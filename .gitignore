@@ -19,6 +19,13 @@
 
 # production
 /build
+/.claude
+/.wolf
+/docs
+/everything-claude-code
+CLAUDE.md
+agents.md
+CLAUDE.md.bak
 
 # misc
 .DS_Store
