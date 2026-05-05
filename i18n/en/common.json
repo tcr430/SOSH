@@ -1,0 +1,20 @@
+{
+  "app": {
+    "name": "SŌSH",
+    "tagline": "Marketing-leading AI social media management"
+  },
+  "nav": {
+    "campaigns": "Campaigns",
+    "calendar": "Calendar",
+    "analytics": "Analytics",
+    "inbox": "Inbox",
+    "settings": "Settings"
+  },
+  "marketing": {
+    "hero": {
+      "title": "SŌSH",
+      "subtitle": "AI-powered social media for B2B SaaS teams. Build your brand, grow your pipeline.",
+      "cta": "Start free trial"
+    }
+  }
+}

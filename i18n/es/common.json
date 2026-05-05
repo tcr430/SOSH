@@ -1,0 +1,20 @@
+{
+  "app": {
+    "name": "SŌSH",
+    "tagline": "Gestión de redes sociales con IA líder en el mercado"
+  },
+  "nav": {
+    "campaigns": "Campañas",
+    "calendar": "Calendario",
+    "analytics": "Analítica",
+    "inbox": "Bandeja de entrada",
+    "settings": "Configuración"
+  },
+  "marketing": {
+    "hero": {
+      "title": "SŌSH",
+      "subtitle": "Redes sociales con IA para equipos de B2B SaaS. Construye tu marca, impulsa tu pipeline.",
+      "cta": "Comenzar prueba gratis"
+    }
+  }
+}

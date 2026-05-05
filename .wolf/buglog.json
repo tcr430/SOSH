@@ -1,0 +1,277 @@
+{
+  "version": 1,
+  "bugs": [
+    {
+      "id": "bug-001",
+      "timestamp": "2026-04-29T19:15:30.398Z",
+      "error_message": "Incorrect value in code",
+      "file": "i18n/request.ts",
+      "root_cause": "Had `./messages/${locale}/common.json`",
+      "fix": "Changed to `./${locale}/common.json`",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-04-29T19:15:30.398Z"
+    },
+    {
+      "id": "bug-002",
+      "timestamp": "2026-04-29T19:16:04.387Z",
+      "error_message": "Significant refactor of ",
+      "file": "next.config.ts",
+      "root_cause": "4 lines replaced/restructured",
+      "fix": "Rewrote 7→8 lines (4 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-04-29T19:16:04.387Z"
+    },
+    {
+      "id": "bug-003",
+      "timestamp": "2026-04-29T19:16:30.299Z",
+      "error_message": "Significant refactor of ",
+      "file": "app/layout.tsx",
+      "root_cause": "23 lines replaced/restructured",
+      "fix": "Rewrote 33→10 lines (23 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-04-29T19:16:30.299Z"
+    },
+    {
+      "id": "bug-004",
+      "timestamp": "2026-04-29T19:18:06.048Z",
+      "error_message": "Significant refactor of ",
+      "file": "lib/supabase/middleware.ts",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 4→6 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-04-29T19:18:06.048Z"
+    },
+    {
+      "id": "bug-005",
+      "timestamp": "2026-04-30T00:17:05.959Z",
+      "error_message": "Significant refactor of ",
+      "file": "C:/Users/tiago/.claude/plugins/installed_plugins.json",
+      "root_cause": "15 lines replaced/restructured",
+      "fix": "Rewrote 34→15 lines (15 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "json"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-04-30T00:17:05.959Z"
+    },
+    {
+      "id": "bug-006",
+      "timestamp": "2026-05-02T18:41:32.329Z",
+      "error_message": "Incorrect value in code",
+      "file": "lib/db/businesses.ts",
+      "root_cause": "Had './types'",
+      "fix": "Changed to '@/lib/supabase/service'",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-02T18:41:32.329Z"
+    },
+    {
+      "id": "bug-007",
+      "timestamp": "2026-05-02T18:42:02.991Z",
+      "error_message": "Missing guard clause",
+      "file": "lib/db/businesses.ts",
+      "root_cause": "No early return/throw for edge case: error",
+      "fix": "Added guard clause: if (error)",
+      "tags": [
+        "auto-detected",
+        "guard-clause",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-02T18:42:02.991Z"
+    },
+    {
+      "id": "bug-008",
+      "timestamp": "2026-05-03T01:06:02.362Z",
+      "error_message": "Significant refactor of ",
+      "file": "lib/db/posts.test.ts",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 13→22 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-03T01:06:02.362Z"
+    },
+    {
+      "id": "bug-009",
+      "timestamp": "2026-05-03T01:09:46.038Z",
+      "error_message": "Incorrect value in code",
+      "file": "lib/db/businesses.ts",
+      "root_cause": "Had '@/lib/supabase/service'",
+      "fix": "Changed to './types'",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-03T01:09:46.038Z"
+    },
+    {
+      "id": "bug-010",
+      "timestamp": "2026-05-03T01:10:20.587Z",
+      "error_message": "Missing import: @/lib/supabase/service",
+      "file": "lib/db/businesses.ts",
+      "root_cause": "Module(s) not imported: @/lib/supabase/service",
+      "fix": "Added import(s) for @/lib/supabase/service",
+      "tags": [
+        "auto-detected",
+        "missing-import",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-03T01:10:20.587Z"
+    },
+    {
+      "id": "bug-011",
+      "timestamp": "2026-05-03T01:36:53.828Z",
+      "error_message": "Type error",
+      "file": "lib/db/social-accounts.test.ts",
+      "root_cause": "Missing or incorrect type annotation",
+      "fix": "Added type assertion/annotation | Also: vault_access_token_id: 'vault-1' as VaultSecretId,",
+      "tags": [
+        "auto-detected",
+        "type-fix",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-05-03T01:37:24.609Z"
+    },
+    {
+      "id": "bug-012",
+      "timestamp": "2026-05-03T14:24:03.479Z",
+      "error_message": "Missing import: @/lib/supabase/service",
+      "file": "lib/db/post-metrics.ts",
+      "root_cause": "Module(s) not imported: @/lib/supabase/service",
+      "fix": "Added import(s) for @/lib/supabase/service",
+      "tags": [
+        "auto-detected",
+        "missing-import",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-03T14:24:03.479Z"
+    },
+    {
+      "id": "bug-013",
+      "timestamp": "2026-05-03T14:24:32.899Z",
+      "error_message": "Missing import: @/lib/supabase/service",
+      "file": "lib/db/ai-usage.ts",
+      "root_cause": "Module(s) not imported: @/lib/supabase/service",
+      "fix": "Added import(s) for @/lib/supabase/service",
+      "tags": [
+        "auto-detected",
+        "missing-import",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-03T14:24:32.899Z"
+    },
+    {
+      "id": "bug-014",
+      "timestamp": "2026-05-03T15:49:54.935Z",
+      "error_message": "Missing await",
+      "file": "lib/db/posts.test.ts",
+      "root_cause": "Async call without await — returned Promise instead of value",
+      "fix": "Added await to async call",
+      "tags": [
+        "auto-detected",
+        "async-fix",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-03T15:49:54.935Z"
+    },
+    {
+      "id": "bug-015",
+      "timestamp": "2026-05-04T20:08:43.756Z",
+      "error_message": "Significant refactor of ",
+      "file": "lib/social/__tests__/registry.test.ts",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 5→4 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-04T20:08:43.756Z"
+    },
+    {
+      "id": "bug-016",
+      "timestamp": "2026-05-05T19:04:41.082Z",
+      "error_message": "Significant refactor of ",
+      "file": "docs/current-phase.md",
+      "root_cause": "23 lines replaced/restructured",
+      "fix": "Rewrote 53→60 lines (23 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "md"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-05T19:04:41.083Z"
+    },
+    {
+      "id": "bug-017",
+      "timestamp": "2026-05-05T20:04:41.586Z",
+      "error_message": "Significant refactor of ",
+      "file": "docs/current-phase.md",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 7→14 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "md"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-05T20:04:41.586Z"
+    }
+  ]
+}
