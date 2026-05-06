@@ -71,10 +71,10 @@ export async function readRefreshToken(
   const client = await getServiceClient()
   const account = await querySocialAccountRow(client, socialAccountId)
 
-  if (!account.vault_refresh_token_id) {
+  if (!account.is_active || !account.vault_refresh_token_id) {
     throw new SocialProviderError({
       code: 'TOKEN_REVOKED',
-      message: `Social account ${socialAccountId} has no refresh token`,
+      message: `Social account ${socialAccountId} is inactive or has no refresh token`,
     })
   }
 

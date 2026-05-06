@@ -3,6 +3,19 @@ import type { SocialProviderErrorCode } from './types'
 
 const SENSITIVE_KEY_PATTERN = /token|secret|authorization|cookie/i
 
+function redactSensitiveKeys(obj: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(obj).map(([k, v]) => [
+      k,
+      SENSITIVE_KEY_PATTERN.test(k)
+        ? '[REDACTED]'
+        : v !== null && typeof v === 'object' && !Array.isArray(v)
+          ? redactSensitiveKeys(v as Record<string, unknown>)
+          : v,
+    ]),
+  )
+}
+
 export class SocialProviderError extends Error {
   readonly code: SocialProviderErrorCode
   readonly platform: Platform | null
@@ -21,12 +34,6 @@ export class SocialProviderError extends Error {
     this.code = args.code
     this.platform = args.platform ?? null
     this.retryAfterSeconds = args.retryAfterSeconds ?? null
-    this.details = Object.freeze(
-      Object.fromEntries(
-        Object.entries(args.details ?? {}).map(([k, v]) =>
-          SENSITIVE_KEY_PATTERN.test(k) ? [k, '[REDACTED]'] : [k, v],
-        ),
-      ),
-    )
+    this.details = Object.freeze(redactSensitiveKeys(args.details ?? {}))
   }
 }

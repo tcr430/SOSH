@@ -19,10 +19,15 @@ export type SocialProviderErrorCode =
 // ---------------------------------------------------------------------------
 
 export interface OAuthAuthorizeInput {
+  // Builder addition (not in ADR §2): PostizProvider needs the platform to
+  // construct its per-platform authorize URL.
   platform: import('@/lib/db/types').Platform
   businessId: string
   redirectUri: string
   scopes: readonly string[]
+  // Builder addition (not in ADR §2): the signed-JWT OAuth state is built by
+  // the calling Server Action (via signOAuthState) and passed in here so the
+  // provider can embed it as the ?state= query parameter.
   state: string
 }
 

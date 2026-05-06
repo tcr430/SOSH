@@ -2,7 +2,7 @@
 
 **Phase:** 1 — MVP
 **Goal:** First paying customer
-**Status:** Session 3B complete — Session 3C (Reviewer) pending
+**Status:** Session 3 complete (3A through 3D)
 
 ## What's done
 - Session 0: Environment setup complete
@@ -36,14 +36,33 @@
   - app/api/_health/social/route.ts — health check endpoint (HEALTHCHECK_TOKEN gated)
   - HEALTHCHECK_TOKEN added to /lib/config.ts as optional server var
   - vitest.config.ts: testTimeout bumped to 15000ms (vault module-reset slowness)
+- Session 3C: Reviewer audit — SocialProvider reviewed by typescript-reviewer +
+  security-reviewer in parallel (Opus 4.7 synthesis). 10 fixes identified.
+- Session 3D: Correction pass — all 10 reviewer fixes applied:
+  1. POSTIZ_BASE_URL — renamed from POSTIZ_API_URL (canonical ADR name) across
+     lib/config.ts, registry.ts, route.ts, .env.local, .env.local.example
+  2. readRefreshToken — added !account.is_active guard (was missing vs readAccessToken)
+  3. Zod validation on Postiz responses — PostizCallbackResponseSchema +
+     PostizRefreshResponseSchema replace raw `as` casts in postiz-provider.ts
+  4. Recursive redaction — SocialProviderError.details now redacts nested
+     token-shaped keys (e.g. details.platform_message.accessToken)
+  5. Constant-time health-check — token comparison uses crypto.timingSafeEqual
+  6. NODE_ENV via config — registry.ts + route.ts read config.public.NODE_ENV,
+     not process.env.NODE_ENV directly
+  7. Expired-token test — oauth-state.test.ts covers verifyOAuthState rejection
+  8. 300s exact boundary test — vault.test.ts covers the <= skew condition
+  9. token_secret + recursive redaction test — errors.test.ts covers nested keys
+  10. Integration test placeholder — lib/social/__integration__/ created, gated on
+      POSTIZ_INTEGRATION_TEST_ENABLED
+  Rec A: OAuthAuthorizeInput platform/state fields documented in types.ts +
+         current-phase.md
+  Rec B: OAUTH_STATE_SECRET requires .min(32) at boot (no silent empty default)
+  Test suite: 165/165 passing + 3 todo + 1 skipped (integration)
 
 ## What's in progress
-- Session 3C: Reviewer session (Opus 4.7) — not yet run
-  Use primer from docs/build-guide/session-3.md Part C
+- Nothing — Session 3 fully complete
 
 ## What's next
-- Session 3C: Run reviewer (Opus 4.7) + parallel typescript-reviewer + security-reviewer
-- Session 3D: Correction pass (if reviewer finds issues — expected)
 - Session 4: Authentication & Onboarding Foundation
   - Supabase Auth integration (email + magic link)
   - Signup flow with work-email validation
@@ -51,12 +70,15 @@
   - Trial state initialization
   - Protected route middleware
 
-## Key decisions (Session 3B)
+## Key decisions (Session 3B + 3D)
 - SocialProvider abstraction enforced at ESLint level (no-restricted-imports rule)
 - Vault access is always service-role; lib/social/ layer owns all vault I/O
 - MockProvider injected via SOCIAL_PROVIDER env var (no test-only DI plumbing)
 - OAuth state signed as HMAC-SHA256 JWT (stateless, no DB round-trip)
 - Vault helpers exposed as Supabase RPC (not direct vault.secrets writes)
+- POSTIZ_BASE_URL is the canonical env var name (not POSTIZ_API_URL)
+- Postiz integration tests gated on POSTIZ_INTEGRATION_TEST_ENABLED env var
+- OAUTH_STATE_SECRET requires min 32 chars — boot fails fast if missing
 
 ## Open gotchas
 - ECC commands use /everything-claude-code: prefix not /ecc:
@@ -65,3 +87,5 @@
 - npm run db:migrate requires Docker (local) or network access (remote Supabase);
   migrations are authored and verified structurally but not yet applied to a live DB
 - Migration 24 vault helpers not yet applied to live Supabase project (awaiting db:migrate)
+- OAuthAuthorizeInput has 2 additional fields vs ADR §2 (platform, state — Builder additions).
+  Document in ADR 0002 open follow-ups before Session 4.

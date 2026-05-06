@@ -3,15 +3,19 @@ import { SocialProviderError } from '../errors'
 import type { SocialProvider } from '../types'
 
 // Top-level mock — controls what config returns for all tests.
-// Individual tests mutate serverConfig to simulate different environments.
+// Individual tests mutate serverConfig / publicConfig to simulate environments.
 const serverConfig = {
   SOCIAL_PROVIDER_MODE: '',
-  POSTIZ_API_URL: '',
+  POSTIZ_BASE_URL: '',
   POSTIZ_API_KEY: '',
 }
 
+const publicConfig = {
+  NODE_ENV: 'development' as 'development' | 'test' | 'production',
+}
+
 vi.mock('@/lib/config', () => ({
-  config: { server: serverConfig },
+  config: { server: serverConfig, public: publicConfig },
 }))
 
 // Import after mocks are declared so the module sees the mock.
@@ -22,8 +26,9 @@ describe('getRegistry', () => {
     _resetRegistry()
     vi.unstubAllEnvs()
     serverConfig.SOCIAL_PROVIDER_MODE = ''
-    serverConfig.POSTIZ_API_URL = ''
+    serverConfig.POSTIZ_BASE_URL = ''
     serverConfig.POSTIZ_API_KEY = ''
+    publicConfig.NODE_ENV = 'development'
   })
 
   it('returns a provider when SOCIAL_PROVIDER_MODE=mock', () => {
@@ -38,13 +43,13 @@ describe('getRegistry', () => {
   })
 
   it('throws PROVIDER_NOT_CONFIGURED in production without Postiz config', () => {
-    vi.stubEnv('NODE_ENV', 'production')
+    publicConfig.NODE_ENV = 'production'
     expect(() => getRegistry()).toThrow(SocialProviderError)
     expect(() => getRegistry()).toThrow(expect.objectContaining({ code: 'PROVIDER_NOT_CONFIGURED' }))
   })
 
   it('returns PostizProvider when both POSTIZ_API_URL and POSTIZ_API_KEY are set', () => {
-    serverConfig.POSTIZ_API_URL = 'https://postiz.test'
+    serverConfig.POSTIZ_BASE_URL = 'https://postiz.test'
     serverConfig.POSTIZ_API_KEY = 'test-key'
     const registry = getRegistry()
     const provider = registry.get('linkedin')

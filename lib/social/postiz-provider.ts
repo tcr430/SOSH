@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import { formatISO } from 'date-fns'
 import type {
   SocialProvider,
@@ -15,6 +16,39 @@ import type {
 } from './types'
 import { SocialProviderError } from './errors'
 import { readRefreshToken, withFreshToken } from './vault'
+
+const PostizCallbackResponseSchema = z.object({
+  accessToken: z.string().optional(),
+  access_token: z.string().optional(),
+  refreshToken: z.string().optional(),
+  refresh_token: z.string().optional(),
+  expiresIn: z.number().optional(),
+  expires_in: z.number().optional(),
+  scopesGranted: z.array(z.string()).optional(),
+  scopes: z.array(z.string()).optional(),
+  integrationId: z.string().optional(),
+  username: z.string().optional(),
+  handle: z.string().optional(),
+  displayName: z.string().nullish(),
+  name: z.string().nullish(),
+}).refine(
+  (d) => !!(d.accessToken ?? d.access_token),
+  { message: 'Postiz callback response missing accessToken' },
+)
+
+const PostizRefreshResponseSchema = z.object({
+  accessToken: z.string().optional(),
+  access_token: z.string().optional(),
+  refreshToken: z.string().optional(),
+  refresh_token: z.string().optional(),
+  expiresIn: z.number().optional(),
+  expires_in: z.number().optional(),
+  scopesGranted: z.array(z.string()).optional(),
+  scopes: z.array(z.string()).optional(),
+}).refine(
+  (d) => !!(d.accessToken ?? d.access_token),
+  { message: 'Postiz refresh response missing accessToken' },
+)
 
 export interface PostizConfig {
   baseUrl: string
@@ -201,10 +235,20 @@ export class PostizProvider implements SocialProvider {
       })
     }
 
-    const body = await resp.json()
-    const newAccessToken: string = body.accessToken ?? body.access_token
-    const newRefreshToken: string | null = body.refreshToken ?? body.refresh_token ?? null
-    const expiresIn: number | null = body.expiresIn ?? body.expires_in ?? null
+    const rawBody = await resp.json()
+    let refreshParsed: z.infer<typeof PostizRefreshResponseSchema>
+    try {
+      refreshParsed = PostizRefreshResponseSchema.parse(rawBody)
+    } catch (e) {
+      throw new SocialProviderError({
+        code: 'PLATFORM_REJECTED',
+        message: 'Postiz returned an unexpected response shape',
+        details: { zodError: e instanceof Error ? e.message : String(e) },
+      })
+    }
+    const newAccessToken = (refreshParsed.accessToken ?? refreshParsed.access_token) as string
+    const newRefreshToken = refreshParsed.refreshToken ?? refreshParsed.refresh_token ?? null
+    const expiresIn = refreshParsed.expiresIn ?? refreshParsed.expires_in ?? null
     const newExpiry = expiresIn ? formatISO(new Date(Date.now() + expiresIn * 1000)) : null
 
     // Update vault access token in-place
@@ -231,7 +275,7 @@ export class PostizProvider implements SocialProvider {
       accessToken: newAccessToken,
       refreshToken: newRefreshToken,
       tokenExpiresAt: newExpiry,
-      scopesGranted: body.scopesGranted ?? body.scopes ?? [],
+      scopesGranted: refreshParsed.scopesGranted ?? refreshParsed.scopes ?? [],
     }
   }
 
@@ -310,17 +354,26 @@ export class PostizProvider implements SocialProvider {
     }
   }
 
-  private normalizeTokenSet(body: Record<string, unknown>): TokenSet {
+  private normalizeTokenSet(body: unknown): TokenSet {
+    let parsed: z.infer<typeof PostizCallbackResponseSchema>
+    try {
+      parsed = PostizCallbackResponseSchema.parse(body)
+    } catch (e) {
+      throw new SocialProviderError({
+        code: 'PLATFORM_REJECTED',
+        message: 'Postiz returned an unexpected response shape',
+        details: { zodError: e instanceof Error ? e.message : String(e) },
+      })
+    }
+    const expiresIn = parsed.expiresIn ?? parsed.expires_in ?? null
     return {
-      accessToken: (body['accessToken'] ?? body['access_token']) as string,
-      refreshToken: (body['refreshToken'] ?? body['refresh_token'] ?? null) as string | null,
-      tokenExpiresAt: body['expiresIn']
-        ? formatISO(new Date(Date.now() + Number(body['expiresIn']) * 1000))
-        : null,
-      scopesGranted: ((body['scopesGranted'] ?? body['scopes'] ?? []) as string[]),
-      platformUserId: body['integrationId'] as string | undefined,
-      platformUsername: (body['username'] ?? body['handle']) as string | undefined,
-      platformDisplayName: (body['displayName'] ?? body['name'] ?? null) as string | null,
+      accessToken: (parsed.accessToken ?? parsed.access_token) as string,
+      refreshToken: parsed.refreshToken ?? parsed.refresh_token ?? null,
+      tokenExpiresAt: expiresIn ? formatISO(new Date(Date.now() + expiresIn * 1000)) : null,
+      scopesGranted: parsed.scopesGranted ?? parsed.scopes ?? [],
+      platformUserId: parsed.integrationId,
+      platformUsername: parsed.username ?? parsed.handle,
+      platformDisplayName: parsed.displayName ?? parsed.name ?? null,
     }
   }
 }

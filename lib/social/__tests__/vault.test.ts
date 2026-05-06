@@ -210,6 +210,32 @@ describe('vault helpers', () => {
       expect(refreshFn).toHaveBeenCalledWith('sa-1')
     })
 
+    it('calls refreshFn when token expires exactly at the skew boundary (300s)', async () => {
+      const { withFreshToken } = await import('../vault')
+
+      // Exactly TOKEN_REFRESH_SKEW_SECONDS — the <= condition means this triggers refresh
+      const exactBoundary = new Date(Date.now() + 300 * 1000).toISOString()
+      mockFrom.mockReturnValue(
+        makeQueryStub({
+          data: {
+            is_active: true,
+            vault_access_token_id: 'v-access',
+            vault_refresh_token_id: null,
+            token_expires_at: exactBoundary,
+          },
+          error: null,
+        }),
+      )
+      mockRpc.mockResolvedValue({ data: 'refreshed-token', error: null })
+
+      const refreshFn = vi.fn().mockResolvedValue(undefined)
+      const fn = vi.fn().mockResolvedValue('done')
+
+      await withFreshToken('sa-1', refreshFn, fn)
+
+      expect(refreshFn).toHaveBeenCalledWith('sa-1')
+    })
+
     it('does NOT call refreshFn when token expires just outside the skew window (5m01s)', async () => {
       const { withFreshToken } = await import('../vault')
 

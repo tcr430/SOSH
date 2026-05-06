@@ -68,6 +68,22 @@ describe('signOAuthState / verifyOAuthState', () => {
     await expect(verifyOAuthState('not.a.valid.jwt.at.all')).rejects.toThrow()
   })
 
+  it('rejects an expired token', async () => {
+    const { SignJWT } = await import('jose')
+    const secret = new TextEncoder().encode('test-secret-that-is-at-least-32-chars-long!')
+    const expiredToken = await new SignJWT({
+      businessId: 'test-uuid',
+      platform: 'linkedin',
+      nonce: 'test-nonce',
+    })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setIssuedAt(Math.floor(Date.now() / 1000) - 700)
+      .setExpirationTime(Math.floor(Date.now() / 1000) - 100)
+      .sign(secret)
+
+    await expect(verifyOAuthState(expiredToken)).rejects.toThrow()
+  })
+
   it('throws when OAUTH_STATE_SECRET is too short', async () => {
     const { config } = await import('@/lib/config')
     vi.mocked(config).server = {

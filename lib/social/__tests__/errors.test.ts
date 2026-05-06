@@ -60,6 +60,24 @@ describe('SocialProviderError', () => {
     expect(Object.isFrozen(err.details)).toBe(true)
   })
 
+  it('redacts token_secret key and recursively redacts nested sensitive keys', () => {
+    const err = new SocialProviderError({
+      code: 'UNKNOWN',
+      message: 'test',
+      details: {
+        Authorization: 'Bearer abc123',
+        token_secret: 'my-secret',
+        nested: { access_token: 'nested-token' },
+        safe: 'safe-value',
+      },
+    })
+
+    expect(err.details['Authorization']).toBe('[REDACTED]')
+    expect(err.details['token_secret']).toBe('[REDACTED]')
+    expect((err.details['nested'] as Record<string, unknown>)['access_token']).toBe('[REDACTED]')
+    expect(err.details['safe']).toBe('safe-value')
+  })
+
   it('redacts fields case-insensitively', () => {
     const err = new SocialProviderError({
       code: 'UNKNOWN',

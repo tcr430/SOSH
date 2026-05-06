@@ -31,7 +31,7 @@ export function getRegistry(): ProviderRegistry {
     return _registry
   }
 
-  const baseUrl = config.server.POSTIZ_API_URL
+  const baseUrl = config.server.POSTIZ_BASE_URL
   const apiKey = config.server.POSTIZ_API_KEY
 
   if (baseUrl && apiKey) {
@@ -40,16 +40,16 @@ export function getRegistry(): ProviderRegistry {
   }
 
   // Dev fallback: MockProvider when Postiz config is absent
-  if (process.env.NODE_ENV === 'production') {
+  if (config.public.NODE_ENV === 'production') {
     throw new SocialProviderError({
       code: 'PROVIDER_NOT_CONFIGURED',
       message:
-        'Production requires POSTIZ_API_URL and POSTIZ_API_KEY (or SOCIAL_PROVIDER_MODE=mock for testing)',
+        'Production requires POSTIZ_BASE_URL and POSTIZ_API_KEY (or SOCIAL_PROVIDER_MODE=mock for testing)',
     })
   }
 
   console.warn(
-    '[SOSH] POSTIZ_API_URL or POSTIZ_API_KEY not configured — falling back to MockProvider. ' +
+    '[SOSH] POSTIZ_BASE_URL or POSTIZ_API_KEY not configured — falling back to MockProvider. ' +
       'Set SOCIAL_PROVIDER_MODE=mock to silence this warning.',
   )
   _registry = new DefaultProviderRegistry(new MockProvider())
