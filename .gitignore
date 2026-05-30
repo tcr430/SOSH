@@ -30,6 +30,8 @@ CLAUDE.md.bak
 # misc
 .DS_Store
 *.pem
+DProjectSOSH.wolfmemory.md
+
 
 # debug
 npm-debug.log*

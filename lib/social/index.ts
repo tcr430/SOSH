@@ -20,6 +20,17 @@ export { SocialProviderError } from './errors'
 export { signOAuthState, verifyOAuthState } from './oauth/state'
 export type { OAuthStateClaims } from './oauth/state'
 export { getRegistry } from './registry'
+export type { PlatformOAuthConfig } from './platforms/config'
+export {
+  PLATFORM_CONFIGS,
+  getPlatformConfig,
+  publishingAvailableFor,
+  isPublishingPlatform,
+} from './platforms/config'
+export { VALID_PLATFORMS, isPlatform } from './platforms/guards'
+export type { ConnectionStatus } from './connection-status'
+export { getConnectionStatus } from './connection-status'
+export type { SocialAccountPublic } from '@/lib/db/social-accounts'
 
 export {
   TOKEN_REFRESH_SKEW_SECONDS,

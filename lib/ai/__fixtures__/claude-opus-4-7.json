@@ -1,0 +1,20 @@
+{
+  "id": "msg_mock_opus",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-opus-4-7",
+  "content": [
+    {
+      "type": "text",
+      "text": "{\"tone\":[\"professional\",\"confident\",\"innovative\"],\"targetAudience\":\"B2B SaaS founders and marketing teams at tech companies with 1-100 employees\",\"keywords\":[\"automation\",\"productivity\",\"AI\",\"social media\",\"B2B\"],\"avoidWords\":[\"cheap\",\"simple\",\"easy\"],\"uniqueValueProp\":\"SOSH automates social media management for B2B SaaS teams, enabling consistent brand presence without manual effort\",\"competitors\":[\"Buffer\",\"Hootsuite\",\"Sprout Social\"]}"
+    }
+  ],
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 350,
+    "output_tokens": 120,
+    "cache_read_input_tokens": 0,
+    "cache_creation_input_tokens": 0
+  }
+}

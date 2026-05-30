@@ -1,0 +1,8 @@
+{
+  "tone": ["professional", "confident", "innovative"],
+  "targetAudience": "B2B SaaS founders and marketing teams at tech companies with 1-100 employees",
+  "keywords": ["automation", "productivity", "AI", "social media", "B2B"],
+  "avoidWords": ["cheap", "simple", "easy"],
+  "uniqueValueProp": "SOSH automates social media management for B2B SaaS teams, enabling consistent brand presence without manual effort",
+  "competitors": ["Buffer", "Hootsuite", "Sprout Social"]
+}

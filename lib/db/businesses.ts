@@ -1,6 +1,7 @@
 import { formatISO } from 'date-fns'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { BusinessRow, BusinessInsert, BusinessUpdate, Plan } from './types'
+import type { PaidPlan } from '@/lib/stripe/products'
 
 export async function getBusinessById(
   client: SupabaseClient,
@@ -78,6 +79,16 @@ export async function updateBusinessPlan(
   return row as BusinessRow
 }
 
+export async function completeOnboarding(businessId: string): Promise<void> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { error } = await client
+    .from('businesses')
+    .update({ onboarding_completed: true })
+    .eq('id', businessId)
+  if (error) throw new Error((error as { message: string }).message)
+}
+
 export async function softDeleteBusiness(
   client: SupabaseClient,
   id: string,
@@ -87,4 +98,99 @@ export async function softDeleteBusiness(
     .update({ deleted_at: formatISO(new Date()) })
     .eq('id', id)
   if (error) throw new Error((error as { message: string }).message)
+}
+
+export async function findBusinessByStripeCustomerId(
+  stripeCustomerId: string,
+): Promise<BusinessRow | null> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client
+    .from('businesses')
+    .select('*')
+    .eq('stripe_customer_id', stripeCustomerId)
+    .is('deleted_at', null)
+    .maybeSingle()
+  if (error) throw new Error((error as { message: string }).message)
+  return (data as BusinessRow | null) ?? null
+}
+
+export async function updateBillingFromSubscription(input: {
+  stripeCustomerId: string
+  stripeSubscriptionId: string
+  plan: PaidPlan
+}): Promise<BusinessRow | null> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client
+    .from('businesses')
+    .update({
+      plan: input.plan,
+      stripe_subscription_id: input.stripeSubscriptionId,
+      updated_at: formatISO(new Date()),
+    })
+    .eq('stripe_customer_id', input.stripeCustomerId)
+    .is('deleted_at', null)
+    .select()
+    .maybeSingle()
+  if (error) throw new Error((error as { message: string }).message)
+  return (data as BusinessRow | null) ?? null
+}
+
+export async function clearBillingOnCancellation(input: {
+  stripeCustomerId: string
+}): Promise<BusinessRow | null> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client
+    .from('businesses')
+    .update({
+      plan: 'trial' as Plan,
+      stripe_subscription_id: null,
+      updated_at: formatISO(new Date()),
+    })
+    .eq('stripe_customer_id', input.stripeCustomerId)
+    .is('deleted_at', null)
+    .select()
+    .maybeSingle()
+  if (error) throw new Error((error as { message: string }).message)
+  return (data as BusinessRow | null) ?? null
+}
+
+export async function setStripeCustomerId(input: {
+  businessId: string
+  stripeCustomerId: string
+}): Promise<void> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+
+  const { data, error } = await client
+    .from('businesses')
+    .update({ stripe_customer_id: input.stripeCustomerId })
+    .eq('id', input.businessId)
+    .or(`stripe_customer_id.is.null,stripe_customer_id.eq.${input.stripeCustomerId}`)
+    .is('deleted_at', null)
+    .select()
+    .maybeSingle()
+
+  if (error) throw new Error((error as { message: string }).message)
+
+  if (data === null) {
+    // No rows matched — check whether the business exists with a different customer ID
+    const { data: existing, error: fetchError } = await client
+      .from('businesses')
+      .select('stripe_customer_id')
+      .eq('id', input.businessId)
+      .is('deleted_at', null)
+      .maybeSingle()
+
+    if (fetchError) throw new Error((fetchError as { message: string }).message)
+
+    const existingId = (existing as { stripe_customer_id: string | null } | null)?.stripe_customer_id
+    if (existing !== null && existingId !== null && existingId !== input.stripeCustomerId) {
+      throw new Error(
+        `Business ${input.businessId} already has Stripe customer ${existingId}; refusing to overwrite with ${input.stripeCustomerId}`,
+      )
+    }
+  }
 }

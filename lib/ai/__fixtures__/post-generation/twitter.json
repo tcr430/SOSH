@@ -1,0 +1,22 @@
+{
+  "posts": [
+    {
+      "content": "Your analytics stack shouldn't need a data engineer to use.\n\nReal-time dashboards. Live in minutes. No SQL required.\n\nThat's the bar we set.",
+      "hashtags": ["#b2bsaas", "#analytics"],
+      "scheduledAt": "2026-05-26T12:00:00.000Z",
+      "rationale": "Short punchy take on the core value prop, fits single-tweet format under 260 chars."
+    },
+    {
+      "content": "The companies shipping the fastest aren't waiting for Friday's analytics report.\n\nThey're watching the data move in real time.\n\nThat's the edge.",
+      "hashtags": ["#datadriven", "#b2bsaas"],
+      "scheduledAt": "2026-05-28T17:00:00.000Z",
+      "rationale": "Frames real-time analytics as a velocity differentiator, targets the competitive ICP mindset."
+    },
+    {
+      "content": "\"Our data team is the bottleneck.\"\n\nWe hear this from engineering leads every week.\n\nThe fix isn't more headcount. It's tools that don't require headcount to work.",
+      "hashtags": ["#analytics", "#scalable"],
+      "scheduledAt": "2026-05-30T12:00:00.000Z",
+      "rationale": "Voice-of-customer quote format builds credibility and speaks directly to the ICP's frustration."
+    }
+  ]
+}

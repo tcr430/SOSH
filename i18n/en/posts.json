@@ -1,0 +1,95 @@
+{
+  "title": "{campaignName} — Posts",
+  "back": "Back to campaign",
+  "summary": {
+    "approved": "{count} approved",
+    "drafts": "{count} drafts",
+    "skipped": "{count} skipped",
+    "of": "of {total}"
+  },
+  "readyBanner": {
+    "title": "All posts approved",
+    "description": "Publishing setup is coming soon."
+  },
+  "empty": {
+    "title": "No posts yet",
+    "description": "Generate posts from the campaign page first.",
+    "action": "Back to campaign"
+  },
+  "filter": {
+    "all": "All ({count})",
+    "approved": "Approved ({count})",
+    "skipped": "Skipped ({count})",
+    "failed": "Failed ({count})"
+  },
+  "bulkApprove": "Approve all drafts",
+  "bulkApproveSuccess": "Approved {count} posts",
+  "card": {
+    "utcNote": "UTC",
+    "regeneratedCount": "Regenerated ×{count}",
+    "skippedReason": "Reason: {note}",
+    "status": {
+      "draft": "Draft",
+      "approved": "Approved",
+      "skipped": "Skipped",
+      "scheduled": "Publishing…",
+      "published": "Published",
+      "failed": "Failed"
+    },
+    "action": {
+      "openOnPlatform": "View on platform"
+    },
+    "tooltip": {
+      "failedAt": "Failed at {at}"
+    },
+    "error": {
+      "token_expired": "Account session expired",
+      "token_revoked": "Account disconnected — reconnect",
+      "rate_limited": "Platform rate-limited the post",
+      "platform_rejected": "Platform rejected the post",
+      "network": "Network error — will retry",
+      "not_implemented": "Publishing not yet available for this platform",
+      "provider_not_configured": "Publishing service not configured",
+      "unknown": "Unknown error",
+      "generic": "Couldn't publish"
+    },
+    "actions": {
+      "approve": "Approve",
+      "skip": "Skip",
+      "undo": "Undo",
+      "edit": "Edit",
+      "regenerate": "Regenerate",
+      "save": "Save",
+      "cancel": "Cancel"
+    },
+    "showMore": "Show more",
+    "showLess": "Show less",
+    "edit": {
+      "contentLabel": "Post content",
+      "hashtagsLabel": "Hashtags (comma-separated)"
+    }
+  },
+  "skip": {
+    "label": "Reason to skip",
+    "placeholder": "Why are you skipping this post?",
+    "submit": "Skip post"
+  },
+  "regenerate": {
+    "title": "Regenerate this post",
+    "description": "Tell the AI what to change. Be specific — this uses one post credit.",
+    "placeholder": "e.g. Make it shorter and more direct. Less jargon.",
+    "minChars": "Minimum 5 characters",
+    "submit": "Regenerate",
+    "submitting": "Regenerating…",
+    "success": "Post regenerated",
+    "error": {
+      "quota_exceeded": "You've used all your post credits for this trial.",
+      "rate_limited": "Too many requests. Wait a moment and try again.",
+      "provider_error": "AI provider error. Try again in a moment.",
+      "invalid_response": "The AI returned an unexpected response. Try again.",
+      "timeout": "The AI took too long. Try again.",
+      "not_eligible": "This post can't be regenerated in its current state.",
+      "generic": "Something went wrong. Please try again."
+    }
+  }
+}

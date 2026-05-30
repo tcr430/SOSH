@@ -5,7 +5,9 @@ import {
   getCampaignById,
   createCampaign,
   updateCampaign,
-  softDeleteCampaign,
+  pauseCampaign,
+  resumeCampaign,
+  softDeleteCampaignGuarded,
 } from './campaigns'
 import type { CampaignRow, CampaignInsert } from './types'
 
@@ -105,15 +107,62 @@ describe('updateCampaign', () => {
   })
 })
 
-describe('softDeleteCampaign', () => {
-  it('resolves without error on success', async () => {
-    const { client } = createMockClient(null, null)
-    await expect(softDeleteCampaign(client, 'camp-1')).resolves.toBeUndefined()
+describe('pauseCampaign', () => {
+  it('returns updated row when campaign is active', async () => {
+    const { client } = createMockClient({ ...mockCampaign, status: 'paused' })
+    const result = await pauseCampaign(client, 'camp-1')
+    expect(result).toMatchObject({ id: 'camp-1', status: 'paused' })
     expect(client.from).toHaveBeenCalledWith('campaigns')
+  })
+
+  it('returns null when guard fails (non-active status)', async () => {
+    const { client } = createMockClient(null, null)
+    const result = await pauseCampaign(client, 'camp-1')
+    expect(result).toBeNull()
+  })
+
+  it('throws when supabase returns an error', async () => {
+    const { client } = createMockClient(null, { message: 'Update error' })
+    await expect(pauseCampaign(client, 'camp-1')).rejects.toThrow('Update error')
+  })
+})
+
+describe('resumeCampaign', () => {
+  it('returns updated row when campaign is paused', async () => {
+    const { client } = createMockClient({ ...mockCampaign, status: 'active' })
+    const result = await resumeCampaign(client, 'camp-1')
+    expect(result).toMatchObject({ id: 'camp-1', status: 'active' })
+    expect(client.from).toHaveBeenCalledWith('campaigns')
+  })
+
+  it('returns null when guard fails (non-paused status)', async () => {
+    const { client } = createMockClient(null, null)
+    const result = await resumeCampaign(client, 'camp-1')
+    expect(result).toBeNull()
+  })
+
+  it('throws when supabase returns an error', async () => {
+    const { client } = createMockClient(null, { message: 'Update error' })
+    await expect(resumeCampaign(client, 'camp-1')).rejects.toThrow('Update error')
+  })
+})
+
+describe('softDeleteCampaignGuarded', () => {
+  it('returns true when campaign is in draft status', async () => {
+    const { client } = createMockClient({ id: 'camp-1' })
+    const result = await softDeleteCampaignGuarded(client, 'camp-1')
+    expect(result).toBe(true)
+    expect(client.from).toHaveBeenCalledWith('campaigns')
+  })
+
+  it('returns false when guard fails (active/paused status — no row updated)', async () => {
+    const { client } = createMockClient(null, null)
+    const result = await softDeleteCampaignGuarded(client, 'camp-1')
+    expect(result).toBe(false)
   })
 
   it('throws when supabase returns an error', async () => {
     const { client } = createMockClient(null, { message: 'Delete error' })
-    await expect(softDeleteCampaign(client, 'camp-1')).rejects.toThrow('Delete error')
+    await expect(softDeleteCampaignGuarded(client, 'camp-1')).rejects.toThrow('Delete error')
   })
 })

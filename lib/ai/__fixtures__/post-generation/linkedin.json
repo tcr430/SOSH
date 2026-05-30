@@ -1,0 +1,28 @@
+{
+  "posts": [
+    {
+      "content": "Most B2B analytics tools promise clarity. They deliver dashboards that need a data engineer to interpret.\n\nWe built this to flip that equation.\n\nReal-time insights. No SQL. No setup sprints. No waiting for the data team to free up.\n\nIf you're leading an engineering team at a growth-stage startup, you've felt this pain. The data exists — you just can't get to it fast enough to make decisions that matter.\n\nAcme brings the signal to you, in the moment it's useful.\n\nWhat's the biggest analytics bottleneck slowing your team down right now?",
+      "hashtags": ["#b2bsaas", "#analytics", "#engineeringleaders"],
+      "scheduledAt": "2026-05-26T09:00:00.000Z",
+      "rationale": "Opens with a pain-point contrast, positions the product as the solution, ends with an engagement question."
+    },
+    {
+      "content": "Speed to insight is the new competitive moat.\n\nWhile your competitors wait 48 hours for a weekly data dump, you could be shipping features informed by what users did this morning.\n\nThat's not a technology advantage — it's a decision-making advantage.\n\nEngineering leaders who instrument their products with real-time analytics ship tighter feedback loops. Fewer wasted sprints. More momentum.\n\nThe data-engineering overhead that used to gatekeep this? We've removed it.\n\nWho on your team owns the analytics stack — and how much of their week goes to maintaining it?",
+      "hashtags": ["#datadriven", "#productled", "#b2bsaas"],
+      "scheduledAt": "2026-05-28T09:00:00.000Z",
+      "rationale": "Reframes analytics as a competitive advantage rather than a reporting tool, speaks to the ICP's sprint context."
+    },
+    {
+      "content": "We talked to 50 engineering leads last quarter.\n\n46 of them said their analytics setup takes longer to maintain than to actually use.\n\nThat's the problem we're solving.\n\nOur real-time dashboard feature was built for the team that doesn't have a dedicated data engineer — and shouldn't need one.\n\nConnect your data source. Your charts are live in minutes, not weeks.\n\nIf you're spending more time building your analytics stack than reading it — it's worth a look.\n\nWould a 20-minute demo change how your team thinks about data?",
+      "hashtags": ["#analytics", "#scalable", "#b2bsaas"],
+      "scheduledAt": "2026-05-30T09:00:00.000Z",
+      "rationale": "Uses a credibility-building stat, addresses the ICP's resource constraint directly, closes with a soft CTA."
+    },
+    {
+      "content": "The question isn't whether your product generates data.\n\nIt's whether your team can act on it before the moment passes.\n\nMost B2B SaaS teams are sitting on a goldmine of behavioral signals — but they're reading them three days late.\n\nReal-time analytics closes that gap. You see what users did this morning. You ship the fix this afternoon.\n\nThat's the compounding advantage that separates fast-moving teams from the ones still waiting for the weekly report.\n\nWhat's one decision you made last month that would have been better with faster data?",
+      "hashtags": ["#analytics", "#b2bsaas", "#datadriven", "#productled"],
+      "scheduledAt": "2026-06-02T09:00:00.000Z",
+      "rationale": "Frames the value as compounding speed advantage, ends with a reflective engagement question to drive comments."
+    }
+  ]
+}

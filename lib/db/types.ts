@@ -22,7 +22,7 @@ export type VaultSecretId = string & { readonly _brand: 'VaultSecretId' }
 // Shared enum types
 // ---------------------------------------------------------------------------
 
-export type Plan = 'trial' | 'starter' | 'pro' | 'agency'
+export type Plan = 'trial' | 'plus' | 'pro' | 'agency'
 export type Language = 'en' | 'pt' | 'es'
 export type Platform = 'linkedin' | 'twitter' | 'instagram' | 'facebook' | 'threads'
 export type CampaignFrequency = 'daily' | '3x_week' | 'weekly' | 'custom'
@@ -148,7 +148,10 @@ export type SocialAccountInsert = {
   updated_at?: string
 }
 
-export type SocialAccountUpdate = Partial<Omit<SocialAccountRow, 'id' | 'created_at'>>
+export type SocialAccountUpdate = Partial<Omit<SocialAccountRow, 'id' | 'created_at' | 'vault_access_token_id' | 'vault_refresh_token_id'>> & {
+  vault_access_token_id?: VaultSecretId | null
+  vault_refresh_token_id?: VaultSecretId | null
+}
 
 // ---------------------------------------------------------------------------
 // 4. campaigns
@@ -192,7 +195,7 @@ export type CampaignInsert = {
   updated_at?: string
 }
 
-export type CampaignUpdate = Partial<Omit<CampaignRow, 'id' | 'created_at' | 'deleted_at'>>
+export type CampaignUpdate = Partial<Omit<CampaignRow, 'id' | 'created_at' | 'deleted_at' | 'business_id'>>
 
 // ---------------------------------------------------------------------------
 // 5. posts — flat model (one row per campaign × platform, no post_variants)
@@ -209,9 +212,13 @@ export type PostRow = {
   scheduled_at: string
   published_at: string | null
   platform_post_id: string | null
+  platform_url: string | null
   status: PostStatus
   rejection_note: string | null
   ai_generation_metadata: Record<string, unknown>
+  publish_attempts: number
+  last_publish_attempt_at: string | null
+  last_publish_error: string | null
   deleted_at: string | null
   created_at: string
   updated_at: string
@@ -228,15 +235,19 @@ export type PostInsert = {
   scheduled_at: string
   published_at?: string | null
   platform_post_id?: string | null
+  platform_url?: string | null
   status?: PostStatus
   rejection_note?: string | null
-  ai_generation_metadata?: Record<string, unknown>
+  ai_generation_metadata?: AiGenerationMetadata | Record<string, unknown>
+  publish_attempts?: number
+  last_publish_attempt_at?: string | null
+  last_publish_error?: string | null
   deleted_at?: string | null
   created_at?: string
   updated_at?: string
 }
 
-export type PostUpdate = Partial<Omit<PostRow, 'id' | 'created_at' | 'business_id' | 'campaign_id' | 'published_at' | 'platform_post_id' | 'deleted_at'>>
+export type PostUpdate = Partial<Omit<PostRow, 'id' | 'created_at' | 'business_id' | 'campaign_id' | 'published_at' | 'platform_post_id' | 'platform_url' | 'deleted_at'>>
 
 // ---------------------------------------------------------------------------
 // 6. post_metrics — upsert-in-place; nullable metrics mean "not exposed by platform"
@@ -330,6 +341,7 @@ export type TrialStateRow = {
   trial_started_at: string | null
   campaigns_created_count: number
   posts_generated_count: number
+  brand_voice_inference_attempts: number
   work_email_verified: boolean
   trial_card_fingerprint: string | null
   created_at: string
@@ -342,6 +354,7 @@ export type TrialStateInsert = {
   trial_started_at?: string | null
   campaigns_created_count?: number
   posts_generated_count?: number
+  brand_voice_inference_attempts?: number
   work_email_verified?: boolean
   trial_card_fingerprint?: string | null
   created_at?: string
@@ -386,4 +399,63 @@ export type AiUsageInsert = {
   success: boolean
   error_code?: string | null
   created_at?: string
+}
+
+// ---------------------------------------------------------------------------
+// 10. post_generation_sessions — written by service-role orchestrator only
+// ---------------------------------------------------------------------------
+
+export type GenerationSessionStatus = 'pending' | 'generating' | 'complete' | 'failed'
+
+export type GenerationSessionRow = {
+  id: string
+  business_id: string
+  campaign_id: string
+  status: GenerationSessionStatus
+  error_code: string | null
+  posts_planned: number
+  posts_created: number
+  started_at: string
+  completed_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type GenerationSessionInsert = {
+  id?: string
+  business_id: string
+  campaign_id: string
+  status?: GenerationSessionStatus
+  error_code?: string | null
+  posts_planned: number
+  posts_created?: number
+  started_at?: string
+  completed_at?: string | null
+  created_at?: string
+  updated_at?: string
+}
+
+export type GenerationSessionUpdate = Partial<
+  Pick<GenerationSessionRow, 'status' | 'error_code' | 'posts_created' | 'completed_at'>
+>
+
+// ---------------------------------------------------------------------------
+// AI generation metadata — stored in posts.ai_generation_metadata (JSONB)
+// ---------------------------------------------------------------------------
+
+export interface AiGenerationMetadata {
+  promptId: string
+  promptVersion: number
+  model: string
+  generationSessionId: string
+  platformContext: string
+  platformConstraintsVersion: number
+  rationale: string
+  regenerationCount: number
+  previousVersions: Array<{
+    content: string
+    rejectionNote: string | null
+    regeneratedAt: string
+  }>
+  generatedAt: string
 }

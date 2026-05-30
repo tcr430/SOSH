@@ -1,91 +1,131 @@
 import { vi, describe, it, expect } from 'vitest'
 import { createMockClient } from './__test-utils__/mock-client'
 import * as serviceModule from '@/lib/supabase/service'
-import {
-  upsertPostMetrics,
-  getPostMetricsByPostId,
-  listStalePostMetrics,
-} from './post-metrics'
-import type { PostMetricsRow, PostMetricsInsert } from './types'
+import { upsertPostMetrics } from './post-metrics'
+import type { PostMetricsInsert, PostMetricsRow } from './types'
 
 vi.mock('@/lib/supabase/service', () => ({
   createServiceRoleClient: vi.fn(),
 }))
 
-const mockMetrics: PostMetricsRow = {
-  id: 'pm-1',
-  post_id: 'post-1',
-  business_id: 'biz-1',
-  likes: 10,
-  comments: 2,
-  shares: 1,
-  saves: null,
-  clicks: null,
-  reach: null,
-  impressions: 500,
-  last_synced_at: '2026-04-30T12:00:00Z',
-  created_at: '2026-04-30T00:00:00Z',
-  updated_at: '2026-04-30T12:00:00Z',
-}
+// ─── upsertPostMetrics ───────────────────────────────────────────────────────
 
 describe('upsertPostMetrics', () => {
-  const insertData: PostMetricsInsert = {
-    post_id: 'post-1',
-    business_id: 'biz-1',
-    likes: 10,
-  }
-
-  it('returns the upserted post metrics', async () => {
-    const { client } = createMockClient(mockMetrics)
+  it('calls upsert on post_metrics with onConflict post_id', async () => {
+    const mockRow: PostMetricsRow = {
+      id: 'pm-1',
+      post_id: 'p-1',
+      business_id: 'b-1',
+      likes: 10,
+      comments: 2,
+      shares: null,
+      saves: null,
+      clicks: null,
+      reach: 500,
+      impressions: 1000,
+      last_synced_at: '2026-05-30T10:00:00Z',
+      created_at: '2026-05-30T10:00:00Z',
+      updated_at: '2026-05-30T10:00:00Z',
+    }
+    const { client, builder } = createMockClient(mockRow, null)
     vi.mocked(serviceModule.createServiceRoleClient).mockReturnValue(client)
-    const result = await upsertPostMetrics(insertData)
-    expect(result).toEqual(mockMetrics)
+
+    const input: PostMetricsInsert = {
+      post_id: 'p-1',
+      business_id: 'b-1',
+      likes: 10,
+      comments: 2,
+      shares: null,
+      saves: null,
+      clicks: null,
+      reach: 500,
+      impressions: 1000,
+      last_synced_at: '2026-05-30T10:00:00Z',
+    }
+    await upsertPostMetrics(input)
+
     expect(client.from).toHaveBeenCalledWith('post_metrics')
+    expect(builder.upsert).toHaveBeenCalledWith(input, { onConflict: 'post_id' })
   })
 
-  it('throws when supabase returns an error', async () => {
-    const { client } = createMockClient(null, { message: 'Upsert error' })
+  describe('null-vs-zero round-trip (ADR 0006 §6 — load-bearing invariant)', () => {
+    it('preserves null, 0, and positive values verbatim — no coalescing', async () => {
+      const mockRow: PostMetricsRow = {
+        id: 'pm-2',
+        post_id: 'p-2',
+        business_id: 'b-2',
+        likes: 5,
+        comments: 0,
+        shares: null,
+        saves: null,
+        clicks: 7,
+        reach: 0,
+        impressions: null,
+        last_synced_at: '2026-05-30T10:00:00Z',
+        created_at: '2026-05-30T10:00:00Z',
+        updated_at: '2026-05-30T10:00:00Z',
+      }
+      const { client, builder } = createMockClient(mockRow, null)
+      vi.mocked(serviceModule.createServiceRoleClient).mockReturnValue(client)
+
+      const input: PostMetricsInsert = {
+        post_id: 'p-2',
+        business_id: 'b-2',
+        likes: 5,
+        comments: 0,
+        shares: null,
+        saves: null,
+        clicks: 7,
+        reach: 0,
+        impressions: null,
+        last_synced_at: '2026-05-30T10:00:00Z',
+      }
+
+      const result = await upsertPostMetrics(input)
+
+      expect(builder.upsert).toHaveBeenCalledWith(input, { onConflict: 'post_id' })
+
+      expect(result.shares).toBeNull()
+      expect(result.saves).toBeNull()
+      expect(result.impressions).toBeNull()
+
+      expect(result.comments).toBe(0)
+      expect(result.reach).toBe(0)
+
+      expect(result.likes).toBe(5)
+      expect(result.clicks).toBe(7)
+    })
+
+    it('shares: null is explicitly not 0', async () => {
+      const mockRow: PostMetricsRow = {
+        id: 'pm-3', post_id: 'p-3', business_id: 'b-3',
+        likes: 1, comments: 0, shares: null, saves: null,
+        clicks: null, reach: null, impressions: null,
+        last_synced_at: '2026-05-30T10:00:00Z',
+        created_at: '2026-05-30T10:00:00Z',
+        updated_at: '2026-05-30T10:00:00Z',
+      }
+      const { client } = createMockClient(mockRow, null)
+      vi.mocked(serviceModule.createServiceRoleClient).mockReturnValue(client)
+
+      const result = await upsertPostMetrics({
+        post_id: 'p-3', business_id: 'b-3',
+        likes: 1, comments: 0, shares: null, saves: null,
+        clicks: null, reach: null, impressions: null,
+        last_synced_at: '2026-05-30T10:00:00Z',
+      })
+
+      expect(result.shares).toBeNull()
+      expect(result.shares).not.toBe(0)
+    })
+  })
+
+  it('throws when upsert returns an error', async () => {
+    const { client } = createMockClient(null, { message: 'constraint violation' })
     vi.mocked(serviceModule.createServiceRoleClient).mockReturnValue(client)
-    await expect(upsertPostMetrics(insertData)).rejects.toThrow('Upsert error')
-  })
-})
 
-describe('getPostMetricsByPostId', () => {
-  it('returns post metrics when found', async () => {
-    const { client } = createMockClient(mockMetrics)
-    const result = await getPostMetricsByPostId(client, 'post-1')
-    expect(result).toEqual(mockMetrics)
-    expect(client.from).toHaveBeenCalledWith('post_metrics')
-  })
-
-  it('returns null when not found', async () => {
-    const { client } = createMockClient(null, null)
-    const result = await getPostMetricsByPostId(client, 'post-missing')
-    expect(result).toBeNull()
-  })
-
-  it('throws when supabase returns an error', async () => {
-    const { client } = createMockClient(null, { message: 'DB error' })
-    await expect(getPostMetricsByPostId(client, 'post-1')).rejects.toThrow('DB error')
-  })
-})
-
-describe('listStalePostMetrics', () => {
-  it('returns list of stale post metrics', async () => {
-    const { client } = createMockClient([mockMetrics])
-    const result = await listStalePostMetrics(client, '2026-04-29T00:00:00Z')
-    expect(result).toEqual([mockMetrics])
-    expect(client.from).toHaveBeenCalledWith('post_metrics')
-  })
-
-  it('returns empty array when none found', async () => {
-    const { client } = createMockClient(null, null)
-    const result = await listStalePostMetrics(client, '2026-04-29T00:00:00Z')
-    expect(result).toEqual([])
-  })
-
-  it('throws when supabase returns an error', async () => {
-    const { client } = createMockClient(null, { message: 'DB error' })
-    await expect(listStalePostMetrics(client, '2026-04-29T00:00:00Z')).rejects.toThrow('DB error')
+    await expect(
+      upsertPostMetrics({ post_id: 'p-err', business_id: 'b-err', last_synced_at: '2026-05-30T10:00:00Z' }),
+    ).rejects.toThrow('constraint violation')
   })
 })

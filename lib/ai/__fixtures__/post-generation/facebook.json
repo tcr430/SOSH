@@ -1,0 +1,22 @@
+{
+  "posts": [
+    {
+      "content": "Quick question for the engineering leaders in here: how long does it take your team to go from a product decision to seeing data that confirms it was right?\n\nFor most of the teams we talk to, the answer is \"too long.\"\n\nWe built our real-time dashboard feature to close that gap. No data engineering setup. No waiting. Just live analytics your whole team can read.\n\nIf you've ever shipped something and had to wait a week to know if it worked, this is for you.",
+      "hashtags": ["#b2bsaas", "#analytics"],
+      "scheduledAt": "2026-05-26T13:00:00.000Z",
+      "rationale": "Opens with a direct question to the target audience, uses conversational tone appropriate for Facebook."
+    },
+    {
+      "content": "Here's something we hear a lot: \"We have the data. We just can't get to it fast enough.\"\n\nEngineering teams at growth-stage startups are making decisions on week-old numbers because their analytics stack can't keep up with their pace.\n\nReal-time analytics shouldn't be a luxury. It should be the baseline.\n\nThat's the product we built. And we'd love to show you how it works.",
+      "hashtags": ["#datadriven", "#b2bsaas"],
+      "scheduledAt": "2026-05-28T13:00:00.000Z",
+      "rationale": "Voice-of-customer framing builds empathy, positions real-time analytics as a baseline expectation."
+    },
+    {
+      "content": "We surveyed 50 engineering leads and found that most of them spend more time maintaining their analytics setup than actually learning from it.\n\nThat's backwards.\n\nYour data stack should work for you — not the other way around.\n\nOur platform connects to your data source and gives you live dashboards in minutes. No engineers required. No week-long setup.\n\nHappy to share more if you're curious — just drop a comment.",
+      "hashtags": ["#analytics", "#scalable"],
+      "scheduledAt": "2026-05-30T13:00:00.000Z",
+      "rationale": "Research stat lends credibility, casual CTA in comments fits Facebook's community interaction style."
+    }
+  ]
+}

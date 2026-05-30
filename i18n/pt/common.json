@@ -8,7 +8,288 @@
     "calendar": "Calendário",
     "analytics": "Análise",
     "inbox": "Caixa de entrada",
-    "settings": "Definições"
+    "settings": "Definições",
+    "profile": "Perfil",
+    "logout": "Terminar sessão",
+    "billing": "Faturação",
+    "coming_soon": "Brevemente"
+  },
+  "dashboard": {
+    "banner": {
+      "no_accounts": "Liga uma conta social para começar a publicar →",
+      "trial_active": "O seu teste termina em {days} dia — escolha um plano → | O seu teste termina em {days} dias — escolha um plano →"
+    },
+    "campaigns": {
+      "empty": {
+        "title": "Ainda sem campanhas",
+        "description": "Crie a sua primeira campanha para começar a gerar publicações."
+      }
+    }
+  },
+  "onboarding": {
+    "progress": "Passo {current} de {total}",
+    "back": "Voltar",
+    "continue": "Continuar",
+    "skip": "Saltar por agora",
+    "step1": {
+      "title": "Fale-nos sobre o seu negócio",
+      "subtitle": "Ajude-nos a personalizar a sua experiência",
+      "fields": {
+        "name": "Nome do negócio",
+        "website": "URL do website",
+        "industry": "Sector",
+        "description": "Descrição",
+        "description_hint": "2–3 frases sobre o que a sua empresa faz e a quem serve"
+      },
+      "industry": {
+        "saas": "SaaS",
+        "ecommerce": "E-commerce",
+        "agency": "Agência",
+        "consulting": "Consultoria",
+        "other": "Outro"
+      }
+    },
+    "step2": {
+      "title": "Defina a voz da sua marca",
+      "subtitle": "Usaremos isto para criar conteúdo que soe como você",
+      "analyzing": "A analisar a voz da sua marca…",
+      "ai_suggested": "Sugerido por IA",
+      "inference_failed": "Não foi possível analisar o seu site automaticamente. Preencha o que souber.",
+      "trial_limit_reached": "Já utilizou a análise de voz de marca do seu período de teste. Preencha o formulário manualmente.",
+      "fields": {
+        "tone": "Tom",
+        "tone_hint": "Selecione todos os que se aplicam",
+        "target_audience": "Público-alvo",
+        "target_audience_hint": "A quem vende? (ex.: fundadores de SaaS, gestores de RH em médias empresas)",
+        "keywords": "Palavras-chave da marca",
+        "keywords_hint": "Prima Enter para adicionar",
+        "avoid_words": "Palavras a evitar",
+        "avoid_words_hint": "Prima Enter para adicionar",
+        "unique_value_prop": "O que o diferencia",
+        "unique_value_prop_hint": "O seu diferenciador principal em 1–2 frases",
+        "competitors": "Concorrentes",
+        "competitors_hint": "Prima Enter para adicionar"
+      },
+      "tones": {
+        "professional": "Profissional",
+        "conversational": "Conversacional",
+        "authoritative": "Autoritário",
+        "friendly": "Amigável",
+        "educational": "Educativo",
+        "inspiring": "Inspirador",
+        "bold": "Ousado",
+        "witty": "Espirituoso"
+      }
+    },
+    "step3": {
+      "title": "Conecte a sua primeira conta de rede social",
+      "subtitle": "Pode adicionar mais contas mais tarde nas Definições",
+      "coming_soon": "Brevemente",
+      "connect": "Conectar",
+      "continue": "Continuar",
+      "skip": "Saltar por agora",
+      "skip_warning": "Sem uma conta ligada, as suas publicações não serão publicadas.",
+      "skip_confirm": "Saltar mesmo assim",
+      "connected_success": "{platform} ligado!",
+      "platforms": {
+        "linkedin": "LinkedIn",
+        "twitter": "X (Twitter)",
+        "instagram": "Instagram",
+        "facebook": "Facebook",
+        "threads": "Threads"
+      }
+    },
+    "step4": {
+      "title": "Está tudo pronto!",
+      "subtitle": "O seu espaço de trabalho está pronto. Crie a sua primeira campanha para começar a gerar conteúdo.",
+      "cta": "Criar a primeira campanha"
+    }
+  },
+  "settings": {
+    "nav": {
+      "accounts": "Contas",
+      "billing": "Faturação",
+      "profile": "Perfil"
+    },
+    "accounts": {
+      "title": "Contas conectadas",
+      "subtitle": "Gira as plataformas sociais onde o SŌSH publica",
+      "status": {
+        "connected": "Conectado",
+        "connected_coming_soon": "Conectado",
+        "expiring_soon": "A expirar em breve",
+        "disconnected": "Não conectado",
+        "coming_soon": "Brevemente"
+      },
+      "reconnect": "Reconectar — expira em {days} dias",
+      "publishing_soon": "Publicação brevemente disponível",
+      "connect": "Conectar",
+      "connect_coming_soon_tooltip": "Conecte para se preparar para quando a publicação for lançada",
+      "disconnect": "Desconectar",
+      "confirm_disconnect_title": "Desconectar {platform}?",
+      "confirm_disconnect_body": "Terá de reconectar para retomar a publicação.",
+      "confirm_disconnect_cancel": "Cancelar",
+      "confirm_disconnect_confirm": "Desconectar",
+      "disconnect_error": "Falha ao desconectar. Por favor, tente novamente.",
+      "connected_as": "Ligado como @{username}",
+      "error": {
+        "invalid_state": "Sessão inválida. Por favor, tente ligar novamente.",
+        "forbidden": "Não tem permissão para ligar esta conta.",
+        "oauth_denied": "Cancelou a ligação a {platform}.",
+        "exchange_failed": "Não foi possível concluir a ligação. Por favor, tente novamente.",
+        "vault_write_failed": "Não foi possível guardar as suas credenciais em segurança. Por favor, tente novamente.",
+        "db_write_failed": "Não foi possível guardar a ligação. Por favor, tente novamente.",
+        "postiz_unavailable": "O serviço de publicação está temporariamente indisponível. Por favor, tente mais tarde.",
+        "connect_failed": "Falha ao conectar. Por favor tente novamente."
+      },
+      "success": {
+        "connected": "{platform} ligado com sucesso."
+      }
+    }
+  },
+  "errors": {
+    "onboarding": {
+      "name_required": "O nome do negócio é obrigatório",
+      "generic": "Ocorreu um erro. Por favor, tente novamente."
+    },
+    "campaign": {
+      "generic": "Ocorreu um erro. Por favor, tente novamente.",
+      "platform_not_connected": "Uma ou mais plataformas selecionadas não estão conectadas. Por favor conecte-as em Definições primeiro."
+    },
+    "ai": {
+      "quota_exceeded": "Esgotou todas as tentativas de análise de voz de marca do período de teste. Preencha manualmente abaixo.",
+      "rate_limited": "Demasiados pedidos. Aguarde um momento e tente novamente.",
+      "provider_error": "O serviço de IA está temporariamente indisponível. Preencha a voz da sua marca manualmente.",
+      "invalid_response": "A análise produziu um resultado inesperado. Preencha a voz da sua marca manualmente.",
+      "timeout": "A análise expirou. Preencha a voz da sua marca manualmente."
+    }
+  },
+  "campaigns": {
+    "list": {
+      "title": "Campanhas",
+      "new_button": "Nova campanha",
+      "empty": {
+        "title": "Crie a sua primeira campanha",
+        "description": "Defina o seu objetivo de conteúdo, escolha as suas plataformas e o SŌSH irá gerar publicações adaptadas à voz da sua marca.",
+        "cta": "Criar campanha"
+      },
+      "card": {
+        "posts": "{published} / {planned} publicações",
+        "created": "Criado a {date}",
+        "view": "Ver",
+        "pause": "Pausar",
+        "resume": "Retomar",
+        "delete": "Eliminar",
+        "delete_confirm_title": "Eliminar campanha?",
+        "delete_confirm_body": "Isto irá eliminar permanentemente a campanha e todas as suas publicações. Esta ação não pode ser desfeita.",
+        "delete_confirm_cancel": "Cancelar",
+        "delete_confirm_confirm": "Eliminar",
+        "delete_active_error": "Pause a campanha antes de a eliminar.",
+        "not_found": "Campanha não encontrada.",
+        "invalid_state": "Esta ação não está disponível para o estado atual da campanha.",
+        "generic": "Ocorreu um erro. Por favor, tente novamente."
+      }
+    },
+    "status": {
+      "draft": "Rascunho",
+      "active": "Ativa",
+      "paused": "Pausada",
+      "completed": "Concluída"
+    },
+    "new": {
+      "title": "Nova campanha",
+      "section1": {
+        "title": "Qual é o objetivo?"
+      },
+      "section2": {
+        "title": "Onde e com que frequência?"
+      },
+      "fields": {
+        "name": "Nome da campanha",
+        "name_placeholder": "ex.: Lançamento de inverno — gerar inscrições",
+        "objective": "Objetivo",
+        "objective_placeholder": "ex.: Gerar inscrições para o lançamento de inverno, construir liderança de pensamento no LinkedIn, promover o nosso novo caso de estudo...",
+        "special_instructions": "Instruções especiais",
+        "special_instructions_placeholder": "ex.: Mencionar que a promoção termina a 31 de dezembro, evitar comparações com concorrentes, terminar sempre com uma pergunta",
+        "optional": "Opcional",
+        "platforms": "Plataformas",
+        "frequency_label": "Frequência de publicação",
+        "frequency": {
+          "daily": "Diário (7/semana)",
+          "3x_week": "3× semana",
+          "weekly": "Semanal",
+          "custom": "Personalizado"
+        },
+        "posts_per_week": "publicações por semana",
+        "start_date": "Data de início",
+        "end_date": "Data de fim",
+        "estimated_posts": "Serão geradas aproximadamente {count} publicações"
+      },
+      "platform": {
+        "not_connected": "Ligar nas Definições →",
+        "coming_soon": "Brevemente"
+      },
+      "summary": {
+        "untitled": "Campanha sem título"
+      },
+      "cta": "Criar campanha",
+      "limit": {
+        "trial": "O seu período de teste inclui 1 campanha. Atualize para criar mais.",
+        "plus": "O seu plano Plus inclui 5 campanhas ativas. Atualize para Pro ou conclua uma existente."
+      }
+    },
+    "detail": {
+      "back": "Voltar às campanhas",
+      "edit": "Editar",
+      "meta": {
+        "platforms": "Plataformas",
+        "frequency": "Frequência",
+        "dates": "Datas",
+        "no_end_date": "Sem data de fim",
+        "special_instructions": "Instruções especiais",
+        "posts_per_week": "{n} publicações/semana"
+      },
+      "generate": {
+        "title": "Pronto para gerar as suas publicações?",
+        "body": "O SŌSH vai criar {count} publicações específicas por plataforma na voz da sua marca. Irá rever e aprovar cada uma antes de qualquer publicação.",
+        "cta": "Gerar publicações",
+        "starting": "A iniciar a geração…",
+        "in_progress": "A gerar {created} de {planned} publicações…",
+        "success": "Geradas {count} publicações. A redirecionar para revisão…",
+        "try_again": "Tentar novamente",
+        "timeout": "Ainda a trabalhar — volte em breve.",
+        "error": {
+          "quota_exceeded": "Atingiu o limite de publicações do período de teste. Faça upgrade para continuar.",
+          "rate_limited": "Demasiados pedidos. Aguarde um momento e tente novamente.",
+          "provider_error": "O fornecedor de IA devolveu um erro. Por favor, tente novamente.",
+          "invalid_response": "A IA devolveu uma resposta inesperada. Por favor, tente novamente.",
+          "timeout": "A geração expirou. Por favor, tente novamente.",
+          "invalid_campaign_state": "Esta campanha não está pronta para gerar publicações. Verifique se tem voz de marca e estado de rascunho.",
+          "already_generated": "As publicações já foram geradas para esta campanha.",
+          "generic": "Ocorreu um erro. Por favor, tente novamente."
+        }
+      },
+      "posts": {
+        "published": "{published} de {total} publicações publicadas",
+        "view_cta": "Ver publicações"
+      },
+      "nextPost": "Próxima publicação: {in}",
+      "failedBanner": "{count} publicação falhou ao publicar",
+      "failedBanner_plural": "{count} publicações falharam ao publicar",
+      "openFailed": "Abrir a fila de revisão",
+      "danger": {
+        "title": "Zona de perigo",
+        "pause": "Pausar campanha",
+        "resume": "Retomar campanha",
+        "delete": "Eliminar campanha",
+        "delete_confirm_title": "Eliminar campanha?",
+        "delete_confirm_body": "Isto irá eliminar permanentemente a campanha e todas as suas publicações. Esta ação não pode ser desfeita.",
+        "confirm_cancel": "Cancelar",
+        "confirm_delete": "Eliminar",
+        "error_invalid_state": "Esta ação não está disponível para o estado atual da campanha.",
+        "error_generic": "Ocorreu um erro. Por favor, tente novamente."
+      }
+    }
   },
   "marketing": {
     "hero": {

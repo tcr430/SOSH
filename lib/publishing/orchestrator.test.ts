@@ -1,0 +1,390 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { runPublishTick, runJanitorTick } from './orchestrator'
+import { SocialProviderError, getRegistry } from '@/lib/social/index'
+import {
+  claimPostsForPublishing,
+  markPostPublished,
+  markPostFailed,
+  requeueScheduledPost,
+  incrementPublishedCountForCampaign,
+} from '@/lib/db/posts'
+import { recoverStuckGenerationSessions } from '@/lib/db/post-generation-sessions'
+import { getActiveByBusinessAndPlatform } from '@/lib/db/social-accounts'
+import type { PostRow, SocialAccountRow, VaultSecretId } from '@/lib/db/types'
+
+vi.mock('@/lib/supabase/service', () => ({
+  createServiceRoleClient: vi.fn(() => ({})),
+}))
+
+vi.mock('@/lib/config', () => ({
+  config: {
+    server: {
+      PUBLISH_BATCH_SIZE: 10,
+      PUBLISH_MAX_ATTEMPTS: 3,
+      PUBLISH_RETRY_BACKOFF_SECONDS: 30,
+      POST_GENERATION_SESSION_STALE_MINUTES: 30,
+    },
+  },
+}))
+
+vi.mock('@/lib/db/posts', () => ({
+  claimPostsForPublishing: vi.fn(),
+  markPostPublished: vi.fn(),
+  markPostFailed: vi.fn(),
+  requeueScheduledPost: vi.fn(),
+  reapStuckScheduledPosts: vi.fn(),
+  incrementPublishedCountForCampaign: vi.fn(),
+}))
+
+vi.mock('@/lib/db/post-generation-sessions', () => ({
+  recoverStuckGenerationSessions: vi.fn(),
+}))
+
+vi.mock('@/lib/db/social-accounts', () => ({
+  getActiveByBusinessAndPlatform: vi.fn(),
+}))
+
+vi.mock('@/lib/social/index', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('@/lib/social/index')>()
+  return { ...mod, getRegistry: vi.fn() }
+})
+
+// ─── Fixtures ────────────────────────────────────────────────────────────────
+
+const NOW = new Date('2026-05-25T10:00:00Z')
+
+const mockAccount: SocialAccountRow = {
+  id: 'acct-1',
+  business_id: 'biz-1',
+  platform: 'linkedin',
+  platform_user_id: 'li-user-1',
+  platform_username: 'testuser',
+  platform_display_name: 'Test User',
+  vault_access_token_id: 'vault-1' as unknown as VaultSecretId,
+  vault_refresh_token_id: null,
+  token_expires_at: null,
+  is_active: true,
+  connected_at: '2026-01-01T00:00:00Z',
+  created_at: '2026-01-01T00:00:00Z',
+  updated_at: '2026-01-01T00:00:00Z',
+}
+
+const mockPost: PostRow = {
+  id: 'post-1',
+  campaign_id: 'camp-1',
+  business_id: 'biz-1',
+  platform: 'linkedin',
+  content: 'Test content',
+  hashtags: [],
+  media_urls: [],
+  scheduled_at: '2026-05-25T10:00:00Z',
+  published_at: null,
+  platform_post_id: null,
+  platform_url: null,
+  status: 'scheduled',
+  rejection_note: null,
+  ai_generation_metadata: {},
+  publish_attempts: 0,
+  last_publish_attempt_at: null,
+  last_publish_error: null,
+  deleted_at: null,
+  created_at: '2026-04-30T00:00:00Z',
+  updated_at: '2026-04-30T00:00:00Z',
+}
+
+// ─── Per-test mock provider ───────────────────────────────────────────────────
+
+const mockPublish = vi.fn()
+const mockRefreshAccessToken = vi.fn()
+
+beforeEach(() => {
+  vi.clearAllMocks()
+
+  const mockProvider = { publish: mockPublish, refreshAccessToken: mockRefreshAccessToken }
+  vi.mocked(getRegistry).mockReturnValue({ get: () => mockProvider } as unknown as ReturnType<typeof getRegistry>)
+
+  mockPublish.mockResolvedValue({ platformPostId: 'ext-123', publishedAt: '2026-05-25T10:01:00Z', url: 'https://example.com' })
+  mockRefreshAccessToken.mockResolvedValue({})
+
+  vi.mocked(claimPostsForPublishing).mockResolvedValue([])
+  vi.mocked(markPostPublished).mockResolvedValue(undefined as never)
+  vi.mocked(markPostFailed).mockResolvedValue(undefined as never)
+  vi.mocked(requeueScheduledPost).mockResolvedValue(undefined as never)
+  vi.mocked(incrementPublishedCountForCampaign).mockResolvedValue(undefined)
+  vi.mocked(recoverStuckGenerationSessions).mockResolvedValue(0)
+  vi.mocked(getActiveByBusinessAndPlatform).mockResolvedValue(mockAccount)
+})
+
+// ─── runPublishTick ───────────────────────────────────────────────────────────
+
+describe('runPublishTick', () => {
+  it('returns all-zero summary with no provider calls when claim is empty', async () => {
+    const summary = await runPublishTick({ now: NOW })
+    expect(summary.claimed).toBe(0)
+    expect(summary.published).toBe(0)
+    expect(summary.failed).toBe(0)
+    expect(summary.retried).toBe(0)
+    expect(summary.refreshed).toBe(0)
+    expect(mockPublish).not.toHaveBeenCalled()
+  })
+
+  it('folds in reaped count from opts', async () => {
+    const summary = await runPublishTick({ now: NOW, reaped: 7 })
+    expect(summary.reaped).toBe(7)
+  })
+
+  it('successful publish: increments published and campaign counter', async () => {
+    vi.mocked(claimPostsForPublishing).mockResolvedValue([mockPost])
+    const summary = await runPublishTick({ now: NOW })
+    expect(summary.published).toBe(1)
+    expect(summary.failed).toBe(0)
+    expect(vi.mocked(markPostPublished)).toHaveBeenCalledWith(
+      expect.anything(),
+      'post-1',
+      expect.objectContaining({ platformPostId: 'ext-123' }),
+    )
+    expect(vi.mocked(incrementPublishedCountForCampaign)).toHaveBeenCalledWith(
+      expect.anything(),
+      'camp-1',
+    )
+  })
+
+  it('passes socialAccountId from looked-up account to PublishInput', async () => {
+    vi.mocked(claimPostsForPublishing).mockResolvedValue([mockPost])
+    await runPublishTick({ now: NOW })
+    expect(mockPublish).toHaveBeenCalledWith(
+      expect.objectContaining({ socialAccountId: 'acct-1' }),
+    )
+  })
+
+  it('TOKEN_EXPIRED → refresh → success: refreshed=1, published=1, publish_attempts unchanged', async () => {
+    const err = new SocialProviderError({ code: 'TOKEN_EXPIRED', message: 'expired' })
+    mockPublish
+      .mockRejectedValueOnce(err)
+      .mockResolvedValueOnce({ platformPostId: 'ext-after', publishedAt: '2026-05-25T10:01:00Z', url: null })
+    vi.mocked(claimPostsForPublishing).mockResolvedValue([mockPost])
+
+    const summary = await runPublishTick({ now: NOW })
+
+    expect(summary.refreshed).toBe(1)
+    expect(summary.published).toBe(1)
+    expect(summary.failed).toBe(0)
+    expect(mockRefreshAccessToken).toHaveBeenCalledWith({ socialAccountId: 'acct-1' })
+    // Token refresh does not consume a publish_attempts budget entry
+    expect(vi.mocked(requeueScheduledPost)).not.toHaveBeenCalled()
+  })
+
+  it('TOKEN_EXPIRED → refresh → fail again: terminal failed with reason=refresh_failed', async () => {
+    const err = new SocialProviderError({ code: 'TOKEN_EXPIRED', message: 'expired' })
+    mockPublish.mockRejectedValue(err)
+    vi.mocked(claimPostsForPublishing).mockResolvedValue([mockPost])
+
+    const summary = await runPublishTick({ now: NOW })
+
+    expect(summary.failed).toBe(1)
+    expect(summary.published).toBe(0)
+    const call = vi.mocked(markPostFailed).mock.calls[0]
+    expect(call[2].errorCode).toBe('TOKEN_REVOKED')
+    expect((call[2].errorDetails as Record<string, unknown>).reason).toBe('refresh_failed')
+  })
+
+  it('TOKEN_EXPIRED refresh-loop guard: two posts same account, second hits guard', async () => {
+    const post2: PostRow = { ...mockPost, id: 'post-2' }
+    const err = new SocialProviderError({ code: 'TOKEN_EXPIRED', message: 'expired' })
+
+    mockPublish
+      .mockRejectedValueOnce(err)
+      .mockResolvedValueOnce({ platformPostId: 'ext-1', publishedAt: '...', url: null })
+      .mockRejectedValueOnce(err)
+
+    vi.mocked(claimPostsForPublishing).mockResolvedValue([mockPost, post2])
+
+    const summary = await runPublishTick({ now: NOW })
+
+    expect(summary.refreshed).toBe(1)
+    expect(mockRefreshAccessToken).toHaveBeenCalledTimes(1)
+    expect(summary.published).toBe(1)
+    expect(summary.failed).toBe(1)
+    const failedCall = vi.mocked(markPostFailed).mock.calls[0]
+    expect((failedCall[2].errorDetails as Record<string, unknown>).reason).toBe('refresh_loop')
+  })
+
+  it('RATE_LIMITED: queues with incrementAttempts=false', async () => {
+    const err = new SocialProviderError({ code: 'RATE_LIMITED', message: 'rate limited', retryAfterSeconds: 120 })
+    mockPublish.mockRejectedValueOnce(err)
+    vi.mocked(claimPostsForPublishing).mockResolvedValue([mockPost])
+
+    const summary = await runPublishTick({ now: NOW })
+
+    expect(summary.retried).toBe(1)
+    expect(summary.failed).toBe(0)
+    const call = vi.mocked(requeueScheduledPost).mock.calls[0]
+    expect(call[2].incrementAttempts).toBe(false)
+    expect(call[2].errorCode).toBe('RATE_LIMITED')
+  })
+
+  it('RATE_LIMITED: newScheduledAt = now + retryAfterSeconds', async () => {
+    const err = new SocialProviderError({ code: 'RATE_LIMITED', message: 'rate limited', retryAfterSeconds: 120 })
+    mockPublish.mockRejectedValueOnce(err)
+    vi.mocked(claimPostsForPublishing).mockResolvedValue([mockPost])
+
+    await runPublishTick({ now: NOW })
+
+    const call = vi.mocked(requeueScheduledPost).mock.calls[0]
+    const newAt = call[2].newScheduledAt as Date
+    expect((newAt.getTime() - NOW.getTime()) / 1000).toBe(120)
+  })
+
+  it('NETWORK (attempts < MAX): queues with incrementAttempts=true', async () => {
+    const err = new SocialProviderError({ code: 'NETWORK', message: 'connection failed' })
+    mockPublish.mockRejectedValueOnce(err)
+    vi.mocked(claimPostsForPublishing).mockResolvedValue([{ ...mockPost, publish_attempts: 0 }])
+
+    const summary = await runPublishTick({ now: NOW })
+
+    expect(summary.retried).toBe(1)
+    expect(summary.failed).toBe(0)
+    const call = vi.mocked(requeueScheduledPost).mock.calls[0]
+    expect(call[2].incrementAttempts).toBe(true)
+    expect(call[2].errorCode).toBe('NETWORK')
+  })
+
+  it('NETWORK (attempts+1 === MAX): terminal failed, no requeue', async () => {
+    const err = new SocialProviderError({ code: 'NETWORK', message: 'connection failed' })
+    mockPublish.mockRejectedValueOnce(err)
+    vi.mocked(claimPostsForPublishing).mockResolvedValue([{ ...mockPost, publish_attempts: 2 }])
+
+    const summary = await runPublishTick({ now: NOW })
+
+    expect(summary.failed).toBe(1)
+    expect(summary.retried).toBe(0)
+    expect(vi.mocked(requeueScheduledPost)).not.toHaveBeenCalled()
+  })
+
+  it('TOKEN_REVOKED: terminal failed', async () => {
+    const err = new SocialProviderError({ code: 'TOKEN_REVOKED', message: 'revoked' })
+    mockPublish.mockRejectedValueOnce(err)
+    vi.mocked(claimPostsForPublishing).mockResolvedValue([mockPost])
+
+    const summary = await runPublishTick({ now: NOW })
+
+    expect(summary.failed).toBe(1)
+    const call = vi.mocked(markPostFailed).mock.calls[0]
+    expect(call[2].errorCode).toBe('TOKEN_REVOKED')
+  })
+
+  it('PLATFORM_REJECTED: terminal failed', async () => {
+    const err = new SocialProviderError({ code: 'PLATFORM_REJECTED', message: 'rejected' })
+    mockPublish.mockRejectedValueOnce(err)
+    vi.mocked(claimPostsForPublishing).mockResolvedValue([mockPost])
+
+    const summary = await runPublishTick({ now: NOW })
+
+    expect(summary.failed).toBe(1)
+    const call = vi.mocked(markPostFailed).mock.calls[0]
+    expect(call[2].errorCode).toBe('PLATFORM_REJECTED')
+  })
+
+  it('NOT_IMPLEMENTED: terminal failed', async () => {
+    const err = new SocialProviderError({ code: 'NOT_IMPLEMENTED', message: 'not impl' })
+    mockPublish.mockRejectedValueOnce(err)
+    vi.mocked(claimPostsForPublishing).mockResolvedValue([mockPost])
+
+    const summary = await runPublishTick({ now: NOW })
+
+    expect(summary.failed).toBe(1)
+  })
+
+  it('PROVIDER_NOT_CONFIGURED: terminal failed', async () => {
+    const err = new SocialProviderError({ code: 'PROVIDER_NOT_CONFIGURED', message: 'not configured' })
+    mockPublish.mockRejectedValueOnce(err)
+    vi.mocked(claimPostsForPublishing).mockResolvedValue([mockPost])
+
+    const summary = await runPublishTick({ now: NOW })
+
+    expect(summary.failed).toBe(1)
+  })
+
+  it('UNKNOWN: terminal failed', async () => {
+    const err = new SocialProviderError({ code: 'UNKNOWN', message: 'unknown' })
+    mockPublish.mockRejectedValueOnce(err)
+    vi.mocked(claimPostsForPublishing).mockResolvedValue([mockPost])
+
+    const summary = await runPublishTick({ now: NOW })
+
+    expect(summary.failed).toBe(1)
+    const call = vi.mocked(markPostFailed).mock.calls[0]
+    expect(call[2].errorCode).toBe('UNKNOWN')
+  })
+
+  it('sequential: NETWORK failure on post-1 does not abort post-2', async () => {
+    const post2: PostRow = { ...mockPost, id: 'post-2', campaign_id: 'camp-2' }
+    const networkErr = new SocialProviderError({ code: 'NETWORK', message: 'fail' })
+    mockPublish
+      .mockRejectedValueOnce(networkErr)
+      .mockResolvedValueOnce({ platformPostId: 'ext-2', publishedAt: '...', url: null })
+    vi.mocked(claimPostsForPublishing).mockResolvedValue([mockPost, post2])
+
+    const summary = await runPublishTick({ now: NOW })
+
+    expect(summary.retried).toBe(1)
+    expect(summary.published).toBe(1)
+  })
+
+  it('reaper-before-claim: stale scheduled + fresh approved → both published', async () => {
+    // Row A was reaped from scheduled → approved, then claimed. Row B was directly approved.
+    // Both arrive in the tick as claimed (scheduled) posts. reaped=1 reflects the pre-tick reaper run.
+    const rowA: PostRow = { ...mockPost, id: 'post-reap', publish_attempts: 0 }
+    const rowB: PostRow = { ...mockPost, id: 'post-fresh', publish_attempts: 0 }
+    vi.mocked(claimPostsForPublishing).mockResolvedValue([rowA, rowB])
+    mockPublish
+      .mockResolvedValueOnce({ platformPostId: 'ext-A', publishedAt: '2026-05-25T10:01:00Z', url: null })
+      .mockResolvedValueOnce({ platformPostId: 'ext-B', publishedAt: '2026-05-25T10:01:00Z', url: null })
+
+    const summary = await runPublishTick({ now: NOW, batchSize: 25, reaped: 1 })
+
+    expect(summary.claimed).toBe(2)
+    expect(summary.published).toBe(2)
+    expect(summary.reaped).toBe(1)
+    expect(summary.failed).toBe(0)
+  })
+
+  it('account_disconnected: marks failed TOKEN_REVOKED with reason=account_disconnected', async () => {
+    vi.mocked(getActiveByBusinessAndPlatform).mockResolvedValue(null)
+    vi.mocked(claimPostsForPublishing).mockResolvedValue([mockPost])
+
+    const summary = await runPublishTick({ now: NOW })
+
+    expect(summary.failed).toBe(1)
+    expect(mockPublish).not.toHaveBeenCalled()
+    const call = vi.mocked(markPostFailed).mock.calls[0]
+    expect(call[2].errorCode).toBe('TOKEN_REVOKED')
+    expect((call[2].errorDetails as Record<string, unknown>).reason).toBe('account_disconnected')
+  })
+})
+
+// ─── runJanitorTick ───────────────────────────────────────────────────────────
+
+describe('runJanitorTick', () => {
+  it('calls recoverStuckGenerationSessions with configured staleMinutes', async () => {
+    vi.mocked(recoverStuckGenerationSessions).mockResolvedValue(3)
+    const summary = await runJanitorTick({ now: NOW })
+    expect(summary.stuckGenerationSessionsReaped).toBe(3)
+    expect(vi.mocked(recoverStuckGenerationSessions)).toHaveBeenCalledWith(
+      expect.anything(),
+      { now: NOW, staleMinutes: 30 },
+    )
+  })
+
+  it('returns zero when no stale sessions exist', async () => {
+    vi.mocked(recoverStuckGenerationSessions).mockResolvedValue(0)
+    const summary = await runJanitorTick({ now: NOW })
+    expect(summary.stuckGenerationSessionsReaped).toBe(0)
+  })
+
+  it('summary includes tick timestamp and durationMs', async () => {
+    const summary = await runJanitorTick({ now: NOW })
+    expect(typeof summary.tick).toBe('string')
+    expect(typeof summary.durationMs).toBe('number')
+  })
+})

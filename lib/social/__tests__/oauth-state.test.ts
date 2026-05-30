@@ -15,19 +15,21 @@ describe('signOAuthState / verifyOAuthState', () => {
     const token = await signOAuthState({
       businessId: 'biz-123',
       platform: 'linkedin',
+      locale: 'en',
     })
 
     const claims = await verifyOAuthState(token)
 
     expect(claims.businessId).toBe('biz-123')
     expect(claims.platform).toBe('linkedin')
+    expect(claims.locale).toBe('en')
     expect(typeof claims.nonce).toBe('string')
     expect(claims.nonce.length).toBeGreaterThan(0)
   })
 
   it('each call produces a different nonce', async () => {
-    const t1 = await signOAuthState({ businessId: 'biz-1', platform: 'twitter' })
-    const t2 = await signOAuthState({ businessId: 'biz-1', platform: 'twitter' })
+    const t1 = await signOAuthState({ businessId: 'biz-1', platform: 'twitter', locale: 'en' })
+    const t2 = await signOAuthState({ businessId: 'biz-1', platform: 'twitter', locale: 'en' })
 
     const c1 = await verifyOAuthState(t1)
     const c2 = await verifyOAuthState(t2)
@@ -36,7 +38,7 @@ describe('signOAuthState / verifyOAuthState', () => {
   })
 
   it('throws when verified with a different secret', async () => {
-    const token = await signOAuthState({ businessId: 'biz-1', platform: 'instagram' })
+    const token = await signOAuthState({ businessId: 'biz-1', platform: 'instagram', locale: 'pt' })
 
     // Temporarily mock config to return a different secret
     const { config } = await import('@/lib/config')
@@ -55,7 +57,7 @@ describe('signOAuthState / verifyOAuthState', () => {
   })
 
   it('throws on a tampered payload', async () => {
-    const token = await signOAuthState({ businessId: 'biz-1', platform: 'facebook' })
+    const token = await signOAuthState({ businessId: 'biz-1', platform: 'facebook', locale: 'en' })
     const [header, , signature] = token.split('.')
     // Replace payload with different content
     const fakePayload = Buffer.from(JSON.stringify({ businessId: 'evil', platform: 'facebook', nonce: 'x' })).toString('base64url')
@@ -92,7 +94,7 @@ describe('signOAuthState / verifyOAuthState', () => {
     }
 
     await expect(
-      signOAuthState({ businessId: 'biz-1', platform: 'threads' }),
+      signOAuthState({ businessId: 'biz-1', platform: 'threads', locale: 'es' }),
     ).rejects.toThrow()
 
     vi.mocked(config).server = {

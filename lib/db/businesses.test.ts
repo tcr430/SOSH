@@ -1,13 +1,22 @@
-import { describe, it, expect } from 'vitest'
+import { vi, describe, it, expect } from 'vitest'
 import { createMockClient } from './__test-utils__/mock-client'
+import * as serviceModule from '@/lib/supabase/service'
 import {
   getBusinessById,
   getBusinessByOwner,
   createBusiness,
   updateBusiness,
   softDeleteBusiness,
+  findBusinessByStripeCustomerId,
+  updateBillingFromSubscription,
+  clearBillingOnCancellation,
+  setStripeCustomerId,
 } from './businesses'
 import type { BusinessRow, BusinessInsert } from './types'
+
+vi.mock('@/lib/supabase/service', () => ({
+  createServiceRoleClient: vi.fn(),
+}))
 
 const mockBusiness: BusinessRow = {
   id: 'biz-1',
@@ -110,5 +119,143 @@ describe('softDeleteBusiness', () => {
   it('throws when supabase returns an error', async () => {
     const { client } = createMockClient(null, { message: 'Delete error' })
     await expect(softDeleteBusiness(client, 'biz-1')).rejects.toThrow('Delete error')
+  })
+})
+
+const mockBusinessWithCustomer: BusinessRow = {
+  ...mockBusiness,
+  stripe_customer_id: 'cus_test_001',
+  stripe_subscription_id: 'sub_test_001',
+  plan: 'plus',
+}
+
+describe('findBusinessByStripeCustomerId', () => {
+  it('returns a business when found', async () => {
+    const { client } = createMockClient(mockBusinessWithCustomer)
+    vi.mocked(serviceModule.createServiceRoleClient).mockReturnValue(client)
+    const result = await findBusinessByStripeCustomerId('cus_test_001')
+    expect(result).toEqual(mockBusinessWithCustomer)
+    expect(client.from).toHaveBeenCalledWith('businesses')
+  })
+
+  it('returns null when not found', async () => {
+    const { client } = createMockClient(null, null)
+    vi.mocked(serviceModule.createServiceRoleClient).mockReturnValue(client)
+    const result = await findBusinessByStripeCustomerId('cus_missing')
+    expect(result).toBeNull()
+  })
+
+  it('throws on DB error', async () => {
+    const { client } = createMockClient(null, { message: 'DB error' })
+    vi.mocked(serviceModule.createServiceRoleClient).mockReturnValue(client)
+    await expect(findBusinessByStripeCustomerId('cus_test_001')).rejects.toThrow('DB error')
+  })
+})
+
+describe('updateBillingFromSubscription', () => {
+  it('returns updated business on match', async () => {
+    const { client } = createMockClient(mockBusinessWithCustomer)
+    vi.mocked(serviceModule.createServiceRoleClient).mockReturnValue(client)
+    const result = await updateBillingFromSubscription({
+      stripeCustomerId: 'cus_test_001',
+      stripeSubscriptionId: 'sub_test_001',
+      plan: 'plus',
+    })
+    expect(result).toEqual(mockBusinessWithCustomer)
+    expect(client.from).toHaveBeenCalledWith('businesses')
+  })
+
+  it('returns null when no business matches the customer ID', async () => {
+    const { client } = createMockClient(null, null)
+    vi.mocked(serviceModule.createServiceRoleClient).mockReturnValue(client)
+    const result = await updateBillingFromSubscription({
+      stripeCustomerId: 'cus_missing',
+      stripeSubscriptionId: 'sub_test_001',
+      plan: 'plus',
+    })
+    expect(result).toBeNull()
+  })
+
+  it('throws on DB error', async () => {
+    const { client } = createMockClient(null, { message: 'Update error' })
+    vi.mocked(serviceModule.createServiceRoleClient).mockReturnValue(client)
+    await expect(
+      updateBillingFromSubscription({ stripeCustomerId: 'cus_test_001', stripeSubscriptionId: 'sub_test_001', plan: 'plus' })
+    ).rejects.toThrow('Update error')
+  })
+})
+
+describe('clearBillingOnCancellation', () => {
+  it('returns updated business with plan=trial and no subscription', async () => {
+    const downgraded: BusinessRow = { ...mockBusinessWithCustomer, plan: 'trial', stripe_subscription_id: null }
+    const { client } = createMockClient(downgraded)
+    vi.mocked(serviceModule.createServiceRoleClient).mockReturnValue(client)
+    const result = await clearBillingOnCancellation({ stripeCustomerId: 'cus_test_001' })
+    expect(result).toEqual(downgraded)
+    expect(client.from).toHaveBeenCalledWith('businesses')
+  })
+
+  it('returns null when no business matches', async () => {
+    const { client } = createMockClient(null, null)
+    vi.mocked(serviceModule.createServiceRoleClient).mockReturnValue(client)
+    const result = await clearBillingOnCancellation({ stripeCustomerId: 'cus_missing' })
+    expect(result).toBeNull()
+  })
+
+  it('throws on DB error', async () => {
+    const { client } = createMockClient(null, { message: 'Update error' })
+    vi.mocked(serviceModule.createServiceRoleClient).mockReturnValue(client)
+    await expect(clearBillingOnCancellation({ stripeCustomerId: 'cus_test_001' })).rejects.toThrow('Update error')
+  })
+})
+
+describe('setStripeCustomerId', () => {
+  it('resolves when customer ID is set for the first time', async () => {
+    const { client } = createMockClient(mockBusinessWithCustomer)
+    vi.mocked(serviceModule.createServiceRoleClient).mockReturnValue(client)
+    await expect(
+      setStripeCustomerId({ businessId: 'biz-1', stripeCustomerId: 'cus_test_001' })
+    ).resolves.toBeUndefined()
+  })
+
+  it('resolves (idempotent) when same customer ID is re-set', async () => {
+    const { client } = createMockClient(mockBusinessWithCustomer)
+    vi.mocked(serviceModule.createServiceRoleClient).mockReturnValue(client)
+    await expect(
+      setStripeCustomerId({ businessId: 'biz-1', stripeCustomerId: 'cus_test_001' })
+    ).resolves.toBeUndefined()
+  })
+
+  it('silently no-ops when business is not found / already deleted', async () => {
+    const { client, builder } = createMockClient(null, null)
+    vi.mocked(serviceModule.createServiceRoleClient).mockReturnValue(client)
+    // UPDATE matched 0 rows, SELECT also returns null (business gone)
+    vi.mocked(builder.maybeSingle as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ data: null, error: null })
+      .mockResolvedValueOnce({ data: null, error: null })
+    await expect(
+      setStripeCustomerId({ businessId: 'biz-gone', stripeCustomerId: 'cus_test_001' })
+    ).resolves.toBeUndefined()
+  })
+
+  it('throws when a DIFFERENT stripe_customer_id is already set (double-write canary)', async () => {
+    const { client, builder } = createMockClient(null, null)
+    vi.mocked(serviceModule.createServiceRoleClient).mockReturnValue(client)
+    // UPDATE matched 0 rows (WHERE condition excluded this row)
+    // SELECT reveals the business exists with a different customer ID
+    vi.mocked(builder.maybeSingle as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ data: null, error: null })
+      .mockResolvedValueOnce({ data: { stripe_customer_id: 'cus_existing_other' }, error: null })
+    await expect(
+      setStripeCustomerId({ businessId: 'biz-1', stripeCustomerId: 'cus_new' })
+    ).rejects.toThrow()
+  })
+
+  it('throws on DB error', async () => {
+    const { client } = createMockClient(null, { message: 'Update error' })
+    vi.mocked(serviceModule.createServiceRoleClient).mockReturnValue(client)
+    await expect(
+      setStripeCustomerId({ businessId: 'biz-1', stripeCustomerId: 'cus_test_001' })
+    ).rejects.toThrow('Update error')
   })
 })

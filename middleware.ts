@@ -9,12 +9,13 @@ const handleI18n = createIntlMiddleware(routing);
 // accessible without authentication. Everything else is treated as a
 // /(dashboard)/ route and requires a valid session.
 const PUBLIC_SEGMENTS = new Set([
-  '',               // /[locale]  (locale root)
-  'home',           // /(marketing)/home
-  'login',          // /(auth)/login
-  'signup',         // /(auth)/signup
-  'reset-password', // /(auth)/reset-password
-  'verify-email',   // /(auth)/verify-email
+  '',                 // /[locale]  (locale root)
+  'home',             // /(marketing)/home
+  'login',            // /(auth)/login
+  'signup',           // /(auth)/signup
+  'forgot-password',  // /(auth)/forgot-password
+  'reset-password',   // /(auth)/reset-password
+  'verify-email',     // /(auth)/verify-email
 ])
 
 export async function middleware(request: NextRequest) {
@@ -30,20 +31,31 @@ export async function middleware(request: NextRequest) {
     const firstSegment = afterLocale.split('/')[1] ?? ''
 
     if (!PUBLIC_SEGMENTS.has(firstSegment) && !user) {
-      return NextResponse.redirect(new URL(`/${locale}/login`, request.url))
+      const loginUrl = new URL(`/${locale}/login`, request.url)
+      loginUrl.searchParams.set('redirect', pathname)
+      return NextResponse.redirect(loginUrl)
     }
   }
 
-  // 3. Run locale routing on the (now cookie-updated) request.
-  const i18nResponse = handleI18n(request);
+  // 3. Forward pathname as a request header so Server Components can read it
+  //    via headers().get('x-pathname'). Required for onboarding redirect guard.
+  const requestHeaders = new Headers(request.headers)
+  requestHeaders.set('x-pathname', pathname)
 
-  // 4. Carry Supabase auth cookies over so the browser stores the refreshed
-  //    session even when the i18n middleware issues a locale redirect.
-  supabaseResponse.cookies.getAll().forEach((cookie) => {
-    i18nResponse.cookies.set(cookie);
-  });
+  // 4. Run locale routing. If i18n issues a redirect (locale normalisation),
+  //    attach Supabase cookies and return it directly.
+  const i18nResponse = handleI18n(request)
+  if (i18nResponse.headers.get('location')) {
+    supabaseResponse.cookies.getAll().forEach((c) => i18nResponse.cookies.set(c))
+    return i18nResponse
+  }
 
-  return i18nResponse;
+  // 5. For normal renders, return NextResponse.next() with modified request
+  //    headers so Server Components receive x-pathname.
+  const response = NextResponse.next({ request: { headers: requestHeaders } })
+  supabaseResponse.cookies.getAll().forEach((c) => response.cookies.set(c))
+  i18nResponse.cookies.getAll().forEach((c) => response.cookies.set(c))
+  return response
 }
 
 export const config = {

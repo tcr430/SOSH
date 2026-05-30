@@ -1,0 +1,22 @@
+{
+  "posts": [
+    {
+      "content": "Your analytics setup should take minutes to understand, not weeks to configure. Real-time dashboards shouldn't require a data engineer. We built the thing that fixes this.",
+      "hashtags": [],
+      "scheduledAt": "2026-05-26T12:00:00.000Z",
+      "rationale": "Casual, under-500-chars take on the core problem — direct and human, no buzzwords."
+    },
+    {
+      "content": "Shipping a feature and waiting 48 hours to see if it worked is not a strategy. It's a bottleneck. The data should be there the moment you need it.",
+      "hashtags": [],
+      "scheduledAt": "2026-05-28T12:00:00.000Z",
+      "rationale": "Short, opinionated take that speaks to the ICP's shipping pace — Threads style, one clear idea."
+    },
+    {
+      "content": "Most analytics tools are built for data teams. We built ours for the engineering leader who doesn't have one. Connect your source. See your data. Make the call.",
+      "hashtags": [],
+      "scheduledAt": "2026-05-30T12:00:00.000Z",
+      "rationale": "Speaks directly to the ICP persona, emphasizes ease in three-sentence rhythm typical of Threads."
+    }
+  ]
+}

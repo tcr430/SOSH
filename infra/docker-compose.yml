@@ -1,0 +1,49 @@
+services:
+  postiz-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postiz_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+
+  postiz-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - postiz_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+
+  postiz-app:
+    image: ghcr.io/gitroomhq/postiz-app:latest
+    restart: unless-stopped
+    depends_on:
+      postiz-db:
+        condition: service_healthy
+      postiz-redis:
+        condition: service_healthy
+    ports:
+      - "5000:5000"
+    environment:
+      DATABASE_URL: ${POSTIZ_DATABASE_URL}
+      REDIS_URL: ${POSTIZ_REDIS_URL}
+      JWT_SECRET: ${POSTIZ_JWT_SECRET}
+      BACKEND_INTERNAL_URL: ${POSTIZ_BACKEND_INTERNAL_URL}
+      FRONTEND_URL: ${POSTIZ_FRONTEND_URL}
+      API_KEY: ${POSTIZ_API_KEY}
+      STORAGE_PROVIDER: ${POSTIZ_STORAGE_PROVIDER}
+
+volumes:
+  postiz_db_data:
+  postiz_redis_data:

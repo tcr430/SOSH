@@ -8,7 +8,288 @@
     "calendar": "Calendar",
     "analytics": "Analytics",
     "inbox": "Inbox",
-    "settings": "Settings"
+    "settings": "Settings",
+    "profile": "Profile",
+    "logout": "Log out",
+    "billing": "Billing",
+    "coming_soon": "Coming soon"
+  },
+  "dashboard": {
+    "banner": {
+      "no_accounts": "Connect a social account to start publishing →",
+      "trial_active": "Your trial ends in {days} day — pick a plan → | Your trial ends in {days} days — pick a plan →"
+    },
+    "campaigns": {
+      "empty": {
+        "title": "No campaigns yet",
+        "description": "Create your first campaign to start generating posts."
+      }
+    }
+  },
+  "onboarding": {
+    "progress": "Step {current} of {total}",
+    "back": "Back",
+    "continue": "Continue",
+    "skip": "Skip for now",
+    "step1": {
+      "title": "Tell us about your business",
+      "subtitle": "Help us personalise your experience",
+      "fields": {
+        "name": "Business name",
+        "website": "Website URL",
+        "industry": "Industry",
+        "description": "Description",
+        "description_hint": "2–3 sentences about what your company does and who it serves"
+      },
+      "industry": {
+        "saas": "SaaS",
+        "ecommerce": "E-commerce",
+        "agency": "Agency",
+        "consulting": "Consulting",
+        "other": "Other"
+      }
+    },
+    "step2": {
+      "title": "Define your brand voice",
+      "subtitle": "We'll use this to write content that sounds like you",
+      "analyzing": "Analysing your brand voice…",
+      "ai_suggested": "AI suggested",
+      "inference_failed": "We couldn't analyse your site automatically. Fill in what you know.",
+      "trial_limit_reached": "You've used your brand voice analysis for this trial. Fill in the form manually.",
+      "fields": {
+        "tone": "Tone",
+        "tone_hint": "Select all that apply",
+        "target_audience": "Target audience",
+        "target_audience_hint": "Who do you sell to? (e.g. SaaS founders, HR managers at mid-sized companies)",
+        "keywords": "Brand keywords",
+        "keywords_hint": "Press Enter to add",
+        "avoid_words": "Words to avoid",
+        "avoid_words_hint": "Press Enter to add",
+        "unique_value_prop": "What makes you different",
+        "unique_value_prop_hint": "Your key differentiator in 1–2 sentences",
+        "competitors": "Competitors",
+        "competitors_hint": "Press Enter to add"
+      },
+      "tones": {
+        "professional": "Professional",
+        "conversational": "Conversational",
+        "authoritative": "Authoritative",
+        "friendly": "Friendly",
+        "educational": "Educational",
+        "inspiring": "Inspiring",
+        "bold": "Bold",
+        "witty": "Witty"
+      }
+    },
+    "step3": {
+      "title": "Connect your first social account",
+      "subtitle": "You can add more accounts later from Settings",
+      "coming_soon": "Coming soon",
+      "connect": "Connect",
+      "continue": "Continue",
+      "skip": "Skip for now",
+      "skip_warning": "Without a connected account, your posts won't be published.",
+      "skip_confirm": "Skip anyway",
+      "connected_success": "{platform} connected!",
+      "platforms": {
+        "linkedin": "LinkedIn",
+        "twitter": "X (Twitter)",
+        "instagram": "Instagram",
+        "facebook": "Facebook",
+        "threads": "Threads"
+      }
+    },
+    "step4": {
+      "title": "You're all set!",
+      "subtitle": "Your workspace is ready. Create your first campaign to start generating content.",
+      "cta": "Create your first campaign"
+    }
+  },
+  "settings": {
+    "nav": {
+      "accounts": "Accounts",
+      "billing": "Billing",
+      "profile": "Profile"
+    },
+    "accounts": {
+      "title": "Connected accounts",
+      "subtitle": "Manage the social platforms SŌSH publishes to",
+      "status": {
+        "connected": "Connected",
+        "connected_coming_soon": "Connected",
+        "expiring_soon": "Expiring soon",
+        "disconnected": "Not connected",
+        "coming_soon": "Coming soon"
+      },
+      "reconnect": "Reconnect — expires in {days} days",
+      "publishing_soon": "Publishing coming soon",
+      "connect": "Connect",
+      "connect_coming_soon_tooltip": "Connect to prepare for when publishing launches",
+      "disconnect": "Disconnect",
+      "confirm_disconnect_title": "Disconnect {platform}?",
+      "confirm_disconnect_body": "You'll need to reconnect to resume publishing.",
+      "confirm_disconnect_cancel": "Cancel",
+      "confirm_disconnect_confirm": "Disconnect",
+      "disconnect_error": "Disconnect failed. Please try again.",
+      "connected_as": "Connected as @{username}",
+      "error": {
+        "invalid_state": "Invalid session. Please try connecting again.",
+        "forbidden": "You don't have permission to connect this account.",
+        "oauth_denied": "You cancelled the connection to {platform}.",
+        "exchange_failed": "We couldn't complete the connection. Please try again.",
+        "vault_write_failed": "We couldn't securely store your credentials. Please try again.",
+        "db_write_failed": "We couldn't save the connection. Please try again.",
+        "postiz_unavailable": "The publishing service is temporarily unavailable. Please try again later.",
+        "connect_failed": "Failed to connect. Please try again."
+      },
+      "success": {
+        "connected": "{platform} connected successfully."
+      }
+    }
+  },
+  "errors": {
+    "onboarding": {
+      "name_required": "Business name is required",
+      "generic": "Something went wrong. Please try again."
+    },
+    "campaign": {
+      "generic": "Something went wrong. Please try again.",
+      "platform_not_connected": "One or more selected platforms are not connected. Please connect them in Settings first."
+    },
+    "ai": {
+      "quota_exceeded": "You've used all your brand voice analysis attempts for the trial. Fill in your brand voice manually below.",
+      "rate_limited": "Too many requests. Please wait a minute and try again.",
+      "provider_error": "The AI service is temporarily unavailable. Please fill in your brand voice manually.",
+      "invalid_response": "Analysis produced an unexpected result. Please fill in your brand voice manually.",
+      "timeout": "Analysis timed out. Please fill in your brand voice manually."
+    }
+  },
+  "campaigns": {
+    "list": {
+      "title": "Campaigns",
+      "new_button": "New campaign",
+      "empty": {
+        "title": "Start your first campaign",
+        "description": "Define your content goal, choose your platforms, and SŌSH will generate posts tailored to your brand voice.",
+        "cta": "Create campaign"
+      },
+      "card": {
+        "posts": "{published} / {planned} posts",
+        "created": "Created {date}",
+        "view": "View",
+        "pause": "Pause",
+        "resume": "Resume",
+        "delete": "Delete",
+        "delete_confirm_title": "Delete campaign?",
+        "delete_confirm_body": "This will permanently delete the campaign and all its posts. This action cannot be undone.",
+        "delete_confirm_cancel": "Cancel",
+        "delete_confirm_confirm": "Delete",
+        "delete_active_error": "Pause the campaign before deleting it.",
+        "not_found": "Campaign not found.",
+        "invalid_state": "This action isn't available for the campaign's current status.",
+        "generic": "Something went wrong. Please try again."
+      }
+    },
+    "status": {
+      "draft": "Draft",
+      "active": "Active",
+      "paused": "Paused",
+      "completed": "Completed"
+    },
+    "new": {
+      "title": "New campaign",
+      "section1": {
+        "title": "What's the goal?"
+      },
+      "section2": {
+        "title": "Where and how often?"
+      },
+      "fields": {
+        "name": "Campaign name",
+        "name_placeholder": "e.g. Winter launch — drive signups",
+        "objective": "Objective",
+        "objective_placeholder": "e.g. Drive signups for our winter launch, build thought leadership on LinkedIn, promote our new case study...",
+        "special_instructions": "Special instructions",
+        "special_instructions_placeholder": "e.g. Mention our sale ends Dec 31, avoid competitor comparisons, always end with a question",
+        "optional": "Optional",
+        "platforms": "Platforms",
+        "frequency_label": "Posting frequency",
+        "frequency": {
+          "daily": "Daily (7/week)",
+          "3x_week": "3× week",
+          "weekly": "Weekly",
+          "custom": "Custom"
+        },
+        "posts_per_week": "posts per week",
+        "start_date": "Start date",
+        "end_date": "End date",
+        "estimated_posts": "Approximately {count} posts will be generated"
+      },
+      "platform": {
+        "not_connected": "Connect in Settings →",
+        "coming_soon": "Coming soon"
+      },
+      "summary": {
+        "untitled": "Untitled campaign"
+      },
+      "cta": "Create campaign",
+      "limit": {
+        "trial": "Your trial includes 1 campaign. Upgrade to create more.",
+        "plus": "Your Plus plan includes 5 active campaigns. Upgrade to Pro or complete an existing one."
+      }
+    },
+    "detail": {
+      "back": "Back to campaigns",
+      "edit": "Edit",
+      "meta": {
+        "platforms": "Platforms",
+        "frequency": "Frequency",
+        "dates": "Dates",
+        "no_end_date": "Open-ended",
+        "special_instructions": "Special instructions",
+        "posts_per_week": "{n} posts/week"
+      },
+      "generate": {
+        "title": "Ready to generate your posts?",
+        "body": "SŌSH will create {count} platform-specific posts in your brand voice. You'll review and approve each one before anything is published.",
+        "cta": "Generate Posts",
+        "starting": "Starting generation…",
+        "in_progress": "Generating {created} of {planned} posts…",
+        "success": "Generated {count} posts. Redirecting to review…",
+        "try_again": "Try again",
+        "timeout": "Still working — check back soon.",
+        "error": {
+          "quota_exceeded": "You've reached your trial post limit. Upgrade to continue generating.",
+          "rate_limited": "Too many requests. Please wait a moment and try again.",
+          "provider_error": "The AI provider returned an error. Please try again.",
+          "invalid_response": "The AI returned an unexpected response. Please try again.",
+          "timeout": "Generation timed out. Please try again.",
+          "invalid_campaign_state": "This campaign isn't ready to generate posts. Check that it has a brand voice and draft status.",
+          "already_generated": "Posts have already been generated for this campaign.",
+          "generic": "Something went wrong. Please try again."
+        }
+      },
+      "posts": {
+        "published": "{published} of {total} posts published",
+        "view_cta": "View Posts"
+      },
+      "nextPost": "Next post: {in}",
+      "failedBanner": "{count} post failed to publish",
+      "failedBanner_plural": "{count} posts failed to publish",
+      "openFailed": "Open the review queue",
+      "danger": {
+        "title": "Danger zone",
+        "pause": "Pause campaign",
+        "resume": "Resume campaign",
+        "delete": "Delete campaign",
+        "delete_confirm_title": "Delete campaign?",
+        "delete_confirm_body": "This will permanently delete the campaign and all its posts. This action cannot be undone.",
+        "confirm_cancel": "Cancel",
+        "confirm_delete": "Delete",
+        "error_invalid_state": "This action isn't available for the campaign's current status.",
+        "error_generic": "Something went wrong. Please try again."
+      }
+    }
   },
   "marketing": {
     "hero": {

@@ -1,0 +1,22 @@
+{
+  "posts": [
+    {
+      "content": "What if your analytics just... worked?\n\nNo waiting for the data team. No SQL queries at midnight. No Friday reports that are already three days stale.\n\nJust open your dashboard and see exactly what's happening — right now.\n\nWe built this for engineering teams that are tired of making decisions based on last week's numbers. Your data should move as fast as your product does.\n\nReal-time insights for teams that can't afford to wait.\n\nDrop a comment if your analytics setup has ever slowed down a launch decision.",
+      "hashtags": ["#b2bsaas", "#analytics", "#startuplife", "#datadriven", "#productled", "#engineeringleaders", "#techstartup", "#saas", "#scalable", "#growthhacking", "#startup", "#softwareengineering", "#businessintelligence", "#realtime", "#dashboard", "#data", "#insights", "#tech", "#innovation", "#entrepreneurship"],
+      "scheduledAt": "2026-05-26T11:00:00.000Z",
+      "rationale": "Visual-first hook using a relief-framing question, ends with a comment prompt to drive engagement."
+    },
+    {
+      "content": "The data is there. You just can't reach it in time.\n\nThat's the invisible tax most B2B SaaS teams are paying. Every decision that waits 48 hours for an analytics report is a decision made with yesterday's map.\n\nWe built the real-time dashboard to change that ratio. See user behavior as it happens. Ship what works. Kill what doesn't — before it costs you a sprint.\n\nFor teams building fast, waiting is the risk.\n\nTag a founder or engineering lead who needs to see this.",
+      "hashtags": ["#analytics", "#b2bsaas", "#datadriven", "#productmanagement", "#engineeringleaders", "#startups", "#saasfounder", "#techleadership", "#growthmindset", "#scalable", "#realtime", "#data", "#insights", "#productled", "#softwareengineering", "#innovation", "#startupfounder", "#businessgrowth", "#saas", "#techstartup"],
+      "scheduledAt": "2026-05-28T11:00:00.000Z",
+      "rationale": "Frames the time-delay cost as an invisible tax, uses a tag-a-colleague CTA to expand reach."
+    },
+    {
+      "content": "You don't need a bigger data team. You need better tools.\n\n50 engineering leads told us the same thing last quarter: their analytics stack costs more in maintenance than it returns in value.\n\nConnect your source. Go live in minutes. Make decisions today, not next week.\n\nNo dedicated data engineer required. No six-week setup sprint. No excuses.\n\nIf this sounds like your team's situation, there's a link in bio.",
+      "hashtags": ["#analytics", "#b2bsaas", "#startuptools", "#datadriven", "#saaslife", "#engineeringleaders", "#scalable", "#productled", "#techfounder", "#growthhacking", "#startupgrowth", "#realtime", "#dashboard", "#softwaretools", "#businessintelligence", "#saasfounder", "#data", "#insights", "#techstartup", "#innovation"],
+      "scheduledAt": "2026-05-30T11:00:00.000Z",
+      "rationale": "Uses social proof from 50 leads, reframes the solution as tool quality over headcount, links to bio for CTA."
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "title": "Planes y Facturación",
+  "subtitle": "Precios simples y transparentes. Sin tarifas ocultas.",
+  "current": {
+    "trial": "Estás en el período de prueba de 14 días. Elige un plan para continuar.",
+    "trial_not_started": "Período de prueba no iniciado — conecta una cuenta social para empezar.",
+    "paid": "Estás en el plan {plan}.",
+    "days_remaining": "{days} día restante en tu prueba | {days} días restantes en tu prueba",
+    "manage": "Gestionar facturación →"
+  },
+  "tiers": {
+    "plus": {
+      "name": "Plus",
+      "price": "€99",
+      "cadence": "al mes",
+      "features": {
+        "posts": "50 publicaciones generadas al mes",
+        "campaigns": "Hasta 5 campañas activas",
+        "platforms": "LinkedIn + X (Twitter)",
+        "analytics": "Análisis básicos"
+      }
+    },
+    "pro": {
+      "name": "Pro",
+      "price": "€199",
+      "cadence": "al mes",
+      "popular": "Más popular",
+      "features": {
+        "posts": "Generación ilimitada de publicaciones",
+        "campaigns": "Campañas activas ilimitadas",
+        "platforms": "Las 5 plataformas",
+        "analytics": "Análisis avanzados",
+        "inbox": "Bandeja de entrada de interacciones"
+      }
+    }
+  },
+  "cta": {
+    "upgrade": "Actualizar a {plan}",
+    "switch": "Cambiar a {plan}",
+    "current": "Plan actual",
+    "loading": "Redirigiendo…"
+  },
+  "success": {
+    "activating": "Activando tu plan…",
+    "activated": "¡Estás en el plan {plan}! Redirigiendo…",
+    "timeout": "Esto está tardando más de lo habitual. Tu plan se activará pronto — actualiza en un minuto. Si no funciona, contacta con soporte.",
+    "check_again": "Verificar de nuevo"
+  },
+  "banner": {
+    "trial_active": "Tu prueba termina en {days} día — elige un plan → | Tu prueba termina en {days} días — elige un plan →"
+  },
+  "errors": {
+    "auth": "Por favor, inicia sesión para continuar.",
+    "no_business": "No se encontró ninguna empresa. Por favor, completa el proceso de incorporación.",
+    "no_customer": "No se encontró ninguna cuenta de facturación. Por favor, inicia primero un checkout.",
+    "generic": "Algo salió mal. Por favor, inténtalo de nuevo."
+  }
+}

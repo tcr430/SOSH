@@ -29,6 +29,21 @@ export async function getPostMetricsByPostId(
   return (data as PostMetricsRow | null) ?? null
 }
 
+export async function listTopPostMetrics(
+  client: SupabaseClient,
+  businessId: string,
+  limit = 10,
+): Promise<PostMetricsRow[]> {
+  const { data, error } = await client
+    .from('post_metrics')
+    .select('*')
+    .eq('business_id', businessId)
+    .order('likes', { ascending: false })
+    .limit(limit)
+  if (error) throw new Error((error as { message: string }).message)
+  return (data as PostMetricsRow[]) ?? []
+}
+
 export async function listStalePostMetrics(
   client: SupabaseClient,
   beforeDate: string,

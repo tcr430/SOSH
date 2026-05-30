@@ -7,6 +7,8 @@ import {
   createSocialAccount,
   updateSocialAccount,
   deactivateSocialAccount,
+  getActiveByBusinessAndPlatform,
+  listByBusiness,
 } from './social-accounts'
 import type { SocialAccountRow, SocialAccountInsert, VaultSecretId } from './types'
 
@@ -117,7 +119,7 @@ describe('deactivateSocialAccount', () => {
     vi.mocked(serviceModule.createServiceRoleClient).mockReturnValue(client)
     await deactivateSocialAccount('sa-1')
     expect(client.from).toHaveBeenCalledWith('social_accounts')
-    expect(client.rpc).toHaveBeenCalledWith('vault.delete_secret', {
+    expect(client.rpc).toHaveBeenCalledWith('vault_delete_secret', {
       secret_id: mockAccount.vault_access_token_id,
     })
   })
@@ -138,14 +140,78 @@ describe('deactivateSocialAccount', () => {
     vi.mocked(serviceModule.createServiceRoleClient).mockReturnValue(client)
     await deactivateSocialAccount('sa-1')
     expect(client.rpc).toHaveBeenCalledTimes(2)
-    expect(client.rpc).toHaveBeenCalledWith('vault.delete_secret', {
+    expect(client.rpc).toHaveBeenCalledWith('vault_delete_secret', {
       secret_id: 'vault-refresh-1',
     })
   })
 
-  it('throws when update fails', async () => {
+  it('does not throw when vault deletion fails (best-effort)', async () => {
+    const { client } = createMockClient(mockAccount)
+    client.rpc = vi.fn().mockRejectedValue(new Error('vault error'))
+    vi.mocked(serviceModule.createServiceRoleClient).mockReturnValue(client)
+    await expect(deactivateSocialAccount('sa-1')).resolves.toBeUndefined()
+  })
+
+  it('throws when account lookup or db update fails', async () => {
     const { client } = createMockClient(null, { message: 'Deactivate error' })
     vi.mocked(serviceModule.createServiceRoleClient).mockReturnValue(client)
     await expect(deactivateSocialAccount('sa-1')).rejects.toThrow()
+  })
+})
+
+describe('getActiveByBusinessAndPlatform', () => {
+  it('returns active account when found', async () => {
+    const { client } = createMockClient(mockAccount)
+    const result = await getActiveByBusinessAndPlatform(client, 'biz-1', 'linkedin')
+    expect(result).toEqual(mockAccount)
+    expect(client.from).toHaveBeenCalledWith('social_accounts')
+  })
+
+  it('returns null when no active account found', async () => {
+    const { client } = createMockClient(null, null)
+    const result = await getActiveByBusinessAndPlatform(client, 'biz-1', 'linkedin')
+    expect(result).toBeNull()
+  })
+
+  it('throws when supabase returns an error', async () => {
+    const { client } = createMockClient(null, { message: 'DB error' })
+    await expect(getActiveByBusinessAndPlatform(client, 'biz-1', 'linkedin')).rejects.toThrow('DB error')
+  })
+})
+
+describe('listByBusiness', () => {
+  const publicAccount = {
+    platform: 'linkedin' as const,
+    platform_username: 'acme_corp',
+    platform_display_name: 'Acme Corp',
+    is_active: true,
+    connected_at: '2026-04-30T00:00:00Z',
+    token_expires_at: null,
+  }
+
+  it('returns public account list', async () => {
+    const { client } = createMockClient([publicAccount])
+    const result = await listByBusiness(client, 'biz-1')
+    expect(result).toEqual([publicAccount])
+    expect(client.from).toHaveBeenCalledWith('social_accounts')
+  })
+
+  it('selects only public columns (no vault IDs)', async () => {
+    const { client, builder } = createMockClient([publicAccount])
+    await listByBusiness(client, 'biz-1')
+    expect(builder.select).toHaveBeenCalledWith(
+      'platform, platform_username, platform_display_name, is_active, connected_at, token_expires_at',
+    )
+  })
+
+  it('returns empty array when none found', async () => {
+    const { client } = createMockClient(null, null)
+    const result = await listByBusiness(client, 'biz-1')
+    expect(result).toEqual([])
+  })
+
+  it('throws when supabase returns an error', async () => {
+    const { client } = createMockClient(null, { message: 'DB error' })
+    await expect(listByBusiness(client, 'biz-1')).rejects.toThrow('DB error')
   })
 })

@@ -1,0 +1,33 @@
+# Caddy v2 reverse proxy for Postiz on Hetzner
+#
+# SETUP:
+# 1. Replace "your-postiz-domain.example.com" with your real domain.
+# 2. Point that domain's DNS A record to your Hetzner VPS IP.
+# 3. Add a "caddy" service to docker-compose.yml (see comment below).
+# 4. Copy this file to Caddyfile (no .example extension) on your VPS.
+#
+# Caddy will automatically obtain and renew a Let's Encrypt TLS certificate
+# for the domain — no additional config required.
+#
+# Example docker-compose service to add for production:
+#
+#   caddy:
+#     image: caddy:2-alpine
+#     restart: unless-stopped
+#     ports:
+#       - "80:80"
+#       - "443:443"
+#     volumes:
+#       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+#       - caddy_data:/data
+#       - caddy_config:/config
+#     depends_on:
+#       - postiz-app
+#
+# And add to the volumes block:
+#   caddy_data:
+#   caddy_config:
+
+your-postiz-domain.example.com {
+    reverse_proxy postiz-app:5000
+}

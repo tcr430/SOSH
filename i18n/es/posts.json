@@ -1,0 +1,95 @@
+{
+  "title": "{campaignName} — Publicaciones",
+  "back": "Volver a la campaña",
+  "summary": {
+    "approved": "{count} aprobadas",
+    "drafts": "{count} borradores",
+    "skipped": "{count} omitidas",
+    "of": "de {total}"
+  },
+  "readyBanner": {
+    "title": "Todas las publicaciones aprobadas",
+    "description": "La configuración de publicación estará disponible pronto."
+  },
+  "empty": {
+    "title": "Aún no hay publicaciones",
+    "description": "Genera publicaciones desde la página de la campaña primero.",
+    "action": "Volver a la campaña"
+  },
+  "filter": {
+    "all": "Todas ({count})",
+    "approved": "Aprobadas ({count})",
+    "skipped": "Omitidas ({count})",
+    "failed": "Fallidas ({count})"
+  },
+  "bulkApprove": "Aprobar todos los borradores",
+  "bulkApproveSuccess": "{count} publicaciones aprobadas",
+  "card": {
+    "utcNote": "UTC",
+    "regeneratedCount": "Regenerada ×{count}",
+    "skippedReason": "Motivo: {note}",
+    "status": {
+      "draft": "Borrador",
+      "approved": "Aprobada",
+      "skipped": "Omitida",
+      "scheduled": "Publicando…",
+      "published": "Publicada",
+      "failed": "Falló"
+    },
+    "action": {
+      "openOnPlatform": "Ver en plataforma"
+    },
+    "tooltip": {
+      "failedAt": "Falló el {at}"
+    },
+    "error": {
+      "token_expired": "La sesión de la cuenta expiró",
+      "token_revoked": "Cuenta desconectada — volver a conectar",
+      "rate_limited": "La plataforma limitó la tasa de publicación",
+      "platform_rejected": "La plataforma rechazó la publicación",
+      "network": "Error de red — se reintentará",
+      "not_implemented": "Publicación aún no disponible en esta plataforma",
+      "provider_not_configured": "Servicio de publicación no configurado",
+      "unknown": "Error desconocido",
+      "generic": "No se pudo publicar"
+    },
+    "actions": {
+      "approve": "Aprobar",
+      "skip": "Omitir",
+      "undo": "Deshacer",
+      "edit": "Editar",
+      "regenerate": "Regenerar",
+      "save": "Guardar",
+      "cancel": "Cancelar"
+    },
+    "showMore": "Ver más",
+    "showLess": "Ver menos",
+    "edit": {
+      "contentLabel": "Contenido de la publicación",
+      "hashtagsLabel": "Hashtags (separados por coma)"
+    }
+  },
+  "skip": {
+    "label": "Motivo para omitir",
+    "placeholder": "¿Por qué estás omitiendo esta publicación?",
+    "submit": "Omitir publicación"
+  },
+  "regenerate": {
+    "title": "Regenerar esta publicación",
+    "description": "Dile a la IA qué cambiar. Sé específico — esto usa un crédito de publicación.",
+    "placeholder": "ej: Hazla más corta y directa. Menos jerga.",
+    "minChars": "Mínimo 5 caracteres",
+    "submit": "Regenerar",
+    "submitting": "Regenerando…",
+    "success": "Publicación regenerada",
+    "error": {
+      "quota_exceeded": "Has usado todos tus créditos de publicación para este período de prueba.",
+      "rate_limited": "Demasiadas solicitudes. Espera un momento e inténtalo de nuevo.",
+      "provider_error": "Error en el proveedor de IA. Inténtalo de nuevo en un momento.",
+      "invalid_response": "La IA devolvió una respuesta inesperada. Inténtalo de nuevo.",
+      "timeout": "La IA tardó demasiado. Inténtalo de nuevo.",
+      "not_eligible": "Esta publicación no puede regenerarse en su estado actual.",
+      "generic": "Algo salió mal. Por favor, inténtalo de nuevo."
+    }
+  }
+}

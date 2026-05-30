@@ -1,0 +1,95 @@
+{
+  "title": "{campaignName} — Publicações",
+  "back": "Voltar à campanha",
+  "summary": {
+    "approved": "{count} aprovadas",
+    "drafts": "{count} rascunhos",
+    "skipped": "{count} ignoradas",
+    "of": "de {total}"
+  },
+  "readyBanner": {
+    "title": "Todas as publicações aprovadas",
+    "description": "A configuração de publicação está a chegar em breve."
+  },
+  "empty": {
+    "title": "Ainda não há publicações",
+    "description": "Gera publicações a partir da página da campanha primeiro.",
+    "action": "Voltar à campanha"
+  },
+  "filter": {
+    "all": "Todas ({count})",
+    "approved": "Aprovadas ({count})",
+    "skipped": "Ignoradas ({count})",
+    "failed": "Falhadas ({count})"
+  },
+  "bulkApprove": "Aprovar todos os rascunhos",
+  "bulkApproveSuccess": "{count} publicações aprovadas",
+  "card": {
+    "utcNote": "UTC",
+    "regeneratedCount": "Regenerada ×{count}",
+    "skippedReason": "Motivo: {note}",
+    "status": {
+      "draft": "Rascunho",
+      "approved": "Aprovada",
+      "skipped": "Ignorada",
+      "scheduled": "A publicar…",
+      "published": "Publicada",
+      "failed": "Falhou"
+    },
+    "action": {
+      "openOnPlatform": "Ver na plataforma"
+    },
+    "tooltip": {
+      "failedAt": "Falhou em {at}"
+    },
+    "error": {
+      "token_expired": "Sessão da conta expirou",
+      "token_revoked": "Conta desligada — voltar a ligar",
+      "rate_limited": "Plataforma limitou a taxa de publicação",
+      "platform_rejected": "Plataforma rejeitou a publicação",
+      "network": "Erro de rede — será repetido",
+      "not_implemented": "Publicação ainda não disponível nesta plataforma",
+      "provider_not_configured": "Serviço de publicação não configurado",
+      "unknown": "Erro desconhecido",
+      "generic": "Não foi possível publicar"
+    },
+    "actions": {
+      "approve": "Aprovar",
+      "skip": "Ignorar",
+      "undo": "Desfazer",
+      "edit": "Editar",
+      "regenerate": "Regenerar",
+      "save": "Guardar",
+      "cancel": "Cancelar"
+    },
+    "showMore": "Ver mais",
+    "showLess": "Ver menos",
+    "edit": {
+      "contentLabel": "Conteúdo da publicação",
+      "hashtagsLabel": "Hashtags (separadas por vírgula)"
+    }
+  },
+  "skip": {
+    "label": "Motivo para ignorar",
+    "placeholder": "Porque estás a ignorar esta publicação?",
+    "submit": "Ignorar publicação"
+  },
+  "regenerate": {
+    "title": "Regenerar esta publicação",
+    "description": "Diz à IA o que mudar. Sê específico — isto usa um crédito de publicação.",
+    "placeholder": "ex: Torna-a mais curta e direta. Menos jargão.",
+    "minChars": "Mínimo 5 caracteres",
+    "submit": "Regenerar",
+    "submitting": "A regenerar…",
+    "success": "Publicação regenerada",
+    "error": {
+      "quota_exceeded": "Usaste todos os créditos de publicação do teu período de teste.",
+      "rate_limited": "Demasiados pedidos. Aguarda um momento e tenta novamente.",
+      "provider_error": "Erro no fornecedor de IA. Tenta novamente dentro de momentos.",
+      "invalid_response": "A IA devolveu uma resposta inesperada. Tenta novamente.",
+      "timeout": "A IA demorou demasiado. Tenta novamente.",
+      "not_eligible": "Esta publicação não pode ser regenerada no seu estado atual.",
+      "generic": "Algo correu mal. Por favor, tenta novamente."
+    }
+  }
+}

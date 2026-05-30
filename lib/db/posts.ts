@@ -1,5 +1,6 @@
+import { formatISO, subMinutes } from 'date-fns'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { PostRow, PostInsert, PostUpdate, PostStatus } from './types'
+import type { PostRow, PostInsert, PostUpdate, PostStatus, AiGenerationMetadata } from './types'
 
 const VALID_TRANSITIONS: Record<PostStatus, PostStatus[]> = {
   draft: ['approved', 'skipped'],
@@ -113,24 +114,47 @@ export async function schedulePost(
   return row as PostRow
 }
 
+export interface MarkPostFailedPayload {
+  errorCode: string
+  errorDetails: unknown
+}
+
 export async function markPostFailed(
   client: SupabaseClient,
-  id: string,
+  postId: string,
+  payload: MarkPostFailedPayload,
 ): Promise<PostRow> {
-  const { data: row, error } = await client
+  const { data: current, error: readError } = await client
     .from('posts')
-    .update({ status: 'failed' })
-    .eq('id', id)
+    .select('ai_generation_metadata, publish_attempts')
+    .eq('id', postId)
+    .eq('status', 'scheduled')
+    .is('deleted_at', null)
+    .single()
+  if (readError) throw new Error((readError as { message: string }).message)
+  if (!current) throw new Error(`Post ${postId} not found or not in 'scheduled' status`)
+
+  const row = current as Pick<PostRow, 'ai_generation_metadata' | 'publish_attempts'>
+  const mergedMetadata = { ...row.ai_generation_metadata, publish_error: payload.errorDetails }
+
+  const { data: updated, error } = await client
+    .from('posts')
+    .update({
+      status: 'failed',
+      last_publish_error: payload.errorCode,
+      ai_generation_metadata: mergedMetadata,
+    })
+    .eq('id', postId)
     .eq('status', 'scheduled')
     .is('deleted_at', null)
     .select()
     .single()
   if (error) throw new Error((error as { message: string }).message)
-  if (!row) throw new Error(`Post ${id} not found or not in 'scheduled' status`)
-  return row as PostRow
+  if (!updated) throw new Error(`Post ${postId} not found or not in 'scheduled' status`)
+  return updated as PostRow
 }
 
-export async function skipPost(
+export async function skipScheduledPost(
   client: SupabaseClient,
   id: string,
 ): Promise<PostRow> {
@@ -147,16 +171,304 @@ export async function skipPost(
   return row as PostRow
 }
 
+export async function unapprovePost(
+  client: SupabaseClient,
+  id: string,
+): Promise<PostRow> {
+  const { data: row, error } = await client
+    .from('posts')
+    .update({ status: 'draft' })
+    .eq('id', id)
+    .eq('status', 'approved')
+    .is('deleted_at', null)
+    .select()
+    .single()
+  if (error) throw new Error((error as { message: string }).message)
+  if (!row) throw new Error(`Post ${id} not found or not in 'approved' status`)
+  return row as PostRow
+}
+
+export async function skipPost(
+  client: SupabaseClient,
+  id: string,
+  rejectionNote: string,
+): Promise<PostRow> {
+  const { data: row, error } = await client
+    .from('posts')
+    .update({ status: 'skipped', rejection_note: rejectionNote })
+    .eq('id', id)
+    .eq('status', 'draft')
+    .is('deleted_at', null)
+    .select()
+    .single()
+  if (error) throw new Error((error as { message: string }).message)
+  if (!row) throw new Error(`Post ${id} not found or not in 'draft' status`)
+  return row as PostRow
+}
+
+export async function unskipPost(
+  client: SupabaseClient,
+  id: string,
+): Promise<PostRow> {
+  const { data: row, error } = await client
+    .from('posts')
+    .update({ status: 'draft', rejection_note: null })
+    .eq('id', id)
+    .eq('status', 'skipped')
+    .is('deleted_at', null)
+    .select()
+    .single()
+  if (error) throw new Error((error as { message: string }).message)
+  if (!row) throw new Error(`Post ${id} not found or not in 'skipped' status`)
+  return row as PostRow
+}
+
+export interface PostContentPatch {
+  content: string
+  hashtags: string[]
+}
+
+export async function updatePostContent(
+  client: SupabaseClient,
+  id: string,
+  patch: PostContentPatch,
+): Promise<PostRow> {
+  const { data: row, error } = await client
+    .from('posts')
+    .update({ content: patch.content, hashtags: patch.hashtags })
+    .eq('id', id)
+    .in('status', ['draft', 'approved'])
+    .is('deleted_at', null)
+    .select()
+    .single()
+  if (error) throw new Error((error as { message: string }).message)
+  if (!row) throw new Error(`Post ${id} not found or not in an editable status`)
+  return row as PostRow
+}
+
+export interface PostContentAndMetadataPatch {
+  content: string
+  hashtags: string[]
+  metadata: AiGenerationMetadata
+}
+
+export async function updatePostContentAndMetadata(
+  client: SupabaseClient,
+  id: string,
+  patch: PostContentAndMetadataPatch,
+): Promise<PostRow> {
+  const { data: row, error } = await client
+    .from('posts')
+    .update({
+      content: patch.content,
+      hashtags: patch.hashtags,
+      ai_generation_metadata: patch.metadata as unknown as Record<string, unknown>,
+    })
+    .eq('id', id)
+    .eq('status', 'draft')
+    .is('deleted_at', null)
+    .select()
+    .single()
+  if (error) throw new Error((error as { message: string }).message)
+  if (!row) throw new Error(`Post ${id} not found or not in 'draft' status`)
+  return row as PostRow
+}
+
+export async function bulkApproveDraftPosts(
+  client: SupabaseClient,
+  campaignId: string,
+): Promise<number> {
+  const { data, error } = await client
+    .from('posts')
+    .update({ status: 'approved' })
+    .eq('campaign_id', campaignId)
+    .eq('status', 'draft')
+    .is('deleted_at', null)
+    .select('id')
+  if (error) throw new Error((error as { message: string }).message)
+  return (data as { id: string }[] | null)?.length ?? 0
+}
+
+export async function getPostSiblingTopics(
+  client: SupabaseClient,
+  campaignId: string,
+  excludePostId: string,
+): Promise<string[]> {
+  const { data, error } = await client
+    .from('posts')
+    .select('ai_generation_metadata')
+    .eq('campaign_id', campaignId)
+    .neq('id', excludePostId)
+    .is('deleted_at', null)
+    .limit(20)
+  if (error) throw new Error((error as { message: string }).message)
+  if (!data) return []
+  return (data as { ai_generation_metadata: Record<string, unknown> | null }[])
+    .map(row => (row.ai_generation_metadata as { rationale?: string } | null)?.rationale ?? '')
+    .filter(Boolean)
+}
+
+export async function listPostsByIds(
+  client: SupabaseClient,
+  ids: string[],
+): Promise<PostRow[]> {
+  if (ids.length === 0) return []
+  const { data, error } = await client
+    .from('posts')
+    .select('*')
+    .in('id', ids)
+    .is('deleted_at', null)
+  if (error) throw new Error((error as { message: string }).message)
+  return (data as PostRow[]) ?? []
+}
+
 export async function listPostsDue(
   client: SupabaseClient,
 ): Promise<PostRow[]> {
-  const now = new Date().toISOString()
+  const now = formatISO(new Date())
   const { data, error } = await client
     .from('posts')
     .select('*')
     .eq('status', 'approved')
     .lte('scheduled_at', now)
     .is('deleted_at', null)
+  if (error) throw new Error((error as { message: string }).message)
+  return (data as PostRow[]) ?? []
+}
+
+// ── Publishing worker helpers (ADR 0005 §11) ─────────────────────────────────
+
+export async function claimPostsForPublishing(
+  client: SupabaseClient,
+  limit: number,
+  now: Date = new Date(),
+): Promise<PostRow[]> {
+  const { data, error } = await client.rpc('claim_posts_for_publishing', {
+    p_now: formatISO(now),
+    p_limit: limit,
+  })
+  if (error) throw new Error((error as { message: string }).message)
+  return (data as PostRow[]) ?? []
+}
+
+export async function markPostPublished(
+  client: SupabaseClient,
+  postId: string,
+  payload: {
+    platformPostId: string
+    platformUrl: string | null
+    publishedAt: Date
+  },
+): Promise<PostRow> {
+  const { data: row, error } = await client
+    .from('posts')
+    .update({
+      status: 'published',
+      platform_post_id: payload.platformPostId,
+      platform_url: payload.platformUrl,
+      published_at: formatISO(payload.publishedAt),
+      last_publish_error: null,
+      last_publish_attempt_at: null,
+    } as Record<string, unknown>)
+    .eq('id', postId)
+    .eq('status', 'scheduled')
+    .is('deleted_at', null)
+    .select()
+    .single()
+  if (error) throw new Error((error as { message: string }).message)
+  if (!row) throw new Error(`Post ${postId} not found or not in 'scheduled' status`)
+  return row as PostRow
+}
+
+export async function requeueScheduledPost(
+  client: SupabaseClient,
+  postId: string,
+  payload: {
+    newScheduledAt: Date
+    errorCode: string
+    errorDetails: unknown
+    incrementAttempts: boolean
+  },
+): Promise<PostRow> {
+  const { data: current, error: readError } = await client
+    .from('posts')
+    .select('ai_generation_metadata, publish_attempts')
+    .eq('id', postId)
+    .eq('status', 'scheduled')
+    .is('deleted_at', null)
+    .single()
+  if (readError) throw new Error((readError as { message: string }).message)
+  if (!current) throw new Error(`Post ${postId} not found or not in 'scheduled' status`)
+
+  const row = current as Pick<PostRow, 'ai_generation_metadata' | 'publish_attempts'>
+  const mergedMetadata = { ...row.ai_generation_metadata, publish_error: payload.errorDetails }
+
+  const updateData: Record<string, unknown> = {
+    status: 'approved',
+    scheduled_at: formatISO(payload.newScheduledAt),
+    last_publish_attempt_at: formatISO(payload.newScheduledAt),
+    last_publish_error: payload.errorCode,
+    ai_generation_metadata: mergedMetadata,
+  }
+  if (payload.incrementAttempts) {
+    updateData.publish_attempts = row.publish_attempts + 1
+  }
+
+  const { data: updated, error } = await client
+    .from('posts')
+    .update(updateData)
+    .eq('id', postId)
+    .eq('status', 'scheduled')
+    .is('deleted_at', null)
+    .select()
+    .single()
+  if (error) throw new Error((error as { message: string }).message)
+  if (!updated) throw new Error(`Post ${postId} not found or not in 'scheduled' status`)
+  return updated as PostRow
+}
+
+export async function reapStuckScheduledPosts(
+  client: SupabaseClient,
+  opts: { now: Date; stuckMinutes: number },
+): Promise<number> {
+  const { config } = await import('@/lib/config')
+  const { data, error } = await client.rpc('reap_stuck_scheduled_posts', {
+    p_now: formatISO(opts.now),
+    p_stuck_minutes: opts.stuckMinutes,
+    p_max_attempts: config.server.PUBLISH_MAX_ATTEMPTS,
+  })
+  if (error) throw new Error((error as { message: string }).message)
+  return (data as number) ?? 0
+}
+
+export async function incrementPublishedCountForCampaign(
+  client: SupabaseClient,
+  campaignId: string,
+): Promise<void> {
+  const { error } = await client.rpc('increment_published_count_for_campaign', {
+    p_campaign_id: campaignId,
+  })
+  if (error) throw new Error((error as { message: string }).message)
+}
+
+// Returns published posts due for a metrics sync per ADR 0006 §4.
+// Left-joins post_metrics so never-synced posts (no metrics row) are included.
+// ORDER BY last_synced_at NULLS FIRST. Read-only; takes the caller's client.
+export async function listPostsForMetricsSync(
+  client: SupabaseClient,
+  opts: {
+    now: Date
+    staleMinutes: number
+    maxAgeDays: number
+    limit: number
+  },
+): Promise<PostRow[]> {
+  const { data, error } = await client.rpc('list_posts_for_metrics_sync', {
+    p_now:          formatISO(opts.now),
+    p_stale_before: formatISO(subMinutes(opts.now, opts.staleMinutes)),
+    p_max_age_days: opts.maxAgeDays,
+    p_limit:        opts.limit,
+  })
   if (error) throw new Error((error as { message: string }).message)
   return (data as PostRow[]) ?? []
 }

@@ -16,6 +16,23 @@ export async function recordAiUsage(
   return row as AiUsageRow
 }
 
+export async function countRecentCalls(
+  client: SupabaseClient,
+  businessId: string,
+  windowSeconds: number,
+  promptId: string,
+): Promise<number> {
+  const since = new Date(Date.now() - windowSeconds * 1000).toISOString()
+  const { count, error } = await client
+    .from('ai_usage')
+    .select('id', { count: 'exact', head: true })
+    .eq('business_id', businessId)
+    .eq('prompt_id', promptId)
+    .gte('created_at', since)
+  if (error) throw new Error((error as { message: string }).message)
+  return count ?? 0
+}
+
 export async function listAiUsageByBusiness(
   client: SupabaseClient,
   businessId: string,

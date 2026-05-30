@@ -40,7 +40,48 @@ const eslintConfig = defineConfig([
         },
       ],
     },
-  },
-]);
+   },
+    // Ban direct imports of @anthropic-ai/sdk from outside /lib/ai/.
+    // All Anthropic SDK calls must go through /lib/ai/runner.ts (ADR 0003 C-2).
+    {
+      files: ["**/*.ts", "**/*.tsx"],
+      ignores: ["lib/ai/**"],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            patterns: [
+              {
+                group: ["@anthropic-ai/sdk", "@anthropic-ai/sdk/*"],
+                message:
+                  "Import from '@/lib/ai' instead of importing @anthropic-ai/sdk directly. All Anthropic SDK calls must go through /lib/ai/runner.ts (ADR 0003 C-2).",
+              },
+            ],
+          },
+        ],
+      },
+    },
+    // Ban direct imports of the stripe npm package from outside /lib/stripe/.
+    // All Stripe SDK calls must go through /lib/stripe/.
+    // Test files are excluded so they can import stripe for mocking.
+    {
+      files: ["**/*.ts", "**/*.tsx"],
+      ignores: ["lib/stripe/**", "**/*.test.ts"],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              {
+                name: "stripe",
+                message:
+                  "Import from '@/lib/stripe' instead of importing the Stripe SDK directly. All Stripe calls must go through /lib/stripe/.",
+              },
+            ],
+          },
+        ],
+      },
+    },
+  ]);
 
 export default eslintConfig;

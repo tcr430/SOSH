@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { createMockClient } from './__test-utils__/mock-client'
 import {
   listPostsByCampaign,
@@ -9,7 +9,13 @@ import {
   schedulePost,
   markPostFailed,
   skipPost,
+  skipScheduledPost,
   listPostsDue,
+  unapprovePost,
+  unskipPost,
+  updatePostContent,
+  bulkApproveDraftPosts,
+  getPostSiblingTopics,
 } from './posts'
 import type { PostRow, PostInsert } from './types'
 
@@ -24,9 +30,13 @@ const mockPost: PostRow = {
   scheduled_at: '2026-05-01T10:00:00Z',
   published_at: null,
   platform_post_id: null,
+  platform_url: null,
   status: 'approved',
   rejection_note: null,
   ai_generation_metadata: {},
+  publish_attempts: 0,
+  last_publish_attempt_at: null,
+  last_publish_error: null,
   deleted_at: null,
   created_at: '2026-04-30T00:00:00Z',
   updated_at: '2026-04-30T00:00:00Z',
@@ -164,39 +174,66 @@ describe('schedulePost', () => {
 
 describe('markPostFailed', () => {
   it('returns the failed post when currently scheduled', async () => {
-    const { client, builder } = createMockClient(mockPost)
-    const result = await markPostFailed(client, 'post-1')
-    expect(result).toEqual(mockPost)
+    const failedPost = { ...mockPost, status: 'failed' as const }
+    const { client, builder } = createMockClient()
+    ;(builder.single as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ data: { ai_generation_metadata: {}, publish_attempts: 0 }, error: null })
+      .mockResolvedValueOnce({ data: failedPost, error: null })
+    const result = await markPostFailed(client, 'post-1', { errorCode: 'UNKNOWN', errorDetails: {} })
+    expect(result).toEqual(failedPost)
     expect(builder.eq).toHaveBeenCalledWith('status', 'scheduled')
   })
 
   it('throws when post not found or wrong status', async () => {
-    const { client } = createMockClient(null, null)
-    await expect(markPostFailed(client, 'post-1')).rejects.toThrow("not found or not in 'scheduled' status")
+    const { client, builder } = createMockClient()
+    ;(builder.single as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ data: null, error: null })
+    await expect(markPostFailed(client, 'post-1', { errorCode: 'UNKNOWN', errorDetails: {} })).rejects.toThrow("not found or not in 'scheduled' status")
   })
 
-  it('throws when supabase returns an error', async () => {
-    const { client } = createMockClient(null, { message: 'Update error' })
-    await expect(markPostFailed(client, 'post-1')).rejects.toThrow('Update error')
+  it('throws when supabase returns an error on read', async () => {
+    const { client, builder } = createMockClient()
+    ;(builder.single as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ data: null, error: { message: 'Update error' } })
+    await expect(markPostFailed(client, 'post-1', { errorCode: 'UNKNOWN', errorDetails: {} })).rejects.toThrow('Update error')
   })
 })
 
-describe('skipPost', () => {
+describe('skipScheduledPost', () => {
   it('returns the skipped post when in a skippable status', async () => {
     const { client, builder } = createMockClient(mockPost)
-    const result = await skipPost(client, 'post-1')
+    const result = await skipScheduledPost(client, 'post-1')
     expect(result).toEqual(mockPost)
     expect(builder.in).toHaveBeenCalledWith('status', ['draft', 'approved', 'scheduled'])
   })
 
   it('throws when post not found or in terminal status', async () => {
     const { client } = createMockClient(null, null)
-    await expect(skipPost(client, 'post-1')).rejects.toThrow('not in a skippable status')
+    await expect(skipScheduledPost(client, 'post-1')).rejects.toThrow('not in a skippable status')
   })
 
   it('throws when supabase returns an error', async () => {
     const { client } = createMockClient(null, { message: 'Update error' })
-    await expect(skipPost(client, 'post-1')).rejects.toThrow('Update error')
+    await expect(skipScheduledPost(client, 'post-1')).rejects.toThrow('Update error')
+  })
+})
+
+describe('skipPost', () => {
+  it('returns skipped row with rejection_note', async () => {
+    const skipped = { ...mockPost, status: 'skipped' as const, rejection_note: 'off topic' }
+    const { client, builder } = createMockClient(skipped)
+    const result = await skipPost(client, 'post-1', 'off topic')
+    expect(result.status).toBe('skipped')
+    expect(result.rejection_note).toBe('off topic')
+    expect(builder.eq).toHaveBeenCalledWith('status', 'draft')
+  })
+
+  it('throws when post not found or not in draft', async () => {
+    const { client } = createMockClient(null, null)
+    await expect(skipPost(client, 'post-1', 'too long')).rejects.toThrow("not found or not in 'draft' status")
+  })
+
+  it('throws supabase error message', async () => {
+    const { client } = createMockClient(null, { message: 'constraint violation' })
+    await expect(skipPost(client, 'post-1', 'bad')).rejects.toThrow('constraint violation')
   })
 })
 
@@ -217,5 +254,144 @@ describe('listPostsDue', () => {
   it('throws when supabase returns an error', async () => {
     const { client } = createMockClient(null, { message: 'DB error' })
     await expect(listPostsDue(client)).rejects.toThrow('DB error')
+  })
+})
+
+describe('unapprovePost', () => {
+  it('returns draft row on success', async () => {
+    const draft = { ...mockPost, status: 'draft' as const }
+    const { client, builder } = createMockClient(draft)
+    const result = await unapprovePost(client, 'post-1')
+    expect(result.status).toBe('draft')
+    expect(builder.eq).toHaveBeenCalledWith('status', 'approved')
+  })
+
+  it('throws when post not found or not approved', async () => {
+    const { client } = createMockClient(null, null)
+    await expect(unapprovePost(client, 'post-1')).rejects.toThrow("not found or not in 'approved' status")
+  })
+
+  it('throws supabase error message', async () => {
+    const { client } = createMockClient(null, { message: 'rls denied' })
+    await expect(unapprovePost(client, 'post-1')).rejects.toThrow('rls denied')
+  })
+})
+
+describe('unskipPost', () => {
+  it('returns draft row with null rejection_note', async () => {
+    const restored = { ...mockPost, status: 'draft' as const, rejection_note: null }
+    const { client, builder } = createMockClient(restored)
+    const result = await unskipPost(client, 'post-1')
+    expect(result.status).toBe('draft')
+    expect(result.rejection_note).toBeNull()
+    expect(builder.eq).toHaveBeenCalledWith('status', 'skipped')
+  })
+
+  it('throws when post not found or not skipped', async () => {
+    const { client } = createMockClient(null, null)
+    await expect(unskipPost(client, 'post-1')).rejects.toThrow("not found or not in 'skipped' status")
+  })
+
+  it('throws supabase error message', async () => {
+    const { client } = createMockClient(null, { message: 'network error' })
+    await expect(unskipPost(client, 'post-1')).rejects.toThrow('network error')
+  })
+})
+
+describe('updatePostContent', () => {
+  it('returns updated row with new content and hashtags', async () => {
+    const updated = { ...mockPost, content: 'New content', hashtags: ['#b2b', '#saas'] }
+    const { client, builder } = createMockClient(updated)
+    const result = await updatePostContent(client, 'post-1', { content: 'New content', hashtags: ['#b2b', '#saas'] })
+    expect(result.content).toBe('New content')
+    expect(result.hashtags).toEqual(['#b2b', '#saas'])
+    expect(builder.in).toHaveBeenCalledWith('status', ['draft', 'approved'])
+  })
+
+  it('throws when post is in a non-editable status (published/skipped/null)', async () => {
+    const { client } = createMockClient(null, null)
+    await expect(
+      updatePostContent(client, 'post-1', { content: 'x', hashtags: [] }),
+    ).rejects.toThrow('not in an editable status')
+  })
+
+  it('throws supabase error message', async () => {
+    const { client } = createMockClient(null, { message: 'column missing' })
+    await expect(
+      updatePostContent(client, 'post-1', { content: 'x', hashtags: [] }),
+    ).rejects.toThrow('column missing')
+  })
+})
+
+describe('bulkApproveDraftPosts', () => {
+  it('returns the count of approved posts (3)', async () => {
+    const { client } = createMockClient([{ id: 'p1' }, { id: 'p2' }, { id: 'p3' }])
+    const count = await bulkApproveDraftPosts(client, 'camp-1')
+    expect(count).toBe(3)
+  })
+
+  it('returns the count of approved posts (1)', async () => {
+    const { client } = createMockClient([{ id: 'p1' }])
+    const count = await bulkApproveDraftPosts(client, 'camp-1')
+    expect(count).toBe(1)
+  })
+
+  it('returns 0 when no draft posts exist', async () => {
+    const { client } = createMockClient([])
+    const count = await bulkApproveDraftPosts(client, 'camp-1')
+    expect(count).toBe(0)
+  })
+
+  it('returns 0 when data is null', async () => {
+    const { client } = createMockClient(null, null)
+    const count = await bulkApproveDraftPosts(client, 'camp-1')
+    expect(count).toBe(0)
+  })
+
+  it('throws supabase error message', async () => {
+    const { client } = createMockClient(null, { message: 'permission denied' })
+    await expect(bulkApproveDraftPosts(client, 'camp-1')).rejects.toThrow('permission denied')
+  })
+})
+
+describe('getPostSiblingTopics', () => {
+  it('returns rationale strings from sibling posts', async () => {
+    const rows = [
+      { ai_generation_metadata: { rationale: 'Angle: product launch' } },
+      { ai_generation_metadata: { rationale: 'Angle: customer pain point' } },
+    ]
+    const { client, builder } = createMockClient(rows)
+    const topics = await getPostSiblingTopics(client, 'camp-1', 'post-99')
+    expect(topics).toEqual(['Angle: product launch', 'Angle: customer pain point'])
+    expect(builder.neq).toHaveBeenCalledWith('id', 'post-99')
+  })
+
+  it('filters out rows with missing or empty rationale', async () => {
+    const rows = [
+      { ai_generation_metadata: { rationale: 'Angle: pricing' } },
+      { ai_generation_metadata: {} },
+      { ai_generation_metadata: { rationale: '' } },
+      { ai_generation_metadata: null },
+    ]
+    const { client } = createMockClient(rows)
+    const topics = await getPostSiblingTopics(client, 'camp-1', 'post-99')
+    expect(topics).toEqual(['Angle: pricing'])
+  })
+
+  it('returns empty array when data is null', async () => {
+    const { client } = createMockClient(null, null)
+    const topics = await getPostSiblingTopics(client, 'camp-1', 'post-99')
+    expect(topics).toEqual([])
+  })
+
+  it('returns empty array when no siblings exist', async () => {
+    const { client } = createMockClient([])
+    const topics = await getPostSiblingTopics(client, 'camp-1', 'post-99')
+    expect(topics).toEqual([])
+  })
+
+  it('throws supabase error message', async () => {
+    const { client } = createMockClient(null, { message: 'query failed' })
+    await expect(getPostSiblingTopics(client, 'camp-1', 'post-99')).rejects.toThrow('query failed')
   })
 })

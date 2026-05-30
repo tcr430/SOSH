@@ -16,7 +16,7 @@ export function createMockClient(data: unknown = null, error: unknown = null) {
   const chainMethods = [
     'select', 'insert', 'update', 'delete', 'upsert',
     'eq', 'neq', 'in', 'is', 'lte', 'gte', 'lt', 'gt',
-    'order', 'limit', 'range', 'not', 'filter', 'match',
+    'order', 'limit', 'range', 'not', 'filter', 'match', 'or',
     'returns', 'throwOnError',
   ]
   for (const m of chainMethods) {

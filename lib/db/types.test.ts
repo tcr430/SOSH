@@ -60,7 +60,7 @@ type Assert<T extends true> = T
 // Enum union types
 // ---------------------------------------------------------------------------
 
-type _PlanValues = Assert<Equals<Plan, 'trial' | 'starter' | 'pro' | 'agency'>>
+type _PlanValues = Assert<Equals<Plan, 'trial' | 'plus' | 'pro' | 'agency'>>
 type _LanguageValues = Assert<Equals<Language, 'en' | 'pt' | 'es'>>
 type _PlatformValues = Assert<Equals<Platform, 'linkedin' | 'twitter' | 'instagram' | 'facebook' | 'threads'>>
 type _FrequencyValues = Assert<Equals<CampaignFrequency, 'daily' | '3x_week' | 'weekly' | 'custom'>>
@@ -81,7 +81,7 @@ type _BusinessRowDeletedAt = Assert<Equals<BusinessRow['deleted_at'], string | n
 
 // Positive: minimal and full inserts compile
 const _businessInsertMinimal = { name: 'Acme', owner_id: 'uuid-abc' } satisfies BusinessInsert
-const _businessInsertFull = { name: 'Acme', owner_id: 'uuid-abc', plan: 'starter' as Plan, language: 'pt' as Language, timezone: 'Europe/Lisbon', onboarding_completed: true } satisfies BusinessInsert
+const _businessInsertFull = { name: 'Acme', owner_id: 'uuid-abc', plan: 'plus' as Plan, language: 'pt' as Language, timezone: 'Europe/Lisbon', onboarding_completed: true } satisfies BusinessInsert
 
 // Negative: invalid enum value
 // @ts-expect-error — 'free' is not a valid Plan
