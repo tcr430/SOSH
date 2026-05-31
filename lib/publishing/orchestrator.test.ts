@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { runPublishTick, runJanitorTick } from './orchestrator'
 import { SocialProviderError, getRegistry } from '@/lib/social/index'
+import { markCronSeen } from '@/lib/db/cron-health'
+import * as Sentry from '@sentry/nextjs'
 import {
   claimPostsForPublishing,
   markPostPublished,
@@ -48,6 +50,19 @@ vi.mock('@/lib/social/index', async (importOriginal) => {
   const mod = await importOriginal<typeof import('@/lib/social/index')>()
   return { ...mod, getRegistry: vi.fn() }
 })
+
+vi.mock('@/lib/db/auth-rate-limits', () => ({
+  pruneStaleAuthRateLimits: vi.fn().mockResolvedValue(0),
+}))
+
+vi.mock('@/lib/db/cron-health', () => ({
+  markCronSeen: vi.fn().mockResolvedValue(undefined),
+  getCronLastSeen: vi.fn().mockResolvedValue(null),
+}))
+
+vi.mock('@sentry/nextjs', () => ({
+  withMonitor: vi.fn().mockImplementation((_slug: string, fn: () => unknown) => fn()),
+}))
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -386,5 +401,34 @@ describe('runJanitorTick', () => {
     const summary = await runJanitorTick({ now: NOW })
     expect(typeof summary.tick).toBe('string')
     expect(typeof summary.durationMs).toBe('number')
+  })
+})
+
+// ─── B6: cron health + Sentry.withMonitor ────────────────────────────────────
+
+describe('runPublishTick — B6 observability', () => {
+  it('calls markCronSeen before any DB op', async () => {
+    vi.mocked(claimPostsForPublishing).mockResolvedValue([])
+    await runPublishTick({ now: NOW })
+    const markOrder = vi.mocked(markCronSeen).mock.invocationCallOrder[0]
+    const claimOrder = vi.mocked(claimPostsForPublishing).mock.invocationCallOrder[0]
+    expect(markCronSeen).toHaveBeenCalledWith(expect.anything(), 'publish')
+    expect(markOrder).toBeLessThan(claimOrder)
+  })
+
+  it('wraps tick with Sentry.withMonitor using correct ADR §3.5 config', async () => {
+    vi.mocked(claimPostsForPublishing).mockResolvedValue([])
+    await runPublishTick({ now: NOW })
+    expect(Sentry.withMonitor).toHaveBeenCalledWith(
+      'publish-tick',
+      expect.any(Function),
+      {
+        schedule: { type: 'crontab', value: '* * * * *' },
+        checkinMargin: 2,
+        maxRuntime: 1,
+        failureIssueThreshold: 3,
+        recoveryThreshold: 1,
+      },
+    )
   })
 })

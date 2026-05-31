@@ -12,6 +12,7 @@ import {
 } from '@/lib/db/posts'
 import { recoverStuckGenerationSessions } from '@/lib/db/post-generation-sessions'
 import { pruneStaleAuthRateLimits } from '@/lib/db/auth-rate-limits'
+import { markCronSeen } from '@/lib/db/cron-health'
 import { getActiveByBusinessAndPlatform } from '@/lib/db/social-accounts'
 import type { PostRow } from '@/lib/db/types'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -50,13 +51,15 @@ export async function runPublishTick(opts?: {
   batchSize?: number
   reaped?: number
 }): Promise<PublishTickSummary> {
-  return Sentry.withMonitor('publish-cron', async () => {
+  return Sentry.withMonitor('publish-tick', async () => {
   const tickStart = Date.now()
   const now = opts?.now ?? new Date()
   const batchSize = opts?.batchSize ?? config.server.PUBLISH_BATCH_SIZE
 
   const { createServiceRoleClient } = await import('@/lib/supabase/service')
   const client = createServiceRoleClient()
+
+  await markCronSeen(client, 'publish')
 
   const summary: PublishTickSummary = {
     tick: formatISO(now),
@@ -131,6 +134,12 @@ export async function runPublishTick(opts?: {
   summary.durationMs = Date.now() - tickStart
   console.log(JSON.stringify({ kind: 'publish_tick', ...summary }))
   return summary
+  }, {
+    schedule: { type: 'crontab', value: '* * * * *' },
+    checkinMargin: 2,
+    maxRuntime: 1,
+    failureIssueThreshold: 3,
+    recoveryThreshold: 1,
   }) // end Sentry.withMonitor
 }
 

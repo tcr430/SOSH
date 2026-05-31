@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { formatISO } from 'date-fns'
 import { runMetricsSyncTick } from './orchestrator'
 import { SocialProviderError, getRegistry } from '@/lib/social/index'
+import { markCronSeen } from '@/lib/db/cron-health'
+import * as Sentry from '@sentry/nextjs'
 import type { SocialProviderErrorCode } from '@/lib/social/index'
 import { listPostsForMetricsSync } from '@/lib/db/posts'
 import { upsertPostMetrics } from '@/lib/db/post-metrics'
@@ -38,6 +40,15 @@ vi.mock('@/lib/social/index', async (importOriginal) => {
   const mod = await importOriginal<typeof import('@/lib/social/index')>()
   return { ...mod, getRegistry: vi.fn() }
 })
+
+vi.mock('@/lib/db/cron-health', () => ({
+  markCronSeen: vi.fn().mockResolvedValue(undefined),
+  getCronLastSeen: vi.fn().mockResolvedValue(null),
+}))
+
+vi.mock('@sentry/nextjs', () => ({
+  withMonitor: vi.fn().mockImplementation((_slug: string, fn: () => unknown) => fn()),
+}))
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -258,5 +269,34 @@ describe('runMetricsSyncTick', () => {
     expect(summary.tick).toBe(formatISO(NOW))
     expect(typeof summary.durationMs).toBe('number')
     expect(summary.durationMs).toBeGreaterThanOrEqual(0)
+  })
+})
+
+// ─── B6: cron health + Sentry.withMonitor ────────────────────────────────────
+
+describe('runMetricsSyncTick — B6 observability', () => {
+  it('calls markCronSeen before any DB op', async () => {
+    vi.mocked(listPostsForMetricsSync).mockResolvedValue([])
+    await runMetricsSyncTick({ now: NOW })
+    const markOrder = vi.mocked(markCronSeen).mock.invocationCallOrder[0]
+    const listOrder = vi.mocked(listPostsForMetricsSync).mock.invocationCallOrder[0]
+    expect(markCronSeen).toHaveBeenCalledWith(expect.anything(), 'metrics-sync')
+    expect(markOrder).toBeLessThan(listOrder)
+  })
+
+  it('wraps tick with Sentry.withMonitor using correct ADR §3.5 config', async () => {
+    vi.mocked(listPostsForMetricsSync).mockResolvedValue([])
+    await runMetricsSyncTick({ now: NOW })
+    expect(Sentry.withMonitor).toHaveBeenCalledWith(
+      'metrics-sync-tick',
+      expect.any(Function),
+      {
+        schedule: { type: 'crontab', value: '0 * * * *' },
+        checkinMargin: 5,
+        maxRuntime: 1,
+        failureIssueThreshold: 3,
+        recoveryThreshold: 1,
+      },
+    )
   })
 })
