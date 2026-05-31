@@ -1,18 +1,25 @@
 import type { Platform } from '@/lib/db/types'
 import type { SocialProviderErrorCode } from './types'
+import { REDACTED_KEYS, normaliseKey } from '@/lib/observability/sentry-scrub'
 
-const SENSITIVE_KEY_PATTERN = /token|secret|authorization|cookie/i
+const CATCH_ALL_SUBSTRINGS = ['token', 'secret', 'apikey', 'authorization', 'cookie', 'password'] as const
 
 function redactSensitiveKeys(obj: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(
-    Object.entries(obj).map(([k, v]) => [
-      k,
-      SENSITIVE_KEY_PATTERN.test(k)
-        ? '[REDACTED]'
-        : v !== null && typeof v === 'object' && !Array.isArray(v)
-          ? redactSensitiveKeys(v as Record<string, unknown>)
-          : v,
-    ]),
+    Object.entries(obj).map(([k, v]) => {
+      const n = normaliseKey(k)
+      const shouldRedact =
+        REDACTED_KEYS.has(n) ||
+        CATCH_ALL_SUBSTRINGS.some((s) => n.includes(s))
+      return [
+        k,
+        shouldRedact
+          ? '[REDACTED]'
+          : v !== null && typeof v === 'object' && !Array.isArray(v)
+            ? redactSensitiveKeys(v as Record<string, unknown>)
+            : v,
+      ]
+    }),
   )
 }
 
