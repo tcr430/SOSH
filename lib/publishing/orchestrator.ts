@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/nextjs'
 import { addSeconds, formatISO } from 'date-fns'
 import { config } from '@/lib/config'
 import { getRegistry, SocialProviderError } from '@/lib/social/index'
@@ -47,6 +48,7 @@ export async function runPublishTick(opts?: {
   batchSize?: number
   reaped?: number
 }): Promise<PublishTickSummary> {
+  return Sentry.withMonitor('publish-cron', async () => {
   const tickStart = Date.now()
   const now = opts?.now ?? new Date()
   const batchSize = opts?.batchSize ?? config.server.PUBLISH_BATCH_SIZE
@@ -127,6 +129,7 @@ export async function runPublishTick(opts?: {
   summary.durationMs = Date.now() - tickStart
   console.log(JSON.stringify({ kind: 'publish_tick', ...summary }))
   return summary
+  }) // end Sentry.withMonitor
 }
 
 async function handleError(
@@ -249,6 +252,7 @@ async function handleError(
 export async function runJanitorTick(opts?: {
   now?: Date
 }): Promise<JanitorTickSummary> {
+  return Sentry.withMonitor('janitor-cron', async () => {
   const tickStart = Date.now()
   const now = opts?.now ?? new Date()
 
@@ -268,4 +272,5 @@ export async function runJanitorTick(opts?: {
 
   console.log(JSON.stringify({ kind: 'janitor_tick', ...summary }))
   return summary
+  }) // end Sentry.withMonitor
 }

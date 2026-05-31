@@ -77,7 +77,6 @@ export function scrubString(value: string): string {
 type ScrubbableBreadcrumb = {
   category?: string
   data?: Record<string, unknown>
-  [key: string]: unknown
 }
 
 type ScrubbableEvent = {
@@ -85,14 +84,12 @@ type ScrubbableEvent = {
     url?: string
     headers?: Record<string, unknown>
     data?: unknown
-    [key: string]: unknown
   }
   breadcrumbs?: ScrubbableBreadcrumb[]
   user?: Record<string, unknown>
   contexts?: Record<string, unknown>
   tags?: Record<string, unknown>
   extra?: Record<string, unknown>
-  [key: string]: unknown
 }
 
 function extractPathname(url: string): string | null {

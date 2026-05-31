@@ -3,6 +3,10 @@ import { z } from "zod";
 // ─── Schemas ────────────────────────────────────────────────────────────────
 
 const serverSchema = z.object({
+  SENTRY_ORG: z.string().default(''),
+  SENTRY_PROJECT: z.string().default(''),
+  CSP_ENFORCE: z.coerce.boolean().default(false),
+  AUTH_RATE_LIMIT_ENABLED: z.coerce.boolean().default(true),
   ANTHROPIC_API_KEY: z.string().min(1, "ANTHROPIC_API_KEY is required"),
   SUPABASE_SERVICE_ROLE_KEY: z
     .string()
@@ -55,6 +59,9 @@ const serverSchema = z.object({
 });
 
 const publicSchema = z.object({
+  NEXT_PUBLIC_SENTRY_DSN: z.string().default(''),
+  SENTRY_ENVIRONMENT: z.string().default(''),
+  VERCEL_GIT_COMMIT_SHA: z.string().default(''),
   NEXT_PUBLIC_SUPABASE_URL: z
     .string()
     .min(1, "NEXT_PUBLIC_SUPABASE_URL is required"),
@@ -71,6 +78,9 @@ const publicSchema = z.object({
 // ─── Parsed values ───────────────────────────────────────────────────────────
 
 const publicEnv = publicSchema.parse({
+  NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN,
+  SENTRY_ENVIRONMENT: process.env.SENTRY_ENVIRONMENT ?? process.env.VERCEL_ENV ?? '',
+  VERCEL_GIT_COMMIT_SHA: process.env.VERCEL_GIT_COMMIT_SHA,
   NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
   NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
   NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
@@ -120,6 +130,10 @@ function parseServerEnv() {
     METRICS_SYNC_BATCH_SIZE: process.env.METRICS_SYNC_BATCH_SIZE,
     METRICS_STALE_MINUTES: process.env.METRICS_STALE_MINUTES,
     METRICS_MAX_AGE_DAYS: process.env.METRICS_MAX_AGE_DAYS,
+    SENTRY_ORG: process.env.SENTRY_ORG,
+    SENTRY_PROJECT: process.env.SENTRY_PROJECT,
+    CSP_ENFORCE: process.env.CSP_ENFORCE,
+    AUTH_RATE_LIMIT_ENABLED: process.env.AUTH_RATE_LIMIT_ENABLED,
   });
 }
 
@@ -269,6 +283,18 @@ export const config = {
     get METRICS_MAX_AGE_DAYS() {
       return serverOnly("METRICS_MAX_AGE_DAYS", () => server().METRICS_MAX_AGE_DAYS);
     },
+    get SENTRY_ORG() {
+      return serverOnly("SENTRY_ORG", () => server().SENTRY_ORG);
+    },
+    get SENTRY_PROJECT() {
+      return serverOnly("SENTRY_PROJECT", () => server().SENTRY_PROJECT);
+    },
+    get CSP_ENFORCE() {
+      return serverOnly("CSP_ENFORCE", () => server().CSP_ENFORCE);
+    },
+    get AUTH_RATE_LIMIT_ENABLED() {
+      return serverOnly("AUTH_RATE_LIMIT_ENABLED", () => server().AUTH_RATE_LIMIT_ENABLED);
+    },
   },
 
   public: {
@@ -277,5 +303,8 @@ export const config = {
     APP_URL: publicEnv.NEXT_PUBLIC_APP_URL,
     STRIPE_PUBLISHABLE_KEY: publicEnv.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
     NODE_ENV: publicEnv.NODE_ENV,
+    SENTRY_DSN: publicEnv.NEXT_PUBLIC_SENTRY_DSN,
+    SENTRY_ENVIRONMENT: publicEnv.SENTRY_ENVIRONMENT,
+    VERCEL_GIT_COMMIT_SHA: publicEnv.VERCEL_GIT_COMMIT_SHA,
   },
 } as const;

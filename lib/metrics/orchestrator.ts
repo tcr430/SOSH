@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/nextjs'
 import { formatISO } from 'date-fns'
 import { config } from '@/lib/config'
 import { getRegistry, SocialProviderError } from '@/lib/social/index'
@@ -21,6 +22,7 @@ export async function runMetricsSyncTick(opts?: {
   now?: Date
   batchSize?: number
 }): Promise<MetricsSyncTickSummary> {
+  return Sentry.withMonitor('metrics-sync-cron', async () => {
   const start = Date.now()
   const now = opts?.now ?? new Date()
   const batchSize = opts?.batchSize ?? config.server.METRICS_SYNC_BATCH_SIZE
@@ -101,4 +103,5 @@ export async function runMetricsSyncTick(opts?: {
   console.log(JSON.stringify({ kind: 'metrics_sync_tick', ...summary }))
 
   return summary
+  }) // end Sentry.withMonitor
 }
