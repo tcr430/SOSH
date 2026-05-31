@@ -11,6 +11,7 @@ import {
   incrementPublishedCountForCampaign,
 } from '@/lib/db/posts'
 import { recoverStuckGenerationSessions } from '@/lib/db/post-generation-sessions'
+import { pruneStaleAuthRateLimits } from '@/lib/db/auth-rate-limits'
 import { getActiveByBusinessAndPlatform } from '@/lib/db/social-accounts'
 import type { PostRow } from '@/lib/db/types'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -30,6 +31,7 @@ export interface JanitorTickSummary {
   tick: string
   durationMs: number
   stuckGenerationSessionsReaped: number
+  authRateLimitsPruned: number
 }
 
 function redactTokens(obj: unknown): unknown {
@@ -263,11 +265,13 @@ export async function runJanitorTick(opts?: {
     now,
     staleMinutes: config.server.POST_GENERATION_SESSION_STALE_MINUTES,
   })
+  const authRateLimitsPruned = await pruneStaleAuthRateLimits(client)
 
   const summary: JanitorTickSummary = {
     tick: formatISO(now),
     durationMs: Date.now() - tickStart,
     stuckGenerationSessionsReaped,
+    authRateLimitsPruned,
   }
 
   console.log(JSON.stringify({ kind: 'janitor_tick', ...summary }))

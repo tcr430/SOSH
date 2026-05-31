@@ -44,7 +44,7 @@ function makeRequest(opts: {
   return new NextRequest('http://localhost/api/cron/publish', { headers })
 }
 
-const janitorSummary = { tick: '2026-05-25T10:00:00Z', durationMs: 1, stuckGenerationSessionsReaped: 0 }
+const janitorSummary = { tick: '2026-05-25T10:00:00Z', durationMs: 1, stuckGenerationSessionsReaped: 0, authRateLimitsPruned: 0 }
 const publishSummary = { tick: '2026-05-25T10:00:00Z', durationMs: 2, claimed: 0, published: 0, failed: 0, retried: 0, refreshed: 0, reaped: 0 }
 
 beforeEach(() => {
