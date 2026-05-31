@@ -2,6 +2,9 @@ import createIntlMiddleware from "next-intl/middleware";
 import { type NextRequest, NextResponse } from "next/server";
 import { routing } from "@/i18n/routing";
 import { updateSession } from "@/lib/supabase/middleware";
+import { buildCsp } from "@/lib/observability/csp";
+import { deriveSentryCspReportUri } from "@/lib/observability/sentry-csp-report-uri";
+import { config as appConfig } from "@/lib/config";
 
 const handleI18n = createIntlMiddleware(routing);
 
@@ -50,9 +53,21 @@ export async function middleware(request: NextRequest) {
     return i18nResponse
   }
 
-  // 5. For normal renders, return NextResponse.next() with modified request
-  //    headers so Server Components receive x-pathname.
+  // 5. Generate nonce and inject into request headers for Server Components.
+  const nonceBytes = crypto.getRandomValues(new Uint8Array(16))
+  const nonce = Buffer.from(nonceBytes).toString('base64')
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  requestHeaders.set('x-nonce', nonce)
+
+  // 6. Build CSP and return response with CSP header.
+  const postizHost = (() => {
+    try { return new URL(appConfig.server.POSTIZ_BASE_URL).host } catch { return undefined }
+  })()
+  const reportUri = deriveSentryCspReportUri(appConfig.public.SENTRY_DSN)
+  const { headerName, headerValue } = buildCsp(nonce, reportUri, appConfig.server.CSP_ENFORCE, postizHost)
+
   const response = NextResponse.next({ request: { headers: requestHeaders } })
+  response.headers.set(headerName, headerValue)
   supabaseResponse.cookies.getAll().forEach((c) => response.cookies.set(c))
   i18nResponse.cookies.getAll().forEach((c) => response.cookies.set(c))
   return response
