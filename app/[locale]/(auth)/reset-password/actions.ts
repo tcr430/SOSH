@@ -2,7 +2,9 @@
 
 import { z } from 'zod'
 import { redirect } from 'next/navigation'
+import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
+import { consumeRateLimit, resolveIp } from '@/lib/auth/rate-limit'
 
 const resetPasswordSchema = z.object({
   code: z.string().min(1),
@@ -52,6 +54,11 @@ export async function resetPasswordAction(
   }
 
   const { code, password, locale } = parsed.data
+
+  const ip = resolveIp(await headers())
+  const allowed = await consumeRateLimit('reset-password', ip)
+  if (!allowed) return { errors: { _form: 'errors.rate_limit' } }
+
   const client = await createClient()
 
   const { error: exchangeError } = await client.auth.exchangeCodeForSession(code)

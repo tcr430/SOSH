@@ -2,7 +2,9 @@
 
 import { z } from 'zod'
 import { redirect } from 'next/navigation'
+import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
+import { consumeRateLimit, resolveIp } from '@/lib/auth/rate-limit'
 import { createBusiness } from '@/lib/db/businesses'
 import { upsertBrandVoice } from '@/lib/db/brand-voices'
 import { workEmailSchema } from '@/lib/validation/email'
@@ -68,6 +70,11 @@ export async function signupAction(
   }
 
   const { name, email, password, company, locale } = parsed.data
+
+  const ip = resolveIp(await headers())
+  const allowed = await consumeRateLimit('signup', ip, email)
+  if (!allowed) return { errors: { _form: 'errors.rate_limit' } }
+
   const client = await createClient()
 
   const { data: authData, error: authError } = await client.auth.signUp({

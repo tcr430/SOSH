@@ -2,8 +2,10 @@
 
 import { z } from 'zod'
 import { redirect } from 'next/navigation'
+import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { getBusinessByOwner } from '@/lib/db/businesses'
+import { consumeRateLimit, resolveIp } from '@/lib/auth/rate-limit'
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -60,6 +62,11 @@ export async function loginAction(
   }
 
   const { email, password, locale, redirectTo } = parsed.data
+
+  const ip = resolveIp(await headers())
+  const allowed = await consumeRateLimit('login', ip, email)
+  if (!allowed) return { errors: { _form: 'errors.rate_limit' } }
+
   const client = await createClient()
 
   const { data, error } = await client.auth.signInWithPassword({ email, password })

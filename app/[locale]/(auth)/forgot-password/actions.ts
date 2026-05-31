@@ -1,8 +1,10 @@
 'use server'
 
 import { z } from 'zod'
+import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { config } from '@/lib/config'
+import { consumeRateLimit, resolveIp } from '@/lib/auth/rate-limit'
 
 const forgotPasswordSchema = z.object({
   email: z.string().email(),
@@ -11,6 +13,9 @@ const forgotPasswordSchema = z.object({
 
 export type ForgotPasswordState = {
   sent?: boolean
+  errors?: {
+    _form?: string
+  }
   values?: {
     email?: string
   }
@@ -32,8 +37,12 @@ export async function forgotPasswordAction(
   }
 
   const { email, locale } = parsed.data
-  const redirectTo = `${config.server.APP_URL}/${locale}/reset-password`
 
+  const ip = resolveIp(await headers())
+  const allowed = await consumeRateLimit('forgot-password', ip, email)
+  if (!allowed) return { errors: { _form: 'errors.rate_limit' } }
+
+  const redirectTo = `${config.server.APP_URL}/${locale}/reset-password`
   const client = await createClient()
   await client.auth.resetPasswordForEmail(email, { redirectTo })
 
