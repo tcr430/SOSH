@@ -1,0 +1,14 @@
+{
+  "locale_error": {
+    "title": "Algo correu mal",
+    "body": "Ocorreu um erro inesperado nesta página. Os seus dados estão seguros. Fomos notificados e iremos investigar.",
+    "retry": "Tentar novamente",
+    "home": "Ir para o início",
+    "reference": "Referência"
+  },
+  "not_found": {
+    "title": "Página não encontrada",
+    "body": "A página que procurava não existe.",
+    "home": "Ir para o início"
+  }
+}

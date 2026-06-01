@@ -1,0 +1,14 @@
+{
+  "locale_error": {
+    "title": "Something went wrong",
+    "body": "An unexpected error occurred on this page. Your data is safe. We have been notified and will investigate.",
+    "retry": "Try again",
+    "home": "Go home",
+    "reference": "Reference"
+  },
+  "not_found": {
+    "title": "Page not found",
+    "body": "The page you were looking for does not exist.",
+    "home": "Go home"
+  }
+}

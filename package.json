@@ -51,6 +51,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
+    "happy-dom": "^20.9.0",
     "pg": "^8.20.0",
     "supabase": "^2.97.0",
     "tailwindcss": "^4",
