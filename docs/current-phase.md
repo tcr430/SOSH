@@ -2,7 +2,7 @@
 
 **Phase:** 1 — MVP
 **Goal:** First paying customer
-**Status:** Session 10D complete (publishing worker correction pass — all 8 blockers resolved, 2 quick wins)
+**Status:** Session 13B complete (Launch Hardening B7 error boundaries + B8 launch checklist filled)
 
 ## What's done
 - Session 0: Environment setup complete
@@ -554,7 +554,19 @@
 - Smoke tests A–F against live Stripe (optional):
   (A) pricing page render, (B) checkout with test card, (C) webhook idempotency replay,
   (D) billing portal access, (E) trial banner, (F) signature failure → 400
-- Session 13: TBD — see backlog below
+- Session 13A: Launch Hardening ADR 0007 — B1 scrubber, B2 Sentry init, B3 CSP + security headers,
+  B4 rate-limit table + RPC + janitor, B5 rate limiting wired into all 4 auth Server Actions,
+  B6 cron health monitoring + `/api/_health` endpoint
+- Session 13B: Launch Hardening continued — B7 error boundaries + B8 launch checklist filled
+  - `app/global-error.tsx` — root error boundary, inline Stone CSS, multi-locale (en/pt/es),
+    Sentry capture on mount, no next-intl dependency
+  - `app/[locale]/error.tsx` — locale-scoped error boundary, Tailwind, next-intl, Sentry on mount
+  - `app/[locale]/not-found.tsx` — Server Component 404 page, next-intl, no Sentry (by design)
+  - `i18n/en|pt|es/errors.json` — error boundary translations for all three locales
+  - `docs/launch-checklist.md` — all Section 1 `<fill>` cells replaced with concrete
+    `vercel env ls production | grep` commands; `SENTRY_DSN` corrected to
+    `NEXT_PUBLIC_SENTRY_DSN`; Section 8 scrubEvent route-path exclusion check added
+  - 2 new migrations applied (auth_rate_limits, cron_health); 551 tests green
 - Backlog: PLUS_CAMPAIGN_LIMIT in enforcement.ts still hardcoded — should read from
   getPlanCapabilities() before Session 13
 
