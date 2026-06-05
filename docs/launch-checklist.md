@@ -1,4 +1,4 @@
-# Launch Checklist
+﻿# Launch Checklist
 
 **Status:** Skeleton — Builder fills the per-row details by reading the cited source files.
 **Owner:** Last engineer to merge before flipping Stripe live.
@@ -83,20 +83,43 @@ Verification command (per row): `vercel env ls production | grep <VAR>`
 
 ## 3. Cron
 
-- [ ] **`vercel.json`** contains both entries:
-  ```json
-  { "path": "/api/cron/publish",      "schedule": "* * * * *" }
-  { "path": "/api/cron/sync-metrics", "schedule": "0 * * * *" }
+### Trigger source
+
+#### QStash (active at launch)
+
+Setup runbook: `docs/build-guide/runbooks/qstash-setup.md`
+
+- [ ] **`CRON_TRIGGER=qstash` set in production env.**
   ```
-- [ ] **`CRON_SECRET` set in production env, ≥ 32 characters.** `/lib/config.ts` rejects shorter values at boot in production — verify the deploy log shows no `ZodError: CRON_SECRET must be at least 32 characters in production`.
-- [ ] **First production tick observed** for each cron in Vercel logs:
-  - `/api/cron/publish` — look for the structured `{"kind":"publish-tick", ...}` log line within 60 seconds of deploy.
-  - `/api/cron/sync-metrics` — look for the structured `{"kind":"metrics-sync-tick", ...}` log line within the first hour. Expected outcome at launch: `synced=0, skippedNotImplemented=N, errors=0` (per ADR 0006 §1 — wired-but-inert is healthy).
+  vercel env ls production | grep CRON_TRIGGER
+  ```
+- [ ] **`QSTASH_CURRENT_SIGNING_KEY` set in production env.**
+  ```
+  vercel env ls production | grep QSTASH_CURRENT_SIGNING_KEY
+  ```
+- [ ] **`QSTASH_NEXT_SIGNING_KEY` set in production env.** (Both keys required — Zod superRefine rejects boot if either is absent when `CRON_TRIGGER=qstash`.)
+  ```
+  vercel env ls production | grep QSTASH_NEXT_SIGNING_KEY
+  ```
+- [ ] **`CRON_SECRET` set in production env, ≥ 32 characters.** Required even in QStash mode — Bearer auth remains the fallback for local-dev curl paths and the dev-bypass tests. `/lib/config.ts` rejects shorter values at boot in production.
+  ```
+  vercel env ls production | grep CRON_SECRET
+  ```
+- [ ] **Both schedules visible in Upstash console** → QStash → Schedules: publish (`* * * * *`) and sync-metrics (`0 * * * *`), status Active.
+- [ ] **First production tick observed** in Vercel logs with `triggeredBy: 'qstash'`:
+  - `/api/cron/publish` — look for `{"kind":"publish-tick","triggeredBy":"qstash",...}` within 60 seconds of deploy.
+  - `/api/cron/sync-metrics` — look for `{"kind":"metrics-sync-tick","triggeredBy":"qstash",...}` within the first hour. Expected at launch: `synced=0, skippedNotImplemented=N, errors=0` (ADR 0006 §1 — wired-but-inert is healthy).
 - [ ] **`cron_health` rows present** after first tick:
   ```sql
   select * from cron_health;
   ```
   Expected: two rows (`publish`, `metrics-sync`) with recent `last_seen_at`.
+
+#### Vercel Cron (reserved — not active at launch)
+
+Restore runbook: `docs/build-guide/runbooks/vercel-cron-restore.md`
+
+Not configured at launch (Vercel Hobby plan). When the project upgrades to Vercel Pro, follow the restore runbook to swap back to Vercel Cron as the trigger source.
 
 ---
 
