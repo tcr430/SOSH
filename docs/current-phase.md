@@ -2,7 +2,7 @@
 
 **Phase:** 1 — MVP
 **Goal:** First paying customer
-**Status:** Session 13B complete (Launch Hardening B7 error boundaries + B8 launch checklist filled)
+**Status:** Session 13.5D complete — QStash trigger migration correction pass done (B7 + E1/H1/I3). Next: Session 14 (Transactional Email).
 
 ## What's done
 - Session 0: Environment setup complete
@@ -550,14 +550,21 @@
      test mocks corrected from `fetchedAt: NOW` (Date) to `fetchedAt: formatISO(NOW)` (string)
   28 test files, 348 tests passing; tsc --noEmit --skipLibCheck clean (SOSH files).
 
-## What's next
-- Smoke tests A–F against live Stripe (optional):
-  (A) pricing page render, (B) checkout with test card, (C) webhook idempotency replay,
-  (D) billing portal access, (E) trial banner, (F) signature failure → 400
-- Session 13A: Launch Hardening ADR 0007 — B1 scrubber, B2 Sentry init, B3 CSP + security headers,
-  B4 rate-limit table + RPC + janitor, B5 rate limiting wired into all 4 auth Server Actions,
-  B6 cron health monitoring + `/api/_health` endpoint
-- Session 13B: Launch Hardening continued — B7 error boundaries + B8 launch checklist filled
+- **Session 13A:** Launch Hardening — Sentry observability + CSP + rate limiting (ADR 0007 §B1–B6):
+  - Sentry SDK initialized across client, server, and edge runtimes; `lib/observability/sentry-scrub.ts`
+    shared scrubber module with CATCH_ALL_SUBSTRINGS; scrubEvent PII scrubber wired into Sentry config
+  - Content Security Policy with nonce injection (Middleware) and Report-Only mode; security headers
+    (X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy)
+  - `auth_rate_limits` and `cron_health` migrations authored and applied to live DB
+  - Database-backed rate limiting: `consumeRateLimit` wired into all 4 auth Server Actions
+    (signup, login, forgot-password, reset-password)
+  - `app/api/_health/route.ts` — health check endpoint with cron job monitoring
+  - `lib/config.ts` — all 42 env vars centralized and typed
+  - Vercel Speed Insights + Analytics integrated
+  - Error message redaction refactored into shared constants
+  - 551 tests passing.
+
+- **Session 13B:** Launch Hardening continued — error boundaries + launch checklist (ADR 0007 §B7–B8):
   - `app/global-error.tsx` — root error boundary, inline Stone CSS, multi-locale (en/pt/es),
     Sentry capture on mount, no next-intl dependency
   - `app/[locale]/error.tsx` — locale-scoped error boundary, Tailwind, next-intl, Sentry on mount
@@ -566,11 +573,64 @@
   - `docs/launch-checklist.md` — all Section 1 `<fill>` cells replaced with concrete
     `vercel env ls production | grep` commands; `SENTRY_DSN` corrected to
     `NEXT_PUBLIC_SENTRY_DSN`; Section 8 scrubEvent route-path exclusion check added
-  - 2 new migrations applied (auth_rate_limits, cron_health); 551 tests green
-- Backlog: PLUS_CAMPAIGN_LIMIT in enforcement.ts still hardcoded — should read from
-  getPlanCapabilities() before Session 13
+  - 551 tests passing.
 
-  ---
+- **Session 13C:** Reviewer audit — typescript-reviewer review of the full ADR 0007 (Launch Hardening)
+  implementation. 6 code findings and 3 ADR doc-drift issues identified.
+
+- **Session 13D:** Correction pass — all 6 code findings resolved, ADR 0007 aligned in 3 sections:
+  - B6: tunnelRoute removed from `withSentryConfig` in next.config.ts
+  - A8: `Sentry.setUser({ id: user.id })` added to dashboard layout (id only — no PII)
+  - H5: Orchestrator kind strings hyphenated — `publish-tick`, `metrics-sync-tick`
+  - F2: `detectLocale` uses `Object.hasOwn()` — prototype-poisoning safe
+  - A1: `CATCH_ALL_SUBSTRINGS` single source of truth — exported from sentry-scrub.ts,
+    imported and re-exported by errors.ts; reference equality enforced by test
+  - D15: `signupAction` drops unused email arg from `consumeRateLimit`
+  - ADR §3.2: sourcemaps config pattern documented (deleteSourcemapsAfterUpload)
+  - ADR §3.5: janitor-cron Sentry.withMonitor example documented
+  - ADR §4.2: middleware ordering corrected (auth redirect → x-pathname → i18n → nonce → CSP)
+  - New tests: prototype-poisoning cases in global-error.test.tsx, CATCH_ALL_SUBSTRINGS ===
+    reference equality in errors.test.ts, Sentry.setUser integration in layout.test.tsx
+  - 691/691 tests passing; tsc --noEmit --skipLibCheck clean.
+
+- **Session 13.5B:** QStash trigger migration — dual-mode cron authentication (ADR 0005 Amendment 1):
+  - `lib/cron/qstash-auth.ts` — `verifyQStashRequest` helper + `QStashAuthError` class;
+    10 tests passing (Receiver constructor mock, valid/invalid/missing signature, env var absent)
+  - `app/api/cron/publish/route.ts` — hard-branched on `CRON_TRIGGER`: GET+Bearer in `secret` mode,
+    POST+QStash signature in `qstash` mode; 405 returned for wrong method in either mode
+  - `app/api/cron/sync-metrics/route.ts` — same dual-mode pattern
+  - `docs/runbooks/qstash-setup.md` and `docs/runbooks/vercel-cron-restore.md` created
+  - `vercel.json` crons array removed (QStash schedules the jobs from the Upstash console)
+  - `docs/launch-checklist.md` §3 updated for QStash verification gates
+  - @upstash/qstash ^2.11.0 added to package.json
+  - 36 route tests + 10 auth tests passing; commit 4840f47.
+
+- **Session 13.5C:** Reviewer audit — security + correctness review of QStash migration (Opus 4.7).
+  Two blockers surfaced: B7 (caret range on @upstash/qstash) and E1/H1/I3 (duplicate tick logs).
+
+- **Session 13.5D:** Correction pass — both reviewer blockers resolved:
+  - B7: `@upstash/qstash` pinned to exact version `2.11.0` (no caret) in package.json;
+    lockfile regenerated
+  - E1/H1/I3: `triggeredBy` parameter threaded through `runPublishTick`, `runJanitorTick`,
+    and `runMetricsSyncTick` signatures; orchestrators emit one canonical log line per tick
+    carrying both `triggeredBy` and all summary fields; duplicate route-level tick logs deleted
+  - Route tests updated to assert `triggeredBy` via `vi.mocked(orchestratorFn).toHaveBeenCalledWith`
+    (orchestrators are mocked in route tests); `it.each(['qstash', 'secret'])` parametrized
+    tests added in both orchestrator test files
+  - 89 tests passing across cron routes + auth + orchestrators; commit b62a29c.
+
+## What's next
+
+**Session 14 — Transactional Email (Resend integration)**
+
+Start with an Architect session to produce an ADR before building. Anticipated scope:
+- ADR for email strategy — welcome email, trial expiry warning, payment failed, post published digest
+- Resend SDK integration via `lib/email/` abstraction (mirrors `lib/ai/` and `lib/stripe/` pattern)
+- Email templates with branding and plain-text fallbacks
+- i18n EN/PT/ES for all transactional email content
+- Trigger wiring: Stripe webhook (subscription events), trial state transitions, publishing worker
+
+---
 
 ## Backlog / Deferred
 
@@ -636,9 +696,31 @@
     `getPlanCapabilities(plan).allowedPlatforms` rather than being re-specified elsewhere
   - Full sweep: grep for hardcoded plan-limit integers (`1`, `2`, `5`, `30`, `50`) across
     `lib/` and replace with `getPlanCapabilities()` lookups.
-- **Smoke tests A–F:** Not yet run against live Stripe keys. Run before Session 11B reviewer:
+- **Smoke tests A–F:** Not yet run against live Stripe keys. Run before going live:
   webhook idempotency, pricing page render, checkout flow, Stripe portal, trial banner,
   signature failure (400).
+
+### Session 13.5C
+
+- **C4/H2 — Bearer-side cron-auth-failure warn log:** The `secret` (Bearer) branch does not emit a
+  structured `{ kind: 'cron-auth-failure' }` warn log on failed auth, unlike the QStash branch which
+  logs reason + route + trigger. Low operational impact at launch but inconsistent with the QStash
+  branch's observability. Add a parallel `console.warn(JSON.stringify({ kind: 'cron-auth-failure',
+  route, trigger: 'secret', reason: ... }))` to both route Bearer guards in a future correction pass.
+- **G1/G2 — ADR 0005 + 0006 cross-reference drift:** ADR 0005 Amendment 1 and ADR 0006 §12/§13
+  were not updated to cross-reference each other after the QStash migration. Resolve in a dedicated
+  doc pass — no code change required.
+- **vercel.json cosmetic:** vercel.json retains commented-out cron stanza (left as a rollback reference).
+  Remove the comment block once QStash is confirmed stable in production.
+
+### Session 13D
+
+- **H1 — launch-checklist tunable granularity:** `docs/launch-checklist.md` §1 collapses ~14
+  tunable parameters into one grep row. Expand to per-var rows referencing ADR §8.1 when an
+  operator complains. Not blocking launch.
+- **B5 — withSentryConfig SENTRY_AUTH_TOKEN:** currently relies on @sentry/nextjs SDK
+  auto-pickup of SENTRY_AUTH_TOKEN rather than passing the field explicitly. ADR §3.2 documents
+  both forms; convert to explicit when next touching next.config.ts.
 
 ---
 
@@ -708,6 +790,31 @@
   returns outcome 'applied' with a null businessId. Dunning emails and grace-period logic
   are Phase 3.
 
+### Sessions 13A–D (ADR 0007 — Launch Hardening)
+
+- **Sentry.setUser passes id only:** no email, no name, no PII ever set on the Sentry user context.
+- **CATCH_ALL_SUBSTRINGS single source of truth:** exported from `lib/observability/sentry-scrub.ts`;
+  `lib/social/errors.ts` imports and re-exports it. Reference equality enforced by test — prevents
+  accidental divergence if one copy is edited and not the other.
+- **Object.hasOwn over `in` operator for locale detection:** `in` traverses the prototype chain
+  and is vulnerable to prototype-poisoning attacks. `Object.hasOwn` checks own properties only.
+- **tunnelRoute excluded from withSentryConfig:** increases attack surface without sufficient
+  benefit at our scale. Removed in Session 13D correction pass.
+- **global-error.tsx has no next-intl dependency:** the root error boundary must render without
+  the i18n provider, which may itself have crashed. Locale detection is manual with an
+  Object.hasOwn guard and a hardcoded EN fallback.
+
+### Session 13.5B–D (ADR 0005 Amendment 1 — QStash trigger migration)
+
+- **CRON_TRIGGER hard-branch, not feature flag:** Routes branch at entry on `config.server.CRON_TRIGGER`.
+  GET returns 405 in `qstash` mode; POST returns 405 in `secret` mode. Dev-bypass (`X-Cron-Dev-Trigger`)
+  is only consulted in the `secret` branch — never in the `qstash` branch.
+- **@upstash/qstash pinned exactly:** `"2.11.0"` (no caret). ADR Amendment 1 mandates exact pinning
+  for security-critical SDKs whose verification logic must not silently change between deploys.
+- **Canonical tick log lives in the orchestrator:** `publish-tick`, `janitor_tick`, and
+  `metrics-sync-tick` log lines are emitted once per tick from the orchestrator, carrying both
+  `triggeredBy` and all summary fields. Routes do not emit tick logs — they delegate to orchestrators.
+
 ---
 
 ## Known gotchas
@@ -717,12 +824,13 @@
 - **`middleware.ts` deprecation warning:** Next.js 16 prefers `proxy`. Not renamed yet —
   belongs in a dedicated correction pass, not a Builder session.
 - **Bare `npx vitest run` picks up ECC tests:** Always scope to SOSH paths, e.g.
-  `npx vitest run lib/db lib/social lib/campaigns lib/ai`. Bare vitest matches ECC files that
-  call `process.exit()` and fail.
+  `npx vitest run lib/db lib/social lib/campaigns lib/ai lib/observability lib/publishing lib/metrics app/global-error "app/[locale]/(dashboard)" "app/[locale]/(auth)"`.
+  Bare vitest matches ECC files that call `process.exit()` and fail.
 - **tsc must use `--skipLibCheck`:** Bare `npx tsc --noEmit` surfaces ECC remotion errors.
   Always use `npx tsc --noEmit --skipLibCheck`.
-- **Migrations applied through 029:** All migrations (001–029) applied to live Supabase as of
-  Session 8D. Session 9B added two additional migration files pending application to live DB.
+- **Migrations applied through 031 + auth_rate_limits + cron_health:** All migrations through 031
+  (billing_events) plus the two Session 13A migrations (auth_rate_limits, cron_health) have been
+  applied to the live Supabase DB as of Session 13A.
 - **OAuthAuthorizeInput has 2 extra fields vs ADR §2** (platform, state — Builder additions).
   Document in ADR 0002 open follow-ups.
 - **ECC commands use `/everything-claude-code:` prefix**, not `/ecc:`.

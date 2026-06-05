@@ -43,4 +43,13 @@ describe('GlobalError', () => {
     const { detectLocale } = await import('../global-error')
     expect(detectLocale()).toBe('en')
   })
+
+  it.each(['constructor', 'toString', '__proto__', 'hasOwnProperty'])(
+    'falls back to en for prototype-poisoning segment %s',
+    async (segment) => {
+      setPathname(`/${segment}/route`)
+      const { detectLocale } = await import('../global-error')
+      expect(detectLocale()).toBe('en')
+    },
+  )
 })

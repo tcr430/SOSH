@@ -2,7 +2,7 @@ import { z } from "zod";
 
 // ─── Schemas ────────────────────────────────────────────────────────────────
 
-const serverSchema = z.object({
+export const serverSchema = z.object({
   SENTRY_ORG: z.string().default(''),
   SENTRY_PROJECT: z.string().default(''),
   CSP_ENFORCE: z.coerce.boolean().default(false),
@@ -56,6 +56,21 @@ const serverSchema = z.object({
   X_CLIENT_SECRET: z.string().default(''),
   META_APP_ID: z.string().default(''),
   META_APP_SECRET: z.string().default(''),
+  CRON_TRIGGER: z.enum(['qstash', 'secret']).default('secret'),
+  QSTASH_CURRENT_SIGNING_KEY: z.string().min(1).optional(),
+  QSTASH_NEXT_SIGNING_KEY: z.string().min(1).optional(),
+}).superRefine((data, ctx) => {
+  if (
+    data.CRON_TRIGGER === 'qstash' &&
+    process.env.NODE_ENV === 'production' &&
+    (!data.QSTASH_CURRENT_SIGNING_KEY || !data.QSTASH_NEXT_SIGNING_KEY)
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        'QSTASH_CURRENT_SIGNING_KEY and QSTASH_NEXT_SIGNING_KEY are both required when CRON_TRIGGER=qstash in production',
+    })
+  }
 });
 
 const publicSchema = z.object({
@@ -134,6 +149,9 @@ function parseServerEnv() {
     SENTRY_PROJECT: process.env.SENTRY_PROJECT,
     CSP_ENFORCE: process.env.CSP_ENFORCE,
     AUTH_RATE_LIMIT_ENABLED: process.env.AUTH_RATE_LIMIT_ENABLED,
+    CRON_TRIGGER: process.env.CRON_TRIGGER,
+    QSTASH_CURRENT_SIGNING_KEY: process.env.QSTASH_CURRENT_SIGNING_KEY,
+    QSTASH_NEXT_SIGNING_KEY: process.env.QSTASH_NEXT_SIGNING_KEY,
   });
 }
 
@@ -294,6 +312,15 @@ export const config = {
     },
     get AUTH_RATE_LIMIT_ENABLED() {
       return serverOnly("AUTH_RATE_LIMIT_ENABLED", () => server().AUTH_RATE_LIMIT_ENABLED);
+    },
+    get CRON_TRIGGER() {
+      return serverOnly("CRON_TRIGGER", () => server().CRON_TRIGGER);
+    },
+    get QSTASH_CURRENT_SIGNING_KEY() {
+      return serverOnly("QSTASH_CURRENT_SIGNING_KEY", () => server().QSTASH_CURRENT_SIGNING_KEY);
+    },
+    get QSTASH_NEXT_SIGNING_KEY() {
+      return serverOnly("QSTASH_NEXT_SIGNING_KEY", () => server().QSTASH_NEXT_SIGNING_KEY);
     },
   },
 

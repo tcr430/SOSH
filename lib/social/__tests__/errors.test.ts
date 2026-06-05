@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { SocialProviderError } from '../errors'
+import { SocialProviderError, CATCH_ALL_SUBSTRINGS as fromErrors } from '../errors'
+import { CATCH_ALL_SUBSTRINGS as fromScrub } from '@/lib/observability/sentry-scrub'
 
 describe('SocialProviderError', () => {
   it('sets code, message, platform, and retryAfterSeconds', () => {
@@ -86,5 +87,13 @@ describe('SocialProviderError', () => {
     })
     expect(err.details['ACCESS_TOKEN']).toBe('[REDACTED]')
     expect(err.details['REFRESH_TOKEN']).toBe('[REDACTED]')
+  })
+})
+
+// ── Single source of truth — CATCH_ALL_SUBSTRINGS ────────────────────────────
+
+describe('CATCH_ALL_SUBSTRINGS — single source of truth', () => {
+  it('errors.ts re-exports the identical array reference from sentry-scrub (=== equality)', () => {
+    expect(fromErrors).toBe(fromScrub)
   })
 })

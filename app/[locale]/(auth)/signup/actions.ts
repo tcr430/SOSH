@@ -72,7 +72,7 @@ export async function signupAction(
   const { name, email, password, company, locale } = parsed.data
 
   const ip = resolveIp(await headers())
-  const allowed = await consumeRateLimit('signup', ip, email)
+  const allowed = await consumeRateLimit('signup', ip)
   if (!allowed) return { errors: { _form: 'errors.rate_limit' } }
 
   const client = await createClient()

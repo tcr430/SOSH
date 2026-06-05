@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { differenceInDays, addDays, parseISO } from 'date-fns'
+import * as Sentry from '@sentry/nextjs'
 import { createClient } from '@/lib/supabase/server'
 import { getBusinessByOwner } from '@/lib/db/businesses'
 import { getBrandVoice } from '@/lib/db/brand-voices'
@@ -21,6 +22,8 @@ export default async function DashboardLayout({
 
   const { data: { user } } = await client.auth.getUser()
   if (!user) redirect(`/${locale}/login`)
+
+  Sentry.setUser({ id: user.id })
 
   const business = await getBusinessByOwner(client, user.id)
   if (!business) redirect(`/${locale}/signup`)

@@ -1,8 +1,8 @@
 import type { Platform } from '@/lib/db/types'
 import type { SocialProviderErrorCode } from './types'
-import { REDACTED_KEYS, normaliseKey } from '@/lib/observability/sentry-scrub'
+import { REDACTED_KEYS, normaliseKey, CATCH_ALL_SUBSTRINGS } from '@/lib/observability/sentry-scrub'
 
-const CATCH_ALL_SUBSTRINGS = ['token', 'secret', 'apikey', 'authorization', 'cookie', 'password'] as const
+export { CATCH_ALL_SUBSTRINGS }
 
 function redactSensitiveKeys(obj: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(

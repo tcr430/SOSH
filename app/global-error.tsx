@@ -32,7 +32,7 @@ type Locale = keyof typeof GLOBAL_ERROR_COPY
 export function detectLocale(): Locale {
   if (typeof window === 'undefined') return 'en'
   const segment = window.location.pathname.split('/')[1]
-  return segment in GLOBAL_ERROR_COPY ? (segment as Locale) : 'en'
+  return Object.hasOwn(GLOBAL_ERROR_COPY, segment) ? (segment as Locale) : 'en'
 }
 
 export default function GlobalError({
