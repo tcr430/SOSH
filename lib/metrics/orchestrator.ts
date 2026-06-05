@@ -22,6 +22,7 @@ export interface MetricsSyncTickSummary {
 export async function runMetricsSyncTick(opts?: {
   now?: Date
   batchSize?: number
+  triggeredBy?: 'qstash' | 'secret'
 }): Promise<MetricsSyncTickSummary> {
   return Sentry.withMonitor('metrics-sync-tick', async () => {
   const start = Date.now()
@@ -103,7 +104,7 @@ export async function runMetricsSyncTick(opts?: {
 
   summary.durationMs = Date.now() - start
 
-  console.log(JSON.stringify({ kind: 'metrics_sync_tick', ...summary }))
+  console.log(JSON.stringify({ kind: 'metrics-sync-tick', triggeredBy: opts?.triggeredBy, ...summary }))
 
   return summary
   }, {

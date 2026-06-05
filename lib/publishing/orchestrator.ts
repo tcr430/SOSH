@@ -50,6 +50,7 @@ export async function runPublishTick(opts?: {
   now?: Date
   batchSize?: number
   reaped?: number
+  triggeredBy?: 'qstash' | 'secret'
 }): Promise<PublishTickSummary> {
   return Sentry.withMonitor('publish-tick', async () => {
   const tickStart = Date.now()
@@ -77,7 +78,7 @@ export async function runPublishTick(opts?: {
 
   if (posts.length === 0) {
     summary.durationMs = Date.now() - tickStart
-    console.log(JSON.stringify({ kind: 'publish_tick', ...summary }))
+    console.log(JSON.stringify({ kind: 'publish-tick', triggeredBy: opts?.triggeredBy, ...summary }))
     return summary
   }
 
@@ -132,7 +133,7 @@ export async function runPublishTick(opts?: {
   }
 
   summary.durationMs = Date.now() - tickStart
-  console.log(JSON.stringify({ kind: 'publish_tick', ...summary }))
+  console.log(JSON.stringify({ kind: 'publish-tick', triggeredBy: opts?.triggeredBy, ...summary }))
   return summary
   }, {
     schedule: { type: 'crontab', value: '* * * * *' },
@@ -262,6 +263,7 @@ async function handleError(
 
 export async function runJanitorTick(opts?: {
   now?: Date
+  triggeredBy?: 'qstash' | 'secret'
 }): Promise<JanitorTickSummary> {
   return Sentry.withMonitor('janitor-cron', async () => {
   const tickStart = Date.now()
@@ -283,7 +285,7 @@ export async function runJanitorTick(opts?: {
     authRateLimitsPruned,
   }
 
-  console.log(JSON.stringify({ kind: 'janitor_tick', ...summary }))
+  console.log(JSON.stringify({ kind: 'janitor_tick', triggeredBy: opts?.triggeredBy, ...summary }))
   return summary
   }) // end Sentry.withMonitor
 }

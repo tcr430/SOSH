@@ -74,16 +74,6 @@ function makeRequest(opts: {
   })
 }
 
-function getTickLog(spy: ReturnType<typeof vi.spyOn>): Record<string, unknown> | null {
-  for (const call of spy.mock.calls) {
-    try {
-      const parsed = JSON.parse(String(call[0]))
-      if (parsed?.kind === 'publish-tick') return parsed as Record<string, unknown>
-    } catch { /* skip */ }
-  }
-  return null
-}
-
 function getWarnLog(spy: ReturnType<typeof vi.spyOn>): Record<string, unknown> | null {
   for (const call of spy.mock.calls) {
     try {
@@ -204,13 +194,13 @@ describe('GET /api/cron/publish — response shape', () => {
     expect(body.janitor).toHaveProperty('error', 'janitor boom')
   })
 
-  it('GET (CRON_TRIGGER=secret) → 200 + triggeredBy: secret in console.log', async () => {
-    const consoleSpy = vi.spyOn(console, 'log')
+  it('GET (CRON_TRIGGER=secret) → 200 + runPublishTick called with triggeredBy: secret', async () => {
     vi.stubEnv('NODE_ENV', 'development')
     const res = await GET(makeRequest({ authorization: `Bearer ${SECRET}` }))
     expect(res.status).toBe(200)
-    const tickLog = getTickLog(consoleSpy)
-    expect(tickLog?.triggeredBy).toBe('secret')
+    expect(vi.mocked(runPublishTick)).toHaveBeenCalledWith(
+      expect.objectContaining({ triggeredBy: 'secret' }),
+    )
   })
 })
 
@@ -240,13 +230,13 @@ describe('POST /api/cron/publish — QStash mode', () => {
     mockCronTrigger.value = 'qstash'
   })
 
-  it('POST + valid signature → 200 + triggeredBy: qstash in console.log', async () => {
-    const consoleSpy = vi.spyOn(console, 'log')
+  it('POST + valid signature → 200 + runPublishTick called with triggeredBy: qstash', async () => {
     mockVerifyQStash.mockResolvedValue(undefined)
     const res = await POST(makeRequest({ method: 'POST', upstashSignature: 'valid-sig' }))
     expect(res.status).toBe(200)
-    const tickLog = getTickLog(consoleSpy)
-    expect(tickLog?.triggeredBy).toBe('qstash')
+    expect(vi.mocked(runPublishTick)).toHaveBeenCalledWith(
+      expect.objectContaining({ triggeredBy: 'qstash' }),
+    )
   })
 
   it('POST + invalid signature → 401 + cron-auth-failure warn with reason=qstash-invalid-signature', async () => {

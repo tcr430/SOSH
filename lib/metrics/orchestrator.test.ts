@@ -299,4 +299,18 @@ describe('runMetricsSyncTick — B6 observability', () => {
       },
     )
   })
+
+  it.each(['qstash', 'secret'] as Array<'qstash' | 'secret'>)(
+    'emits metrics-sync-tick log with triggeredBy: %s',
+    async (triggeredBy) => {
+      const logSpy = vi.spyOn(console, 'log')
+      vi.mocked(listPostsForMetricsSync).mockResolvedValue([])
+      await runMetricsSyncTick({ now: NOW, triggeredBy })
+      const tickLine = logSpy.mock.calls
+        .map(c => { try { return JSON.parse(String(c[0])) } catch { return null } })
+        .find(p => p?.kind === 'metrics-sync-tick')
+      expect(tickLine).toBeDefined()
+      expect(tickLine!.triggeredBy).toBe(triggeredBy)
+    },
+  )
 })

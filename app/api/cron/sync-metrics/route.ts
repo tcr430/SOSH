@@ -48,10 +48,11 @@ async function metricsSyncTick(request: NextRequest): Promise<NextResponse> {
     }
   }
 
+  const triggeredBy = config.server.CRON_TRIGGER
   const now = new Date()
   let metrics
   try {
-    metrics = await runMetricsSyncTick({ now })
+    metrics = await runMetricsSyncTick({ now, triggeredBy })
   } catch (err) {
     metrics = {
       tick: formatISO(now),
@@ -65,11 +66,6 @@ async function metricsSyncTick(request: NextRequest): Promise<NextResponse> {
       error: err instanceof Error ? err.message : 'unknown',
     }
   }
-
-  console.log(JSON.stringify({
-    kind: 'metrics-sync-tick',
-    triggeredBy: config.server.CRON_TRIGGER,
-  }))
 
   return NextResponse.json({ metrics })
 }

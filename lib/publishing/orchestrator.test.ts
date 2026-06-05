@@ -431,4 +431,18 @@ describe('runPublishTick — B6 observability', () => {
       },
     )
   })
+
+  it.each(['qstash', 'secret'] as Array<'qstash' | 'secret'>)(
+    'emits publish-tick log with triggeredBy: %s',
+    async (triggeredBy) => {
+      const logSpy = vi.spyOn(console, 'log')
+      vi.mocked(claimPostsForPublishing).mockResolvedValue([])
+      await runPublishTick({ now: NOW, triggeredBy })
+      const tickLine = logSpy.mock.calls
+        .map(c => { try { return JSON.parse(String(c[0])) } catch { return null } })
+        .find(p => p?.kind === 'publish-tick')
+      expect(tickLine).toBeDefined()
+      expect(tickLine!.triggeredBy).toBe(triggeredBy)
+    },
+  )
 })

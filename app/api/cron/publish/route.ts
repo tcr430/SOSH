@@ -51,6 +51,7 @@ async function publishTick(request: NextRequest): Promise<NextResponse> {
   }
 
   // ── Phase A (janitor + reaper before claim) ───────────────
+  const triggeredBy = config.server.CRON_TRIGGER
   const now = new Date()
   const tick = formatISO(now)
 
@@ -59,7 +60,7 @@ async function publishTick(request: NextRequest): Promise<NextResponse> {
 
   let janitor, reaped = 0
   try {
-    janitor = await runJanitorTick({ now })
+    janitor = await runJanitorTick({ now, triggeredBy })
   } catch (err) {
     janitor = {
       tick, durationMs: 0,
@@ -80,7 +81,7 @@ async function publishTick(request: NextRequest): Promise<NextResponse> {
   // ── Phase B (publish) ─────────────────────────────────────
   let publish
   try {
-    publish = await runPublishTick({ now, batchSize: config.server.PUBLISH_BATCH_SIZE, reaped })
+    publish = await runPublishTick({ now, batchSize: config.server.PUBLISH_BATCH_SIZE, reaped, triggeredBy })
   } catch (err) {
     publish = {
       tick, durationMs: 0,
@@ -89,11 +90,6 @@ async function publishTick(request: NextRequest): Promise<NextResponse> {
       error: err instanceof Error ? err.message : 'unknown',
     }
   }
-
-  console.log(JSON.stringify({
-    kind: 'publish-tick',
-    triggeredBy: config.server.CRON_TRIGGER,
-  }))
 
   // Always 200 — non-2xx triggers Vercel retry which we don't want
   return NextResponse.json({ tick, janitor, publish })
