@@ -16,6 +16,7 @@ export const REDACTED_KEYS: ReadonlySet<string> = new Set([
   'vaultaccesstokenid', 'vaultrefreshtokenid',
   'stripesecretkey', 'stripewebhooksecret',
   'cronsecret', 'oauthstatesecret', 'healthchecktoken',
+  'upstashsignature', 'qstashcurrentsigningkey', 'qstashnextsigningkey',
   'sentryauthtoken', 'sentrydsn',
   'authorization', 'cookie', 'setcookie',
   'password', 'passwordconfirmation', 'newpassword',
@@ -23,7 +24,7 @@ export const REDACTED_KEYS: ReadonlySet<string> = new Set([
 ])
 
 // Catch-alls checked as substrings of the normalised key in addition to exact set membership.
-const CATCH_ALL_SUBSTRINGS = ['token', 'secret', 'apikey', 'authorization', 'cookie', 'password'] as const
+export const CATCH_ALL_SUBSTRINGS: ReadonlyArray<string> = ['token', 'secret', 'apikey', 'authorization', 'cookie', 'password'] as const
 
 export function normaliseKey(key: string): string {
   return key.toLowerCase().replace(/[^a-z0-9]/g, '')
