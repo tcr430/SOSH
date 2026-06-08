@@ -5,6 +5,16 @@ import * as billingEventsModule from '@/lib/db/billing-events'
 import * as businessesModule from '@/lib/db/businesses'
 import type { BusinessRow } from '@/lib/db/types'
 
+const mockAfter = vi.hoisted(() => vi.fn())
+vi.mock('next/server', () => ({ after: mockAfter }))
+
+const mockEnqueueWelcomeToPlan = vi.hoisted(() => vi.fn())
+const mockEnqueuePaymentFailedCourtesy = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/email/triggers/stripe', () => ({
+  enqueueWelcomeToPlan: mockEnqueueWelcomeToPlan,
+  enqueuePaymentFailedCourtesy: mockEnqueuePaymentFailedCourtesy,
+}))
+
 vi.mock('@/lib/stripe/webhook', () => ({
   parseWebhookEvent: vi.fn(),
   dispatchWebhookEvent: vi.fn(),
@@ -51,6 +61,7 @@ const mockBusiness: BusinessRow = {
   language: 'en',
   timezone: 'UTC',
   onboarding_completed: true,
+  total_posts_published: 0,
   deleted_at: null,
   created_at: '2026-04-30T00:00:00Z',
   updated_at: '2026-04-30T00:00:00Z',
@@ -180,5 +191,73 @@ describe('POST /api/stripe/webhook', () => {
     const res = await POST(makeRequest())
     expect(res.status).toBe(200)
     expect(webhookModule.dispatchWebhookEvent).not.toHaveBeenCalled()
+  })
+
+  it('after() registered once on checkout.session.completed with outcome=applied', async () => {
+    const event = makeCheckoutEvent()
+    vi.mocked(webhookModule.parseWebhookEvent).mockReturnValue(event)
+    vi.mocked(webhookModule.dispatchWebhookEvent).mockResolvedValue({ outcome: 'applied', businessId: 'biz-1' })
+    const POST = await getRoute()
+    await POST(makeRequest())
+    expect(mockAfter).toHaveBeenCalledTimes(1)
+  })
+
+  it('after() callback invokes enqueueWelcomeToPlan with the event', async () => {
+    const event = makeCheckoutEvent()
+    vi.mocked(webhookModule.parseWebhookEvent).mockReturnValue(event)
+    vi.mocked(webhookModule.dispatchWebhookEvent).mockResolvedValue({ outcome: 'applied', businessId: 'biz-1' })
+    mockEnqueueWelcomeToPlan.mockResolvedValue(undefined)
+    const POST = await getRoute()
+    await POST(makeRequest())
+    const [afterCallback] = mockAfter.mock.calls[0] as [() => Promise<void>]
+    await afterCallback()
+    expect(mockEnqueueWelcomeToPlan).toHaveBeenCalledWith(event)
+  })
+
+  it('after() registered once on invoice.payment_failed with outcome=applied', async () => {
+    const event: Stripe.Event = {
+      id: 'evt_inv',
+      type: 'invoice.payment_failed',
+      data: { object: { customer: 'cus_test', customer_email: 'user@example.com' } as unknown as Stripe.Invoice },
+    } as unknown as Stripe.Event
+    vi.mocked(webhookModule.parseWebhookEvent).mockReturnValue(event)
+    vi.mocked(webhookModule.dispatchWebhookEvent).mockResolvedValue({ outcome: 'applied', businessId: 'biz-1' })
+    const POST = await getRoute()
+    await POST(makeRequest())
+    expect(mockAfter).toHaveBeenCalledTimes(1)
+  })
+
+  it('after() callback invokes enqueuePaymentFailedCourtesy with the event', async () => {
+    const event: Stripe.Event = {
+      id: 'evt_inv2',
+      type: 'invoice.payment_failed',
+      data: { object: { customer: 'cus_test', customer_email: 'user@example.com' } as unknown as Stripe.Invoice },
+    } as unknown as Stripe.Event
+    vi.mocked(webhookModule.parseWebhookEvent).mockReturnValue(event)
+    vi.mocked(webhookModule.dispatchWebhookEvent).mockResolvedValue({ outcome: 'applied', businessId: 'biz-1' })
+    mockEnqueuePaymentFailedCourtesy.mockResolvedValue(undefined)
+    const POST = await getRoute()
+    await POST(makeRequest())
+    const [afterCallback] = mockAfter.mock.calls[0] as [() => Promise<void>]
+    await afterCallback()
+    expect(mockEnqueuePaymentFailedCourtesy).toHaveBeenCalledWith(event)
+  })
+
+  it('after() not called when outcome is not applied', async () => {
+    const event = makeCheckoutEvent()
+    vi.mocked(webhookModule.parseWebhookEvent).mockReturnValue(event)
+    vi.mocked(webhookModule.dispatchWebhookEvent).mockResolvedValue({ outcome: 'ignored_unknown_price', businessId: 'biz-1' })
+    const POST = await getRoute()
+    await POST(makeRequest())
+    expect(mockAfter).not.toHaveBeenCalled()
+  })
+
+  it('after() not called on duplicate event', async () => {
+    const event = makeCheckoutEvent()
+    vi.mocked(webhookModule.parseWebhookEvent).mockReturnValue(event)
+    vi.mocked(billingEventsModule.recordBillingEvent).mockResolvedValue({ duplicate: true })
+    const POST = await getRoute()
+    await POST(makeRequest())
+    expect(mockAfter).not.toHaveBeenCalled()
   })
 })

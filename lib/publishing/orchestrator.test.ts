@@ -12,7 +12,7 @@ import {
 } from '@/lib/db/posts'
 import { recoverStuckGenerationSessions } from '@/lib/db/post-generation-sessions'
 import { getActiveByBusinessAndPlatform } from '@/lib/db/social-accounts'
-import type { PostRow, SocialAccountRow, VaultSecretId } from '@/lib/db/types'
+import type { PostRow, SocialAccountRow, VaultSecretId, BusinessRow } from '@/lib/db/types'
 
 vi.mock('@/lib/supabase/service', () => ({
   createServiceRoleClient: vi.fn(() => ({})),
@@ -43,6 +43,21 @@ vi.mock('@/lib/db/email-outbox', () => ({
   reapStuckSendingRows: vi.fn().mockResolvedValue(0),
 }))
 
+const mockAfter = vi.hoisted(() => vi.fn())
+vi.mock('next/server', () => ({ after: mockAfter }))
+
+const mockIncrementBusinessPublishedCount = vi.hoisted(() => vi.fn())
+const mockGetBusinessById = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/db/businesses', () => ({
+  incrementBusinessPublishedCount: mockIncrementBusinessPublishedCount,
+  getBusinessById: mockGetBusinessById,
+}))
+
+const mockEnqueueFirstPostPublished = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/email/triggers/publishing', () => ({
+  enqueueFirstPostPublished: mockEnqueueFirstPostPublished,
+}))
+
 vi.mock('@/lib/db/post-generation-sessions', () => ({
   recoverStuckGenerationSessions: vi.fn(),
 }))
@@ -67,6 +82,7 @@ vi.mock('@/lib/db/cron-health', () => ({
 
 vi.mock('@sentry/nextjs', () => ({
   withMonitor: vi.fn().mockImplementation((_slug: string, fn: () => unknown) => fn()),
+  captureException: vi.fn(),
 }))
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
@@ -87,6 +103,26 @@ const mockAccount: SocialAccountRow = {
   connected_at: '2026-01-01T00:00:00Z',
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
+}
+
+const mockBusiness: BusinessRow = {
+  id: 'biz-1',
+  name: 'Acme SaaS',
+  website: null,
+  industry: null,
+  description: null,
+  logo_url: null,
+  owner_id: 'user-1',
+  plan: 'plus',
+  stripe_customer_id: 'cus_test',
+  stripe_subscription_id: 'sub_test',
+  language: 'en',
+  timezone: 'UTC',
+  onboarding_completed: true,
+  total_posts_published: 0,
+  deleted_at: null,
+  created_at: '2026-04-30T00:00:00Z',
+  updated_at: '2026-04-30T00:00:00Z',
 }
 
 const mockPost: PostRow = {
@@ -133,6 +169,9 @@ beforeEach(() => {
   vi.mocked(incrementPublishedCountForCampaign).mockResolvedValue(undefined)
   vi.mocked(recoverStuckGenerationSessions).mockResolvedValue(0)
   vi.mocked(getActiveByBusinessAndPlatform).mockResolvedValue(mockAccount)
+  mockIncrementBusinessPublishedCount.mockResolvedValue(2)
+  mockGetBusinessById.mockResolvedValue(mockBusiness)
+  mockEnqueueFirstPostPublished.mockResolvedValue(undefined)
 })
 
 // ─── runPublishTick ───────────────────────────────────────────────────────────
@@ -450,4 +489,66 @@ describe('runPublishTick — B6 observability', () => {
       expect(tickLine!.triggeredBy).toBe(triggeredBy)
     },
   )
+})
+
+// ─── First-post detection ─────────────────────────────────────────────────────
+
+describe('runPublishTick — first-post detection', () => {
+  it('registers after() when incrementBusinessPublishedCount returns 1', async () => {
+    vi.mocked(claimPostsForPublishing).mockResolvedValue([mockPost])
+    mockIncrementBusinessPublishedCount.mockResolvedValue(1)
+
+    await runPublishTick({ now: NOW })
+
+    expect(mockAfter).toHaveBeenCalledTimes(1)
+  })
+
+  it('after() callback calls enqueueFirstPostPublished with business and post', async () => {
+    vi.mocked(claimPostsForPublishing).mockResolvedValue([mockPost])
+    mockIncrementBusinessPublishedCount.mockResolvedValue(1)
+
+    await runPublishTick({ now: NOW })
+
+    const [afterCallback] = mockAfter.mock.calls[0] as [() => Promise<void>]
+    await afterCallback()
+
+    expect(mockEnqueueFirstPostPublished).toHaveBeenCalledWith(
+      expect.objectContaining({
+        business: mockBusiness,
+        post: mockPost,
+      }),
+    )
+  })
+
+  it('does NOT register after() when incrementBusinessPublishedCount returns 2', async () => {
+    vi.mocked(claimPostsForPublishing).mockResolvedValue([mockPost])
+    mockIncrementBusinessPublishedCount.mockResolvedValue(2)
+
+    await runPublishTick({ now: NOW })
+
+    expect(mockAfter).not.toHaveBeenCalled()
+  })
+
+  it('after() callback captures Sentry exception and does not rethrow', async () => {
+    vi.mocked(claimPostsForPublishing).mockResolvedValue([mockPost])
+    mockIncrementBusinessPublishedCount.mockResolvedValue(1)
+    mockEnqueueFirstPostPublished.mockRejectedValue(new Error('enqueue failed'))
+
+    await runPublishTick({ now: NOW })
+
+    const [afterCallback] = mockAfter.mock.calls[0] as [() => Promise<void>]
+    await expect(afterCallback()).resolves.toBeUndefined()
+    expect(vi.mocked(Sentry.captureException)).toHaveBeenCalled()
+  })
+
+  it('concurrent first-publish: second call returns 2 → after() called only once total', async () => {
+    vi.mocked(claimPostsForPublishing).mockResolvedValue([mockPost])
+    mockIncrementBusinessPublishedCount
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(2)
+
+    await runPublishTick({ now: NOW })
+
+    expect(mockAfter).toHaveBeenCalledTimes(1)
+  })
 })

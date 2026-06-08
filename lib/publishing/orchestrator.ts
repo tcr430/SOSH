@@ -1,4 +1,5 @@
 import * as Sentry from '@sentry/nextjs'
+import { after } from 'next/server'
 import { addSeconds, formatISO } from 'date-fns'
 import { config } from '@/lib/config'
 import { getRegistry, SocialProviderError } from '@/lib/social/index'
@@ -10,6 +11,8 @@ import {
   requeueScheduledPost,
   incrementPublishedCountForCampaign,
 } from '@/lib/db/posts'
+import { incrementBusinessPublishedCount, getBusinessById } from '@/lib/db/businesses'
+import { enqueueFirstPostPublished } from '@/lib/email/triggers/publishing'
 import { reapStuckSendingRows } from '@/lib/db/email-outbox'
 import { recoverStuckGenerationSessions } from '@/lib/db/post-generation-sessions'
 import { pruneStaleAuthRateLimits } from '@/lib/db/auth-rate-limits'
@@ -122,6 +125,19 @@ export async function runPublishTick(opts?: {
       publishedAt: now,
     })
     await incrementPublishedCountForCampaign(client, post.campaign_id)
+
+    const newCount = await incrementBusinessPublishedCount(client, post.business_id)
+    if (newCount === 1) {
+      const business = await getBusinessById(client, post.business_id)
+      after(async () => {
+        try {
+          await enqueueFirstPostPublished({ business, post, postUrl: result.url ?? null })
+        } catch (err) {
+          Sentry.captureException(err, { tags: { email_kind: 'first-post-published', business_id: post.business_id } })
+        }
+      })
+    }
+
     summary.published++
   }
 

@@ -1,6 +1,9 @@
 import { headers } from 'next/headers'
+import { after } from 'next/server'
+import * as Sentry from '@sentry/nextjs'
 import { parseWebhookEvent, dispatchWebhookEvent, WebhookSignatureError } from '@/lib/stripe/webhook'
 import { recordBillingEvent, updateBillingEventOutcome } from '@/lib/db/billing-events'
+import { enqueueWelcomeToPlan, enqueuePaymentFailedCourtesy } from '@/lib/email/triggers/stripe'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -70,6 +73,24 @@ export async function POST(req: Request): Promise<Response> {
     outcome = result.outcome
     businessId = result.businessId
     await updateBillingEventOutcome(event.id, result.outcome)
+
+    if (outcome === 'applied' && event.type === 'checkout.session.completed') {
+      after(async () => {
+        try {
+          await enqueueWelcomeToPlan(event)
+        } catch (err) {
+          Sentry.captureException(err, { tags: { email_kind: 'welcome-to-plan', stripe_event_id: event.id } })
+        }
+      })
+    } else if (outcome === 'applied' && event.type === 'invoice.payment_failed') {
+      after(async () => {
+        try {
+          await enqueuePaymentFailedCourtesy(event)
+        } catch (err) {
+          Sentry.captureException(err, { tags: { email_kind: 'payment-failed-courtesy', stripe_event_id: event.id } })
+        }
+      })
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     await updateBillingEventOutcome(event.id, 'error').catch(() => undefined)
