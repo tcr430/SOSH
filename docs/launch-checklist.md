@@ -33,6 +33,11 @@ Verification command (per row): `vercel env ls production | grep <VAR>`
 | `STRIPE_PRICE_ID_PRO` | Stripe Dashboard → Products → Pro → Price ID (**live mode**) | ☐ `vercel env ls production \| grep -q '^STRIPE_PRICE_ID_PRO' && echo present \|\| echo MISSING` |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe Dashboard → Developers → API Keys (**live mode**, `pk_live_…`) | ☐ `vercel env ls production \| grep -q '^NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY' && echo present \|\| echo MISSING` |
 | `RESEND_API_KEY` | Resend Dashboard → API Keys | ☐ `vercel env ls production \| grep -q '^RESEND_API_KEY' && echo present \|\| echo MISSING` |
+| `RESEND_WEBHOOK_SECRET` | Resend Dashboard → Webhooks → endpoint → Signing secret | ☐ `vercel env ls production \| grep -q '^RESEND_WEBHOOK_SECRET' && echo present \|\| echo MISSING` |
+| `EMAIL_PROVIDER` | `resend` (production) | ☐ `vercel env ls production \| grep -q '^EMAIL_PROVIDER' && echo present \|\| echo MISSING` |
+| `EMAIL_FROM` | `hello@mail.sosh.app` | ☐ `vercel env ls production \| grep -q '^EMAIL_FROM' && echo present \|\| echo MISSING` |
+| `EMAIL_REPLY_TO` | `support@sosh.app` | ☐ `vercel env ls production \| grep -q '^EMAIL_REPLY_TO' && echo present \|\| echo MISSING` |
+| Email tunables (`EMAIL_DRAIN_BATCH_SIZE`, `EMAIL_MAX_ATTEMPTS`, `EMAIL_RETRY_BACKOFF_SECONDS`, `EMAIL_SENDING_STUCK_MINUTES`) | Defaults from `/lib/config.ts` — set only if overriding | ☐ `vercel env ls production \| grep -E '^EMAIL_' \|\| echo none-set` |
 | `NEXT_PUBLIC_SENTRY_DSN` | Sentry → Settings → Projects → sosh → Client Keys (DSN) | ☐ `vercel env ls production \| grep -q '^NEXT_PUBLIC_SENTRY_DSN' && echo present \|\| echo MISSING` |
 | `SENTRY_ENVIRONMENT` | `production` (or omit — defaults to `VERCEL_ENV`) | ☐ `vercel env ls production \| grep -q '^SENTRY_ENVIRONMENT' && echo present \|\| echo MISSING` |
 | `SENTRY_ORG` | Sentry → Settings → org slug | ☐ `vercel env ls production \| grep -q '^SENTRY_ORG' && echo present \|\| echo MISSING` |
@@ -105,9 +110,10 @@ Setup runbook: `docs/build-guide/runbooks/qstash-setup.md`
   ```
   vercel env ls production | grep CRON_SECRET
   ```
-- [ ] **Both schedules visible in Upstash console** → QStash → Schedules: publish (`* * * * *`) and sync-metrics (`0 * * * *`), status Active.
+- [ ] **Both core schedules visible in Upstash console** → QStash → Schedules: publish (`*/10 * * * *`) and sync-metrics (`0 * * * *`), status Active.
+- [ ] **Email cron schedules visible** in Upstash console: `drain-email-outbox` (`* * * * *`) and `trial-warnings` (`0 9 * * *`), status Active.
 - [ ] **First production tick observed** in Vercel logs with `triggeredBy: 'qstash'`:
-  - `/api/cron/publish` — look for `{"kind":"publish-tick","triggeredBy":"qstash",...}` within 60 seconds of deploy.
+  - `/api/cron/publish` — look for `{"kind":"publish-tick","triggeredBy":"qstash",...}` within 10 minutes of deploy.
   - `/api/cron/sync-metrics` — look for `{"kind":"metrics-sync-tick","triggeredBy":"qstash",...}` within the first hour. Expected at launch: `synced=0, skippedNotImplemented=N, errors=0` (ADR 0006 §1 — wired-but-inert is healthy).
 - [ ] **`cron_health` rows present** after first tick:
   ```sql
@@ -243,6 +249,49 @@ Not configured at launch (Vercel Hobby plan). When the project upgrades to Verce
 - [ ] **Abuse contact email** live: `abuse@<domain>` — receives mail.
 - [ ] **Support email** live: `support@<domain>` (or equivalent) — receives mail.
 - [ ] **Security contact** live: `security@<domain>` (or `.well-known/security.txt`).
+
+### Transactional Email (ADR 0008)
+
+#### DNS / sender authentication (mail.sosh.app)
+
+- [ ] Resend domain `mail.sosh.app` added and verified
+- [ ] SPF record published for `mail.sosh.app`
+- [ ] DKIM record(s) published for `mail.sosh.app`
+- [ ] DMARC policy published for the root domain
+- [ ] `From: hello@mail.sosh.app` and `Reply-To: support@sosh.app` confirmed in a live send
+
+#### Supabase Auth SMTP relay
+
+- [ ] Supabase Auth custom SMTP configured to Resend (host, port, credential)
+- [ ] Auth sender set to `hello@mail.sosh.app`
+- [ ] Auth templates re-styled on-brand (confirm-signup, password-reset, change-email)
+- [ ] NOTE: auth emails are EN-only at launch (accepted wart — ADR 0008 §13)
+
+#### Resend webhook
+
+- [ ] Resend webhook endpoint registered → `/api/webhooks/resend`
+- [ ] `RESEND_WEBHOOK_SECRET` set in Vercel env (production)
+- [ ] Signature verification confirmed (invalid signature → 400)
+
+#### Data preconditions
+
+- [ ] `email_suppressions` table empty pre-launch (no stale suppressions)
+- [ ] `businesses.total_posts_published` column present (migration applied)
+
+#### Smoke tests — product email (6)
+
+- [ ] `trial-warning-t3` renders + sends (sandbox), visible in Resend dashboard
+- [ ] `trial-warning-t1` renders + sends
+- [ ] `welcome-to-plan` renders + sends
+- [ ] `payment-failed-courtesy` renders + sends
+- [ ] `first-post-published` renders + sends
+- [ ] Bounce simulation propagates to `email_suppressions`
+
+#### Smoke tests — auth email (3)
+
+- [ ] Signup-confirm relays via Resend SMTP and arrives
+- [ ] Password-reset relays and arrives
+- [ ] Change-email relays and arrives
 
 ---
 
