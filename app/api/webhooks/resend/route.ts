@@ -40,14 +40,14 @@ export async function POST(req: Request): Promise<Response> {
   const client = createServiceRoleClient()
 
   const { recordWebhookEvent } = await import('@/lib/db/email-webhook-events')
-  const { inserted } = await recordWebhookEvent(client, {
+  const result = await recordWebhookEvent(client, {
     id: svixId,
     event_type: payload.type,
     payload,
   })
 
-  if (!inserted) {
-    console.log(JSON.stringify({ kind: 'email.webhook', type: payload.type, deduped: true, suppressedWritten: false }))
+  if (!result.inserted) {
+    console.log(JSON.stringify({ kind: 'email.webhook', type: result.normalised_event_type, deduped: true, suppressedWritten: false }))
     return new Response('OK', { status: 200 })
   }
 
@@ -66,6 +66,6 @@ export async function POST(req: Request): Promise<Response> {
     }
   }
 
-  console.log(JSON.stringify({ kind: 'email.webhook', type: payload.type, deduped: false, suppressedWritten }))
+  console.log(JSON.stringify({ kind: 'email.webhook', type: result.normalised_event_type, deduped: false, suppressedWritten }))
   return new Response('OK', { status: 200 })
 }
