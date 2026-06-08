@@ -1,5 +1,27 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Language } from './types'
 import type { TrialStateRow, TrialStatePublicRow } from './types'
+
+export type TrialExpiringCandidate = {
+  business_id: string
+  business_name: string
+  recipient_email: string
+  language: Language
+  trial_expires_at: string
+}
+
+export async function findTrialExpiringBetween(
+  client: SupabaseClient,
+  fromIso: string,
+  toIso: string,
+): Promise<TrialExpiringCandidate[]> {
+  const { data, error } = await client.rpc('find_trial_expiring_between', {
+    p_from: fromIso,
+    p_to: toIso,
+  })
+  if (error) throw new Error((error as { message: string }).message)
+  return (data ?? []) as TrialExpiringCandidate[]
+}
 
 const PUBLIC_COLUMNS =
   'id,business_id,trial_started_at,campaigns_created_count,posts_generated_count,brand_voice_inference_attempts,work_email_verified,created_at,updated_at'
