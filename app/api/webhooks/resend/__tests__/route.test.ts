@@ -87,7 +87,7 @@ const deliveredPayload = {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mockRecordWebhookEvent.mockResolvedValue({ inserted: true })
+  mockRecordWebhookEvent.mockResolvedValue({ inserted: true, normalised_event_type: 'email.bounced' })
   mockUpsertSuppression.mockResolvedValue({ inserted: true })
 })
 
@@ -180,5 +180,34 @@ describe('POST /api/webhooks/resend', () => {
       expect.anything(),
       expect.objectContaining({ email: 'user@example.com' }),
     )
+  })
+
+  it.each([
+    ['email.sent'],
+    ['email.delivery_delayed'],
+    ['email.failed'],
+    ['completely.unknown'],
+  ])('unknown event type %s → 200, no suppression, log emits type:other', async (eventType) => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    mockRecordWebhookEvent.mockResolvedValue({ inserted: true, normalised_event_type: 'other' })
+    const payload = { type: eventType, data: { email_id: 'e-unk', to: ['x@y.com'] } }
+    const POST = await getRoute()
+    const res = await POST(makeSignedRequest(payload))
+
+    expect(res.status).toBe(200)
+    expect(mockUpsertSuppression).not.toHaveBeenCalled()
+    expect(logSpy).toHaveBeenCalledOnce()
+    const logged = JSON.parse(logSpy.mock.calls[0][0])
+    expect(logged.type).toBe('other')
+    logSpy.mockRestore()
+  })
+
+  it('email.bounced duplicate event → inserted:false, 200, no second suppression', async () => {
+    mockRecordWebhookEvent.mockResolvedValue({ inserted: false, normalised_event_type: 'email.bounced' })
+    const POST = await getRoute()
+    const res = await POST(makeSignedRequest(bouncedPayload))
+
+    expect(res.status).toBe(200)
+    expect(mockUpsertSuppression).not.toHaveBeenCalled()
   })
 })
