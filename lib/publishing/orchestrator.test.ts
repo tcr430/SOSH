@@ -25,6 +25,7 @@ vi.mock('@/lib/config', () => ({
       PUBLISH_MAX_ATTEMPTS: 3,
       PUBLISH_RETRY_BACKOFF_SECONDS: 30,
       POST_GENERATION_SESSION_STALE_MINUTES: 30,
+      EMAIL_SENDING_STUCK_MINUTES: 15,
     },
   },
 }))
@@ -36,6 +37,10 @@ vi.mock('@/lib/db/posts', () => ({
   requeueScheduledPost: vi.fn(),
   reapStuckScheduledPosts: vi.fn(),
   incrementPublishedCountForCampaign: vi.fn(),
+}))
+
+vi.mock('@/lib/db/email-outbox', () => ({
+  reapStuckSendingRows: vi.fn().mockResolvedValue(0),
 }))
 
 vi.mock('@/lib/db/post-generation-sessions', () => ({

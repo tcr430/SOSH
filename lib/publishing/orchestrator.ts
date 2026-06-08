@@ -10,6 +10,7 @@ import {
   requeueScheduledPost,
   incrementPublishedCountForCampaign,
 } from '@/lib/db/posts'
+import { reapStuckSendingRows } from '@/lib/db/email-outbox'
 import { recoverStuckGenerationSessions } from '@/lib/db/post-generation-sessions'
 import { pruneStaleAuthRateLimits } from '@/lib/db/auth-rate-limits'
 import { markCronSeen } from '@/lib/db/cron-health'
@@ -277,6 +278,10 @@ export async function runJanitorTick(opts?: {
     staleMinutes: config.server.POST_GENERATION_SESSION_STALE_MINUTES,
   })
   const authRateLimitsPruned = await pruneStaleAuthRateLimits(client)
+  const reapedStuckEmails = await reapStuckSendingRows(
+    client,
+    config.server.EMAIL_SENDING_STUCK_MINUTES,
+  )
 
   const summary: JanitorTickSummary = {
     tick: formatISO(now),
@@ -285,7 +290,7 @@ export async function runJanitorTick(opts?: {
     authRateLimitsPruned,
   }
 
-  console.log(JSON.stringify({ kind: 'janitor_tick', triggeredBy: opts?.triggeredBy, ...summary }))
+  console.log(JSON.stringify({ kind: 'janitor_tick', triggeredBy: opts?.triggeredBy, reapedStuckEmails, ...summary }))
   return summary
   }) // end Sentry.withMonitor
 }
