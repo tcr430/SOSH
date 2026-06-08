@@ -21,6 +21,14 @@ export const serverSchema = z.object({
   STRIPE_PRICE_ID_PLUS: z.string().min(10).startsWith('price_'),
   STRIPE_PRICE_ID_PRO: z.string().min(10).startsWith('price_'),
   RESEND_API_KEY: z.string().default(""),
+  RESEND_WEBHOOK_SECRET: z.string().default(''),
+  EMAIL_PROVIDER: z.enum(['resend', 'mock']).default(process.env.NODE_ENV === 'test' ? 'mock' : 'resend'),
+  EMAIL_FROM: z.string().email().default('hello@mail.sosh.app'),
+  EMAIL_REPLY_TO: z.string().email().default('support@sosh.app'),
+  EMAIL_DRAIN_BATCH_SIZE: z.coerce.number().int().positive().default(50),
+  EMAIL_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
+  EMAIL_RETRY_BACKOFF_SECONDS: z.coerce.number().int().positive().default(60),
+  EMAIL_SENDING_STUCK_MINUTES: z.coerce.number().int().positive().default(15),
   OAUTH_STATE_SECRET: z.string().min(32, "OAUTH_STATE_SECRET must be at least 32 characters"),
   SOCIAL_PROVIDER_MODE: z.string().default(""),
   HEALTHCHECK_TOKEN: z.string().default(""),
@@ -71,6 +79,17 @@ export const serverSchema = z.object({
         'QSTASH_CURRENT_SIGNING_KEY and QSTASH_NEXT_SIGNING_KEY are both required when CRON_TRIGGER=qstash in production',
     })
   }
+  if (
+    data.EMAIL_PROVIDER === 'resend' &&
+    process.env.NODE_ENV === 'production' &&
+    (!data.RESEND_API_KEY || !data.RESEND_WEBHOOK_SECRET)
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        'RESEND_API_KEY and RESEND_WEBHOOK_SECRET are both required when EMAIL_PROVIDER=resend in production',
+    })
+  }
 });
 
 const publicSchema = z.object({
@@ -117,6 +136,14 @@ function parseServerEnv() {
     STRIPE_PRICE_ID_PLUS: process.env.STRIPE_PRICE_ID_PLUS,
     STRIPE_PRICE_ID_PRO: process.env.STRIPE_PRICE_ID_PRO,
     RESEND_API_KEY: process.env.RESEND_API_KEY,
+    RESEND_WEBHOOK_SECRET: process.env.RESEND_WEBHOOK_SECRET,
+    EMAIL_PROVIDER: process.env.EMAIL_PROVIDER,
+    EMAIL_FROM: process.env.EMAIL_FROM,
+    EMAIL_REPLY_TO: process.env.EMAIL_REPLY_TO,
+    EMAIL_DRAIN_BATCH_SIZE: process.env.EMAIL_DRAIN_BATCH_SIZE,
+    EMAIL_MAX_ATTEMPTS: process.env.EMAIL_MAX_ATTEMPTS,
+    EMAIL_RETRY_BACKOFF_SECONDS: process.env.EMAIL_RETRY_BACKOFF_SECONDS,
+    EMAIL_SENDING_STUCK_MINUTES: process.env.EMAIL_SENDING_STUCK_MINUTES,
     OAUTH_STATE_SECRET: process.env.OAUTH_STATE_SECRET,
     SOCIAL_PROVIDER_MODE: process.env.SOCIAL_PROVIDER_MODE,
     HEALTHCHECK_TOKEN: process.env.HEALTHCHECK_TOKEN,
@@ -216,6 +243,30 @@ export const config = {
     },
     get RESEND_API_KEY() {
       return serverOnly("RESEND_API_KEY", () => server().RESEND_API_KEY);
+    },
+    get RESEND_WEBHOOK_SECRET() {
+      return serverOnly("RESEND_WEBHOOK_SECRET", () => server().RESEND_WEBHOOK_SECRET);
+    },
+    get EMAIL_PROVIDER() {
+      return serverOnly("EMAIL_PROVIDER", () => server().EMAIL_PROVIDER);
+    },
+    get EMAIL_FROM() {
+      return serverOnly("EMAIL_FROM", () => server().EMAIL_FROM);
+    },
+    get EMAIL_REPLY_TO() {
+      return serverOnly("EMAIL_REPLY_TO", () => server().EMAIL_REPLY_TO);
+    },
+    get EMAIL_DRAIN_BATCH_SIZE() {
+      return serverOnly("EMAIL_DRAIN_BATCH_SIZE", () => server().EMAIL_DRAIN_BATCH_SIZE);
+    },
+    get EMAIL_MAX_ATTEMPTS() {
+      return serverOnly("EMAIL_MAX_ATTEMPTS", () => server().EMAIL_MAX_ATTEMPTS);
+    },
+    get EMAIL_RETRY_BACKOFF_SECONDS() {
+      return serverOnly("EMAIL_RETRY_BACKOFF_SECONDS", () => server().EMAIL_RETRY_BACKOFF_SECONDS);
+    },
+    get EMAIL_SENDING_STUCK_MINUTES() {
+      return serverOnly("EMAIL_SENDING_STUCK_MINUTES", () => server().EMAIL_SENDING_STUCK_MINUTES);
     },
     get OAUTH_STATE_SECRET() {
       return serverOnly("OAUTH_STATE_SECRET", () => server().OAUTH_STATE_SECRET);

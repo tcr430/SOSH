@@ -31,6 +31,14 @@ export type PostStatus = 'draft' | 'approved' | 'scheduled' | 'published' | 'fai
 export type EngagementType = 'comment' | 'dm' | 'mention'
 export type EngagementSentiment = 'positive' | 'neutral' | 'negative' | 'urgent'
 export type EngagementStatus = 'pending' | 'replied' | 'ignored' | 'auto_replied'
+export type EmailKind =
+  | 'trial-warning-t3'
+  | 'trial-warning-t1'
+  | 'welcome-to-plan'
+  | 'payment-failed-courtesy'
+  | 'first-post-published'
+export type EmailOutboxStatus = 'pending' | 'sending' | 'sent' | 'failed' | 'suppressed'
+export type EmailSuppressionReason = 'bounce' | 'complaint' | 'manual'
 
 // ---------------------------------------------------------------------------
 // 1. businesses
@@ -50,6 +58,7 @@ export type BusinessRow = {
   language: Language
   timezone: string
   onboarding_completed: boolean
+  total_posts_published: number
   deleted_at: string | null
   created_at: string
   updated_at: string
@@ -69,6 +78,7 @@ export type BusinessInsert = {
   language?: Language
   timezone?: string
   onboarding_completed?: boolean
+  total_posts_published?: number
   deleted_at?: string | null
   created_at?: string
   updated_at?: string
@@ -458,4 +468,48 @@ export interface AiGenerationMetadata {
     regeneratedAt: string
   }>
   generatedAt: string
+}
+
+// ---------------------------------------------------------------------------
+// 11. email_outbox — durable queue for product transactional email (ADR 0008 §5)
+// ---------------------------------------------------------------------------
+
+export type EmailOutboxRow = {
+  id: string
+  business_id: string
+  kind: EmailKind
+  recipient: string
+  locale: Language
+  props: Record<string, unknown>
+  dedupe_token: string | null
+  status: EmailOutboxStatus
+  attempts: number
+  next_attempt_at: string | null
+  last_error: string | null
+  provider_message_id: string | null
+  created_at: string
+  updated_at: string
+  sent_at: string | null
+}
+
+// ---------------------------------------------------------------------------
+// 12. email_suppressions — addresses never to email (ADR 0008 §6)
+// ---------------------------------------------------------------------------
+
+export type EmailSuppressionRow = {
+  email: string
+  reason: EmailSuppressionReason
+  source_event_id: string | null
+  created_at: string
+}
+
+// ---------------------------------------------------------------------------
+// 13. email_webhook_events — audit log for Resend webhook events (ADR 0008 §14)
+// ---------------------------------------------------------------------------
+
+export type EmailWebhookEventRow = {
+  id: string
+  event_type: string
+  payload: Record<string, unknown>
+  received_at: string
 }

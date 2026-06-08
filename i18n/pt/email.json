@@ -1,0 +1,46 @@
+{
+  "trial_warning_t3": {
+    "subject": "Faltam 3 dias do teu período de teste SOSH",
+    "preheader": "Mantém as tuas campanhas ativas — escolhe um plano antes de o teste terminar.",
+    "heading": "O teu teste termina em 3 dias, {businessName}.",
+    "lead": "O teu período de teste SOSH expira em {date}. As tuas campanhas ativas serão pausadas e não serão geradas novas publicações.",
+    "supporting": "Escolhe um plano agora para manter tudo a funcionar sem interrupções.",
+    "cta": "Escolhe o teu plano"
+  },
+  "trial_warning_t1": {
+    "subject": "Último dia do teu período de teste SOSH",
+    "preheader": "O teu teste termina amanhã — escolhe um plano para continuar.",
+    "heading": "O teu teste termina amanhã, {businessName}.",
+    "lead": "O teu período de teste SOSH expira amanhã, {date}. As tuas campanhas serão pausadas e não serão geradas novas publicações, a menos que escolhas um plano hoje.",
+    "supporting": "Escolhe um plano para manter as tuas campanhas, publicações e análises exatamente como estão.",
+    "cta": "Escolhe o teu plano"
+  },
+  "welcome_to_plan": {
+    "subject": "Bem-vindo ao SOSH {planName}",
+    "preheader": "O teu plano está ativo — eis o que está desbloqueado.",
+    "heading": "Estás no SOSH {planName}, {businessName}.",
+    "lead": "A tua subscrição está ativa. Tudo o que configuraste durante o período de teste fica intacto — as tuas campanhas, as tuas publicações, a tua voz.",
+    "supporting": "Abre o teu painel de controlo para continuar onde ficaste.",
+    "cta": "Ir para o teu painel"
+  },
+  "payment_failed_courtesy": {
+    "subject": "Uma nota rápida sobre o teu pagamento SOSH",
+    "preheader": "Não conseguimos processar o teu último pagamento — eis como resolver.",
+    "heading": "Uma nota sobre o teu pagamento, {businessName}.",
+    "lead": "Não conseguimos processar o teu pagamento mais recente. A tua conta continua ativa — queríamos informar-te para poderes atualizar os teus dados quando for conveniente.",
+    "supporting": "Atualizar o teu método de pagamento demora menos de um minuto. Nada muda até que o faças.",
+    "cta": "Atualizar método de pagamento"
+  },
+  "first_post_published": {
+    "subject": "A tua primeira publicação está no ar 🎉",
+    "preheader": "SOSH publicou a tua primeira publicação em {platform}.",
+    "heading": "A tua primeira publicação está no ar em {platform}. 🎉",
+    "lead": "SOSH acaba de publicar a tua primeira publicação em {platform}, {businessName}. O sistema está a funcionar.",
+    "supporting": "Mantém a cadência — revê os teus próximos rascunhos e mantém o teu público envolvido.",
+    "cta": "Ver as tuas publicações"
+  },
+  "footer": {
+    "tagline": "SŌSH · hello@mail.sosh.app",
+    "reply_to": "Responder para support@sosh.app"
+  }
+}

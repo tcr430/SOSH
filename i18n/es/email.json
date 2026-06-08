@@ -1,0 +1,46 @@
+{
+  "trial_warning_t3": {
+    "subject": "Te quedan 3 días de prueba en SOSH",
+    "preheader": "Mantén tus campañas activas — elige un plan antes de que termine tu prueba.",
+    "heading": "Tu prueba termina en 3 días, {businessName}.",
+    "lead": "Tu período de prueba en SOSH expira el {date}. Tus campañas activas se pausarán y no se generarán nuevas publicaciones.",
+    "supporting": "Actualiza ahora para mantener todo funcionando sin interrupciones.",
+    "cta": "Elige tu plan"
+  },
+  "trial_warning_t1": {
+    "subject": "Último día de tu prueba en SOSH",
+    "preheader": "Tu prueba termina mañana — elige un plan para continuar.",
+    "heading": "Tu prueba termina mañana, {businessName}.",
+    "lead": "Tu período de prueba en SOSH expira mañana, {date}. Tus campañas se pausarán y no se generarán nuevas publicaciones, a menos que elijas un plan hoy.",
+    "supporting": "Elige un plan para mantener tus campañas, publicaciones y análisis exactamente como están.",
+    "cta": "Elige tu plan"
+  },
+  "welcome_to_plan": {
+    "subject": "Bienvenido a SOSH {planName}",
+    "preheader": "Tu plan está activo — esto es lo que tienes desbloqueado.",
+    "heading": "Estás en SOSH {planName}, {businessName}.",
+    "lead": "Tu suscripción está activa. Todo lo que configuraste durante el período de prueba permanece intacto: tus campañas, tus publicaciones, tu voz.",
+    "supporting": "Abre tu panel de control para continuar donde lo dejaste.",
+    "cta": "Ir a tu panel"
+  },
+  "payment_failed_courtesy": {
+    "subject": "Una nota sobre tu pago en SOSH",
+    "preheader": "No pudimos procesar tu último pago — así puedes solucionarlo.",
+    "heading": "Una nota sobre tu pago, {businessName}.",
+    "lead": "No pudimos procesar tu pago más reciente. Tu cuenta sigue activa — queremos informarte para que puedas actualizar tus datos cuando lo consideres oportuno.",
+    "supporting": "Actualizar tu método de pago tarda menos de un minuto. Nada cambia hasta que lo hagas.",
+    "cta": "Actualizar método de pago"
+  },
+  "first_post_published": {
+    "subject": "Tu primera publicación ya está publicada 🎉",
+    "preheader": "SOSH acaba de publicar tu primera publicación en {platform}.",
+    "heading": "Tu primera publicación está en vivo en {platform}. 🎉",
+    "lead": "SOSH acaba de publicar tu primera publicación en {platform}, {businessName}. El sistema está funcionando.",
+    "supporting": "Mantén el ritmo — revisa tus próximos borradores y mantén a tu audiencia comprometida.",
+    "cta": "Ver tus publicaciones"
+  },
+  "footer": {
+    "tagline": "SŌSH · hello@mail.sosh.app",
+    "reply_to": "Responder a support@sosh.app"
+  }
+}

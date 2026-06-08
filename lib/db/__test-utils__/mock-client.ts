@@ -25,7 +25,7 @@ export function createMockClient(data: unknown = null, error: unknown = null) {
 
   const client = {
     from: vi.fn().mockReturnValue(builder),
-    rpc: vi.fn().mockResolvedValue({ data: null, error: null }),
+    rpc: vi.fn().mockResolvedValue(result),
   }
 
   return {

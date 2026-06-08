@@ -45,6 +45,7 @@ const mockBusiness: BusinessRow = {
   language: 'en',
   timezone: 'UTC',
   onboarding_completed: true,
+  total_posts_published: 0,
   deleted_at: null,
   created_at: '2026-04-30T00:00:00Z',
   updated_at: '2026-04-30T00:00:00Z',

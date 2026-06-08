@@ -1,0 +1,46 @@
+{
+  "trial_warning_t3": {
+    "subject": "3 days left in your SOSH trial",
+    "preheader": "Keep your campaigns running — pick a plan before your trial ends.",
+    "heading": "Your trial ends in 3 days, {businessName}.",
+    "lead": "Your SOSH trial expires on {date}. Your active campaigns will pause and no new posts will be generated.",
+    "supporting": "Choose a plan now to keep everything running without interruption.",
+    "cta": "Choose your plan"
+  },
+  "trial_warning_t1": {
+    "subject": "Last day of your SOSH trial",
+    "preheader": "Your trial ends tomorrow — choose a plan to keep going.",
+    "heading": "Your trial ends tomorrow, {businessName}.",
+    "lead": "Your SOSH trial expires tomorrow, on {date}. Your campaigns will pause and no new posts will be generated unless you choose a plan today.",
+    "supporting": "Pick a plan to keep your campaigns, posts, and analytics exactly as they are.",
+    "cta": "Choose your plan"
+  },
+  "welcome_to_plan": {
+    "subject": "Welcome to SOSH {planName}",
+    "preheader": "Your plan is active — here's what's unlocked.",
+    "heading": "You're on SOSH {planName}, {businessName}.",
+    "lead": "Your subscription is active. Everything from your trial carries over — your campaigns, your posts, your brand voice.",
+    "supporting": "Open your dashboard to pick up where you left off.",
+    "cta": "Go to your dashboard"
+  },
+  "payment_failed_courtesy": {
+    "subject": "A quick note about your SOSH payment",
+    "preheader": "We could not process your latest payment — here is how to fix it.",
+    "heading": "A note about your payment, {businessName}.",
+    "lead": "We weren't able to process your most recent payment. Your account is still active — we wanted to let you know so you can update your details at your convenience.",
+    "supporting": "Updating your payment method takes less than a minute. Nothing changes until you do.",
+    "cta": "Update payment method"
+  },
+  "first_post_published": {
+    "subject": "Your first post is live 🎉",
+    "preheader": "SOSH just published your first post to {platform}.",
+    "heading": "Your first post is live on {platform}. 🎉",
+    "lead": "SOSH just published your first post to {platform}, {businessName}. The system is working.",
+    "supporting": "Keep the cadence going — review your next drafts and keep your audience engaged.",
+    "cta": "View your posts"
+  },
+  "footer": {
+    "tagline": "SŌSH · hello@mail.sosh.app",
+    "reply_to": "Reply to support@sosh.app"
+  }
+}

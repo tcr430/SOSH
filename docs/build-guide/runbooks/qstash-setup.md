@@ -22,7 +22,7 @@ In the Upstash console → **QStash** → **Schedules** → **Create Schedule**:
 |-------------|-----------------------------------------------|
 | Destination | `https://<prod-domain>/api/cron/publish`      |
 | Method      | `POST`                                        |
-| Cron        | `* * * * *`                                   |
+| Cron        | `*/10 * * * *`                                 |
 | Retries     | `3` (default)                                 |
 | Body        | _(empty)_                                     |
 | Headers     | _(none required — auth via signature)_        |
@@ -80,7 +80,7 @@ The crons array was removed from `vercel.json` as part of this change (see git h
 
 After the deploy goes live:
 
-**Publish route (within 60 seconds):**
+**Publish route (within 10 minutes):**
 
 ```
 Vercel dashboard → project → Logs → filter: /api/cron/publish

@@ -2,7 +2,7 @@
 
 **Phase:** 1 — MVP
 **Goal:** First paying customer
-**Status:** Session 13.5D complete — QStash trigger migration correction pass done (B7 + E1/H1/I3). Next: Session 14 (Transactional Email).
+**Status:** Session 14B complete — Transactional Email B8 done (Stripe webhook after() tails, Resend inbound webhook suppression handler, publishing worker first-post detection). Next: Session 15 (drain-email-outbox worker + Resend send integration).
 
 ## What's done
 - Session 0: Environment setup complete
@@ -426,7 +426,7 @@
   - app/api/cron/publish/route.ts: CRON_SECRET timing-safe auth (length pre-check +
     timingSafeEqual); X-Cron-Dev-Trigger dev bypass (production rejects header entirely);
     Phase A (janitor + reaper) → Phase B (publish tick); always-200 response
-  - vercel.json: * * * * * schedule for /api/cron/publish (Pro; Hobby: */5 * * * *)
+  - QStash: */10 * * * * schedule for /api/cron/publish (Hobby limit; upgrade to * * * * * on Pro)
   - lib/config.ts: 6 new vars with ADR 0005 §14 defaults (CRON_SECRET, PUBLISH_BATCH_SIZE=25,
     PUBLISH_MAX_ATTEMPTS=5, PUBLISH_RETRY_BACKOFF_SECONDS=60, PUBLISH_STUCK_MINUTES=10,
     POST_GENERATION_SESSION_STALE_MINUTES=15)
@@ -619,16 +619,29 @@
     tests added in both orchestrator test files
   - 89 tests passing across cron routes + auth + orchestrators; commit b62a29c.
 
+- **Session 14A:** Transactional Email — foundation (ADR 0008, DB migrations, data access layer,
+  5 React Email templates EN/PT/ES, render orchestrator, enqueue facade, D3 suppression check,
+  trial-warnings cron with T-3/T-1 dual-cadence, drain-email-outbox cron stub).
+
+- **Session 14B:** Transactional Email B8 — enqueue wiring across three surfaces:
+  - Stripe webhook: `after()` tail fires `enqueueWelcomeToPlan` on `checkout.session.completed`
+    and `enqueuePaymentFailedCourtesy` on `invoice.payment_failed` (outcome=applied only)
+  - Resend inbound webhook (`app/api/webhooks/resend/`): svix signature verification,
+    idempotent event recording via `email_webhook_events`, bounce/complaint suppression upsert
+  - Publishing worker: `incrementBusinessPublishedCount` RPC; `newCount === 1` fires
+    `enqueueFirstPostPublished` in `after()` (race-free 0→1 detection)
+  - ESLint `no-restricted-imports` on `stripe` resolved; `Stripe` type re-exported from
+    `lib/stripe/webhook.ts`; 405 tests passing.
+
 ## What's next
 
-**Session 14 — Transactional Email (Resend integration)**
+**Session 15 — Transactional Email: drain worker + Resend send integration**
 
-Start with an Architect session to produce an ADR before building. Anticipated scope:
-- ADR for email strategy — welcome email, trial expiry warning, payment failed, post published digest
-- Resend SDK integration via `lib/email/` abstraction (mirrors `lib/ai/` and `lib/stripe/` pattern)
-- Email templates with branding and plain-text fallbacks
-- i18n EN/PT/ES for all transactional email content
-- Trigger wiring: Stripe webhook (subscription events), trial state transitions, publishing worker
+- Implement `drain-email-outbox` worker: poll `email_outbox` for `pending` rows, call Resend
+  API to send, mark `sent` / `failed`, honour `EMAIL_DRAIN_BATCH_SIZE`
+- Wire Resend SDK into `lib/email/resend-provider.ts` (currently a stub)
+- Add integration test with Resend sandbox / mock SDK
+- Smoke-test full round-trip: enqueue → drain → Resend delivery
 
 ---
 

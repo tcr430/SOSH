@@ -1,4 +1,5 @@
 import type Stripe from 'stripe'
+export type { default as Stripe } from 'stripe'
 import { getStripeClient } from '@/lib/stripe/client'
 import { planForPriceId } from '@/lib/stripe/products'
 import {

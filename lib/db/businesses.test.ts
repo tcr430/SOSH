@@ -11,6 +11,7 @@ import {
   updateBillingFromSubscription,
   clearBillingOnCancellation,
   setStripeCustomerId,
+  incrementBusinessPublishedCount,
 } from './businesses'
 import type { BusinessRow, BusinessInsert } from './types'
 
@@ -32,6 +33,7 @@ const mockBusiness: BusinessRow = {
   language: 'en',
   timezone: 'UTC',
   onboarding_completed: false,
+  total_posts_published: 0,
   deleted_at: null,
   created_at: '2026-04-30T00:00:00Z',
   updated_at: '2026-04-30T00:00:00Z',
@@ -257,5 +259,27 @@ describe('setStripeCustomerId', () => {
     await expect(
       setStripeCustomerId({ businessId: 'biz-1', stripeCustomerId: 'cus_test_001' })
     ).rejects.toThrow('Update error')
+  })
+})
+
+describe('incrementBusinessPublishedCount', () => {
+  it('returns 1 on the 0→1 transition (first post)', async () => {
+    const { client } = createMockClient(1, null)
+    const result = await incrementBusinessPublishedCount(client, 'biz-1')
+    expect(result).toBe(1)
+    expect(client.rpc).toHaveBeenCalledWith('increment_business_published_count', {
+      p_business_id: 'biz-1',
+    })
+  })
+
+  it('returns 2 on the 1→2 transition (second post)', async () => {
+    const { client } = createMockClient(2, null)
+    const result = await incrementBusinessPublishedCount(client, 'biz-1')
+    expect(result).toBe(2)
+  })
+
+  it('throws on RPC error', async () => {
+    const { client } = createMockClient(null, { message: 'RPC error' })
+    await expect(incrementBusinessPublishedCount(client, 'biz-1')).rejects.toThrow('RPC error')
   })
 })

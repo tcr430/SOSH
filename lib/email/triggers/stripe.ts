@@ -1,4 +1,4 @@
-import type Stripe from 'stripe'
+import type { Stripe } from '@/lib/stripe/webhook'
 import { config } from '@/lib/config'
 import { enqueueEmail } from '@/lib/email/enqueue'
 

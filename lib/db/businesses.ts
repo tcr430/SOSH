@@ -157,6 +157,17 @@ export async function clearBillingOnCancellation(input: {
   return (data as BusinessRow | null) ?? null
 }
 
+export async function incrementBusinessPublishedCount(
+  client: SupabaseClient,
+  businessId: string,
+): Promise<number> {
+  const { data, error } = await client.rpc('increment_business_published_count', {
+    p_business_id: businessId,
+  })
+  if (error) throw new Error((error as { message: string }).message)
+  return data as number
+}
+
 export async function setStripeCustomerId(input: {
   businessId: string
   stripeCustomerId: string
