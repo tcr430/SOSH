@@ -115,4 +115,69 @@ describe('ResendEmailProvider', () => {
       name: 'EmailProviderError',
     })
   })
+
+  describe('Retry-After header extraction on 429', () => {
+    it('delta-seconds header → retryAfterSeconds equals parsed value', async () => {
+      mockSend.mockResolvedValue({
+        data: null,
+        error: { message: 'Too Many Requests', statusCode: 429, name: 'rate_limit_exceeded' },
+        headers: { 'retry-after': '30' },
+      })
+      const provider = new ResendEmailProvider()
+      const err = await provider.send(baseInput).catch((e: unknown) => e)
+      expect(err).toBeInstanceOf(EmailProviderError)
+      expect((err as EmailProviderError).code).toBe('provider_rate_limit')
+      expect((err as EmailProviderError).retryAfterSeconds).toBe(30)
+    })
+
+    it('delta-seconds > 3600 → retryAfterSeconds capped at 3600', async () => {
+      mockSend.mockResolvedValue({
+        data: null,
+        error: { message: 'Too Many Requests', statusCode: 429, name: 'rate_limit_exceeded' },
+        headers: { 'retry-after': '5000' },
+      })
+      const provider = new ResendEmailProvider()
+      const err = await provider.send(baseInput).catch((e: unknown) => e)
+      expect((err as EmailProviderError).retryAfterSeconds).toBe(3600)
+    })
+
+    it('HTTP-date header → retryAfterSeconds equals delta from now', async () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-06-08T18:00:00.000Z'))
+      const futureDate = new Date('2026-06-08T18:01:00.000Z').toUTCString()
+      mockSend.mockResolvedValue({
+        data: null,
+        error: { message: 'Too Many Requests', statusCode: 429, name: 'rate_limit_exceeded' },
+        headers: { 'retry-after': futureDate },
+      })
+      const provider = new ResendEmailProvider()
+      const err = await provider.send(baseInput).catch((e: unknown) => e)
+      expect((err as EmailProviderError).retryAfterSeconds).toBe(60)
+      vi.useRealTimers()
+    })
+
+    it('no Retry-After header (null headers) → retryAfterSeconds undefined', async () => {
+      mockSend.mockResolvedValue({
+        data: null,
+        error: { message: 'Too Many Requests', statusCode: 429, name: 'rate_limit_exceeded' },
+        headers: null,
+      })
+      const provider = new ResendEmailProvider()
+      const err = await provider.send(baseInput).catch((e: unknown) => e)
+      expect((err as EmailProviderError).code).toBe('provider_rate_limit')
+      expect((err as EmailProviderError).retryAfterSeconds).toBeUndefined()
+    })
+
+    it('malformed Retry-After (abc) → retryAfterSeconds undefined', async () => {
+      mockSend.mockResolvedValue({
+        data: null,
+        error: { message: 'Too Many Requests', statusCode: 429, name: 'rate_limit_exceeded' },
+        headers: { 'retry-after': 'abc' },
+      })
+      const provider = new ResendEmailProvider()
+      const err = await provider.send(baseInput).catch((e: unknown) => e)
+      expect((err as EmailProviderError).code).toBe('provider_rate_limit')
+      expect((err as EmailProviderError).retryAfterSeconds).toBeUndefined()
+    })
+  })
 })

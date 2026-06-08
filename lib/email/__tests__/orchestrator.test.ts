@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import * as Sentry from '@sentry/nextjs'
-import { runEmailDrainTick } from '../orchestrator'
+import { runEmailDrainTick, computeBackoff } from '../orchestrator'
 import { getEmailProvider, _resetEmailProviderForTests } from '@/lib/email/registry'
 import { MockEmailProvider } from '@/lib/email/mock-provider'
 import { EmailProviderError } from '@/lib/email/errors'
@@ -244,5 +244,20 @@ describe('runEmailDrainTick', () => {
         recoveryThreshold: 1,
       },
     )
+  })
+})
+
+describe('computeBackoff', () => {
+  it('retryAfterSeconds path honours provider value and caps at 3600', () => {
+    expect(computeBackoff(1, 30)).toBe(30)
+    expect(computeBackoff(1, 5000)).toBe(3600)
+  })
+
+  it('exponential path is capped at 3600s regardless of attempt count', () => {
+    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(1.0)
+    // attempts=20 with base=60 → 60 * 2^19 * 1.25 = 39,321,600 → must cap to 3600
+    const result = computeBackoff(20, undefined)
+    expect(result).toBe(3600)
+    randomSpy.mockRestore()
   })
 })
