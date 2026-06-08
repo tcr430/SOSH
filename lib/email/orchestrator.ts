@@ -19,14 +19,14 @@ export interface EmailDrainTickSummary {
 
 const TRANSIENT_CODES = new Set<string>(['provider_rate_limit', 'provider_unavailable'])
 
-function computeBackoff(attempts: number, retryAfterSeconds?: number): number {
+export function computeBackoff(attempts: number, retryAfterSeconds?: number): number {
   if (retryAfterSeconds && retryAfterSeconds > 0) {
     return Math.min(retryAfterSeconds, 3600)
   }
   const base = config.server.EMAIL_RETRY_BACKOFF_SECONDS
   const exp = base * Math.pow(2, attempts - 1)
   const jitter = exp * (0.75 + Math.random() * 0.5)
-  return Math.round(jitter)
+  return Math.min(Math.round(jitter), 3600)
 }
 
 export async function runEmailDrainTick(opts: {

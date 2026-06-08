@@ -18,12 +18,33 @@ function isResendErrorLike(val: unknown): val is ResendErrorLike {
   )
 }
 
-function mapResendError(err: ResendErrorLike): EmailProviderError {
+function parseRetryAfterHeader(headers: Record<string, string> | null | undefined): number | undefined {
+  const headerValue = headers?.['retry-after']
+  if (!headerValue) return undefined
+  const asInt = Number.parseInt(headerValue, 10)
+  if (Number.isFinite(asInt) && asInt > 0) return Math.min(asInt, 3600)
+  const asDate = Date.parse(headerValue)
+  if (!Number.isFinite(asDate)) return undefined
+  const deltaSeconds = Math.round((asDate - Date.now()) / 1000)
+  if (deltaSeconds <= 0) return undefined
+  return Math.min(deltaSeconds, 3600)
+}
+
+function mapResendError(
+  err: ResendErrorLike,
+  responseHeaders?: Record<string, string> | null,
+): EmailProviderError {
   const status = err.statusCode ?? 0
-  let code: EmailProviderErrorCode
   if (status === 429) {
-    code = 'provider_rate_limit'
-  } else if (status >= 500) {
+    return new EmailProviderError(
+      'provider_rate_limit',
+      err.message,
+      { statusCode: 429, resendName: err.name },
+      parseRetryAfterHeader(responseHeaders),
+    )
+  }
+  let code: EmailProviderErrorCode
+  if (status >= 500) {
     code = 'provider_unavailable'
   } else if (status === 422) {
     code = 'invalid_recipient'
@@ -47,7 +68,7 @@ export class ResendEmailProvider implements EmailProvider {
 
   async send(input: SendEmailInput): Promise<SendEmailResult> {
     try {
-      const { data, error } = await this.client.emails.send(
+      const sdkResponse = await this.client.emails.send(
         {
           from: `SŌSH <${config.server.EMAIL_FROM}>`,
           to: input.to,
@@ -62,15 +83,15 @@ export class ResendEmailProvider implements EmailProvider {
         { idempotencyKey: input.idempotencyKey },
       )
 
-      if (error) {
-        throw mapResendError(error as ResendErrorLike)
+      if (sdkResponse.error) {
+        throw mapResendError(sdkResponse.error as ResendErrorLike, sdkResponse.headers)
       }
 
-      if (!data?.id) {
+      if (!sdkResponse.data?.id) {
         throw new EmailProviderError('unknown', 'Resend returned no id')
       }
 
-      return { providerMessageId: data.id }
+      return { providerMessageId: sdkResponse.data.id }
     } catch (err) {
       if (err instanceof EmailProviderError) throw err
       throw mapNetworkError(err)
