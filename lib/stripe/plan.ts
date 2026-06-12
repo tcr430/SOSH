@@ -73,3 +73,40 @@ const CAPABILITIES: Record<Plan, PlanCapabilities> = {
 export function getPlanCapabilities(plan: Plan): PlanCapabilities {
   return CAPABILITIES[plan]
 }
+
+/** Plans shown on the marketing pricing surface, in display order. */
+export const MARKETING_PLANS: ReadonlyArray<Plan> = ['plus', 'pro']
+
+/** A feature row = an i18n label key + values to interpolate. */
+export interface PricingFeatureRow {
+  key: string // → marketing.pricing.feature.<key>
+  values?: Record<string, number>
+}
+
+/**
+ * Ordered feature rows for a plan card, derived from getPlanCapabilities.
+ * Numbers come from capabilities; only label templates live in i18n.
+ * This is what keeps the marketing card and the billing layer from disagreeing.
+ */
+export function pricingFeatureRows(plan: Plan): ReadonlyArray<PricingFeatureRow> {
+  const c = getPlanCapabilities(plan)
+  const rows: PricingFeatureRow[] = []
+  rows.push(
+    c.postsPerMonth === null
+      ? { key: 'posts_unlimited' }
+      : { key: 'posts', values: { count: c.postsPerMonth } },
+  )
+  rows.push(
+    c.activeCampaigns === null
+      ? { key: 'campaigns_unlimited' }
+      : { key: 'campaigns', values: { count: c.activeCampaigns } },
+  )
+  rows.push(
+    c.allowedPlatforms.length >= ALL_PLATFORMS.length
+      ? { key: 'platforms_all', values: { count: c.allowedPlatforms.length } }
+      : { key: 'platforms_launch' },
+  )
+  rows.push({ key: c.advancedAnalytics ? 'analytics_advanced' : 'analytics_basic' })
+  if (c.engagementInbox) rows.push({ key: 'inbox' })
+  return rows
+}

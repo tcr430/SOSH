@@ -19,7 +19,7 @@ function isResendErrorLike(val: unknown): val is ResendErrorLike {
 }
 
 function parseRetryAfterHeader(headers: Record<string, string> | null | undefined): number | undefined {
-  const headerValue = headers?.['retry-after']
+  const headerValue = Object.entries(headers ?? {}).find(([k]) => k.toLowerCase() === 'retry-after')?.[1]
   if (!headerValue) return undefined
   const asInt = Number.parseInt(headerValue, 10)
   if (Number.isFinite(asInt) && asInt > 0) return Math.min(asInt, 3600)

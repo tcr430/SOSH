@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { addSeconds, formatISO } from 'date-fns'
 import * as Sentry from '@sentry/nextjs'
 import { runEmailDrainTick, computeBackoff } from '../orchestrator'
 import { getEmailProvider, _resetEmailProviderForTests } from '@/lib/email/registry'
@@ -244,6 +245,91 @@ describe('runEmailDrainTick', () => {
         recoveryThreshold: 1,
       },
     )
+  })
+
+  it('A9: retryAfterSeconds from rate-limit error is used for next_attempt_at (Amendment 1)', async () => {
+    vi.useFakeTimers()
+    const pinnedNow = new Date('2026-06-10T12:00:00.000Z')
+    vi.setSystemTime(pinnedNow)
+    try {
+      vi.mocked(claimEmailOutboxBatch).mockResolvedValue([makeRow({ attempts: 0 })])
+      vi.spyOn(mockProvider, 'send').mockRejectedValueOnce(
+        new EmailProviderError('provider_rate_limit', 'Rate limited', {}, 120),
+      )
+
+      const summary = await runEmailDrainTick({ triggeredBy: 'qstash' })
+
+      expect(summary.retried).toBe(1)
+      expect(vi.mocked(transitionEmailOutboxRow)).toHaveBeenCalledWith(
+        expect.anything(),
+        'row-1',
+        expect.objectContaining({
+          status: 'pending',
+          attempts: 1,
+          next_attempt_at: formatISO(addSeconds(pinnedNow, 120)),
+        }),
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('transient failure (provider_unavailable, attempts remaining) → pending, retried+=1', async () => {
+    vi.mocked(claimEmailOutboxBatch).mockResolvedValue([makeRow({ attempts: 0 })])
+    mockProvider.failNextSend('provider_unavailable')
+
+    const summary = await runEmailDrainTick({ triggeredBy: 'qstash' })
+
+    expect(summary.retried).toBe(1)
+    expect(summary.failed).toBe(0)
+    expect(vi.mocked(transitionEmailOutboxRow)).toHaveBeenCalledWith(
+      expect.anything(),
+      'row-1',
+      expect.objectContaining({ status: 'pending', attempts: 1 }),
+    )
+  })
+
+  it('unknown error code → failed (terminal), Sentry captured', async () => {
+    vi.mocked(claimEmailOutboxBatch).mockResolvedValue([makeRow()])
+    vi.spyOn(mockProvider, 'send').mockRejectedValueOnce(
+      new EmailProviderError('unknown', 'Unclassified provider error', {}),
+    )
+
+    const summary = await runEmailDrainTick({ triggeredBy: 'qstash' })
+
+    expect(summary.failed).toBe(1)
+    expect(summary.retried).toBe(0)
+    expect(vi.mocked(transitionEmailOutboxRow)).toHaveBeenCalledWith(
+      expect.anything(),
+      'row-1',
+      expect.objectContaining({ status: 'failed' }),
+    )
+    expect(vi.mocked(Sentry.captureException)).toHaveBeenCalled()
+  })
+
+  it('mixed batch: suppressed + render-failed + retried + sent → correct summary counters', async () => {
+    const rows = [
+      makeRow({ id: 'r-supp', recipient: 'suppressed@example.com' }),
+      makeRow({ id: 'r-fail' }),
+      makeRow({ id: 'r-retry', attempts: 0 }),
+      makeRow({ id: 'r-sent' }),
+    ]
+    vi.mocked(claimEmailOutboxBatch).mockResolvedValue(rows)
+    vi.mocked(isEmailSuppressed).mockImplementation(async (_client, email) =>
+      email === 'suppressed@example.com',
+    )
+    vi.mocked(renderTemplate).mockRejectedValueOnce(
+      new EmailProviderError('template_render_failed', 'Props invalid', {}),
+    )
+    mockProvider.failNextSend('provider_rate_limit')
+
+    const summary = await runEmailDrainTick({ triggeredBy: 'qstash' })
+
+    expect(summary.claimed).toBe(4)
+    expect(summary.suppressed).toBe(1)
+    expect(summary.failed).toBe(1)
+    expect(summary.retried).toBe(1)
+    expect(summary.sent).toBe(1)
   })
 })
 

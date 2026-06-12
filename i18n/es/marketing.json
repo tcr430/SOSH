@@ -1,0 +1,149 @@
+{
+  "_todo": "localize — ADR 0009 §10",
+  "nav": {
+    "brand": "SŌSH",
+    "pricing": "Pricing",
+    "signin": "Sign in",
+    "cta": "Start free trial"
+  },
+  "hero": {
+    "eyebrow": "For B2B SaaS founders and teams",
+    "headline": "You built something worth hearing about. SŌSH makes sure your market does.",
+    "subhead": "Knowing your market was never the problem. Showing up where your buyers already are — consistently, in your voice — is. SŌSH is the social media team you can't hire yet: campaigns built around your goals, every post written for you, published across your channels once you approve.",
+    "cta_primary": "Start free trial",
+    "cta_secondary": "See how it works",
+    "trust": "Free for 14 days · Card required, nothing charged today · Cancel anytime"
+  },
+  "gap": {
+    "heading": "The best product doesn't win. The one people hear about does.",
+    "subhead": "You're heads-down building. Meanwhile the work that decides whether anyone finds you — showing up on social — waits for a team you haven't hired. So the channels go quiet, the momentum fades, and a product your market needs stays a secret.",
+    "card_team_title": "A whole function, landing on one person",
+    "card_team_body": "Strategy, writing, scheduling, knowing what worked — that's a social media team's job. At your stage it's a founder's twelfth.",
+    "card_quiet_title": "Every quiet week has a cost",
+    "card_quiet_body": "The weeks you don't show up, a competitor who does takes the attention you were building. Silence compounds.",
+    "card_generic_title": "Generic tools sound generic",
+    "card_generic_body": "Your insight is the edge. Off-the-shelf content sands it off until you read like everyone else."
+  },
+  "how": {
+    "heading": "A social media team's output. Your final say on every post.",
+    "subhead": "Set the direction once. SŌSH does the work a team would — and you stay the editor.",
+    "step1_title": "1 · Set the campaign",
+    "step1_body": "Tell SŌSH your goal, your audience, and your channels. It plans content around the objective, not just the calendar.",
+    "step2_title": "2 · It drafts in your voice",
+    "step2_body": "SŌSH writes posts that sound like you — the right length and tone for each channel, built from what makes your product matter.",
+    "step3_title": "3 · You approve",
+    "step3_body": "Review, edit, or regenerate every post. Nothing reaches your audience until you've signed off.",
+    "step4_title": "4 · It publishes and learns",
+    "step4_body": "Approved posts go live on schedule across your channels. SŌSH watches what lands and feeds it into the next campaign."
+  },
+  "features": {
+    "heading": "Everything a social media team does — without the headcount.",
+    "subhead": "Not a scheduler with a text box. The social media function your stage can't staff yet.",
+    "voice_title": "Your voice, captured",
+    "voice_body": "SŌSH learns how you talk about your product, then writes every post to match. Your insight, not a template.",
+    "campaigns_title": "Campaigns, not one-off posts",
+    "campaigns_body": "Content planned around a goal and an audience, the way a strategist would brief it — across weeks, not just today.",
+    "native_title": "Native to every channel",
+    "native_body": "LinkedIn depth, X brevity. Each post is shaped for where it lands, so nothing reads copy-pasted.",
+    "approval_title": "You approve everything",
+    "approval_body": "Human sign-off is built in. Your account only ever shows what you chose to publish.",
+    "analytics_title": "Analytics that change what's next",
+    "analytics_body": "See what reaches people and what doesn't, and watch each campaign get sharper for it.",
+    "languages_title": "Speaks your market's language",
+    "languages_body": "Write natively in English, Portuguese, or Spanish — written for each market, not machine-translated."
+  },
+  "pov": {
+    "eyebrow": "Why we built this",
+    "heading": "Big companies have a team for this. Startups have themselves.",
+    "body": "The companies you compete with have people whose whole job is showing up where their market is — posting, consistently, in a voice that's unmistakably theirs. You have a product that's often better and no one to do that for you. We think that's the real reason good startups stay quiet: not the product, the presence. SŌSH gives you a social media team's worth of presence inside a startup's budget, so the better product gets a fair hearing.",
+    "pull": "A scheduler assumes you already have a social media team to feed it. SŌSH is the team."
+  },
+  "pricing": {
+    "heading": "Priced for a startup, not an agency.",
+    "subhead": "Both plans include a 14-day free trial. Pick one when you're ready — cancel anytime.",
+    "see_all": "Compare plans in detail",
+    "tiers": {
+      "plus": {
+        "name": "Plus",
+        "price": "€99",
+        "cadence": "per month",
+        "tagline": "For founders getting their product in front of the channels that matter most.",
+        "cta": "Start free trial"
+      },
+      "pro": {
+        "name": "Pro",
+        "price": "€199",
+        "cadence": "per month",
+        "badge": "Most popular",
+        "tagline": "For teams going all-in across every channel, with the data to prove it.",
+        "cta": "Start free trial"
+      }
+    },
+    "feature": {
+      "posts": "{count} posts a month",
+      "posts_unlimited": "Unlimited posts",
+      "campaigns": "Up to {count} active campaigns",
+      "campaigns_unlimited": "Unlimited active campaigns",
+      "platforms_launch": "LinkedIn + X (Twitter)",
+      "platforms_all": "All {count} channels — LinkedIn, X, Instagram, Facebook, Threads",
+      "analytics_basic": "Basic analytics",
+      "analytics_advanced": "Advanced analytics",
+      "inbox": "Engagement inbox"
+    },
+    "trial_note": "Both plans start with a 14-day free trial. Work email and card required. No charge until your trial ends."
+  },
+  "pricingPage": {
+    "title": "Priced for a startup, not an agency.",
+    "subtitle": "One simple choice, billed monthly. A social media team's output, from €99 a month — with a 14-day free trial and no lock-in."
+  },
+  "faq": {
+    "heading": "Questions, answered.",
+    "q1": "What happens when my free trial ends?",
+    "a1": "Pick the plan that fits and keep going, or do nothing and your account pauses. We never charge you without a plan you chose.",
+    "q2": "Do I need a card to start?",
+    "a2": "Yes. The 14-day trial needs a work email and a card, but nothing is charged until the trial ends — and you can cancel before then.",
+    "q3": "Which channels can I publish to?",
+    "a3": "Plus publishes to LinkedIn and X (Twitter). Pro adds Instagram, Facebook Pages, and Threads. More channels are on the way.",
+    "q4": "Can I cancel anytime?",
+    "a4": "Anytime, from your billing settings. You keep access until the end of the period you've paid for.",
+    "q5": "Is there annual billing?",
+    "a5": "Not yet — both plans are billed monthly today. For now you're never locked into more than a month at a time.",
+    "q6": "Can my team use one account?",
+    "a6": "Your plan covers your business, with no per-seat fees. Deeper team roles and permissions are on the way as we grow with you."
+  },
+  "finalCta": {
+    "heading": "Your market is waiting to hear from you.",
+    "subhead": "Start your free trial today. Set your first campaign, approve your first posts, and put a social media team to work for the price of a tool.",
+    "cta": "Start free trial",
+    "trust": "Free for 14 days · Card required, nothing charged today · Cancel anytime"
+  },
+  "footer": {
+    "tagline": "The social media team B2B SaaS startups can't hire yet.",
+    "col_product": "Product",
+    "link_features": "Features",
+    "link_pricing": "Pricing",
+    "col_legal": "Legal",
+    "link_terms": "Terms",
+    "link_privacy": "Privacy",
+    "col_company": "Company",
+    "link_signin": "Sign in",
+    "link_signup": "Start free trial",
+    "locale_label": "Language",
+    "copyright": "© 2026 SŌSH. All rights reserved."
+  },
+  "meta": {
+    "home_title": "SŌSH — the social media team B2B SaaS startups can't hire yet",
+    "home_description": "SŌSH builds campaigns, writes every post in your voice, and publishes across your channels once you approve. A social media team's worth of presence, priced for a startup.",
+    "pricing_title": "Pricing — SŌSH",
+    "pricing_description": "A social media team's output from €99 a month. 14-day free trial, cancel anytime. Compare Plus and Pro.",
+    "terms_title": "Terms — SŌSH",
+    "privacy_title": "Privacy — SŌSH"
+  },
+  "og": {
+    "home": "You built something worth hearing about. SŌSH makes sure your market does.",
+    "pricing": "A social media team's output, from €99 a month.",
+    "terms": "SŌSH — Terms",
+    "privacy": "SŌSH — Privacy"
+  },
+  "legal_stub": "This document is being finalised. Last updated: TBD."
+}

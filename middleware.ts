@@ -12,8 +12,11 @@ const handleI18n = createIntlMiddleware(routing);
 // accessible without authentication. Everything else is treated as a
 // /(dashboard)/ route and requires a valid session.
 const PUBLIC_SEGMENTS = new Set([
-  '',                 // /[locale]  (locale root)
-  'home',             // /(marketing)/home
+  '',                 // /[locale]  (marketing homepage — ADR 0009 §3.4)
+  'pricing',          // /(marketing)/pricing
+  'terms',            // /(marketing)/terms
+  'privacy',          // /(marketing)/privacy
+  'og',               // /(marketing)/og  (runtime OG image — ADR 0009 §9)
   'login',            // /(auth)/login
   'signup',           // /(auth)/signup
   'forgot-password',  // /(auth)/forgot-password

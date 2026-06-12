@@ -422,6 +422,62 @@ describe('runPublishTick', () => {
   })
 })
 
+// ─── First-post detection via TOKEN_EXPIRED refresh-retry (I3/I4) ────────────
+
+describe('runPublishTick — first-post via refresh-retry (I3/I4)', () => {
+  const tokenExpiredErr = new SocialProviderError({ code: 'TOKEN_EXPIRED', message: 'expired' })
+
+  it('first publish via refresh-retry: increments business counter and schedules first-post email', async () => {
+    mockPublish
+      .mockRejectedValueOnce(tokenExpiredErr)
+      .mockResolvedValueOnce({ platformPostId: 'ext-retry', url: 'https://li.com/1', publishedAt: NOW.toISOString() })
+    vi.mocked(claimPostsForPublishing).mockResolvedValue([mockPost])
+    mockIncrementBusinessPublishedCount.mockResolvedValue(1)
+
+    const summary = await runPublishTick({ now: NOW })
+
+    expect(summary.published).toBe(1)
+    expect(mockIncrementBusinessPublishedCount).toHaveBeenCalledTimes(1)
+    expect(mockIncrementBusinessPublishedCount).toHaveBeenCalledWith(expect.anything(), 'biz-1')
+    expect(mockAfter).toHaveBeenCalledTimes(1)
+
+    const [afterCallback] = mockAfter.mock.calls[0] as [() => Promise<void>]
+    await afterCallback()
+    expect(mockEnqueueFirstPostPublished).toHaveBeenCalledWith(
+      expect.objectContaining({ business: mockBusiness, post: mockPost }),
+    )
+  })
+
+  it('second publish via refresh-retry: increments counter but does NOT schedule first-post email', async () => {
+    mockPublish
+      .mockRejectedValueOnce(tokenExpiredErr)
+      .mockResolvedValueOnce({ platformPostId: 'ext-retry', url: null, publishedAt: NOW.toISOString() })
+    vi.mocked(claimPostsForPublishing).mockResolvedValue([mockPost])
+    mockIncrementBusinessPublishedCount.mockResolvedValue(2)
+
+    const summary = await runPublishTick({ now: NOW })
+
+    expect(summary.published).toBe(1)
+    expect(mockIncrementBusinessPublishedCount).toHaveBeenCalledTimes(1)
+    expect(mockAfter).not.toHaveBeenCalled()
+  })
+
+  it('refresh-retry: incrementBusinessPublishedCount throws → tick continues, published counted, Sentry captured', async () => {
+    mockPublish
+      .mockRejectedValueOnce(tokenExpiredErr)
+      .mockResolvedValueOnce({ platformPostId: 'ext-retry', url: null, publishedAt: NOW.toISOString() })
+    vi.mocked(claimPostsForPublishing).mockResolvedValue([mockPost])
+    mockIncrementBusinessPublishedCount.mockRejectedValue(new Error('DB failure'))
+
+    const summary = await runPublishTick({ now: NOW })
+
+    expect(summary.published).toBe(1)
+    expect(vi.mocked(markPostPublished)).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(Sentry.captureException)).toHaveBeenCalledTimes(1)
+    expect(mockAfter).not.toHaveBeenCalled()
+  })
+})
+
 // ─── runJanitorTick ───────────────────────────────────────────────────────────
 
 describe('runJanitorTick', () => {

@@ -115,6 +115,15 @@ Setup runbook: `docs/build-guide/runbooks/qstash-setup.md`
 - [ ] **First production tick observed** in Vercel logs with `triggeredBy: 'qstash'`:
   - `/api/cron/publish` — look for `{"kind":"publish-tick","triggeredBy":"qstash",...}` within 10 minutes of deploy.
   - `/api/cron/sync-metrics` — look for `{"kind":"metrics-sync-tick","triggeredBy":"qstash",...}` within the first hour. Expected at launch: `synced=0, skippedNotImplemented=N, errors=0` (ADR 0006 §1 — wired-but-inert is healthy).
+  - `/api/cron/drain-email-outbox` — look for `{"kind":"email.drain.tick","triggeredBy":"qstash",...}` within the first minute. Expected on a quiet queue: `claimed=0, sent=0, retried=0, failed=0, suppressed=0`.
+- [ ] **Drain-email-outbox smoke test.** Manually insert a row into `email_outbox` (`status='pending'`, `next_attempt_at=now()`, `recipient` = a real address you control, `kind='trial-warning-t3'`). Wait up to 90 seconds for the next cron tick. Confirm `status='sent'` and `provider_message_id IS NOT NULL`:
+  ```sql
+  select id, status, provider_message_id, sent_at
+  from email_outbox
+  where recipient = '<your-test-address>'
+  order by created_at desc
+  limit 1;
+  ```
 - [ ] **`cron_health` rows present** after first tick:
   ```sql
   select * from cron_health;
@@ -310,6 +319,40 @@ Not configured at launch (Vercel Hobby plan). When the project upgrades to Verce
 - [ ] **Sentry DSN compromise procedure:** DSN is public-ish (it ships in the client bundle); compromise is low-impact. Rotate via Sentry → Client Keys → New DSN → swap env → redeploy. Old DSN keeps working until disabled, so no blackout window.
 
 ---
+
+## 11. Landing page (ADR 0009)
+
+### Routes & infrastructure
+- [ ] `/` (homepage) returns 200 and its HTML contains the hero phrase "makes sure your market does"
+- [ ] `/pricing` returns 200 and renders both plan prices (€99 and €199) sourced from getPlanCapabilities
+- [ ] `/terms` returns 200 (MDX wrapper + stub paragraph "Last updated: TBD")
+- [ ] `/privacy` returns 200 (MDX wrapper + stub paragraph "Last updated: TBD")
+- [ ] OG image route `/og` returns a PNG for `/` (route=home)
+- [ ] `sitemap.ts` covers all marketing routes (/, /pricing, /terms, /privacy) across en/pt/es
+- [ ] `robots.txt` allows `/` and references the sitemap
+- [ ] Locale switcher present in the footer (EN/PT/ES)
+
+### Content & i18n
+- [ ] `marketing` namespace registered in i18n/request.ts; placeholder `marketing.hero.*` removed from common.json (all locales)
+- [ ] EN copy matches ADR 0009 §6 verbatim (no Builder-invented strings)
+- [ ] PT/ES marketing.json present with EN fallback values + `_todo` sentinel; PT/ES routes render in EN without missing-key errors
+- [ ] No customer logos, testimonials, screenshots, stock photos, or raster images on any route (L5)
+
+### Pricing integrity
+- [ ] PricingCards renders feature rows from getPlanCapabilities via pricingFeatureRows (no duplicated constant in components/marketing/)
+- [ ] Same <PricingCards /> renders on `/` and `/pricing` with no prop drift
+- [ ] Plus = 50 posts / 5 campaigns / LinkedIn + X / basic analytics; Pro = unlimited / unlimited / all 5 channels / advanced / inbox
+
+### Motion, perf, a11y
+- [ ] <MotionConfig reducedMotion="user"> at the marketing layout root; reduced-motion renders sections instantly in place
+- [ ] First-load JS for marketing routes ≤ 90 KB gz; no heavy client deps beyond `motion`
+- [ ] LCP < 1.8s, CLS < 0.05, INP < 200ms on `/` (lab check pre-launch)
+- [ ] Single <h1>, semantic landmarks, skip-to-content link, focus rings continuous with ADR 0007 §B7
+- [ ] Vercel Analytics only; no cookie-consent banner (no third-party cookies/pixels added)
+
+### Tests
+- [ ] Route smoke test green (5 routes 200; hero phrase + price strings present; legal links resolve)
+- [ ] PricingCards unit test green (reads getPlanCapabilities, renders both plans)
 
 ## Cross-reference
 

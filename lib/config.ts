@@ -28,7 +28,7 @@ export const serverSchema = z.object({
   EMAIL_DRAIN_BATCH_SIZE: z.coerce.number().int().positive().default(50),
   EMAIL_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
   EMAIL_RETRY_BACKOFF_SECONDS: z.coerce.number().int().positive().default(60),
-  EMAIL_SENDING_STUCK_MINUTES: z.coerce.number().int().positive().default(15),
+  EMAIL_SENDING_STUCK_MINUTES: z.coerce.number().int().positive().default(10),
   OAUTH_STATE_SECRET: z.string().min(32, "OAUTH_STATE_SECRET must be at least 32 characters"),
   SOCIAL_PROVIDER_MODE: z.string().default(""),
   HEALTHCHECK_TOKEN: z.string().default(""),

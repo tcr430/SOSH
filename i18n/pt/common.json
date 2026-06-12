@@ -290,12 +290,5 @@
         "error_generic": "Ocorreu um erro. Por favor, tente novamente."
       }
     }
-  },
-  "marketing": {
-    "hero": {
-      "title": "SŌSH",
-      "subtitle": "Redes sociais com IA para equipas de B2B SaaS. Construa a sua marca, acelere o pipeline.",
-      "cta": "Iniciar teste grátis"
-    }
   }
 }

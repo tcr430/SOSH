@@ -126,18 +126,7 @@ export async function runPublishTick(opts?: {
     })
     await incrementPublishedCountForCampaign(client, post.campaign_id)
 
-    const newCount = await incrementBusinessPublishedCount(client, post.business_id)
-    if (newCount === 1) {
-      const business = await getBusinessById(client, post.business_id)
-      after(async () => {
-        try {
-          await enqueueFirstPostPublished({ business, post, postUrl: result.url ?? null })
-        } catch (err) {
-          Sentry.captureException(err, { tags: { email_kind: 'first-post-published', business_id: post.business_id } })
-        }
-      })
-    }
-
+    await maybeEnqueueFirstPostPublished({ client, businessId: post.business_id, post, postUrl: result.url ?? null })
     summary.published++
   }
 
@@ -159,6 +148,30 @@ export async function runPublishTick(opts?: {
     failureIssueThreshold: 3,
     recoveryThreshold: 1,
   }) // end Sentry.withMonitor
+}
+
+async function maybeEnqueueFirstPostPublished(opts: {
+  client: SupabaseClient
+  businessId: string
+  post: PostRow
+  postUrl: string | null
+}): Promise<void> {
+  let newCount: number
+  try {
+    newCount = await incrementBusinessPublishedCount(opts.client, opts.businessId)
+  } catch (err) {
+    Sentry.captureException(err, { tags: { email_kind: 'first-post-published', business_id: opts.businessId } })
+    return
+  }
+  if (newCount !== 1) return
+  const business = await getBusinessById(opts.client, opts.businessId)
+  after(async () => {
+    try {
+      await enqueueFirstPostPublished({ business, post: opts.post, postUrl: opts.postUrl })
+    } catch (err) {
+      Sentry.captureException(err, { tags: { email_kind: 'first-post-published', business_id: opts.businessId } })
+    }
+  })
 }
 
 async function handleError(
@@ -217,6 +230,7 @@ async function handleError(
           publishedAt: now,
         })
         await incrementPublishedCountForCampaign(client, post.campaign_id)
+        await maybeEnqueueFirstPostPublished({ client, businessId: post.business_id, post, postUrl: retryResult.url ?? null })
         summary.published++
       } else {
         await markPostFailed(client, post.id, {

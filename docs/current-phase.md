@@ -2,7 +2,7 @@
 
 **Phase:** 1 — MVP
 **Goal:** First paying customer
-**Status:** Session 14B complete — Transactional Email B8 done (Stripe webhook after() tails, Resend inbound webhook suppression handler, publishing worker first-post detection). Next: Session 15 (drain-email-outbox worker + Resend send integration).
+**Status:** Session 16 Builder complete — Landing Page & Positioning (ADR 0009, B1–B6). Marketing surface live: `/`, `/pricing`, `/terms`, `/privacy`, `/og` across en/pt/es. Reviewer session pending.
 
 ## What's done
 - Session 0: Environment setup complete
@@ -633,15 +633,98 @@
   - ESLint `no-restricted-imports` on `stripe` resolved; `Stripe` type re-exported from
     `lib/stripe/webhook.ts`; 405 tests passing.
 
+- **Session 14D:** Transactional Email — correction pass (ADR 0008 Amendment 1):
+  - **D2 (merge blocker):** Missing first-post-published email trigger added to the
+    TOKEN_EXPIRED refresh-retry success path in `lib/publishing/orchestrator.ts`;
+    `maybeEnqueueFirstPostPublished` helper extracted for both code paths.
+  - **D3 (live blocker — retry storm):** Unknown Resend event types (e.g. `email.sent`)
+    now normalised to `'other'` before DB insert in `recordWebhookEvent`; eliminates
+    `23514` check-constraint → 500 → Resend retry loop.
+  - **A9 (live blocker — backoff):** `Retry-After` header extracted from Resend 429 SDK
+    response wrapper (`sdkResponse.headers`); `parseRetryAfterHeader` supports both
+    delta-seconds and HTTP-date formats, capped at 3600 s; passed through
+    `mapResendError` → `EmailProviderError.retryAfterSeconds` → `computeBackoff`.
+    Exponential path also capped at 3600 s.
+  - **K11 (docs):** `.env.local.example` completed with all 9 ADR 0008 email vars
+    (`RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`, `EMAIL_PROVIDER`, `EMAIL_FROM`,
+    `EMAIL_REPLY_TO`, and 4 commented tunables).
+  - Full verification: tsc clean, 46 test files / 692 tests passing, ESLint 0 errors.
+  - ADR 0008 Amendment 1 filed at `docs/decisions/0008-transactional-email.md §A1`.
+
+- **Session 15 — Transactional Email: drain orchestrator + integration test:**
+  - `lib/email/orchestrator.ts` — `runEmailDrainTick`: SKIP LOCKED claim, per-row suppress/render/send,
+    transient retry with `computeBackoff`, terminal failure, stuck-row reaper, one canonical log line
+  - `lib/email/resend-provider.ts` — full Resend SDK integration: `send()`, `mapResendError`,
+    `parseRetryAfterHeader` (delta-seconds + HTTP-date, capped at 3600 s), `mapNetworkError`
+  - `lib/email/__tests__/orchestrator.test.ts` — 16 unit tests covering all drain behaviours
+    (A9 Retry-After cap, provider_unavailable transient, unknown error → terminal + Sentry, mixed batch)
+  - `lib/email/__integration__/round-trip.test.ts` — real-network test gated on `EMAIL_INTEGRATION_TEST_ENABLED`
+  - `.env.local.example` — ADR 0008 block completed (RESEND_API_KEY, EMAIL_PROVIDER, tunables, gate var)
+  - `docs/launch-checklist.md` §3 — drain-email-outbox smoke-test rows added
+  - ADR 0008 Amendment 1 appended: A9 (Retry-After extraction + 3600 s cap) + D3 (event-type normalisation)
+  - Full suite: 237 tests passed / 1 skipped / 0 failed; tsc clean.
+
+- **Session 15D — Transactional Email correction pass (Reviewer findings):**
+  - **L-01 / B-01** `eslint.config.mjs` — consolidated 4 sprawling blocks into 1 main block
+    (all four bans: stripe, @anthropic-ai/sdk, lib/social internals, resend) + 4 narrow per-package
+    override blocks with shared constants; B-01 regression test confirmed all 4 bans fire on
+    `app/__test_fixtures__/boundary-probe.ts`.
+  - **M-01** `lib/email/render.tsx` — widened try block to cover `getTranslations()` and
+    `entry.subject()`; raw throws now become `EmailProviderError('template_render_failed', ...)`.
+  - **M-02** `lib/config.ts` — `EMAIL_SENDING_STUCK_MINUTES` default corrected 15 → 10
+    (aligns with ADR 0008 §15); `.env.local.example` comment updated.
+  - **L-02** `lib/email/resend-provider.ts` — `parseRetryAfterHeader` now uses case-insensitive
+    header key lookup via `Object.entries().find(k.toLowerCase())`.
+  - **L-03** `docs/decisions/0008-transactional-email.md` — Amendment 1 §A9: verification
+    sentence confirming Resend SDK v6 `Response<T>.headers` path is live.
+  - **L-04** `lib/email/__integration__/round-trip.test.ts` — Zod schema tracking comment
+    added near props literal.
+  - **L-05** `docs/backlog.md` created — Pre-launch debt section; atomic WHERE guard in
+    `transitionEmailOutboxRow` filed (email-outbox.ts not modified).
+  - Full suite: 720 tests passed / 0 failed; tsc clean.
+
+- **Session 16 (Builder) — Landing Page & Positioning (ADR 0009, B1–B6):**
+  - **B1:** `marketing` i18n namespace (EN verbatim from ADR §6; PT/ES EN-fallback + `_todo`
+    sentinel); placeholder `marketing.hero` removed from common.json (all locales);
+    `(marketing)` chrome: MotionProviders (`MotionConfig reducedMotion="user"`),
+    MarketingHeader, MarketingFooter, LocaleSwitcher; §3.4 path change — `/` is the
+    canonical homepage; `(marketing)/home/` and `app/[locale]/page.tsx` deleted
+  - **B2:** `MARKETING_PLANS` + `pricingFeatureRows` in lib/stripe/plan.ts (§5.2);
+    shared no-props `<PricingCards />`; `<PricingFaq />` (native details/summary);
+    `/pricing` composition
+  - **B3:** Section/StaggerItem canonical motion wrapper (§8); six homepage sections
+    (Hero, TheGap, HowItWorks, WhatYouGet, WhereWeStand, FinalCta); `/` spine composed
+    with pricing block + see_all deep-link
+  - **B4:** @next/mdx + remark-frontmatter wiring; content/legal stubs (§6.15 sentence
+    only); LegalPage wrapper; /terms + /privacy routes; deps added: remark-frontmatter,
+    remark-mdx-frontmatter, @tailwindcss/typography
+  - **B5:** marketingMetadata helper (meta/OG/twitter/hreflang/x-default); Edge
+    `/og` ImageResponse route (§6.14 strings, Stone hex literals); root app/sitemap.ts
+    (12 URLs); app/robots.ts
+  - **B6:** pricingFeatureRows unit tests (drift guard, §14); env-gated route smoke test
+    (5/5 green against live server); launch-checklist §11 added; this status update
+  - **Fixes found during build (logged in .wolf/buglog.json):** middleware
+    PUBLIC_SEGMENTS updated for marketing routes (was 307→login); conflicting
+    `(dashboard)/page.tsx` deleted (two pages resolved `/{locale}`); APP_URL
+    trailing-slash double-slash in sitemap/robots
+  - **Reviewer flags:** skip-link label hardcoded (no §6 key — i18n gap);
+    StaggerItem implements §8 stagger via `delay: i*0.08` (constants use whileInView,
+    not variants); root sitemap.ts instead of ADR §3.1's `app/[locale]/sitemap.ts`
+    (crawler-findable at /sitemap.xml); `(dashboard)/page.tsx` deletion touches a
+    group the ADR declared untouched (unavoidable per §3.4)
+
 ## What's next
 
-**Session 15 — Transactional Email: drain worker + Resend send integration**
+**Session 16 (Reviewer) — audit the ADR 0009 marketing surface**
 
-- Implement `drain-email-outbox` worker: poll `email_outbox` for `pending` rows, call Resend
-  API to send, mark `sent` / `failed`, honour `EMAIL_DRAIN_BATCH_SIZE`
-- Wire Resend SDK into `lib/email/resend-provider.ts` (currently a stub)
-- Add integration test with Resend sandbox / mock SDK
-- Smoke-test full round-trip: enqueue → drain → Resend delivery
+Then: pre-launch hardening sweep per `docs/launch-checklist.md` and `docs/backlog.md`:
+
+- Pre-launch debt: items in `docs/backlog.md` (L-05 atomic guard, footer 13px fix, suppressed
+  error code, svix-id ADR drift, locale-snapshot test)
+- Smoke tests: Resend sandbox sends for all 5 email kinds; Stripe smoke tests A–F
+- Launch-checklist verification pass: confirm all §1–§3 rows are actionable
+- Core Web Vitals lab check on `/` and `/pricing` (needs a production-build serve;
+  `npm run build` still fails pre-existing — ECC remotion issue, see Known gotchas)
 
 ---
 
@@ -734,6 +817,43 @@
 - **B5 — withSentryConfig SENTRY_AUTH_TOKEN:** currently relies on @sentry/nextjs SDK
   auto-pickup of SENTRY_AUTH_TOKEN rather than passing the field explicitly. ADR §3.2 documents
   both forms; convert to explicit when next touching next.config.ts.
+
+### Session 14 reviewer (ADR 0008 — Transactional Email)
+
+- **A4 — `suppressed` missing from EmailProviderErrorCode:** ADR §4 lists six error codes;
+  `lib/email/errors.ts` only has five — `suppressed` is absent. Add `| 'suppressed'` to the
+  union. (Alternatively, amend ADR §4 to five codes since suppression is modelled as an outbox
+  status, not a provider error — the smaller diff either way.)
+- **G3 — T-1 window ADR reconciliation:** Implementation uses `[now+1d, now+2d)` (i.e. "ends
+  tomorrow"); ADR §10 text says `[now, now+1d)`. Code and tests are internally consistent and
+  the copy is correct. Recommended fix: amend ADR §10 to the implemented windows rather than
+  changing code; update the §16 test description comment.
+- **C7 / §14 schema drift — svix-id as PK:** `email_webhook_events` uses `svix-id` as the
+  idempotency PK (stable across Resend retries), not a payload event id. ADR §14 schema block
+  does not document this and shows a different column shape. Reconcile the ADR §14 schema
+  block with the shipped migration; document why svix-id is the correct anchor.
+- **D3 — full locale-snapshot invariant test missing:** `enqueue.test.ts` asserts locale is
+  forwarded but does not cover the mutation invariant. Add: enqueue with `locale='pt'`, mutate
+  `businesses.language='es'`, claim the row, assert render uses `'pt'` (not the live value).
+  Locks the snapshot guarantee end-to-end per ADR §16.
+- **J3 — verify beforeSend scrubs bare email addresses in Sentry error strings:** ADR 0007
+  `beforeSend` scrubber is key-name based (`REDACTED_KEYS`). Resend error messages can embed
+  the recipient address as a bare string (not under a key), which the scrubber would not catch.
+  Confirm `scrubString` / `scrubEvent` covers this pattern; if not, scrub `err.message` before
+  `Sentry.captureException` in the drainer.
+- **E5 — footer text 13px below 14px minimum:** `lib/email/templates/_layout.tsx` footer text
+  is 13px; ADR §8b mandates no fixed typography below 14px. Bump to 14px.
+- **K1 — `any` escape hatch in templates/index.ts:** Two `any` casts (props, `React.FC`)
+  with `eslint-disable` comments are the registry heterogeneity escape hatch. Consider a
+  generic `KindEntry<P>` keyed per kind to remove them, or document the exception in CLAUDE.md.
+- **§5 — atomic WHERE-guard on transitionEmailOutboxRow:** Currently a read-then-update
+  (no `WHERE status = expectedCurrent` guard). Safe today because `SKIP LOCKED` claim makes the
+  drainer the sole owner of a `sending` row. Add the atomic guard as a hardening measure
+  consistent with the CLAUDE.md state-machine pattern — low risk, low effort.
+- **Hardcoded 14-day trial interval in find_trial_expiring_between.sql:** The SQL function
+  hardcodes the 14-day trial length. Should read from a config constant or be passed as a
+  parameter so it stays in sync with `config.server.TRIAL_DURATION_DAYS` if that var is ever
+  introduced.
 
 ---
 

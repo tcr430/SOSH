@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { getTranslations } from 'next-intl/server'
 import { makeTranslator, LOCALES } from '../templates/__tests__/helpers'
 import type { TestLocale } from '../templates/__tests__/helpers'
 import { renderTemplate } from '../render'
@@ -98,5 +99,15 @@ describe('renderTemplate', () => {
       VALID_PROPS['trial-warning-t3'],
     )
     expect(result.subject).toBe(t('trial_warning_t3.subject'))
+  })
+
+  it('wraps getTranslations failure as EmailProviderError template_render_failed (M-01)', async () => {
+    vi.mocked(getTranslations).mockRejectedValueOnce(new Error('i18n service unavailable'))
+    await expect(
+      renderTemplate('trial-warning-t3', 'en', VALID_PROPS['trial-warning-t3']),
+    ).rejects.toMatchObject({
+      name: 'EmailProviderError',
+      code: 'template_render_failed',
+    })
   })
 })

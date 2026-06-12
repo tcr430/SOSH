@@ -25,24 +25,24 @@ export async function renderTemplate(
     )
   }
 
-  const rawT = await getTranslations({ locale, namespace: 'email' })
-  const t = rawT as unknown as TranslatorFn
-
-  const subject = entry.subject(t, parsed.data)
-  const Component = entry.Component
-  const data = parsed.data as Record<string, unknown>
-
   let html: string
   let text: string
+  let subject: string
   try {
+    const rawT = await getTranslations({ locale, namespace: 'email' })
+    const t = rawT as unknown as TranslatorFn
+    subject = entry.subject(t, parsed.data)
+    const Component = entry.Component
+    const data = parsed.data as Record<string, unknown>
     html = await render(<Component {...data} locale={locale} t={t} />)
     text = await render(<Component {...data} locale={locale} t={t} />, {
       plainText: true,
     })
   } catch (err) {
+    if (err instanceof EmailProviderError) throw err
     throw new EmailProviderError(
       'template_render_failed',
-      `React Email render failed for ${kind}`,
+      `Render failed for ${kind}: ${err instanceof Error ? err.message : String(err)}`,
       { err: String(err) },
     )
   }

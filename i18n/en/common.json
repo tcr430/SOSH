@@ -290,12 +290,5 @@
         "error_generic": "Something went wrong. Please try again."
       }
     }
-  },
-  "marketing": {
-    "hero": {
-      "title": "SŌSH",
-      "subtitle": "AI-powered social media for B2B SaaS teams. Build your brand, grow your pipeline.",
-      "cta": "Start free trial"
-    }
   }
 }
