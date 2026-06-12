@@ -344,8 +344,8 @@ Not configured at launch (Vercel Hobby plan). When the project upgrades to Verce
 - [ ] Plus = 50 posts / 5 campaigns / LinkedIn + X / basic analytics; Pro = unlimited / unlimited / all 5 channels / advanced / inbox
 
 ### Motion, perf, a11y
-- [ ] <MotionConfig reducedMotion="user"> at the marketing layout root; reduced-motion renders sections instantly in place
-- [ ] First-load JS for marketing routes ≤ 90 KB gz; no heavy client deps beyond `motion`
+- [ ] All marketing motion lives in the `prefers-reduced-motion: no-preference` block in globals.css (ADR 0009 §17 A1); reduced-motion renders sections instantly in place and anchor links jump instantly
+- [ ] First-load JS for marketing routes ≤ 90 KB gz; zero client animation libraries (`motion` removed per ADR 0009 §17 A1)
 - [ ] LCP < 1.8s, CLS < 0.05, INP < 200ms on `/` (lab check pre-launch)
 - [ ] Single <h1>, semantic landmarks, skip-to-content link, focus rings continuous with ADR 0007 §B7
 - [ ] Vercel Analytics only; no cookie-consent banner (no third-party cookies/pixels added)

@@ -3,6 +3,7 @@ import { getLocale, getTranslations } from 'next-intl/server'
 import { MARKETING_PLANS, pricingFeatureRows } from '@/lib/stripe/plan'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { StaggerItem } from '@/components/marketing/Section'
 
 /**
  * Shared pricing cards (ADR 0009 §5.3). NO PROPS — `/` and `/pricing` render
@@ -34,8 +35,10 @@ export default async function PricingCards() {
             </p>
             <p className="mt-3 text-sm text-muted-foreground">{t(`tiers.${plan}.tagline`)}</p>
             <ul className="mt-6 flex-1 space-y-3">
-              {pricingFeatureRows(plan).map((row) => (
-                <li key={row.key} className="flex items-start gap-2 text-sm">
+              {pricingFeatureRows(plan).map((row, i) => (
+                <li key={row.key}>
+                  {/* §8 A1: dense list — 40ms stagger draws the eye down in reading order */}
+                  <StaggerItem index={i} stepMs={40} className="flex items-start gap-2 text-sm">
                   <svg
                     aria-hidden="true"
                     viewBox="0 0 16 16"
@@ -49,12 +52,13 @@ export default async function PricingCards() {
                     <path d="M3 8.5l3.5 3.5L13 4.5" />
                   </svg>
                   <span>{t(`feature.${row.key}`, row.values)}</span>
+                  </StaggerItem>
                 </li>
               ))}
             </ul>
             <Link
               href={`/${locale}/signup`}
-              className={cn(buttonVariants({ size: 'lg' }), 'mt-8 w-full')}
+              className={cn(buttonVariants({ size: 'lg' }), 'mt-8 w-full active:scale-[0.98]')}
             >
               {t(`tiers.${plan}.cta`)}
             </Link>

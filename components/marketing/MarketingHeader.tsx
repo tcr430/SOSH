@@ -8,7 +8,8 @@ export default async function MarketingHeader() {
   const t = await getTranslations('marketing.nav')
 
   return (
-    <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur">
+    // marketing-header: the border hairline fades in on scroll (globals.css, A1)
+    <header className="marketing-header sticky top-0 z-40 border-b bg-background/80 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
         <Link
           href={`/${locale}`}
@@ -29,7 +30,10 @@ export default async function MarketingHeader() {
           >
             {t('signin')}
           </Link>
-          <Link href={`/${locale}/signup`} className={cn(buttonVariants({ size: 'sm' }))}>
+          <Link
+            href={`/${locale}/signup`}
+            className={cn(buttonVariants({ size: 'sm' }), 'active:scale-[0.98]')}
+          >
             {t('cta')}
           </Link>
         </nav>

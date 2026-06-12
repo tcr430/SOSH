@@ -15,13 +15,13 @@ export default async function PricingFaq() {
       <h2 className="text-2xl font-bold tracking-tight">{t('heading')}</h2>
       <div className="mt-8 divide-y border-y">
         {FAQ_ITEMS.map((n) => (
-          <details key={n} className="group py-4">
+          <details key={n} className="faq-details group py-4">
             <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [&::-webkit-details-marker]:hidden">
               {t(`q${n}`)}
               <svg
                 aria-hidden="true"
                 viewBox="0 0 16 16"
-                className="size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
+                className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 ease-out group-open:rotate-180"
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="2"

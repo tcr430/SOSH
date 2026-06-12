@@ -18,7 +18,10 @@ export default async function FinalCta() {
         <p className="mt-6 max-w-2xl text-pretty leading-relaxed text-muted-foreground">
           {t('subhead')}
         </p>
-        <Link href={`/${locale}/signup`} className={cn(buttonVariants({ size: 'lg' }), 'mt-10')}>
+        <Link
+          href={`/${locale}/signup`}
+          className={cn(buttonVariants({ size: 'lg' }), 'mt-10 active:scale-[0.98]')}
+        >
           {t('cta')}
         </Link>
         <p className="mt-6 text-sm text-muted-foreground">{t('trust')}</p>

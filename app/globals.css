@@ -131,3 +131,89 @@
     @apply font-sans;
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * Marketing motion (ADR 0009 §8, Amendment A1 — CSS-only, no JS animation lib)
+ * Canonical values: 0.5s sections / 0.4s staggered children,
+ * ease cubic-bezier(0.22, 1, 0.36, 1), entrance opacity 0→1 + 12px rise.
+ * Everything motion-related lives inside prefers-reduced-motion: no-preference;
+ * reduced-motion users get instant render in place and instant anchor jumps.
+ * ------------------------------------------------------------------------- */
+
+:root {
+  --ease-out-expo: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* allow-keywords lets block-size transition to/from `auto` (FAQ panels) */
+  :root {
+    interpolate-size: allow-keywords;
+  }
+
+  /* Scroll reveals — hidden state is applied by JS only (Section.tsx), so
+     no-JS visitors and crawlers always see fully rendered content. */
+  .reveal {
+    transition:
+      opacity 0.5s var(--ease-out-expo),
+      translate 0.5s var(--ease-out-expo);
+    transition-delay: var(--reveal-delay, 0ms);
+  }
+  .reveal-child {
+    transition-duration: 0.4s;
+  }
+  .reveal[data-reveal='pending'] {
+    opacity: 0;
+    translate: 0 12px;
+  }
+
+  /* Hero one-time entrance — pure CSS via @starting-style, runs without JS. */
+  .hero-enter {
+    transition:
+      opacity 0.5s var(--ease-out-expo),
+      translate 0.5s var(--ease-out-expo),
+      filter 0.5s var(--ease-out-expo);
+    transition-delay: var(--enter-delay, 0ms);
+    @starting-style {
+      opacity: 0;
+      translate: 0 12px;
+    }
+  }
+  .hero-enter-blur {
+    @starting-style {
+      filter: blur(4px);
+    }
+  }
+
+  /* FAQ <details> open/close height transition (PricingFaq.tsx) */
+  .faq-details::details-content {
+    block-size: 0;
+    overflow: clip;
+    transition:
+      block-size 200ms var(--ease-out-expo),
+      content-visibility 200ms allow-discrete;
+  }
+  .faq-details[open]::details-content {
+    block-size: auto;
+  }
+}
+
+/* Sticky marketing header: hairline appears only once the page scrolls.
+   Progressive enhancement — without scroll-driven animation support the
+   border is simply always visible (previous behavior). */
+@supports (animation-timeline: scroll()) {
+  .marketing-header {
+    border-bottom-color: transparent;
+    animation: marketing-header-border linear both;
+    animation-timeline: scroll();
+    animation-range: 0px 24px;
+  }
+  @keyframes marketing-header-border {
+    to {
+      border-bottom-color: var(--border);
+    }
+  }
+}

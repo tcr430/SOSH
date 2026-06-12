@@ -1,10 +1,12 @@
-import MotionProviders from '@/components/marketing/MotionProviders'
 import MarketingHeader from '@/components/marketing/MarketingHeader'
 import MarketingFooter from '@/components/marketing/MarketingFooter'
 
+// Reduced motion is honored once, in CSS (globals.css wraps all marketing
+// motion in prefers-reduced-motion: no-preference) — ADR 0009 §8 Amendment A1
+// replaced the MotionConfig client boundary.
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
   return (
-    <MotionProviders>
+    <>
       {/* ADR 0009 §3.2/§13: first focusable element targets #main. The label is
           hardcoded per the ADR snippet — §6 defines no i18n key for it (Reviewer finding). */}
       <a
@@ -16,6 +18,6 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
       <MarketingHeader />
       <main id="main">{children}</main>
       <MarketingFooter />
-    </MotionProviders>
+    </>
   )
 }
