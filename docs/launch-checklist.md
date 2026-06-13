@@ -253,11 +253,26 @@ Not configured at launch (Vercel Hobby plan). When the project upgrades to Verce
 
 - [ ] **Privacy policy** live at `/privacy` (or `/{locale}/privacy`).
 - [ ] **Terms of service** live at `/terms` (or `/{locale}/terms`).
-- [ ] **DPA template** available on request (link from `/privacy`).
+- [ ] **Subprocessors page** live at `/subprocessors` (ADR 0010 §14 — new route, Builder session required).
+- [ ] **DPA available on request** — `privacy@sosh.app` receives and responds. No public URL; reference in Privacy Policy footer.
 - [ ] **Status page URL** configured (slot only — record where it lives once chosen).
-- [ ] **Abuse contact email** live: `abuse@<domain>` — receives mail.
-- [ ] **Support email** live: `support@<domain>` (or equivalent) — receives mail.
-- [ ] **Security contact** live: `security@<domain>` (or `.well-known/security.txt`).
+- [ ] **Abuse contact email** live: `abuse@sosh.app` — receives mail.
+- [ ] **Support email** live: `support@sosh.app` — receives mail.
+- [ ] **Security contact** live: `security@sosh.app` (or `.well-known/security.txt`).
+- [ ] **Privacy contact** live: `privacy@sosh.app` — receives GDPR data-subject requests and DPA requests.
+- [ ] **Legal contact** live: `legal@sosh.app` — receives DPA signed-copy requests (may alias to `privacy@sosh.app`).
+
+### ADR 0010 — Legal surface (gated items)
+
+These items are required by ADR 0010 and are not yet in the codebase. Each blocks the Stripe live-mode flip.
+
+- [ ] **Counsel ratification gate.** A lawyer must review the ADR 0010 prose before it ships in `content/legal/`. Redlines come back as a correction PR. Blocks §6 (Stripe live-mode flip). Record sign-off date here: `<fill>`.
+- [ ] **AI training opt-in migration.** Add `businesses.ai_training_opt_in BOOLEAN NOT NULL DEFAULT false` (ADR 0010 §4, E7 — Path B). Builder session required.
+- [ ] **AI training opt-in UI.** Account settings screen must expose a toggle wired to `businesses.ai_training_opt_in`. No retroactive processing of data collected before opt-in.
+- [ ] **Deletion jobs.** E6 found zero scheduled deletion jobs. ADR 0010 §5 retention map commits to specific periods. Builder must implement: (a) hard-delete of businesses + cascade 30 days after deletion request; (b) `auth_rate_limits` TTL purge (buckets older than 30 days). Record implementation session: `<fill>`.
+- [ ] **Vault deletion Sentry alert.** E5: vault deletion is best-effort (silent catch). Add `captureException` on vault RPC failure so orphaned vault secrets surface in Sentry.
+- [ ] **`/subprocessors` route.** New Next.js route + MDX file at `content/legal/subprocessors.en.mdx`. Builder transcribes ADR 0010 §14. Footer link: "Subprocessors".
+- [ ] **Legal MDX `evidenceRef` frontmatter.** Each file in `content/legal/` must carry `evidenceRef: 5f7a2e4` (Evidence Pack commit hash). Future PRs must update this ref if evidence changes.
 
 ### Transactional Email (ADR 0008)
 
@@ -323,36 +338,36 @@ Not configured at launch (Vercel Hobby plan). When the project upgrades to Verce
 ## 11. Landing page (ADR 0009)
 
 ### Routes & infrastructure
-- [ ] `/` (homepage) returns 200 and its HTML contains the hero phrase "makes sure your market does"
-- [ ] `/pricing` returns 200 and renders both plan prices (€99 and €199) sourced from getPlanCapabilities
-- [ ] `/terms` returns 200 (MDX wrapper + stub paragraph "Last updated: TBD")
-- [ ] `/privacy` returns 200 (MDX wrapper + stub paragraph "Last updated: TBD")
-- [ ] OG image route `/og` returns a PNG for `/` (route=home)
-- [ ] `sitemap.ts` covers all marketing routes (/, /pricing, /terms, /privacy) across en/pt/es
-- [ ] `robots.txt` allows `/` and references the sitemap
-- [ ] Locale switcher present in the footer (EN/PT/ES)
+- [x] `/` (homepage) returns 200 and its HTML contains the hero phrase "makes sure your market does"
+- [x] `/pricing` returns 200 and renders both plan prices (€99 and €199) sourced from getPlanCapabilities
+- [x] `/terms` returns 200 (MDX wrapper + stub paragraph "Last updated: TBD")
+- [x] `/privacy` returns 200 (MDX wrapper + stub paragraph "Last updated: TBD")
+- [x] OG image route `/og` returns a PNG for `/` (route=home)
+- [x] `sitemap.ts` covers all marketing routes (/, /pricing, /terms, /privacy) across en/pt/es
+- [x] `robots.txt` allows `/` and references the sitemap
+- [x] Locale switcher present in the footer (EN/PT/ES)
 
 ### Content & i18n
-- [ ] `marketing` namespace registered in i18n/request.ts; placeholder `marketing.hero.*` removed from common.json (all locales)
-- [ ] EN copy matches ADR 0009 §6 verbatim (no Builder-invented strings)
-- [ ] PT/ES marketing.json present with EN fallback values + `_todo` sentinel; PT/ES routes render in EN without missing-key errors
-- [ ] No customer logos, testimonials, screenshots, stock photos, or raster images on any route (L5)
+- [x] `marketing` namespace registered in i18n/request.ts; placeholder `marketing.hero.*` removed from common.json (all locales)
+- [x] EN copy matches ADR 0009 §6 verbatim (no Builder-invented strings)
+- [x] PT/ES marketing.json present with EN fallback values + `_todo` sentinel; PT/ES routes render in EN without missing-key errors
+- [x] No customer logos, testimonials, screenshots, stock photos, or raster images on any route (L5)
 
 ### Pricing integrity
-- [ ] PricingCards renders feature rows from getPlanCapabilities via pricingFeatureRows (no duplicated constant in components/marketing/)
-- [ ] Same <PricingCards /> renders on `/` and `/pricing` with no prop drift
-- [ ] Plus = 50 posts / 5 campaigns / LinkedIn + X / basic analytics; Pro = unlimited / unlimited / all 5 channels / advanced / inbox
+- [x] PricingCards renders feature rows from getPlanCapabilities via pricingFeatureRows (no duplicated constant in components/marketing/)
+- [x] Same <PricingCards /> renders on `/` and `/pricing` with no prop drift
+- [x] Plus = 50 posts / 5 campaigns / LinkedIn + X / basic analytics; Pro = unlimited / unlimited / all 5 channels / advanced / inbox
 
 ### Motion, perf, a11y
-- [ ] All marketing motion lives in the `prefers-reduced-motion: no-preference` block in globals.css (ADR 0009 §17 A1); reduced-motion renders sections instantly in place and anchor links jump instantly
-- [ ] First-load JS for marketing routes ≤ 90 KB gz; zero client animation libraries (`motion` removed per ADR 0009 §17 A1)
-- [ ] LCP < 1.8s, CLS < 0.05, INP < 200ms on `/` (lab check pre-launch)
-- [ ] Single <h1>, semantic landmarks, skip-to-content link, focus rings continuous with ADR 0007 §B7
-- [ ] Vercel Analytics only; no cookie-consent banner (no third-party cookies/pixels added)
+- [x] All marketing motion lives in the `prefers-reduced-motion: no-preference` block in globals.css (ADR 0009 §17 A1); reduced-motion renders sections instantly in place and anchor links jump instantly
+- [ ] First-load JS for marketing routes ≤ 90 KB gz; zero client animation libraries (`motion` removed per ADR 0009 §17 A1) <!-- BLOCKED: npm run build fails at TS check on pre-existing ECC Remotion error; Turbopack compilation succeeds but route table not printed; verify when ECC issue resolved -->
+- [ ] LCP < 1.8s, CLS < 0.05, INP < 200ms on `/` (lab check pre-launch) <!-- BLOCKED: requires successful production build + Lighthouse run -->
+- [x] Single <h1>, semantic landmarks, skip-to-content link, focus rings continuous with ADR 0007 §B7
+- [x] Vercel Analytics only; no cookie-consent banner (no third-party cookies/pixels added)
 
 ### Tests
-- [ ] Route smoke test green (5 routes 200; hero phrase + price strings present; legal links resolve)
-- [ ] PricingCards unit test green (reads getPlanCapabilities, renders both plans)
+- [x] Route smoke test green (5 routes 200; hero phrase + price strings present; legal links resolve)
+- [x] PricingCards unit test green (reads getPlanCapabilities, renders both plans)
 
 ## Cross-reference
 
