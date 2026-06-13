@@ -19,21 +19,33 @@ export default async function PricingCards() {
   return (
     <div>
       <div className="mx-auto grid max-w-3xl gap-6 sm:grid-cols-2">
-        {MARKETING_PLANS.map((plan) => (
-          <div key={plan} className="flex flex-col rounded-lg border bg-card p-8">
+        {MARKETING_PLANS.map((plan) => {
+          const isPro = plan === 'pro'
+          return (
+          <div
+            key={plan}
+            className={cn(
+              'flex flex-col rounded-lg border p-8',
+              isPro ? 'border-foreground bg-foreground text-background' : 'bg-card'
+            )}
+          >
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold">{t(`tiers.${plan}.name`)}</h3>
-              {plan === 'pro' && (
-                <span className="rounded-full px-3 py-1 text-xs font-medium text-primary ring-1 ring-primary/30">
+              {isPro && (
+                <span className="rounded-full px-3 py-1 text-xs font-medium ring-1 text-background/80 ring-background/20">
                   {t('tiers.pro.badge')}
                 </span>
               )}
             </div>
             <p className="mt-4 flex items-baseline gap-2">
               <span className="text-4xl font-bold tracking-tight">{t(`tiers.${plan}.price`)}</span>
-              <span className="text-sm text-muted-foreground">{t(`tiers.${plan}.cadence`)}</span>
+              <span className={cn('text-sm', isPro ? 'text-background/60' : 'text-muted-foreground')}>
+                {t(`tiers.${plan}.cadence`)}
+              </span>
             </p>
-            <p className="mt-3 text-sm text-muted-foreground">{t(`tiers.${plan}.tagline`)}</p>
+            <p className={cn('mt-3 text-sm', isPro ? 'text-background/70' : 'text-muted-foreground')}>
+              {t(`tiers.${plan}.tagline`)}
+            </p>
             <ul className="mt-6 flex-1 space-y-3">
               {pricingFeatureRows(plan).map((row, i) => (
                 <li key={row.key}>
@@ -42,7 +54,7 @@ export default async function PricingCards() {
                   <svg
                     aria-hidden="true"
                     viewBox="0 0 16 16"
-                    className="mt-0.5 size-4 shrink-0 text-primary"
+                    className="mt-0.5 size-4 shrink-0 text-brand"
                     fill="none"
                     stroke="currentColor"
                     strokeWidth="2"
@@ -51,19 +63,22 @@ export default async function PricingCards() {
                   >
                     <path d="M3 8.5l3.5 3.5L13 4.5" />
                   </svg>
-                  <span>{t(`feature.${row.key}`, row.values)}</span>
+                  <span className={isPro ? 'text-background/80' : undefined}>
+                    {t(`feature.${row.key}`, row.values)}
+                  </span>
                   </StaggerItem>
                 </li>
               ))}
             </ul>
             <Link
               href={`/${locale}/signup`}
-              className={cn(buttonVariants({ size: 'lg' }), 'mt-8 w-full active:scale-[0.98]')}
+              className={cn(buttonVariants({ variant: 'brand', size: 'lg' }), 'mt-8 w-full active:scale-[0.98]')}
             >
               {t(`tiers.${plan}.cta`)}
             </Link>
           </div>
-        ))}
+          )
+        })}
       </div>
       <p className="mx-auto mt-6 max-w-3xl text-center text-sm text-muted-foreground">
         {t('trial_note')}

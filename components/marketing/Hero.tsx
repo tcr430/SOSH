@@ -22,6 +22,7 @@ export default async function Hero() {
   const t = await getTranslations('marketing.hero')
 
   return (
+    <div className="hero-bg">
     <section className="mx-auto flex max-w-4xl flex-col items-center px-6 pb-24 pt-24 text-center sm:pb-32 sm:pt-32">
       <p className="hero-enter text-sm font-medium text-muted-foreground" style={enterDelay(0)}>
         {t('eyebrow')}
@@ -44,7 +45,7 @@ export default async function Hero() {
       >
         <Link
           href={`/${locale}/signup`}
-          className={cn(buttonVariants({ size: 'lg' }), 'active:scale-[0.98]')}
+          className={cn(buttonVariants({ variant: 'brand', size: 'lg' }), 'active:scale-[0.98]')}
         >
           {t('cta_primary')}
         </Link>
@@ -59,5 +60,6 @@ export default async function Hero() {
         {t('trust')}
       </p>
     </section>
+    </div>
   )
 }

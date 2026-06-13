@@ -40,6 +40,8 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -75,6 +77,8 @@
   --chart-4: oklch(0.371 0.004 75);
   --chart-5: oklch(0.269 0.004 75);
   --radius: 0.625rem;
+  --brand: oklch(0.55 0.2 265);
+  --brand-foreground: oklch(0.985 0.002 75);
   --sidebar: oklch(0.97 0.002 75);
   --sidebar-foreground: oklch(0.145 0.004 75);
   --sidebar-primary: oklch(0.205 0.004 75);
@@ -110,6 +114,8 @@
   --chart-3: oklch(0.439 0.004 75);
   --chart-4: oklch(0.371 0.004 75);
   --chart-5: oklch(0.269 0.004 75);
+  --brand: oklch(0.65 0.18 265);
+  --brand-foreground: oklch(0.145 0.004 75);
   --sidebar: oklch(0.205 0.004 75);
   --sidebar-foreground: oklch(0.985 0.002 75);
   --sidebar-primary: oklch(0.488 0.243 264.376);
@@ -204,6 +210,11 @@
 /* Sticky marketing header: hairline appears only once the page scrolls.
    Progressive enhancement — without scroll-driven animation support the
    border is simply always visible (previous behavior). */
+/* Hero section: subtle radial bloom from top-center — no imagery needed. */
+.hero-bg {
+  background: radial-gradient(ellipse 80% 60% at 50% -5%, oklch(0.55 0.2 265 / 0.09), transparent 70%);
+}
+
 @supports (animation-timeline: scroll()) {
   .marketing-header {
     border-bottom-color: transparent;

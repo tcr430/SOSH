@@ -16,7 +16,7 @@ export default async function WhereWeStand() {
           {t('heading')}
         </h2>
         <p className="mt-8 text-pretty leading-relaxed text-muted-foreground">{t('body')}</p>
-        <p className="mt-12 text-balance text-2xl font-semibold leading-snug tracking-tight sm:text-3xl">
+        <p className="mt-12 border-l-2 border-brand pl-6 text-balance text-3xl font-semibold leading-snug tracking-tight sm:text-4xl">
           {t('pull')}
         </p>
       </div>
