@@ -749,10 +749,136 @@ Two automated deletion jobs required before the §5 retention map is operational
 
 ## Cross-references
 
-- **Evidence Pack:** `docs/evidence/0010-legal-evidence.md` (commit `5f7a2e4`) — all E-refs point here
+- **Evidence Pack:** `docs/evidence/0010-legal-evidence.md` (commit `5f7a2e4`, amended 2026-06-13) — all E-refs point here
 - **ADR 0009 §6.15** — superseded stub sentence
 - **ADR 0009 §7** — MDX infrastructure, `LegalPage` wrapper, frontmatter schema (unchanged; `evidenceRef` field is additive)
 - **ADR 0009 §10** — EN-only at launch precedent (§2 Defers inherits this)
 - **ADR 0001** — RLS and Vault architecture (§3, §11)
 - **CLAUDE.md** — three-step disconnect contract (§3, §5, §13 of Privacy Policy)
 - **Launch checklist §9** — ratification gate and ADR 0010 Builder tasks tracked there
+
+---
+
+## Amendment A1 — 2026-06-13
+
+**Author:** Tiago (decisions T1–T12)
+**Scope:** Twelve post-ADR decisions that affect prose, builder tasks, and launch blockers. No sections of the original ADR body are rewritten; all changes are additive or identify specific clause targets for the next Builder session.
+
+### A1.1 — Subprocessor list: Postiz removed (T1)
+
+**Decision:** Postiz is being replaced with direct LinkedIn and X (Twitter) API integration. Migration is WIP as of 2026-06-13.
+
+**Effect on ADR prose:**
+- §14 Subprocessors List — Postiz row is **removed**. LinkedIn and X are now direct integrations (controller-to-platform); they are not subprocessors. No row needed.
+- §13 Privacy Policy §8 ("Data processors we use") — remove any reference to Postiz.
+- §12 ToS §9 ("Third-party platforms") — the description of how posts reach platforms should reflect direct API calls, not an intermediary.
+
+**Evidence Pack:** E1 #6 struck (Postiz); E9 Postiz row removed; E10 replaced with WIP migration state (`[VERIFY: WIP]`). Evidence Pack amended 2026-06-13.
+
+**Launch blocker:** Direct LinkedIn/X integration must be complete before go-live. Add to launch checklist §9.
+
+### A1.2 — AI training posture: Path A at launch (T2)
+
+**Decision:** SOSH does not use customer content to train AI models at launch. Path A applies. No `ai_training_opt_in` column, no opt-in UI, no schema migration required.
+
+**Effect on ADR prose:**
+- §13 Privacy Policy §3 ("How we use your information") — replace the opt-in table row with: *"We do not use your content or personal data to train AI models. The AI we use (Anthropic Claude) is called via API under Anthropic's data usage policy, which does not use API inputs for model training. See our Subprocessors list for details."*
+- §13 Privacy Policy §5 ("Lawful basis") — remove the `ai_training_opt_in` row from the lawful-basis table.
+- §13 Privacy Policy §6 ("Your rights — Withdrawal of consent") — remove the paragraph about withdrawing AI training consent; this right is not applicable under Path A.
+- §17 Builder hand-off item E (ai_training_opt_in migration) — **removed**. No migration required at launch.
+
+**Evidence Pack:** E7 replaced with Path A one-liner. Structural gap "No AI training schema" closed.
+
+### A1.3 — Subprocessor-change refund contradiction resolved (T3)
+
+**Decision:** No pro-rata refund on subprocessor-change termination. Remedy is end-of-billing-period cancellation only, consistent with ToS §5 ("No refunds").
+
+**Effect on ADR prose:**
+- §12 ToS §8 ("Changes to this agreement") — if a subprocessor-change notice gives the right to terminate, the termination remedy is: *"You may terminate your subscription effective at the end of the current billing period. No pro-rata refund will be issued. Your access continues until the billing period ends."* (E1, ToS §5)
+- §14 Subprocessors List — the objection clause must match: *"… you may terminate your subscription at the end of the current billing period. No refund will be issued for the unused portion."*
+- Remove any "pro-rata refund" language wherever it appears in §12–§14.
+
+### A1.4 — Deletion jobs and Vault Sentry alert: launch blockers (T4/T11)
+
+**Decision:** Absence of deletion jobs and the silent vault-deletion failure are not acceptable at launch. Both are promoted from backlog to launch blocker.
+
+**Effect on ADR prose:**
+- §13 Privacy Policy §7 ("Retention") — the retention-period claims are now supported by implementation. The paragraph *"We delete your data within 30 days of account closure"* is locked once the cron job exists. Builder must implement the job first; do not transcribe this clause until the job is in production.
+- §17 Builder hand-off — add (or elevate) two mandatory items:
+  - **F-1 (launch blocker):** Create 30-day hard-delete cron for `business_deletion_requests` — purge all personal data columns for businesses with `scheduled_purge_at ≤ NOW()`. Also purge `auth_rate_limits` rows older than 30 days.
+  - **F-2 (launch blocker):** In `lib/social/social-accounts.ts` step 3 (vault RPC), replace `catch {}` with `catch (err) { captureException(err, { tags: { operation: 'vault_delete_secret' } }) }`. Already shown in §17-G; this amendment elevates it to a blocker.
+
+**Evidence Pack:** E6 gap + E5 gap both now carry launch-blocker status in Summary table.
+
+### A1.5 — Deletion-request mechanism: `business_deletion_requests` table (T5)
+
+**Decision:** User-facing "delete my account" flow will submit a row to a new `public.business_deletion_requests` table. The 30-day cron (A1.4 F-1) reads this table to schedule purges.
+
+**Table spec:**
+```sql
+CREATE TABLE public.business_deletion_requests (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  business_id   uuid NOT NULL REFERENCES public.businesses(id),
+  requested_at  timestamptz NOT NULL DEFAULT now(),
+  verified_at   timestamptz,          -- set when user confirms via email link
+  scheduled_purge_at timestamptz,     -- set to verified_at + 30 days
+  purged_at     timestamptz           -- set by cron after purge completes
+);
+-- RLS: owner can read own row; only service-role can write purged_at
+```
+
+**Effect on ADR prose:**
+- §13 Privacy Policy §9 ("Your rights — Erasure") — the erasure mechanism is: *"To request deletion of your account and all associated data, use the 'Delete account' option in Settings. We will send a confirmation email. Once confirmed, your data will be permanently deleted within 30 days."*
+- §17 Builder hand-off — add **G (migration):** create `supabase/migrations/YYYYMMDDHHMMSS_business_deletion_requests.sql` with the spec above.
+
+### A1.6 — [LEGAL ENTITY] placeholder: deliberate gate (T6)
+
+**Decision:** No change. [LEGAL ENTITY] remains as a deliberate placeholder throughout §12 and §13. Substitution is gated on counsel ratification (§16). This amendment documents the decision explicitly so it is not treated as an oversight by future sessions.
+
+### A1.7 — Anthropic US posture confirmed; [VERIFY] marker removed (T7)
+
+**Decision:** Anthropic operates from the US. The transfer mechanism is EU-US Data Privacy Framework (DPF). Anthropic's current DPF participation must be verified at dataprivacyframework.gov before go-live (not a day-one blocker, but a pre-launch gate).
+
+**Effect on ADR prose:**
+- §14 Subprocessors List, Anthropic row — remove `[VERIFY]` from the "Region" cell. Set to "US (EU-US DPF)".
+- §13 Privacy Policy §10 ("International transfers") — add: *"Anthropic (our AI provider) is based in the United States. We rely on the EU-US Data Privacy Framework as the transfer mechanism for data processed by Anthropic. You can verify Anthropic's current certification at dataprivacyframework.gov."*
+
+**Evidence Pack:** E9 Anthropic row updated; V2 [VERIFY] marker closed.
+
+### A1.8 — Email webhook events: add to Privacy Policy §2 (T8)
+
+**Decision:** Resend sends webhook events (delivered, opened, bounced, complained) back to SOSH. These events are stored and constitute personal data processing. Must be disclosed.
+
+**Effect on ADR prose:**
+- §13 Privacy Policy §2 ("What we collect") — under "Service data", add bullet: *"Email engagement events (delivery status, open events, bounce and complaint signals) received from our email provider (Resend) as webhooks. These are used to manage your subscription communications and suppress future emails where required by anti-spam law."*
+
+### A1.9 — Security contact: add to Privacy Policy §11 (T9)
+
+**Decision:** security@sosh.app is the designated contact for security disclosures.
+
+**Effect on ADR prose:**
+- §13 Privacy Policy §11 ("Contact") — add: *"To report a security vulnerability, contact security@sosh.app."*
+
+### A1.10 — Cookie inventory: backlog, not launch blocker (T10)
+
+**Decision:** Cookie inventory check (browser devtools inspection in staging) is a pre-launch gate but not a day-one build blocker. Add to launch checklist §9.
+
+**Effect on ADR prose:** None — the cookie section (§12 ToS §14, §13 Privacy Policy §4) does not change until the inventory is confirmed. Builder must not transcribe cookie claims until inspection is complete.
+
+**Launch checklist:** Add row: "Cookie inventory — inspect staging browser, confirm only `sb-<ref>-auth-token` is set; no banner needed. [VERIFY V10, V11, V12]"
+
+### A1.11 — Svix client-verify mode: launch blocker (T12)
+
+**Decision:** Svix must be configured in client-verify mode only (HMAC signature verification, no Svix-side event storage). This must be confirmed before go-live.
+
+**Effect on ADR prose:**
+- §14 Subprocessors List, Svix row — add note: *"Client-verify mode only — webhook payloads are not stored by Svix."*
+- §17 Builder hand-off — add **H (launch blocker):** confirm `SVIX_CLIENT_VERIFY=true` (or equivalent SDK flag) is set in production environment variables. Log evidence in `docs/reviews/` or equivalent.
+
+**Evidence Pack:** V13 [VERIFY] marker retained; now a named launch blocker.
+
+---
+
+**Amendment A1 signed off by:** Tiago Crebelo, 2026-06-13
+**Evidence Pack state after amendment:** `docs/evidence/0010-legal-evidence.md` (amended 2026-06-13, commit to be tagged by Builder)
+**Next action:** Builder session — transcribe §12/§13/§14 prose into MDX, implement T5 migration, implement A1.4 cron jobs, complete Postiz→direct-API migration.

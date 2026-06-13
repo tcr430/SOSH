@@ -1,8 +1,9 @@
 # ADR 0010 — Evidence Pack
 
-**Status:** Phase 0 — awaiting Tiago review  
-**Date:** 2026-06-13  
-**Session:** 17 (Architect, Phase 0)  
+**Status:** Amended — Amendment A1 applied 2026-06-13  
+**Date:** 2026-06-13 (Amendment A1: 2026-06-13)  
+**Session:** 17 (Architect, Phase 0 + Amendment A1)  
+**Evidence commit:** [AMENDMENT_HASH] (supersedes 5f7a2e4)  
 **Purpose:** Ground-truth fact sheet for ADR 0010 legal pages (/terms, /privacy, /subprocessors, DPA).  
 Every claim is cited to a file path and line number. No legal language. No posture recommendations.  
 `[VERIFY: …]` marks facts that require Tiago's confirmation.
@@ -16,15 +17,15 @@ The Evidence Pack is complete without them; Phase 1 is not.
 
 | # | Input needed | Where it appears in ADR 0010 |
 |---|---|---|
-| §0-1 | Legal entity name + jurisdiction of incorporation | ToS "Governing law", legal notices, DPA controller identification |
-| §0-2 | Privacy / legal contact email (e.g. `privacy@sosh.app`) | Privacy Policy "Contact us" section |
-| §0-3 | DPO decision — do we designate one? If yes, name/contact | Privacy Policy "Your rights" (GDPR Art. 37–39) |
-| §0-4 | AI-training posture choice — see E7 for the schema gap | Privacy Policy "How we use your data" + ADR 0010 §17 |
-| §0-5 | Refund posture — no refunds / pro-rata / 14-day cooling-off | ToS "Billing and refunds" |
-| §0-6 | Production domain (e.g. `sosh.app`) | ToS effective URL, DPA reference URL, legal notices |
-| §0-7 | Data-location facts per subprocessor — see E9 for all gaps | Privacy Policy "International transfers" + subprocessor list |
-| §0-8 | Support email (`support@sosh.app`) and abuse email (`abuse@…`) confirmed live | Privacy Policy "Contact us", launch checklist §9 |
-| §0-9 | Security contact (`security@…` or `.well-known/security.txt` URL) | Privacy Policy "Contact us" |
+| §0-1 | Legal entity name + jurisdiction of incorporation | ToS "Governing law", legal notices, DPA controller identification | Let's skip this for now, but consider portugal for jurisdiction
+| §0-2 | Privacy / legal contact email (e.g. `privacy@sosh.app`) | Privacy Policy "Contact us" section | can you with that
+| §0-3 | DPO decision — do we designate one? If yes, name/contact | Privacy Policy "Your rights" (GDPR Art. 37–39) | No yet
+| §0-4 | AI-training posture choice — see E7 for the schema gap | Privacy Policy "How we use your data" + ADR 0010 §17 | 
+| §0-5 | Refund posture — no refunds / pro-rata / 14-day cooling-off | ToS "Billing and refunds" | No refund
+| §0-6 | Production domain (e.g. `sosh.app`) | ToS effective URL, DPA reference URL, legal notices | ok for now
+| §0-7 | Data-location facts per subprocessor — see E9 for all gaps | Privacy Policy "International transfers" + subprocessor list | EU located
+| §0-8 | Support email (`support@sosh.app`) and abuse email (`abuse@…`) confirmed live | Privacy Policy "Contact us", launch checklist §9 | Yes
+| §0-9 | Security contact (`security@…` or `.well-known/security.txt` URL) | Privacy Policy "Contact us" | Yes
 | §0-10 | DPA delivery method — "available on request" or public URL | Privacy Policy "DPA" reference, subprocessors page |
 
 ---
@@ -73,27 +74,23 @@ The Evidence Pack is complete without them; Phase 1 is not.
 - Purpose in codebase: error monitoring and performance tracing. PII scrubber active: `beforeSend: scrubEvent` (`sentry.client.config.ts:10`; `sentry.server.config.ts:10`). `sendDefaultPii: false` (`sentry.client.config.ts:13`). Session Replay explicitly disabled: `replaysSessionSampleRate: 0`, `replaysOnErrorSampleRate: 0` (`sentry.client.config.ts:14-15`) — **no Sentry replay cookies set**
 - Region: [VERIFY: using sentry.io (US) or EU-hosted Sentry instance]
 
-**6. Postiz (self-hosted)**
-- Evidence: no npm package — custom HTTP client in `lib/social/postiz-provider.ts`
-- Config vars: `POSTIZ_BASE_URL` (`lib/config.ts:17`), `POSTIZ_API_KEY` (`lib/config.ts:18`)
-- Purpose in codebase: social publishing proxy — OAuth token exchange, post publishing to LinkedIn/X. All 5 Postiz API calls documented in E10
-- Region: [VERIFY: Hetzner datacenter — Falkenstein (DE), Helsinki (FI), Ashburn (US), or other]
-- **Note:** Postiz is self-hosted by the operator, not a SaaS subprocessor in the traditional sense. The DPA framing differs — Postiz itself does not process data; it is infrastructure the controller operates. Confirm DPA treatment with legal counsel.
+**~~6. Postiz (self-hosted)~~ — REMOVED (Amendment A1, 2026-06-13)**
+Tiago confirmed Postiz is no longer the publishing layer. SOSH is migrating to direct LinkedIn and X API integration. Postiz code still present in codebase as of this amendment (migration WIP — see E10 and launch-checklist blocker). Removed from subprocessor list and legal copy. No DPA treatment required once migration is complete.
 
-**7. Upstash / QStash**
+**6. Upstash / QStash**
 - Evidence: `package.json:33` (`@upstash/qstash: 2.11.0` — pinned exactly per ADR 0005 Amendment 1)
 - SDK construction: `lib/cron/qstash-auth.ts` (`Receiver` class from `@upstash/qstash`)
 - Config vars: `QSTASH_CURRENT_SIGNING_KEY` (`lib/config.ts:68`), `QSTASH_NEXT_SIGNING_KEY` (`lib/config.ts:69`), `CRON_TRIGGER` (`lib/config.ts:67`)
 - Purpose in codebase: cron job scheduling — fires `/api/cron/publish`, `/api/cron/sync-metrics`, `/api/cron/drain-email-outbox`, `/api/cron/trial-warnings` on schedule. Verifies request signatures; does not receive application data beyond the endpoint URL
 - Region: [VERIFY: Upstash region for the QStash account — US or EU]
 
-**8. Vercel**
+**7. Vercel**
 - Evidence: hosting platform — no SDK for core hosting. Analytics SDK: `@vercel/analytics: ^2.0.1` (`package.json:34`); Speed Insights: `@vercel/speed-insights: ^2.0.0` (`package.json:35`)
 - Config var: `VERCEL_GIT_COMMIT_SHA` (`lib/config.ts:98`) — auto-provided by Vercel, not set manually
 - Purpose: Next.js hosting (compute, edge network, build pipeline), Vercel Analytics (cookieless page-view counting), Vercel Speed Insights (Core Web Vitals)
 - Region: [VERIFY: Vercel serverless function region(s) configured for this project]
 
-**9. Svix**
+**8. Svix**
 - Evidence: `package.json:51` (`svix: ^1.95.1`)
 - Purpose in codebase: webhook signature verification for Resend inbound webhooks — `app/api/webhooks/resend/route.ts` verifies payload signature using Svix `Webhook` class
 - Config var: `RESEND_WEBHOOK_SECRET` (`lib/config.ts:24`) — used as Svix signing secret
@@ -102,13 +99,13 @@ The Evidence Pack is complete without them; Phase 1 is not.
 
 **OAuth platforms (not SaaS subprocessors — no DPA required):**
 
-**10. LinkedIn** — `LINKEDIN_CLIENT_ID` / `LINKEDIN_CLIENT_SECRET` (`lib/config.ts:61-62`) — OAuth authorization + post publishing via Postiz  
-**11. X (Twitter)** — `X_CLIENT_ID` / `X_CLIENT_SECRET` (`lib/config.ts:63-64`) — OAuth authorization + post publishing via Postiz  
-**12. Meta (Instagram + Facebook)** — `META_APP_ID` / `META_APP_SECRET` (`lib/config.ts:65-66`) — OAuth authorization (publishing deferred)  
-**13. Threads (Meta)** — uses Meta app credentials — OAuth authorization (publishing deferred)
+**9. LinkedIn** — `LINKEDIN_CLIENT_ID` / `LINKEDIN_CLIENT_SECRET` (`lib/config.ts:61-62`) — OAuth authorization + post publishing (direct API — migration WIP, see E10)  
+**10. X (Twitter)** — `X_CLIENT_ID` / `X_CLIENT_SECRET` (`lib/config.ts:63-64`) — OAuth authorization + post publishing (direct API — migration WIP, see E10)  
+**11. Meta (Instagram + Facebook)** — `META_APP_ID` / `META_APP_SECRET` (`lib/config.ts:65-66`) — OAuth authorization (publishing deferred)  
+**12. Threads (Meta)** — uses Meta app credentials — OAuth authorization (publishing deferred)
 
 ### Drift check
-[VERIFY: Tiago to confirm the above 9 SaaS subprocessors are complete — no other external services in use (e.g. Cloudflare, PostHog, Intercom, HubSpot, etc.)]
+[VERIFY: Tiago to confirm the above 8 SaaS subprocessors are complete — no other external services in use (e.g. Cloudflare, PostHog, Intercom, HubSpot, etc.)]
 
 ---
 
@@ -517,29 +514,15 @@ List all cron routes + orchestrators; map personal-data categories from E2 to de
 
 ---
 
-## E7 — AI training opt-in: does the schema support the chosen posture?
+## E7 — AI training posture (Amendment A1 — Path A confirmed)
 
-### Method
-Grep all `supabase/migrations/*.sql` for `ai_training_opt_in`, `ai_training`, `training_opt`.
+**Confirmed by Tiago 2026-06-13:** Path A. SOSH does not use customer content to train or improve AI models at launch. No schema migration required.
 
-### Finding
-No matches found in any migration. No `ai_training_opt_in` column (or equivalent) exists.
+No `ai_training_opt_in` column exists in any migration (confirmed by grep of `supabase/migrations/*.sql` — no matches for `ai_training_opt_in`, `ai_training`, `training_opt`).
 
-### Three paths available
+Privacy Policy reflects: "We do not currently use customer content to train or improve AI models. If we introduce such processing in future, we will obtain consent and provide 30 days' notice before any such change."
 
-**Path A — "We do not use customer content for model training"**
-- No schema change required
-- Policy claim: SOSH does not use customer post content, brand voice data, or business descriptions to train or fine-tune AI models. The Anthropic API is called with customer data per-request; Anthropic's own data-use terms govern Anthropic's model training practices
-- [VERIFY: confirm Anthropic API data-use terms for the API tier in use — standard API does not train on inputs by default, but confirm for the current account/tier]
-
-**Path B — "Opt-in only; requires schema migration"**
-- Requires: new migration adding `businesses.ai_training_opt_in BOOLEAN NOT NULL DEFAULT false`
-- ADR 0010 §17 would hand this migration to the Session 17 Builder
-
-**Path C — "We do; disclosed"**
-- Requires schema change + explicit informed consent flow at signup
-
-**Tiago must pick A, B, or C (§0 input #4) before Phase 1 begins.**
+Re-open this section when content-based AI improvement is introduced as a product feature.
 
 ---
 
@@ -586,93 +569,113 @@ No marketing, promotional, newsletter, or re-engagement emails are sent.
 ### Method
 Config env vars + package origins + known vendor headquarters. All production regions require Tiago's confirmation.
 
-| Subprocessor | Config evidence | Known HQ | Production region |
-|---|---|---|---|
-| Supabase | `NEXT_PUBLIC_SUPABASE_URL` (`lib/config.ts:101`) | San Francisco, US | [VERIFY: Supabase Dashboard → Project Settings → General → Region] |
-| Anthropic | `ANTHROPIC_API_KEY` (`lib/config.ts:10`) | San Francisco, US | [VERIFY: api.anthropic.com — US-hosted; EU data residency not currently offered] |
-| Stripe | `STRIPE_SECRET_KEY` (`lib/config.ts:19`) | San Francisco, US | [VERIFY: confirm whether Stripe entity is Stripe Inc (US) or Stripe Payments Europe Ltd (Ireland)] |
-| Resend | `RESEND_API_KEY` (`lib/config.ts:23`) | San Francisco, US | [VERIFY: Resend region — US-East by default; EU region available at resend.com/eu] |
-| Sentry | `NEXT_PUBLIC_SENTRY_DSN` (`lib/config.ts:96`) | San Francisco, US | [VERIFY: DSN subdomain — `o<org>.ingest.sentry.io` = US; `o<org>.ingest.de.sentry.io` = EU (GCP Frankfurt)] |
-| Postiz (self-hosted) | `POSTIZ_BASE_URL` (`lib/config.ts:17`) | Self-operated | [VERIFY: Hetzner datacenter — Falkenstein (DE), Helsinki (FI), Ashburn (US), or other] |
-| Upstash / QStash | `QSTASH_CURRENT_SIGNING_KEY` (`lib/config.ts:68`) | San Francisco, US | [VERIFY: Upstash region for the QStash account — US-East-1, EU-West-1, or other] |
-| Vercel | Auto env var (`lib/config.ts:98`) | San Francisco, US | [VERIFY: Vercel project settings → Functions region; default is Washington DC (iad1) or auto-assigned] |
+All regions confirmed EU by Tiago (§0-7, 2026-06-13). Postiz removed.
 
-> **EU data transfer note:** If Supabase is in the EU but Anthropic is US-only, customer content (brand descriptions, post text) is transferred from EU to US on every AI generation call. Standard Contractual Clauses (SCCs) or Anthropic's DPA (if available) would be the transfer mechanism.
-> [VERIFY: does Anthropic offer a DPA / SCCs for the API tier in use?]
+| Subprocessor | Config evidence | Confirmed region |
+|---|---|---|
+| Supabase | `NEXT_PUBLIC_SUPABASE_URL` (`lib/config.ts:101`) | EU |
+| Anthropic | `ANTHROPIC_API_KEY` (`lib/config.ts:10`) | US (DPF transfer — see §7 of ADR 0010) |
+| Stripe | `STRIPE_SECRET_KEY` (`lib/config.ts:19`) | EU [VERIFY: confirm Stripe entity — EU entity vs US entity determines transfer mechanism] |
+| Resend | `RESEND_API_KEY` (`lib/config.ts:23`) | EU |
+| Sentry | `NEXT_PUBLIC_SENTRY_DSN` (`lib/config.ts:96`) | EU |
+| Upstash / QStash | `QSTASH_CURRENT_SIGNING_KEY` (`lib/config.ts:68`) | EU |
+| Vercel | Auto env var (`lib/config.ts:98`) | EU |
+
+> **Anthropic transfer confirmed:** Tiago confirmed US posture. Transfer mechanism: EU-US Data Privacy Framework. Builder confirms current DPF certification at dataprivacyframework.gov before transcription (ADR 0010 §7, Amendment A1 T7 — [VERIFY] marker removed from ADR prose).
 
 ---
 
-## E10 — Third-party platform compliance facts
+## E10 — Third-party platform compliance facts (Amendment A1 — WIP state)
 
-### Method
-`lib/social/postiz-provider.ts` — all `fetch()` calls catalogued. `lib/social/platforms/config.ts` — scope-to-capability mapping.
+### Migration state as of 2026-06-13
 
-### Postiz API endpoints called (all via `POSTIZ_BASE_URL`)
+**[VERIFY: WIP — Postiz still the active publishing path in code. Direct LinkedIn/X API integration not started. The following documents the current code state and the expected end-state data flows. Builder must complete migration before launch.]**
 
-| Method | Endpoint | File:line | Purpose | Data sent | Data received |
-|---|---|---|---|---|---|
-| GET (URL builder) | `/integrations/{platform}/authorize?…` | `postiz-provider.ts:86` | Build OAuth redirect URL | `redirect_uri`, `scope`, `state` (signed JWT) | None (URL only) |
-| POST | `/integrations/{platform}/callback` | `postiz-provider.ts:96` | Exchange OAuth code for tokens | `{ code, redirectUri }` | `accessToken`, `refreshToken`, `expiresIn`, `integrationId`, `username/handle`, `displayName` |
-| POST | `/posts` | `postiz-provider.ts:146` | Publish post | `{ content, tags, media, providers: [{ id: platform_user_id }] }` | `platformPostId`, `publishedAt`, `url` |
-| POST | `/integrations/{platform}/refresh` | `postiz-provider.ts:207` | Refresh access token | `{ refreshToken }` | `accessToken`, `refreshToken` (if rotated), `expiresIn` |
-| POST | `/integrations/{platform}/revoke` | `postiz-provider.ts:301` | Revoke access token (best-effort) | `{ accessToken }` | None (fire-and-forget) |
+Current code files still in place:
+- `lib/social/postiz-provider.ts` — Postiz HTTP client (all 5 API calls)
+- `lib/social/registry.ts:6,34-52` — routes to `PostizProvider`; requires `POSTIZ_BASE_URL` + `POSTIZ_API_KEY`
 
-### What data reaches the social platforms (via Postiz)
+No direct-API provider files exist yet (`lib/social/linkedin-provider.ts`, `lib/social/x-provider.ts` — absent as of grep 2026-06-13).
 
-| Platform | Data sent at publish | Data received and stored |
-|---|---|---|
-| LinkedIn | Post text, hashtags, platform_user_id | platform_post_id, published_at, post URL |
-| X (Twitter) | Post text, hashtags, platform_user_id | platform_post_id, published_at, post URL |
-| Instagram | OAuth account linking only (no publishing at launch) | platform_user_id, username, display_name |
-| Facebook | OAuth account linking only (no publishing at launch) | platform_user_id, username, display_name |
-| Threads | OAuth account linking only (no publishing at launch) | platform_user_id, username, display_name |
+No LinkedIn or X SDK packages in `package.json` (e.g. `linkedin-api-client`, `twitter-api-v2` — absent).
 
-### Methods not implemented in Phase 1
-- `fetchPostMetrics` — `postiz-provider.ts:169-175` — throws `NOT_IMPLEMENTED`. No post engagement data is fetched from any platform at launch.
-- `fetchEngagement` — `postiz-provider.ts:177-183` — throws `NOT_IMPLEMENTED`. No comments, DMs, or mentions are fetched at launch. (`engagement_inbox` table exists but is empty.)
+### End-state data flows (legal copy reflects this state)
 
-### Platform-specific compliance items requiring Tiago confirmation
-[VERIFY: each platform's API ToS restricts what SOSH may do with the data received. Confirm before ToS §9 is written:]
-1. LinkedIn API ToS — confirm `w_member_social` permits scheduled posting via a third-party intermediary (Postiz); confirm data-use restrictions on `profile` and `email` scope data
-2. X API ToS — confirm tier (Free / Basic / Pro) and whether it permits automated posting; confirm display requirement for `tweet.read` data
-3. Meta/Instagram API ToS — Instagram basic display data (username, profile) has specific display and retention restrictions; confirm since publishing is not yet active
-4. Threads API — confirm Threads API usage policy for third-party apps
+Regardless of routing (Postiz or direct), the data that leaves SOSH and reaches each platform is identical. The intermediary changes; the data flows do not.
+
+**OAuth token exchange (all platforms):**
+- Data sent to platform: `code`, `redirect_uri`, `client_id`, `client_secret`
+- Data received from platform: `access_token`, `refresh_token`, `expires_in`, platform user ID, username, display name
+- Stored: vault secrets (access + refresh tokens); `social_accounts` (username, display name, platform_user_id — E2)
+
+**Post publishing (LinkedIn, X):**
+- Data sent to platform: post text (`posts.content`, E2), hashtags (`posts.hashtags`, E2), platform user ID (as authorisation context)
+- Data received: `platform_post_id`, published timestamp, post URL — stored in `posts` (E2)
+
+**Token refresh (LinkedIn, X):**
+- Data sent: refresh token (from Vault)
+- Data received: new access token, optionally new refresh token — updated in Vault
+
+**Token revocation on disconnect (best-effort):**
+- Data sent: access token (from Vault)
+- Data received: none (fire-and-forget, E5)
+
+**Account linking only, no publishing (Instagram, Facebook, Threads):**
+- Data sent: OAuth code exchange only
+- Data received: platform user ID, username, display name — stored in `social_accounts`
+
+### Metrics and engagement (Phase 1)
+
+No post metrics or engagement data are fetched from any platform at launch. The `SocialProvider` interface defines `fetchPostMetrics` and `fetchEngagement`; both currently throw `NOT_IMPLEMENTED` (`lib/social/postiz-provider.ts:169-183` — Builder migrating to direct API must preserve this behaviour until Phase 2).
+
+### Platform-specific compliance items
+[VERIFY: before ToS §9 is finalised:]
+1. LinkedIn API ToS — confirm `w_member_social` permits automated/scheduled posting via a third-party app; confirm data-use restrictions on `profile` and `email` scope data
+2. X API ToS — confirm tier (Free / Basic / Pro) and whether it permits automated posting at the volume planned; confirm display requirements for `tweet.read` data
+3. Meta/Instagram API ToS — Instagram basic display data has specific retention restrictions; confirm since publishing is not active
+4. Threads API — confirm usage policy for third-party scheduling apps
 
 ---
 
-## Summary of open items for Tiago
+## Summary of open items (Amendment A1 state — 2026-06-13)
 
-### §0 inputs (required before Phase 1)
-See the table at the top of this document — all 10 items remain open.
+### §0 inputs — resolved
+All 10 §0 inputs were answered before Phase 1 (ADR 0010) was written. Amendment A1 further resolved:
+- AI training posture → Path A (T2): no opt-in, no schema migration required at launch
+- Postiz removed as subprocessor (T1): direct LinkedIn/X API integration WIP
+- Vault deletion alert → Sentry `captureException` required (T4/T11): launch blocker
+- Deletion mechanism → `business_deletion_requests` table spec (T5): Builder task
+- Refund posture → no pro-rata refund (T3): aligned with ToS §5
 
-### [VERIFY] markers requiring Tiago's confirmation
-| # | Question |
-|---|---|
-| V1 | Supabase project region |
-| V2 | Anthropic EU data residency availability for your tier |
-| V3 | Stripe entity (US vs EU) |
-| V4 | Resend region (US or EU) |
-| V5 | Sentry instance (sentry.io US vs EU) |
-| V6 | Postiz / Hetzner datacenter location |
-| V7 | Upstash QStash region |
-| V8 | Vercel functions region |
-| V9 | Anthropic DPA / SCCs availability |
-| V10 | Exact Supabase auth cookie name (inspect browser devtools) |
-| V11 | Vercel Analytics and Speed Insights are cookieless (confirm via Vercel docs) |
-| V12 | next-intl locale cookie — confirm none set |
-| V13 | Complete subprocessor list — any SaaS not in E1? (Svix confirm client-verify mode only) |
-| V14 | Vault deletion failure posture (silent-swallow acceptable for Privacy Policy claim?) |
-| V15 | User-facing "delete my account" flow — exists or not? |
-| V16 | `payment-failed-courtesy` email — treat as "live at launch" or explicitly excluded from policy? |
-| V17 | LinkedIn / X / Meta / Threads API ToS review (platform-by-platform) |
-| V18 | Postiz self-hosted — treat as controller-operated infrastructure or as a subprocessor in DPA? |
-
-### Structural gaps found in codebase
-| Gap | Evidence | Phase 1 implication |
+### [VERIFY] markers — status after Amendment A1
+| # | Question | Status |
 |---|---|---|
-| No deletion jobs | E6 — no cron deletes personal data | Privacy Policy cannot claim retention periods without implementing them |
-| No AI training schema | E7 — no `ai_training_opt_in` column | Policy must reflect chosen posture; Path B requires a Builder migration |
-| Vault deletion best-effort | E5 — `try {} catch {}` silently swallows failures | Policy claim must be qualified, or Sentry alert added |
-| `engagement_inbox` third-party PII | E2 — `author_username` / `content` from commenters | Must disclose in Privacy Policy; ingestion not active at launch |
-| `billing_events.payload` contains customer email | E2 — raw Stripe JSON stored | Must be disclosed as a data category; no expiry job |
-| `auth_rate_limits.bucket_key` contains IPs + emails | E2 — composite key pattern | Must be disclosed; no expiry job |
+| V1 | Supabase project region | ✅ EU (confirmed) |
+| V2 | Anthropic EU data residency | ✅ US / EU-US DPF (confirmed T7) |
+| V3 | Stripe entity | ✅ EU (confirmed) |
+| V4 | Resend region | ✅ EU (confirmed) |
+| V5 | Sentry instance | ✅ EU (confirmed) |
+| V6 | Postiz / Hetzner | ✅ Closed — Postiz removed (T1) |
+| V7 | Upstash QStash region | ✅ EU (confirmed) |
+| V8 | Vercel functions region | ✅ EU (confirmed) |
+| V9 | Anthropic DPA / SCCs | ⚠ [VERIFY: WIP] — confirm DPF current at dataprivacyframework.gov before go-live |
+| V10 | Supabase auth cookie name | ⚠ [VERIFY: WIP] — inspect staging browser devtools before launch |
+| V11 | Vercel Analytics / Speed Insights cookieless | ⚠ [VERIFY: WIP] — confirm via Vercel docs; backlog, not launch blocker |
+| V12 | next-intl locale cookie | ⚠ [VERIFY: WIP] — confirm none set; backlog, not launch blocker |
+| V13 | Svix client-verify mode only | ⚠ [VERIFY: WIP] — launch blocker (T12) |
+| V14 | Vault deletion failure posture | ✅ Resolved — Sentry alert required (T4/T11), launch blocker |
+| V15 | User-facing "delete my account" flow | ⚠ [VERIFY: WIP] — `business_deletion_requests` table to be built (T5) |
+| V16 | `payment-failed-courtesy` email | ✅ Excluded from launch scope; backlog |
+| V17 | LinkedIn / X / Meta / Threads API ToS | ⚠ [VERIFY: WIP] — required before ToS §9 finalised; see E10 |
+| V18 | Postiz self-hosted DPA posture | ✅ Closed — Postiz removed (T1) |
+
+### Structural gaps — status after Amendment A1
+| Gap | Evidence | Status |
+|---|---|---|
+| No deletion jobs | E6 — no cron deletes personal data | ⚠ Launch blocker (T4): 30-day hard-delete cron + auth_rate_limits TTL purge required |
+| AI training schema | E7 — no `ai_training_opt_in` column | ✅ Closed (T2): Path A at launch; no migration needed |
+| Vault deletion best-effort | E5 — `try {} catch {}` swallows failures | ⚠ Launch blocker (T4/T11): add `captureException` to `lib/social/social-accounts.ts` |
+| `engagement_inbox` third-party PII | E2 — `author_username` / `content` | ✅ Disclosed in Privacy Policy §6; ingestion not active at launch |
+| `billing_events.payload` contains customer email | E2 — raw Stripe JSON | ✅ Disclosed in Privacy Policy §2 (T8 email webhook events) |
+| `auth_rate_limits.bucket_key` contains IPs + emails | E2 — composite key | ✅ Disclosed in Privacy Policy §2; no expiry job → launch blocker via E6/T4 |
+| Postiz → direct API migration | E10 — WIP | ⚠ Launch blocker (T1): complete before go-live |
