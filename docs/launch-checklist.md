@@ -267,12 +267,30 @@ Not configured at launch (Vercel Hobby plan). When the project upgrades to Verce
 These items are required by ADR 0010 and are not yet in the codebase. Each blocks the Stripe live-mode flip.
 
 - [ ] **Counsel ratification gate.** A lawyer must review the ADR 0010 prose before it ships in `content/legal/`. Redlines come back as a correction PR. Blocks §6 (Stripe live-mode flip). Record sign-off date here: `<fill>`.
-- [ ] **AI training opt-in migration.** Add `businesses.ai_training_opt_in BOOLEAN NOT NULL DEFAULT false` (ADR 0010 §4, E7 — Path B). Builder session required.
-- [ ] **AI training opt-in UI.** Account settings screen must expose a toggle wired to `businesses.ai_training_opt_in`. No retroactive processing of data collected before opt-in.
-- [ ] **Deletion jobs.** E6 found zero scheduled deletion jobs. ADR 0010 §5 retention map commits to specific periods. Builder must implement: (a) hard-delete of businesses + cascade 30 days after deletion request; (b) `auth_rate_limits` TTL purge (buckets older than 30 days). Record implementation session: `<fill>`.
-- [ ] **Vault deletion Sentry alert.** E5: vault deletion is best-effort (silent catch). Add `captureException` on vault RPC failure so orphaned vault secrets surface in Sentry.
-- [ ] **`/subprocessors` route.** New Next.js route + MDX file at `content/legal/subprocessors.en.mdx`. Builder transcribes ADR 0010 §14. Footer link: "Subprocessors".
-- [ ] **Legal MDX `evidenceRef` frontmatter.** Each file in `content/legal/` must carry `evidenceRef: 5f7a2e4` (Evidence Pack commit hash). Future PRs must update this ref if evidence changes.
+- [x] **`/subprocessors` route.** `content/legal/subprocessors.en.mdx` transcribed (ADR 0010 §14 + A1 deltas). Route live at `app/[locale]/(marketing)/subprocessors/page.tsx`. Footer link "Subprocessors" added (Session 17B).
+- [x] **Legal MDX transcription.** `content/legal/terms.en.mdx` and `content/legal/privacy.en.mdx` transcribed from ADR 0010 §12/§13 with all A1 deltas applied. `evidenceRef: 5f7a2e4` set in all three files (Session 17B).
+- [x] **Vault deletion Sentry alert.** Silent `catch {}` blocks in `lib/db/social-accounts.ts` replaced with `captureException(err, { tags: { operation: 'vault_delete_secret' } })` (Session 17B). (A1.4/T11)
+
+**From A1.2 (Path A — no AI training at launch):**
+- [ ] Confirmed: no `ai_training_opt_in` column exists in production schema (no migration required at launch). (A1.2)
+
+**From A1.4 / T4 (deletion infrastructure — launch blockers):**
+- [ ] 30-day hard-delete cron for `business_deletion_requests` deployed and executing on schedule in production. `business_deletion_requests` table migration applied (Session 17B). (Pending — backlog session.)
+- [ ] `auth_rate_limits` TTL purge cron deployed and executing on schedule in production. (Pending — backlog session.)
+- [ ] In-app Delete Account flow (Settings → Delete Account) shipped, with email-verification round-trip, writing into `business_deletion_requests`. (Pending — backlog session.)
+- [ ] Amendment A2 to ADR 0010 swapping §13 §9 Erasure prose from email-based to in-app-based wording, applied after the in-app flow is live.
+
+**From A1.7 (Anthropic DPF):**
+- [ ] Anthropic PBC's current EU-US DPF certification verified at dataprivacyframework.gov within 30 days of go-live.
+
+**From A1.10 (Cookie inventory):**
+- [ ] Cookie inventory inspection: confirmed only `sb-<ref>-auth-token` is set in staging; no banner needed. [VERIFY V10, V11, V12]
+
+**From A1.11 (Svix — client-verify mode):**
+- [ ] Svix SDK configured in client-verify mode only; `SVIX_CLIENT_VERIFY=true` (or equivalent SDK flag) confirmed in production environment.
+
+**From §16 (entity gate):**
+- [ ] All `[LEGAL ENTITY]` placeholders in `content/legal/*.mdx` replaced with the actual incorporated legal entity name after counsel ratification.
 
 ### Transactional Email (ADR 0008)
 
@@ -368,6 +386,20 @@ These items are required by ADR 0010 and are not yet in the codebase. Each block
 ### Tests
 - [x] Route smoke test green (5 routes 200; hero phrase + price strings present; legal links resolve)
 - [x] PricingCards unit test green (reads getPlanCapabilities, renders both plans)
+
+## 16. Postiz removal
+
+> **Context:** ADR 0010 Amendment A1 (2026-06-13) committed to removing Postiz in favour of direct LinkedIn and X API integrations. These rows track complete removal — a half-removal leaves dead code that future audits read as "we use Postiz."
+
+- [ ] `lib/social/postiz-provider.ts` deleted from the repo.
+- [ ] `POSTIZ_BASE_URL` and `POSTIZ_API_KEY` removed from `lib/config.ts`, `.env.local.example`, and Vercel/Supabase production env vars.
+- [ ] `lib/social/registry.ts` confirmed to route exclusively to the direct LinkedIn and X providers; no Postiz code path reachable.
+- [ ] ESLint `no-restricted-imports` rule for `postiz-provider` removed (rule is moot once the file is gone).
+- [ ] Integration test `POSTIZ_INTEGRATION_TEST_ENABLED` gate and any associated tests removed (`lib/social/__integration__/postiz-provider.integration.test.ts`, `lib/social/__tests__/postiz-provider.test.ts`).
+- [ ] `current-phase.md` and `CLAUDE.md` references to Postiz archived to "Historical decisions" or removed.
+- [ ] `grep -r postiz` against the repo returns no matches outside `/docs/decisions/` historical ADRs.
+
+---
 
 ## Cross-reference
 
