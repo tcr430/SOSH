@@ -1,3 +1,4 @@
+import { captureException } from '@sentry/nextjs'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Platform, SocialAccountRow, SocialAccountInsert, SocialAccountUpdate } from './types'
 
@@ -106,14 +107,18 @@ export async function deactivateSocialAccount(id: string): Promise<void> {
     await serviceClient.rpc('vault_delete_secret', {
       secret_id: account.vault_access_token_id,
     })
-  } catch {}
+  } catch (err) {
+    captureException(err, { tags: { operation: 'vault_delete_secret' } })
+  }
 
   if (account.vault_refresh_token_id) {
     try {
       await serviceClient.rpc('vault_delete_secret', {
         secret_id: account.vault_refresh_token_id,
       })
-    } catch {}
+    } catch (err) {
+      captureException(err, { tags: { operation: 'vault_delete_secret' } })
+    }
   }
 }
 
