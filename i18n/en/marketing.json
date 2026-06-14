@@ -124,6 +124,7 @@
     "col_legal": "Legal",
     "link_terms": "Terms",
     "link_privacy": "Privacy",
+    "link_subprocessors": "Subprocessors",
     "col_company": "Company",
     "link_signin": "Sign in",
     "link_signup": "Start free trial",
@@ -136,13 +137,15 @@
     "pricing_title": "Pricing — SŌSH",
     "pricing_description": "A social media team's output from €99 a month. 14-day free trial, cancel anytime. Compare Plus and Pro.",
     "terms_title": "Terms — SŌSH",
-    "privacy_title": "Privacy — SŌSH"
+    "privacy_title": "Privacy — SŌSH",
+    "subprocessors_title": "Subprocessors — SŌSH"
   },
   "og": {
     "home": "You built something worth hearing about. SŌSH makes sure your market does.",
     "pricing": "A social media team's output, from €99 a month.",
     "terms": "SŌSH — Terms",
-    "privacy": "SŌSH — Privacy"
+    "privacy": "SŌSH — Privacy",
+    "subprocessors": "SŌSH — Subprocessors"
   },
   "legal_stub": "This document is being finalised. Last updated: TBD."
 }

@@ -18,6 +18,7 @@ export default async function MarketingFooter() {
       heading: t('col_legal'),
       links: [
         { label: t('link_terms'), href: `/${locale}/terms` },
+        { label: t('link_subprocessors'), href: `/${locale}/subprocessors` },
         { label: t('link_privacy'), href: `/${locale}/privacy` },
       ],
     },

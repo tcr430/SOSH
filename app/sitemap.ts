@@ -11,6 +11,7 @@ const ROUTES = [
   { path: '/pricing', priority: 0.9, changeFrequency: 'monthly' },
   { path: '/terms', priority: 0.3, changeFrequency: 'yearly' },
   { path: '/privacy', priority: 0.3, changeFrequency: 'yearly' },
+  { path: '/subprocessors', priority: 0.3, changeFrequency: 'yearly' },
 ] as const
 
 export default function sitemap(): MetadataRoute.Sitemap {

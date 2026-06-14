@@ -4,21 +4,23 @@ import { config } from '@/lib/config'
 
 const LOCALES = ['en', 'pt', 'es'] as const
 
-export type MarketingRoute = 'home' | 'pricing' | 'terms' | 'privacy'
+export type MarketingRoute = 'home' | 'pricing' | 'terms' | 'privacy' | 'subprocessors'
 
 const ROUTE_PATHS: Record<MarketingRoute, string> = {
   home: '',
   pricing: '/pricing',
   terms: '/terms',
   privacy: '/privacy',
+  subprocessors: '/subprocessors',
 }
 
-/** §6.10 defines descriptions for home/pricing only; terms/privacy are title-only. */
+/** §6.10 defines descriptions for home/pricing only; legal pages are title-only. */
 const HAS_DESCRIPTION: Record<MarketingRoute, boolean> = {
   home: true,
   pricing: true,
   terms: false,
   privacy: false,
+  subprocessors: false,
 }
 
 /**
