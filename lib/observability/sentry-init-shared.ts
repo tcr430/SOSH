@@ -1,4 +1,4 @@
-// Shared constants imported by sentry.client.config.ts, sentry.server.config.ts,
+// Shared constants imported by instrumentation-client.ts, sentry.server.config.ts,
 // and sentry.edge.config.ts. Not imported by application code — use scrubEvent
 // from sentry-scrub.ts directly where needed.
 export { scrubEvent } from './sentry-scrub'
