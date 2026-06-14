@@ -22,7 +22,6 @@ function useReveal<T extends HTMLElement>(): React.RefObject<T | null> {
   useEffect(() => {
     const el = ref.current
     if (!el) return
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
     // Already in (or near) view at hydration — render in place, no entrance.
     if (el.getBoundingClientRect().top < window.innerHeight * NEAR_VIEWPORT_FRACTION) return
 

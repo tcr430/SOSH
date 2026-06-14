@@ -2,7 +2,7 @@
 
 **Phase:** 1 — MVP
 **Goal:** First paying customer
-**Status:** Session 16 Builder complete — Landing Page & Positioning (ADR 0009, B1–B6). Marketing surface live: `/`, `/pricing`, `/terms`, `/privacy`, `/og` across en/pt/es. Reviewer session pending.
+**Status:** Session 17B Builder complete — Legal Surface (ADR 0010 + Amendment A1). Terms, Privacy, Subprocessors MDX live. `/subprocessors` route, `business_deletion_requests` migration, vault Sentry monitoring, launch checklist §9 updated. Reviewer session pending.
 
 ## What's done
 - Session 0: Environment setup complete
@@ -683,48 +683,61 @@
     `transitionEmailOutboxRow` filed (email-outbox.ts not modified).
   - Full suite: 720 tests passed / 0 failed; tsc clean.
 
-- **Session 16 (Builder) — Landing Page & Positioning (ADR 0009, B1–B6):**
-  - **B1:** `marketing` i18n namespace (EN verbatim from ADR §6; PT/ES EN-fallback + `_todo`
-    sentinel); placeholder `marketing.hero` removed from common.json (all locales);
-    `(marketing)` chrome: MotionProviders (`MotionConfig reducedMotion="user"`),
-    MarketingHeader, MarketingFooter, LocaleSwitcher; §3.4 path change — `/` is the
-    canonical homepage; `(marketing)/home/` and `app/[locale]/page.tsx` deleted
-  - **B2:** `MARKETING_PLANS` + `pricingFeatureRows` in lib/stripe/plan.ts (§5.2);
-    shared no-props `<PricingCards />`; `<PricingFaq />` (native details/summary);
-    `/pricing` composition
-  - **B3:** Section/StaggerItem canonical motion wrapper (§8); six homepage sections
-    (Hero, TheGap, HowItWorks, WhatYouGet, WhereWeStand, FinalCta); `/` spine composed
-    with pricing block + see_all deep-link
-  - **B4:** @next/mdx + remark-frontmatter wiring; content/legal stubs (§6.15 sentence
-    only); LegalPage wrapper; /terms + /privacy routes; deps added: remark-frontmatter,
-    remark-mdx-frontmatter, @tailwindcss/typography
-  - **B5:** marketingMetadata helper (meta/OG/twitter/hreflang/x-default); Edge
-    `/og` ImageResponse route (§6.14 strings, Stone hex literals); root app/sitemap.ts
-    (12 URLs); app/robots.ts
-  - **B6:** pricingFeatureRows unit tests (drift guard, §14); env-gated route smoke test
-    (5/5 green against live server); launch-checklist §11 added; this status update
-  - **Fixes found during build (logged in .wolf/buglog.json):** middleware
-    PUBLIC_SEGMENTS updated for marketing routes (was 307→login); conflicting
-    `(dashboard)/page.tsx` deleted (two pages resolved `/{locale}`); APP_URL
-    trailing-slash double-slash in sitemap/robots
-  - **Reviewer flags:** skip-link label hardcoded (no §6 key — i18n gap);
-    StaggerItem implements §8 stagger via `delay: i*0.08` (constants use whileInView,
-    not variants); root sitemap.ts instead of ADR §3.1's `app/[locale]/sitemap.ts`
-    (crawler-findable at /sitemap.xml); `(dashboard)/page.tsx` deletion touches a
-    group the ADR declared untouched (unavoidable per §3.4)
+- **Session 17B complete — Legal Surface (ADR 0010 + Amendment A1):**
+  - `content/legal/terms.en.mdx` — full Terms of Service prose from ADR 0010 §12 with A1 deltas
+    applied (A1.1: §9 direct LinkedIn/X API wording; A1.3: §18 end-of-billing-period termination remedy)
+  - `content/legal/privacy.en.mdx` — full Privacy Policy from ADR 0010 §13 with A1 deltas
+    (A1.2 Path A: no AI training row, no Art. 7(3) bullet; A1.7: DPF explicit cite;
+    A1.8: email webhook events bullet; A1.9: security@sosh.app; §8 erasure → email-based override)
+  - `content/legal/subprocessors.en.mdx` — Subprocessors list from ADR 0010 §14 with A1 deltas
+    (A1.1: no Postiz row; A1.7: Anthropic "US (EU-US DPF)"; A1.11: Svix client-verify note;
+    A1.3: end-of-billing-period sub-processor change remedy)
+  - All three MDX files carry `evidenceRef: "5f7a2e4"` frontmatter locking to Evidence Pack commit
+  - `[LEGAL ENTITY]` placeholder deliberately retained — gated on counsel ratification (ADR §16)
+  - `app/[locale]/(marketing)/subprocessors/page.tsx` — new route mirroring terms/privacy pattern
+  - `components/marketing/LegalPage.tsx` extended for `'subprocessors'` slug
+  - `lib/marketing/metadata.ts` — `MarketingRoute` + `ROUTE_PATHS` extended with `subprocessors`
+  - `app/sitemap.ts` — `/subprocessors` added (priority 0.3, changeFrequency yearly)
+  - `i18n/en/marketing.json` — `footer.link_subprocessors`, `meta.subprocessors_title`, `og.subprocessors`
+  - `i18n/pt/marketing.json` + `i18n/es/marketing.json` — same keys with `_todo` sentinel (ADR 0009 §10)
+  - `components/marketing/MarketingFooter.tsx` — legal column: Terms → Subprocessors → Privacy
+  - `supabase/migrations/20260614021500_business_deletion_requests.sql` — TABLE + RLS SELECT policy;
+    cron/UI/TTL purge deferred to backlog per session hard constraints
+  - `lib/db/social-accounts.ts` — two silent `catch {}` blocks replaced with
+    `captureException(err, { tags: { operation: 'vault_delete_secret' } })` from `@sentry/nextjs`
+  - `docs/launch-checklist.md` §9 — A1 gate items fully expanded (A1.2 Path A, A1.4 deletion jobs ×4,
+    A1.7 DPF gate, A1.10 cookie inventory, A1.11 Svix client-verify, §16 entity gate)
+  - `CLAUDE.md` — "Legal pages" section added (evidenceRef rule + [LEGAL ENTITY] gate)
+  - 5 commits: `5747873` (MDX), `6bcfc67` (migration), `756b76a` (route+i18n+footer),
+    `aed2f8e` (Sentry), `223a23c` (checklist)
+  - Backlog: 30-day purge cron, in-app Delete Account flow, auth_rate_limits TTL purge,
+    Amendment A2 to ADR 0010, PT/ES legal copy translations
+
+- **Session 16 complete — Landing Page & Positioning (ADR 0009 + Amendments A1, A2):**
+  - Five public routes (`/`, `/pricing`, `/terms`, `/privacy`, `/og`) across en/pt/es in the `(marketing)` route group; MarketingHeader, MarketingFooter, LocaleSwitcher; §3.4 path change (`/` is canonical homepage)
+  - Locked EN copy namespace (`i18n/en/marketing.json` verbatim from ADR §6); PT/ES EN-fallback + `_todo` sentinel per §10 wart; `marketing.hero` placeholder removed from common.json
+  - Shared no-props `<PricingCards />` + `<PricingFaq />` (native `<details>`/`<summary>`); `pricingFeatureRows` in `lib/stripe/plan.ts` — zero price drift possible
+  - MDX legal stubs (§6.15 sentence only); Edge OG ImageResponse route (Stone hex, 1200×630); root `app/sitemap.ts` (12 URLs, 4 routes × 3 locales with `alternates.languages`); `app/robots.ts`
+  - **Amendment A1 (2026-06-12):** CSS-only motion migration — Framer Motion uninstalled; IntersectionObserver + `@starting-style` + single `@media (prefers-reduced-motion: no-preference)` block in `globals.css`; `MotionProviders.tsx` and `motion.ts` deleted
+  - **Amendment A2 (2026-06-13):** ADR documentation corrections — §3.1 sitemap path and §5.3 button variant aligned to implementation; no code changes
+  - Reviewer audit: 0 BLOCKERs, 0 MAJORs; MINOR-2 corrected (ADR §3.1 diagram); MINOR-3 resolved (redundant `matchMedia` JS guard removed from `Section.tsx`); MINOR-1 deferred → backlog L-16-1; NIT-3 no-action (locale_label confirmed consumed in LocaleSwitcher)
+  - Launch-checklist §11: 13 of 15 rows ticked; 2 perf/CWV rows blocked (Turbopack compilation succeeds; `npm run build` fails at TS check on pre-existing ECC Remotion error — route table not printed)
+  - Tests: 426 passing, 0 failed; tsc clean (SOSH files)
 
 ## What's next
 
-**Session 16 (Reviewer) — audit the ADR 0009 marketing surface**
+Pre-launch hardening sweep per `docs/launch-checklist.md` and `docs/backlog.md`:
 
-Then: pre-launch hardening sweep per `docs/launch-checklist.md` and `docs/backlog.md`:
-
-- Pre-launch debt: items in `docs/backlog.md` (L-05 atomic guard, footer 13px fix, suppressed
-  error code, svix-id ADR drift, locale-snapshot test)
-- Smoke tests: Resend sandbox sends for all 5 email kinds; Stripe smoke tests A–F
-- Launch-checklist verification pass: confirm all §1–§3 rows are actionable
-- Core Web Vitals lab check on `/` and `/pricing` (needs a production-build serve;
-  `npm run build` still fails pre-existing — ECC remotion issue, see Known gotchas)
+- **Legal Reviewer session (Session 17C):** typescript-reviewer + security-reviewer audit of Session 17B
+  output (MDX, migration, route, Sentry wiring)
+- **Open legal gates (§9):** counsel ratification → [LEGAL ENTITY] substitution; Anthropic DPF
+  verification at dataprivacyframework.gov; cookie inventory in staging; Svix client-verify confirm
+- **Postiz removal workstream (§16):** separate from legal — migrate lib/social/ to direct LinkedIn/X APIs
+- **Backlog deletions:** 30-day hard-delete cron; in-app Delete Account flow; auth_rate_limits TTL purge
+- **Perf/CWV gates (§11, 2 rows):** tick first-load JS ≤ 90 KB gz + LCP/CLS/INP lab check once `npm run build` ECC Remotion issue is resolved
+- **Pre-launch debt:** items in `docs/backlog.md` (A4 suppressed error code, E5 footer 13px, L-05 atomic guard, L-16-1 skip-to-content i18n)
+- **Smoke tests:** Resend sandbox sends for all 5 email kinds; Stripe smoke tests A–F
+- **Launch-checklist verification pass:** confirm all §1–§10 rows are actionable
 
 ---
 
