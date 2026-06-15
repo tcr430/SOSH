@@ -882,3 +882,255 @@ CREATE TABLE public.business_deletion_requests (
 **Amendment A1 signed off by:** Tiago Crebelo, 2026-06-13
 **Evidence Pack state after amendment:** `docs/evidence/0010-legal-evidence.md` (amended 2026-06-13, commit to be tagged by Builder)
 **Next action:** Builder session — transcribe §12/§13/§14 prose into MDX, implement T5 migration, implement A1.4 cron jobs, complete Postiz→direct-API migration.
+
+---
+
+## Amendment 2 — Hard-Delete Cron (2026-06-14)
+
+### Status
+
+Accepted. Supersedes the "mechanism TBD" / implicit-manual posture of §17-F-11 and A1.4 F-1. Locks the **executor** of the 30-day GDPR erasure that §13 Privacy Policy §9 promises. Architect-designed in Session 18B-1 Phase A; Builder implements against this Amendment in Phase B. No file other than this ADR, `CLAUDE.md`, and `docs/session-18-triage.md` was changed by the Architect.
+
+### Context
+
+§13 (Privacy Policy §9, "Your rights — Erasure") commits SOSH to permanently delete a customer's account and all associated data **within 30 days** of a verified deletion request. A1 (2026-06-13) chose an **email-based** request flow: a row is recorded in `public.business_deletion_requests` (A1.5, migration `20260614021500_business_deletion_requests.sql`), manually at launch from a `privacy@` request. A1.4 named the table and the 30-day window but left the **executor unspecified** ("mechanism TBD"). This Amendment locks that executor as a daily QStash-triggered cron that mirrors the ADR 0008 email-drain pattern and the ADR 0005 A1 QStash thin-route convention.
+
+A pre-write cascade audit (Step 3 below) walked every migration in `supabase/migrations/` in order to enumerate every business-scoped table and prove that the purge leaves no orphaned personal data. **This is the load-bearing safety property: a deletion request that reports success must leave zero customer rows behind, including Vault secrets and the `auth.users` identity row.**
+
+### Decision
+
+#### D2.1 — Schema delta to `business_deletion_requests`
+
+The A1.5 table lacks state-machine columns and its FK to `businesses` is **ON DELETE NO ACTION**, which would block the very `DELETE FROM businesses` the purge performs (the audit row references the business being deleted). Builder applies a forward migration:
+
+```sql
+-- 1. State-machine columns (mirror email_outbox)
+ALTER TABLE public.business_deletion_requests
+  ADD COLUMN status text NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending','processing','completed','failed','abandoned')),
+  ADD COLUMN attempts int NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+  ADD COLUMN next_attempt_at timestamptz,
+  ADD COLUMN last_error text,
+  ADD COLUMN updated_at timestamptz NOT NULL DEFAULT now();
+
+-- 2. Decouple the FK so the audit row survives the hard-delete of its business.
+--    business_id is retained as a bare uuid NOT NULL: the row's purpose at rest
+--    is to be an erasure-audit record keyed on a business_id that no longer
+--    exists. Preserving referential integrity to a deleted parent is the wrong
+--    semantic; SET NULL would erase *which* business was purged. Drop it.
+ALTER TABLE public.business_deletion_requests
+  DROP CONSTRAINT business_deletion_requests_business_id_fkey;
+
+-- 3. Drainer scan index (mirror email_outbox_drainable_idx). Covers the two
+--    claimable states; 'processing' rows are re-found by their own PK, not scanned.
+CREATE INDEX business_deletion_requests_claimable_idx
+  ON public.business_deletion_requests (requested_at)
+  WHERE status IN ('pending','failed');
+
+-- 4. updated_at trigger, for consistency with every other queue table.
+CREATE TRIGGER trg_business_deletion_requests_updated_at
+  BEFORE UPDATE ON public.business_deletion_requests
+  FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+```
+
+`purged_at` (already present) is reused as the completion timestamp; no new column.
+
+#### D2.2 — Status machine
+
+States: `pending` → `processing` → (`completed` | `failed`); `failed` → `processing` (retry); `processing` → `abandoned` (terminal-failure). Every transition is a single UPDATE guarded on both the PK **and** the source status (CLAUDE.md atomic-transition rule). The claim RPC owns `pending|failed → processing`; the orchestrator owns all exits from `processing`.
+
+| Transition | Owner | Guard |
+|---|---|---|
+| `pending`→`processing` | claim RPC | claim subquery, `FOR UPDATE SKIP LOCKED` |
+| `failed`→`processing` | claim RPC | claim subquery, `FOR UPDATE SKIP LOCKED` |
+| `processing`→`completed` | orchestrator | `WHERE id = $1 AND status = 'processing'` |
+| `processing`→`failed` | orchestrator | `WHERE id = $1 AND status = 'processing'` (attempts+1 < max) |
+| `processing`→`abandoned` | orchestrator | `WHERE id = $1 AND status = 'processing'` (attempts+1 ≥ max, or permanent error) + Sentry |
+
+Eligibility (in the claim RPC): a row is claimable when it is **verified** (`verified_at IS NOT NULL` — an unverified/forged request must never trigger an irreversible purge) **and** either `status='pending' AND requested_at <= now() - DELETION_RETENTION_DAYS`, or `status='failed' AND attempts < DELETION_MAX_ATTEMPTS AND next_attempt_at <= now()`. `scheduled_purge_at` is treated as informational only (nullable; the manual handler may not set it).
+
+#### D2.3 — Claim RPC
+
+Config constants are passed as parameters (no `process.env` / GUC reads inside SQL — CLAUDE.md). Service-role only.
+
+```sql
+CREATE OR REPLACE FUNCTION public.claim_deletion_requests(
+  p_limit int, p_retention_days int, p_max_attempts int
+)
+RETURNS SETOF public.business_deletion_requests
+LANGUAGE sql SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  UPDATE public.business_deletion_requests
+     SET status = 'processing', updated_at = now()
+   WHERE id IN (
+     SELECT id FROM public.business_deletion_requests
+      WHERE (
+        status = 'pending' AND verified_at IS NOT NULL
+          AND requested_at <= now() - make_interval(days => p_retention_days)
+      ) OR (
+        status = 'failed' AND attempts < p_max_attempts
+          AND next_attempt_at <= now()
+      )
+      ORDER BY requested_at
+      FOR UPDATE SKIP LOCKED
+      LIMIT p_limit
+   )
+  RETURNING *;
+$$;
+REVOKE ALL ON FUNCTION public.claim_deletion_requests(int,int,int) FROM public;
+GRANT EXECUTE ON FUNCTION public.claim_deletion_requests(int,int,int) TO service_role;
+```
+
+#### D2.4 — Purge RPC
+
+`purge_business(p_business_id uuid)` owns purge mechanics only (state transitions stay in the orchestrator, per the ADR 0008 split). Single implicit transaction; any unexpected error `RAISE`s and rolls back. **Idempotency guard at the top** makes a retry safe after a partial success (e.g. the business was deleted but the downstream `auth.users` delete failed): a re-claim re-invokes the RPC, which short-circuits with `{already_purged: true}`.
+
+```sql
+CREATE OR REPLACE FUNCTION public.purge_business(p_business_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_secret_count  int := 0;
+  v_billing_count int := 0;
+  v_secret_id     uuid;
+BEGIN
+  -- 0. Idempotency: a previous tick may have deleted the business already.
+  IF NOT EXISTS (SELECT 1 FROM public.businesses WHERE id = p_business_id) THEN
+    RETURN jsonb_build_object('already_purged', true, 'business_id', p_business_id);
+  END IF;
+
+  -- 1. Vault secrets FIRST. social_accounts.vault_*_token_id reference
+  --    vault.secrets in the OTHER direction; deleting the social_account does
+  --    NOT cascade the secret. Delete each access + refresh secret explicitly.
+  FOR v_secret_id IN
+    SELECT vault_access_token_id FROM public.social_accounts
+     WHERE business_id = p_business_id AND vault_access_token_id IS NOT NULL
+    UNION ALL
+    SELECT vault_refresh_token_id FROM public.social_accounts
+     WHERE business_id = p_business_id AND vault_refresh_token_id IS NOT NULL
+  LOOP
+    PERFORM public.vault_delete_secret(v_secret_id);
+    v_secret_count := v_secret_count + 1;
+  END LOOP;
+
+  -- 2. Redact retained audit rows (D2.6) BEFORE the SET NULL FK fires on delete.
+  --    billing_events is retained for tax/financial audit; sever the PII link.
+  --    The PK `id` (the Stripe event id, an opaque evt_… reference) is retained
+  --    as the idempotency/audit key — it is controller-side pseudonymous data,
+  --    not direct PII, and a PK cannot be nulled.
+  UPDATE public.billing_events
+     SET stripe_customer_id = NULL,
+         payload = jsonb_build_object('redacted', true, 'type', type)
+   WHERE business_id = p_business_id;
+  GET DIAGNOSTICS v_billing_count = ROW_COUNT;
+
+  -- 3. Root delete. ON DELETE CASCADE purges every cascading child;
+  --    billing_events.business_id → NULL; business_deletion_requests is
+  --    decoupled (FK dropped, D2.1) and survives as the erasure-audit row.
+  DELETE FROM public.businesses WHERE id = p_business_id;
+
+  RETURN jsonb_build_object(
+    'already_purged', false,
+    'business_id', p_business_id,
+    'vault_secrets_deleted', v_secret_count,
+    'billing_events_redacted', v_billing_count,
+    'purged_at', now()
+  );
+END;
+$$;
+REVOKE ALL ON FUNCTION public.purge_business(uuid) FROM public;
+GRANT EXECUTE ON FUNCTION public.purge_business(uuid) TO service_role;
+```
+
+#### D2.5 — Cascade table (every table in the cumulative schema)
+
+| Table | Business-scoped? | FK→businesses ON DELETE | Cascades? | Action on purge |
+|---|---|---|---|---|
+| **businesses** | root | (owner_id→auth.users **RESTRICT**) | n/a | **DELETE last** |
+| brand_voices | yes (business_id) | CASCADE | yes | none |
+| social_accounts | yes (business_id) | CASCADE | yes | **`vault_delete_secret` per access+refresh id FIRST** |
+| trial_state | yes (business_id) | CASCADE | yes | none |
+| campaigns | yes (business_id) | CASCADE | yes | none |
+| posts | yes (business_id + campaign_id) | CASCADE (both) | yes | none |
+| post_metrics | yes (business_id + post_id) | CASCADE (both) | yes | none |
+| engagement_inbox | yes (business_id; post_id SET NULL) | CASCADE (business_id) | yes | none |
+| ai_usage | yes (business_id) | CASCADE | yes | none |
+| post_generation_sessions | yes (business_id + campaign_id) | CASCADE | yes | none |
+| email_outbox | yes (business_id) | CASCADE | yes | none — cascade = erasure (holds `recipient` PII) |
+| **billing_events** | yes (business_id nullable) | **SET NULL** | no | **RETAIN (tax/audit); REDACT PII before root delete** |
+| **business_deletion_requests** | self (business_id) | **NO ACTION → FK DROPPED (D2.1)** | no | **RETAIN as audit; orchestrator sets `completed` + `purged_at`** |
+| email_suppressions | no (keyed by email, global) | — | n/a | RETAIN (deliverability / legitimate interest; not business-reachable) |
+| email_webhook_events | no | — | n/a | RETAIN (not business-scoped) |
+| auth_rate_limits | no (keyed by bucket_key) | — | n/a | RETAIN (separate TTL purge — A1.4 / launch-checklist §16) |
+| cron_health | no | — | n/a | RETAIN (ops) |
+
+Only `business_deletion_requests` (NO ACTION) would have blocked the root delete; D2.1 resolves it. Every other business-scoped table either cascades or is deliberately retained.
+
+#### D2.6 — Retention & redaction (D1 / D2)
+
+- **Retain `billing_events`** — tax/financial record (10-year retention, §5). `business_id` auto-nulled by its SET NULL FK on root delete; redact `stripe_customer_id` → NULL and `payload` → `{redacted:true,type}` **before** the delete (the SET NULL means the rows can no longer be found by `business_id` afterward). PK `id` retained (pseudonymous Stripe event ref, audit key).
+- **Retain `business_deletion_requests`** — the erasure-audit record itself. No PII columns (timestamps + a now-orphaned `business_id` uuid); no redaction needed.
+- **Everything else: purged** (cascade or explicit Vault delete). `email_outbox` is purged, not retained — it carries recipient emails, and erasure is the correct outcome.
+
+#### D2.7 — `auth.users` identity deletion (D3)
+
+Purging `public.*` is not erasure while the customer's **email and name remain in `auth.users`** — a `/privacy` claim that would otherwise be false to a regulator. `businesses.owner_id → auth.users` is **ON DELETE RESTRICT**, so the business must be deleted first (correct ordering, enforced by the RPC running before this step). The orchestrator (not the RPC — the Admin API is unreachable from plpgsql) performs, **after** `purge_business` returns success or `{already_purged:true}`:
+
+1. **Multi-business guard:** `SELECT EXISTS(SELECT 1 FROM businesses WHERE owner_id = $owner LIMIT 1)`. If `true`, the owner still owns another business (Phase-2 `business_members` is not yet live but the schema permits it) — **skip** the auth delete and log `auth_user_deleted: false`.
+2. Otherwise call `supabase.auth.admin.deleteUser(owner_id)`.
+3. If the auth delete **fails** after a successful purge, the row stays `processing` and is re-claimed; the next tick's `purge_business` returns `{already_purged:true}` and the orchestrator retries only the auth delete. The orchestrator marks `completed` only once the auth delete has succeeded (or was correctly skipped under the multi-business guard).
+
+The owner_id is read from the business row **before** `purge_business` deletes it.
+
+#### D2.8 — Failure-class taxonomy
+
+The orchestrator distinguishes outcomes by the returned jsonb and the Postgres SQLSTATE; not every failure should consume a retry:
+
+| Class | Trigger | Orchestrator action |
+|---|---|---|
+| **Success-equivalent** | RPC returns `{already_purged:true}` (a prior tick purged the business) | proceed to D2.7 auth delete, then `processing`→`completed` |
+| **Transient (retry)** | network/timeout to Supabase; lock_not_available `55P03`; deadlock `40P01`; serialization `40001`; a transient Vault RPC error; `auth.admin.deleteUser` network failure | `processing`→`failed`, `attempts++`, `next_attempt_at = now() + backoff`; escalate to `abandoned` once `attempts ≥ DELETION_MAX_ATTEMPTS` |
+| **Permanent (abandon immediately)** | unrecoverable RAISE — NOT NULL `23502`, CHECK `23514`, or any constraint/logic violation that a retry cannot fix | `processing`→`abandoned` at once (do not wait for max attempts) + `Sentry.captureException` |
+
+Backoff: `DELETION_RETRY_BACKOFF_BASE_MINUTES * 2^(attempts-1)` with jitter, mirroring `computeBackoff` in `lib/email/orchestrator.ts` (minutes, not seconds), capped at 24h.
+
+#### D2.9 — Orchestrator, route, schedule, config
+
+- **`lib/deletion/orchestrator.ts`** → `runDeletionTick(opts: { triggeredBy: 'qstash' | 'secret' }): Promise<DeletionTickSummary>`, mirroring `runEmailDrainTick`: service-role client, `Sentry.withMonitor('process-deletions', …)`, claim batch → per-row try/catch → purge → D2.7 auth delete → transition.
+- **`DeletionTickSummary`**: `{ claimed, purged, retried, abandoned, durationMs }`.
+- **Three canonical JSON log lines** (no `console.*` beyond these structured lines):
+  - `deletion.tick.start` — `{ kind, triggeredBy, claimed }`
+  - `deletion.row.processed` — `{ kind, request_id, business_id, outcome: 'purged'|'retried'|'abandoned', attempts, vault_secrets_deleted, billing_events_redacted, auth_user_deleted }`
+  - `deletion.tick.end` — `{ kind, triggeredBy, ...summary }`
+- **`app/api/cron/process-deletions/route.ts`** — exact mirror of `app/api/cron/drain-email-outbox/route.ts`: `CRON_TRIGGER` hard-branch; QStash signature verification in the `qstash` branch; `GET`→405 when `qstash`, `POST`→405 when not `qstash`; `force-dynamic`, `runtime='nodejs'`, `maxDuration=60`.
+- **Schedule:** daily **03:00 UTC** via QStash (no contention with publishing = 5-min, metrics = hourly, email = 1-min ticks).
+- **`lib/config.ts` additions** (typed `config.server`): `DELETION_RETENTION_DAYS` (default 30, §13), `DELETION_MAX_ATTEMPTS` (default 5, mirrors ADR 0008 A1), `DELETION_RETRY_BACKOFF_BASE_MINUTES` (default 60).
+
+#### D2.10 — Test surface
+
+- `lib/deletion/orchestrator.test.ts` (mock-driven): eligible-`pending`→`purged`; not-yet-30-days→not claimed; RPC throws transient→`failed` + `attempts++` + `next_attempt_at`; RPC throws permanent (`23502`/`23514`)→`abandoned` immediately + Sentry; `failed` past `next_attempt_at`→re-claimed; `attempts==max`→`abandoned` + Sentry; `{already_purged:true}`→`completed`; SKIP LOCKED no double-claim; `purge_business` called with the right `business_id`; auth delete skipped under the multi-business guard.
+- `lib/deletion/__integration__/purge-business.test.ts` (gated on `DELETION_INTEGRATION_TEST_ENABLED`): seed a business with a row in **every** business-scoped table + Vault secrets → run the tick → assert zero rows in every purged table for that `business_id`, Vault secrets gone (`vault.secrets` direct query), `billing_events` retained with PII nulled, `business_deletion_requests` retained `status='completed'`, and the `auth.users` row gone (or retained when the multi-business case is exercised).
+- `supabase/__tests__/rls-policy-lockdown.test.sql` (bundles B18-082 + B18-067 closure): assert `post_metrics` has exactly one policy `post_metrics_select_own` (SELECT) and **zero** INSERT/UPDATE/DELETE policies for `authenticated`; assert `trial_state` has exactly one policy `trial_state_select_own` (SELECT only).
+
+### Consequences
+
+**Positive.** GDPR Art. 17 erasure becomes a defensible automated executor, not a manual promise. The cascade audit proves no orphaned personal data — Vault secrets and the `auth.users` identity included. The cron reuses three already-reviewed patterns (ADR 0008 drain orchestrator, ADR 0005 A1 QStash thin-route, the `SKIP LOCKED` claim), so the new surface is small and idempotent under retry.
+
+**Negative / ongoing obligation.** The cascade table (D2.5) is only correct for the schema as it exists today. **Any future business-scoped table is a silent erasure leak unless it is added to D2.5 and either cascades from `businesses` or is explicitly handled in `purge_business`.** This is now a standing review obligation (CLAUDE.md addition below). The `auth.users` multi-business guard is forward-defensive for Phase-2 `business_members`; until that ships, a one-business-per-owner reality means the guard is effectively always `false`.
+
+### CLAUDE.md addition
+
+A rule is added to `CLAUDE.md` (Multi-tenancy section): *"Any migration that adds a business-scoped table (or any table reachable only via a `business`) must, in the same PR, add a row to ADR 0010 Amendment 2's cascade table (§D2.5) and ensure the table either cascades from `businesses` ON DELETE or is explicitly purged/retained in `purge_business`."*
+
+### Evidence Pack
+
+No new `[VERIFY]` markers. D2.5 is derived entirely from the committed migration sequence in `supabase/migrations/`; the integration test (D2.10) is the executable proof of the cascade claim. B18-082 is closed N/A (the over-grant policies were dropped in migration 016 / recreated SELECT-only in 017); B18-067 is closed OK with the defensive lockdown test.
+
+---
+
+**Amendment 2 designed by:** Architect (Session 18B-1 Phase A), adjudicated by Tiago Crebelo, 2026-06-14
+**Next action:** Builder session 18B-1 Phase B — apply the D2.1 migration, the claim + purge RPCs, `lib/deletion/orchestrator.ts`, the `process-deletions` route, config keys, the QStash 03:00 UTC schedule, and the D2.10 tests, against this locked Amendment.
