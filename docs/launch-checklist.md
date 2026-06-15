@@ -110,12 +110,16 @@ Setup runbook: `docs/build-guide/runbooks/qstash-setup.md`
   ```
   vercel env ls production | grep CRON_SECRET
   ```
-- [ ] **Both core schedules visible in Upstash console** → QStash → Schedules: publish (`*/10 * * * *`) and sync-metrics (`0 * * * *`), status Active.
+- [ ] **Core schedules visible in Upstash console** → QStash → Schedules, all status Active:
+  - publish (`*/10 * * * *`)
+  - sync-metrics (`0 * * * *`)
+  - process-deletions (`0 3 * * *`, retries=0 — see `docs/build-guide/runbooks/qstash-setup.md` Step 2b)
 - [ ] **Email cron schedules visible** in Upstash console: `drain-email-outbox` (`* * * * *`) and `trial-warnings` (`0 9 * * *`), status Active.
 - [ ] **First production tick observed** in Vercel logs with `triggeredBy: 'qstash'`:
   - `/api/cron/publish` — look for `{"kind":"publish-tick","triggeredBy":"qstash",...}` within 10 minutes of deploy.
   - `/api/cron/sync-metrics` — look for `{"kind":"metrics-sync-tick","triggeredBy":"qstash",...}` within the first hour. Expected at launch: `synced=0, skippedNotImplemented=N, errors=0` (ADR 0006 §1 — wired-but-inert is healthy).
   - `/api/cron/drain-email-outbox` — look for `{"kind":"email.drain.tick","triggeredBy":"qstash",...}` within the first minute. Expected on a quiet queue: `claimed=0, sent=0, retried=0, failed=0, suppressed=0`.
+  - `/api/cron/process-deletions` — look for `{"kind":"deletion.tick.end","triggeredBy":"qstash",...}` at 03:00 UTC. Expected at launch: `claimed=0, purged=0, retried=0, abandoned=0`.
 - [ ] **Drain-email-outbox smoke test.** Manually insert a row into `email_outbox` (`status='pending'`, `next_attempt_at=now()`, `recipient` = a real address you control, `kind='trial-warning-t3'`). Wait up to 90 seconds for the next cron tick. Confirm `status='sent'` and `provider_message_id IS NOT NULL`:
   ```sql
   select id, status, provider_message_id, sent_at
@@ -275,7 +279,7 @@ These items are required by ADR 0010 and are not yet in the codebase. Each block
 - [ ] Confirmed: no `ai_training_opt_in` column exists in production schema (no migration required at launch). (A1.2)
 
 **From A1.4 / T4 (deletion infrastructure — launch blockers):**
-- [ ] 30-day hard-delete cron for `business_deletion_requests` deployed and executing on schedule in production. `business_deletion_requests` table migration applied (Session 17B). (Pending — backlog session.)
+- [x] 30-day hard-delete cron for `business_deletion_requests` deployed and executing on schedule in production. Migration `20260615200000_deletion_cron_state_machine.sql` applied (Session 18B-1). Orchestrator at `lib/deletion/orchestrator.ts`, route at `app/api/cron/process-deletions/route.ts`, QStash schedule `0 3 * * *` (retries=0). (A2/D2.9)
 - [ ] `auth_rate_limits` TTL purge cron deployed and executing on schedule in production. (Pending — backlog session.)
 - [ ] In-app Delete Account flow (Settings → Delete Account) shipped, with email-verification round-trip, writing into `business_deletion_requests`. (Pending — backlog session.)
 - [ ] Amendment A2 to ADR 0010 swapping §13 §9 Erasure prose from email-based to in-app-based wording, applied after the in-app flow is live.

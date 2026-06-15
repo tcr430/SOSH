@@ -2,7 +2,7 @@
 
 **Phase:** 1 — MVP
 **Goal:** First paying customer
-**Status:** Session 17B Builder complete — Legal Surface (ADR 0010 + Amendment A1). Terms, Privacy, Subprocessors MDX live. `/subprocessors` route, `business_deletion_requests` migration, vault Sentry monitoring, launch checklist §9 updated. Reviewer session pending.
+**Status:** Session 18B-1 Builder complete — GDPR hard-delete cron (ADR 0010 Amendment 2). B18-012 closed. `process-deletions` cron route live. Migration applied. 14 unit tests passing. Reviewer session pending.
 
 ## What's done
 - Session 0: Environment setup complete
@@ -683,6 +683,34 @@
     `transitionEmailOutboxRow` filed (email-outbox.ts not modified).
   - Full suite: 720 tests passed / 0 failed; tsc clean.
 
+- **Session 18B-1 complete — GDPR 30-day hard-delete cron (ADR 0010 Amendment 2 §D2.1–D2.10):**
+  - Migration `20260615200000_deletion_cron_state_machine.sql` — D2.1 schema delta on `business_deletion_requests`
+    (status/attempts/next_attempt_at/last_error/updated_at columns, updated_at trigger, claimable index,
+    FK decoupled so audit row survives purge), D2.3 `claim_deletion_requests(int,int,int)` RPC
+    (FOR UPDATE SKIP LOCKED, service_role-only), D2.4 `purge_business(uuid)` RPC (idempotency guard,
+    vault-first delete via `vault_delete_secret`, billing_events redaction, root DELETE FROM businesses)
+  - `lib/config.ts` — three new server vars: `DELETION_RETENTION_DAYS=30`, `DELETION_MAX_ATTEMPTS=5`,
+    `DELETION_RETRY_BACKOFF_BASE_MINUTES=60` (Zod-coerced, env-configurable, serverOnly guarded)
+  - `lib/db/deletion-requests.ts` — typed query helpers: `claimDeletionRequests`, `transitionDeletionRequest`
+    (atomic `.eq('status','processing')` guard), `purgeBusiness`, `getBusinessOwnerId`, `countRemainingBusinesses`
+  - `lib/deletion/orchestrator.ts` — `runDeletionTick({ triggeredBy })` + exported `computeBackoff`
+    (base MINUTES, exp growth, 0.75–1.25× jitter, cap 1440); lazy `createServiceRoleClient` import;
+    Sentry.withMonitor('process-deletions', ..., `{ schedule:{type:'crontab',value:'0 3 * * *'}, ... }`);
+    D2.7 auth-delete ordering (read ownerId BEFORE purge); multi-business guard; D2.8 failure taxonomy
+    (SQLSTATE class 23 → abandon; exhausted → abandon; transient → retry); structured console.log tick logs
+  - `app/api/cron/process-deletions/route.ts` — POST-only QStash route (mirrors drain-email-outbox),
+    `maxDuration=60`, returns `NextResponse.json({ ok: true, ...summary })`
+  - `lib/deletion/orchestrator.test.ts` — 14 unit tests: `vi.hoisted` pattern for auth.admin mock,
+    empty queue, happy path, idempotent replay, multi-business guard, permanent SQLSTATE, transient
+    retry, attempts-exhausted, auth-delete failure, mixed batch, tick-start/end logs, Sentry.withMonitor
+  - `lib/deletion/__integration__/purge-business.test.ts` — gated on `DELETION_INTEGRATION_TEST_ENABLED`;
+    tests purge metadata, idempotency, audit-row survival
+  - `supabase/__tests__/rls-policy-lockdown.test.ts` — `pg.Client` RLS audit: RLS enabled,
+    SELECT policy shape, no authenticated mutate policies, `= ANY` (not `IN` subquery), grant lockdown
+  - Pre-existing bug fixed: `= ANY (public.get_user_business_ids())` in `email_outbox.sql` and
+    `business_deletion_requests.sql` (was `IN (SELECT get_user_business_ids())` — wrong operator on uuid[])
+  - QStash runbook Step 2b added (`0 3 * * *`, retries=0 rationale); launch-checklist A1.4 ticked ✅
+
 - **Session 17B complete — Legal Surface (ADR 0010 + Amendment A1):**
   - `content/legal/terms.en.mdx` — full Terms of Service prose from ADR 0010 §12 with A1 deltas
     applied (A1.1: §9 direct LinkedIn/X API wording; A1.3: §18 end-of-billing-period termination remedy)
@@ -733,7 +761,7 @@ Pre-launch hardening sweep per `docs/launch-checklist.md` and `docs/backlog.md`:
 - **Open legal gates (§9):** counsel ratification → [LEGAL ENTITY] substitution; Anthropic DPF
   verification at dataprivacyframework.gov; cookie inventory in staging; Svix client-verify confirm
 - **Postiz removal workstream (§16):** separate from legal — migrate lib/social/ to direct LinkedIn/X APIs
-- **Backlog deletions:** 30-day hard-delete cron; in-app Delete Account flow; auth_rate_limits TTL purge
+- **Backlog deletions:** in-app Delete Account flow (B18-014, P2); auth_rate_limits TTL purge
 - **Perf/CWV gates (§11, 2 rows):** tick first-load JS ≤ 90 KB gz + LCP/CLS/INP lab check once `npm run build` ECC Remotion issue is resolved
 - **Pre-launch debt:** items in `docs/backlog.md` (A4 suppressed error code, E5 footer 13px, L-05 atomic guard, L-16-1 skip-to-content i18n)
 - **Smoke tests:** Resend sandbox sends for all 5 email kinds; Stripe smoke tests A–F

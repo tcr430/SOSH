@@ -45,6 +45,28 @@ Create a second schedule:
 
 ---
 
+## Step 2b — Create QStash schedule: process-deletions route
+
+Create a third schedule for the GDPR 30-day hard-delete cron (ADR 0010 Amendment 2 §D2.9):
+
+| Field       | Value                                                   |
+|-------------|---------------------------------------------------------|
+| Destination | `https://<prod-domain>/api/cron/process-deletions`      |
+| Method      | `POST`                                                  |
+| Cron        | `0 3 * * *`                                             |
+| Retries     | `0` (orchestrator owns its own retry/abandon loop)      |
+| Body        | _(empty)_                                               |
+
+> **Why retries=0?** The orchestrator claims rows atomically and drives its own
+> state machine (pending→processing→completed|failed|abandoned). QStash retrying
+> a delivery would cause the same row to be re-processed concurrently, doubling
+> the attempt count against the `DELETION_MAX_ATTEMPTS` cap. Set retries=0 and
+> let the next day's tick pick up any `failed` rows.
+
+Note the **Schedule ID** for your ops log.
+
+---
+
 ## Step 3 — Set production environment variables
 
 Add these in a single Vercel deployment (all three must be present before the deploy goes live):
@@ -139,9 +161,9 @@ The `@upstash/qstash` `Receiver` singleton accepts **either** `CURRENT_SIGNING_K
 ## Step 7 — Alerting
 
 **Primary alert path:** Sentry Cron Monitors (ADR 0007).
-Sentry tracks `publish-tick` and `metrics-sync-tick` by monitor slug. A missed tick
-(no check-in within the expected window) pages via the Sentry alert rule — regardless of
-whether the trigger source is QStash or Vercel Cron.
+Sentry tracks `publish-tick`, `metrics-sync-tick`, and `process-deletions` by monitor slug.
+A missed tick (no check-in within the expected window) pages via the Sentry alert rule —
+regardless of whether the trigger source is QStash or Vercel Cron.
 
 **QStash-side alerting:** Upstash console → QStash → Schedules shows delivery status and
 retry history per schedule. Configure Upstash webhook alerts in the QStash settings if you
