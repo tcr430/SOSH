@@ -58,6 +58,9 @@ export const serverSchema = z.object({
   METRICS_STALE_MINUTES: z.coerce.number().int().positive().default(360),
   METRICS_MAX_AGE_DAYS: z.coerce.number().int().positive().default(90),
   POST_GENERATION_SESSION_STALE_MINUTES: z.coerce.number().int().positive().default(15),
+  DELETION_RETENTION_DAYS: z.coerce.number().int().positive().default(30),
+  DELETION_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
+  DELETION_RETRY_BACKOFF_BASE_MINUTES: z.coerce.number().int().positive().default(60),
   LINKEDIN_CLIENT_ID: z.string().default(''),
   LINKEDIN_CLIENT_SECRET: z.string().default(''),
   X_CLIENT_ID: z.string().default(''),
@@ -163,6 +166,9 @@ function parseServerEnv() {
     PUBLISH_RETRY_BACKOFF_SECONDS: process.env.PUBLISH_RETRY_BACKOFF_SECONDS,
     PUBLISH_STUCK_MINUTES: process.env.PUBLISH_STUCK_MINUTES,
     POST_GENERATION_SESSION_STALE_MINUTES: process.env.POST_GENERATION_SESSION_STALE_MINUTES,
+    DELETION_RETENTION_DAYS: process.env.DELETION_RETENTION_DAYS,
+    DELETION_MAX_ATTEMPTS: process.env.DELETION_MAX_ATTEMPTS,
+    DELETION_RETRY_BACKOFF_BASE_MINUTES: process.env.DELETION_RETRY_BACKOFF_BASE_MINUTES,
     LINKEDIN_CLIENT_ID: process.env.LINKEDIN_CLIENT_ID,
     LINKEDIN_CLIENT_SECRET: process.env.LINKEDIN_CLIENT_SECRET,
     X_CLIENT_ID: process.env.X_CLIENT_ID,
@@ -324,6 +330,15 @@ export const config = {
     },
     get POST_GENERATION_SESSION_STALE_MINUTES() {
       return serverOnly("POST_GENERATION_SESSION_STALE_MINUTES", () => server().POST_GENERATION_SESSION_STALE_MINUTES);
+    },
+    get DELETION_RETENTION_DAYS() {
+      return serverOnly("DELETION_RETENTION_DAYS", () => server().DELETION_RETENTION_DAYS);
+    },
+    get DELETION_MAX_ATTEMPTS() {
+      return serverOnly("DELETION_MAX_ATTEMPTS", () => server().DELETION_MAX_ATTEMPTS);
+    },
+    get DELETION_RETRY_BACKOFF_BASE_MINUTES() {
+      return serverOnly("DELETION_RETRY_BACKOFF_BASE_MINUTES", () => server().DELETION_RETRY_BACKOFF_BASE_MINUTES);
     },
     get LINKEDIN_CLIENT_ID() {
       return serverOnly("LINKEDIN_CLIENT_ID", () => server().LINKEDIN_CLIENT_ID);
