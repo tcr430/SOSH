@@ -21,5 +21,5 @@ CREATE POLICY "owner can read own deletion request"
   ON public.business_deletion_requests
   FOR SELECT
   USING (
-    business_id IN (SELECT get_user_business_ids())
+    business_id = ANY (public.get_user_business_ids())
   );

@@ -42,7 +42,7 @@ ALTER TABLE public.email_outbox ENABLE ROW LEVEL SECURITY;
 -- No INSERT/UPDATE/DELETE policy for authenticated — service-role only.
 CREATE POLICY email_outbox_select_own
   ON public.email_outbox FOR SELECT TO authenticated
-  USING (business_id IN (SELECT get_user_business_ids()));
+  USING (business_id = ANY (public.get_user_business_ids()));
 
 -- claim_email_outbox: atomic batch claim for the drainer (ADR 0008 §9).
 -- FOR UPDATE SKIP LOCKED prevents concurrent ticks from claiming the same rows.
