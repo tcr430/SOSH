@@ -3,7 +3,7 @@ import { buildCustomerContext } from '@/lib/ai/context'
 import { runPrompt } from '@/lib/ai/runner'
 import { postGenerationPrompt, PLATFORM_CONSTRAINTS, getPlatformConstraintsVersion } from '@/lib/ai/prompts/post-generation'
 import { MODELS } from '@/lib/ai/models'
-import { getCampaignById, updateCampaign } from '@/lib/db/campaigns'
+import { getCampaignById, activateCampaign } from '@/lib/db/campaigns'
 import { listPostsByCampaign, createPosts } from '@/lib/db/posts'
 import { updateGenerationSessionStatus } from '@/lib/db/post-generation-sessions'
 import { incrementPostsGeneratedBy } from '@/lib/db/trial-state'
@@ -206,10 +206,7 @@ export async function generatePostsForCampaign(
     const postsCreated = inserted.length
 
     // STEP 10 — Update campaign atomically (guard on 'draft' prevents double-write)
-    await updateCampaign(client, campaignId, {
-      status: 'active',
-      total_posts_planned: postsCreated,
-    })
+    await activateCampaign(client, campaignId, postsCreated)
 
     // STEP 11 — Increment trial counter (R-1)
     await incrementPostsGeneratedBy(businessId, postsCreated)

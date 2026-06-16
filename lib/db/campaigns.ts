@@ -63,6 +63,23 @@ export async function updateCampaign(
   return row as CampaignRow
 }
 
+export async function activateCampaign(
+  client: SupabaseClient,
+  id: string,
+  totalPostsPlanned: number,
+): Promise<CampaignRow | null> {
+  const { data, error } = await client
+    .from('campaigns')
+    .update({ status: 'active', total_posts_planned: totalPostsPlanned })
+    .eq('id', id)
+    .eq('status', 'draft')
+    .is('deleted_at', null)
+    .select()
+    .maybeSingle()
+  if (error) throw new Error((error as { message: string }).message)
+  return (data as CampaignRow | null) ?? null
+}
+
 export async function pauseCampaign(
   client: SupabaseClient,
   id: string,

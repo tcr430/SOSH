@@ -12,7 +12,7 @@ vi.mock('@/lib/db/post-generation-sessions', () => ({
 
 vi.mock('@/lib/db/campaigns', () => ({
   getCampaignById: vi.fn(),
-  updateCampaign: vi.fn().mockResolvedValue({}),
+  activateCampaign: vi.fn().mockResolvedValue({}),
 }))
 
 vi.mock('@/lib/db/posts', () => ({
@@ -40,7 +40,7 @@ vi.mock('@/lib/campaigns/schedule', () => ({
 
 import { generatePostsForCampaign } from './generate'
 import { updateGenerationSessionStatus } from '@/lib/db/post-generation-sessions'
-import { getCampaignById, updateCampaign } from '@/lib/db/campaigns'
+import { getCampaignById, activateCampaign } from '@/lib/db/campaigns'
 import { listPostsByCampaign, createPosts } from '@/lib/db/posts'
 import { buildCustomerContext } from '@/lib/ai/context'
 import { runPrompt } from '@/lib/ai/runner'
@@ -163,7 +163,7 @@ beforeEach(() => {
   vi.mocked(getCampaignById).mockResolvedValue(mockCampaign)
   vi.mocked(listPostsByCampaign).mockResolvedValue([])
   vi.mocked(buildCustomerContext).mockResolvedValue(mockCtx)
-  vi.mocked(updateCampaign).mockResolvedValue({} as never)
+  vi.mocked(activateCampaign).mockResolvedValue({} as never)
   vi.mocked(updateGenerationSessionStatus).mockResolvedValue(undefined)
   vi.mocked(incrementPostsGeneratedBy).mockResolvedValue(undefined)
   vi.mocked(schedulePosts)
@@ -279,7 +279,7 @@ describe('generatePostsForCampaign — runPrompt failure', () => {
     await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
 
     expect(createPosts).not.toHaveBeenCalled()
-    expect(updateCampaign).not.toHaveBeenCalled()
+    expect(activateCampaign).not.toHaveBeenCalled()
     expect(incrementPostsGeneratedBy).not.toHaveBeenCalled()
     expect(updateGenerationSessionStatus).toHaveBeenCalledWith(
       expect.anything(),
@@ -328,10 +328,10 @@ describe('generatePostsForCampaign — success path', () => {
   it('updates campaign to active with actual inserted post count', async () => {
     await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
 
-    expect(updateCampaign).toHaveBeenCalledWith(
+    expect(activateCampaign).toHaveBeenCalledWith(
       expect.anything(),
       CAMPAIGN_ID,
-      expect.objectContaining({ status: 'active', total_posts_planned: 6 }),
+      6,
     )
   })
 
