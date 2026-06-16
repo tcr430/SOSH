@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { createMockClient } from './__test-utils__/mock-client'
 import {
   claimPostsForPublishing,
-  markPostPublished,
+  publishPostComplete,
   markPostFailed,
   requeueScheduledPost,
   reapStuckScheduledPosts,
@@ -79,65 +79,49 @@ describe('claimPostsForPublishing', () => {
   })
 })
 
-// ─── markPostPublished ───────────────────────────────────────────────────────
+// ─── publishPostComplete ────────────────────────────────────────────────────
 
-describe('markPostPublished', () => {
-  it('updates status to published with platform details', async () => {
+describe('publishPostComplete', () => {
+  it('calls publish_post_complete RPC with post id and platform details', async () => {
     const published = { ...mockScheduledPost, status: 'published' as const, platform_post_id: 'ext-123', platform_url: 'https://ex.com' }
-    const { client } = createMockClient(published)
-    const result = await markPostPublished(client, 'post-1', {
+    const { client } = createMockClient()
+    vi.spyOn(client, 'rpc').mockResolvedValue({ data: [published], error: null } as never)
+    const result = await publishPostComplete(client, 'post-1', {
       platformPostId: 'ext-123',
       platformUrl: 'https://ex.com',
       publishedAt: new Date('2026-05-25T10:01:00Z'),
     })
-    expect(result.status).toBe('published')
-    expect(result.platform_post_id).toBe('ext-123')
+    expect(client.rpc).toHaveBeenCalledWith('publish_post_complete', {
+      p_post_id: 'post-1',
+      p_platform_post_id: 'ext-123',
+      p_platform_url: 'https://ex.com',
+      p_published_at: expect.any(String),
+    })
+    expect(result?.status).toBe('published')
+    expect(result?.platform_post_id).toBe('ext-123')
   })
 
-  it('does NOT include publish_attempts in the update payload', async () => {
-    const published = { ...mockScheduledPost, status: 'published' as const }
-    const { client, builder } = createMockClient(published)
-    await markPostPublished(client, 'post-1', {
+  it('returns null when the RPC returns zero rows (guard rejected the transition)', async () => {
+    const { client } = createMockClient()
+    vi.spyOn(client, 'rpc').mockResolvedValue({ data: [], error: null } as never)
+    const result = await publishPostComplete(client, 'post-1', {
       platformPostId: 'ext-123',
       platformUrl: null,
       publishedAt: new Date(),
     })
-    const updateArg = (builder.update as ReturnType<typeof vi.fn>).mock.calls[0][0]
-    expect(updateArg).not.toHaveProperty('publish_attempts')
+    expect(result).toBeNull()
   })
 
-  it('clears last_publish_error in the update', async () => {
-    const published = { ...mockScheduledPost, status: 'published' as const }
-    const { client, builder } = createMockClient(published)
-    await markPostPublished(client, 'post-1', {
-      platformPostId: 'ext-123',
-      platformUrl: null,
-      publishedAt: new Date(),
-    })
-    const updateArg = (builder.update as ReturnType<typeof vi.fn>).mock.calls[0][0]
-    expect(updateArg).toHaveProperty('last_publish_error', null)
-  })
-
-  it('uses WHERE status=scheduled guard', async () => {
-    const published = { ...mockScheduledPost, status: 'published' as const }
-    const { client, builder } = createMockClient(published)
-    await markPostPublished(client, 'post-1', {
-      platformPostId: 'ext-123',
-      platformUrl: null,
-      publishedAt: new Date(),
-    })
-    expect(builder.eq).toHaveBeenCalledWith('status', 'scheduled')
-  })
-
-  it('throws when zero rows updated (row moved under us)', async () => {
-    const { client } = createMockClient(null)
+  it('throws when the RPC returns an error', async () => {
+    const { client } = createMockClient()
+    vi.spyOn(client, 'rpc').mockResolvedValue({ data: null, error: { message: 'publish error' } } as never)
     await expect(
-      markPostPublished(client, 'post-1', {
+      publishPostComplete(client, 'post-1', {
         platformPostId: 'ext-123',
         platformUrl: null,
         publishedAt: new Date(),
       })
-    ).rejects.toThrow()
+    ).rejects.toThrow('publish error')
   })
 })
 

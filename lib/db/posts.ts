@@ -351,7 +351,12 @@ export async function claimPostsForPublishing(
   return (data as PostRow[]) ?? []
 }
 
-export async function markPostPublished(
+// B18-075: single RPC consolidates the post-publish UPDATE and the
+// campaign total_posts_published increment into one atomic round-trip,
+// guarded by the RPC's internal WHERE status = 'scheduled'. Zero rows
+// returned means the guard rejected the transition — callers must treat
+// that as a no-op, not an error.
+export async function publishPostComplete(
   client: SupabaseClient,
   postId: string,
   payload: {
@@ -359,25 +364,16 @@ export async function markPostPublished(
     platformUrl: string | null
     publishedAt: Date
   },
-): Promise<PostRow> {
-  const { data: row, error } = await client
-    .from('posts')
-    .update({
-      status: 'published',
-      platform_post_id: payload.platformPostId,
-      platform_url: payload.platformUrl,
-      published_at: formatISO(payload.publishedAt),
-      last_publish_error: null,
-      last_publish_attempt_at: null,
-    } as Record<string, unknown>)
-    .eq('id', postId)
-    .eq('status', 'scheduled')
-    .is('deleted_at', null)
-    .select()
-    .single()
+): Promise<PostRow | null> {
+  const { data, error } = await client.rpc('publish_post_complete', {
+    p_post_id: postId,
+    p_platform_post_id: payload.platformPostId,
+    p_platform_url: payload.platformUrl,
+    p_published_at: formatISO(payload.publishedAt),
+  })
   if (error) throw new Error((error as { message: string }).message)
-  if (!row) throw new Error(`Post ${postId} not found or not in 'scheduled' status`)
-  return row as PostRow
+  const rows = (data ?? []) as PostRow[]
+  return rows[0] ?? null
 }
 
 export async function requeueScheduledPost(

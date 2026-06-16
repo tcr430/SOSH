@@ -6,10 +6,9 @@ import { getRegistry, SocialProviderError } from '@/lib/social/index'
 import type { PublishInput } from '@/lib/social/index'
 import {
   claimPostsForPublishing,
-  markPostPublished,
+  publishPostComplete,
   markPostFailed,
   requeueScheduledPost,
-  incrementPublishedCountForCampaign,
 } from '@/lib/db/posts'
 import { incrementBusinessPublishedCount, getBusinessById } from '@/lib/db/businesses'
 import { enqueueFirstPostPublished } from '@/lib/email/triggers/publishing'
@@ -119,12 +118,12 @@ export async function runPublishTick(opts?: {
       return
     }
 
-    await markPostPublished(client, post.id, {
+    const updated = await publishPostComplete(client, post.id, {
       platformPostId: result.platformPostId,
       platformUrl: result.url,
       publishedAt: now,
     })
-    await incrementPublishedCountForCampaign(client, post.campaign_id)
+    if (!updated) return // guard rejected the transition — no-op, not an error
 
     await maybeEnqueueFirstPostPublished({ client, businessId: post.business_id, post, postUrl: result.url ?? null })
     summary.published++
@@ -224,12 +223,13 @@ async function handleError(
           return
         }
 
-        await markPostPublished(client, post.id, {
+        const updated = await publishPostComplete(client, post.id, {
           platformPostId: retryResult.platformPostId,
           platformUrl: retryResult.url,
           publishedAt: now,
         })
-        await incrementPublishedCountForCampaign(client, post.campaign_id)
+        if (!updated) return // guard rejected the transition — no-op, not an error
+
         await maybeEnqueueFirstPostPublished({ client, businessId: post.business_id, post, postUrl: retryResult.url ?? null })
         summary.published++
       } else {

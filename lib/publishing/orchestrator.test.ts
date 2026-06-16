@@ -5,10 +5,9 @@ import { markCronSeen } from '@/lib/db/cron-health'
 import * as Sentry from '@sentry/nextjs'
 import {
   claimPostsForPublishing,
-  markPostPublished,
+  publishPostComplete,
   markPostFailed,
   requeueScheduledPost,
-  incrementPublishedCountForCampaign,
 } from '@/lib/db/posts'
 import { recoverStuckGenerationSessions } from '@/lib/db/post-generation-sessions'
 import { getActiveByBusinessAndPlatform } from '@/lib/db/social-accounts'
@@ -32,11 +31,10 @@ vi.mock('@/lib/config', () => ({
 
 vi.mock('@/lib/db/posts', () => ({
   claimPostsForPublishing: vi.fn(),
-  markPostPublished: vi.fn(),
+  publishPostComplete: vi.fn(),
   markPostFailed: vi.fn(),
   requeueScheduledPost: vi.fn(),
   reapStuckScheduledPosts: vi.fn(),
-  incrementPublishedCountForCampaign: vi.fn(),
 }))
 
 vi.mock('@/lib/db/email-outbox', () => ({
@@ -163,10 +161,9 @@ beforeEach(() => {
   mockRefreshAccessToken.mockResolvedValue({})
 
   vi.mocked(claimPostsForPublishing).mockResolvedValue([])
-  vi.mocked(markPostPublished).mockResolvedValue(undefined as never)
+  vi.mocked(publishPostComplete).mockResolvedValue({ id: 'post-1', campaign_id: 'camp-1' } as never)
   vi.mocked(markPostFailed).mockResolvedValue(undefined as never)
   vi.mocked(requeueScheduledPost).mockResolvedValue(undefined as never)
-  vi.mocked(incrementPublishedCountForCampaign).mockResolvedValue(undefined)
   vi.mocked(recoverStuckGenerationSessions).mockResolvedValue(0)
   vi.mocked(getActiveByBusinessAndPlatform).mockResolvedValue(mockAccount)
   mockIncrementBusinessPublishedCount.mockResolvedValue(2)
@@ -197,15 +194,20 @@ describe('runPublishTick', () => {
     const summary = await runPublishTick({ now: NOW })
     expect(summary.published).toBe(1)
     expect(summary.failed).toBe(0)
-    expect(vi.mocked(markPostPublished)).toHaveBeenCalledWith(
+    expect(vi.mocked(publishPostComplete)).toHaveBeenCalledWith(
       expect.anything(),
       'post-1',
       expect.objectContaining({ platformPostId: 'ext-123' }),
     )
-    expect(vi.mocked(incrementPublishedCountForCampaign)).toHaveBeenCalledWith(
-      expect.anything(),
-      'camp-1',
-    )
+  })
+
+  it('treats zero-row RPC guard rejection as a no-op, not a failure or success', async () => {
+    vi.mocked(claimPostsForPublishing).mockResolvedValue([mockPost])
+    vi.mocked(publishPostComplete).mockResolvedValue(null)
+    const summary = await runPublishTick({ now: NOW })
+    expect(summary.published).toBe(0)
+    expect(summary.failed).toBe(0)
+    expect(mockEnqueueFirstPostPublished).not.toHaveBeenCalled()
   })
 
   it('passes socialAccountId from looked-up account to PublishInput', async () => {
@@ -472,7 +474,7 @@ describe('runPublishTick — first-post via refresh-retry (I3/I4)', () => {
     const summary = await runPublishTick({ now: NOW })
 
     expect(summary.published).toBe(1)
-    expect(vi.mocked(markPostPublished)).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(publishPostComplete)).toHaveBeenCalledTimes(1)
     expect(vi.mocked(Sentry.captureException)).toHaveBeenCalledTimes(1)
     expect(mockAfter).not.toHaveBeenCalled()
   })
