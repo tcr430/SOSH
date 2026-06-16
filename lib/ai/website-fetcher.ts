@@ -32,6 +32,22 @@ function isBlockedIPv4(address: string): boolean {
   // 169.254.0.0/16 link-local
   if ((n & 0xffff0000) >>> 0 === 0xa9fe0000) return true
 
+  // Additional reserved ranges (B18-029 / RFC 6890, RFC 5737, RFC 2544, RFC 4193).
+  // 100.64.0.0/10 CGNAT
+  if ((n & 0xffc00000) >>> 0 === 0x64400000) return true
+  // 192.0.2.0/24 TEST-NET-1
+  if ((n & 0xffffff00) >>> 0 === 0xc0000200) return true
+  // 198.51.100.0/24 TEST-NET-2
+  if ((n & 0xffffff00) >>> 0 === 0xc6336400) return true
+  // 203.0.113.0/24 TEST-NET-3
+  if ((n & 0xffffff00) >>> 0 === 0xcb007100) return true
+  // 198.18.0.0/15 benchmark
+  if ((n & 0xfffe0000) >>> 0 === 0xc6120000) return true
+  // 240.0.0.0/4 Class E
+  if ((n & 0xf0000000) >>> 0 === 0xf0000000) return true
+  // 255.255.255.255/32 broadcast
+  if (n === 0xffffffff) return true
+
   return false
 }
 
@@ -43,7 +59,18 @@ function isBlockedIPv6(address: string): boolean {
   if (mapped) return isBlockedIPv4(mapped[1])
   // fc00::/7 ULA — first byte is 0xfc or 0xfd
   const firstByte = parseInt(lower.split(':')[0].padStart(4, '0').slice(0, 2), 16)
-  return !isNaN(firstByte) && (firstByte & 0xfe) === 0xfc
+  if (!isNaN(firstByte) && (firstByte & 0xfe) === 0xfc) return true
+
+  // Additional reserved ranges (B18-029 / RFC 6890, RFC 5737, RFC 2544, RFC 4193).
+  const groups = lower.split(':')
+  const g0 = parseInt(groups[0] || '0', 16)
+  // fe80::/10 link-local
+  if (!isNaN(g0) && (g0 & 0xffc0) === 0xfe80) return true
+  // 2001:db8::/32 documentation
+  const g1 = parseInt(groups[1] || '0', 16)
+  if (!isNaN(g0) && !isNaN(g1) && g0 === 0x2001 && g1 === 0x0db8) return true
+
+  return false
 }
 
 async function resolveAndCheck(
