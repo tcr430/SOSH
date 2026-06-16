@@ -140,6 +140,24 @@ describe('transitionEmailOutboxRow', () => {
     expect(result).toEqual(sendingRow)
   })
 
+  it('guards the UPDATE with WHERE status = <source status> (atomic transition)', async () => {
+    const pendingRow = { status: 'pending' }
+    const sendingRow = { ...baseRow, status: 'sending' as const }
+    const eqSpy = vi.fn().mockReturnThis()
+    const singleSpy = vi.fn()
+      .mockResolvedValueOnce({ data: pendingRow, error: null })
+      .mockResolvedValueOnce({ data: sendingRow, error: null })
+    const client = { from: vi.fn() } as unknown as Parameters<typeof transitionEmailOutboxRow>[0]
+    ;(client.from as ReturnType<typeof vi.fn>).mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      update: vi.fn().mockReturnThis(),
+      eq: eqSpy,
+      single: singleSpy,
+    })
+    await transitionEmailOutboxRow(client, baseRow.id, { status: 'sending' })
+    expect(eqSpy).toHaveBeenCalledWith('status', 'pending')
+  })
+
   it('throws on illegal transition: sent → pending', async () => {
     const { client } = createMockClient(null, null)
     client.from = vi.fn().mockReturnValue({

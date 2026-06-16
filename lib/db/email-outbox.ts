@@ -107,6 +107,7 @@ export async function transitionEmailOutboxRow(
     .from('email_outbox')
     .update(update)
     .eq('id', rowId)
+    .eq('status', currentStatus)
     .select()
     .single()
 
