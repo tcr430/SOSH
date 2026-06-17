@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { canonicalizeEmail } from '@/lib/auth/email'
 
 export const FREE_EMAIL_PROVIDERS = new Set([
   'gmail.com', 'googlemail.com',
@@ -51,7 +52,10 @@ export function isWorkEmail(email: string): boolean {
   return true
 }
 
-export const workEmailSchema = z
-  .string()
-  .email({ message: 'errors.email.invalid_format' })
-  .refine(isWorkEmail, { message: 'errors.email.work_required' })
+export const workEmailSchema = z.preprocess(
+  (val) => (typeof val === 'string' ? canonicalizeEmail(val) : val),
+  z
+    .string()
+    .email({ message: 'errors.email.invalid_format' })
+    .refine(isWorkEmail, { message: 'errors.email.work_required' }),
+)

@@ -7,16 +7,23 @@ import { createClient } from '@/lib/supabase/server'
 import { getBusinessByOwner } from '@/lib/db/businesses'
 import { consumeRateLimit, resolveIp } from '@/lib/auth/rate-limit'
 import { isSafeRedirect } from '@/lib/auth/safe-redirect'
+import { canonicalizeEmail } from '@/lib/auth/email'
 
 const loginSchema = z.object({
-  email: z.string().email(),
+  email: z.preprocess(
+    (val) => (typeof val === 'string' ? canonicalizeEmail(val) : val),
+    z.string().email(),
+  ),
   password: z.string().min(1),
   locale: z.enum(['en', 'pt', 'es']).default('en'),
   redirectTo: z.string().optional(),
 })
 
 const resendSchema = z.object({
-  email: z.string().email(),
+  email: z.preprocess(
+    (val) => (typeof val === 'string' ? canonicalizeEmail(val) : val),
+    z.string().email(),
+  ),
   locale: z.enum(['en', 'pt', 'es']).default('en'),
 })
 

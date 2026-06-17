@@ -5,9 +5,13 @@ import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { config } from '@/lib/config'
 import { consumeRateLimit, resolveIp } from '@/lib/auth/rate-limit'
+import { canonicalizeEmail } from '@/lib/auth/email'
 
 const forgotPasswordSchema = z.object({
-  email: z.string().email(),
+  email: z.preprocess(
+    (val) => (typeof val === 'string' ? canonicalizeEmail(val) : val),
+    z.string().email(),
+  ),
   locale: z.enum(['en', 'pt', 'es']).default('en'),
 })
 
