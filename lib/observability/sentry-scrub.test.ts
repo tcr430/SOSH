@@ -5,6 +5,7 @@ import {
   isEmailLike,
   scrubString,
   scrubEvent,
+  scrubObject,
 } from './sentry-scrub'
 
 // ── normaliseKey ─────────────────────────────────────────────────────────────
@@ -259,5 +260,71 @@ describe('scrubEvent — missing fields', () => {
 
   it('handles empty event object', () => {
     expect(scrubEvent({})).not.toBeNull()
+  })
+})
+
+// ── scrubObject — value-scan pass (B18-076) ───────────────────────────────────
+
+describe('scrubObject — value-scan pass', () => {
+  it('redacts email value at depth 2', () => {
+    const obj = { meta: { contact: 'user@example.com' } }
+    const result = scrubObject(obj) as Record<string, Record<string, unknown>>
+    expect(result.meta.contact).toBe('u***@example.com')
+  })
+
+  it('redacts JWT value at depth 4', () => {
+    const jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0In0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c'
+    const obj = { a: { b: { c: { d: jwt } } } }
+    const result = scrubObject(obj) as Record<string, unknown>
+    expect(
+      ((result.a as Record<string, unknown>).b as Record<string, unknown>).c,
+    ).toEqual({ d: '[REDACTED]' })
+  })
+
+  it('redacts Stripe sk_live_ key', () => {
+    const obj = { key: 'sk_live_abcdefghijklmnopqrstu' }
+    expect((scrubObject(obj) as Record<string, unknown>).key).toBe('[REDACTED]')
+  })
+
+  it('redacts long hex token (32+ chars) via value-scan (key not in REDACTED_KEYS)', () => {
+    // key "hex_data" doesn't match key-based redaction → value-scan fires
+    const obj = { hex_data: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4' }
+    expect((scrubObject(obj) as Record<string, unknown>).hex_data).toBe('[REDACTED]')
+  })
+
+  it('does not redact a short string that does not match any pattern', () => {
+    const obj = { label: 'hello-world' }
+    expect((scrubObject(obj) as Record<string, unknown>).label).toBe('hello-world')
+  })
+
+  it('handles circular references without stack overflow', () => {
+    const a: Record<string, unknown> = { x: 1 }
+    a.b = a // a.b → a (cycle)
+    expect(() => scrubObject(a)).not.toThrow()
+    const result = scrubObject(a) as Record<string, unknown>
+    expect(result.b).toBe('[CIRCULAR]')
+  })
+
+  it('does not recurse past depth 5', () => {
+    // Build a 7-level deep object; value at depth 6 should NOT be redacted.
+    const jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0In0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c'
+    const obj = { l1: { l2: { l3: { l4: { l5: { l6: jwt } } } } } }
+    const result = scrubObject(obj) as Record<string, unknown>
+    // l5 is at depth 5 → returned as-is (no recursion into l6)
+    const l5 = ((((result.l1 as Record<string, unknown>).l2 as Record<string, unknown>).l3 as Record<string, unknown>).l4 as Record<string, unknown>).l5
+    expect(typeof l5).toBe('object')
+    // l6 inside l5 is not traversed — its raw value remains
+    expect((l5 as Record<string, unknown>).l6).toBe(jwt)
+  })
+
+  it('truncates arrays with more than 100 elements', () => {
+    const large = Array.from({ length: 101 }, (_, i) => i)
+    const result = scrubObject(large)
+    expect(result).toEqual(['[ARRAY_TRUNCATED]'])
+  })
+
+  it('truncates objects with more than 50 keys', () => {
+    const large = Object.fromEntries(Array.from({ length: 51 }, (_, i) => [`k${i}`, 'v']))
+    expect(scrubObject(large)).toBe('[OBJECT_TRUNCATED]')
   })
 })

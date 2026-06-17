@@ -3,6 +3,20 @@
 
 const URL_QUERY_PATTERN = /([?&](?:token|code|state)=)[^&#]+/gi
 const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
+
+// Value-scan patterns: redact tokens, JWTs, Stripe keys, long hex strings (B18-076).
+// Applied to every string leaf during recursive object traversal.
+const VALUE_PATTERNS: ReadonlyArray<RegExp> = [
+  /^ey[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*$/,  // JWT (header.payload.sig)
+  /^sk_(live|test)_[A-Za-z0-9]{20,}$/,                     // Stripe secret key
+  /^rk_(live|test)_[A-Za-z0-9]{20,}$/,                     // Stripe restricted key
+  /^(Bearer|Token)\s+\S+$/i,                                // Authorization header value
+  /^[0-9a-f]{32,}$/i,                                       // Long hex token (32+ chars)
+]
+
+function matchesValuePattern(value: string): boolean {
+  return VALUE_PATTERNS.some((re) => re.test(value))
+}
 const EXCLUDED_PATHS = [
   /^\/api\/stripe\/webhook$/,
   /^\/api\/cron\//,
@@ -49,18 +63,31 @@ function scrubUrlQuery(url: string): string {
   return url.replace(URL_QUERY_PATTERN, '$1[Filtered]')
 }
 
-// Recursively redact keys that match REDACTED_KEYS and scrub email leaf values.
-function scrubObject(obj: unknown): unknown {
+// Exported for unit testing. Production consumers use scrubEvent or scrubString.
+// Recursively redact keys matching REDACTED_KEYS, scrub email and token leaf values.
+// depth: bounded at 5 to prevent excessive traversal of large nested objects.
+// seen: WeakSet for cycle detection — circular references are replaced with '[CIRCULAR]'.
+// Arrays > 100 elements and objects > 50 keys are truncated (performance guard).
+export function scrubObject(obj: unknown, depth = 0, seen = new WeakSet<object>()): unknown {
   if (typeof obj === 'string') {
-    return isEmailLike(obj) ? redactEmail(obj) : obj
+    if (isEmailLike(obj)) return redactEmail(obj)
+    if (matchesValuePattern(obj)) return '[REDACTED]'
+    return obj
   }
   if (Array.isArray(obj)) {
-    return obj.map(scrubObject)
+    if (depth >= 5) return obj
+    if (obj.length > 100) return ['[ARRAY_TRUNCATED]']
+    return obj.map((item) => scrubObject(item, depth + 1, seen))
   }
   if (obj !== null && typeof obj === 'object') {
+    if (depth >= 5) return obj
+    if (seen.has(obj)) return '[CIRCULAR]'
+    const record = obj as Record<string, unknown>
+    if (Object.keys(record).length > 50) return '[OBJECT_TRUNCATED]'
+    seen.add(obj)
     const result: Record<string, unknown> = {}
-    for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
-      result[k] = shouldRedactKey(k) ? '[Filtered]' : scrubObject(v)
+    for (const [k, v] of Object.entries(record)) {
+      result[k] = shouldRedactKey(k) ? '[Filtered]' : scrubObject(v, depth + 1, seen)
     }
     return result
   }
