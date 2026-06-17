@@ -3,6 +3,9 @@
 
 const URL_QUERY_PATTERN = /([?&](?:token|code|state)=)[^&#]+/gi
 const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
+// Matches email-shaped substrings within longer strings (e.g. error messages).
+// Used by scrubString to catch bare emails embedded in Resend/provider error text.
+const EMAIL_INLINE_PATTERN = /[^@\s]+@[^@\s]+\.[^@\s]+/g
 
 // Value-scan patterns: redact tokens, JWTs, Stripe keys, long hex strings (B18-076).
 // Applied to every string leaf during recursive object traversal.
@@ -94,12 +97,15 @@ export function scrubObject(obj: unknown, depth = 0, seen = new WeakSet<object>(
   return obj
 }
 
-// Applies URL-query scrubbing and email-leaf scrubbing to a free string.
-// Exposed for SocialProviderError.toJSON() and other callers that don't have
-// a full Sentry Event shape.
+// Applies URL-query scrubbing and email scrubbing to a free string.
+// Handles both whole-string emails and emails embedded in longer text (e.g. error messages).
+// Exposed for SocialProviderError.toJSON() and other callers without a full Sentry Event.
 export function scrubString(value: string): string {
-  const urlScubbed = value.replace(URL_QUERY_PATTERN, '$1[Filtered]')
-  return isEmailLike(urlScubbed) ? redactEmail(urlScubbed) : urlScubbed
+  const urlScrubbed = value.replace(URL_QUERY_PATTERN, '$1[Filtered]')
+  return urlScrubbed.replace(EMAIL_INLINE_PATTERN, (match) => {
+    const at = match.indexOf('@')
+    return match[0] + '***' + match.slice(at)
+  })
 }
 
 type ScrubbableBreadcrumb = {
@@ -118,6 +124,9 @@ type ScrubbableEvent = {
   contexts?: Record<string, unknown>
   tags?: Record<string, unknown>
   extra?: Record<string, unknown>
+  exception?: {
+    values?: Array<{ type?: string; value?: string }>
+  }
 }
 
 function extractPathname(url: string): string | null {
@@ -180,6 +189,18 @@ export function scrubEvent<E extends ScrubbableEvent>(event: E): E | null {
   if (result.contexts) result.contexts = scrubObject(result.contexts) as Record<string, unknown>
   if (result.tags) result.tags = scrubObject(result.tags) as Record<string, unknown>
   if (result.extra) result.extra = scrubObject(result.extra) as Record<string, unknown>
+
+  // 5. Scrub exception message values — Sentry includes err.message in exception.values[].value.
+  // Provider error messages (e.g. Resend "invalid_recipient") may embed the recipient email.
+  if (result.exception?.values) {
+    result.exception = {
+      ...result.exception,
+      values: result.exception.values.map((ex) => ({
+        ...ex,
+        value: typeof ex.value === 'string' ? scrubString(ex.value) : ex.value,
+      })),
+    }
+  }
 
   return result as E
 }

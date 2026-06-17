@@ -328,3 +328,65 @@ describe('scrubObject — value-scan pass', () => {
     expect(scrubObject(large)).toBe('[OBJECT_TRUNCATED]')
   })
 })
+
+// ── scrubString — inline email scrubbing (B18-008) ────────────────────────────
+
+describe('scrubString — inline email scrubbing', () => {
+  it('redacts a bare email that is the whole string', () => {
+    expect(scrubString('user@example.com')).toBe('u***@example.com')
+  })
+
+  it('redacts an email embedded inside an error message', () => {
+    const result = scrubString('Failed to deliver email to user@example.com: bounce')
+    expect(result).toContain('u***@example.com')
+    expect(result).not.toContain('user@example.com')
+  })
+
+  it('redacts multiple emails in a single string', () => {
+    const result = scrubString('Sending from a@corp.io to b@other.com failed')
+    expect(result).not.toContain('a@corp.io')
+    expect(result).not.toContain('b@other.com')
+    expect(result).toContain('a***@corp.io')
+    expect(result).toContain('b***@other.com')
+  })
+
+  it('leaves plain text without an email unchanged', () => {
+    expect(scrubString('something went wrong')).toBe('something went wrong')
+  })
+})
+
+// ── scrubEvent — exception value scrubbing (B18-008) ─────────────────────────
+
+describe('scrubEvent — exception value scrubbing', () => {
+  it('scrubs an email embedded in exception.values[].value', () => {
+    const event = {
+      exception: {
+        values: [{ type: 'EmailProviderError', value: 'Invalid recipient user@example.com' }],
+      },
+    }
+    const result = scrubEvent(event)!
+    expect(result.exception!.values![0].value).toContain('u***@example.com')
+    expect(result.exception!.values![0].value).not.toContain('user@example.com')
+  })
+
+  it('leaves exception.values[].value without an email unchanged', () => {
+    const event = {
+      exception: { values: [{ type: 'Error', value: 'Something went wrong' }] },
+    }
+    const result = scrubEvent(event)!
+    expect(result.exception!.values![0].value).toBe('Something went wrong')
+  })
+
+  it('handles missing exception gracefully', () => {
+    const event = { user: { id: 'u1' } }
+    expect(scrubEvent(event)).not.toBeNull()
+  })
+
+  it('preserves exception.values[].type (only value is scrubbed)', () => {
+    const event = {
+      exception: { values: [{ type: 'EmailProviderError', value: 'err at a@b.co' }] },
+    }
+    const result = scrubEvent(event)!
+    expect(result.exception!.values![0].type).toBe('EmailProviderError')
+  })
+})
