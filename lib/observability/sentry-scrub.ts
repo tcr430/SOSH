@@ -7,6 +7,17 @@ const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 // Used by scrubString to catch bare emails embedded in Resend/provider error text.
 const EMAIL_INLINE_PATTERN = /[^@\s]+@[^@\s]+\.[^@\s]+/g
 
+// VALUE_PATTERNS deliberately over-matches on common 32+ hex strings
+// (the /^[0-9a-f]{32,}$/i pattern). This will redact:
+//   - git commit SHAs (40 hex)
+//   - MD5/SHA digests
+//   - content hashes, idempotency keys
+// Over-redaction is the safe direction for a scrubber — a debugging
+// breadcrumb missing a SHA is recoverable; a leaked credential is not.
+// If a future debug surface needs un-redacted hashes, wire them through
+// a separate breadcrumb field that bypasses this scrubber, rather than
+// narrowing the pattern.
+
 // Value-scan patterns: redact tokens, JWTs, Stripe keys, long hex strings (B18-076).
 // Applied to every string leaf during recursive object traversal.
 const VALUE_PATTERNS: ReadonlyArray<RegExp> = [
