@@ -221,6 +221,25 @@ describe('transitionEmailOutboxRow', () => {
       transitionEmailOutboxRow(client, baseRow.id, { status: 'sending' }),
     ).rejects.toThrow('fetch error')
   })
+
+  it('returns null when UPDATE affects zero rows (atomic guard: status changed concurrently)', async () => {
+    // The SELECT finds status='pending' (legal transition passes), but by the time
+    // the UPDATE runs with .eq('status','pending'), the row has moved to another
+    // status — zero rows matched → .single() returns { data: null, error: null }.
+    // transitionEmailOutboxRow must return null, not throw (M3 / B18-003 follow-up).
+    const { client } = createMockClient(null, null)
+    const singleSpy = vi.fn()
+      .mockResolvedValueOnce({ data: { status: 'pending' }, error: null }) // SELECT
+      .mockResolvedValueOnce({ data: null, error: null })                  // UPDATE — zero rows
+    client.from = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      update: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: singleSpy,
+    })
+    const result = await transitionEmailOutboxRow(client, baseRow.id, { status: 'sending' })
+    expect(result).toBeNull()
+  })
 })
 
 describe('reapStuckSendingRows', () => {
