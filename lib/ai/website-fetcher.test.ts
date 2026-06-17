@@ -348,6 +348,18 @@ describe('DNS failure (F-8/F-9 support)', () => {
 
 // ── B18-029 extra reserved ranges (RFC 6890, RFC 5737, RFC 2544, RFC 4193) ───
 
+describe('B18-029 — 0.0.0.0/8 (this-network / loopback evasion)', () => {
+  it('returns null for 0.0.0.0 (network address)', async () => {
+    mockLookup.mockResolvedValue([{ address: '0.0.0.0', family: 4 }])
+    expect(await fetchWebsiteText('http://0.0.0.0')).toBeNull()
+  })
+
+  it('returns null for 0.1.2.3 (mid-range)', async () => {
+    mockLookup.mockResolvedValue([{ address: '0.1.2.3', family: 4 }])
+    expect(await fetchWebsiteText('http://0.1.2.3')).toBeNull()
+  })
+})
+
 describe('B18-029 — CGNAT 100.64.0.0/10', () => {
   it('returns null for 100.96.0.1 (mid-range)', async () => {
     mockLookup.mockResolvedValue([{ address: '100.96.0.1', family: 4 }])

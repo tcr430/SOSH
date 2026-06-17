@@ -21,6 +21,9 @@ function isBlockedIPv4(address: string): boolean {
     return false
   }
 
+  // B18-029: 0.0.0.0/8 named in triage description but missed in initial implementation (18B-2D fix).
+  // On Linux, TCP connect to 0.0.0.0 targets the loopback interface — canonical loopback-SSRF evasion.
+  if ((n >>> 24) === 0) return true
   // 127.0.0.0/8 loopback
   if ((n & 0xff000000) >>> 0 === 0x7f000000) return true
   // 10.0.0.0/8 private
