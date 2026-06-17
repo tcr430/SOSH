@@ -1,5 +1,6 @@
 import * as Sentry from '@sentry/nextjs'
 import { after } from 'next/server'
+import { scrubStringValue } from '@/lib/observability/sentry-scrub'
 import { addSeconds, formatISO } from 'date-fns'
 import { config } from '@/lib/config'
 import { getRegistry, SocialProviderError } from '@/lib/social/index'
@@ -38,15 +39,27 @@ export interface JanitorTickSummary {
   authRateLimitsPruned: number
 }
 
-function redactTokens(obj: unknown): unknown {
-  if (typeof obj !== 'object' || obj === null) return obj
-  return Object.fromEntries(
-    Object.entries(obj as Record<string, unknown>).map(([k, v]) =>
-      /token|secret|authorization|cookie/i.test(k)
-        ? [k, '[REDACTED]']
-        : [k, redactTokens(v)],
-    ),
-  )
+// B18-076 value-scan; shared scrubStringValue with sentry-scrub.ts (18B-2D fix).
+// Depth/size caps mirror scrubObject in sentry-scrub.ts (5 / 100 / 50).
+function redactTokens(obj: unknown, depth = 0): unknown {
+  if (depth >= 5) return obj
+  if (typeof obj === 'string') return scrubStringValue(obj)
+  if (Array.isArray(obj)) {
+    if (obj.length > 100) return ['[ARRAY_TRUNCATED]']
+    return obj.map((item) => redactTokens(item, depth + 1))
+  }
+  if (obj !== null && typeof obj === 'object') {
+    const record = obj as Record<string, unknown>
+    if (Object.keys(record).length > 50) return '[OBJECT_TRUNCATED]'
+    return Object.fromEntries(
+      Object.entries(record).map(([k, v]) =>
+        /token|secret|authorization|cookie/i.test(k)
+          ? [k, '[REDACTED]']
+          : [k, redactTokens(v, depth + 1)],
+      ),
+    )
+  }
+  return obj
 }
 
 export async function runPublishTick(opts?: {

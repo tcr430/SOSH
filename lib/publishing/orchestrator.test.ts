@@ -610,3 +610,48 @@ describe('runPublishTick — first-post detection', () => {
     expect(mockAfter).toHaveBeenCalledTimes(1)
   })
 })
+
+// ─── redactTokens value-scan (B18-076) ───────────────────────────────────────
+// Verify that value-pattern scanning (Bearer JWT, Stripe sk_, long hex) is applied
+// to non-token-named keys in err.details, which flows through the PLATFORM_REJECTED branch.
+
+describe('redactTokens — value-scan (B18-076)', () => {
+  it('redacts Bearer JWT in a non-token-named key (detail)', async () => {
+    const err = new SocialProviderError({
+      code: 'PLATFORM_REJECTED',
+      message: 'rejected',
+      details: { detail: 'Bearer eyJabc.eyJdef.ghi' },
+    })
+    mockPublish.mockRejectedValueOnce(err)
+    vi.mocked(claimPostsForPublishing).mockResolvedValue([mockPost])
+    await runPublishTick({ now: NOW })
+    const call = vi.mocked(markPostFailed).mock.calls[0]
+    expect((call[2].errorDetails as Record<string, unknown>).detail).toBe('[REDACTED]')
+  })
+
+  it('redacts Stripe sk_live_ key in a non-token-named key (message)', async () => {
+    const err = new SocialProviderError({
+      code: 'PLATFORM_REJECTED',
+      message: 'rejected',
+      details: { message: 'sk_live_ABCDEFGHIJKLMNOPQRSTUVWX' },
+    })
+    mockPublish.mockRejectedValueOnce(err)
+    vi.mocked(claimPostsForPublishing).mockResolvedValue([mockPost])
+    await runPublishTick({ now: NOW })
+    const call = vi.mocked(markPostFailed).mock.calls[0]
+    expect((call[2].errorDetails as Record<string, unknown>).message).toBe('[REDACTED]')
+  })
+
+  it('redacts 32-char hex string in a non-token-named key (hash)', async () => {
+    const err = new SocialProviderError({
+      code: 'PLATFORM_REJECTED',
+      message: 'rejected',
+      details: { hash: 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6' },
+    })
+    mockPublish.mockRejectedValueOnce(err)
+    vi.mocked(claimPostsForPublishing).mockResolvedValue([mockPost])
+    await runPublishTick({ now: NOW })
+    const call = vi.mocked(markPostFailed).mock.calls[0]
+    expect((call[2].errorDetails as Record<string, unknown>).hash).toBe('[REDACTED]')
+  })
+})

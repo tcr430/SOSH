@@ -20,6 +20,13 @@ const VALUE_PATTERNS: ReadonlyArray<RegExp> = [
 function matchesValuePattern(value: string): boolean {
   return VALUE_PATTERNS.some((re) => re.test(value))
 }
+
+// B18-076 value-scan; shared with redactTokens in publishing/orchestrator.ts (18B-2D fix).
+// Applies VALUE_PATTERNS to a single string leaf — returns '[REDACTED]' on match, original otherwise.
+export function scrubStringValue(s: string): string {
+  return matchesValuePattern(s) ? '[REDACTED]' : s
+}
+
 const EXCLUDED_PATHS = [
   /^\/api\/stripe\/webhook$/,
   /^\/api\/cron\//,
