@@ -2,7 +2,7 @@
 
 **Phase:** 1 — MVP
 **Goal:** First paying customer
-**Status:** Session 18B-1 Builder complete — GDPR hard-delete cron (ADR 0010 Amendment 2). B18-012 closed. `process-deletions` cron route live. Migration applied. 14 unit tests passing. Reviewer session pending.
+**Status:** Session 18B-2 Builder complete — 8 security/hardening items closed (B18-003/008/029/040/061/062/075/076). Reviewer session pending.
 
 ## What's done
 - Session 0: Environment setup complete
