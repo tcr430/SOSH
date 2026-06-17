@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/nextjs'
 import { formatISO } from 'date-fns'
 import { buildCustomerContext } from '@/lib/ai/context'
 import { runPrompt } from '@/lib/ai/runner'
@@ -206,7 +207,23 @@ export async function generatePostsForCampaign(
     const postsCreated = inserted.length
 
     // STEP 10 — Update campaign atomically (guard on 'draft' prevents double-write)
-    await activateCampaign(client, campaignId, postsCreated)
+    const activated = await activateCampaign(client, campaignId, postsCreated)
+    if (!activated) {
+      // Guard rejected: campaign no longer in 'draft' status (M1 / B18-040 follow-up).
+      // Self-healing — next generation attempt re-evaluates — but operator-visible.
+      console.log(JSON.stringify({
+        kind: 'campaign.activate.guard_rejected',
+        level: 'warn',
+        campaign_id: campaignId,
+        posts_created: postsCreated,
+      }))
+      Sentry.addBreadcrumb({
+        category: 'campaign',
+        message: 'activateCampaign guard rejected',
+        level: 'warning',
+        data: { campaign_id: campaignId },
+      })
+    }
 
     // STEP 11 — Increment trial counter (R-1)
     await incrementPostsGeneratedBy(businessId, postsCreated)
