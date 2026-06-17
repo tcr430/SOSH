@@ -136,7 +136,12 @@ export async function runPublishTick(opts?: {
       platformUrl: result.url,
       publishedAt: now,
     })
-    if (!updated) return // guard rejected the transition — no-op, not an error
+    if (!updated) {
+      // Guard rejected: post no longer in 'scheduled' status (M2 / B18-075 follow-up).
+      // Self-healing — row stays scheduled and is re-claimed next tick — but operator-visible.
+      console.log(JSON.stringify({ kind: 'publish.complete.guard_rejected', level: 'warn', post_id: post.id }))
+      return
+    }
 
     await maybeEnqueueFirstPostPublished({ client, businessId: post.business_id, post, postUrl: result.url ?? null })
     summary.published++
@@ -241,7 +246,11 @@ async function handleError(
           platformUrl: retryResult.url,
           publishedAt: now,
         })
-        if (!updated) return // guard rejected the transition — no-op, not an error
+        if (!updated) {
+          // Guard rejected on refresh-retry path (M2 / B18-075 follow-up).
+          console.log(JSON.stringify({ kind: 'publish.complete.guard_rejected', level: 'warn', post_id: post.id }))
+          return
+        }
 
         await maybeEnqueueFirstPostPublished({ client, businessId: post.business_id, post, postUrl: retryResult.url ?? null })
         summary.published++
