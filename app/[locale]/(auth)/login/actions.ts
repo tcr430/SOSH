@@ -6,6 +6,7 @@ import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { getBusinessByOwner } from '@/lib/db/businesses'
 import { consumeRateLimit, resolveIp } from '@/lib/auth/rate-limit'
+import { isSafeRedirect } from '@/lib/auth/safe-redirect'
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -33,14 +34,6 @@ export type LoginState = {
 export type ResendState = {
   success?: boolean
   error?: string
-}
-
-function isSafeRedirect(value: string, locale: string): boolean {
-  return (
-    value.startsWith(`/${locale}/`) &&
-    !value.includes('://') &&
-    !value.includes('..')
-  )
 }
 
 export async function loginAction(
