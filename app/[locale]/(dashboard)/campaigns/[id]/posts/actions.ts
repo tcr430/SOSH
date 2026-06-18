@@ -22,6 +22,7 @@ import { runPrompt } from '@/lib/ai/runner'
 import { AiError, type AiErrorCode } from '@/lib/ai/errors'
 import { postRegenerationPrompt } from '@/lib/ai/prompts/post-regeneration'
 import type { AiGenerationMetadata, Platform } from '@/lib/db/types'
+import { parseAiGenerationMetadata } from '@/lib/db/utils'
 
 // ---------------------------------------------------------------------------
 // State types
@@ -245,7 +246,7 @@ export async function regeneratePostAction(
       return { error: 'quota_exceeded' }
     }
 
-    const existingMetadata = (post.ai_generation_metadata ?? {}) as Partial<AiGenerationMetadata>
+    const existingMetadata = parseAiGenerationMetadata(post.ai_generation_metadata)
 
     const input = {
       postId,

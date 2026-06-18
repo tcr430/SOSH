@@ -15,6 +15,7 @@ import {
   updatePostContentAction,
 } from '@/app/[locale]/(dashboard)/campaigns/[id]/posts/actions'
 import type { PostRow, Platform, AiGenerationMetadata } from '@/lib/db/types'
+import { parseAiGenerationMetadata } from '@/lib/db/utils'
 
 // ---------------------------------------------------------------------------
 // Platform constants
@@ -68,7 +69,7 @@ export function PostCard({ post, onOptimisticUpdate }: PostCardProps) {
   const [isRegenerateOpen, setIsRegenerateOpen] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
 
-  const meta = post.ai_generation_metadata as Partial<AiGenerationMetadata>
+  const meta = parseAiGenerationMetadata(post.ai_generation_metadata)
   const accentColor = PLATFORM_COLORS[post.platform]
   const scheduledLabel =
     format(new Date(post.scheduled_at), 'EEE d MMM · HH:mm') +
