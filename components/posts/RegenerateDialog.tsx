@@ -12,13 +12,24 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { regeneratePostAction } from '@/app/[locale]/(dashboard)/campaigns/[id]/posts/actions'
+import {
+  regeneratePostAction,
+  type PostActionErrorCode,
+} from '@/app/[locale]/(dashboard)/campaigns/[id]/posts/actions'
 
 interface RegenerateDialogProps {
   postId: string
   open: boolean
   onOpenChange: (open: boolean) => void
   onSuccess: (content: string, hashtags: string[]) => void
+}
+
+function regenerateErrorKey(code: PostActionErrorCode | undefined): string {
+  switch (code) {
+    case 'not_eligible':   return 'regenerate.error.not_eligible'
+    case 'quota_exceeded': return 'regenerate.error.quota_exceeded'
+    default:               return 'regenerate.error.generic'
+  }
 }
 
 export function RegenerateDialog({
@@ -48,10 +59,7 @@ export function RegenerateDialog({
         onSuccess(result.content, result.hashtags)
         onOpenChange(false)
       } else {
-        const key = result.error as 'not_eligible' | 'quota_exceeded' | 'generic' | undefined
-        if (key === 'not_eligible') setError(t('regenerate.error.not_eligible'))
-        else if (key === 'quota_exceeded') setError(t('regenerate.error.quota_exceeded'))
-        else setError(t('regenerate.error.generic'))
+        setError(t(regenerateErrorKey(result.error)))
       }
     })
   }
