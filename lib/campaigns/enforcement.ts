@@ -2,10 +2,9 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { BusinessRow, TrialStatePublicRow } from '@/lib/db/types'
 import { countActiveCampaigns } from '@/lib/db/campaigns'
 import { config } from '@/lib/config'
+import { getPlanCapabilities } from '@/lib/stripe/plan'
 
 export type CampaignEnforcementReason = 'trial_campaign_limit' | 'plus_campaign_limit'
-
-const PLUS_CAMPAIGN_LIMIT = 5
 
 export async function checkCampaignCreationAllowed(
   client: SupabaseClient,
@@ -23,7 +22,7 @@ export async function checkCampaignCreationAllowed(
 
   if (business.plan === 'plus') {
     const count = await countActiveCampaigns(client, business.id)
-    if (count >= PLUS_CAMPAIGN_LIMIT) {
+    if (count >= (getPlanCapabilities('plus').activeCampaigns ?? Infinity)) {
       return { allowed: false, reason: 'plus_campaign_limit' }
     }
     return { allowed: true }
