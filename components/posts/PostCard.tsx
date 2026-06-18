@@ -234,7 +234,7 @@ export function PostCard({ post, onOptimisticUpdate }: PostCardProps) {
             )}
             {(post.status === 'draft' || post.status === 'approved' || post.status === 'skipped') && (
               <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${pillClass}`}>
-                {t(`card.status.${legacyStatusKey}`)}
+                {t(`card.status.${post.status}`)}
               </span>
             )}
             {(meta.regenerationCount ?? 0) > 0 && (
