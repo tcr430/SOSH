@@ -164,8 +164,7 @@ export function PostCard({ post, onOptimisticUpdate }: PostCardProps) {
   const hashtags = post.hashtags ?? []
   const isLongContent = post.content.length > 300
   const contentClass = isLongContent && !isExpanded ? 'max-h-48 overflow-y-auto' : ''
-  const legacyStatusKey = post.status as 'draft' | 'approved' | 'skipped'
-  const pillClass = STATUS_PILL_CLASS[legacyStatusKey] ?? STATUS_PILL_CLASS.draft
+  const pillClass = STATUS_PILL_CLASS[post.status] ?? STATUS_PILL_CLASS.draft
 
   const failedAtLabel = post.status === 'failed' && post.last_publish_attempt_at
     ? t('card.tooltip.failedAt', { at: format(new Date(post.last_publish_attempt_at), 'dd MMM HH:mm') })
