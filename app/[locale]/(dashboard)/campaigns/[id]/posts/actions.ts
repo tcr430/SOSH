@@ -19,7 +19,7 @@ import {
 } from '@/lib/db/posts'
 import { buildCustomerContext } from '@/lib/ai/context'
 import { runPrompt } from '@/lib/ai/runner'
-import { AiError } from '@/lib/ai/errors'
+import { AiError, type AiErrorCode } from '@/lib/ai/errors'
 import { postRegenerationPrompt } from '@/lib/ai/prompts/post-regeneration'
 import type { AiGenerationMetadata, Platform } from '@/lib/db/types'
 
@@ -27,9 +27,11 @@ import type { AiGenerationMetadata, Platform } from '@/lib/db/types'
 // State types
 // ---------------------------------------------------------------------------
 
+export type PostActionErrorCode = 'invalid_input' | 'generic' | 'not_eligible' | AiErrorCode
+
 export type PostActionState = {
   success?: boolean
-  error?: string
+  error?: PostActionErrorCode
   count?: number
   content?: string
   hashtags?: string[]
