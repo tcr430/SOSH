@@ -158,13 +158,14 @@ Inventory IDs trace back to the Step 1 chat list. 64 items tiered below.
 - Source: S9 R2 · Original: reviewer defer
 - Description: `PostActionState.error` should be a typed error-code union.
 - Reasoning: Define a named union, removes a downstream cast. — 20min
-- **CLOSED — Session 18B-3**
+- **CLOSED — Session 18B-3** ✅ (completed in 18B-3D — 18B-3 close was premature; the downstream cast in `RegenerateDialog.tsx:51` was never removed until 18B-3D replaced it with `regenerateErrorKey()` comparison switch)
 
 ### B18-071 — aimetadata-parse-helper
 - Source: S9 R3 · Original: reviewer defer
 - Description: `as Partial<AiGenerationMetadata>` on `Record<string,unknown>` is latent-any; add a narrow parse helper.
 - Reasoning: Small helper + 2 call sites; `?? []` guard prevents crashes today. — 20min
 - **CLOSED — Session 18B-3**
+- M2 note (P2): `parseAiGenerationMetadata` narrows the container (non-null object check) but not individual fields — `regenerationCount` is still an unvalidated cast inside `Partial<AiGenerationMetadata>`. Field-by-field narrowing is quality debt; no runtime bug today because call sites use `?? 0` / `?? []` guards.
 
 ### B18-072 — valid-transitions-map
 - Source: S9 R4 · Original: reviewer defer
@@ -220,7 +221,7 @@ Inventory IDs trace back to the Step 1 chat list. 64 items tiered below.
 - Source: current-phase §752 / S5 H-casts · Original: Session 5D defer
 - Description: `(error as {message})` repeated ~15× across `lib/db/`; extract a typed `getErrorMessage(unknown)`.
 - Reasoning: Violates unknown-narrowing rule (R1) across ~15 sites; cross-cutting. — 50min
-- **CLOSED — Session 18B-3**
+- **CLOSED — Session 18B-3** ✅ (completed in 18B-3D — 18B-3 close was premature; aliased sites `fetchError`/`readError` in `businesses.ts`/`posts.ts` + `lib/ai/metrics.ts` required a pattern-matched follow-up grep)
 
 ### B18-041 — toiso-sweep
 - Source: current-phase §792 / S8/S5 defer (verified ~8 live sites) · Original: Session 8C defer
@@ -342,6 +343,12 @@ Inventory IDs trace back to the Step 1 chat list. 64 items tiered below.
 - Description: Metrics catch block doesn't distinguish infra vs provider errors.
 - Reasoning: Error-classification accuracy in a wired-but-inert metrics worker (R4). — defer
 
+### B18-085 — formatISO-local-audit
+- Source: S18B-3 reviewer L2 · Original: filed 18B-3D
+- Description: `formatISO(new Date())` calls in `businesses.ts`, `campaigns.ts`, `posts.ts` emit LOCAL-offset strings (the same UTC hazard B18-041 fixed, invisible to the `.toISOString()` ban lint rule).
+- Reasoning: Tier UNDECIDED pending a probe: **P1** if any site writes a `timestamptz` column or string-compares the value; **P2** if display-only. Do NOT fix until the probe determines tier — just verify call sites and column types first.
+- **Do not fix in the next Builder session without running the probe first.**
+
 ---
 
 ## N/A — Stale / superseded / already done
@@ -372,6 +379,13 @@ Inventory IDs trace back to the Step 1 chat list. 64 items tiered below.
 ---
 
 ## Closed in correction passes
+
+Items closed during 18B-3D (correction pass on 18B-3 — finishing two items whose deliverables were unmet):
+
+- **H1 / B18-030 follow-up** — Pattern-matched getErrorMessage sweep: replaced aliased casts `(fetchError as {message}).message` in `lib/db/businesses.ts`, `(readError as {message}).message` ×2 in `lib/db/posts.ts`, and `(error as {message}).message` ×2 in `lib/ai/metrics.ts`.
+- **H2 / B18-070 follow-up** — Removed unsound `result.error as '...'` cast in `RegenerateDialog.tsx`; replaced with `regenerateErrorKey()` comparison switch (same runtime behaviour).
+- **M4** — Added direct unit tests for `getErrorMessage` (5 cases) and `parseAiGenerationMetadata` (4 cases) in `lib/db/utils.test.ts`.
+- **M3 / B18-071 observation** — PostCard null-metadata default changed `null → {}` (accepted strict improvement — latent null-deref fix; pre-refactor path would have thrown on `null.regenerationCount`).
 
 Items closed during 18B-2D (observability, test, and doc additions to items already marked complete):
 

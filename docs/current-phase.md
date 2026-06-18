@@ -2,7 +2,7 @@
 
 **Phase:** 1 — MVP
 **Goal:** First paying customer
-**Status:** Session 18B-2 Builder complete — 8 security/hardening items closed (B18-003/008/029/040/061/062/075/076). Reviewer session pending.
+**Status:** Session 18B-3 complete (18B-3D correction applied) — type-quality sweep closed B18-010/030/041/069/070/071; correction pass 18B-3D finished pattern-matched getErrorMessage sweep and RegenerateDialog cast removal.
 
 ## What's done
 - Session 0: Environment setup complete
@@ -1009,3 +1009,4 @@ Pre-launch hardening sweep per `docs/launch-checklist.md` and `docs/backlog.md`:
   Document in ADR 0002 open follow-ups.
 - **ECC commands use `/everything-claude-code:` prefix**, not `/ecc:`.
 - **`npm run db:migrate` requires `DATABASE_URL`** (Supabase transaction pooler connection string).
+- **B18-030 sweep is pattern-matched, not variable-name-matched:** aliased error vars (`fetchError`, `readError`) are covered. The original 18B-3 sweep matched only the variable name `error` and missed them.
