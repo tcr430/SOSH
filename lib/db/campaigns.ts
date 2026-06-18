@@ -1,6 +1,7 @@
 import { formatISO } from 'date-fns'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { CampaignRow, CampaignInsert, CampaignUpdate } from './types'
+import { getErrorMessage } from './utils'
 
 export async function listCampaigns(
   client: SupabaseClient,
@@ -14,7 +15,7 @@ export async function listCampaigns(
     .is('deleted_at', null)
     .order('created_at', { ascending: false })
     .limit(limit)
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   return (data as CampaignRow[]) ?? []
 }
 
@@ -28,7 +29,7 @@ export async function getCampaignById(
     .eq('id', id)
     .is('deleted_at', null)
     .single()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   if (!data) throw new Error(`Campaign ${id} not found`)
   return data as CampaignRow
 }
@@ -42,7 +43,7 @@ export async function createCampaign(
     .insert(data)
     .select()
     .single()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   if (!row) throw new Error('Failed to create campaign')
   return row as CampaignRow
 }
@@ -58,7 +59,7 @@ export async function updateCampaign(
     .eq('id', id)
     .select()
     .single()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   if (!row) throw new Error(`Campaign ${id} not found`)
   return row as CampaignRow
 }
@@ -76,7 +77,7 @@ export async function activateCampaign(
     .is('deleted_at', null)
     .select()
     .maybeSingle()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   return (data as CampaignRow | null) ?? null
 }
 
@@ -92,7 +93,7 @@ export async function pauseCampaign(
     .is('deleted_at', null)
     .select()
     .maybeSingle()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   return (data as CampaignRow | null) ?? null
 }
 
@@ -108,7 +109,7 @@ export async function resumeCampaign(
     .is('deleted_at', null)
     .select()
     .maybeSingle()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   return (data as CampaignRow | null) ?? null
 }
 
@@ -124,7 +125,7 @@ export async function softDeleteCampaignGuarded(
     .is('deleted_at', null)
     .select('id')
     .maybeSingle()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   return data !== null
 }
 
@@ -138,6 +139,6 @@ export async function countActiveCampaigns(
     .eq('business_id', businessId)
     .in('status', ['active', 'draft'])
     .is('deleted_at', null)
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   return count ?? 0
 }

@@ -2,6 +2,7 @@ import { formatISO } from 'date-fns'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { BusinessRow, BusinessInsert, BusinessUpdate, Plan } from './types'
 import type { PaidPlan } from '@/lib/stripe/products'
+import { getErrorMessage } from './utils'
 
 export async function getBusinessById(
   client: SupabaseClient,
@@ -13,7 +14,7 @@ export async function getBusinessById(
     .eq('id', id)
     .is('deleted_at', null)
     .single()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   if (!data) throw new Error(`Business ${id} not found`)
   return data as BusinessRow
 }
@@ -28,7 +29,7 @@ export async function getBusinessByOwner(
     .eq('owner_id', ownerId)
     .is('deleted_at', null)
     .maybeSingle()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   return (data as BusinessRow | null) ?? null
 }
 
@@ -41,7 +42,7 @@ export async function createBusiness(
     .insert(data)
     .select()
     .single()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   if (!row) throw new Error('Failed to create business')
   return row as BusinessRow
 }
@@ -57,7 +58,7 @@ export async function updateBusiness(
     .eq('id', id)
     .select()
     .single()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   if (!row) throw new Error(`Business ${id} not found`)
   return row as BusinessRow
 }
@@ -74,7 +75,7 @@ export async function updateBusinessPlan(
     .eq('id', id)
     .select()
     .single()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   if (!row) throw new Error(`Business ${id} not found`)
   return row as BusinessRow
 }
@@ -86,7 +87,7 @@ export async function completeOnboarding(businessId: string): Promise<void> {
     .from('businesses')
     .update({ onboarding_completed: true })
     .eq('id', businessId)
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
 }
 
 export async function softDeleteBusiness(
@@ -97,7 +98,7 @@ export async function softDeleteBusiness(
     .from('businesses')
     .update({ deleted_at: formatISO(new Date()) })
     .eq('id', id)
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
 }
 
 export async function findBusinessByStripeCustomerId(
@@ -111,7 +112,7 @@ export async function findBusinessByStripeCustomerId(
     .eq('stripe_customer_id', stripeCustomerId)
     .is('deleted_at', null)
     .maybeSingle()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   return (data as BusinessRow | null) ?? null
 }
 
@@ -133,7 +134,7 @@ export async function updateBillingFromSubscription(input: {
     .is('deleted_at', null)
     .select()
     .maybeSingle()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   return (data as BusinessRow | null) ?? null
 }
 
@@ -153,7 +154,7 @@ export async function clearBillingOnCancellation(input: {
     .is('deleted_at', null)
     .select()
     .maybeSingle()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   return (data as BusinessRow | null) ?? null
 }
 
@@ -164,7 +165,7 @@ export async function incrementBusinessPublishedCount(
   const { data, error } = await client.rpc('increment_business_published_count', {
     p_business_id: businessId,
   })
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   return data as number
 }
 
@@ -184,7 +185,7 @@ export async function setStripeCustomerId(input: {
     .select()
     .maybeSingle()
 
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
 
   if (data === null) {
     // No rows matched — check whether the business exists with a different customer ID

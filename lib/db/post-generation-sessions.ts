@@ -5,6 +5,7 @@ import type {
   GenerationSessionInsert,
   GenerationSessionUpdate,
 } from './types'
+import { getErrorMessage } from './utils'
 
 export async function createGenerationSession(
   client: SupabaseClient,
@@ -15,7 +16,7 @@ export async function createGenerationSession(
     .insert(input)
     .select()
     .single()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   if (!data) throw new Error('Failed to create generation session')
   return data as GenerationSessionRow
 }
@@ -29,7 +30,7 @@ export async function getGenerationSession(
     .select('*')
     .eq('id', sessionId)
     .maybeSingle()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   return (data as GenerationSessionRow | null) ?? null
 }
 
@@ -42,7 +43,7 @@ export async function updateGenerationSessionStatus(
     .from('post_generation_sessions')
     .update(patch)
     .eq('id', sessionId)
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
 }
 
 export async function recoverStuckGenerationSessions(
@@ -60,6 +61,6 @@ export async function recoverStuckGenerationSessions(
     .eq('status', 'generating')
     .lt('started_at', cutoff)
     .select('id')
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   return (data as { id: string }[] | null)?.length ?? 0
 }

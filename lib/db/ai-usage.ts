@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { AiUsageRow, AiUsageInsert } from './types'
 import { toUtcIso } from '@/lib/utils'
+import { getErrorMessage } from './utils'
 
 export async function recordAiUsage(
   data: AiUsageInsert,
@@ -12,7 +13,7 @@ export async function recordAiUsage(
     .insert(data)
     .select()
     .single()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   if (!row) throw new Error('Failed to record AI usage')
   return row as AiUsageRow
 }
@@ -30,7 +31,7 @@ export async function countRecentCalls(
     .eq('business_id', businessId)
     .eq('prompt_id', promptId)
     .gte('created_at', since)
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   return count ?? 0
 }
 
@@ -44,6 +45,6 @@ export async function listAiUsageByBusiness(
     .select('*')
     .eq('business_id', businessId)
     .limit(limit)
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   return (data as AiUsageRow[]) ?? []
 }

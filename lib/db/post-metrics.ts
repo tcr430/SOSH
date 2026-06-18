@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { PostMetricsRow, PostMetricsInsert } from './types'
+import { getErrorMessage } from './utils'
 
 export async function upsertPostMetrics(
   data: PostMetricsInsert,
@@ -11,7 +12,7 @@ export async function upsertPostMetrics(
     .upsert(data, { onConflict: 'post_id' })
     .select()
     .single()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   if (!row) throw new Error('Failed to upsert post metrics')
   return row as PostMetricsRow
 }
@@ -25,7 +26,7 @@ export async function getPostMetricsByPostId(
     .select('*')
     .eq('post_id', postId)
     .maybeSingle()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   return (data as PostMetricsRow | null) ?? null
 }
 
@@ -40,7 +41,7 @@ export async function listTopPostMetrics(
     .eq('business_id', businessId)
     .order('likes', { ascending: false })
     .limit(limit)
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   return (data as PostMetricsRow[]) ?? []
 }
 
@@ -54,6 +55,6 @@ export async function listStalePostMetrics(
     .select('*')
     .lt('last_synced_at', beforeDate)
     .limit(limit)
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   return (data as PostMetricsRow[]) ?? []
 }

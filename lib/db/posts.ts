@@ -1,6 +1,7 @@
 import { formatISO, subMinutes } from 'date-fns'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { PostRow, PostInsert, PostUpdate, PostStatus, AiGenerationMetadata } from './types'
+import { getErrorMessage } from './utils'
 
 const VALID_TRANSITIONS: Record<PostStatus, PostStatus[]> = {
   draft: ['approved', 'skipped'],
@@ -29,7 +30,7 @@ export async function listPostsByCampaign(
     .is('deleted_at', null)
     .order('created_at', { ascending: false })
     .limit(limit)
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   return (data as PostRow[]) ?? []
 }
 
@@ -43,7 +44,7 @@ export async function getPostById(
     .eq('id', id)
     .is('deleted_at', null)
     .single()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   if (!data) throw new Error(`Post ${id} not found`)
   return data as PostRow
 }
@@ -56,7 +57,7 @@ export async function createPosts(
     .from('posts')
     .insert(posts)
     .select()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   return (data as PostRow[]) ?? []
 }
 
@@ -75,7 +76,7 @@ export async function updatePost(
     .eq('id', id)
     .select()
     .single()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   if (!row) throw new Error(`Post ${id} not found`)
   return row as PostRow
 }
@@ -92,7 +93,7 @@ export async function approvePost(
     .is('deleted_at', null)
     .select()
     .single()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   if (!row) throw new Error(`Post ${id} not found or not in 'draft' status`)
   return row as PostRow
 }
@@ -109,7 +110,7 @@ export async function schedulePost(
     .is('deleted_at', null)
     .select()
     .single()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   if (!row) throw new Error(`Post ${id} not found or not in 'approved' status`)
   return row as PostRow
 }
@@ -149,7 +150,7 @@ export async function markPostFailed(
     .is('deleted_at', null)
     .select()
     .single()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   if (!updated) throw new Error(`Post ${postId} not found or not in 'scheduled' status`)
   return updated as PostRow
 }
@@ -166,7 +167,7 @@ export async function skipScheduledPost(
     .is('deleted_at', null)
     .select()
     .single()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   if (!row) throw new Error(`Post ${id} not found or not in a skippable status`)
   return row as PostRow
 }
@@ -183,7 +184,7 @@ export async function unapprovePost(
     .is('deleted_at', null)
     .select()
     .single()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   if (!row) throw new Error(`Post ${id} not found or not in 'approved' status`)
   return row as PostRow
 }
@@ -201,7 +202,7 @@ export async function skipPost(
     .is('deleted_at', null)
     .select()
     .single()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   if (!row) throw new Error(`Post ${id} not found or not in 'draft' status`)
   return row as PostRow
 }
@@ -218,7 +219,7 @@ export async function unskipPost(
     .is('deleted_at', null)
     .select()
     .single()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   if (!row) throw new Error(`Post ${id} not found or not in 'skipped' status`)
   return row as PostRow
 }
@@ -241,7 +242,7 @@ export async function updatePostContent(
     .is('deleted_at', null)
     .select()
     .single()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   if (!row) throw new Error(`Post ${id} not found or not in an editable status`)
   return row as PostRow
 }
@@ -269,7 +270,7 @@ export async function updatePostContentAndMetadata(
     .is('deleted_at', null)
     .select()
     .single()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   if (!row) throw new Error(`Post ${id} not found or not in 'draft' status`)
   return row as PostRow
 }
@@ -285,7 +286,7 @@ export async function bulkApproveDraftPosts(
     .eq('status', 'draft')
     .is('deleted_at', null)
     .select('id')
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   return (data as { id: string }[] | null)?.length ?? 0
 }
 
@@ -301,7 +302,7 @@ export async function getPostSiblingTopics(
     .neq('id', excludePostId)
     .is('deleted_at', null)
     .limit(20)
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   if (!data) return []
   return (data as { ai_generation_metadata: Record<string, unknown> | null }[])
     .map(row => (row.ai_generation_metadata as { rationale?: string } | null)?.rationale ?? '')
@@ -318,7 +319,7 @@ export async function listPostsByIds(
     .select('*')
     .in('id', ids)
     .is('deleted_at', null)
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   return (data as PostRow[]) ?? []
 }
 
@@ -332,7 +333,7 @@ export async function listPostsDue(
     .eq('status', 'approved')
     .lte('scheduled_at', now)
     .is('deleted_at', null)
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   return (data as PostRow[]) ?? []
 }
 
@@ -347,7 +348,7 @@ export async function claimPostsForPublishing(
     p_now: formatISO(now),
     p_limit: limit,
   })
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   return (data as PostRow[]) ?? []
 }
 
@@ -371,7 +372,7 @@ export async function publishPostComplete(
     p_platform_url: payload.platformUrl,
     p_published_at: formatISO(payload.publishedAt),
   })
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   const rows = (data ?? []) as PostRow[]
   return rows[0] ?? null
 }
@@ -418,7 +419,7 @@ export async function requeueScheduledPost(
     .is('deleted_at', null)
     .select()
     .single()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   if (!updated) throw new Error(`Post ${postId} not found or not in 'scheduled' status`)
   return updated as PostRow
 }
@@ -433,7 +434,7 @@ export async function reapStuckScheduledPosts(
     p_stuck_minutes: opts.stuckMinutes,
     p_max_attempts: config.server.PUBLISH_MAX_ATTEMPTS,
   })
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   return (data as number) ?? 0
 }
 
@@ -444,7 +445,7 @@ export async function incrementPublishedCountForCampaign(
   const { error } = await client.rpc('increment_published_count_for_campaign', {
     p_campaign_id: campaignId,
   })
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
 }
 
 // Returns published posts due for a metrics sync per ADR 0006 §4.
@@ -465,6 +466,6 @@ export async function listPostsForMetricsSync(
     p_max_age_days: opts.maxAgeDays,
     p_limit:        opts.limit,
   })
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   return (data as PostRow[]) ?? []
 }

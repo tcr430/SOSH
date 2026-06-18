@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Language } from './types'
 import type { TrialStateRow, TrialStatePublicRow } from './types'
+import { getErrorMessage } from './utils'
 
 export type TrialExpiringCandidate = {
   business_id: string
@@ -19,7 +20,7 @@ export async function findTrialExpiringBetween(
     p_from: fromIso,
     p_to: toIso,
   })
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   return (data ?? []) as TrialExpiringCandidate[]
 }
 
@@ -35,7 +36,7 @@ export async function getTrialState(
     .select(PUBLIC_COLUMNS)
     .eq('business_id', businessId)
     .single()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   if (!data) throw new Error(`Trial state for business ${businessId} not found`)
   return data as TrialStatePublicRow
 }
@@ -49,7 +50,7 @@ export async function getTrialStateMaybe(
     .select(PUBLIC_COLUMNS)
     .eq('business_id', businessId)
     .maybeSingle()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   return (data as TrialStatePublicRow | null) ?? null
 }
 
@@ -57,21 +58,21 @@ export async function incrementBrandVoiceAttempts(businessId: string): Promise<v
   const { createServiceRoleClient } = await import('@/lib/supabase/service')
   const client = createServiceRoleClient()
   const { error } = await client.rpc('increment_brand_voice_attempts', { p_business_id: businessId })
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
 }
 
 export async function incrementPostsGenerated(businessId: string): Promise<void> {
   const { createServiceRoleClient } = await import('@/lib/supabase/service')
   const client = createServiceRoleClient()
   const { error } = await client.rpc('increment_posts_generated', { p_business_id: businessId })
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
 }
 
 export async function incrementCampaignsCreated(businessId: string): Promise<void> {
   const { createServiceRoleClient } = await import('@/lib/supabase/service')
   const client = createServiceRoleClient()
   const { error } = await client.rpc('increment_campaigns_created', { p_business_id: businessId })
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
 }
 
 export async function incrementPostsGeneratedBy(businessId: string, amount: number): Promise<void> {
@@ -81,7 +82,7 @@ export async function incrementPostsGeneratedBy(businessId: string, amount: numb
     p_business_id: businessId,
     p_amount: amount,
   })
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
 }
 
 export async function getTrialStateForBilling(
@@ -94,7 +95,7 @@ export async function getTrialStateForBilling(
     .select('*')
     .eq('business_id', businessId)
     .single()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   if (!data) throw new Error(`Trial state for business ${businessId} not found`)
   return data as TrialStateRow
 }
@@ -110,5 +111,5 @@ export async function recordTrialCardFingerprint(input: {
     .update({ trial_card_fingerprint: input.fingerprint })
     .eq('business_id', input.businessId)
     .is('trial_card_fingerprint', null)
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
 }

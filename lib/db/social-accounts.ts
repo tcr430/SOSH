@@ -1,6 +1,7 @@
 import { captureException } from '@sentry/nextjs'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Platform, SocialAccountRow, SocialAccountInsert, SocialAccountUpdate } from './types'
+import { getErrorMessage } from './utils'
 
 export type SocialAccountPublic = {
   platform: Platform
@@ -26,7 +27,7 @@ export async function listAllSocialAccounts(
     .select(SOCIAL_ACCOUNT_PUBLIC_COLUMNS)
     .eq('business_id', businessId)
     .limit(limit)
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   return (data as SocialAccountWithoutVault[]) ?? []
 }
 
@@ -39,7 +40,7 @@ export async function listActiveSocialAccounts(
     .select(SOCIAL_ACCOUNT_PUBLIC_COLUMNS)
     .eq('business_id', businessId)
     .eq('is_active', true)
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   return (data as SocialAccountWithoutVault[]) ?? []
 }
 
@@ -52,7 +53,7 @@ export async function getSocialAccountById(
     .select('*')
     .eq('id', id)
     .single()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   if (!data) throw new Error(`Social account ${id} not found`)
   return data as SocialAccountRow
 }
@@ -66,7 +67,7 @@ export async function createSocialAccount(
     .insert(data)
     .select()
     .single()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   if (!row) throw new Error('Failed to create social account')
   return row as SocialAccountRow
 }
@@ -82,7 +83,7 @@ export async function updateSocialAccount(
     .eq('id', id)
     .select()
     .single()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   if (!row) throw new Error(`Social account ${id} not found`)
   return row as SocialAccountRow
 }
@@ -101,7 +102,7 @@ export async function deactivateSocialAccount(id: string): Promise<void> {
       vault_refresh_token_id: null,
     })
     .eq('id', id)
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
 
   try {
     await serviceClient.rpc('vault_delete_secret', {
@@ -134,7 +135,7 @@ export async function getActiveByBusinessAndPlatform(
     .eq('platform', platform)
     .eq('is_active', true)
     .maybeSingle()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   return (data as SocialAccountRow | null) ?? null
 }
 
@@ -149,6 +150,6 @@ export async function listByBusiness(
     .eq('business_id', businessId)
     .order('connected_at', { ascending: false })
     .limit(limit)
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   return (data as SocialAccountPublic[]) ?? []
 }

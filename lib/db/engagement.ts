@@ -5,6 +5,7 @@ import type {
   EngagementInboxUpdate,
   EngagementStatus,
 } from './types'
+import { getErrorMessage } from './utils'
 
 export async function listEngagementItems(
   client: SupabaseClient,
@@ -26,7 +27,7 @@ export async function listEngagementItems(
     .order('received_at', { ascending: false })
     .limit(limit)
     .range(offset, offset + limit - 1)
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   return (data as EngagementInboxRow[]) ?? []
 }
 
@@ -40,7 +41,7 @@ export async function createEngagementItem(
     .insert(data)
     .select()
     .single()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   if (!row) throw new Error('Failed to create engagement item')
   return row as EngagementInboxRow
 }
@@ -57,7 +58,7 @@ export async function updateEngagementItem(
     .eq('id', id)
     .select()
     .single()
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
   if (!row) throw new Error(`Engagement item ${id} not found`)
   return row as EngagementInboxRow
 }
