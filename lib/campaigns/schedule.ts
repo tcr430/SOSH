@@ -1,5 +1,6 @@
 import { addDays, addWeeks, getISOWeek, getISOWeekYear, isAfter } from 'date-fns'
 import type { Platform, CampaignFrequency, CampaignRow } from '@/lib/db/types'
+import { toUtcIso } from '@/lib/utils'
 
 export interface ScheduleInput {
   startDate: string         // YYYY-MM-DD (campaigns.start_date)
@@ -59,7 +60,7 @@ function localHourToUTCIso(dateStr: string, localHour: number, timezone: string)
   }).format(naive)
   const tzHour = parseInt(tzHourStr, 10) % 24
   // Subtract the difference so local time lands on localHour
-  return new Date(naive.getTime() - (tzHour - localHour) * 3_600_000).toISOString()
+  return toUtcIso(new Date(naive.getTime() - (tzHour - localHour) * 3_600_000))
 }
 
 function buildCandidates(

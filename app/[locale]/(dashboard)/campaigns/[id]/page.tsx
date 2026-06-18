@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import { getTranslations } from 'next-intl/server'
 import Link from 'next/link'
 import { format, parseISO } from 'date-fns'
-import { cn } from '@/lib/utils'
+import { cn, toUtcIso } from '@/lib/utils'
 import { buttonVariants } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/server'
 import { getBusinessByOwner } from '@/lib/db/businesses'
@@ -47,7 +47,7 @@ export default async function CampaignDetailPage({ params }: Props) {
     : []
   const failedCount = allPosts.filter(p => p.status === 'failed').length
   const upcomingDates = allPosts
-    .filter(p => (p.status === 'approved' || p.status === 'scheduled') && p.scheduled_at > new Date().toISOString())
+    .filter(p => (p.status === 'approved' || p.status === 'scheduled') && p.scheduled_at > toUtcIso(new Date()))
     .map(p => p.scheduled_at)
   const nextScheduledAt = upcomingDates.length > 0
     ? upcomingDates.reduce((a, b) => (a < b ? a : b))

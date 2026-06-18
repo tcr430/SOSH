@@ -1,8 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { toUtcIso } from '@/lib/utils'
 
 export async function markCronSeen(client: SupabaseClient, slug: string): Promise<void> {
   await client.from('cron_health').upsert(
-    { cron_slug: slug, last_seen_at: new Date().toISOString() },
+    { cron_slug: slug, last_seen_at: toUtcIso(new Date()) },
     { onConflict: 'cron_slug' },
   )
 }

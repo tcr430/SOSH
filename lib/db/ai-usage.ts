@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { AiUsageRow, AiUsageInsert } from './types'
+import { toUtcIso } from '@/lib/utils'
 
 export async function recordAiUsage(
   data: AiUsageInsert,
@@ -22,7 +23,7 @@ export async function countRecentCalls(
   windowSeconds: number,
   promptId: string,
 ): Promise<number> {
-  const since = new Date(Date.now() - windowSeconds * 1000).toISOString()
+  const since = toUtcIso(new Date(Date.now() - windowSeconds * 1000))
   const { count, error } = await client
     .from('ai_usage')
     .select('id', { count: 'exact', head: true })

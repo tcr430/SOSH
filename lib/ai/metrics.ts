@@ -1,3 +1,5 @@
+import { toUtcIso } from '@/lib/utils'
+
 export async function getCostThisMonth(businessId: string): Promise<{ cents: number }> {
   const { createServiceRoleClient } = await import('@/lib/supabase/service')
   const client = createServiceRoleClient()
@@ -10,7 +12,7 @@ export async function getCostThisMonth(businessId: string): Promise<{ cents: num
     .from('ai_usage')
     .select('cost_cents')
     .eq('business_id', businessId)
-    .gte('created_at', startOfMonth.toISOString())
+    .gte('created_at', toUtcIso(startOfMonth))
 
   if (error) throw new Error((error as { message: string }).message)
 
@@ -26,7 +28,7 @@ export async function getCallVolumeLast24h(businessId: string): Promise<{ count:
   const { createServiceRoleClient } = await import('@/lib/supabase/service')
   const client = createServiceRoleClient()
 
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  const since = toUtcIso(new Date(Date.now() - 24 * 60 * 60 * 1000))
 
   const { count, error } = await client
     .from('ai_usage')

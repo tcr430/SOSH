@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'crypto'
 import { type NextRequest, NextResponse } from 'next/server'
 import { config } from '@/lib/config'
 import { getCronLastSeen } from '@/lib/db/cron-health'
+import { toUtcIso } from '@/lib/utils'
 
 function safeCompare(a: string, b: string): boolean {
   if (a.length !== b.length) return false
@@ -53,7 +54,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   ])
 
   return NextResponse.json({
-    ts: new Date().toISOString(),
+    ts: toUtcIso(new Date()),
     db,
     cron: {
       publish: {
