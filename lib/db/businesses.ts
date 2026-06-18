@@ -196,7 +196,7 @@ export async function setStripeCustomerId(input: {
       .is('deleted_at', null)
       .maybeSingle()
 
-    if (fetchError) throw new Error((fetchError as { message: string }).message)
+    if (fetchError) throw new Error(getErrorMessage(fetchError))
 
     const existingId = (existing as { stripe_customer_id: string | null } | null)?.stripe_customer_id
     if (existing !== null && existingId !== null && existingId !== input.stripeCustomerId) {

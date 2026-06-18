@@ -1,4 +1,5 @@
 import { toUtcIso } from '@/lib/utils'
+import { getErrorMessage } from '@/lib/db/utils'
 
 export async function getCostThisMonth(businessId: string): Promise<{ cents: number }> {
   const { createServiceRoleClient } = await import('@/lib/supabase/service')
@@ -14,7 +15,7 @@ export async function getCostThisMonth(businessId: string): Promise<{ cents: num
     .eq('business_id', businessId)
     .gte('created_at', toUtcIso(startOfMonth))
 
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
 
   const cents = (data ?? []).reduce(
     (sum: number, row: { cost_cents: number }) => sum + (row.cost_cents ?? 0),
@@ -36,7 +37,7 @@ export async function getCallVolumeLast24h(businessId: string): Promise<{ count:
     .eq('business_id', businessId)
     .gte('created_at', since)
 
-  if (error) throw new Error((error as { message: string }).message)
+  if (error) throw new Error(getErrorMessage(error))
 
   return { count: count ?? 0 }
 }

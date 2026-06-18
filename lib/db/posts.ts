@@ -132,7 +132,7 @@ export async function markPostFailed(
     .eq('status', 'scheduled')
     .is('deleted_at', null)
     .single()
-  if (readError) throw new Error((readError as { message: string }).message)
+  if (readError) throw new Error(getErrorMessage(readError))
   if (!current) throw new Error(`Post ${postId} not found or not in 'scheduled' status`)
 
   const row = current as Pick<PostRow, 'ai_generation_metadata' | 'publish_attempts'>
@@ -394,7 +394,7 @@ export async function requeueScheduledPost(
     .eq('status', 'scheduled')
     .is('deleted_at', null)
     .single()
-  if (readError) throw new Error((readError as { message: string }).message)
+  if (readError) throw new Error(getErrorMessage(readError))
   if (!current) throw new Error(`Post ${postId} not found or not in 'scheduled' status`)
 
   const row = current as Pick<PostRow, 'ai_generation_metadata' | 'publish_attempts'>
