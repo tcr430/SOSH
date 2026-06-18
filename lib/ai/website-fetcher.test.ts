@@ -350,75 +350,75 @@ describe('DNS failure (F-8/F-9 support)', () => {
 
 describe('B18-029 — 0.0.0.0/8 (this-network / loopback evasion)', () => {
   it('returns null for 0.0.0.0 (network address)', async () => {
-    mockLookup.mockResolvedValue([{ address: '0.0.0.0', family: 4 }])
+    mockDns('0.0.0.0')
     expect(await fetchWebsiteText('http://0.0.0.0')).toBeNull()
   })
 
   it('returns null for 0.1.2.3 (mid-range)', async () => {
-    mockLookup.mockResolvedValue([{ address: '0.1.2.3', family: 4 }])
+    mockDns('0.1.2.3')
     expect(await fetchWebsiteText('http://0.1.2.3')).toBeNull()
   })
 })
 
 describe('B18-029 — CGNAT 100.64.0.0/10', () => {
   it('returns null for 100.96.0.1 (mid-range)', async () => {
-    mockLookup.mockResolvedValue([{ address: '100.96.0.1', family: 4 }])
+    mockDns('100.96.0.1')
     expect(await fetchWebsiteText('http://100.96.0.1')).toBeNull()
   })
 })
 
 describe('B18-029 — TEST-NET-1 192.0.2.0/24', () => {
   it('returns null for 192.0.2.100 (mid-range)', async () => {
-    mockLookup.mockResolvedValue([{ address: '192.0.2.100', family: 4 }])
+    mockDns('192.0.2.100')
     expect(await fetchWebsiteText('http://192.0.2.100')).toBeNull()
   })
 })
 
 describe('B18-029 — TEST-NET-2 198.51.100.0/24', () => {
   it('returns null for 198.51.100.100 (mid-range)', async () => {
-    mockLookup.mockResolvedValue([{ address: '198.51.100.100', family: 4 }])
+    mockDns('198.51.100.100')
     expect(await fetchWebsiteText('http://198.51.100.100')).toBeNull()
   })
 })
 
 describe('B18-029 — TEST-NET-3 203.0.113.0/24', () => {
   it('returns null for 203.0.113.100 (mid-range)', async () => {
-    mockLookup.mockResolvedValue([{ address: '203.0.113.100', family: 4 }])
+    mockDns('203.0.113.100')
     expect(await fetchWebsiteText('http://203.0.113.100')).toBeNull()
   })
 })
 
 describe('B18-029 — benchmark 198.18.0.0/15', () => {
   it('returns null for 198.18.100.1 (mid-range)', async () => {
-    mockLookup.mockResolvedValue([{ address: '198.18.100.1', family: 4 }])
+    mockDns('198.18.100.1')
     expect(await fetchWebsiteText('http://198.18.100.1')).toBeNull()
   })
 })
 
 describe('B18-029 — Class E 240.0.0.0/4', () => {
   it('returns null for 248.0.0.1 (mid-range)', async () => {
-    mockLookup.mockResolvedValue([{ address: '248.0.0.1', family: 4 }])
+    mockDns('248.0.0.1')
     expect(await fetchWebsiteText('http://248.0.0.1')).toBeNull()
   })
 })
 
 describe('B18-029 — broadcast 255.255.255.255/32', () => {
   it('returns null for 255.255.255.255', async () => {
-    mockLookup.mockResolvedValue([{ address: '255.255.255.255', family: 4 }])
+    mockDns('255.255.255.255')
     expect(await fetchWebsiteText('http://255.255.255.255')).toBeNull()
   })
 })
 
 describe('B18-029 — IPv6 link-local fe80::/10', () => {
   it('returns null for fe80::1 (mid-range)', async () => {
-    mockLookup.mockResolvedValue([{ address: 'fe80::1', family: 6 }])
+    mockDns('fe80::1', 6)
     expect(await fetchWebsiteText('http://[fe80::1]')).toBeNull()
   })
 })
 
 describe('B18-029 — IPv6 documentation 2001:db8::/32', () => {
   it('returns null for 2001:db8::1 (mid-range)', async () => {
-    mockLookup.mockResolvedValue([{ address: '2001:db8::1', family: 6 }])
+    mockDns('2001:db8::1', 6)
     expect(await fetchWebsiteText('http://[2001:db8::1]')).toBeNull()
   })
 })
