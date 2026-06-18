@@ -2,6 +2,12 @@
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
 
+const TO_ISO_STRING_BAN = {
+  property: 'toISOString',
+  message:
+    "Use toUtcIso() from '@/lib/utils' instead. Raw .toISOString() is banned to prevent local-offset bugs — see CLAUDE.md date rule.",
+}
+
 // Shared ban lists — used in the main block and subtracted from per-package overrides.
 
 const SOCIAL_INTERNALS_BAN = {
@@ -59,6 +65,15 @@ const eslintConfig = defineConfig([
           paths: [STRIPE_BAN, RESEND_BAN],
         },
       ],
+      "no-restricted-properties": ["error", TO_ISO_STRING_BAN],
+    },
+  },
+
+  // Exception: test files — toISOString allowed in fixtures and mocks.
+  {
+    files: ["**/*.test.ts", "**/*.test.tsx", "**/__tests__/**", "**/__integration__/**", "scripts/**"],
+    rules: {
+      "no-restricted-properties": "off",
     },
   },
 
