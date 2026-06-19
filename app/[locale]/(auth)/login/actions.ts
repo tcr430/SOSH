@@ -58,6 +58,11 @@ export async function loginAction(
 
   if (error) {
     // Deliberately vague — do not reveal whether the email exists or is confirmed.
+    // Residual: response shape is uniform across all failure states, but GoTrue may still leak
+    // existence via timing (nonexistent user may return faster than wrong-password on a real
+    // account, depending on dummy-hash behaviour). Accepted — Supabase owns auth timing;
+    // app-layer constant-time is explicitly out of scope and would give false assurance.
+    // Matches forgot-password posture. (B18-060)
     return { errors: { _form: 'errors.login.invalid' }, values: { email } }
   }
 

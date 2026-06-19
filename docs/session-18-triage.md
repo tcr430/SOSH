@@ -235,6 +235,7 @@ Inventory IDs trace back to the Step 1 chat list. 64 items tiered below.
 - Description: Login distinguishes registered-unconfirmed vs unregistered email → account-enumeration oracle.
 - Reasoning: Security finding entangled with the resend-confirmation UX; needs a product decision before any change. — 45min (incl. decision)
 - **CLOSED — Session 18B-4** ✅ (Option 3 — collapse all signInWithPassword failures to generic `errors.login.invalid`; remove unconfirmedEmail from LoginState; replace conditional amber banner with always-rendered resend link on login page; new `/resend-confirmation` route mirrors forgot-password anti-enumeration posture; `'resend-confirmation'` added to AuthAction + RATE_LIMITS + PUBLIC_SEGMENTS)
+- **Residual (18B-4D, M1):** Response-shape oracle is fully closed. A GoTrue-layer timing oracle remains: `signInWithPassword` may return faster for a nonexistent user than for a wrong-password attempt on a real account, depending on dummy-hash behaviour. Accepted — Supabase owns auth timing; app-layer constant-time is explicitly out of scope and would give false assurance. Matches the forgot-password posture. Documented in `login/actions.ts` comment.
 
 ### ~~B18-075 — publish-metadata-rpc~~ ✅ COMPLETE (Session 18B-2)
 - Source: S10 B2 · Original: reviewer defer
