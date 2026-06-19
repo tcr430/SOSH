@@ -51,7 +51,22 @@ Verification command (per row): `vercel env ls production | grep <VAR>`
 | `LINKEDIN_CLIENT_ID` / `LINKEDIN_CLIENT_SECRET` | LinkedIn Developer Portal → app | ☐ `vercel env ls production \| grep -q '^LINKEDIN_CLIENT_ID' && echo present \|\| echo MISSING` / `vercel env ls production \| grep -q '^LINKEDIN_CLIENT_SECRET' && echo present \|\| echo MISSING` |
 | `X_CLIENT_ID` / `X_CLIENT_SECRET` | X Developer Portal → app | ☐ `vercel env ls production \| grep -q '^X_CLIENT_ID' && echo present \|\| echo MISSING` / `vercel env ls production \| grep -q '^X_CLIENT_SECRET' && echo present \|\| echo MISSING` |
 | `META_APP_ID` / `META_APP_SECRET` | Meta for Developers → app | ☐ `vercel env ls production \| grep -q '^META_APP_ID' && echo present \|\| echo MISSING` / `vercel env ls production \| grep -q '^META_APP_SECRET' && echo present \|\| echo MISSING` |
-| Tunables (`PUBLISH_*`, `METRICS_*`, `AI_*`, `POST_GENERATION_*`) | Defaults from `/lib/config.ts` — set only if overriding | ☐ `vercel env ls production \| grep -E '^(PUBLISH_\|METRICS_\|AI_\|POST_GENERATION_)' \|\| echo none-set` |
+| `PUBLISH_MAX_ATTEMPTS` | Default `5` — set only if overriding | ☐ `vercel env ls production \| grep '^PUBLISH_MAX_ATTEMPTS' \|\| echo 'not set (default 5)'` |
+| `PUBLISH_BATCH_SIZE` | Default `25` — set only if overriding | ☐ `vercel env ls production \| grep '^PUBLISH_BATCH_SIZE' \|\| echo 'not set (default 25)'` |
+| `PUBLISH_RETRY_BACKOFF_SECONDS` | Default `60` — set only if overriding | ☐ `vercel env ls production \| grep '^PUBLISH_RETRY_BACKOFF_SECONDS' \|\| echo 'not set (default 60)'` |
+| `PUBLISH_STUCK_MINUTES` | Default `10` — set only if overriding | ☐ `vercel env ls production \| grep '^PUBLISH_STUCK_MINUTES' \|\| echo 'not set (default 10)'` |
+| `METRICS_SYNC_BATCH_SIZE` | Default `50` — set only if overriding | ☐ `vercel env ls production \| grep '^METRICS_SYNC_BATCH_SIZE' \|\| echo 'not set (default 50)'` |
+| `METRICS_STALE_MINUTES` | Default `360` — set only if overriding | ☐ `vercel env ls production \| grep '^METRICS_STALE_MINUTES' \|\| echo 'not set (default 360)'` |
+| `METRICS_MAX_AGE_DAYS` | Default `90` — set only if overriding | ☐ `vercel env ls production \| grep '^METRICS_MAX_AGE_DAYS' \|\| echo 'not set (default 90)'` |
+| `AI_RATE_LIMIT_BRAND_VOICE_PER_MIN` | Default `10` — set only if overriding | ☐ `vercel env ls production \| grep '^AI_RATE_LIMIT_BRAND_VOICE_PER_MIN' \|\| echo 'not set (default 10)'` |
+| `AI_RATE_LIMIT_POST_GENERATION_PER_MIN` | Default `30` — set only if overriding | ☐ `vercel env ls production \| grep '^AI_RATE_LIMIT_POST_GENERATION_PER_MIN' \|\| echo 'not set (default 30)'` |
+| `AI_TRIAL_BRAND_VOICE_ATTEMPTS` | Default `3` — set only if overriding | ☐ `vercel env ls production \| grep '^AI_TRIAL_BRAND_VOICE_ATTEMPTS' \|\| echo 'not set (default 3)'` |
+| `AI_TRIAL_POST_CAP` | Default `50` — set only if overriding | ☐ `vercel env ls production \| grep '^AI_TRIAL_POST_CAP' \|\| echo 'not set (default 50)'` |
+| `AI_TRIAL_CAMPAIGN_CAP` | Default `1` — set only if overriding | ☐ `vercel env ls production \| grep '^AI_TRIAL_CAMPAIGN_CAP' \|\| echo 'not set (default 1)'` |
+| `AI_WEBSITE_FETCH_TIMEOUT_MS` | Default `5000` — set only if overriding | ☐ `vercel env ls production \| grep '^AI_WEBSITE_FETCH_TIMEOUT_MS' \|\| echo 'not set (default 5000)'` |
+| `AI_WEBSITE_FETCH_MAX_BYTES` | Default `512000` (512 KB) — set only if overriding | ☐ `vercel env ls production \| grep '^AI_WEBSITE_FETCH_MAX_BYTES' \|\| echo 'not set (default 512000)'` |
+| `POST_GENERATION_POLL_MAX_SECONDS` | Default `120` — set only if overriding | ☐ `vercel env ls production \| grep '^POST_GENERATION_POLL_MAX_SECONDS' \|\| echo 'not set (default 120)'` |
+| `POST_GENERATION_SESSION_STALE_MINUTES` | Default `15` — set only if overriding | ☐ `vercel env ls production \| grep '^POST_GENERATION_SESSION_STALE_MINUTES' \|\| echo 'not set (default 15)'` |
 
 > Builder note: regenerate this table by walking `serverSchema` + `publicSchema` in `/lib/config.ts`. Any var present in the schema but absent here is a gap; any var here that is absent from the schema is a stale entry to remove.
 
