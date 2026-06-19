@@ -2,7 +2,7 @@
 
 **Phase:** 1 — MVP
 **Goal:** First paying customer
-**Status:** Session 18B-3 complete (18B-3D correction applied) — type-quality sweep closed B18-010/030/041/069/070/071; correction pass 18B-3D finished pattern-matched getErrorMessage sweep and RegenerateDialog cast removal.
+**Status:** Session 18B-4 complete (18B-4D cleanup applied) — anti-enumeration oracle closed (B18-060); middleware renamed to proxy.ts (B18-025); correction pass 18B-4D recorded residual timing oracle, removed orphaned i18n keys, filed B18-087.
 
 ## What's done
 - Session 0: Environment setup complete
@@ -988,6 +988,11 @@ Pre-launch hardening sweep per `docs/launch-checklist.md` and `docs/backlog.md`:
 - **Canonical tick log lives in the orchestrator:** `publish-tick`, `janitor_tick`, and
   `metrics-sync-tick` log lines are emitted once per tick from the orchestrator, carrying both
   `triggeredBy` and all summary fields. Routes do not emit tick logs — they delegate to orchestrators.
+
+### Session 18B-4 (B18-060 anti-enumeration + B18-025 proxy rename)
+
+- **Anti-enumeration: Option 3 — collapse all `signInWithPassword` failures to `errors.login.invalid`:** removes `unconfirmedEmail` from `LoginState`; replaces the conditional amber banner with an always-rendered resend link; new `/resend-confirmation` route mirrors the `forgot-password` indistinguishability posture. Residual GoTrue timing oracle documented + accepted.
+- **proxy.ts replaces middleware.ts (Next.js 16 convention):** `config.matcher`, `x-pathname` header, nonce/CSP injection, and auth-redirect logic are byte-identical; only the export name and filename changed.
 
 ---
 
