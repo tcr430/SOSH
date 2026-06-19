@@ -358,6 +358,12 @@ Inventory IDs trace back to the Step 1 chat list. 64 items tiered below.
 - Reasoning: Same class as B18-060 (account-enumeration oracle); signup flow. Fix: collapse the `already registered` branch into the generic `errors.signup.generic` form error, same indistinguishability principle. — 30min
 - **NOT fixed in Session 18B-4 — out of scope. File and tier for next auth session.**
 
+### B18-087 — confirmation-redirect-env-parity (P2)
+- Source: S18B-4 reviewer L2 · Original: discovered during B18-060 review
+- Description: The signup-confirmation flow (both entry points: `signup/actions.ts` and `resend-confirmation/actions.ts`) omits `emailRedirectTo`, so confirmation links resolve to the Supabase-dashboard Site URL rather than `config.server.APP_URL`. Correct and consistent in production (Site URL == APP_URL), but in preview/staging the link points at the configured Site URL, not the preview deployment.
+- Reasoning: Not a security issue, not a prod-correctness issue. If multi-environment confirmation links ever matter, pin `emailRedirectTo` from `APP_URL` on **both** signup and resend together — one-sided would create a signup↔resend asymmetry. — 20min
+- **NOT fixed in Session 18B-4D — out of scope (documentation only). Fix signup and resend together in the same pass.**
+
 ---
 
 ## N/A — Stale / superseded / already done
