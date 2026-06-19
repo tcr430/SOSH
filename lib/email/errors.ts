@@ -7,6 +7,7 @@ export type EmailProviderErrorCode =
   | 'provider_unavailable'
   | 'invalid_recipient'
   | 'template_render_failed'
+  | 'suppressed'
   | 'unknown'
 
 function redactSensitiveKeys(obj: Record<string, unknown>): Record<string, unknown> {

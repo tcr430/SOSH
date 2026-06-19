@@ -116,7 +116,6 @@ export function PostsClient({ posts, campaign, locale, initialFilter = 'all' }: 
       if (activeFilter === 'failed') return p.status === 'failed'
       return p.platform === activeFilter
     })
-    .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at))
 
   const dateFnsLocale = DATE_FNS_LOCALES[locale] ?? enUS
 

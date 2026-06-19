@@ -1,8 +1,7 @@
-import { formatISO } from 'date-fns'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { BusinessRow, BusinessInsert, BusinessUpdate, Plan } from './types'
 import type { PaidPlan } from '@/lib/stripe/products'
-import { getErrorMessage } from './utils'
+import { getErrorMessage, toUtcIso } from './utils'
 
 export async function getBusinessById(
   client: SupabaseClient,
@@ -96,7 +95,7 @@ export async function softDeleteBusiness(
 ): Promise<void> {
   const { error } = await client
     .from('businesses')
-    .update({ deleted_at: formatISO(new Date()) })
+    .update({ deleted_at: toUtcIso() })
     .eq('id', id)
   if (error) throw new Error(getErrorMessage(error))
 }
@@ -128,7 +127,7 @@ export async function updateBillingFromSubscription(input: {
     .update({
       plan: input.plan,
       stripe_subscription_id: input.stripeSubscriptionId,
-      updated_at: formatISO(new Date()),
+      updated_at: toUtcIso(),
     })
     .eq('stripe_customer_id', input.stripeCustomerId)
     .is('deleted_at', null)
@@ -148,7 +147,7 @@ export async function clearBillingOnCancellation(input: {
     .update({
       plan: 'trial' as Plan,
       stripe_subscription_id: null,
-      updated_at: formatISO(new Date()),
+      updated_at: toUtcIso(),
     })
     .eq('stripe_customer_id', input.stripeCustomerId)
     .is('deleted_at', null)

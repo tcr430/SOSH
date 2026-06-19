@@ -1,5 +1,9 @@
 import type { AiGenerationMetadata } from './types'
 
+export function toUtcIso(date: Date = new Date()): string {
+  return date.toISOString()
+}
+
 export function getErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message
   if (typeof error === 'object' && error !== null && 'message' in error) {

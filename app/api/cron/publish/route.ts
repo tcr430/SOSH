@@ -46,6 +46,7 @@ async function publishTick(request: NextRequest): Promise<NextResponse> {
     }
 
     if (!authorised) {
+      console.warn(JSON.stringify({ kind: 'cron-auth-failure', route: 'publish', trigger: 'secret', reason: 'bearer-invalid' }))
       return new NextResponse('Unauthorized', { status: 401 })
     }
   }

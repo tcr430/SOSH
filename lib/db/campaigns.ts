@@ -1,7 +1,6 @@
-import { formatISO } from 'date-fns'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { CampaignRow, CampaignInsert, CampaignUpdate } from './types'
-import { getErrorMessage } from './utils'
+import { getErrorMessage, toUtcIso } from './utils'
 
 export async function listCampaigns(
   client: SupabaseClient,
@@ -119,7 +118,7 @@ export async function softDeleteCampaignGuarded(
 ): Promise<boolean> {
   const { data, error } = await client
     .from('campaigns')
-    .update({ deleted_at: formatISO(new Date()) })
+    .update({ deleted_at: toUtcIso() })
     .eq('id', id)
     .in('status', ['draft', 'completed'])
     .is('deleted_at', null)

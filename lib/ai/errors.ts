@@ -5,7 +5,6 @@ export type AiErrorCode =
   | 'provider_error'    // 5xx after retry
   | 'rate_limit'        // 429 after retry
   | 'timeout'           // SDK call exceeded timeout
-  | 'fetch_failed'      // website-fetcher could not retrieve
 
 export class AiError extends Error {
   constructor(public readonly code: AiErrorCode, message: string) {

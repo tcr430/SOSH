@@ -54,6 +54,8 @@ async function getAuthContext() {
 }
 
 function revalidateCampaignPosts(campaignId: string): void {
+  // Literal /[locale]/... brackets are the Next.js 16 pattern for invalidating a dynamic
+  // segment across all its values — this correctly purges every locale at once.
   revalidatePath(`/[locale]/campaigns/${campaignId}/posts`, 'page')
 }
 

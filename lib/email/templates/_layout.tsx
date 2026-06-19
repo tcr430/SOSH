@@ -94,7 +94,7 @@ export function EmailLayout({ locale, preheader, children }: EmailLayoutProps): 
           >
             <Text
               style={{
-                fontSize: '13px',
+                fontSize: '14px',
                 color: st.muted,
                 lineHeight: '1.6',
                 margin: '0 0 4px 0',
@@ -104,7 +104,7 @@ export function EmailLayout({ locale, preheader, children }: EmailLayoutProps): 
             </Text>
             <Text
               style={{
-                fontSize: '13px',
+                fontSize: '14px',
                 color: st.muted,
                 lineHeight: '1.6',
                 margin: '0',

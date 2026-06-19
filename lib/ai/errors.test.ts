@@ -31,7 +31,6 @@ describe('AiError', () => {
       'provider_error',
       'rate_limit',
       'timeout',
-      'fetch_failed',
     ]
     for (const code of codes) {
       expect(() => new AiError(code, 'test')).not.toThrow()

@@ -61,18 +61,18 @@ export function DashboardShell({
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setBannerDismissed(sessionStorage.getItem(BANNER_KEY) === '1')
+    setBannerDismissed(localStorage.getItem(BANNER_KEY) === '1')
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setTrialBannerDismissed(sessionStorage.getItem(TRIAL_BILLING_BANNER_KEY) === '1')
+    setTrialBannerDismissed(localStorage.getItem(TRIAL_BILLING_BANNER_KEY) === '1')
   }, [])
 
   function dismissBanner() {
-    sessionStorage.setItem(BANNER_KEY, '1')
+    localStorage.setItem(BANNER_KEY, '1')
     setBannerDismissed(true)
   }
 
   function dismissTrialBanner() {
-    sessionStorage.setItem(TRIAL_BILLING_BANNER_KEY, '1')
+    localStorage.setItem(TRIAL_BILLING_BANNER_KEY, '1')
     setTrialBannerDismissed(true)
   }
 

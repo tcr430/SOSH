@@ -147,5 +147,8 @@
     "privacy": "SŌSH — Privacy",
     "subprocessors": "SŌSH — Subprocessors"
   },
-  "legal_stub": "This document is being finalised. Last updated: TBD."
+  "legal_stub": "This document is being finalised. Last updated: TBD.",
+  "accessibility": {
+    "skip_to_content": "Skip to content"
+  }
 }

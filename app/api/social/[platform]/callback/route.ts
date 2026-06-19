@@ -6,6 +6,7 @@ import type { OAuthStateClaims, TokenSet } from '@/lib/social'
 import type { VaultSecretId } from '@/lib/db/types'
 import { getBusinessById } from '@/lib/db/businesses'
 import { formatISO } from 'date-fns'
+import * as Sentry from '@sentry/nextjs'
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -117,7 +118,7 @@ export async function GET(
     } catch {
       try {
         await serviceClient.rpc('vault_delete_secret', { secret_id: vaultAccessId })
-      } catch {}
+      } catch (e) { Sentry.captureException(e) }
       return errorRedirect(request, 'vault_write_failed', locale)
     }
   }
@@ -159,11 +160,11 @@ export async function GET(
   if (dbError || !upsertResult) {
     try {
       await serviceClient.rpc('vault_delete_secret', { secret_id: vaultAccessId })
-    } catch {}
+    } catch (e) { Sentry.captureException(e) }
     if (vaultRefreshId) {
       try {
         await serviceClient.rpc('vault_delete_secret', { secret_id: vaultRefreshId })
-      } catch {}
+      } catch (e) { Sentry.captureException(e) }
     }
     return errorRedirect(request, 'db_write_failed', locale)
   }
@@ -177,12 +178,12 @@ export async function GET(
     if (prior.vault_access_token_id && prior.vault_access_token_id !== vaultAccessId) {
       try {
         await serviceClient.rpc('vault_delete_secret', { secret_id: prior.vault_access_token_id })
-      } catch {}
+      } catch (e) { Sentry.captureException(e) }
     }
     if (prior.vault_refresh_token_id && prior.vault_refresh_token_id !== vaultRefreshId) {
       try {
         await serviceClient.rpc('vault_delete_secret', { secret_id: prior.vault_refresh_token_id })
-      } catch {}
+      } catch (e) { Sentry.captureException(e) }
     }
   }
 

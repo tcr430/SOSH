@@ -44,6 +44,7 @@ async function metricsSyncTick(request: NextRequest): Promise<NextResponse> {
     }
 
     if (!authorised) {
+      console.warn(JSON.stringify({ kind: 'cron-auth-failure', route: 'sync-metrics', trigger: 'secret', reason: 'bearer-invalid' }))
       return new NextResponse('Unauthorized', { status: 401 })
     }
   }

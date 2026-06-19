@@ -1,8 +1,10 @@
 import { formatISO, subMinutes } from 'date-fns'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { PostRow, PostInsert, PostUpdate, PostStatus, AiGenerationMetadata } from './types'
-import { getErrorMessage } from './utils'
+import { getErrorMessage, toUtcIso } from './utils'
 
+// Governs only the generic updatePost path. Dedicated functions (unapprovePost,
+// unskipPost) bypass this map and use their own atomic WHERE guards.
 const VALID_TRANSITIONS: Record<PostStatus, PostStatus[]> = {
   draft: ['approved', 'skipped'],
   approved: ['scheduled', 'skipped'],
@@ -326,7 +328,7 @@ export async function listPostsByIds(
 export async function listPostsDue(
   client: SupabaseClient,
 ): Promise<PostRow[]> {
-  const now = formatISO(new Date())
+  const now = toUtcIso()
   const { data, error } = await client
     .from('posts')
     .select('*')

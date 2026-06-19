@@ -318,7 +318,6 @@ export async function runJanitorTick(opts?: {
   now?: Date
   triggeredBy?: 'qstash' | 'secret'
 }): Promise<JanitorTickSummary> {
-  return Sentry.withMonitor('janitor-cron', async () => {
   const tickStart = Date.now()
   const now = opts?.now ?? new Date()
 
@@ -344,5 +343,4 @@ export async function runJanitorTick(opts?: {
 
   console.log(JSON.stringify({ kind: 'janitor_tick', triggeredBy: opts?.triggeredBy, reapedStuckEmails, ...summary }))
   return summary
-  }) // end Sentry.withMonitor
 }
