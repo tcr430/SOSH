@@ -2,7 +2,7 @@ import { isIP } from 'node:net'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { config } from '@/lib/config'
 
-export type AuthAction = 'signup' | 'login' | 'forgot-password' | 'reset-password'
+export type AuthAction = 'signup' | 'login' | 'forgot-password' | 'reset-password' | 'resend-confirmation'
 
 interface BucketConfig {
   capacity: number
@@ -13,7 +13,8 @@ export const RATE_LIMITS: Record<AuthAction, { ip: BucketConfig; email?: BucketC
   'signup':          { ip: { capacity: 5,  refillPerSecond: 5 / 60 } },
   'login':           { ip: { capacity: 10, refillPerSecond: 10 / 60 },      email: { capacity: 5, refillPerSecond: 5 / (15 * 60) } },
   'forgot-password': { ip: { capacity: 5,  refillPerSecond: 5 / 60 },       email: { capacity: 3, refillPerSecond: 3 / (15 * 60) } },
-  'reset-password':  { ip: { capacity: 5,  refillPerSecond: 5 / 60 } },
+  'reset-password':       { ip: { capacity: 5,  refillPerSecond: 5 / 60 } },
+  'resend-confirmation':  { ip: { capacity: 5,  refillPerSecond: 5 / 60 },       email: { capacity: 3, refillPerSecond: 3 / (15 * 60) } },
 }
 
 export function isValidIp(value: string): boolean {

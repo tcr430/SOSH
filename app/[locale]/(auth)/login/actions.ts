@@ -19,28 +19,13 @@ const loginSchema = z.object({
   redirectTo: z.string().optional(),
 })
 
-const resendSchema = z.object({
-  email: z.preprocess(
-    (val) => (typeof val === 'string' ? canonicalizeEmail(val) : val),
-    z.string().email(),
-  ),
-  locale: z.enum(['en', 'pt', 'es']).default('en'),
-})
-
 export type LoginState = {
   errors?: {
     _form?: string
   }
-  unconfirmedEmail?: string
-  resendSuccess?: boolean
   values?: {
     email?: string
   }
-}
-
-export type ResendState = {
-  success?: boolean
-  error?: string
 }
 
 export async function loginAction(
@@ -72,10 +57,7 @@ export async function loginAction(
   const { data, error } = await client.auth.signInWithPassword({ email, password })
 
   if (error) {
-    if (error.message.toLowerCase().includes('email not confirmed')) {
-      return { unconfirmedEmail: email, values: { email } }
-    }
-    // Deliberately vague — do not reveal whether the email exists.
+    // Deliberately vague — do not reveal whether the email exists or is confirmed.
     return { errors: { _form: 'errors.login.invalid' }, values: { email } }
   }
 
@@ -95,24 +77,4 @@ export async function loginAction(
   }
 
   redirect(`/${locale}/campaigns`)
-}
-
-export async function resendConfirmationAction(
-  _prevState: ResendState,
-  formData: FormData,
-): Promise<ResendState> {
-  const parsed = resendSchema.safeParse({
-    email: formData.get('email'),
-    locale: formData.get('locale'),
-  })
-
-  if (!parsed.success) {
-    return { error: 'errors.signup.generic' }
-  }
-
-  const client = await createClient()
-  await client.auth.resend({ type: 'signup', email: parsed.data.email })
-
-  // Always return success — never reveal whether the email is registered.
-  return { success: true }
 }

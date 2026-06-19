@@ -216,6 +216,7 @@ Inventory IDs trace back to the Step 1 chat list. 64 items tiered below.
 - Source: current-phase §970 / CLAUDE.md file-structure · Original: gotcha
 - Description: Rename `middleware.ts` → `proxy.ts` (Next.js 16 deprecation); CLAUDE.md already names `proxy.ts`.
 - Reasoning: Violates CLAUDE.md (file-structure already describes the rename) (R1); touches config + launch-checklist §8 grep commands, needs care. — 45min
+- **CLOSED — Session 18B-4** ✅ (renamed middleware.ts → proxy.ts; export `middleware` → `proxy`; added `resend-confirmation` to PUBLIC_SEGMENTS; updated launch-checklist §8 grep commands; removed stale gotcha from current-phase.md)
 
 ### B18-030 — geterrormessage-helper
 - Source: current-phase §752 / S5 H-casts · Original: Session 5D defer
@@ -233,6 +234,7 @@ Inventory IDs trace back to the Step 1 chat list. 64 items tiered below.
 - Source: S4 M-01 · Original: reviewer defer (decision required)
 - Description: Login distinguishes registered-unconfirmed vs unregistered email → account-enumeration oracle.
 - Reasoning: Security finding entangled with the resend-confirmation UX; needs a product decision before any change. — 45min (incl. decision)
+- **CLOSED — Session 18B-4** ✅ (Option 3 — collapse all signInWithPassword failures to generic `errors.login.invalid`; remove unconfirmedEmail from LoginState; replace conditional amber banner with always-rendered resend link on login page; new `/resend-confirmation` route mirrors forgot-password anti-enumeration posture; `'resend-confirmation'` added to AuthAction + RATE_LIMITS + PUBLIC_SEGMENTS)
 
 ### ~~B18-075 — publish-metadata-rpc~~ ✅ COMPLETE (Session 18B-2)
 - Source: S10 B2 · Original: reviewer defer
@@ -348,6 +350,12 @@ Inventory IDs trace back to the Step 1 chat list. 64 items tiered below.
 - Description: `formatISO(new Date())` calls in `businesses.ts`, `campaigns.ts`, `posts.ts` emit LOCAL-offset strings (the same UTC hazard B18-041 fixed, invisible to the `.toISOString()` ban lint rule).
 - Reasoning: Tier UNDECIDED pending a probe: **P1** if any site writes a `timestamptz` column or string-compares the value; **P2** if display-only. Do NOT fix until the probe determines tier — just verify call sites and column types first.
 - **Do not fix in the next Builder session without running the probe first.**
+
+### B18-086 — signup-email-oracle
+- Source: S18B-4 recon · Original: discovered during B18-060 analysis
+- Description: `signup/actions.ts` `includes('already registered')` branch returns a distinct field-level `errors.email` key vs the generic `errors._form` on other failures — leaks whether an email address is already registered.
+- Reasoning: Same class as B18-060 (account-enumeration oracle); signup flow. Fix: collapse the `already registered` branch into the generic `errors.signup.generic` form error, same indistinguishability principle. — 30min
+- **NOT fixed in Session 18B-4 — out of scope. File and tier for next auth session.**
 
 ---
 
