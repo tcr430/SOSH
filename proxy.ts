@@ -12,19 +12,20 @@ const handleI18n = createIntlMiddleware(routing);
 // accessible without authentication. Everything else is treated as a
 // /(dashboard)/ route and requires a valid session.
 const PUBLIC_SEGMENTS = new Set([
-  '',                 // /[locale]  (marketing homepage — ADR 0009 §3.4)
-  'pricing',          // /(marketing)/pricing
-  'terms',            // /(marketing)/terms
-  'privacy',          // /(marketing)/privacy
-  'og',               // /(marketing)/og  (runtime OG image — ADR 0009 §9)
-  'login',            // /(auth)/login
-  'signup',           // /(auth)/signup
-  'forgot-password',  // /(auth)/forgot-password
-  'reset-password',   // /(auth)/reset-password
-  'verify-email',     // /(auth)/verify-email
+  '',                     // /[locale]  (marketing homepage — ADR 0009 §3.4)
+  'pricing',              // /(marketing)/pricing
+  'terms',                // /(marketing)/terms
+  'privacy',              // /(marketing)/privacy
+  'og',                   // /(marketing)/og  (runtime OG image — ADR 0009 §9)
+  'login',                // /(auth)/login
+  'signup',               // /(auth)/signup
+  'forgot-password',      // /(auth)/forgot-password
+  'reset-password',       // /(auth)/reset-password
+  'verify-email',         // /(auth)/verify-email
+  'resend-confirmation',  // /(auth)/resend-confirmation
 ])
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   // 1. Refresh the Supabase session and get the current user in one call.
   const { response: supabaseResponse, user } = await updateSession(request);
 

@@ -236,12 +236,12 @@ Not configured at launch (Vercel Hobby plan). When the project upgrades to Verce
   Every match must be inside an `if (NODE_ENV !== 'production')` guard (or in a test file).
 - [ ] **`process.env.NODE_ENV` is only read inside `/lib/config.ts`.**
   ```
-  grep -rn "process.env.NODE_ENV" app/ lib/ middleware.ts next.config.ts
+  grep -rn "process.env.NODE_ENV" app/ lib/ proxy.ts next.config.ts
   ```
   Outside `/lib/config.ts`, every hit is a manual audit. Acceptable callers documented in CLAUDE.md: `next.config.ts` (build-time) and the Sentry init files (runtime, per ADR 0007 §3.1 where the env is read via `config.public.SENTRY_ENVIRONMENT`, which itself defaults from `VERCEL_ENV`, not `NODE_ENV`). Any other hit is a finding.
 - [ ] **`process.env.*` outside `/lib/config.ts`.** Acceptable: `next.config.ts` for `SENTRY_AUTH_TOKEN` (ADR 0007 §3.2). All other matches are findings.
   ```
-  grep -rn "process\.env\." app/ lib/ middleware.ts next.config.ts | grep -v 'lib/config.ts'
+  grep -rn "process\.env\." app/ lib/ proxy.ts next.config.ts | grep -v 'lib/config.ts'
   ```
 - [ ] **Sentry scrubEvent route-path exclusion verified** (ADR 0007 §3.3 update E5). A synthetic Sentry event with `request.url` set to `'/api/stripe/webhook'` is dropped by `scrubEvent`. Unit test must exist; no production call needed.
   ```

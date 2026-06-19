@@ -995,8 +995,6 @@ Pre-launch hardening sweep per `docs/launch-checklist.md` and `docs/backlog.md`:
 
 - **`npm run build` fails (pre-existing):** ECC remotion skill files cause Next.js tsc
   (without `--skipLibCheck`) to error. Use `npm run dev` for local work. Do not fix in a Builder session.
-- **`middleware.ts` deprecation warning:** Next.js 16 prefers `proxy`. Not renamed yet —
-  belongs in a dedicated correction pass, not a Builder session.
 - **Bare `npx vitest run` picks up ECC tests:** Always scope to SOSH paths, e.g.
   `npx vitest run lib/db lib/social lib/campaigns lib/ai lib/observability lib/publishing lib/metrics app/global-error "app/[locale]/(dashboard)" "app/[locale]/(auth)"`.
   Bare vitest matches ECC files that call `process.exit()` and fail.
