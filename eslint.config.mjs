@@ -36,6 +36,15 @@ const STRIPE_BAN = {
     "Import from '@/lib/stripe' instead of importing the Stripe SDK directly. All Stripe calls must go through /lib/stripe/.",
 };
 
+const STRIPE_CLIENT_INTERNALS_BAN = {
+  group: [
+    "@/lib/stripe/products",
+    "@/lib/stripe/checkout",
+  ],
+  message:
+    "Do not value-import Stripe internals outside lib/stripe/. Use type-only imports or pass pricing data via Server Actions.",
+};
+
 const RESEND_BAN = {
   name: "resend",
   message:
@@ -61,7 +70,7 @@ const eslintConfig = defineConfig([
       "no-restricted-imports": [
         "error",
         {
-          patterns: [SOCIAL_INTERNALS_BAN, ANTHROPIC_BAN],
+          patterns: [SOCIAL_INTERNALS_BAN, ANTHROPIC_BAN, STRIPE_CLIENT_INTERNALS_BAN],
           paths: [STRIPE_BAN, RESEND_BAN],
         },
       ],
@@ -130,7 +139,7 @@ const eslintConfig = defineConfig([
       "no-restricted-imports": [
         "error",
         {
-          patterns: [SOCIAL_INTERNALS_BAN, ANTHROPIC_BAN],
+          patterns: [SOCIAL_INTERNALS_BAN, ANTHROPIC_BAN, STRIPE_CLIENT_INTERNALS_BAN],
           paths: [STRIPE_BAN],
         },
       ],
