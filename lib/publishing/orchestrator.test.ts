@@ -633,7 +633,7 @@ describe('redactTokens — value-scan (B18-076)', () => {
     const err = new SocialProviderError({
       code: 'PLATFORM_REJECTED',
       message: 'rejected',
-      details: { message: 'ab_live_ABCDEFGHIJKLMNOPQRSTUVWX' },
+      details: { message: 'sk_live_ABCDEFGHIJKLMNOPQRSTUVWX' },
     })
     mockPublish.mockRejectedValueOnce(err)
     vi.mocked(claimPostsForPublishing).mockResolvedValue([mockPost])
