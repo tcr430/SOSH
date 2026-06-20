@@ -125,7 +125,7 @@ All environment variables accessed through `/lib/config.ts` which exports a type
 
 ## Code conventions
 
-- **TypeScript strict mode.** No `any` types. If you need an unknown type, use `unknown` and narrow it. **Named carve-out:** `lib/email/templates/index.ts` — the template registry function map uses `as unknown as` casts to unify per-`EmailKind` payload shapes; this is intentional and the only accepted `any`-adjacent pattern in the codebase.
+- **TypeScript strict mode.** No `any` types. If you need an unknown type, use `unknown` and narrow it. **Named carve-out:** `lib/email/templates/index.ts` — the template registry uses `props: any` and `React.FC<any>` with `eslint-disable-next-line @typescript-eslint/no-explicit-any` comments to unify per-`EmailKind` payload shapes in the `KindEntry` interface; this is intentional and the only accepted `any`-adjacent pattern in the codebase.
 - **Server Components by default.** Only use `'use client'` when interactivity demands it.
 - **Server Actions for mutations.** Don't create POST API routes for things that can be Server Actions.
 - **Zod for all input validation.** Every Server Action and API route validates input with Zod before processing.
