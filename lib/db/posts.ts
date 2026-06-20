@@ -1,7 +1,8 @@
 import { formatISO, subMinutes } from 'date-fns'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { PostRow, PostInsert, PostUpdate, PostStatus, AiGenerationMetadata } from './types'
-import { getErrorMessage, toUtcIso } from './utils'
+import { getErrorMessage } from './utils'
+import { toUtcIso } from '@/lib/utils'
 
 // Governs only the generic updatePost path. Dedicated functions (unapprovePost,
 // unskipPost) bypass this map and use their own atomic WHERE guards.
@@ -328,7 +329,7 @@ export async function listPostsByIds(
 export async function listPostsDue(
   client: SupabaseClient,
 ): Promise<PostRow[]> {
-  const now = toUtcIso()
+  const now = toUtcIso(new Date())
   const { data, error } = await client
     .from('posts')
     .select('*')
