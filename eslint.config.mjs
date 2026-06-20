@@ -41,6 +41,7 @@ const STRIPE_CLIENT_INTERNALS_BAN = {
     "@/lib/stripe/products",
     "@/lib/stripe/checkout",
   ],
+  allowTypeImports: true,
   message:
     "Do not value-import Stripe internals outside lib/stripe/. Use type-only imports or pass pricing data via Server Actions.",
 };
@@ -99,6 +100,20 @@ const eslintConfig = defineConfig([
         {
           patterns: [SOCIAL_INTERNALS_BAN, ANTHROPIC_BAN],
           paths: [RESEND_BAN],
+        },
+      ],
+    },
+  },
+
+  // Exception: billing Server Action — value-imports checkout functions server-side (S11 D5).
+  {
+    files: ["app/**/billing/actions.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [SOCIAL_INTERNALS_BAN, ANTHROPIC_BAN],
+          paths: [STRIPE_BAN, RESEND_BAN],
         },
       ],
     },

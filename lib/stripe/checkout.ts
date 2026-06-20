@@ -1,3 +1,10 @@
+if (typeof window !== 'undefined') {
+  throw new Error(
+    'lib/stripe/checkout.ts was imported in browser code. ' +
+      'Checkout session creation must only run server-side.',
+  )
+}
+
 import { getStripeClient } from '@/lib/stripe/client'
 import { PLAN_TO_PRICE_ID } from '@/lib/stripe/products'
 import { getBusinessById, setStripeCustomerId } from '@/lib/db/businesses'
