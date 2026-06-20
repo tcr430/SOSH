@@ -2,7 +2,7 @@
 
 **Phase:** 1 — MVP
 **Goal:** First paying customer
-**Status:** Session 18B-4 complete (18B-4D cleanup applied) — anti-enumeration oracle closed (B18-060); middleware renamed to proxy.ts (B18-025); correction pass 18B-4D recorded residual timing oracle, removed orphaned i18n keys, filed B18-087.
+**Status:** Session 18 complete (18B-5D correction pass applied) — CI green: lint clean, vitest 820+ pass, 0 fail. Closed: B18-001, 002, 009, 031, 045, 072, 073, 081, 084, 085 (partial). N/A-verified: B18-005, 006, 043. CVE evidence recorded: B18-064 (postcss, awaits Next.js bump). Filed B18-089 (date-write-convention P2).
 
 ## What's done
 - Session 0: Environment setup complete

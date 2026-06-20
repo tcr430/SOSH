@@ -33,15 +33,16 @@ Inventory IDs trace back to the Step 1 chat list. 64 items tiered below.
 
 ## P1-CHEAP — Pre-launch nice-to-have (≤30min each)
 
-### B18-001 — email-suppressed-errorcode
+### ~~B18-001 — email-suppressed-errorcode~~ ✅ COMPLETE (Session 18B-5)
 - Source: backlog.md:13 / current-phase §834 (A4) · Original: pre-launch debt
 - Description: `suppressed` missing from `EmailProviderErrorCode` (5 vs ADR 0008 §4's 6).
 - Reasoning: ADR-fidelity type gap with no runtime path; add `| 'suppressed'` or amend ADR. — 10min
 
-### B18-002 — email-footer-14px
+### ~~B18-002 — email-footer-14px~~ ✅ COMPLETE (Session 18B-5 + 18B-5D)
 - Source: backlog.md:14 (E5) · Original: pre-launch debt
 - Description: Email footer text is 13px, below the 14px WCAG 1.4.4 minimum.
 - Reasoning: One CSS value, accessibility correctness. — 5min
+- CSS fix landed in 18B-5; 15 vitest email snapshots regenerated in 18B-5D (Step 3).
 
 ### ~~B18-003 — outbox-atomic-guard~~ ✅ COMPLETE (Session 18B-2)
 - Source: backlog.md:15 (L-05) · Original: pre-launch debt
@@ -53,25 +54,28 @@ Inventory IDs trace back to the Step 1 chat list. 64 items tiered below.
 - Description: Marketing layout hardcodes "Skip to content" instead of an i18n key.
 - Reasoning: Violates CLAUDE.md "i18n from day one" (R1); add 3 locale keys + wire (R5). — 15min
 
-### B18-005 — adr0008-t1-window-drift
+### ~~B18-005 — adr0008-t1-window-drift~~ ✅ N/A — ALREADY CORRECT (verified Session 18B-5D)
 - Source: backlog.md:26 (G3) · Original: post-launch
 - Description: ADR 0008 §10 T-1 window text contradicts the implemented `[now+1d,now+2d)`.
 - Reasoning: Documentation-only reconciliation, code is correct (R5). — 10min
+- **Verified 18B-5D:** ADR 0008 §10 line 423 already reads `[now+1d, now+2d)` — code and ADR are consistent. No change needed.
 
-### B18-006 — svixid-pk-adr-drift
+### ~~B18-006 — svixid-pk-adr-drift~~ ✅ N/A — ALREADY CORRECT (verified Session 18B-5D)
 - Source: backlog.md:27 (C7) · Original: post-launch
 - Description: ADR 0008 §14 schema block doesn't document `svix-id` as the idempotency PK.
 - Reasoning: Documentation-only ADR reconciliation (R5). — 10min
+- **Verified 18B-5D:** ADR 0008 §14 line 508 already reads `id text PRIMARY KEY -- svix delivery id (idempotency anchor)`. No change needed.
 
 ### ~~B18-008 — scrub-bare-email~~ ✅ COMPLETE (Session 18B-2)
 - Source: backlog.md:29 / S14 J3 · Original: post-launch
 - Description: Verify `scrubEvent` catches bare emails in Resend error strings; scrub `err.message` in the drainer if not.
 - Reasoning: Potential PII leak to Sentry; cheap verify + small scrub addition, security-adjacent so kept P1. — 25min
 
-### B18-009 — email-templates-any-casts
+### ~~B18-009 — email-templates-any-casts~~ ✅ COMPLETE (Session 18B-5D)
 - Source: backlog.md:30 (K1) · Original: post-launch
 - Description: Two `any` casts with eslint-disable in `lib/email/templates/index.ts`.
 - Reasoning: Violates no-any (R1) but is a registry escape hatch; cheapest fix is documenting the exception in CLAUDE.md. — 10min
+- CLAUDE.md carve-out updated to accurately describe the mechanism: `props: any` / `React.FC<any>` with `eslint-disable-next-line` comments in `KindEntry` interface (not `as unknown as` casts).
 
 ### B18-011 — cron-auth-failure-log
 - Source: backlog.md:32 / current-phase §814 (13.5C-log) · Original: post-launch
@@ -88,7 +92,7 @@ Inventory IDs trace back to the Step 1 chat list. 64 items tiered below.
 - Description: Add `0.0.0.0/8` and `fe80::/10` to the website-fetcher SSRF blocklist.
 - Reasoning: Security defense-in-depth, cheap blocklist additions + tests, no known live exploit. — 25min
 
-### B18-031 — fetch-failed-dead-enum
+### ~~B18-031 — fetch-failed-dead-enum~~ ✅ COMPLETE (Session 18B-5)
 - Source: current-phase §754 / S5 G-dead-enum · Original: Session 5D defer
 - Description: `fetch_failed` error enum value is never produced; remove or wire it.
 - Reasoning: Dead-code cleanup, trivial. — 10min
@@ -103,12 +107,13 @@ Inventory IDs trace back to the Step 1 chat list. 64 items tiered below.
 - Description: `generate.ts` step 10 `updateCampaign` lacks an atomic `WHERE status='draft'` guard.
 - Reasoning: Violates CLAUDE.md atomic-transition convention (R1); cheap guard, low live risk (step-3 already verified draft). — 15min
 
-### B18-043 — adr-crossref-drift
+### ~~B18-043 — adr-crossref-drift~~ ✅ N/A — ALREADY CORRECT (verified Session 18B-5D)
 - Source: current-phase §819 / S13.5C G1/G2 · Original: Session 13.5C defer
 - Description: ADR 0005 A1 ↔ ADR 0006 §12/§13 not cross-referenced after the QStash migration.
 - Reasoning: Documentation-only doc pass (R5). — 15min
+- **Verified 18B-5D:** ADR 0005 line 749 references ADR 0006 Amendment 1. ADR 0006 §2 "Relationship to ADR 0005" exhaustively cross-references ADR 0005 §§2, 11, 12, 17. Both ADRs are fully cross-linked; no change needed.
 
-### B18-045 — checklist-tunable-rows
+### ~~B18-045 — checklist-tunable-rows~~ ✅ COMPLETE (Session 18B-5)
 - Source: current-phase §827 / S13 H1 · Original: Session 13D defer
 - Description: Launch-checklist §1 collapses ~14 tunables into one grep row; expand to per-var.
 - Reasoning: Documentation-only checklist expansion (R5). — 20min
@@ -128,10 +133,11 @@ Inventory IDs trace back to the Step 1 chat list. 64 items tiered below.
 - Description: `isSafeRedirect` doesn't URL-decode, so double-encoded paths can slip the open-redirect guard.
 - Reasoning: Cheap decode-before-check closes an open-redirect bypass. — 15min
 
-### B18-064 — postcss-cve
+### B18-064 — postcss-cve ⚠️ OPEN — EVIDENCE RECORDED (Session 18B-5D)
 - Source: S2 L-08 · Original: reviewer defer
 - Description: PostCSS moderate CVE in the Next.js 16.2.4 dependency chain (Next not bumped).
 - Reasoning: Verify current severity via `npm audit`; apply override/patch — may escalate if it forces a Next bump. — 20min
+- **Audit run 18B-5D:** CVE `GHSA-qx2v-qp2m-jg93` confirmed — PostCSS XSS via unescaped `</style>` in CSS Stringify Output, severity **moderate**, in `node_modules/next/node_modules/postcss <8.5.10`. Fix requires Next.js bump 16.2.4 → 16.2.9 (`npm audit fix --force`). Override not applied — awaiting deliberate Next.js upgrade decision. Practical risk is low (postcss runs at build time, not runtime).
 
 ### B18-066 — banner-localstorage
 - Source: S6 C4 · Original: reviewer defer
@@ -167,12 +173,12 @@ Inventory IDs trace back to the Step 1 chat list. 64 items tiered below.
 - **CLOSED — Session 18B-3**
 - M2 note (P2): `parseAiGenerationMetadata` narrows the container (non-null object check) but not individual fields — `regenerationCount` is still an unvalidated cast inside `Partial<AiGenerationMetadata>`. Field-by-field narrowing is quality debt; no runtime bug today because call sites use `?? 0` / `?? []` guards.
 
-### B18-072 — valid-transitions-map
+### ~~B18-072 — valid-transitions-map~~ ✅ COMPLETE (Session 18B-5)
 - Source: S9 R4 · Original: reviewer defer
 - Description: `VALID_TRANSITIONS` omits unapprove/unskip edges.
 - Reasoning: Add 2 edges or a JSDoc clarifying the map only governs generic `updatePost`. — 10min
 
-### B18-073 — posts-double-sort
+### ~~B18-073 — posts-double-sort~~ ✅ COMPLETE (Session 18B-5)
 - Source: S9 R5 · Original: reviewer defer
 - Description: Posts sorted server-side then re-sorted in `PostsClient`.
 - Reasoning: Remove one redundant sort. — 10min
@@ -187,15 +193,17 @@ Inventory IDs trace back to the Step 1 chat list. 64 items tiered below.
 - Description: `redactTokens` is key-name-based; add value-pattern scanning (Bearer/sk-/hex).
 - Reasoning: Add value scan to one redactor + tests, defense-in-depth against token leak to logs. — 25min
 
-### B18-081 — stripe-client-import-eslint
+### ~~B18-081 — stripe-client-import-eslint~~ ✅ COMPLETE (Session 18B-5 + 18B-5D)
 - Source: S11 D5 · Original: reviewer defer
 - Description: Add ESLint ban on client value-imports of `@/lib/stripe/{products,checkout}` + `typeof window` guard.
 - Reasoning: Cheap ESLint hardening; today only type-imports (erased), no live leak. — 20min
+- Ban added in 18B-5; `allowTypeImports: true` + billing Server Action exception + `checkout.ts` `typeof window` guard added in 18B-5D (Step 2).
 
-### B18-084 — janitor-monitor-schedule
+### ~~B18-084 — janitor-monitor-schedule~~ ✅ COMPLETE (Session 18B-5)
 - Source: S13 E3 · Original: reviewer defer
 - Description: `Sentry.withMonitor('janitor-cron')` has no declared schedule → possible "no schedule" Sentry warnings.
 - Reasoning: Cheap document-or-remove of the wrap. — 15min
+- `Sentry.withMonitor` wrapper removed from `runJanitorTick`; Sentry import and usage in `runPublishTick` confirmed retained (L3 verified 18B-5D).
 
 ---
 
@@ -346,11 +354,18 @@ Inventory IDs trace back to the Step 1 chat list. 64 items tiered below.
 - Description: Metrics catch block doesn't distinguish infra vs provider errors.
 - Reasoning: Error-classification accuracy in a wired-but-inert metrics worker (R4). — defer
 
-### B18-085 — formatISO-local-audit
+### ~~B18-085 — formatISO-local-audit~~ ✅ PARTIAL COMPLETE (Session 18B-5D) → B18-089 filed for remainder
 - Source: S18B-3 reviewer L2 · Original: filed 18B-3D
 - Description: `formatISO(new Date())` calls in `businesses.ts`, `campaigns.ts`, `posts.ts` emit LOCAL-offset strings (the same UTC hazard B18-041 fixed, invisible to the `.toISOString()` ban lint rule).
 - Reasoning: Tier UNDECIDED pending a probe: **P1** if any site writes a `timestamptz` column or string-compares the value; **P2** if display-only. Do NOT fix until the probe determines tier — just verify call sites and column types first.
-- **Do not fix in the next Builder session without running the probe first.**
+- **18B-5D Step 1:** Duplicate `toUtcIso` in `lib/db/utils.ts` collapsed into canonical `@/lib/utils` version. Call sites in `businesses.ts`, `campaigns.ts`, `posts.ts` updated to `toUtcIso(new Date())`. The `.toISOString()` ban now enforced codebase-wide via ESLint.
+- 15-site `formatISO` sweep (remaining call sites that write `timestamptz`) deferred to **B18-089 (P2)**.
+
+### B18-089 — date-write-convention (P2)
+- Source: B18-085 18B-5D partial close · Original: filed 18B-5D
+- Description: 15+ `formatISO(new Date())` call sites across the codebase write UTC timestamps to `timestamptz` columns using date-fns `formatISO`, which emits LOCAL-offset strings (e.g. `+01:00`) rather than UTC. The `toISOString()` ESLint ban doesn't catch `formatISO` calls. Probe needed to verify each site writes to a `timestamptz` column and whether Postgres normalises the offset correctly (it does for `timestamptz`, not for `text`).
+- Reasoning: The Postgres `timestamptz` type stores UTC internally regardless of input offset, so the practical risk is low today. The convention violation is real: CLAUDE.md mandates `toUtcIso()` for all UTC writes. A systematic sweep — grep all `formatISO(new Date())` call sites, verify column type, replace with `toUtcIso(new Date())` where writing to DB — is P2 pre-launch hygiene. — 45min
+- **Do NOT fix piecemeal.** Run the full 15-site sweep in one pass. See B18-085 partial close note.
 
 ### B18-086 — signup-email-oracle
 - Source: S18B-4 recon · Original: discovered during B18-060 analysis
