@@ -31,6 +31,7 @@ function makeCtx(overrides: Partial<CustomerContext> = {}): CustomerContext {
     brandVoice: {
       id: 'bv-1',
       business_id: 'biz-1',
+      voice_axes: { formal_casual: 50, expert_peer: 50, serious_playful: 50, reserved_warm: 50, calm_energetic: 50, rational_emotional: 50, exclusive_inclusive: 50 },
       tone: ['professional', 'confident'],
       target_audience: 'Engineering leaders at growth-stage startups',
       keywords: ['data-driven', 'scalable'],

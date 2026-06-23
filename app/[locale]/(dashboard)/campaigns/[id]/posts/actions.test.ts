@@ -92,6 +92,7 @@ const MOCK_CAMPAIGN: CampaignRow = {
   status: 'active',
   total_posts_planned: 10,
   total_posts_published: 0,
+  voice_variation_id: null,
   deleted_at: null,
   created_at: '2026-05-01T00:00:00Z',
   updated_at: '2026-05-01T00:00:00Z',

@@ -77,6 +77,7 @@ const mockBusiness: BusinessRow = {
 const mockBrandVoice: BrandVoiceRow = {
   id: 'bv-1',
   business_id: 'biz-1',
+  voice_axes: { formal_casual: 50, expert_peer: 50, serious_playful: 50, reserved_warm: 50, calm_energetic: 50, rational_emotional: 50, exclusive_inclusive: 50 },
   tone: ['professional'],
   target_audience: 'B2B SaaS founders',
   keywords: ['growth', 'pipeline'],
@@ -103,6 +104,7 @@ const makeCampaign = (n: number): CampaignRow => ({
   status: 'active',
   total_posts_planned: 10,
   total_posts_published: 0,
+  voice_variation_id: null,
   deleted_at: null,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
