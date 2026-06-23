@@ -1052,6 +1052,7 @@ GRANT EXECUTE ON FUNCTION public.purge_business(uuid) TO service_role;
 |---|---|---|---|---|
 | **businesses** | root | (owner_id→auth.users **RESTRICT**) | n/a | **DELETE last** |
 | brand_voices | yes (business_id) | CASCADE | yes | none |
+| brand_voice_variations | yes (business_id) | CASCADE | yes | none |
 | social_accounts | yes (business_id) | CASCADE | yes | **`vault_delete_secret` per access+refresh id FIRST** |
 | trial_state | yes (business_id) | CASCADE | yes | none |
 | campaigns | yes (business_id) | CASCADE | yes | none |

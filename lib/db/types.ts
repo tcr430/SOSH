@@ -1,5 +1,5 @@
 /**
- * TypeScript types for all 9 SŌSH database tables.
+ * TypeScript types for all SŌSH database tables.
  *
  * Conventions:
  * - Row    — exact DB representation; matches every column including nulls.
@@ -7,8 +7,12 @@
  * - Update — all fields optional (use with .eq('id', …).update(…)).
  * - Enum types are string literal unions, never TypeScript enums.
  * - Timestamps are string (ISO-8601); localisation is done in the app via date-fns.
- * - JSONB columns are Record<string, unknown> where the shape is open.
+ * - JSONB columns are Record<string, unknown> where the shape is open,
+ *   or a named type where the shape is structurally enforced (e.g. VoiceAxes).
  */
+
+import type { VoiceAxes } from '@/lib/validation/voice'
+export type { VoiceAxes }
 
 // ---------------------------------------------------------------------------
 // Shared utility types
@@ -93,6 +97,7 @@ export type BusinessUpdate = Partial<Omit<BusinessRow, 'id' | 'created_at' | 'pl
 export type BrandVoiceRow = {
   id: string
   business_id: string
+  voice_axes: VoiceAxes
   tone: string[]
   target_audience: string | null
   keywords: string[]
@@ -108,6 +113,7 @@ export type BrandVoiceRow = {
 export type BrandVoiceInsert = {
   id?: string
   business_id: string
+  voice_axes?: VoiceAxes
   tone?: string[]
   target_audience?: string | null
   keywords?: string[]
@@ -121,6 +127,28 @@ export type BrandVoiceInsert = {
 }
 
 export type BrandVoiceUpdate = Partial<Omit<BrandVoiceRow, 'id' | 'created_at'>>
+
+// ---------------------------------------------------------------------------
+// 2a. brand_voice_variations (ADR 0011 §3.2)
+// ---------------------------------------------------------------------------
+
+export type BrandVoiceVariationRow = {
+  id: string
+  business_id: string
+  name: string
+  voice_axes: VoiceAxes
+  created_at: string
+  updated_at: string
+}
+
+export type BrandVoiceVariationInsert = {
+  id?: string
+  business_id: string
+  name: string
+  voice_axes: VoiceAxes
+  created_at?: string
+  updated_at?: string
+}
 
 // ---------------------------------------------------------------------------
 // 3. social_accounts
@@ -181,6 +209,7 @@ export type CampaignRow = {
   status: CampaignStatus
   total_posts_planned: number
   total_posts_published: number
+  voice_variation_id: string | null
   deleted_at: string | null
   created_at: string
   updated_at: string
@@ -200,6 +229,7 @@ export type CampaignInsert = {
   status?: CampaignStatus
   total_posts_planned?: number
   total_posts_published?: number
+  voice_variation_id?: string | null
   deleted_at?: string | null
   created_at?: string
   updated_at?: string
