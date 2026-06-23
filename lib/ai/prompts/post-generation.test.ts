@@ -32,6 +32,7 @@ function makeCtx(overrides: Partial<CustomerContext> = {}): CustomerContext {
       id: 'bv-1',
       business_id: 'biz-1',
       voice_axes: { formal_casual: 50, expert_peer: 50, serious_playful: 50, reserved_warm: 50, calm_energetic: 50, rational_emotional: 50, exclusive_inclusive: 50 },
+      descriptor: 'A balanced, neutral voice with no strong leanings.',
       tone: ['professional', 'confident'],
       target_audience: 'Engineering leaders at growth-stage startups',
       keywords: ['data-driven', 'scalable'],
@@ -169,10 +170,16 @@ describe('postGenerationPrompt — buildUserMessage', () => {
 
   test('includes brand voice fields', () => {
     const msg = postGenerationPrompt.buildUserMessage(makeInput(), makeCtx())
-    expect(msg).toContain('professional')
+    expect(msg).toContain('A balanced, neutral voice with no strong leanings.')
     expect(msg).toContain('data-driven')
     expect(msg).toContain('synergy')
     expect(msg).toContain('Real-time analytics')
+  })
+
+  test('brand voice block uses descriptor (Voice:) not tone[] (Tone:)', () => {
+    const msg = postGenerationPrompt.buildUserMessage(makeInput(), makeCtx())
+    expect(msg).toContain('Voice:')
+    expect(msg).not.toContain('Tone:')
   })
 
   test('includes alreadyGeneratedTopics when present', () => {
@@ -226,7 +233,7 @@ describe('postGenerationPrompt — buildUserMessage', () => {
 
   test('wraps brand voice in [DATA] tags', () => {
     const msg = postGenerationPrompt.buildUserMessage(makeInput(), makeCtx())
-    expect(msg).toMatch(/\[DATA\][\s\S]*professional[\s\S]*\[\/DATA\]/)
+    expect(msg).toMatch(/\[DATA\][\s\S]*balanced, neutral[\s\S]*\[\/DATA\]/)
   })
 })
 

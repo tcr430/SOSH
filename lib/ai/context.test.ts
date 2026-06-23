@@ -186,9 +186,15 @@ describe('buildCustomerContext', () => {
     expect(Object.keys(ctx.business)).toHaveLength(7)
   })
 
-  it('passes brandVoice through unchanged', async () => {
+  it('passes all BrandVoiceRow fields through unchanged', async () => {
     const ctx = await buildCustomerContext('biz-1')
-    expect(ctx.brandVoice).toEqual(mockBrandVoice)
+    expect(ctx.brandVoice).toMatchObject(mockBrandVoice)
+  })
+
+  it('attaches descriptor derived from voice_axes to brandVoice', async () => {
+    const ctx = await buildCustomerContext('biz-1')
+    // voice_axes are all-neutral (50s) → locked descriptor
+    expect(ctx.brandVoice?.descriptor).toBe('A balanced, neutral voice with no strong leanings.')
   })
 
   it('returns null brandVoice when none exists', async () => {
