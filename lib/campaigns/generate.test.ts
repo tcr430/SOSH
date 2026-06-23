@@ -89,6 +89,7 @@ const mockCtx: CustomerContext = {
     id: 'bv-1',
     business_id: BUSINESS_ID,
     voice_axes: { formal_casual: 50, expert_peer: 50, serious_playful: 50, reserved_warm: 50, calm_energetic: 50, rational_emotional: 50, exclusive_inclusive: 50 },
+    descriptor: 'A balanced, neutral voice with no strong leanings.',
     tone: ['professional'],
     target_audience: 'Engineering leads',
     keywords: ['data-driven'],

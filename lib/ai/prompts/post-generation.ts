@@ -132,7 +132,7 @@ ${PLATFORM_CONSTRAINTS[input.targetPlatform]}`)
     if (bv) {
       sections.push(`## Brand Voice
 [DATA]
-Tone: ${bv.tone.join(', ')}
+Voice: ${bv.descriptor}
 Target audience: ${bv.target_audience}
 Keywords to use: ${bv.keywords.join(', ')}
 Words to avoid: ${bv.avoid_words.join(', ')}

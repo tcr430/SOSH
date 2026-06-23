@@ -5,10 +5,13 @@ import { listCampaigns } from '@/lib/db/campaigns'
 import { listTopPostMetrics } from '@/lib/db/post-metrics'
 import { listPostsByIds } from '@/lib/db/posts'
 import { getTrialStateMaybe } from '@/lib/db/trial-state'
+import { vectorToVoiceFields } from '@/lib/voice/translate'
+
+export type BrandVoiceContext = BrandVoiceRow & { readonly descriptor: string }
 
 export interface CustomerContext {
   business: Pick<BusinessRow, 'id' | 'name' | 'industry' | 'description' | 'language' | 'website' | 'timezone'>
-  brandVoice: BrandVoiceRow | null
+  brandVoice: BrandVoiceContext | null
   recentCampaigns: Array<Pick<CampaignRow, 'id' | 'name' | 'objective' | 'status'>>
   recentPostPerformance: Array<{
     platform: Platform
@@ -85,7 +88,9 @@ export async function buildCustomerContext(businessId: string): Promise<Customer
       website: business.website,
       timezone: business.timezone,
     },
-    brandVoice,
+    brandVoice: brandVoice
+      ? { ...brandVoice, descriptor: vectorToVoiceFields(brandVoice.voice_axes).descriptor }
+      : null,
     recentCampaigns: campaigns.map(c => ({
       id: c.id,
       name: c.name,
