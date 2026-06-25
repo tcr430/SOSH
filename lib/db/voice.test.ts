@@ -1,7 +1,14 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest'
 import { createMockClient } from './__test-utils__/mock-client'
 import * as serviceModule from '@/lib/supabase/service'
-import { createVoiceVariation, VoiceVariationCapError } from './voice'
+import {
+  createVoiceVariation,
+  VoiceVariationCapError,
+  addVariation,
+  renameVariation,
+  listVariations,
+  updateVariationAxes,
+} from './voice'
 import type { VoiceAxes } from '@/lib/validation/voice'
 
 vi.mock('@/lib/supabase/service', () => ({
@@ -101,5 +108,103 @@ describe('createVoiceVariation', () => {
     await createVoiceVariation(baseParams)
 
     expect(serviceModule.createServiceRoleClient).toHaveBeenCalledTimes(1)
+  })
+})
+
+// ── addVariation ──────────────────────────────────────────────────────────
+
+describe('addVariation', () => {
+  it('delegates to createVoiceVariation and returns the row', async () => {
+    const { client } = createMockClient(mockVariationRow, null)
+    vi.mocked(serviceModule.createServiceRoleClient).mockReturnValue(client)
+
+    const result = await addVariation(baseParams)
+
+    expect(result).toEqual(mockVariationRow)
+    expect(client.rpc).toHaveBeenCalledWith('create_voice_variation', {
+      p_business_id: baseParams.businessId,
+      p_name: baseParams.name,
+      p_voice_axes: baseParams.voiceAxes,
+    })
+  })
+
+  it('surfaces VoiceVariationCapError on cap hit (no app-layer count)', async () => {
+    const { client } = createMockClient(null, {
+      code: 'P0001',
+      message: 'voice_variation_cap_reached',
+    })
+    vi.mocked(serviceModule.createServiceRoleClient).mockReturnValue(client)
+
+    await expect(addVariation(baseParams)).rejects.toBeInstanceOf(VoiceVariationCapError)
+  })
+})
+
+// ── renameVariation ───────────────────────────────────────────────────────
+
+describe('renameVariation', () => {
+  it('issues UPDATE on brand_voice_variations with the new name', async () => {
+    const { client, builder } = createMockClient({ id: 'var-uuid-001', name: 'Renamed' }, null)
+
+    await renameVariation(client, 'var-uuid-001', 'Renamed')
+
+    expect(client.from).toHaveBeenCalledWith('brand_voice_variations')
+    expect(builder.update).toHaveBeenCalledWith(expect.objectContaining({ name: 'Renamed' }))
+    expect(builder.eq).toHaveBeenCalledWith('id', 'var-uuid-001')
+  })
+
+  it('throws on DB error', async () => {
+    const { client } = createMockClient(null, { message: 'unique constraint' })
+
+    await expect(renameVariation(client, 'var-uuid-001', 'Duplicate')).rejects.toThrow()
+  })
+})
+
+// ── listVariations ────────────────────────────────────────────────────────
+
+describe('listVariations', () => {
+  it('queries brand_voice_variations filtered by business_id', async () => {
+    const { client, builder } = createMockClient([mockVariationRow], null)
+
+    const result = await listVariations(client, 'biz-uuid-001')
+
+    expect(client.from).toHaveBeenCalledWith('brand_voice_variations')
+    expect(builder.eq).toHaveBeenCalledWith('business_id', 'biz-uuid-001')
+    expect(result).toEqual([mockVariationRow])
+  })
+
+  it('returns empty array when no variations exist', async () => {
+    const { client } = createMockClient([], null)
+
+    const result = await listVariations(client, 'biz-uuid-001')
+
+    expect(result).toEqual([])
+  })
+
+  it('throws on DB error', async () => {
+    const { client } = createMockClient(null, { message: 'DB error' })
+
+    await expect(listVariations(client, 'biz-uuid-001')).rejects.toThrow()
+  })
+})
+
+// ── updateVariationAxes ───────────────────────────────────────────────────
+
+describe('updateVariationAxes', () => {
+  const newAxes: VoiceAxes = { ...neutralAxes, formal_casual: 80 }
+
+  it('issues UPDATE on brand_voice_variations with the new axes', async () => {
+    const { client, builder } = createMockClient({ id: 'var-uuid-001' }, null)
+
+    await updateVariationAxes(client, 'var-uuid-001', newAxes)
+
+    expect(client.from).toHaveBeenCalledWith('brand_voice_variations')
+    expect(builder.update).toHaveBeenCalledWith(expect.objectContaining({ voice_axes: newAxes }))
+    expect(builder.eq).toHaveBeenCalledWith('id', 'var-uuid-001')
+  })
+
+  it('throws on DB error', async () => {
+    const { client } = createMockClient(null, { message: 'DB error' })
+
+    await expect(updateVariationAxes(client, 'var-uuid-001', newAxes)).rejects.toThrow()
   })
 })
