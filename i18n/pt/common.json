@@ -290,5 +290,61 @@
         "error_generic": "Ocorreu um erro. Por favor, tente novamente."
       }
     }
+  },
+  "voiceEditor": {
+    "question_count": "Pergunta {current} de {total}",
+    "keywords_label": "Palavras a incluir",
+    "keywords_hint": "Termos, frases ou nomes de produto que devem sempre aparecer.",
+    "keywords_placeholder": "Adicionar palavra…",
+    "avoid_label": "Palavras a evitar",
+    "avoid_hint": "Palavras ou frases que nunca devem aparecer no conteúdo.",
+    "avoid_placeholder": "Adicionar palavra…",
+    "save": "Guardar voz",
+    "saving": "A guardar…",
+    "tracks_hint": "A sua voz vai-se definindo à medida que responde às perguntas."
+  },
+  "calibration": {
+    "q1": {
+      "prompt": "Como quer ser percebido ao partilhar o que sabe?",
+      "a": "\"Somos os especialistas que falam com clareza.\"",
+      "b": "\"Somos profissionais experientes, mas mantemo-nos humanos.\"",
+      "c": "\"Somos pares a descobrir juntos.\"",
+      "d": "\"Somos o guia amigável que simplifica o que é difícil.\""
+    },
+    "q2": {
+      "prompt": "Qual é a energia do seu melhor conteúdo?",
+      "a": "\"Ponderado e substantivo — sem excessos.\"",
+      "b": "\"Animado e com impulso.\"",
+      "c": "\"Espirituoso e um pouco irreverente.\"",
+      "d": "\"Estável e tranquilizador.\""
+    },
+    "q3": {
+      "prompt": "Quando defende uma ideia, o que a sustenta?",
+      "a": "\"A evidência. Deixamos os dados falar.\"",
+      "b": "\"A história. Fazemos as pessoas senti-la.\"",
+      "c": "\"Um pouco de ambos — prova que se sente.\"",
+      "d": "\"Lógica clara, entregue com calor.\""
+    },
+    "q4": {
+      "prompt": "Com quem está realmente a falar?",
+      "a": "\"Um grupo seleto que já compreende.\"",
+      "b": "\"Qualquer pessoa disposta a aprender — todos são bem-vindos.\"",
+      "c": "\"O nosso nicho específico, abordado diretamente.\"",
+      "d": "\"Um público amplo, encontrado onde está.\""
+    },
+    "q5": {
+      "prompt": "Escolha a frase que mais soa como você.",
+      "a": "\"Eis o que os números nos dizem este trimestre.\"",
+      "b": "\"Isto vai mudar tudo — ouça-nos.\"",
+      "c": "\"Também já estivemos aí. Eis o que ajudou.\"",
+      "d": "\"Vamos analisar isto passo a passo.\""
+    },
+    "q6": {
+      "prompt": "Como devem as pessoas sentir-se depois de ler?",
+      "a": "\"Informadas e com a mente clara.\"",
+      "b": "\"Motivadas e prontas a agir.\"",
+      "c": "\"Vistas e parte de algo.\"",
+      "d": "\"Confiantes de que estão em boas mãos.\""
+    }
   }
 }

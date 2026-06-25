@@ -290,5 +290,61 @@
         "error_generic": "Algo salió mal. Por favor, inténtalo de nuevo."
       }
     }
+  },
+  "voiceEditor": {
+    "question_count": "Pregunta {current} de {total}",
+    "keywords_label": "Palabras a incluir",
+    "keywords_hint": "Términos, frases o nombres de producto que siempre deben aparecer.",
+    "keywords_placeholder": "Añadir palabra…",
+    "avoid_label": "Palabras a evitar",
+    "avoid_hint": "Palabras o frases que nunca deben aparecer en tu contenido.",
+    "avoid_placeholder": "Añadir palabra…",
+    "save": "Guardar voz",
+    "saving": "Guardando…",
+    "tracks_hint": "Tu voz se va definiendo a medida que respondes cada pregunta."
+  },
+  "calibration": {
+    "q1": {
+      "prompt": "¿Cómo quieres que te perciban cuando compartes lo que sabes?",
+      "a": "\"Somos los expertos que hablan con claridad.\"",
+      "b": "\"Somos profesionales con experiencia, pero nos mantenemos humanos.\"",
+      "c": "\"Somos compañeros que lo descubrimos juntos.\"",
+      "d": "\"Somos el guía amigable que simplifica lo difícil.\""
+    },
+    "q2": {
+      "prompt": "¿Cuál es la energía de tu mejor contenido?",
+      "a": "\"Reflexivo y sustancioso — sin relleno.\"",
+      "b": "\"Animado y con impulso.\"",
+      "c": "\"Ingenioso y un poco irreverente.\"",
+      "d": "\"Estable y tranquilizador.\""
+    },
+    "q3": {
+      "prompt": "Cuando defiendes una idea, ¿qué la sostiene?",
+      "a": "\"La evidencia. Dejamos que los datos hablen.\"",
+      "b": "\"La historia. Hacemos que la gente la sienta.\"",
+      "c": "\"Un poco de ambas — prueba que se puede sentir.\"",
+      "d": "\"Lógica clara, entregada con calidez.\""
+    },
+    "q4": {
+      "prompt": "¿Con quién estás hablando realmente?",
+      "a": "\"Un grupo selecto que ya lo entiende.\"",
+      "b": "\"Cualquiera dispuesto a aprender — todos son bienvenidos.\"",
+      "c": "\"Nuestro nicho específico, abordado directamente.\"",
+      "d": "\"Una audiencia amplia, donde se encuentra.\""
+    },
+    "q5": {
+      "prompt": "Elige la frase que más se parece a ti.",
+      "a": "\"Esto es lo que los números nos dicen este trimestre.\"",
+      "b": "\"Esto va a cambiarlo todo — escúchanos.\"",
+      "c": "\"También hemos estado ahí. Esto es lo que ayudó.\"",
+      "d": "\"Analicemos esto paso a paso.\""
+    },
+    "q6": {
+      "prompt": "¿Cómo deben sentirse las personas después de leer?",
+      "a": "\"Informadas y con la mente clara.\"",
+      "b": "\"Motivadas y listas para actuar.\"",
+      "c": "\"Vistas y parte de algo.\"",
+      "d": "\"Seguras de que están en buenas manos.\""
+    }
   }
 }

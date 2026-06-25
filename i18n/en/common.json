@@ -290,5 +290,61 @@
         "error_generic": "Something went wrong. Please try again."
       }
     }
+  },
+  "voiceEditor": {
+    "question_count": "Question {current} of {total}",
+    "keywords_label": "Words to include",
+    "keywords_hint": "Terms, phrases, or product names you always want to appear.",
+    "keywords_placeholder": "Add a word…",
+    "avoid_label": "Words to avoid",
+    "avoid_hint": "Words or phrases you never want in your content.",
+    "avoid_placeholder": "Add a word…",
+    "save": "Save voice",
+    "saving": "Saving…",
+    "tracks_hint": "Your voice takes shape as you answer each question."
+  },
+  "calibration": {
+    "q1": {
+      "prompt": "How do you want to come across when you share what you know?",
+      "a": "\"We're the experts who tell it straight.\"",
+      "b": "\"We're seasoned pros, but we keep it human.\"",
+      "c": "\"We're peers figuring it out alongside you.\"",
+      "d": "\"We're the friendly guide who simplifies the hard stuff.\""
+    },
+    "q2": {
+      "prompt": "What's the energy of your best content?",
+      "a": "\"Considered and substantive — no fluff.\"",
+      "b": "\"Upbeat and momentum-building.\"",
+      "c": "\"Witty and a little irreverent.\"",
+      "d": "\"Steady and reassuring.\""
+    },
+    "q3": {
+      "prompt": "When you make a point, what carries it?",
+      "a": "\"The evidence. We let the data speak.\"",
+      "b": "\"The story. We make people feel it.\"",
+      "c": "\"A bit of both — proof you can feel.\"",
+      "d": "\"Clear logic, warmly delivered.\""
+    },
+    "q4": {
+      "prompt": "Who are you really talking to?",
+      "a": "\"A select few who already get it.\"",
+      "b": "\"Anyone willing to learn — all are welcome.\"",
+      "c": "\"Our specific niche, spoken to directly.\"",
+      "d": "\"A broad audience, met where they are.\""
+    },
+    "q5": {
+      "prompt": "Pick the line that sounds most like you.",
+      "a": "\"Here's what the numbers tell us this quarter.\"",
+      "b": "\"Okay, this one's a game-changer — hear us out.\"",
+      "c": "\"We've been there too. Here's what helped.\"",
+      "d": "\"Let's break this down, step by step.\""
+    },
+    "q6": {
+      "prompt": "How should people feel after reading?",
+      "a": "\"Informed and clear-headed.\"",
+      "b": "\"Fired up and ready to act.\"",
+      "c": "\"Seen, and part of something.\"",
+      "d": "\"Confident they're in expert hands.\""
+    }
   }
 }
