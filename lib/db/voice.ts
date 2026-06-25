@@ -1,5 +1,7 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 import type { VoiceAxes } from '@/lib/validation/voice'
 import type { BrandVoiceVariationRow } from './types'
+import { getErrorMessage } from './utils'
 
 function isPostgresError(e: unknown): e is { code: string; message: string } {
   return (
@@ -41,4 +43,50 @@ export async function createVoiceVariation(params: {
   }
 
   return data as BrandVoiceVariationRow
+}
+
+/** Public alias for Server Action callers — cap is enforced in the RPC (D-B). */
+export async function addVariation(params: {
+  businessId: string
+  name: string
+  voiceAxes: VoiceAxes
+}): Promise<BrandVoiceVariationRow> {
+  return createVoiceVariation(params)
+}
+
+export async function renameVariation(
+  client: SupabaseClient,
+  id: string,
+  name: string,
+): Promise<void> {
+  const { error } = await client
+    .from('brand_voice_variations')
+    .update({ name })
+    .eq('id', id)
+  if (error) throw new Error(getErrorMessage(error))
+}
+
+export async function listVariations(
+  client: SupabaseClient,
+  businessId: string,
+): Promise<BrandVoiceVariationRow[]> {
+  const { data, error } = await client
+    .from('brand_voice_variations')
+    .select('*')
+    .eq('business_id', businessId)
+    .order('created_at', { ascending: true })
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as BrandVoiceVariationRow[]) ?? []
+}
+
+export async function updateVariationAxes(
+  client: SupabaseClient,
+  id: string,
+  voiceAxes: VoiceAxes,
+): Promise<void> {
+  const { error } = await client
+    .from('brand_voice_variations')
+    .update({ voice_axes: voiceAxes })
+    .eq('id', id)
+  if (error) throw new Error(getErrorMessage(error))
 }
