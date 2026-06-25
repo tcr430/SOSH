@@ -4,5 +4,14 @@
   "keywords": ["automation", "productivity", "AI", "social media", "B2B"],
   "avoidWords": ["cheap", "simple", "easy"],
   "uniqueValueProp": "SOSH automates social media management for B2B SaaS teams, enabling consistent brand presence without manual effort",
-  "competitors": ["Buffer", "Hootsuite", "Sprout Social"]
+  "competitors": ["Buffer", "Hootsuite", "Sprout Social"],
+  "voiceAxes": {
+    "formal_casual": 30,
+    "expert_peer": 25,
+    "serious_playful": 35,
+    "reserved_warm": 50,
+    "calm_energetic": 55,
+    "rational_emotional": 40,
+    "exclusive_inclusive": 45
+  }
 }
