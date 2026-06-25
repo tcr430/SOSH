@@ -683,6 +683,70 @@
     `transitionEmailOutboxRow` filed (email-outbox.ts not modified).
   - Full suite: 720 tests passed / 0 failed; tsc clean.
 
+- **Session 18B-5D complete — Correction pass (CI fixes):**
+  - B1: 15 email template snapshots regenerated after 13 px → 14 px footer fix. Committed `a31423b`.
+  - B2: Duplicate `toUtcIso` in `lib/db/utils.ts` removed; canonical `@/lib/utils` import used across `businesses.ts`, `campaigns.ts`, `posts.ts`. Committed `1fd98c5`.
+  - B3: `STRIPE_CLIENT_INTERNALS_BAN` ESLint rule updated — `allowTypeImports: true`, billing Server Action exception block, `typeof window` guard in `lib/stripe/checkout.ts`. Committed `77e2e34`.
+  - M1 (B18-009): CLAUDE.md `any`-escape-hatch carve-out wording corrected (describes `eslint-disable-next-line` comments, not `as unknown as` casts). Committed `90fc652`.
+  - Triage backfill: B18-001/002/009/031/045/072/073/081/084/085 closed; B18-005/006/043 N/A-verified; B18-064 CVE evidence recorded; B18-089 filed. Committed `dab1791`.
+  - Bonus: pre-existing test typo `ab_live_` → `sk_live_` in `orchestrator.test.ts:636` fixed. Committed `afa60f6`.
+  - Final CI: `npx tsc --noEmit --skipLibCheck` → 0 errors; scoped vitest → **1071 passed / 0 failed**.
+
+- **Session 18B-5 complete — Docs + remaining P1-CHEAP cleanup:**
+  - B18-001: `'suppressed'` added to `EmailProviderErrorCode` union (`lib/email/errors.ts`).
+  - B18-002: Email footer `13px → 14px` (`lib/email/templates/_layout.tsx`, WCAG 1.4.4); snapshots fixed in 18B-5D.
+  - B18-004: `marketing.layout.skipToContent` i18n key wired in EN/PT/ES; layout made `async` with `getTranslations`.
+  - B18-026: ADR 0002 open-follow-up note for `OAuthAuthorizeInput` 2-extra-fields drift.
+  - B18-031: `fetch_failed` dead enum value removed from `AiErrorCode`.
+  - B18-034: Silent `catch {}` blocks in OAuth callback replaced with `Sentry.captureException` (5 sites).
+  - B18-045: Launch-checklist §1 expanded from grouped row to per-var tunable rows matching `lib/config.ts`.
+  - B18-046: `authToken: process.env.SENTRY_AUTH_TOKEN` passed explicitly in `next.config.ts`.
+  - B18-066: No-accounts banner dismissal switched `sessionStorage → localStorage`.
+  - B18-072: `VALID_TRANSITIONS` JSDoc updated (documents why `unapprove`/`unskip` bypass the map).
+  - B18-073: Redundant re-sort removed from `PostsClient` (server already sorts by `scheduled_at`).
+  - B18-081: `STRIPE_CLIENT_INTERNALS_BAN` ESLint rule added; refined in 18B-5D.
+  - B18-084: `Sentry.withMonitor` wrapper removed from `runJanitorTick` (no declared schedule).
+  - B18-085 (partial → B18-089): `toUtcIso` duplicate collapsed in 18B-5D; full `formatISO` sweep deferred as B18-089 (P2).
+
+- **Session 18B-4D complete — Documentation + dead-key pass (zero behavioural change):**
+  - M1: Missing `/resend-confirmation` locale keys backfilled in EN/PT/ES `common.json`.
+  - L1: Orphaned `unconfirmedEmail` i18n keys removed from all three `auth.json` files.
+
+- **Session 18B-4 complete — Auth oracle + middleware rename:**
+  - B18-060 (Option 3): Login enumeration oracle closed. All `signInWithPassword` failures return generic `errors.login.invalid`. `unconfirmedEmail` state removed; login page shows resend-confirmation link unconditionally. New `/resend-confirmation` route mirrors `forgot-password` anti-enumeration posture. `proxy.ts` updated: `'resend-confirmation'` added to `AuthAction`, `RATE_LIMITS`, `PUBLIC_SEGMENTS`.
+  - B18-025: `middleware.ts` → `proxy.ts` (Next.js 16 convention). Export renamed `middleware → proxy`. Behaviour byte-identical. Launch-checklist §8 grep commands updated.
+  - B18-086 (signup oracle) + B18-087 (confirmation redirect env parity): filed as P2 triage items.
+
+- **Session 18B-3D complete — Correction pass on 18B-3:**
+  - H1: Pattern-matched `getErrorMessage` sweep — replaced aliased casts in `lib/db/businesses.ts`, `lib/db/posts.ts` (×2), `lib/ai/metrics.ts` (×2).
+  - H2: Unsound `result.error as '...'` cast in `RegenerateDialog.tsx:51` removed; replaced with `regenerateErrorKey()` switch.
+  - M4: Unit tests added for `getErrorMessage` (5 cases) and `parseAiGenerationMetadata` (4 cases) in `lib/db/utils.test.ts`.
+  - L2 → B18-089: `formatISO(new Date())` local-offset strings filed as new triage item (P2).
+
+- **Session 18B-3 complete — Type-quality cross-cutting sweeps:**
+  - B18-041: 8 production `toISOString()` sites replaced with `toUtcIso()` wrapper; ESLint `no-restricted-properties` ban added.
+  - B18-030: `getErrorMessage(error: unknown): string` helper extracted to `lib/utils.ts`; all `(error as Error).message` casts in `lib/db/` replaced.
+  - B18-010: Hardcoded plan-limit integers replaced with `getPlanCapabilities()` reads in `lib/campaigns/enforcement.ts` and adjacent files.
+  - B18-069: Unsound `post.status as …` cast removed from `PostCard`.
+  - B18-070: `PostActionErrorCode` named union defined; `PostActionState.error` retyped.
+  - B18-071: `parseAiGenerationMetadata` narrow-parse helper added to `lib/db/utils.ts`; two call sites updated.
+
+- **Session 18B-2D complete — Correction pass on 18B-2 (M1–M4):**
+  - M1: `activateCampaign` atomic guard rejection emits structured warn log + Sentry breadcrumb.
+  - M2: `publishPostComplete` guard rejections emit structured warn log at both sites in `lib/publishing/orchestrator.ts`.
+  - M3: Zero-row negative test added for `transitionEmailOutboxRow` wrong-source-status path.
+  - M4: Hex over-redaction trade-off documented above `VALUE_PATTERNS` in `lib/observability/sentry-scrub.ts`.
+
+- **Session 18B-2 complete — Atomic-transition + small security batch:**
+  - B18-075: `publish_complete` single-statement RPC migration; `markPostPublished` / `requeueScheduledPost` rewritten to call it.
+  - B18-003: `transitionEmailOutboxRow` atomic `WHERE id AND WHERE status` guard added.
+  - B18-040: `updateCampaign` in `generate.ts` step 10 given atomic `WHERE status='draft'` guard.
+  - B18-029: 10 CIDR ranges added to SSRF block-list (link-local, CGNAT, Class E, TEST-NET-1/2/3, benchmark, IPv6 ULA/link-local/documentation); one unit test per range.
+  - B18-062: `isSafeRedirect` now recursively `decodeURIComponent` (max 3 iterations) before allow-list validation.
+  - B18-061: `canonicalizeEmail(input)` helper added to `lib/auth/email.ts`; wired into signup, login, password-reset, resend-confirmation.
+  - B18-076: Value-scan pass added to token redactor — email, JWT, Stripe `sk_(live|test)_`, long hex (32+ chars).
+  - B18-008: All Sentry paths confirmed flowing through extended redactor; closed via B18-076 coverage.
+
 - **Session 18B-1 complete — GDPR 30-day hard-delete cron (ADR 0010 Amendment 2 §D2.1–D2.10):**
   - Migration `20260615200000_deletion_cron_state_machine.sql` — D2.1 schema delta on `business_deletion_requests`
     (status/attempts/next_attempt_at/last_error/updated_at columns, updated_at trigger, claimable index,
@@ -754,16 +818,13 @@
 
 ## What's next
 
-Pre-launch hardening sweep per `docs/launch-checklist.md` and `docs/backlog.md`:
+Session 18 is complete. All pre-launch debt cleared. Remaining work before launch:
 
-- **Legal Reviewer session (Session 17C):** typescript-reviewer + security-reviewer audit of Session 17B
-  output (MDX, migration, route, Sentry wiring)
-- **Open legal gates (§9):** counsel ratification → [LEGAL ENTITY] substitution; Anthropic DPF
-  verification at dataprivacyframework.gov; cookie inventory in staging; Svix client-verify confirm
-- **Postiz removal workstream (§16):** separate from legal — migrate lib/social/ to direct LinkedIn/X APIs
-- **Backlog deletions:** in-app Delete Account flow (B18-014, P2); auth_rate_limits TTL purge
-- **Perf/CWV gates (§11, 2 rows):** tick first-load JS ≤ 90 KB gz + LCP/CLS/INP lab check once `npm run build` ECC Remotion issue is resolved
-- **Pre-launch debt:** items in `docs/backlog.md` (A4 suppressed error code, E5 footer 13px, L-05 atomic guard, L-16-1 skip-to-content i18n)
+- **Open legal gates (§9):** counsel ratification → [LEGAL ENTITY] substitution; Anthropic DPF verification at dataprivacyframework.gov; cookie inventory in staging; Svix client-verify confirm
+- **Postiz removal workstream (§16):** migrate `lib/social/` to direct LinkedIn/X APIs (separate track)
+- **Deferred post-launch backlog:** in-app Delete Account flow (B18-014, P2); `auth_rate_limits` TTL purge; `13.5C-log` (cron-auth-failure structured log); ADR reconciliation items G3/C7 (backlog.md)
+- **Open triage items:** B18-089 (full 15-site `formatISO(new Date())` sweep → `toUtcIso`, P2); B18-064 (postcss XSS CVE, awaits Next.js bump); B18-086/087 (P2 signup oracle + confirmation redirect env parity)
+- **Perf/CWV gates (§11, 2 rows):** first-load JS ≤ 90 KB gz + LCP/CLS/INP lab check once `npm run build` ECC Remotion issue is resolved
 - **Smoke tests:** Resend sandbox sends for all 5 email kinds; Stripe smoke tests A–F
 - **Launch-checklist verification pass:** confirm all §1–§10 rows are actionable
 
