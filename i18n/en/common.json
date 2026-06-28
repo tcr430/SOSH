@@ -108,8 +108,24 @@
   "settings": {
     "nav": {
       "accounts": "Accounts",
+      "voice": "Voice",
       "billing": "Billing",
       "profile": "Profile"
+    },
+    "voice": {
+      "title": "Brand voice",
+      "subtitle": "Define your voice by answering questions, then fine-tune the dials.",
+      "refine_title": "Refine from your posts",
+      "refine_subtitle": "Use up to 3 of your most recently published posts to refine your voice vector. Counts against your brand voice analysis limit.",
+      "refine_cta": "Refine from recent posts",
+      "refine_loading": "Analysing your posts…",
+      "refine_success": "Voice updated ✓",
+      "refine_error_no_accounts": "Connect a social account to use this feature.",
+      "refine_error_no_posts": "No published posts found. Publish some posts first.",
+      "refine_error_cap": "You've used all your brand voice analysis attempts. Upgrade to continue.",
+      "refine_error_generic": "Something went wrong. Please try again.",
+      "variations_title": "Voice variations",
+      "variations_subtitle": "Create named variations for individual campaigns."
     },
     "accounts": {
       "title": "Connected accounts",
@@ -204,6 +220,9 @@
       "section2": {
         "title": "Where and how often?"
       },
+      "section3": {
+        "title": "Brand voice"
+      },
       "fields": {
         "name": "Campaign name",
         "name_placeholder": "e.g. Winter launch — drive signups",
@@ -223,7 +242,10 @@
         "posts_per_week": "posts per week",
         "start_date": "Start date",
         "end_date": "End date",
-        "estimated_posts": "Approximately {count} posts will be generated"
+        "estimated_posts": "Approximately {count} posts will be generated",
+        "voice_variation": "Voice",
+        "voice_variation_base": "Base voice",
+        "voice_variation_hint": "Use a variation to give this campaign a distinct tone."
       },
       "platform": {
         "not_connected": "Connect in Settings →",
@@ -301,7 +323,9 @@
     "avoid_placeholder": "Add a word…",
     "save": "Save voice",
     "saving": "Saving…",
-    "tracks_hint": "Your voice takes shape as you answer each question."
+    "tracks_hint": "Your voice takes shape as you answer each question.",
+    "tracks_toggle_show": "Show voice track",
+    "tracks_toggle_hide": "Hide voice track"
   },
   "calibration": {
     "q1": {
@@ -346,5 +370,19 @@
       "c": "\"Seen, and part of something.\"",
       "d": "\"Confident they're in expert hands.\""
     }
+  },
+  "variations": {
+    "your_variations": "Your variations",
+    "suggestions_title": "Suggested presets",
+    "suggestions_hint": "One click to add a preset variation derived from your base voice.",
+    "cap_reached": "You've reached the 5-variation limit. Delete a variation to add a new one.",
+    "error_generic": "Something went wrong. Please try again.",
+    "rename_hint": "Click to rename",
+    "fine_tune": "Fine-tune",
+    "collapse": "Collapse",
+    "delete": "Delete",
+    "save_axes": "Save",
+    "saving": "Saving…",
+    "saved": "Saved"
   }
 }

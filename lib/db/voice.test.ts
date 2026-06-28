@@ -8,8 +8,11 @@ import {
   renameVariation,
   listVariations,
   updateVariationAxes,
+  getVariationById,
+  deleteVariation,
 } from './voice'
 import type { VoiceAxes } from '@/lib/validation/voice'
+import { VOICE_VARIATION_CAP } from '@/lib/validation/voice'
 
 vi.mock('@/lib/supabase/service', () => ({
   createServiceRoleClient: vi.fn(),
@@ -46,7 +49,7 @@ beforeEach(() => {
 
 describe('createVoiceVariation', () => {
   it('returns the inserted variation row on success', async () => {
-    const { client } = createMockClient(mockVariationRow, null)
+    const { client } = createMockClient([mockVariationRow], null)
     vi.mocked(serviceModule.createServiceRoleClient).mockReturnValue(client)
 
     const result = await createVoiceVariation(baseParams)
@@ -57,6 +60,17 @@ describe('createVoiceVariation', () => {
       p_name: 'Bolder',
       p_voice_axes: neutralAxes,
     })
+  })
+
+  it('returns a scalar object — .id and .name are directly accessible (SETOF unwrap)', async () => {
+    const { client } = createMockClient([mockVariationRow], null)
+    vi.mocked(serviceModule.createServiceRoleClient).mockReturnValue(client)
+
+    const result = await createVoiceVariation(baseParams)
+
+    expect(typeof result.id).toBe('string')
+    expect(result.name).toBe('Bolder')
+    expect(Array.isArray(result)).toBe(false)
   })
 
   it('throws VoiceVariationCapError when RPC message is voice_variation_cap_reached', async () => {
@@ -102,7 +116,7 @@ describe('createVoiceVariation', () => {
   })
 
   it('uses the service-role client (not the anon client)', async () => {
-    const { client } = createMockClient(mockVariationRow, null)
+    const { client } = createMockClient([mockVariationRow], null)
     vi.mocked(serviceModule.createServiceRoleClient).mockReturnValue(client)
 
     await createVoiceVariation(baseParams)
@@ -115,7 +129,7 @@ describe('createVoiceVariation', () => {
 
 describe('addVariation', () => {
   it('delegates to createVoiceVariation and returns the row', async () => {
-    const { client } = createMockClient(mockVariationRow, null)
+    const { client } = createMockClient([mockVariationRow], null)
     vi.mocked(serviceModule.createServiceRoleClient).mockReturnValue(client)
 
     const result = await addVariation(baseParams)
@@ -172,6 +186,14 @@ describe('listVariations', () => {
     expect(result).toEqual([mockVariationRow])
   })
 
+  it('issues a bounded query — .limit(VOICE_VARIATION_CAP) is called', async () => {
+    const { client, builder } = createMockClient([mockVariationRow], null)
+
+    await listVariations(client, 'biz-uuid-001')
+
+    expect(builder.limit).toHaveBeenCalledWith(VOICE_VARIATION_CAP)
+  })
+
   it('returns empty array when no variations exist', async () => {
     const { client } = createMockClient([], null)
 
@@ -206,5 +228,52 @@ describe('updateVariationAxes', () => {
     const { client } = createMockClient(null, { message: 'DB error' })
 
     await expect(updateVariationAxes(client, 'var-uuid-001', newAxes)).rejects.toThrow()
+  })
+})
+
+// ── getVariationById ──────────────────────────────────────────────────────
+
+describe('getVariationById', () => {
+  it('returns the variation row when found', async () => {
+    const { client } = createMockClient(mockVariationRow, null)
+
+    const result = await getVariationById(client, 'var-uuid-001')
+
+    expect(client.from).toHaveBeenCalledWith('brand_voice_variations')
+    expect(result).toEqual(mockVariationRow)
+  })
+
+  it('returns null when variation is not found (maybeSingle returns null data)', async () => {
+    const { client } = createMockClient(null, null)
+
+    const result = await getVariationById(client, 'var-uuid-not-found')
+
+    expect(result).toBeNull()
+  })
+
+  it('throws on DB error', async () => {
+    const { client } = createMockClient(null, { message: 'DB error' })
+
+    await expect(getVariationById(client, 'var-uuid-001')).rejects.toThrow()
+  })
+})
+
+// ── deleteVariation ───────────────────────────────────────────────────────
+
+describe('deleteVariation', () => {
+  it('issues DELETE on brand_voice_variations filtered by id', async () => {
+    const { client, builder } = createMockClient(null, null)
+
+    await deleteVariation(client, 'var-uuid-001')
+
+    expect(client.from).toHaveBeenCalledWith('brand_voice_variations')
+    expect(builder.delete).toHaveBeenCalled()
+    expect(builder.eq).toHaveBeenCalledWith('id', 'var-uuid-001')
+  })
+
+  it('throws on DB error', async () => {
+    const { client } = createMockClient(null, { message: 'constraint error' })
+
+    await expect(deleteVariation(client, 'var-uuid-001')).rejects.toThrow()
   })
 })

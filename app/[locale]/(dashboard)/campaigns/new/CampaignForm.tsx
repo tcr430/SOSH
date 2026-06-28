@@ -11,9 +11,11 @@ import { createCampaignAction } from './actions'
 import type { Platform } from '@/lib/db/types'
 
 type ConnectedAccount = { platform: Platform }
+type VoiceVariation = { id: string; name: string }
 
 interface CampaignFormProps {
   connectedAccounts: ConnectedAccount[]
+  variations: VoiceVariation[]
   locale: string
 }
 
@@ -48,7 +50,7 @@ function estimatedPosts(postsPerWeek: number, start: string, end: string): numbe
   }
 }
 
-export function CampaignForm({ connectedAccounts, locale }: CampaignFormProps) {
+export function CampaignForm({ connectedAccounts, variations, locale }: CampaignFormProps) {
   const t = useTranslations('campaigns.new')
   const tErrors = useTranslations('errors.campaign')
   const router = useRouter()
@@ -61,6 +63,7 @@ export function CampaignForm({ connectedAccounts, locale }: CampaignFormProps) {
   const [postsPerWeek, setPostsPerWeek] = useState(3)
   const [startDate, setStartDate] = useState(todayISO)
   const [endDate, setEndDate] = useState('')
+  const [voiceVariationId, setVoiceVariationId] = useState<string>('')
 
   const today = todayISO()
   const connectedSet = new Set(connectedAccounts.map((a) => a.platform))
@@ -92,6 +95,7 @@ export function CampaignForm({ connectedAccounts, locale }: CampaignFormProps) {
       <input type="hidden" name="postsPerWeek" value={postsPerWeek} />
       <input type="hidden" name="startDate" value={startDate} />
       {endDate && <input type="hidden" name="endDate" value={endDate} />}
+      {voiceVariationId && <input type="hidden" name="voiceVariationId" value={voiceVariationId} />}
       {selectedPlatforms.map((p) => (
         <input key={p} type="hidden" name="platforms" value={p} />
       ))}
@@ -275,6 +279,27 @@ export function CampaignForm({ connectedAccounts, locale }: CampaignFormProps) {
             </p>
           )}
         </section>
+
+        {/* ── Section 3: Voice ── */}
+        {variations.length > 0 && (
+          <section className="space-y-6">
+            <SectionHeading>{t('section3.title')}</SectionHeading>
+            <Field label={t('fields.voice_variation')} htmlFor="voiceVariationSelect">
+              <select
+                id="voiceVariationSelect"
+                value={voiceVariationId}
+                onChange={e => setVoiceVariationId(e.target.value)}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                <option value="">{t('fields.voice_variation_base')}</option>
+                {variations.map(v => (
+                  <option key={v.id} value={v.id}>{v.name}</option>
+                ))}
+              </select>
+              <p className="mt-1.5 text-xs text-muted-foreground">{t('fields.voice_variation_hint')}</p>
+            </Field>
+          </section>
+        )}
 
         {/* Limit banners */}
         {state.errors?._limit === 'trial_campaign_limit' && (

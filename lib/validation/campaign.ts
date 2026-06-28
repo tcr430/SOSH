@@ -16,6 +16,7 @@ export const createCampaignSchema = z
       .string()
       .refine(s => !isNaN(Date.parse(s)), { message: 'Invalid date' })
       .optional(),
+    voiceVariationId: z.string().uuid().optional().nullable(),
   })
   .refine(
     data => {

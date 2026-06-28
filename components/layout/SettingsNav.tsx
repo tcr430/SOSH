@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 
 const NAV_ITEMS = [
   { key: 'accounts', href: 'accounts', enabled: true },
+  { key: 'voice',    href: 'voice',    enabled: true },
   { key: 'billing',  href: 'billing',  enabled: false },
   { key: 'profile',  href: 'profile',  enabled: false },
 ] as const

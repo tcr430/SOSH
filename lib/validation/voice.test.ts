@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { voiceAxesSchema, NEUTRAL_VOICE_AXES } from './voice'
+import { voiceAxesSchema, voiceAxesCoerceSchema, NEUTRAL_VOICE_AXES } from './voice'
 
 const valid = {
   formal_casual: 50,
@@ -68,5 +68,43 @@ describe('voiceAxesSchema', () => {
         expect(NEUTRAL_VOICE_AXES[key]).toBe(50)
       }
     })
+  })
+})
+
+describe('voiceAxesCoerceSchema (FormData strings)', () => {
+  const validStrings = {
+    formal_casual: '50',
+    expert_peer: '50',
+    serious_playful: '50',
+    reserved_warm: '50',
+    calm_energetic: '50',
+    rational_emotional: '50',
+    exclusive_inclusive: '50',
+  }
+
+  it('coerces string "55" to number 55', () => {
+    const result = voiceAxesCoerceSchema.safeParse({ ...validStrings, formal_casual: '55' })
+    expect(result.success).toBe(true)
+    if (result.success) expect(result.data.formal_casual).toBe(55)
+  })
+
+  it('accepts boundary string "0"', () => {
+    expect(voiceAxesCoerceSchema.safeParse({ ...validStrings, formal_casual: '0' }).success).toBe(true)
+  })
+
+  it('accepts boundary string "100"', () => {
+    expect(voiceAxesCoerceSchema.safeParse({ ...validStrings, formal_casual: '100' }).success).toBe(true)
+  })
+
+  it('rejects "200" (above max after coerce)', () => {
+    expect(voiceAxesCoerceSchema.safeParse({ ...validStrings, formal_casual: '200' }).success).toBe(false)
+  })
+
+  it('rejects "-1" (below min after coerce)', () => {
+    expect(voiceAxesCoerceSchema.safeParse({ ...validStrings, formal_casual: '-1' }).success).toBe(false)
+  })
+
+  it('rejects "50.5" (non-integer after coerce)', () => {
+    expect(voiceAxesCoerceSchema.safeParse({ ...validStrings, formal_casual: '50.5' }).success).toBe(false)
   })
 })

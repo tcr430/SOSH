@@ -47,7 +47,7 @@ export interface VoiceEditorProps {
   initialAvoidWords?: string[]
   /** AI-derived summary line shown atop the left pane */
   aiSummary?: string | null
-  onSave: (payload: VoiceEditorSavePayload) => void | Promise<void>
+  onSave: (payload: VoiceEditorSavePayload) => void | Promise<unknown>
 }
 
 export function VoiceEditor({
@@ -65,6 +65,7 @@ export function VoiceEditor({
   )
   const [highlightedAxes, setHighlightedAxes] = useState<Set<keyof VoiceAxes>>(new Set())
   const [isSaving, setIsSaving] = useState(false)
+  const [trackExpanded, setTrackExpanded] = useState(false)
   const [keywordInput, setKeywordInput] = useState('')
   const [avoidInput, setAvoidInput] = useState('')
 
@@ -184,23 +185,50 @@ export function VoiceEditor({
       </div>
 
       {/* ── Right pane: 7-axis tracks ──
-           Mobile: stacks below questions (questions-first, L-13).
-           lg+: fixed-width side column. */}
-      <div className="w-full lg:w-72 xl:w-80 shrink-0 space-y-5">
-        {locked && (
-          <p className="text-xs text-muted-foreground">{t('tracks_hint')}</p>
-        )}
-        {AXIS_ORDER.map(axis => (
-          <AxisTrack
-            key={axis}
-            lowLabel={AXIS_POLES[axis][0]}
-            highLabel={AXIS_POLES[axis][1]}
-            value={state.axes[axis]}
-            locked={locked}
-            highlighted={highlightedAxes.has(axis)}
-            onChange={v => handleAxisChange(axis, v)}
-          />
-        ))}
+           Mobile: sticky bottom bar, collapsible; questions render first (L-13).
+           lg+: static fixed-width side column, always expanded. */}
+      <div className="sticky bottom-0 z-10 bg-background border-t border-border py-3 lg:static lg:border-0 lg:py-0 w-full lg:w-72 xl:w-80 shrink-0">
+        {/* Toggle button — mobile only */}
+        <button
+          type="button"
+          className="flex w-full items-center justify-between text-sm text-muted-foreground lg:hidden"
+          onClick={() => setTrackExpanded(prev => !prev)}
+          aria-expanded={trackExpanded}
+          aria-controls="voice-track-panel"
+        >
+          <span>{trackExpanded ? t('tracks_toggle_hide') : t('tracks_toggle_show')}</span>
+          <svg
+            aria-hidden="true"
+            className={`h-3.5 w-3.5 transition-transform duration-150 ${trackExpanded ? 'rotate-180' : ''}`}
+            viewBox="0 0 12 12"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+          >
+            <path d="M2 4l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+
+        {/* Track panel: hidden on mobile until expanded; always visible on desktop */}
+        <div
+          id="voice-track-panel"
+          className={`space-y-5 ${trackExpanded ? 'mt-3' : 'hidden'} lg:mt-0 lg:block`}
+        >
+          {locked && (
+            <p className="text-xs text-muted-foreground">{t('tracks_hint')}</p>
+          )}
+          {AXIS_ORDER.map(axis => (
+            <AxisTrack
+              key={axis}
+              lowLabel={AXIS_POLES[axis][0]}
+              highLabel={AXIS_POLES[axis][1]}
+              value={state.axes[axis]}
+              locked={locked}
+              highlighted={highlightedAxes.has(axis)}
+              onChange={v => handleAxisChange(axis, v)}
+            />
+          ))}
+        </div>
       </div>
     </div>
   )

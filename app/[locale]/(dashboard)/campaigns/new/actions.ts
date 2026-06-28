@@ -16,6 +16,7 @@ export type CreateCampaignState = {
     objective?: string
     platforms?: string
     endDate?: string
+    voice_variation?: string
     _form?: string
     _limit?: 'trial_campaign_limit' | 'plus_campaign_limit'
   }
@@ -40,6 +41,7 @@ export async function createCampaignAction(
   formData: FormData,
 ): Promise<CreateCampaignState> {
   // Step 1: Parse and validate
+  const rawVoiceVariationId = formData.get('voiceVariationId') as string | null
   const rawData = {
     name: formData.get('name') as string,
     objective: formData.get('objective') as string,
@@ -49,6 +51,7 @@ export async function createCampaignAction(
     postsPerWeek: Number(formData.get('postsPerWeek')),
     startDate: formData.get('startDate') as string,
     endDate: (formData.get('endDate') as string) || undefined,
+    voiceVariationId: rawVoiceVariationId || undefined,
   }
 
   const parsed = createCampaignSchema.safeParse(rawData)
@@ -88,6 +91,15 @@ export async function createCampaignAction(
       return { errors: { platforms: 'errors.campaign.platform_not_connected' } }
     }
 
+    // Step 5a: Verify voice variation belongs to this business (write-time ownership guard §3.3)
+    if (parsed.data.voiceVariationId) {
+      const { getVariationById } = await import('@/lib/db/voice')
+      const variation = await getVariationById(client, parsed.data.voiceVariationId)
+      if (!variation) {
+        return { errors: { voice_variation: 'errors.campaign.invalid_voice_variation' } }
+      }
+    }
+
     // Step 5: Get trial state (null if trial hasn't started)
     const trialState = await getTrialStateMaybe(client, business.id)
 
@@ -118,6 +130,7 @@ export async function createCampaignAction(
       status: 'draft',
       total_posts_planned: totalPostsPlanned,
       total_posts_published: 0,
+      voice_variation_id: parsed.data.voiceVariationId ?? null,
     })
 
     // Step 8: Increment trial counter (errors swallowed — must not block the user)

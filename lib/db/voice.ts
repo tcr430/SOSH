@@ -1,7 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { VoiceAxes } from '@/lib/validation/voice'
+import { VOICE_VARIATION_CAP } from '@/lib/validation/voice'
 import type { BrandVoiceVariationRow } from './types'
 import { getErrorMessage } from './utils'
+
+export type { BrandVoiceVariationRow }
 
 function isPostgresError(e: unknown): e is { code: string; message: string } {
   return (
@@ -42,7 +45,7 @@ export async function createVoiceVariation(params: {
     throw new Error(isPostgresError(error) ? error.message : 'Database error')
   }
 
-  return data as BrandVoiceVariationRow
+  return (data as BrandVoiceVariationRow[])[0]
 }
 
 /** Public alias for Server Action callers — cap is enforced in the RPC (D-B). */
@@ -75,6 +78,7 @@ export async function listVariations(
     .select('*')
     .eq('business_id', businessId)
     .order('created_at', { ascending: true })
+    .limit(VOICE_VARIATION_CAP)
   if (error) throw new Error(getErrorMessage(error))
   return (data as BrandVoiceVariationRow[]) ?? []
 }
@@ -87,6 +91,47 @@ export async function updateVariationAxes(
   const { error } = await client
     .from('brand_voice_variations')
     .update({ voice_axes: voiceAxes })
+    .eq('id', id)
+  if (error) throw new Error(getErrorMessage(error))
+}
+
+export async function getVariationById(
+  client: SupabaseClient,
+  id: string,
+): Promise<BrandVoiceVariationRow | null> {
+  const { data, error } = await client
+    .from('brand_voice_variations')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle()
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as BrandVoiceVariationRow) ?? null
+}
+
+/** Fetches a variation only when it belongs to the given business.
+ * Safe for service-role callers — explicitly constrains by business_id instead of relying on RLS. */
+export async function getVariationForBusiness(
+  client: SupabaseClient,
+  id: string,
+  businessId: string,
+): Promise<BrandVoiceVariationRow | null> {
+  const { data, error } = await client
+    .from('brand_voice_variations')
+    .select('*')
+    .eq('id', id)
+    .eq('business_id', businessId)
+    .maybeSingle()
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as BrandVoiceVariationRow) ?? null
+}
+
+export async function deleteVariation(
+  client: SupabaseClient,
+  id: string,
+): Promise<void> {
+  const { error } = await client
+    .from('brand_voice_variations')
+    .delete()
     .eq('id', id)
   if (error) throw new Error(getErrorMessage(error))
 }

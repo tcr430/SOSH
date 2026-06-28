@@ -35,6 +35,7 @@ export async function inferBrandVoiceAction(): Promise<{ success: boolean; error
 
     await upsertBrandVoice(serviceClient, {
       business_id: business.id,
+      voice_axes: result.voiceAxes,
       tone: result.tone,
       target_audience: result.targetAudience,
       keywords: result.keywords,
@@ -47,7 +48,6 @@ export async function inferBrandVoiceAction(): Promise<{ success: boolean; error
     return { success: true }
   } catch (err) {
     if (err instanceof AiError) {
-      console.error('[inferBrandVoice] AI error:', err.code, err.message)
       return { success: false, errorCode: err.code }
     }
     return { success: false, errorCode: 'provider_error' }

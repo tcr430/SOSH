@@ -79,8 +79,8 @@ export async function generatePostsForCampaign(
       return { sessionId, postsCreated: 0 }
     }
 
-    // STEP 4 — Build customer context
-    const ctx = await buildCustomerContext(businessId)
+    // STEP 4 — Build customer context (§4.3: pass variation so descriptor reflects campaign's voice)
+    const ctx = await buildCustomerContext(businessId, campaign.voice_variation_id)
 
     if (!ctx.brandVoice) {
       await updateGenerationSessionStatus(client, sessionId, {

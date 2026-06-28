@@ -25,7 +25,7 @@ export default async function OnboardingPage({
   }
 
   const brandVoice = await getBrandVoice(client, business.id)
-  if (!brandVoice?.tone?.length && !brandVoice?.target_audience) {
+  if (!brandVoice?.target_audience) {
     redirect(`/${locale}/onboarding/step-2`)
   }
 

@@ -38,6 +38,10 @@ vi.mock('@/lib/db/trial-state', () => ({
   getTrialStateMaybe: vi.fn(),
 }))
 
+vi.mock('@/lib/db/voice', () => ({
+  getVariationForBusiness: vi.fn(),
+}))
+
 import { buildCustomerContext } from './context'
 import { getBusinessById } from '@/lib/db/businesses'
 import { getBrandVoice } from '@/lib/db/brand-voices'
@@ -45,9 +49,11 @@ import { listCampaigns } from '@/lib/db/campaigns'
 import { listTopPostMetrics } from '@/lib/db/post-metrics'
 import { listPostsByIds } from '@/lib/db/posts'
 import { getTrialStateMaybe } from '@/lib/db/trial-state'
+import { getVariationForBusiness } from '@/lib/db/voice'
 import type {
   BusinessRow,
   BrandVoiceRow,
+  BrandVoiceVariationRow,
   CampaignRow,
   PostMetricsRow,
   PostRow,
@@ -161,6 +167,23 @@ const mockTrialState: TrialStatePublicRow = {
   updated_at: '2026-01-01T00:00:00Z',
 }
 
+const mockVariation: BrandVoiceVariationRow = {
+  id: 'var-1',
+  business_id: 'biz-1',
+  name: 'Bolder',
+  voice_axes: {
+    formal_casual: 30,
+    expert_peer: 20,
+    serious_playful: 70,
+    reserved_warm: 50,
+    calm_energetic: 85,
+    rational_emotional: 60,
+    exclusive_inclusive: 50,
+  },
+  created_at: '2026-01-01T00:00:00Z',
+  updated_at: '2026-01-01T00:00:00Z',
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(getBusinessById).mockResolvedValue(mockBusiness)
@@ -169,6 +192,7 @@ beforeEach(() => {
   vi.mocked(listTopPostMetrics).mockResolvedValue([mockMetric])
   vi.mocked(listPostsByIds).mockResolvedValue([mockPost])
   vi.mocked(getTrialStateMaybe).mockResolvedValue(mockTrialState)
+  vi.mocked(getVariationForBusiness).mockResolvedValue(null)
 })
 
 describe('buildCustomerContext', () => {
@@ -313,5 +337,64 @@ describe('buildCustomerContext', () => {
     })
     const ctx = await buildCustomerContext('biz-1')
     expect(ctx.trialState?.brandVoiceAttemptsRemaining).toBe(0)
+  })
+})
+
+describe('buildCustomerContext — voice variation read-through (BP7 §4.3/§8.2)', () => {
+  it('uses base voice_axes when voiceVariationId is null (L-10)', async () => {
+    const ctx = await buildCustomerContext('biz-1', null)
+    // base voice_axes are all 50 (neutral) → locked descriptor
+    expect(ctx.brandVoice?.descriptor).toBe('A balanced, neutral voice with no strong leanings.')
+    expect(getVariationForBusiness).not.toHaveBeenCalled()
+  })
+
+  it('uses base voice_axes when voiceVariationId is omitted', async () => {
+    const ctx = await buildCustomerContext('biz-1')
+    expect(ctx.brandVoice?.descriptor).toBe('A balanced, neutral voice with no strong leanings.')
+  })
+
+  it('loads variation axes when voiceVariationId is set and calls getVariationForBusiness with businessId', async () => {
+    vi.mocked(getVariationForBusiness).mockResolvedValue(mockVariation)
+    await buildCustomerContext('biz-1', 'var-1')
+    expect(getVariationForBusiness).toHaveBeenCalledWith(expect.anything(), 'var-1', 'biz-1')
+  })
+
+  it('descriptor differs between base and variation axes (§4.3)', async () => {
+    vi.mocked(getVariationForBusiness).mockResolvedValue(mockVariation)
+    const ctxVariation = await buildCustomerContext('biz-1', 'var-1')
+
+    const ctxBase = await buildCustomerContext('biz-1', null)
+
+    expect(ctxVariation.brandVoice?.descriptor).not.toBe(ctxBase.brandVoice?.descriptor)
+  })
+
+  it('voice_axes on brandVoice are replaced with variation axes when voiceVariationId is set', async () => {
+    vi.mocked(getVariationForBusiness).mockResolvedValue(mockVariation)
+    const ctx = await buildCustomerContext('biz-1', 'var-1')
+    expect(ctx.brandVoice?.voice_axes).toEqual(mockVariation.voice_axes)
+  })
+
+  it('falls back to base when variation is not found (ON DELETE SET NULL path)', async () => {
+    vi.mocked(getVariationForBusiness).mockResolvedValue(null)
+    const ctx = await buildCustomerContext('biz-1', 'var-deleted')
+    expect(ctx.brandVoice?.descriptor).toBe('A balanced, neutral voice with no strong leanings.')
+    expect(ctx.brandVoice?.voice_axes).toEqual(mockBrandVoice.voice_axes)
+  })
+
+  it('§3.3 defense-in-depth: does not load a variation whose business_id differs from the campaign business', async () => {
+    // getVariationForBusiness filters by id AND business_id; cross-tenant → null
+    vi.mocked(getVariationForBusiness).mockResolvedValue(null)
+    const ctx = await buildCustomerContext('biz-1', 'var-from-biz-2')
+    expect(ctx.brandVoice?.voice_axes).toEqual(mockBrandVoice.voice_axes)
+    expect(ctx.brandVoice?.descriptor).toBe('A balanced, neutral voice with no strong leanings.')
+    expect(getVariationForBusiness).toHaveBeenCalledWith(expect.anything(), 'var-from-biz-2', 'biz-1')
+  })
+
+  it('CampaignUpdate type includes voice_variation_id (§3.3 — ordinary updatable field)', () => {
+    // Type-level check: CampaignUpdate must allow voice_variation_id
+    // If this compiles, the field is included (not excluded like business_id)
+    type HasVoiceVariationId = 'voice_variation_id' extends keyof import('@/lib/db/types').CampaignUpdate ? true : false
+    const check: HasVoiceVariationId = true
+    expect(check).toBe(true)
   })
 })

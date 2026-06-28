@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+const { hoistedGetVariationById } = vi.hoisted(() => ({
+  hoistedGetVariationById: vi.fn(),
+}))
+
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(),
 }))
@@ -21,6 +25,14 @@ vi.mock('@/lib/db/social-accounts', () => ({
   listActiveSocialAccounts: vi.fn(),
 }))
 
+vi.mock('@/lib/db/voice', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/lib/db/voice')>()
+  return {
+    ...original,
+    getVariationById: hoistedGetVariationById,
+  }
+})
+
 vi.mock('@/lib/db/campaigns', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/db/campaigns')>()
   return {
@@ -36,8 +48,10 @@ import { getTrialStateMaybe, incrementCampaignsCreated } from '@/lib/db/trial-st
 import { checkCampaignCreationAllowed } from '@/lib/campaigns/enforcement'
 import { listActiveSocialAccounts } from '@/lib/db/social-accounts'
 import { createCampaign } from '@/lib/db/campaigns'
-import type { BusinessRow } from '@/lib/db/types'
+import { getVariationById } from '@/lib/db/voice'
+import type { BusinessRow, BrandVoiceVariationRow } from '@/lib/db/types'
 
+const mockGetVariationById = vi.mocked(getVariationById)
 const mockCreateClient = vi.mocked(createClient)
 const mockGetBusinessByOwner = vi.mocked(getBusinessByOwner)
 const mockGetTrialStateMaybe = vi.mocked(getTrialStateMaybe)
@@ -127,6 +141,7 @@ beforeEach(() => {
   mockListActiveSocialAccounts.mockResolvedValue([{ platform: 'linkedin' }] as never)
   mockCreateCampaign.mockResolvedValue(MOCK_CAMPAIGN as never)
   mockIncrementCampaignsCreated.mockResolvedValue(undefined)
+  mockGetVariationById.mockResolvedValue(null)
 })
 
 describe('createCampaignAction', () => {
@@ -286,6 +301,49 @@ describe('createCampaignAction', () => {
       const result = await createCampaignAction(prevState, makeFormData())
       expect(result.errors?._form).toBeDefined()
       expect(result.success).toBeUndefined()
+    })
+  })
+
+  describe('voice variation ownership (§3.3)', () => {
+    const OTHER_BIZ_VARIATION_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    const OWN_VARIATION_ID = 'bbbbbbbb-bbbb-4bbb-9bbb-bbbbbbbbbbbb'
+
+    const MOCK_OWN_VARIATION: BrandVoiceVariationRow = {
+      id: 'bbbbbbbb-bbbb-4bbb-9bbb-bbbbbbbbbbbb',
+      business_id: 'biz-456',
+      name: 'Bold',
+      voice_axes: { formal_casual: 30, expert_peer: 20, serious_playful: 70, reserved_warm: 50, calm_energetic: 85, rational_emotional: 60, exclusive_inclusive: 50 },
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    }
+
+    it('rejects a voiceVariationId not visible to the auth client (cross-tenant)', async () => {
+      mockGetVariationById.mockResolvedValue(null)
+      const result = await createCampaignAction(
+        prevState,
+        makeFormData({ voiceVariationId: OTHER_BIZ_VARIATION_ID }),
+      )
+      expect(result.errors?.voice_variation).toBeDefined()
+      expect(mockCreateCampaign).not.toHaveBeenCalled()
+    })
+
+    it('accepts a voiceVariationId that the auth client can resolve (same tenant)', async () => {
+      mockGetVariationById.mockResolvedValue(MOCK_OWN_VARIATION)
+      const result = await createCampaignAction(
+        prevState,
+        makeFormData({ voiceVariationId: OWN_VARIATION_ID }),
+      )
+      expect(result.success).toBe(true)
+      expect(mockCreateCampaign).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ voice_variation_id: OWN_VARIATION_ID }),
+      )
+    })
+
+    it('does not call getVariationById when voiceVariationId is absent', async () => {
+      const result = await createCampaignAction(prevState, makeFormData())
+      expect(result.success).toBe(true)
+      expect(mockGetVariationById).not.toHaveBeenCalled()
     })
   })
 })

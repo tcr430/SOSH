@@ -21,6 +21,23 @@ function validateStatusTransition(from: PostStatus, to: PostStatus): void {
   }
 }
 
+export async function listRecentPublishedPostTexts(
+  client: SupabaseClient,
+  businessId: string,
+  limit = 3,
+): Promise<string[]> {
+  const { data, error } = await client
+    .from('posts')
+    .select('content')
+    .eq('business_id', businessId)
+    .eq('status', 'published')
+    .is('deleted_at', null)
+    .order('published_at', { ascending: false })
+    .limit(limit)
+  if (error) throw new Error(getErrorMessage(error))
+  return ((data as { content: string }[]) ?? []).map(row => row.content)
+}
+
 export async function listPostsByCampaign(
   client: SupabaseClient,
   campaignId: string,

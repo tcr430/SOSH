@@ -108,8 +108,24 @@
   "settings": {
     "nav": {
       "accounts": "Cuentas",
+      "voice": "Voz",
       "billing": "Facturación",
       "profile": "Perfil"
+    },
+    "voice": {
+      "title": "Voz de marca",
+      "subtitle": "Define tu voz respondiendo preguntas y ajusta los controles.",
+      "refine_title": "Refinar desde tus publicaciones",
+      "refine_subtitle": "Usa hasta 3 de tus publicaciones más recientes para refinar el vector de voz. Cuenta contra tu límite de análisis de voz de marca.",
+      "refine_cta": "Refinar desde publicaciones recientes",
+      "refine_loading": "Analizando tus publicaciones…",
+      "refine_success": "Voz actualizada ✓",
+      "refine_error_no_accounts": "Conecta una cuenta social para usar esta función.",
+      "refine_error_no_posts": "No se encontraron publicaciones. Publica primero.",
+      "refine_error_cap": "Has agotado los intentos de análisis de voz. Actualiza para continuar.",
+      "refine_error_generic": "Algo salió mal. Por favor inténtalo de nuevo.",
+      "variations_title": "Variaciones de voz",
+      "variations_subtitle": "Crea variaciones para campañas individuales."
     },
     "accounts": {
       "title": "Cuentas conectadas",
@@ -204,6 +220,9 @@
       "section2": {
         "title": "¿Dónde y con qué frecuencia?"
       },
+      "section3": {
+        "title": "Voz de marca"
+      },
       "fields": {
         "name": "Nombre de campaña",
         "name_placeholder": "ej.: Lanzamiento de invierno — generar registros",
@@ -223,7 +242,10 @@
         "posts_per_week": "publicaciones por semana",
         "start_date": "Fecha de inicio",
         "end_date": "Fecha de fin",
-        "estimated_posts": "Se generarán aproximadamente {count} publicaciones"
+        "estimated_posts": "Se generarán aproximadamente {count} publicaciones",
+        "voice_variation": "Voz",
+        "voice_variation_base": "Voz base",
+        "voice_variation_hint": "Usa una variación para dar a esta campaña un tono distinto."
       },
       "platform": {
         "not_connected": "Conectar en Configuración →",
@@ -301,7 +323,9 @@
     "avoid_placeholder": "Añadir palabra…",
     "save": "Guardar voz",
     "saving": "Guardando…",
-    "tracks_hint": "Tu voz se va definiendo a medida que respondes cada pregunta."
+    "tracks_hint": "Tu voz se va definiendo a medida que respondes cada pregunta.",
+    "tracks_toggle_show": "Mostrar panel de voz",
+    "tracks_toggle_hide": "Ocultar panel de voz"
   },
   "calibration": {
     "q1": {
@@ -346,5 +370,19 @@
       "c": "\"Vistas y parte de algo.\"",
       "d": "\"Seguras de que están en buenas manos.\""
     }
+  },
+  "variations": {
+    "your_variations": "Tus variaciones",
+    "suggestions_title": "Sugerencias",
+    "suggestions_hint": "Un clic para añadir una variación derivada de tu voz base.",
+    "cap_reached": "Has alcanzado el límite de 5 variaciones. Elimina una para añadir otra.",
+    "error_generic": "Algo salió mal. Por favor, inténtalo de nuevo.",
+    "rename_hint": "Haz clic para renombrar",
+    "fine_tune": "Ajustar",
+    "collapse": "Contraer",
+    "delete": "Eliminar",
+    "save_axes": "Guardar",
+    "saving": "Guardando…",
+    "saved": "Guardado"
   }
 }

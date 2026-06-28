@@ -5,6 +5,7 @@ import { listCampaigns } from '@/lib/db/campaigns'
 import { listTopPostMetrics } from '@/lib/db/post-metrics'
 import { listPostsByIds } from '@/lib/db/posts'
 import { getTrialStateMaybe } from '@/lib/db/trial-state'
+import { getVariationForBusiness } from '@/lib/db/voice'
 import { vectorToVoiceFields } from '@/lib/voice/translate'
 
 export type BrandVoiceContext = BrandVoiceRow & { readonly descriptor: string }
@@ -27,7 +28,10 @@ export interface CustomerContext {
   } | null
 }
 
-export async function buildCustomerContext(businessId: string): Promise<CustomerContext> {
+export async function buildCustomerContext(
+  businessId: string,
+  voiceVariationId?: string | null,
+): Promise<CustomerContext> {
   const { createServiceRoleClient } = await import('@/lib/supabase/service')
   const { config } = await import('@/lib/config')
   const client = createServiceRoleClient()
@@ -78,6 +82,19 @@ export async function buildCustomerContext(businessId: string): Promise<Customer
     }
   }
 
+  // When a campaign has a variation selected (§8.2/§4.3), override the base voice_axes
+  // and recompute descriptor. Falls back to base on null, missing id, or deleted variation (ON DELETE SET NULL).
+  let resolvedBrandVoice: BrandVoiceContext | null = null
+  if (brandVoice) {
+    let axesToUse = brandVoice.voice_axes
+    if (voiceVariationId) {
+      const variation = await getVariationForBusiness(client, voiceVariationId, businessId)
+      if (variation) axesToUse = variation.voice_axes
+    }
+    const { descriptor } = vectorToVoiceFields(axesToUse)
+    resolvedBrandVoice = { ...brandVoice, voice_axes: axesToUse, descriptor }
+  }
+
   return {
     business: {
       id: business.id,
@@ -88,9 +105,7 @@ export async function buildCustomerContext(businessId: string): Promise<Customer
       website: business.website,
       timezone: business.timezone,
     },
-    brandVoice: brandVoice
-      ? { ...brandVoice, descriptor: vectorToVoiceFields(brandVoice.voice_axes).descriptor }
-      : null,
+    brandVoice: resolvedBrandVoice,
     recentCampaigns: campaigns.map(c => ({
       id: c.id,
       name: c.name,
