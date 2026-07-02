@@ -18,7 +18,7 @@ export function buildPlatformPostUrl(
   if (!platformPostId || !platformPostId.trim()) return null
 
   if (platform === 'twitter') {
-    return `https://x.com/i/web/status/${platformPostId}`
+    return `https://x.com/i/web/status/${encodeURIComponent(platformPostId)}`
   }
 
   return null

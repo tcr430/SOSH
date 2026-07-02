@@ -44,4 +44,18 @@ describe('buildPlatformPostUrl', () => {
   it('returns null for twitter when id is whitespace only', () => {
     expect(buildPlatformPostUrl('twitter', '   ')).toBeNull()
   })
+
+  // ---- MINOR-3: encodeURIComponent hardening -------------------------------
+
+  it('encodes a crafted id so it cannot break out of the path segment', () => {
+    const craftedId = '../../evil?x=1#frag'
+    const url = buildPlatformPostUrl('twitter', craftedId)
+    expect(url).toBe(`https://x.com/i/web/status/${encodeURIComponent(craftedId)}`)
+    expect(url).not.toContain('../../evil')
+  })
+
+  it('encodes special characters in the id (slash, question mark, ampersand)', () => {
+    const url = buildPlatformPostUrl('twitter', 'abc/def?x=1&y=2')
+    expect(url).toBe('https://x.com/i/web/status/abc%2Fdef%3Fx%3D1%26y%3D2')
+  })
 })

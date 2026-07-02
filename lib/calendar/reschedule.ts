@@ -1,4 +1,5 @@
 import { toZonedTime, fromZonedTime } from 'date-fns-tz'
+import { toUtcIso } from '@/lib/utils'
 
 /**
  * Preserves the post's business-tz wall-clock time-of-day onto a new target day.
@@ -14,7 +15,7 @@ import { toZonedTime, fromZonedTime } from 'date-fns-tz'
  * - Gap (spring forward): date-fns-tz forward-shifts the non-existent local time.
  * - Overlap (autumn back): date-fns-tz picks the later UTC+0 occurrence.
  *
- * Returns a UTC ISO string (toISOString() — project-sanctioned via toUtcIso).
+ * Returns a UTC ISO string via toUtcIso() (CLAUDE.md date rule).
  */
 export function computeRescheduledInstant(
   currentScheduledAtUtc: string,
@@ -35,5 +36,5 @@ export function computeRescheduledInstant(
   zoned.setFullYear(y, mo - 1, d)
 
   // Convert the local (tz) wall time back to UTC.
-  return fromZonedTime(zoned, tz).toISOString()
+  return toUtcIso(fromZonedTime(zoned, tz))
 }

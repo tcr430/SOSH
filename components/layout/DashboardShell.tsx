@@ -26,14 +26,14 @@ import {
 import { useActiveBusiness } from '@/lib/contexts/business-context'
 import { logoutAction } from '@/app/[locale]/(dashboard)/actions'
 
-const ACTIVE_NAV = [
+export const ACTIVE_NAV = [
   { key: 'campaigns', href: 'campaigns',         icon: Megaphone  },
+  { key: 'calendar',  href: 'calendar',           icon: CalendarDays },
   { key: 'billing',   href: 'billing',            icon: CreditCard },
   { key: 'settings',  href: 'settings/accounts', icon: Settings   },
 ] as const
 
-const COMING_SOON_NAV = [
-  { key: 'calendar',  icon: CalendarDays },
+export const COMING_SOON_NAV = [
   { key: 'inbox',     icon: Inbox        },
   { key: 'analytics', icon: BarChart2    },
 ] as const
@@ -62,7 +62,6 @@ export function DashboardShell({
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setBannerDismissed(localStorage.getItem(BANNER_KEY) === '1')
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTrialBannerDismissed(localStorage.getItem(TRIAL_BILLING_BANNER_KEY) === '1')
   }, [])
 

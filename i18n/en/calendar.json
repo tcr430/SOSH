@@ -1,0 +1,83 @@
+{
+  "page_title": "Calendar",
+  "overflow_banner": "Some posts aren't shown — the visible window contains more than 5,000 posts.",
+  "toolbar": {
+    "create_campaign": "New campaign",
+    "create_post": "New post",
+    "create_post_coming_soon": "Post creation from the calendar is coming soon",
+    "today": "Today",
+    "prev_month": "Previous month",
+    "next_month": "Next month"
+  },
+  "box": {
+    "draft_badge_label": "Awaiting approval",
+    "failed_dot_label": "Publishing failed for one or more posts",
+    "skipped_label": "All posts skipped",
+    "open_label": "Open {campaign} posts for {date}",
+    "drag_handle_label": "Drag to reschedule"
+  },
+  "platform": {
+    "linkedin": "LinkedIn",
+    "twitter": "X (Twitter)",
+    "instagram": "Instagram",
+    "facebook": "Facebook",
+    "threads": "Threads"
+  },
+  "day": {
+    "today": "Today"
+  },
+  "panel": {
+    "close": "Close panel",
+    "empty": "No posts for this day"
+  },
+  "post": {
+    "approve": "Approve",
+    "edit": "Edit",
+    "save": "Save",
+    "cancel": "Cancel",
+    "move_to": "Move to…",
+    "view_on_platform": "View on {platform}",
+    "content_label": "Post content",
+    "hashtags_label": "Hashtags",
+    "hashtags_placeholder": "tag1 tag2 tag3",
+    "status": {
+      "draft": "Draft",
+      "approved": "Approved",
+      "scheduled": "Scheduled",
+      "published": "Published",
+      "failed": "Failed",
+      "skipped": "Skipped"
+    },
+    "metrics": {
+      "likes": "Likes",
+      "comments": "Comments",
+      "shares": "Shares",
+      "saves": "Saves",
+      "clicks": "Clicks",
+      "reach": "Reach",
+      "impressions": "Impressions"
+    }
+  },
+  "drag": {
+    "error_mixed": "Some posts in this group can't be moved yet — edit them individually first.",
+    "error_too_soon": "Target date must be at least tomorrow.",
+    "error_generic": "Reschedule failed. Please try again.",
+    "instruct_draggable": "Press Space or Enter to pick up. Use arrow keys to move. Press Space or Enter to drop, Escape to cancel.",
+    "announce_start": "Picked up {campaign}.",
+    "announce_over": "Moving {campaign} over {day}.",
+    "announce_off": "{campaign} is not over any date.",
+    "announce_end": "Dropped {campaign} on {day}.",
+    "announce_cancelled": "Drag cancelled."
+  },
+  "grid": {
+    "aria_label": "Calendar for {month}",
+    "empty_month": "No posts scheduled this month",
+    "weekday_mon": "Mon",
+    "weekday_tue": "Tue",
+    "weekday_wed": "Wed",
+    "weekday_thu": "Thu",
+    "weekday_fri": "Fri",
+    "weekday_sat": "Sat",
+    "weekday_sun": "Sun"
+  }
+}

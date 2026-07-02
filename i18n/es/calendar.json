@@ -1,0 +1,83 @@
+{
+  "page_title": "Calendario",
+  "overflow_banner": "Algunos posts no se muestran — la ventana visible contiene más de 5.000 posts.",
+  "toolbar": {
+    "create_campaign": "Nueva campaña",
+    "create_post": "Nuevo post",
+    "create_post_coming_soon": "La creación de posts desde el calendario llegará pronto",
+    "today": "Hoy",
+    "prev_month": "Mes anterior",
+    "next_month": "Mes siguiente"
+  },
+  "box": {
+    "draft_badge_label": "Pendiente de aprobación",
+    "failed_dot_label": "La publicación falló para uno o más posts",
+    "skipped_label": "Todos los posts omitidos",
+    "open_label": "Ver posts de {campaign} el {date}",
+    "drag_handle_label": "Arrastrar para reprogramar"
+  },
+  "platform": {
+    "linkedin": "LinkedIn",
+    "twitter": "X (Twitter)",
+    "instagram": "Instagram",
+    "facebook": "Facebook",
+    "threads": "Threads"
+  },
+  "day": {
+    "today": "Hoy"
+  },
+  "panel": {
+    "close": "Cerrar panel",
+    "empty": "Sin publicaciones para este día"
+  },
+  "post": {
+    "approve": "Aprobar",
+    "edit": "Editar",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "move_to": "Mover a…",
+    "view_on_platform": "Ver en {platform}",
+    "content_label": "Contenido de la publicación",
+    "hashtags_label": "Hashtags",
+    "hashtags_placeholder": "etiqueta1 etiqueta2",
+    "status": {
+      "draft": "Borrador",
+      "approved": "Aprobado",
+      "scheduled": "Programado",
+      "published": "Publicado",
+      "failed": "Fallido",
+      "skipped": "Omitido"
+    },
+    "metrics": {
+      "likes": "Me gusta",
+      "comments": "Comentarios",
+      "shares": "Compartidos",
+      "saves": "Guardados",
+      "clicks": "Clics",
+      "reach": "Alcance",
+      "impressions": "Impresiones"
+    }
+  },
+  "drag": {
+    "error_mixed": "Algunos posts de este grupo aún no se pueden mover — edítalos individualmente primero.",
+    "error_too_soon": "La fecha destino debe ser al menos mañana.",
+    "error_generic": "Reprogramación fallida. Por favor inténtalo de nuevo.",
+    "instruct_draggable": "Pulsa Espacio o Enter para agarrar. Usa las teclas de flecha para mover. Pulsa Espacio o Enter para soltar, Escape para cancelar.",
+    "announce_start": "{campaign} agarrado.",
+    "announce_over": "Moviendo {campaign} sobre {day}.",
+    "announce_off": "{campaign} no está sobre ninguna fecha.",
+    "announce_end": "{campaign} soltado en {day}.",
+    "announce_cancelled": "Arrastre cancelado."
+  },
+  "grid": {
+    "aria_label": "Calendario de {month}",
+    "empty_month": "Sin publicaciones programadas este mes",
+    "weekday_mon": "Lun",
+    "weekday_tue": "Mar",
+    "weekday_wed": "Mié",
+    "weekday_thu": "Jue",
+    "weekday_fri": "Vie",
+    "weekday_sat": "Sáb",
+    "weekday_sun": "Dom"
+  }
+}

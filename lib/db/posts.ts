@@ -1,8 +1,134 @@
 import { formatISO, subMinutes } from 'date-fns'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { PostRow, PostInsert, PostUpdate, PostStatus, AiGenerationMetadata } from './types'
+import type { PostRow, PostInsert, PostUpdate, PostStatus, Platform, AiGenerationMetadata } from './types'
+import type { CalendarPostRow, CalendarPostMetrics } from '@/lib/calendar/types'
 import { getErrorMessage } from './utils'
 import { toUtcIso } from '@/lib/utils'
+
+// ── Calendar layer (ADR 0012) ─────────────────────────────────────────────────
+
+export const CALENDAR_POST_LIMIT = 5000
+
+// Single source of truth is lib/calendar/types.ts — re-exported here so existing
+// `@/lib/db/posts` imports keep working without a second, divergence-prone copy.
+export type { CalendarPostRow, CalendarPostMetrics }
+
+type RawCalendarRow = {
+  id: string
+  campaign_id: string
+  platform: Platform
+  status: PostStatus
+  content: string
+  hashtags: string[]
+  scheduled_at: string
+  published_at: string | null
+  platform_post_id: string | null
+  // PostgREST returns the FK-joined side as an array even for to-one relationships
+  campaigns: Array<{ name: string }>
+  post_metrics: CalendarPostMetrics[] | null
+}
+
+function mapCalendarRow(raw: RawCalendarRow): CalendarPostRow {
+  const arr = raw.post_metrics
+  return {
+    id: raw.id,
+    campaign_id: raw.campaign_id,
+    campaign_name: raw.campaigns[0]?.name ?? '',
+    platform: raw.platform,
+    status: raw.status,
+    content: raw.content,
+    hashtags: raw.hashtags,
+    scheduled_at: raw.scheduled_at,
+    published_at: raw.published_at,
+    platform_post_id: raw.platform_post_id,
+    metrics: arr && arr.length > 0 ? arr[0] : null,
+  }
+}
+
+export async function listPostsForCalendar(
+  client: SupabaseClient,
+  opts: {
+    businessId: string
+    rangeStartUtc: string
+    rangeEndUtc: string
+    limit?: number
+  },
+): Promise<{ rows: CalendarPostRow[]; overflow: boolean }> {
+  const effectiveLimit = opts.limit ?? CALENDAR_POST_LIMIT
+  const { data, error } = await client
+    .from('posts')
+    .select(`
+      id,
+      campaign_id,
+      platform,
+      status,
+      content,
+      hashtags,
+      scheduled_at,
+      published_at,
+      platform_post_id,
+      campaigns!inner(name),
+      post_metrics(likes, comments, shares, saves, clicks, reach, impressions, last_synced_at)
+    `)
+    .eq('business_id', opts.businessId)
+    .gte('scheduled_at', opts.rangeStartUtc)
+    .lt('scheduled_at', opts.rangeEndUtc)
+    .is('deleted_at', null)
+    .order('scheduled_at', { ascending: true })
+    .limit(effectiveLimit + 1)
+  if (error) throw new Error(getErrorMessage(error))
+
+  // client is an untyped SupabaseClient (no Database generic), so PostgREST's
+  // joined-select response is `any[]` here — this is the single narrowing cast
+  // to the shape that query actually returns (verified against RawCalendarRow's
+  // field list above), not a type-safety-defeating `as unknown as`.
+  const raw = (data ?? []) as RawCalendarRow[]
+  const overflow = raw.length > effectiveLimit
+  const rows = (overflow ? raw.slice(0, effectiveLimit) : raw).map(mapCalendarRow)
+  return { rows, overflow }
+}
+
+export async function reschedulePost(
+  client: SupabaseClient,
+  opts: {
+    postId: string
+    businessId: string
+    newScheduledAtUtc: string
+  },
+): Promise<{ updated: boolean }> {
+  const { data, error } = await client
+    .from('posts')
+    .update({ scheduled_at: opts.newScheduledAtUtc })
+    .eq('id', opts.postId)
+    .eq('business_id', opts.businessId)
+    .in('status', ['draft', 'approved'])
+    .is('published_at', null)
+    .is('deleted_at', null)
+    .select('id')
+  if (error) throw new Error(getErrorMessage(error))
+  return { updated: ((data as { id: string }[] | null)?.length ?? 0) === 1 }
+}
+
+// Moves every post in a group in ONE atomic statement (20C MAJOR-1 / D-N) —
+// each post keeps its own business-tz time-of-day, so every row gets a
+// different scheduled_at; a plain multi-row .update() can't express that.
+// The RPC is SECURITY INVOKER (see migration) so RLS still gates every row —
+// this is not a service-role escape hatch.
+export async function reschedulePostsBatch(
+  client: SupabaseClient,
+  opts: {
+    businessId: string
+    moves: { id: string; newScheduledAtUtc: string }[]
+  },
+): Promise<string[]> {
+  if (opts.moves.length === 0) return []
+  const { data, error } = await client.rpc('reschedule_posts_batch', {
+    p_business_id: opts.businessId,
+    p_moves: opts.moves.map(m => ({ id: m.id, ts: toUtcIso(new Date(m.newScheduledAtUtc)) })),
+  })
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as string[] | null) ?? []
+}
 
 // Governs only the generic updatePost path. Dedicated functions (unapprovePost,
 // unskipPost) bypass this map and use their own atomic WHERE guards.
@@ -104,15 +230,20 @@ export async function updatePost(
 export async function approvePost(
   client: SupabaseClient,
   id: string,
+  // Optional belt-and-suspenders tenancy guard (20D-5 / MINOR-2), matching
+  // reschedulePost's posture. RLS already scopes rows by business — this is
+  // defense-in-depth, not the sole guard — so it stays optional to avoid
+  // touching call sites that rely on RLS alone (e.g. campaigns/[id]/posts).
+  businessId?: string,
 ): Promise<PostRow> {
-  const { data: row, error } = await client
+  let query = client
     .from('posts')
     .update({ status: 'approved' })
     .eq('id', id)
     .eq('status', 'draft')
     .is('deleted_at', null)
-    .select()
-    .single()
+  if (businessId !== undefined) query = query.eq('business_id', businessId)
+  const { data: row, error } = await query.select().single()
   if (error) throw new Error(getErrorMessage(error))
   if (!row) throw new Error(`Post ${id} not found or not in 'draft' status`)
   return row as PostRow

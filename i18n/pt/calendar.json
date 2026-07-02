@@ -1,0 +1,83 @@
+{
+  "page_title": "Calendário",
+  "overflow_banner": "Alguns posts não são mostrados — a janela visível contém mais de 5.000 posts.",
+  "toolbar": {
+    "create_campaign": "Nova campanha",
+    "create_post": "Novo post",
+    "create_post_coming_soon": "A criação de posts a partir do calendário está a chegar em breve",
+    "today": "Hoje",
+    "prev_month": "Mês anterior",
+    "next_month": "Próximo mês"
+  },
+  "box": {
+    "draft_badge_label": "Aguarda aprovação",
+    "failed_dot_label": "Publicação falhou para um ou mais posts",
+    "skipped_label": "Todos os posts ignorados",
+    "open_label": "Ver posts de {campaign} em {date}",
+    "drag_handle_label": "Arrastar para reagendar"
+  },
+  "platform": {
+    "linkedin": "LinkedIn",
+    "twitter": "X (Twitter)",
+    "instagram": "Instagram",
+    "facebook": "Facebook",
+    "threads": "Threads"
+  },
+  "day": {
+    "today": "Hoje"
+  },
+  "panel": {
+    "close": "Fechar painel",
+    "empty": "Sem publicações para este dia"
+  },
+  "post": {
+    "approve": "Aprovar",
+    "edit": "Editar",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "move_to": "Mover para…",
+    "view_on_platform": "Ver em {platform}",
+    "content_label": "Conteúdo da publicação",
+    "hashtags_label": "Hashtags",
+    "hashtags_placeholder": "tag1 tag2 tag3",
+    "status": {
+      "draft": "Rascunho",
+      "approved": "Aprovado",
+      "scheduled": "Agendado",
+      "published": "Publicado",
+      "failed": "Falhou",
+      "skipped": "Ignorado"
+    },
+    "metrics": {
+      "likes": "Gostos",
+      "comments": "Comentários",
+      "shares": "Partilhas",
+      "saves": "Guardados",
+      "clicks": "Cliques",
+      "reach": "Alcance",
+      "impressions": "Impressões"
+    }
+  },
+  "drag": {
+    "error_mixed": "Alguns posts deste grupo ainda não podem ser movidos — edita-os individualmente primeiro.",
+    "error_too_soon": "A data destino deve ser pelo menos amanhã.",
+    "error_generic": "Reagendamento falhou. Por favor tenta novamente.",
+    "instruct_draggable": "Prima Espaço ou Enter para pegar. Use as teclas de seta para mover. Prima Espaço ou Enter para largar, Escape para cancelar.",
+    "announce_start": "{campaign} apanhado.",
+    "announce_over": "A mover {campaign} para {day}.",
+    "announce_off": "{campaign} não está sobre nenhuma data.",
+    "announce_end": "{campaign} largado em {day}.",
+    "announce_cancelled": "Arrastar cancelado."
+  },
+  "grid": {
+    "aria_label": "Calendário de {month}",
+    "empty_month": "Sem publicações agendadas este mês",
+    "weekday_mon": "Seg",
+    "weekday_tue": "Ter",
+    "weekday_wed": "Qua",
+    "weekday_thu": "Qui",
+    "weekday_fri": "Sex",
+    "weekday_sat": "Sáb",
+    "weekday_sun": "Dom"
+  }
+}

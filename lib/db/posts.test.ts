@@ -151,6 +151,19 @@ describe('approvePost', () => {
     const { client } = createMockClient(null, { message: 'Update error' })
     await expect(approvePost(client, 'post-1')).rejects.toThrow('Update error')
   })
+
+  // MINOR-2: optional belt-and-suspenders business_id predicate, matching reschedulePost.
+  it('adds a business_id predicate when businessId is provided', async () => {
+    const { client, builder } = createMockClient(mockPost)
+    await approvePost(client, 'post-1', 'biz-1')
+    expect(builder.eq).toHaveBeenCalledWith('business_id', 'biz-1')
+  })
+
+  it('does not add a business_id predicate when businessId is omitted (existing callers unaffected)', async () => {
+    const { client, builder } = createMockClient(mockPost)
+    await approvePost(client, 'post-1')
+    expect(builder.eq).not.toHaveBeenCalledWith('business_id', expect.anything())
+  })
 })
 
 describe('schedulePost', () => {
