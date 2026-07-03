@@ -32,9 +32,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - uses: supabase/setup-cli@v1
-        with:
-          version: latest
+      # v3 auto-detects the version pinned in package-lock.json (supabase@^2.97.0)
+      # when `version` is omitted, keeping CI in lockstep with the local CLI.
+      - uses: supabase/setup-cli@v3
 
       - name: Start local Supabase stack (applies supabase/migrations M1-M8)
         run: supabase start
