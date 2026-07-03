@@ -19,6 +19,7 @@ const REQUIRED_FIELDS = {
   STRIPE_PRICE_ID_PLUS: 'price_plus_test',
   STRIPE_PRICE_ID_PRO: 'price_pro_test',
   OAUTH_STATE_SECRET: 'a'.repeat(32),
+  INVITE_TOKEN_SECRET: 'b'.repeat(32),
 }
 
 // CRON_SECRET needs ≥ 32 chars in production (existing refine) — include in prod tests.

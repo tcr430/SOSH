@@ -30,6 +30,7 @@ export const serverSchema = z.object({
   EMAIL_RETRY_BACKOFF_SECONDS: z.coerce.number().int().positive().default(60),
   EMAIL_SENDING_STUCK_MINUTES: z.coerce.number().int().positive().default(10),
   OAUTH_STATE_SECRET: z.string().min(32, "OAUTH_STATE_SECRET must be at least 32 characters"),
+  INVITE_TOKEN_SECRET: z.string().min(32, "INVITE_TOKEN_SECRET must be at least 32 characters"),
   SOCIAL_PROVIDER_MODE: z.string().default(""),
   HEALTHCHECK_TOKEN: z.string().default(""),
   APP_URL: z.string().url().default("http://localhost:3000"),
@@ -148,6 +149,7 @@ function parseServerEnv() {
     EMAIL_RETRY_BACKOFF_SECONDS: process.env.EMAIL_RETRY_BACKOFF_SECONDS,
     EMAIL_SENDING_STUCK_MINUTES: process.env.EMAIL_SENDING_STUCK_MINUTES,
     OAUTH_STATE_SECRET: process.env.OAUTH_STATE_SECRET,
+    INVITE_TOKEN_SECRET: process.env.INVITE_TOKEN_SECRET,
     SOCIAL_PROVIDER_MODE: process.env.SOCIAL_PROVIDER_MODE,
     HEALTHCHECK_TOKEN: process.env.HEALTHCHECK_TOKEN,
     APP_URL: process.env.NEXT_PUBLIC_APP_URL,
@@ -276,6 +278,9 @@ export const config = {
     },
     get OAUTH_STATE_SECRET() {
       return serverOnly("OAUTH_STATE_SECRET", () => server().OAUTH_STATE_SECRET);
+    },
+    get INVITE_TOKEN_SECRET() {
+      return serverOnly("INVITE_TOKEN_SECRET", () => server().INVITE_TOKEN_SECRET);
     },
     get SOCIAL_PROVIDER_MODE() {
       return serverOnly("SOCIAL_PROVIDER_MODE", () => server().SOCIAL_PROVIDER_MODE);

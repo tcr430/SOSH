@@ -1,6 +1,13 @@
 import { vi, describe, it, expect } from 'vitest'
 import { createMockClient } from './__test-utils__/mock-client'
-import { getMemberById, listMembers, countSeatUsage } from './business-members'
+import {
+  getMemberById,
+  listMembers,
+  countSeatUsage,
+  createInvite,
+  revokeMember,
+  acceptInvite,
+} from './business-members'
 import type { BusinessMemberRow } from './types'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
@@ -97,5 +104,66 @@ describe('countSeatUsage', () => {
     const client = makeSeatCountClient(null, null)
     const result = await countSeatUsage(client, 'biz-1')
     expect(result).toEqual({ activeCount: 0, pendingCount: 0 })
+  })
+})
+
+describe('createInvite', () => {
+  it('inserts a reserved invited row, lower-casing the email', async () => {
+    const invited: BusinessMemberRow = { ...mockMember, id: 'member-2', email: 'new@example.com', status: 'invited', user_id: null }
+    const { client, builder } = createMockClient(invited)
+    const result = await createInvite(client, {
+      businessId: 'biz-1',
+      email: 'NEW@Example.com',
+      role: 'editor',
+      invitedBy: 'user-1',
+    })
+    expect(result).toEqual(invited)
+    expect(builder.insert).toHaveBeenCalledWith({
+      business_id: 'biz-1',
+      email: 'new@example.com',
+      role: 'editor',
+      is_admin: false,
+      invited_by: 'user-1',
+      status: 'invited',
+    })
+  })
+
+  it('throws when supabase returns an error (e.g. seat cap trigger rejection)', async () => {
+    const { client } = createMockClient(null, { message: 'seat cap reached for plan (10 of 10 seats used)' })
+    await expect(
+      createInvite(client, { businessId: 'biz-1', email: 'x@example.com', role: 'viewer', invitedBy: 'user-1' }),
+    ).rejects.toThrow('seat cap reached')
+  })
+})
+
+describe('revokeMember', () => {
+  it('updates status to revoked', async () => {
+    const revoked: BusinessMemberRow = { ...mockMember, status: 'revoked' }
+    const { client, builder } = createMockClient(revoked)
+    const result = await revokeMember(client, 'member-1')
+    expect(result).toEqual(revoked)
+    expect(builder.update).toHaveBeenCalledWith({ status: 'revoked' })
+  })
+
+  it('throws when data is null', async () => {
+    const { client } = createMockClient(null, null)
+    await expect(revokeMember(client, 'missing')).rejects.toThrow('Business member missing not found')
+  })
+})
+
+describe('acceptInvite', () => {
+  it('calls the accept_invite RPC with the right params', async () => {
+    const { client } = createMockClient(mockMember)
+    const result = await acceptInvite(client, 'member-1', 'biz-1')
+    expect(result).toEqual(mockMember)
+    expect(client.rpc).toHaveBeenCalledWith('accept_invite', {
+      p_member_id: 'member-1',
+      p_business_id: 'biz-1',
+    })
+  })
+
+  it('throws when the RPC returns an error', async () => {
+    const { client } = createMockClient(null, { message: 'invite not available' })
+    await expect(acceptInvite(client, 'member-1', 'biz-1')).rejects.toThrow('invite not available')
   })
 })
