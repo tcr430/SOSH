@@ -1,0 +1,107 @@
+name: DB tests (ADR 0013 RLS/migration suite)
+
+# Boots a real local Supabase (Postgres + RLS) stack via Docker on the runner and
+# runs the migration-backed integration tests that need one. These are the same
+# tests that skip locally when run without a live Supabase instance
+# (`*_INTEGRATION_TEST_ENABLED` gates) — this workflow is what turns them from
+# "authored" into "passing in CI". No app code is deployed; this never touches
+# the linked remote Supabase project.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    paths:
+      - 'supabase/**'
+      - 'lib/db/**'
+      - 'lib/members/**'
+      - 'lib/config.ts'
+      - '.github/workflows/db-tests.yml'
+
+jobs:
+  db-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start local Supabase stack (applies supabase/migrations M1-M8)
+        run: supabase start
+
+      - name: Reset DB (deterministic re-apply of all migrations)
+        run: supabase db reset
+
+      - name: Export Supabase connection env vars
+        run: |
+          set -euo pipefail
+          supabase status -o env > /tmp/supabase-status.env
+          echo "--- raw supabase status -o env output (for debugging) ---"
+          sed -E 's/(ANON_KEY|SERVICE_ROLE_KEY|JWT_SECRET)="?.{6}/\1="[redacted]/' /tmp/supabase-status.env
+          # shellcheck disable=SC1091
+          source /tmp/supabase-status.env
+
+          for name in API_URL ANON_KEY SERVICE_ROLE_KEY DB_URL; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::supabase status -o env did not produce $name — check the raw output above and update this step's mapping"
+              exit 1
+            fi
+          done
+
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
+            echo "DATABASE_URL=$DB_URL"
+          } >> "$GITHUB_ENV"
+
+      - name: Run ADR 0013 DB-backed integration test suite
+        env:
+          NODE_ENV: test
+          # Test-only dummies — never used for real network calls (EMAIL_PROVIDER
+          # defaults to 'mock' under NODE_ENV=test, so RESEND_* stay unset).
+          ANTHROPIC_API_KEY: 'sk-ant-test-dummy-key-not-real'
+          STRIPE_SECRET_KEY: 'sk_test_dummy0000000000000000'
+          STRIPE_WEBHOOK_SECRET: 'whsec_dummy0000000000000000'
+          STRIPE_PRICE_ID_PLUS: 'price_dummy_plus'
+          STRIPE_PRICE_ID_PRO: 'price_dummy_pro'
+          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: 'pk_test_dummy0000000000000000'
+          OAUTH_STATE_SECRET: 'ci-dummy-oauth-state-secret-32chars-min'
+          INVITE_TOKEN_SECRET: 'ci-dummy-invite-token-secret-32chars-min'
+          # Directory-scoped selector: every file in supabase/__tests__/ gates on
+          # its own *_INTEGRATION_TEST_ENABLED flag; setting all of them is how
+          # this job opts the whole directory in (ADR 0013 §10 named constraints).
+          ACCEPT_INVITE_INTEGRATION_TEST_ENABLED: 'true'
+          BACKFILL_PURGE_INTEGRATION_TEST_ENABLED: 'true'
+          MEMBERS_INTEGRATION_TEST_ENABLED: 'true'
+          CAMPAIGNS_SOCIAL_ROLE_INTEGRATION_TEST_ENABLED: 'true'
+          RLS_MATRIX_INTEGRATION_TEST_ENABLED: 'true'
+          POSTS_APPROVAL_INTEGRATION_TEST_ENABLED: 'true'
+          SEAT_CAP_INTEGRATION_TEST_ENABLED: 'true'
+          USER_CAN_INTEGRATION_TEST_ENABLED: 'true'
+          DELETION_INTEGRATION_TEST_ENABLED: 'true'
+        run: npx vitest run supabase/__tests__
+
+      - name: Dump Supabase status + container logs on failure
+        if: failure()
+        run: |
+          supabase status || true
+          docker ps -a || true
+          for c in $(docker ps -a --filter "name=supabase" --format '{{.Names}}'); do
+            echo "--- logs: $c ---"
+            docker logs "$c" --tail 200 || true
+          done
+
+      - name: Stop Supabase stack
+        if: always()
+        run: supabase stop --no-backup
