@@ -3,7 +3,7 @@
 -- Fulfils ADR 0001 §A's promise ("the same function will resolve via a
 -- business_members join table without changes to any policy"). Every
 -- existing RLS policy already references this helper's output via the
--- `business_id = ANY ((SELECT public.get_user_business_ids()))` array-ANY
+-- `business_id = ANY (SELECT unnest(public.get_user_business_ids()))` array-ANY
 -- pattern (established in migration 20260430120017). This migration is the
 -- SINGLE point of change for the read-access widening — no policy body is
 -- touched (RLS-READ-HELPER-ONLY).

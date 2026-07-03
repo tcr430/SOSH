@@ -62,7 +62,7 @@ ALTER TABLE public.business_members ENABLE ROW LEVEL SECURITY;
 CREATE POLICY business_members_select ON public.business_members
   FOR SELECT TO authenticated
   USING (
-    business_id = ANY ((SELECT public.get_user_business_ids()))
+    business_id = ANY (SELECT unnest(public.get_user_business_ids()))
   );
 
 -- INSERT/UPDATE policies (admin-gated via user_can('manage_members')) land in

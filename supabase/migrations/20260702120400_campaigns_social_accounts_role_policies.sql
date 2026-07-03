@@ -11,19 +11,19 @@ DROP POLICY campaigns_delete_own ON public.campaigns;
 
 CREATE POLICY campaigns_insert_own
   ON public.campaigns FOR INSERT TO authenticated
-  WITH CHECK (business_id = ANY ((SELECT public.get_user_business_ids()))
+  WITH CHECK (business_id = ANY (SELECT unnest(public.get_user_business_ids()))
               AND (SELECT public.user_can(business_id, 'author')));
 
 CREATE POLICY campaigns_update_own
   ON public.campaigns FOR UPDATE TO authenticated
-  USING      (business_id = ANY ((SELECT public.get_user_business_ids()))
+  USING      (business_id = ANY (SELECT unnest(public.get_user_business_ids()))
               AND (SELECT public.user_can(business_id, 'author')))
-  WITH CHECK (business_id = ANY ((SELECT public.get_user_business_ids()))
+  WITH CHECK (business_id = ANY (SELECT unnest(public.get_user_business_ids()))
               AND (SELECT public.user_can(business_id, 'author')));
 
 CREATE POLICY campaigns_delete_own
   ON public.campaigns FOR DELETE TO authenticated
-  USING (business_id = ANY ((SELECT public.get_user_business_ids()))
+  USING (business_id = ANY (SELECT unnest(public.get_user_business_ids()))
          AND (SELECT public.user_can(business_id, 'author')));
 
 -- ─── social_accounts (§5.4) — defense-in-depth only ─────────────────────────
@@ -39,17 +39,17 @@ DROP POLICY social_accounts_delete_own ON public.social_accounts;
 
 CREATE POLICY social_accounts_insert_own
   ON public.social_accounts FOR INSERT TO authenticated
-  WITH CHECK (business_id = ANY ((SELECT public.get_user_business_ids()))
+  WITH CHECK (business_id = ANY (SELECT unnest(public.get_user_business_ids()))
               AND (SELECT public.user_can(business_id, 'connect_accounts')));
 
 CREATE POLICY social_accounts_update_own
   ON public.social_accounts FOR UPDATE TO authenticated
-  USING      (business_id = ANY ((SELECT public.get_user_business_ids()))
+  USING      (business_id = ANY (SELECT unnest(public.get_user_business_ids()))
               AND (SELECT public.user_can(business_id, 'connect_accounts')))
-  WITH CHECK (business_id = ANY ((SELECT public.get_user_business_ids()))
+  WITH CHECK (business_id = ANY (SELECT unnest(public.get_user_business_ids()))
               AND (SELECT public.user_can(business_id, 'connect_accounts')));
 
 CREATE POLICY social_accounts_delete_own
   ON public.social_accounts FOR DELETE TO authenticated
-  USING (business_id = ANY ((SELECT public.get_user_business_ids()))
+  USING (business_id = ANY (SELECT unnest(public.get_user_business_ids()))
          AND (SELECT public.user_can(business_id, 'connect_accounts')));

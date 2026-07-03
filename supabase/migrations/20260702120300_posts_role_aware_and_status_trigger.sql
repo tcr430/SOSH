@@ -11,7 +11,7 @@ DROP POLICY posts_delete_own ON public.posts;
 CREATE POLICY posts_insert_own ON public.posts
   FOR INSERT TO authenticated
   WITH CHECK (
-    business_id = ANY ((SELECT public.get_user_business_ids()))
+    business_id = ANY (SELECT unnest(public.get_user_business_ids()))
     AND (SELECT public.user_can(business_id, 'author'))
   );
 
@@ -20,14 +20,14 @@ CREATE POLICY posts_insert_own ON public.posts
 -- .eq('status','draft')); the WHERE guard and the capability check are orthogonal.
 CREATE POLICY posts_update_own ON public.posts
   FOR UPDATE TO authenticated
-  USING      (business_id = ANY ((SELECT public.get_user_business_ids()))
+  USING      (business_id = ANY (SELECT unnest(public.get_user_business_ids()))
               AND (SELECT public.user_can(business_id, 'reschedule')))
-  WITH CHECK (business_id = ANY ((SELECT public.get_user_business_ids()))
+  WITH CHECK (business_id = ANY (SELECT unnest(public.get_user_business_ids()))
               AND (SELECT public.user_can(business_id, 'reschedule')));
 
 CREATE POLICY posts_delete_own ON public.posts
   FOR DELETE TO authenticated
-  USING (business_id = ANY ((SELECT public.get_user_business_ids()))
+  USING (business_id = ANY (SELECT unnest(public.get_user_business_ids()))
          AND (SELECT public.user_can(business_id, 'author')));
 
 -- 5.1b — Status-transition capability trigger (the real approval boundary).
