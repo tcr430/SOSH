@@ -32,9 +32,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # v3 auto-detects the version pinned in package-lock.json (supabase@^2.97.0)
-      # when `version` is omitted, keeping CI in lockstep with the local CLI.
-      - uses: supabase/setup-cli@v3
+      # Pinned to an exact tag: no floating major tag (v1/v2) is published for
+      # this action, so `@v3`/`@v2` are not resolvable refs. Auto-detection via
+      # an omitted `version` input still applies — this only pins the action's
+      # own release, not the supabase CLI version it installs (that comes from
+      # package-lock.json's pinned supabase@^2.97.0).
+      - uses: supabase/setup-cli@v2.1.1
 
       - name: Start local Supabase stack (applies supabase/migrations M1-M8)
         run: supabase start
