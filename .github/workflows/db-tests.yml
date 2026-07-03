@@ -24,13 +24,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Matches the local dev toolchain (Node 24 / npm 11) that this repo's
+      # committed package-lock.json actually resolves cleanly against — Node 20
+      # / npm 10 in CI failed `npm ci` with a lock-file-out-of-sync error
+      # (missing @swc/helpers@0.5.23), and undici@8.2.0 itself requires
+      # Node >=22.19.0.
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          npm install -g npm@11
+          npm ci
 
       # Pinned to an exact tag: no floating major tag (v1/v2) is published for
       # this action, so `@v3`/`@v2` are not resolvable refs. Auto-detection via
