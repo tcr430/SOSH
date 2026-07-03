@@ -43,6 +43,8 @@ export type EmailKind =
   | 'first-post-published'
 export type EmailOutboxStatus = 'pending' | 'sending' | 'sent' | 'failed' | 'suppressed'
 export type EmailSuppressionReason = 'bounce' | 'complaint' | 'manual'
+export type MemberRole = 'approver' | 'editor' | 'viewer'
+export type MemberStatus = 'invited' | 'active' | 'revoked'
 
 // ---------------------------------------------------------------------------
 // 1. businesses
@@ -543,3 +545,41 @@ export type EmailWebhookEventRow = {
   payload: Record<string, unknown>
   received_at: string
 }
+
+// ---------------------------------------------------------------------------
+// 14. business_members — seats & permissions (ADR 0013 §2)
+// ---------------------------------------------------------------------------
+
+export type BusinessMemberRow = {
+  id: string
+  business_id: string
+  user_id: string | null
+  email: string
+  role: MemberRole
+  is_admin: boolean
+  status: MemberStatus
+  invited_by: string | null
+  invited_at: string
+  accepted_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type BusinessMemberInsert = {
+  id?: string
+  business_id: string
+  user_id?: string | null
+  email: string
+  role: MemberRole
+  is_admin?: boolean
+  status?: MemberStatus
+  invited_by?: string | null
+  invited_at?: string
+  accepted_at?: string | null
+  created_at?: string
+  updated_at?: string
+}
+
+export type BusinessMemberUpdate = Partial<
+  Omit<BusinessMemberRow, 'id' | 'created_at' | 'business_id' | 'invited_by' | 'invited_at'>
+>
