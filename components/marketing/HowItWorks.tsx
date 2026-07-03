@@ -20,12 +20,25 @@ export default async function HowItWorks() {
           </h2>
           <p className="mt-5 text-pretty leading-relaxed text-muted-foreground">{t('subhead')}</p>
         </div>
-        <ol className="mt-14 grid gap-x-12 gap-y-10 sm:grid-cols-2">
+        <ol className="mt-14 grid gap-x-8 gap-y-8 sm:grid-cols-2">
           {STEPS.map((step, i) => (
             <li key={step}>
               <StaggerItem index={i}>
-                <h3 className="text-lg font-semibold tracking-tight">{t(`step${step}_title`)}</h3>
-                <p className="mt-3 leading-relaxed text-muted-foreground">{t(`step${step}_body`)}</p>
+                <div className="glass-shell h-full">
+                  <div className="glass-core flex h-full items-start gap-4 p-6">
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-foreground text-sm font-semibold text-background">
+                      {step}
+                    </span>
+                    <div>
+                      <h3 className="text-lg font-semibold tracking-tight">
+                        {t(`step${step}_title`)}
+                      </h3>
+                      <p className="mt-2 leading-relaxed text-muted-foreground">
+                        {t(`step${step}_body`)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </StaggerItem>
             </li>
           ))}

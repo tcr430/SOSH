@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { ChevronRight } from 'lucide-react'
 import { getLocale, getTranslations } from 'next-intl/server'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -23,12 +24,15 @@ export default async function Hero() {
 
   return (
     <div className="hero-bg">
-    <section className="mx-auto flex max-w-4xl flex-col items-center px-6 pb-24 pt-24 text-center sm:pb-32 sm:pt-32">
-      <p className="hero-enter text-sm font-medium text-muted-foreground" style={enterDelay(0)}>
+    <section className="mx-auto flex max-w-4xl flex-col items-center px-6 pb-28 pt-28 text-center sm:pb-36 sm:pt-36">
+      <p
+        className="hero-enter rounded-full border border-border/70 bg-background/60 px-3 py-1 text-[11px] font-medium tracking-[0.16em] text-muted-foreground uppercase backdrop-blur-sm"
+        style={enterDelay(0)}
+      >
         {t('eyebrow')}
       </p>
       <h1
-        className="hero-enter hero-enter-blur mt-6 text-balance text-5xl font-bold tracking-tight sm:text-6xl md:text-7xl"
+        className="hero-enter hero-enter-blur mt-8 text-balance text-5xl font-bold tracking-tight sm:text-6xl md:text-7xl"
         style={enterDelay(1)}
       >
         {t('headline')}
@@ -45,20 +49,26 @@ export default async function Hero() {
       >
         <Link
           href={`/${locale}/signup`}
-          className={cn(buttonVariants({ variant: 'brand', size: 'lg' }), 'active:scale-[0.98]')}
+          className={cn(
+            buttonVariants({ variant: 'brand', size: 'lg' }),
+            'magnetic-cta rounded-full py-5 pr-2 pl-6'
+          )}
         >
-          {t('cta_primary')}
+          <span>{t('cta_primary')}</span>
+          <span className="cta-orb flex size-7 items-center justify-center rounded-full bg-brand-foreground/15">
+            <ChevronRight aria-hidden="true" strokeWidth={1.75} className="size-3.5" />
+          </span>
         </Link>
         <Link
           href={`/${locale}#how`}
-          className={cn(buttonVariants({ variant: 'outline', size: 'lg' }), 'active:scale-[0.98]')}
+          className={cn(
+            buttonVariants({ variant: 'outline', size: 'lg' }),
+            'active:scale-[0.98] rounded-full py-5'
+          )}
         >
           {t('cta_secondary')}
         </Link>
       </div>
-      <p className="hero-enter mt-6 text-sm text-muted-foreground" style={enterDelay(4)}>
-        {t('trust')}
-      </p>
     </section>
     </div>
   )

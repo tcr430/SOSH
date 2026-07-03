@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { Check, ChevronRight } from 'lucide-react'
 import { getLocale, getTranslations } from 'next-intl/server'
 import { MARKETING_PLANS, pricingFeatureRows } from '@/lib/stripe/plan'
 import { buttonVariants } from '@/components/ui/button'
@@ -22,13 +23,13 @@ export default async function PricingCards() {
         {MARKETING_PLANS.map((plan) => {
           const isPro = plan === 'pro'
           return (
-          <div
-            key={plan}
-            className={cn(
-              'flex flex-col rounded-lg border p-8',
-              isPro ? 'border-foreground bg-foreground text-background' : 'bg-card'
-            )}
-          >
+          <div key={plan} className={cn('glass-shell', isPro && 'bg-foreground/8')}>
+            <div
+              className={cn(
+                'glass-core flex h-full flex-col p-8',
+                isPro && 'bg-foreground text-background'
+              )}
+            >
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold">{t(`tiers.${plan}.name`)}</h3>
               {isPro && (
@@ -51,18 +52,11 @@ export default async function PricingCards() {
                 <li key={row.key}>
                   {/* §8 A1: dense list — 40ms stagger draws the eye down in reading order */}
                   <StaggerItem index={i} stepMs={40} className="flex items-start gap-2 text-sm">
-                  <svg
+                  <Check
                     aria-hidden="true"
-                    viewBox="0 0 16 16"
-                    className="mt-0.5 size-4 shrink-0 text-brand"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M3 8.5l3.5 3.5L13 4.5" />
-                  </svg>
+                    strokeWidth={2}
+                    className={cn('mt-0.5 size-4 shrink-0', isPro ? 'text-background/70' : 'text-brand')}
+                  />
                   <span className={isPro ? 'text-background/80' : undefined}>
                     {t(`feature.${row.key}`, row.values)}
                   </span>
@@ -72,10 +66,23 @@ export default async function PricingCards() {
             </ul>
             <Link
               href={`/${locale}/signup`}
-              className={cn(buttonVariants({ variant: 'brand', size: 'lg' }), 'mt-8 w-full active:scale-[0.98]')}
+              className={cn(
+                buttonVariants({ variant: isPro ? 'default' : 'brand', size: 'lg' }),
+                'magnetic-cta mt-8 w-full rounded-full py-5 pr-2 pl-6',
+                isPro && 'bg-background text-foreground hover:bg-background/90'
+              )}
             >
-              {t(`tiers.${plan}.cta`)}
+              <span className="flex-1 text-left">{t(`tiers.${plan}.cta`)}</span>
+              <span
+                className={cn(
+                  'cta-orb flex size-7 items-center justify-center rounded-full',
+                  isPro ? 'bg-foreground/10' : 'bg-brand-foreground/15'
+                )}
+              >
+                <ChevronRight aria-hidden="true" strokeWidth={1.75} className="size-3.5" />
+              </span>
             </Link>
+            </div>
           </div>
           )
         })}

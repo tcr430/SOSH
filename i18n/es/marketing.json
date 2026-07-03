@@ -11,8 +11,17 @@
     "headline": "You built something worth hearing about. SŌSH makes sure your market does.",
     "subhead": "Knowing your market was never the problem. Showing up where your buyers already are — consistently, in your voice — is. SŌSH is the social media team you can't hire yet: campaigns built around your goals, every post written for you, published across your channels once you approve.",
     "cta_primary": "Start free trial",
-    "cta_secondary": "See how it works",
-    "trust": "Free for 14 days · Card required, nothing charged today · Cancel anytime"
+    "cta_secondary": "See how it works"
+  },
+  "preview": {
+    "heading": "You always see it first.",
+    "subhead": "Two drafts SŌSH wrote from a real campaign brief. Nothing goes out until you approve it.",
+    "draftBadge": "Draft",
+    "linkedin_content": "We just shipped campaign-level planning. Set the goal once, and SŌSH plans every post around it instead of you guessing what to write next.",
+    "x_content": "New in SŌSH: campaign-level planning. Set the goal, get the posts. No more guessing what to write next.",
+    "actionApprove": "Approve",
+    "actionEdit": "Edit",
+    "actionSkip": "Skip"
   },
   "gap": {
     "heading": "The best product doesn't win. The one people hear about does.",
@@ -27,13 +36,13 @@
   "how": {
     "heading": "A social media team's output. Your final say on every post.",
     "subhead": "Set the direction once. SŌSH does the work a team would — and you stay the editor.",
-    "step1_title": "1 · Set the campaign",
+    "step1_title": "Set the campaign",
     "step1_body": "Tell SŌSH your goal, your audience, and your channels. It plans content around the objective, not just the calendar.",
-    "step2_title": "2 · It drafts in your voice",
+    "step2_title": "It drafts in your voice",
     "step2_body": "SŌSH writes posts that sound like you — the right length and tone for each channel, built from what makes your product matter.",
-    "step3_title": "3 · You approve",
+    "step3_title": "You approve",
     "step3_body": "Review, edit, or regenerate every post. Nothing reaches your audience until you've signed off.",
-    "step4_title": "4 · It publishes and learns",
+    "step4_title": "It publishes and learns",
     "step4_body": "Approved posts go live on schedule across your channels. SŌSH watches what lands and feeds it into the next campaign."
   },
   "features": {
@@ -115,7 +124,7 @@
     "heading": "Your market is waiting to hear from you.",
     "subhead": "Start your free trial today. Set your first campaign, approve your first posts, and put a social media team to work for the price of a tool.",
     "cta": "Start free trial",
-    "trust": "Free for 14 days · Card required, nothing charged today · Cancel anytime"
+    "trust": "14-day free trial. Card required, nothing charged until it ends. Cancel anytime."
   },
   "footer": {
     "tagline": "The social media team B2B SaaS startups can't hire yet.",

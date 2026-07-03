@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { getLocale, getTranslations } from 'next-intl/server'
 import { marketingMetadata } from '@/lib/marketing/metadata'
 import Hero from '@/components/marketing/Hero'
+import ProductPreview from '@/components/marketing/ProductPreview'
 import TheGap from '@/components/marketing/TheGap'
 import HowItWorks from '@/components/marketing/HowItWorks'
 import WhatYouGet from '@/components/marketing/WhatYouGet'
@@ -29,12 +30,13 @@ export default async function MarketingHomePage() {
   return (
     <>
       <Hero />
+      <ProductPreview />
       <TheGap />
       <HowItWorks />
       <WhatYouGet />
       <WhereWeStand />
-      <Section id="pricing" className="scroll-mt-16 border-t">
-        <div className="mx-auto max-w-6xl px-6 py-20 sm:py-24">
+      <Section id="pricing" className="mesh-glow scroll-mt-16 border-t">
+        <div className="mx-auto max-w-6xl px-6 py-24 sm:py-32">
           <div className="mx-auto max-w-3xl text-center">
             <h2 className="text-balance text-3xl font-bold tracking-tight sm:text-4xl">
               {t('heading')}

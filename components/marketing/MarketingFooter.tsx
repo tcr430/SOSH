@@ -33,15 +33,17 @@ export default async function MarketingFooter() {
 
   return (
     <footer className="border-t">
-      <div className="mx-auto max-w-6xl px-6 py-12">
-        <div className="grid gap-8 sm:grid-cols-2 md:grid-cols-4">
+      <div className="mx-auto max-w-6xl px-6 py-16 sm:py-20">
+        <div className="grid gap-10 sm:grid-cols-2 md:grid-cols-4">
           <div className="space-y-2">
             <p className="text-lg font-bold tracking-tight">{t('tagline')}</p>
           </div>
           {columns.map((column) => (
             <div key={column.heading}>
-              <h3 className="text-sm font-medium">{column.heading}</h3>
-              <ul className="mt-3 space-y-2">
+              <h3 className="text-[11px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
+                {column.heading}
+              </h3>
+              <ul className="mt-4 space-y-2.5">
                 {column.links.map((link) => (
                   <li key={link.href}>
                     <Link
@@ -56,7 +58,7 @@ export default async function MarketingFooter() {
             </div>
           ))}
         </div>
-        <div className="mt-12 flex flex-col gap-4 border-t pt-6 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-14 flex flex-col gap-4 border-t pt-6 sm:flex-row sm:items-center sm:justify-between">
           <LocaleSwitcher />
           <p className="text-sm text-muted-foreground">{t('copyright')}</p>
         </div>
