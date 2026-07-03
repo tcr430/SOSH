@@ -38,6 +38,24 @@ describe('getPlanCapabilities', () => {
     expect(agency.allowedPlatforms).toEqual(pro.allowedPlatforms)
     expect(agency.engagementInbox).toBe(pro.engagementInbox)
     expect(agency.advancedAnalytics).toBe(pro.advancedAnalytics)
+    expect(agency.maxSeats).toBe(pro.maxSeats)
+  })
+
+  // ADR 0013 §6.1 — seat caps (SEAT-MAXSEATS-NULL-UNLIMITED).
+  it("trial's maxSeats === 10", () => {
+    expect(getPlanCapabilities('trial').maxSeats).toBe(10)
+  })
+
+  it("plus's maxSeats === 10", () => {
+    expect(getPlanCapabilities('plus').maxSeats).toBe(10)
+  })
+
+  it("pro's maxSeats === null (unlimited)", () => {
+    expect(getPlanCapabilities('pro').maxSeats).toBeNull()
+  })
+
+  it("agency's maxSeats === null (unlimited)", () => {
+    expect(getPlanCapabilities('agency').maxSeats).toBeNull()
   })
 })
 

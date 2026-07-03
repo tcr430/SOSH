@@ -1,7 +1,28 @@
-import { describe, it, expect } from 'vitest'
+import { vi, describe, it, expect } from 'vitest'
 import { createMockClient } from './__test-utils__/mock-client'
-import { getMemberById, listMembers } from './business-members'
+import { getMemberById, listMembers, countSeatUsage } from './business-members'
 import type { BusinessMemberRow } from './types'
+import type { SupabaseClient } from '@supabase/supabase-js'
+
+// Mirrors lib/db/ai-usage.test.ts's makeCountClient — countSeatUsage issues two
+// sequential count queries (status='active' then status='invited'); the mock
+// tracks the last .eq('status', …) call to return the right count for each.
+function makeSeatCountClient(activeCount: number | null, pendingCount: number | null) {
+  let lastStatus: string | undefined
+  const builder: Record<string, unknown> = {
+    then: (res: (v: unknown) => unknown) => {
+      const count = lastStatus === 'active' ? activeCount : pendingCount
+      return Promise.resolve({ count, error: null }).then(res)
+    },
+  }
+  builder.select = vi.fn().mockReturnValue(builder)
+  builder.eq = vi.fn((col: string, val: string) => {
+    if (col === 'status') lastStatus = val
+    return builder
+  })
+  const client = { from: vi.fn().mockReturnValue(builder) }
+  return client as unknown as SupabaseClient
+}
 
 const mockMember: BusinessMemberRow = {
   id: 'member-1',
@@ -62,5 +83,19 @@ describe('listMembers', () => {
   it('throws when supabase returns an error', async () => {
     const { client } = createMockClient(null, { message: 'DB error' })
     await expect(listMembers(client, 'biz-1')).rejects.toThrow('DB error')
+  })
+})
+
+describe('countSeatUsage', () => {
+  it('returns active and pending counts', async () => {
+    const client = makeSeatCountClient(3, 2)
+    const result = await countSeatUsage(client, 'biz-1')
+    expect(result).toEqual({ activeCount: 3, pendingCount: 2 })
+  })
+
+  it('defaults null counts to 0', async () => {
+    const client = makeSeatCountClient(null, null)
+    const result = await countSeatUsage(client, 'biz-1')
+    expect(result).toEqual({ activeCount: 0, pendingCount: 0 })
   })
 })

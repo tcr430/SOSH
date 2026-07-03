@@ -16,6 +16,8 @@ export interface PlanCapabilities {
   allowedPlatforms: ReadonlyArray<Platform>
   engagementInbox: boolean
   advancedAnalytics: boolean
+  /** Max total seats (active members + pending invites, owner incl.). null = unlimited. */
+  maxSeats: number | null
 }
 
 const LAUNCH_PLATFORMS: ReadonlyArray<Platform> = ['linkedin', 'twitter']
@@ -34,6 +36,7 @@ const PRO_CAPABILITIES: Omit<PlanCapabilities, 'plan' | 'displayKey'> = {
   allowedPlatforms: ALL_PLATFORMS,
   engagementInbox: true,
   advancedAnalytics: true,
+  maxSeats: null,
 }
 
 const CAPABILITIES: Record<Plan, PlanCapabilities> = {
@@ -46,6 +49,7 @@ const CAPABILITIES: Record<Plan, PlanCapabilities> = {
     allowedPlatforms: LAUNCH_PLATFORMS,
     engagementInbox: false,
     advancedAnalytics: false,
+    maxSeats: 10,
   },
   plus: {
     plan: 'plus',
@@ -56,6 +60,7 @@ const CAPABILITIES: Record<Plan, PlanCapabilities> = {
     allowedPlatforms: LAUNCH_PLATFORMS,
     engagementInbox: false,
     advancedAnalytics: false,
+    maxSeats: 10,
   },
   pro: {
     plan: 'pro',
