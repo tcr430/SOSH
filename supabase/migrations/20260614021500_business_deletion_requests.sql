@@ -19,7 +19,7 @@ ALTER TABLE public.business_deletion_requests ENABLE ROW LEVEL SECURITY;
 -- delete flow (backlog) will add user-facing policies when it ships.
 CREATE POLICY "owner can read own deletion request"
   ON public.business_deletion_requests
-  FOR SELECT
+  FOR SELECT TO authenticated
   USING (
     business_id = ANY (public.get_user_business_ids())
   );

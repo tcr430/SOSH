@@ -16,7 +16,7 @@ DROP POLICY businesses_update_own ON public.businesses;
 
 CREATE POLICY businesses_select_own
   ON public.businesses FOR SELECT TO authenticated
-  USING (owner_id = (SELECT auth.uid()) AND deleted_at IS NULL);
+  USING (id = ANY (SELECT unnest(public.get_user_business_ids())) AND deleted_at IS NULL);
 
 CREATE POLICY businesses_insert_own
   ON public.businesses FOR INSERT TO authenticated
