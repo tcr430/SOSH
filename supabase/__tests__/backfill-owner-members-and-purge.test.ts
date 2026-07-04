@@ -89,12 +89,19 @@ describe.skipIf(!INTEGRATION)('backfill_owner_members (ADR 0013 §9 M7) + purge_
     })
   }
 
-  it('backfills a creator row (approver+is_admin+active) for a business with no member row yet', async () => {
+  // 21A-D/MAJOR-1: trg_ensure_owner_membership now provisions this row at
+  // INSERT time (see ensure-owner-membership.test.ts for its dedicated
+  // coverage). These three tests exercise M7's *own* mechanism — the raw
+  // backfill INSERT shape — against a business the trigger already covers,
+  // which is exactly the scenario a re-run of the M7 migration would hit.
+  it('M7-shaped insert against a trigger-covered business hits the partial unique index on the first attempt (ROLE-CREATOR-BACKFILL-IDEMPOTENT)', async () => {
     const owner = await createUser('creator1')
     const businessId = await createBusiness(owner.id, 'Backfill Business 1')
 
+    // The trigger already created this row; an M7-style insert conflicts immediately.
     const { error: insertErr } = await insertOwnerBackfillRow(businessId, owner)
-    expect(insertErr).toBeNull()
+    expect(insertErr).not.toBeNull()
+    expect(insertErr!.code).toBe('23505')
 
     const { data: member, error } = await admin
       .from('business_members')
@@ -108,14 +115,12 @@ describe.skipIf(!INTEGRATION)('backfill_owner_members (ADR 0013 §9 M7) + purge_
     expect(member.status).toBe('active')
   })
 
-  it('is idempotent: a second backfill insert for a business already covered hits the partial unique index, not a duplicate row (ROLE-CREATOR-BACKFILL-IDEMPOTENT)', async () => {
+  it('stays a single row: the trigger-created row plus a rejected M7-style re-insert never produce a duplicate', async () => {
     const owner = await createUser('creator2')
     const businessId = await createBusiness(owner.id, 'Backfill Business 2')
 
-    const { error: firstErr } = await insertOwnerBackfillRow(businessId, owner)
-    expect(firstErr).toBeNull()
-    const first = await admin.from('business_members').select('id').eq('business_id', businessId)
-    expect(first.data).toHaveLength(1)
+    const before = await admin.from('business_members').select('id').eq('business_id', businessId)
+    expect(before.data).toHaveLength(1)
 
     // The migration's ON CONFLICT (business_id, user_id) WHERE (...) DO NOTHING
     // targets exactly this index (business_members_uniq_user); a raw re-insert
@@ -124,17 +129,14 @@ describe.skipIf(!INTEGRATION)('backfill_owner_members (ADR 0013 §9 M7) + purge_
     expect(secondErr).not.toBeNull()
     expect(secondErr!.code).toBe('23505')
 
-    const second = await admin.from('business_members').select('id').eq('business_id', businessId)
-    expect(second.data).toHaveLength(1)
-    expect(second.data![0].id).toBe(first.data![0].id)
+    const after = await admin.from('business_members').select('id').eq('business_id', businessId)
+    expect(after.data).toHaveLength(1)
+    expect(after.data![0].id).toBe(before.data![0].id)
   })
 
-  it('the backfilled creator suffers zero capability regression across all six user_can capabilities (ROLE-CREATOR-NOREG)', async () => {
+  it('the trigger-provisioned owner suffers zero capability regression across all six user_can capabilities (ROLE-CREATOR-NOREG)', async () => {
     const owner = await createUser('creator3')
     const businessId = await createBusiness(owner.id, 'Backfill Business 3')
-
-    const { error: insertErr } = await insertOwnerBackfillRow(businessId, owner)
-    expect(insertErr).toBeNull()
 
     const client = await signInAs(owner.email)
     for (const capability of CAPABILITIES) {
@@ -151,15 +153,7 @@ describe.skipIf(!INTEGRATION)('backfill_owner_members (ADR 0013 §9 M7) + purge_
     const owner = await createUser('purgeowner')
     const businessId = await createBusiness(owner.id, 'Purge Business')
 
-    await admin.from('business_members').insert({
-      business_id: businessId,
-      user_id: owner.id,
-      email: owner.email.toLowerCase(),
-      role: 'approver',
-      is_admin: true,
-      status: 'active',
-    })
-
+    // trg_ensure_owner_membership already provisioned the owner's row.
     const before = await admin.from('business_members').select('id').eq('business_id', businessId)
     expect(before.data!.length).toBeGreaterThan(0)
 
@@ -181,15 +175,7 @@ describe.skipIf(!INTEGRATION)('backfill_owner_members (ADR 0013 §9 M7) + purge_
     const owner = await createUser('purgeowner2')
     const businessId = await createBusiness(owner.id, 'Purge Business Cascade Check')
 
-    await admin.from('business_members').insert({
-      business_id: businessId,
-      user_id: owner.id,
-      email: owner.email.toLowerCase(),
-      role: 'approver',
-      is_admin: true,
-      status: 'active',
-    })
-
+    // trg_ensure_owner_membership already provisioned the owner's row.
     const { error } = await admin.rpc('purge_business', { p_business_id: businessId })
     expect(error).toBeNull()
 

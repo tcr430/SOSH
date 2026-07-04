@@ -32,7 +32,10 @@ export async function listMembers(
 }
 
 // Counts active + pending (invited) members for a business. Owner is an active
-// member row (backfill) → counted naturally, no special-case. status='revoked' excluded.
+// member row — backfilled for pre-21A-D businesses by M7's one-time DML, and
+// auto-provisioned go-forward by the ensure_owner_membership AFTER INSERT
+// trigger (M9, 21A-D/MAJOR-1) — so it's counted naturally, no special-case.
+// status='revoked' excluded.
 export async function countSeatUsage(
   client: SupabaseClient,
   businessId: string,

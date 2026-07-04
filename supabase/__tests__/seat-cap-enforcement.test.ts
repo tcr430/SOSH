@@ -72,20 +72,21 @@ describe.skipIf(!INTEGRATION)('seat cap enforcement (ADR 0013 §6.6)', () => {
     expect(data).toBe(getPlanCapabilities(plan).maxSeats)
   })
 
-  it('rejects an INSERT that would exceed the plan cap (trial, max=10)', async () => {
+  it('rejects an INSERT that would exceed the plan cap (trial, max=10, auto-owner counts as 1 seat)', async () => {
     const businessId = await makeBusiness('trial')
-    // Fill to cap (10 seat-consuming rows).
-    for (let i = 0; i < 10; i++) {
+    // The auto-provisioned owner (trg_ensure_owner_membership, 21A-D/MAJOR-1)
+    // already consumes 1 seat, so only 9 more invites fit under max=10.
+    for (let i = 0; i < 9; i++) {
       const { error } = await insertMember(businessId, 'invited')
       expect(error).toBeNull()
     }
-    // 11th insert must be rejected.
+    // The 10th invite (owner + 9 already used = 10 = cap) must be rejected.
     const { error } = await insertMember(businessId, 'invited')
     expect(error).not.toBeNull()
     expect(error.message).toMatch(/seat cap reached/)
   })
 
-  it('allows an INSERT below cap', async () => {
+  it('allows an INSERT up to cap (auto-owner + 9 invites = 10 = max)', async () => {
     const businessId = await makeBusiness('plus')
     for (let i = 0; i < 9; i++) {
       const { error } = await insertMember(businessId, 'invited')
@@ -103,7 +104,7 @@ describe.skipIf(!INTEGRATION)('seat cap enforcement (ADR 0013 §6.6)', () => {
 
   it('overage lock: a Pro→Plus downgrade blocks further invites (SEAT-OVERAGE-LOCK)', async () => {
     const businessId = await makeBusiness('pro')
-    // 12 seats while unlimited — all allowed.
+    // Auto-owner (1) + 12 seats while unlimited — all allowed.
     for (let i = 0; i < 12; i++) {
       const { error } = await insertMember(businessId, 'invited')
       expect(error).toBeNull()

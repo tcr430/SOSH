@@ -46,7 +46,7 @@ jobs:
       # package-lock.json's pinned supabase@^2.97.0).
       - uses: supabase/setup-cli@v2.1.1
 
-      - name: Start local Supabase stack (applies supabase/migrations M1-M8)
+      - name: Start local Supabase stack (applies supabase/migrations M1-M9)
         run: supabase start
 
       - name: Reset DB (deterministic re-apply of all migrations)
@@ -100,6 +100,7 @@ jobs:
           SEAT_CAP_INTEGRATION_TEST_ENABLED: 'true'
           USER_CAN_INTEGRATION_TEST_ENABLED: 'true'
           DELETION_INTEGRATION_TEST_ENABLED: 'true'
+          ENSURE_OWNER_MEMBERSHIP_INTEGRATION_TEST_ENABLED: 'true'
         run: npx vitest run supabase/__tests__
 
       - name: Dump Supabase status + container logs on failure

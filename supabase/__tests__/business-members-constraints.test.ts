@@ -33,16 +33,9 @@ describe.skipIf(!INTEGRATION)('business_members — CHECK/unique-index/trigger i
     if (bizErr) throw bizErr
     businessId = biz.id
 
-    // Backfill the primary-admin row per L-8, exercised by trg_protect_primary_admin_membership.
-    const { error: memberErr } = await client.from('business_members').insert({
-      business_id: businessId,
-      user_id: ownerId,
-      email: 'owner@integration.test',
-      role: 'approver',
-      is_admin: true,
-      status: 'active',
-    })
-    if (memberErr) throw memberErr
+    // The primary-admin row (L-8, exercised by trg_protect_primary_admin_membership)
+    // is now auto-provisioned by trg_ensure_owner_membership (21A-D/MAJOR-1) — no
+    // manual insert needed; a manual one here would 23505 against the trigger's row.
   })
 
   afterAll(async () => {
