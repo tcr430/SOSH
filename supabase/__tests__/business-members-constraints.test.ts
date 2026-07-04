@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { createClient } from '@supabase/supabase-js'
 
 // Gates on a live Supabase instance, like lib/deletion/__integration__/purge-business.test.ts.
 const INTEGRATION = process.env.MEMBERS_INTEGRATION_TEST_ENABLED === 'true'
+
+const PASSWORD = 'TestPass123!'
 
 describe.skipIf(!INTEGRATION)('business_members — CHECK/unique-index/trigger integration', () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -44,6 +47,19 @@ describe.skipIf(!INTEGRATION)('business_members — CHECK/unique-index/trigger i
     await client.from('businesses').delete().eq('id', businessId)
     if (ownerId) await client.auth.admin.deleteUser(ownerId)
   })
+
+  // Returns an anon-key client signed in as the given user — RLS applies to every query.
+  async function signInAs(email: string) {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    if (!url || !anonKey) {
+      throw new Error('NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY are required')
+    }
+    const authClient = createClient(url, anonKey)
+    const { error } = await authClient.auth.signInWithPassword({ email, password: PASSWORD })
+    if (error) throw error
+    return authClient
+  }
 
   it('rejects an active row with a null user_id (business_members_active_has_user)', async () => {
     const { error } = await client.from('business_members').insert({
@@ -238,6 +254,92 @@ describe.skipIf(!INTEGRATION)('business_members — CHECK/unique-index/trigger i
       .update({ status: 'revoked' })
       .eq('id', row.data.id)
     expect(error).toBeNull()
+
+    await client.from('business_members').delete().eq('id', row.data.id)
+  })
+
+  // D1 / RLS-INVITED-VISIBLE-ALL — the visibility half (§2.1, L-16). Pending
+  // rows are visible to every member of the tenant, not just admins; the
+  // hijack vector this opens is closed at accept time by email-match, not by
+  // restricting visibility here.
+  it('a peer active member can SELECT a pending (invited) row of the same business', async () => {
+    const { data: authUser } = await client.auth.admin.createUser({
+      email: `members-peer-${Date.now()}@integration.test`,
+      password: PASSWORD,
+      email_confirm: true,
+    })
+    const peerId = authUser.user.id
+
+    const peerRow = await client
+      .from('business_members')
+      .insert({
+        business_id: businessId,
+        user_id: peerId,
+        email: authUser.user.email,
+        role: 'editor',
+        status: 'active',
+      })
+      .select('id')
+      .single()
+    expect(peerRow.error).toBeNull()
+
+    const pendingRow = await client
+      .from('business_members')
+      .insert({
+        business_id: businessId,
+        email: `pending-visible-${Date.now()}@integration.test`,
+        role: 'viewer',
+        status: 'invited',
+      })
+      .select('id')
+      .single()
+    expect(pendingRow.error).toBeNull()
+
+    const peerClient = await signInAs(authUser.user.email)
+    const { data, error } = await peerClient
+      .from('business_members')
+      .select('id')
+      .eq('id', pendingRow.data.id)
+    expect(error).toBeNull()
+    expect((data ?? []).map((r: { id: string }) => r.id)).toContain(pendingRow.data.id)
+
+    await client.from('business_members').delete().eq('id', pendingRow.data.id)
+    await client.from('business_members').delete().eq('id', peerRow.data.id)
+    await client.auth.admin.deleteUser(peerId)
+  })
+
+  // SEAT-STATUS-3 — the status enum is exactly ('invited','active','revoked');
+  // a 4th value must be rejected by the CHECK constraint on both INSERT and UPDATE.
+  it('rejects a 4th status value on INSERT (CHECK constraint)', async () => {
+    const { error } = await client.from('business_members').insert({
+      business_id: businessId,
+      email: `bad-status-insert-${Date.now()}@integration.test`,
+      role: 'viewer',
+      status: 'removed',
+    })
+    expect(error).not.toBeNull()
+    expect(error.message).toMatch(/business_members_status_check|violates check constraint/)
+  })
+
+  it('rejects a 4th status value on UPDATE (CHECK constraint)', async () => {
+    const row = await client
+      .from('business_members')
+      .insert({
+        business_id: businessId,
+        email: `bad-status-update-${Date.now()}@integration.test`,
+        role: 'viewer',
+        status: 'invited',
+      })
+      .select('id')
+      .single()
+    expect(row.error).toBeNull()
+
+    const { error } = await client
+      .from('business_members')
+      .update({ status: 'removed' })
+      .eq('id', row.data.id)
+    expect(error).not.toBeNull()
+    expect(error.message).toMatch(/business_members_status_check|violates check constraint/)
 
     await client.from('business_members').delete().eq('id', row.data.id)
   })

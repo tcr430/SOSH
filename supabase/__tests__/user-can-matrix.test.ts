@@ -171,6 +171,20 @@ describe.skipIf(!INTEGRATION)('user_can() — role×capability matrix (ADR 0013 
     expect(data).toBe(false)
   })
 
+  // F3 — 'transfer_ownership' is not a real capability (n1: no owner-transfer
+  // feature exists, §0/§4); an approver+admin must not get a free pass on it.
+  it("unknown capability 'transfer_ownership' resolves false even for an approver+admin", async () => {
+    const member = members.find((m) => m.role === 'approver' && m.isAdmin === true)
+    if (!member) throw new Error('fixture member not found')
+    const client = await signInAs(member.email)
+    const { data, error } = await client.rpc('user_can', {
+      p_business_id: businessId,
+      p_capability: 'transfer_ownership',
+    })
+    expect(error).toBeNull()
+    expect(data).toBe(false)
+  })
+
   it('null auth (unauthenticated anon client) resolves false', async () => {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL
     const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY

@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { createClient } from '@supabase/supabase-js'
 import { getPlanCapabilities } from '@/lib/stripe/plan'
 import type { Plan } from '@/lib/db/types'
+
+const PASSWORD = 'TestPass123!'
 
 // Gates on a live Supabase instance, like the other supabase/__tests__ integration suites.
 const INTEGRATION = process.env.SEAT_CAP_INTEGRATION_TEST_ENABLED === 'true'
@@ -48,6 +51,19 @@ describe.skipIf(!INTEGRATION)('seat cap enforcement (ADR 0013 §6.6)', () => {
       role: 'editor',
       status,
     })
+  }
+
+  // Returns an anon-key client signed in as the given user — RLS applies to every query.
+  async function signInAs(email: string) {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    if (!url || !anonKey) {
+      throw new Error('NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY are required')
+    }
+    const client = createClient(url, anonKey)
+    const { error } = await client.auth.signInWithPassword({ email, password: PASSWORD })
+    if (error) throw error
+    return client
   }
 
   beforeAll(async () => {
@@ -120,5 +136,63 @@ describe.skipIf(!INTEGRATION)('seat cap enforcement (ADR 0013 §6.6)', () => {
     const { error } = await insertMember(businessId, 'invited')
     expect(error).not.toBeNull()
     expect(error.message).toMatch(/seat cap reached/)
+  })
+
+  // E1 — every other test in this file drives the INSERT through the service-role
+  // admin client, which bypasses RLS. This test proves the trigger also blocks
+  // the real, authenticated-user request path: the business owner (auto-admin
+  // via trg_ensure_owner_membership) signs in with the anon key and issues the
+  // over-cap invite themselves, going through business_members_insert RLS
+  // (requires manage_members) AND enforce_seat_cap together.
+  it('a genuine authenticated admin member (signInAs, anon key) is rejected by the seat cap, not just the service-role path', async () => {
+    const { data: owner, error: ownerErr } = await admin.auth.admin.createUser({
+      email: `seatcap-e1-owner-${Date.now()}-${Math.random().toString(36).slice(2)}@integration.test`,
+      password: PASSWORD,
+      email_confirm: true,
+    })
+    if (ownerErr) throw ownerErr
+    userIds.push(owner.user.id)
+
+    const { data: biz, error: bizErr } = await admin
+      .from('businesses')
+      .insert({ name: 'Seat Cap Business (E1 authenticated admin)', owner_id: owner.user.id, plan: 'plus' })
+      .select('id')
+      .single()
+    if (bizErr) throw bizErr
+    businessIds.push(biz.id)
+    const businessId = biz.id as string
+
+    // Auto-owner (1, is_admin=true via trg_ensure_owner_membership) + 8 invited = 9.
+    for (let i = 0; i < 8; i++) {
+      const { error } = await insertMember(businessId, 'invited')
+      expect(error).toBeNull()
+    }
+
+    const ownerClient = await signInAs(owner.user.email)
+
+    // 9th invite (owner + 9 = 10 = cap) — issued by the real authenticated admin, must succeed.
+    const invitee9 = await admin.auth.admin.createUser({
+      email: `seatcap-e1-invitee9-${Date.now()}@integration.test`,
+      password: PASSWORD,
+      email_confirm: true,
+    })
+    userIds.push(invitee9.data.user.id)
+    const ninth = await ownerClient
+      .from('business_members')
+      .insert({ business_id: businessId, email: invitee9.data.user.email, role: 'editor', status: 'invited' })
+    expect(ninth.error).toBeNull()
+
+    // 10th invite — same authenticated admin path, must be rejected by enforce_seat_cap.
+    const invitee10 = await admin.auth.admin.createUser({
+      email: `seatcap-e1-invitee10-${Date.now()}@integration.test`,
+      password: PASSWORD,
+      email_confirm: true,
+    })
+    userIds.push(invitee10.data.user.id)
+    const tenth = await ownerClient
+      .from('business_members')
+      .insert({ business_id: businessId, email: invitee10.data.user.email, role: 'editor', status: 'invited' })
+    expect(tenth.error).not.toBeNull()
+    expect(tenth.error!.message).toMatch(/seat cap reached/)
   })
 })

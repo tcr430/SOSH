@@ -105,6 +105,49 @@ describe.skipIf(!INTEGRATION)('RLS policy lockdown — pg_catalog audit', () => 
     expect(grantees).toContain('service_role')
   })
 
+  // B3 / RLS-MEMBERS-USINGCHECK — every write policy must carry the correct
+  // clause(s) per command: INSERT gets WITH CHECK only, DELETE gets USING
+  // only, UPDATE gets BOTH (guards tenant tunnelling, ADR 0013 §2.1/§5/§5.3/§5.4).
+  const WRITE_POLICY_TABLES = ['business_members', 'posts', 'campaigns', 'social_accounts'] as const
+
+  it.each(WRITE_POLICY_TABLES)('%s: every authenticated INSERT policy has WITH CHECK', async (tablename) => {
+    const policies = await getPolicies(tablename)
+    const inserts = policies.filter((p) => p.cmd === 'INSERT' && p.roles.includes('authenticated'))
+    expect(inserts.length).toBeGreaterThan(0)
+    for (const p of inserts) {
+      expect(p.with_check).not.toBeNull()
+    }
+  })
+
+  it.each(WRITE_POLICY_TABLES)('%s: every authenticated UPDATE policy has both USING and WITH CHECK', async (tablename) => {
+    const policies = await getPolicies(tablename)
+    const updates = policies.filter((p) => p.cmd === 'UPDATE' && p.roles.includes('authenticated'))
+    expect(updates.length).toBeGreaterThan(0)
+    for (const p of updates) {
+      expect(p.qual).not.toBeNull()
+      expect(p.with_check).not.toBeNull()
+    }
+  })
+
+  it('posts/campaigns/social_accounts: every authenticated DELETE policy has USING', async () => {
+    for (const tablename of ['posts', 'campaigns', 'social_accounts'] as const) {
+      const policies = await getPolicies(tablename)
+      const deletes = policies.filter((p) => p.cmd === 'DELETE' && p.roles.includes('authenticated'))
+      expect(deletes.length).toBeGreaterThan(0)
+      for (const p of deletes) {
+        expect(p.qual).not.toBeNull()
+      }
+    }
+  })
+
+  it('business_members has no DELETE policy for authenticated (revocation is UPDATE status=revoked, §2.1)', async () => {
+    const policies = await getPolicies('business_members')
+    const deletes = policies.filter(
+      (p) => ['DELETE', 'ALL'].includes(p.cmd) && p.roles.includes('authenticated'),
+    )
+    expect(deletes).toHaveLength(0)
+  })
+
   it('purge_business function is executable by service_role only', async () => {
     const { rows } = await pg.query<{ grantee: string }>(
       `SELECT grantee

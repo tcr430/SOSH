@@ -16,6 +16,9 @@ describe.skipIf(!INTEGRATION)('get_user_business_ids() — read blast-radius mat
   let businessBId: string
   let businessCId: string // soft-deleted
   let postAId: string
+  let campaignAId: string
+  let socialAccountAId: string
+  let postMetricAId: string
 
   let ownerAEmail: string
   let ownerBEmail: string
@@ -159,6 +162,7 @@ describe.skipIf(!INTEGRATION)('get_user_business_ids() — read blast-radius mat
       .select('id')
       .single()
     if (campaignErr) throw campaignErr
+    campaignAId = campaign.id
 
     const { data: post, error: postErr } = await admin
       .from('posts')
@@ -173,6 +177,30 @@ describe.skipIf(!INTEGRATION)('get_user_business_ids() — read blast-radius mat
       .single()
     if (postErr) throw postErr
     postAId = post.id
+
+    // MAJOR-2 — widen the matrix to campaigns/social_accounts/post_metrics,
+    // all gated by the same get_user_business_ids() helper as businesses/posts.
+    const { data: socialAccount, error: socialAccountErr } = await admin
+      .from('social_accounts')
+      .insert({
+        business_id: businessAId,
+        platform: 'linkedin',
+        platform_user_id: 'matrix-platform-user',
+        platform_username: 'matrix-handle',
+        vault_access_token_id: '00000000-0000-0000-0000-000000000001',
+      })
+      .select('id')
+      .single()
+    if (socialAccountErr) throw socialAccountErr
+    socialAccountAId = socialAccount.id
+
+    const { data: postMetric, error: postMetricErr } = await admin
+      .from('post_metrics')
+      .insert({ post_id: postAId, business_id: businessAId, likes: 1 })
+      .select('id')
+      .single()
+    if (postMetricErr) throw postMetricErr
+    postMetricAId = postMetric.id
   })
 
   afterAll(async () => {
@@ -181,6 +209,8 @@ describe.skipIf(!INTEGRATION)('get_user_business_ids() — read blast-radius mat
       if (id) await admin.from('business_members').delete().eq('business_id', id)
     }
     if (businessAId) {
+      await admin.from('post_metrics').delete().eq('business_id', businessAId)
+      await admin.from('social_accounts').delete().eq('business_id', businessAId)
       await admin.from('posts').delete().eq('business_id', businessAId)
       await admin.from('campaigns').delete().eq('business_id', businessAId)
     }
@@ -192,6 +222,25 @@ describe.skipIf(!INTEGRATION)('get_user_business_ids() — read blast-radius mat
     }
   })
 
+  // MAJOR-2 — the same visibility outcome (visible/not-visible for business A's
+  // rows) asserted for campaigns, social_accounts, and post_metrics, mirroring
+  // the businesses/posts checks each actor test already performs.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function expectWideMatrix(client: any, shouldSee: boolean) {
+    const { data: campaigns } = await client.from('campaigns').select('id').eq('id', campaignAId)
+    const { data: socialAccounts } = await client.from('social_accounts').select('id').eq('id', socialAccountAId)
+    const { data: postMetrics } = await client.from('post_metrics').select('id').eq('id', postMetricAId)
+    if (shouldSee) {
+      expect((campaigns ?? []).map((c: { id: string }) => c.id)).toContain(campaignAId)
+      expect((socialAccounts ?? []).map((s: { id: string }) => s.id)).toContain(socialAccountAId)
+      expect((postMetrics ?? []).map((m: { id: string }) => m.id)).toContain(postMetricAId)
+    } else {
+      expect(campaigns ?? []).toHaveLength(0)
+      expect(socialAccounts ?? []).toHaveLength(0)
+      expect(postMetrics ?? []).toHaveLength(0)
+    }
+  }
+
   it('owner sees own business row (representative table) and own post', async () => {
     const client = await signInAs(ownerAEmail)
     const { data: businesses } = await client.from('businesses').select('id')
@@ -199,6 +248,8 @@ describe.skipIf(!INTEGRATION)('get_user_business_ids() — read blast-radius mat
 
     const { data: posts } = await client.from('posts').select('id').eq('id', postAId)
     expect((posts ?? []).map((p: { id: string }) => p.id)).toContain(postAId)
+
+    await expectWideMatrix(client, true)
   })
 
   it('active member (status=active, user_id bound) sees the business row and its post', async () => {
@@ -208,6 +259,8 @@ describe.skipIf(!INTEGRATION)('get_user_business_ids() — read blast-radius mat
 
     const { data: posts } = await client.from('posts').select('id').eq('id', postAId)
     expect((posts ?? []).map((p: { id: string }) => p.id)).toContain(postAId)
+
+    await expectWideMatrix(client, true)
   })
 
   it('invited member (status=invited, user_id bound) sees nothing', async () => {
@@ -217,6 +270,8 @@ describe.skipIf(!INTEGRATION)('get_user_business_ids() — read blast-radius mat
 
     const { data: posts } = await client.from('posts').select('id').eq('id', postAId)
     expect(posts ?? []).toHaveLength(0)
+
+    await expectWideMatrix(client, false)
   })
 
   it('revoked member sees nothing', async () => {
@@ -226,6 +281,8 @@ describe.skipIf(!INTEGRATION)('get_user_business_ids() — read blast-radius mat
 
     const { data: posts } = await client.from('posts').select('id').eq('id', postAId)
     expect(posts ?? []).toHaveLength(0)
+
+    await expectWideMatrix(client, false)
   })
 
   it('cross-tenant user (member of business B) sees no rows of business A', async () => {
@@ -237,12 +294,16 @@ describe.skipIf(!INTEGRATION)('get_user_business_ids() — read blast-radius mat
 
     const { data: posts } = await client.from('posts').select('id').eq('id', postAId)
     expect(posts ?? []).toHaveLength(0)
+
+    await expectWideMatrix(client, false)
   })
 
   it('member (owner) of a soft-deleted business sees nothing for that business', async () => {
     const client = await signInAs(ownerCEmail)
     const { data: businesses } = await client.from('businesses').select('id')
     expect((businesses ?? []).map((b: { id: string }) => b.id)).not.toContain(businessCId)
+
+    await expectWideMatrix(client, false)
   })
 
   it('non-recursion: an active member can query business_members without error', async () => {

@@ -173,6 +173,43 @@ describe.skipIf(!INTEGRATION)('accept_invite() RPC (ADR 0013 §7.3)', () => {
     expect(second.data.user_id).toBe(user.id)
   })
 
+  // D4 — third-party replay: once user A has bound a row, user B (any other
+  // account, including one whose email doesn't match) calling accept_invite
+  // on that same row must get the same generic error as any other rejection,
+  // and A's row must be provably unchanged.
+  it('third-party replay: a different user calling accept_invite on an already-bound row is rejected generically, A unchanged', async () => {
+    const userA = await createUser('replay-a')
+    const memberId = await insertInvite(userA.email)
+    const clientA = await signInAs(userA.email)
+
+    const boundResult = await clientA.rpc('accept_invite', {
+      p_member_id: memberId,
+      p_business_id: businessId,
+    })
+    expect(boundResult.error).toBeNull()
+    expect(boundResult.data.status).toBe('active')
+    expect(boundResult.data.user_id).toBe(userA.id)
+
+    const userB = await createUser('replay-b')
+    const clientB = await signInAs(userB.email)
+
+    const { error } = await clientB.rpc('accept_invite', {
+      p_member_id: memberId,
+      p_business_id: businessId,
+    })
+    expect(error).not.toBeNull()
+    expect(error!.message).toMatch(/invite not available/)
+
+    const { data: rowAfter, error: readErr } = await admin
+      .from('business_members')
+      .select('*')
+      .eq('id', memberId)
+      .single()
+    expect(readErr).toBeNull()
+    expect(rowAfter.user_id).toBe(userA.id)
+    expect(rowAfter.status).toBe('active')
+  })
+
   it('revoke frees the seat (drops out of countSeatUsage) and re-invite of the revoked email is allowed', async () => {
     const before = await countSeatUsage(admin, businessId)
     const email = `revoke-reinvite-${Date.now()}@integration.test`
