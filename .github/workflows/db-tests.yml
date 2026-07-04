@@ -75,6 +75,32 @@ jobs:
             echo "DATABASE_URL=$DB_URL"
           } >> "$GITHUB_ENV"
 
+      # `supabase db reset` returns as soon as migrations are applied, but PostgREST
+      # reloads its schema/role cache asynchronously (on a NOTIFY from the DDL
+      # watch event trigger) and needs a moment to catch up. Firing real queries
+      # immediately after reset can transiently hit "permission denied for table
+      # X" during that window — a documented PostgREST/Supabase-local gotcha, not
+      # an actual grants problem. Poll a real table read with the service-role key
+      # until it succeeds instead of guessing a fixed sleep duration.
+      - name: Wait for PostgREST schema cache to warm up
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 30); do
+            status=$(curl -s -o /tmp/pgrst-probe.json -w '%{http_code}' \
+              "${NEXT_PUBLIC_SUPABASE_URL}/rest/v1/businesses?select=id&limit=1" \
+              -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+              -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}") || status="000"
+            if [ "$status" = "200" ] || [ "$status" = "206" ]; then
+              echo "PostgREST ready after $i attempt(s) (HTTP $status)"
+              exit 0
+            fi
+            echo "Attempt $i: PostgREST not ready yet (HTTP $status) — retrying in 1s"
+            cat /tmp/pgrst-probe.json 2>/dev/null || true
+            sleep 1
+          done
+          echo "::error::PostgREST did not become ready after 30 attempts"
+          exit 1
+
       - name: Run ADR 0013 DB-backed integration test suite
         env:
           NODE_ENV: test
