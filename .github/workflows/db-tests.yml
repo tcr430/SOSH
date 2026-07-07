@@ -166,7 +166,13 @@ jobs:
         run: |
           supabase status || true
           docker ps -a || true
+          echo "--- host memory (free -h) ---"
+          free -h || true
+          echo "--- kernel OOM-killer messages (dmesg) ---"
+          dmesg 2>/dev/null | grep -i -E "out of memory|oom.kill|killed process" || echo "(no dmesg access or no OOM lines)"
           for c in $(docker ps -a --filter "name=supabase" --format '{{.Names}}'); do
+            echo "--- inspect state: $c ---"
+            docker inspect "$c" --format '{{.Name}}: ExitCode={{.State.ExitCode}} OOMKilled={{.State.OOMKilled}} Restarting={{.State.Restarting}} StartedAt={{.State.StartedAt}} FinishedAt={{.State.FinishedAt}}' || true
             echo "--- logs: $c ---"
             docker logs "$c" --tail 200 || true
           done
