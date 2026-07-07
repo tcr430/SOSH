@@ -46,8 +46,23 @@ jobs:
       # package-lock.json's pinned supabase@^2.97.0).
       - uses: supabase/setup-cli@v2.1.1
 
+      # "FATAL: the database system is in recovery mode" (PGRST000) started
+      # appearing once the earlier connection-pressure fixes (--no-file-
+      # parallelism, --retry) let the suite run further into its auth-heavy
+      # tests — that message means Postgres itself crashed and is replaying
+      # WAL, not just refusing a new connection. Most likely cause on a
+      # 2-core/~7GB GH Actions runner: the full stack (db, auth, rest, kong,
+      # realtime, storage, imgproxy, studio, meta, analytics/vector,
+      # edge-runtime) all run in one docker compose group, and the analytics
+      # pipeline (Logflare+Vector) in particular is a known heavy consumer.
+      # None of the excluded services here are used by this workflow: no
+      # supabase.storage / storage.* calls, no realtime.* usage, no edge
+      # functions, no Studio, and admin.createUser({ email_confirm: true })
+      # never sends mail (no inbucket/mailpit needed). Trimming the stack to
+      # db+auth+rest+kong reduces memory pressure so Postgres doesn't get
+      # OOM-killed under load.
       - name: Start local Supabase stack (applies supabase/migrations M1-M9)
-        run: supabase start
+        run: supabase start -x analytics,vector,edge-runtime,functions,imgproxy,inbucket,storage,studio,meta,realtime
 
       - name: Reset DB (deterministic re-apply of all migrations)
         run: supabase db reset
