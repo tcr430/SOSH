@@ -76,12 +76,13 @@ jobs:
           } >> "$GITHUB_ENV"
 
       # `supabase db reset` returns as soon as migrations are applied, but PostgREST
-      # reloads its schema/role cache asynchronously (on a NOTIFY from the DDL
-      # watch event trigger) and needs a moment to catch up. Firing real queries
-      # immediately after reset can transiently hit "permission denied for table
-      # X" during that window — a documented PostgREST/Supabase-local gotcha, not
-      # an actual grants problem. Poll a real table read with the service-role key
-      # until it succeeds instead of guessing a fixed sleep duration.
+      # can take a moment to notice the schema and reload its cache. That shows up
+      # as a 404/connection-refused window, so poll a real table read with the
+      # service-role key and retry those. A 401/403, however, is Postgres itself
+      # refusing the role a table-level GRANT (42501) — that is never transient,
+      # so fail immediately instead of burning the retry budget and misreporting
+      # a real permissions bug as "PostgREST not ready" (see 20260707190000
+      # migration for the actual fix — explicit service_role GRANTs).
       - name: Wait for PostgREST schema cache to warm up
         run: |
           set -euo pipefail
@@ -93,6 +94,11 @@ jobs:
             if [ "$status" = "200" ] || [ "$status" = "206" ]; then
               echo "PostgREST ready after $i attempt(s) (HTTP $status)"
               exit 0
+            fi
+            if [ "$status" = "401" ] || [ "$status" = "403" ]; then
+              echo "::error::PostgREST rejected the service-role key with HTTP $status — this is a real grants/auth problem, not a startup race. Response:"
+              cat /tmp/pgrst-probe.json 2>/dev/null || true
+              exit 1
             fi
             echo "Attempt $i: PostgREST not ready yet (HTTP $status) — retrying in 1s"
             cat /tmp/pgrst-probe.json 2>/dev/null || true
