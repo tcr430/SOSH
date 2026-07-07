@@ -133,7 +133,15 @@ jobs:
           USER_CAN_INTEGRATION_TEST_ENABLED: 'true'
           DELETION_INTEGRATION_TEST_ENABLED: 'true'
           ENSURE_OWNER_MEMBERSHIP_INTEGRATION_TEST_ENABLED: 'true'
-        run: npx vitest run supabase/__tests__
+        # --no-file-parallelism: these tests all share one local Postgres/GoTrue
+        # instance (single ephemeral CI container), so running test files
+        # concurrently buys no isolation — only connection pressure. Vitest's
+        # default file-level parallelism was fine while most files failed early
+        # on the 42501 grants bug (low cumulative connection count); once fixed,
+        # files ran to completion in parallel and exhausted local Postgres/GoTrue
+        # connections, surfacing as PGRST001 "no connection to the server" and
+        # GoTrue's "Database error creating new user" — not a permissions issue.
+        run: npx vitest run supabase/__tests__ --no-file-parallelism
 
       - name: Dump Supabase status + container logs on failure
         if: failure()
