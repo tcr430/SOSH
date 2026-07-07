@@ -141,7 +141,17 @@ jobs:
         # files ran to completion in parallel and exhausted local Postgres/GoTrue
         # connections, surfacing as PGRST001 "no connection to the server" and
         # GoTrue's "Database error creating new user" — not a permissions issue.
-        run: npx vitest run supabase/__tests__ --no-file-parallelism
+        # --retry=2: even fully sequential (see --no-file-parallelism above),
+        # the local Postgres/GoTrue/PostgREST stack on a 2-core CI runner
+        # occasionally can't keep up with auth-heavy setup (admin.createUser,
+        # bcrypt hashing) and momentarily refuses connections or can't reload
+        # its schema cache — PGRST001 "no connection to the server" and
+        # GoTrue's "Database error creating new user" are the services' own
+        # internal retry messages surfacing to the client as a failure. These
+        # are self-describing transient errors, not deterministic bugs (the
+        # exact test that trips varies run to run) — unlike the earlier 42501
+        # grants bug, retrying here is the correct fix, not a band-aid.
+        run: npx vitest run supabase/__tests__ --no-file-parallelism --retry=2
 
       - name: Dump Supabase status + container logs on failure
         if: failure()
