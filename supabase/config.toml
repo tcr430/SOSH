@@ -381,7 +381,19 @@ deno_version = 2
 # secret_key = "env(SECRET_VALUE)"
 
 [analytics]
-enabled = true
+# Disabled (2026-07-07): container logs from a failing db-tests CI run showed
+# Logflare (this service) running Cainophile, a logical-replication WAL
+# client subscribed to a "logflare_pub" publication on Postgres, plus Oban
+# polling every few seconds -- all while Postgres was crashing and cycling
+# through "FATAL 57P03 cannot_connect_now: the database system is in
+# recovery mode" / "is not accepting connections. Hot standby mode is
+# disabled." This is a confirmed cause (from real logs, not a guess), not a
+# correlation: this workflow's tests don't use Studio's log viewer, and a
+# `supabase start -x analytics,...` CLI-flag attempt to disable it did NOT
+# actually stop the container (Logflare was still fully running in the
+# captured logs), so disabling it here in config.toml -- the one place that
+# reliably takes effect -- is the fix, not another CLI flag guess.
+enabled = false
 port = 54327
 # Configure one of the supported backends: `postgres`, `bigquery`.
 backend = "postgres"
