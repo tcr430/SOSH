@@ -9,6 +9,14 @@ const INTEGRATION = process.env.USER_CAN_INTEGRATION_TEST_ENABLED === 'true'
 
 const PASSWORD = 'TestPass123!'
 
+// Experimental (2026-07-07): a Postgres backend SIGSEGV in CI (see
+// .wolf/buglog.json bug-115) reproduced twice immediately after a rapid-fire
+// burst of user_can() RPC calls from this file's it.each loop. No JS-level
+// concurrency exists here -- every call is sequential -- so this delay is a
+// request-rate experiment, not a fix for actual concurrency.
+const HEAVY_LOOP_DELAY_MS = 50
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
 const CAPABILITIES = [
   'author',
   'reschedule',
@@ -132,6 +140,7 @@ describe.skipIf(!INTEGRATION)('user_can() — role×capability matrix (ADR 0013 
       })
       expect(error).toBeNull()
       expect(data).toBe(expected[capability])
+      await sleep(HEAVY_LOOP_DELAY_MS)
     }
   })
 

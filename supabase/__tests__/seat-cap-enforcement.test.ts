@@ -8,6 +8,15 @@ const PASSWORD = 'TestPass123!'
 // Gates on a live Supabase instance, like the other supabase/__tests__ integration suites.
 const INTEGRATION = process.env.SEAT_CAP_INTEGRATION_TEST_ENABLED === 'true'
 
+// Experimental (2026-07-07): a rapid-fire burst of business_members INSERTs
+// (each firing enforce_seat_cap + protect_primary_admin_membership triggers)
+// immediately preceded a Postgres backend SIGSEGV in CI (see .wolf/buglog.json
+// bug-115) on ghcr.io/supabase/postgres:17.6.1.111. No JS-level concurrency
+// exists in this file already -- every insert is sequential -- so this delay
+// is a request-rate experiment, not a fix for actual concurrency.
+const HEAVY_LOOP_DELAY_MS = 50
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
 const ALL_PLANS: Plan[] = ['trial', 'plus', 'pro', 'agency']
 
 describe.skipIf(!INTEGRATION)('seat cap enforcement (ADR 0013 §6.6)', () => {
@@ -95,6 +104,7 @@ describe.skipIf(!INTEGRATION)('seat cap enforcement (ADR 0013 §6.6)', () => {
     for (let i = 0; i < 9; i++) {
       const { error } = await insertMember(businessId, 'invited')
       expect(error).toBeNull()
+      await sleep(HEAVY_LOOP_DELAY_MS)
     }
     // The 10th invite (owner + 9 already used = 10 = cap) must be rejected.
     const { error } = await insertMember(businessId, 'invited')
@@ -107,6 +117,7 @@ describe.skipIf(!INTEGRATION)('seat cap enforcement (ADR 0013 §6.6)', () => {
     for (let i = 0; i < 9; i++) {
       const { error } = await insertMember(businessId, 'invited')
       expect(error).toBeNull()
+      await sleep(HEAVY_LOOP_DELAY_MS)
     }
   })
 
@@ -115,6 +126,7 @@ describe.skipIf(!INTEGRATION)('seat cap enforcement (ADR 0013 §6.6)', () => {
     for (let i = 0; i < 15; i++) {
       const { error } = await insertMember(businessId, 'invited')
       expect(error).toBeNull()
+      await sleep(HEAVY_LOOP_DELAY_MS)
     }
   })
 
@@ -124,6 +136,7 @@ describe.skipIf(!INTEGRATION)('seat cap enforcement (ADR 0013 §6.6)', () => {
     for (let i = 0; i < 12; i++) {
       const { error } = await insertMember(businessId, 'invited')
       expect(error).toBeNull()
+      await sleep(HEAVY_LOOP_DELAY_MS)
     }
     // Downgrade to plus (max=10); used(12) already exceeds max(10).
     const { error: downgradeErr } = await admin
@@ -166,6 +179,7 @@ describe.skipIf(!INTEGRATION)('seat cap enforcement (ADR 0013 §6.6)', () => {
     for (let i = 0; i < 8; i++) {
       const { error } = await insertMember(businessId, 'invited')
       expect(error).toBeNull()
+      await sleep(HEAVY_LOOP_DELAY_MS)
     }
 
     const ownerClient = await signInAs(owner.user.email)
