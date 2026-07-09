@@ -33,6 +33,33 @@ export async function getBusinessByOwner(
   return (data as BusinessRow | null) ?? null
 }
 
+export async function getBusinessForUser(
+  client: SupabaseClient,
+  userId: string,
+  preferredBusinessId?: string,
+): Promise<BusinessRow | null> {
+  const { data, error } = await client
+    .from('businesses')
+    .select('*')
+    .is('deleted_at', null)
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true })
+  if (error) throw new Error(getErrorMessage(error))
+
+  const businesses = (data as BusinessRow[] | null) ?? []
+  if (businesses.length === 0) return null
+
+  if (preferredBusinessId) {
+    const preferred = businesses.find((b) => b.id === preferredBusinessId)
+    if (preferred) return preferred
+  }
+
+  const owned = businesses.find((b) => b.owner_id === userId)
+  if (owned) return owned
+
+  return businesses[0]
+}
+
 export async function createBusiness(
   client: SupabaseClient,
   data: BusinessInsert,

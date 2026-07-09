@@ -4,6 +4,7 @@ import * as serviceModule from '@/lib/supabase/service'
 import {
   getBusinessById,
   getBusinessByOwner,
+  getBusinessForUser,
   createBusiness,
   updateBusiness,
   softDeleteBusiness,
@@ -75,6 +76,48 @@ describe('getBusinessByOwner', () => {
   it('throws when supabase returns an error', async () => {
     const { client } = createMockClient(null, { message: 'DB error' })
     await expect(getBusinessByOwner(client, 'user-1')).rejects.toThrow('DB error')
+  })
+})
+
+describe('getBusinessForUser', () => {
+  const owned: BusinessRow = { ...mockBusiness, id: 'biz-owned', owner_id: 'user-1', created_at: '2026-04-30T00:00:00Z' }
+  const memberEarlier: BusinessRow = { ...mockBusiness, id: 'biz-member-earlier', owner_id: 'user-other', created_at: '2026-04-01T00:00:00Z' }
+  const memberLater: BusinessRow = { ...mockBusiness, id: 'biz-member-later', owner_id: 'user-other-2', created_at: '2026-05-01T00:00:00Z' }
+
+  it('RES-RESOLVER-OWNED-WINS: returns the owned row when the RLS-visible set contains an owned business and member-only businesses', async () => {
+    const { client } = createMockClient([memberEarlier, owned, memberLater])
+    const result = await getBusinessForUser(client, 'user-1')
+    expect(result).toEqual(owned)
+    expect(client.from).toHaveBeenCalledWith('businesses')
+  })
+
+  it('RES-RESOLVER-DETERMINISTIC: member-only (no owned row) picks the earliest by created_at, id', async () => {
+    const { client } = createMockClient([memberEarlier, memberLater])
+    const result = await getBusinessForUser(client, 'user-1')
+    expect(result).toEqual(memberEarlier)
+  })
+
+  it('RES-RESOLVER-DETERMINISTIC: returns null when the visible set is empty', async () => {
+    const { client } = createMockClient([])
+    const result = await getBusinessForUser(client, 'user-1')
+    expect(result).toBeNull()
+  })
+
+  it('RES-SEAM-PARAM-ONLY: preferredBusinessId wins when it is in the visible set, even over an owned row', async () => {
+    const { client } = createMockClient([memberEarlier, owned, memberLater])
+    const result = await getBusinessForUser(client, 'user-1', memberLater.id)
+    expect(result).toEqual(memberLater)
+  })
+
+  it('RES-SEAM-PARAM-ONLY: falls back to owned-then-earliest when preferredBusinessId is not in the visible set', async () => {
+    const { client } = createMockClient([memberEarlier, owned, memberLater])
+    const result = await getBusinessForUser(client, 'user-1', 'biz-not-visible')
+    expect(result).toEqual(owned)
+  })
+
+  it('throws when supabase returns an error', async () => {
+    const { client } = createMockClient(null, { message: 'DB error' })
+    await expect(getBusinessForUser(client, 'user-1')).rejects.toThrow('DB error')
   })
 })
 
