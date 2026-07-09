@@ -4,6 +4,7 @@ export type EmailKind =
   | 'welcome-to-plan'
   | 'payment-failed-courtesy'
   | 'first-post-published'
+  | 'team-invite'
 
 export type EmailLocale = 'en' | 'pt' | 'es'
 

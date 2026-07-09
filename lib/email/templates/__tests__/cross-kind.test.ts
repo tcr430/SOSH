@@ -34,6 +34,12 @@ const SAMPLE_PROPS: Record<EmailKind, Record<string, unknown>> = {
     platform: 'LinkedIn',
     postUrl: 'https://app.sosh.app/posts',
   },
+  'team-invite': {
+    inviterName: 'Jamie',
+    businessName: 'Acme',
+    roleLabelKey: 'team_invite.role.viewer',
+    acceptUrl: 'https://app.sosh.app/en/invite/accept?token=abc',
+  },
 }
 
 describe('cross-kind: subject < 60 chars for all kinds × locales', () => {

@@ -41,6 +41,7 @@ export type EmailKind =
   | 'welcome-to-plan'
   | 'payment-failed-courtesy'
   | 'first-post-published'
+  | 'team-invite'
 export type EmailOutboxStatus = 'pending' | 'sending' | 'sent' | 'failed' | 'suppressed'
 export type EmailSuppressionReason = 'bounce' | 'complaint' | 'manual'
 export type MemberRole = 'approver' | 'editor' | 'viewer'

@@ -1,0 +1,15 @@
+{
+  "team_invite": {
+    "subject": "You've been invited to join {businessName} on SOSH",
+    "preheader": "{inviterName} invited you to collaborate on {businessName}.",
+    "heading": "You're invited to join {businessName}.",
+    "lead": "{inviterName} has invited you to join {businessName} on SOSH as a {roleLabel}.",
+    "supporting": "Accept the invite to start collaborating on campaigns and posts.",
+    "cta": "Accept invite",
+    "role": {
+      "viewer": "Viewer",
+      "editor": "Editor",
+      "approver": "Approver"
+    }
+  }
+}

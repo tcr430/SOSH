@@ -25,6 +25,11 @@ import {
   firstPostPublishedSubject,
   FirstPostPublishedEmail,
 } from './first-post-published'
+import {
+  TeamInvitePropsSchema,
+  teamInviteSubject,
+  TeamInviteEmail,
+} from './team-invite'
 
 export interface KindEntry {
   propsSchema: ZodSchema
@@ -59,5 +64,10 @@ export const TEMPLATES: Record<EmailKind, KindEntry> = {
     propsSchema: FirstPostPublishedPropsSchema,
     subject: firstPostPublishedSubject,
     Component: FirstPostPublishedEmail,
+  },
+  'team-invite': {
+    propsSchema: TeamInvitePropsSchema,
+    subject: teamInviteSubject,
+    Component: TeamInviteEmail,
   },
 } as const

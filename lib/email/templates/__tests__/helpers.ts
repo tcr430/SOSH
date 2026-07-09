@@ -2,11 +2,14 @@ import type { TranslatorFn } from '../../types'
 import enEmail from '../../../../i18n/en/email.json'
 import ptEmail from '../../../../i18n/pt/email.json'
 import esEmail from '../../../../i18n/es/email.json'
+import enInvite from '../../../../i18n/en/invite.json'
+import ptInvite from '../../../../i18n/pt/invite.json'
+import esInvite from '../../../../i18n/es/invite.json'
 
 const DICTS: Record<string, Record<string, unknown>> = {
-  en: enEmail as Record<string, unknown>,
-  pt: ptEmail as Record<string, unknown>,
-  es: esEmail as Record<string, unknown>,
+  en: { ...enEmail, ...enInvite } as Record<string, unknown>,
+  pt: { ...ptEmail, ...ptInvite } as Record<string, unknown>,
+  es: { ...esEmail, ...esInvite } as Record<string, unknown>,
 }
 
 export function makeTranslator(locale: 'en' | 'pt' | 'es'): TranslatorFn {

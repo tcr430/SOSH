@@ -1,0 +1,15 @@
+{
+  "team_invite": {
+    "subject": "Te han invitado a unirte a {businessName} en SOSH",
+    "preheader": "{inviterName} te invitó a colaborar en {businessName}.",
+    "heading": "Te han invitado a unirte a {businessName}.",
+    "lead": "{inviterName} te ha invitado a unirte a {businessName} en SOSH como {roleLabel}.",
+    "supporting": "Acepta la invitación para empezar a colaborar en campañas y publicaciones.",
+    "cta": "Aceptar invitación",
+    "role": {
+      "viewer": "Visualizador",
+      "editor": "Editor",
+      "approver": "Aprobador"
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "team_invite": {
+    "subject": "Foste convidado a juntar-te a {businessName} no SOSH",
+    "preheader": "{inviterName} convidou-te a colaborar em {businessName}.",
+    "heading": "Foste convidado a juntar-te a {businessName}.",
+    "lead": "{inviterName} convidou-te a juntar-te a {businessName} no SOSH como {roleLabel}.",
+    "supporting": "Aceita o convite para começares a colaborar em campanhas e publicações.",
+    "cta": "Aceitar convite",
+    "role": {
+      "viewer": "Visualizador",
+      "editor": "Editor",
+      "approver": "Aprovador"
+    }
+  }
+}
