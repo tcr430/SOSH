@@ -152,17 +152,26 @@ describe('revokeMember', () => {
 })
 
 describe('acceptInvite', () => {
-  it('calls the accept_invite RPC with the right params', async () => {
+  it('calls the accept_invite RPC with the right params and returns outcome accepted', async () => {
     const { client } = createMockClient(mockMember)
     const result = await acceptInvite(client, 'member-1', 'biz-1')
-    expect(result).toEqual(mockMember)
+    expect(result).toEqual({ outcome: 'accepted', row: mockMember })
     expect(client.rpc).toHaveBeenCalledWith('accept_invite', {
       p_member_id: 'member-1',
       p_business_id: 'biz-1',
     })
   })
 
-  it('throws when the RPC returns an error', async () => {
+  it('returns outcome already_member on a 23505 unique_violation', async () => {
+    const { client } = createMockClient(null, {
+      code: '23505',
+      message: 'already an active member of this business',
+    })
+    const result = await acceptInvite(client, 'member-1', 'biz-1')
+    expect(result).toEqual({ outcome: 'already_member' })
+  })
+
+  it('throws (anti-enum, generic) when the RPC returns any other error', async () => {
     const { client } = createMockClient(null, { message: 'invite not available' })
     await expect(acceptInvite(client, 'member-1', 'biz-1')).rejects.toThrow('invite not available')
   })

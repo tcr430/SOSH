@@ -104,17 +104,38 @@ export async function revokeMember(
   return data as BusinessMemberRow
 }
 
+function isPostgresError(e: unknown): e is { code: string; message: string } {
+  return (
+    typeof e === 'object' && e !== null &&
+    'code' in e && typeof (e as { code: unknown }).code === 'string' &&
+    'message' in e && typeof (e as { message: unknown }).message === 'string'
+  )
+}
+
+export type AcceptInviteResult =
+  | { outcome: 'accepted'; row: BusinessMemberRow }
+  | { outcome: 'already_member' }
+
 // Wraps the accept_invite SECURITY DEFINER RPC (§7.3) — the only correct
-// mechanism for a not-yet-member to bind their own row.
+// mechanism for a not-yet-member to bind their own row. The RPC raises a
+// distinct 23505 for "already an active member" (ADR 0014 §4.2) so the
+// accept route can show a friendly message instead of the generic invalid
+// state; any other RPC failure (email-mismatch / expired / claimed / unknown)
+// is intentionally ambiguous and surfaces as a thrown error (§4.3 anti-enum).
 export async function acceptInvite(
   client: SupabaseClient,
   memberId: string,
   businessId: string,
-): Promise<BusinessMemberRow> {
+): Promise<AcceptInviteResult> {
   const { data, error } = await client.rpc('accept_invite', {
     p_member_id: memberId,
     p_business_id: businessId,
   })
-  if (error) throw new Error(getErrorMessage(error))
-  return data as BusinessMemberRow
+  if (error) {
+    if (isPostgresError(error) && error.code === '23505') {
+      return { outcome: 'already_member' }
+    }
+    throw new Error(getErrorMessage(error))
+  }
+  return { outcome: 'accepted', row: data as BusinessMemberRow }
 }

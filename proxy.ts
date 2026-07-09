@@ -23,6 +23,7 @@ const PUBLIC_SEGMENTS = new Set([
   'reset-password',       // /(auth)/reset-password
   'verify-email',         // /(auth)/verify-email
   'resend-confirmation',  // /(auth)/resend-confirmation
+  'invite',               // /invite/accept — an invitee may arrive unauthenticated (ADR 0014 §4)
 ])
 
 export async function proxy(request: NextRequest) {
