@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
 import { signOAuthState, getRegistry, getPlatformConfig, isPlatform } from '@/lib/social'
+import { CAPABILITIES } from '@/lib/members/capabilities'
 import type { Language } from '@/lib/db/types'
 
 const VALID_LOCALES = new Set<string>(['en', 'pt', 'es'])
@@ -33,6 +34,19 @@ export async function GET(
     const business = await getBusinessForUser(supabase, user.id)
     if (!business) {
       return NextResponse.redirect(new URL(`/${locale}/onboarding`, request.url))
+    }
+
+    // Authoritative gate (ADR 0014 §7): the write in .../callback/route.ts
+    // runs service-role and bypasses RLS, so this app-layer user_can check
+    // is the real boundary.
+    const { data: canConnect, error: capError } = await supabase.rpc('user_can', {
+      p_business_id: business.id,
+      p_capability: CAPABILITIES.CONNECT_ACCOUNTS,
+    })
+    if (capError || !canConnect) {
+      return NextResponse.redirect(
+        new URL(`/${locale}/settings/accounts?error=forbidden`, request.url),
+      )
     }
 
     const state = await signOAuthState({ businessId: business.id, platform, locale })

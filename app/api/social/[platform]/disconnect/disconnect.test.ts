@@ -66,7 +66,7 @@ function makeParams(platform = 'linkedin') {
   return { params: Promise.resolve({ platform }) }
 }
 
-function makeAuthClient(user: typeof MOCK_USER | null = MOCK_USER) {
+function makeAuthClient(user: typeof MOCK_USER | null = MOCK_USER, canConnect = true) {
   return {
     auth: {
       getUser: vi.fn().mockResolvedValue({
@@ -74,6 +74,7 @@ function makeAuthClient(user: typeof MOCK_USER | null = MOCK_USER) {
         error: user ? null : new Error('Not authenticated'),
       }),
     },
+    rpc: vi.fn().mockResolvedValue({ data: canConnect, error: null }),
   }
 }
 
@@ -136,5 +137,41 @@ describe('DELETE /api/social/[platform]/disconnect', () => {
       MOCK_BUSINESS.id,
       'twitter',
     )
+  })
+})
+
+describe('DELETE /api/social/[platform]/disconnect — app-layer capability gate (ADR 0014 §7, ROLE-DISCONNECT-APPLAYER-GATE)', () => {
+  it('blocks a member without connect_accounts (viewer/editor) with 403 and does not touch the account', async () => {
+    mockCreateClient.mockResolvedValue(makeAuthClient(MOCK_USER, false) as never)
+    const response = await DELETE(makeRequest(), makeParams())
+    expect(response.status).toBe(403)
+    expect(mockGetActiveByBusinessAndPlatform).not.toHaveBeenCalled()
+    expect(mockDeactivateSocialAccount).not.toHaveBeenCalled()
+  })
+
+  it('blocks with 403 when the user_can RPC errors (fail-closed)', async () => {
+    const client = makeAuthClient(MOCK_USER, false)
+    client.rpc = vi.fn().mockResolvedValue({ data: null, error: new Error('rpc failure') })
+    mockCreateClient.mockResolvedValue(client as never)
+    const response = await DELETE(makeRequest(), makeParams())
+    expect(response.status).toBe(403)
+    expect(mockDeactivateSocialAccount).not.toHaveBeenCalled()
+  })
+
+  it('passes through (an approver/admin) when user_can resolves true', async () => {
+    mockCreateClient.mockResolvedValue(makeAuthClient(MOCK_USER, true) as never)
+    const response = await DELETE(makeRequest(), makeParams())
+    expect(response.status).toBe(200)
+    expect(mockDeactivateSocialAccount).toHaveBeenCalledWith(MOCK_ACCOUNT.id)
+  })
+
+  it('calls user_can with the resolved business id and connect_accounts capability', async () => {
+    const client = makeAuthClient(MOCK_USER, true)
+    mockCreateClient.mockResolvedValue(client as never)
+    await DELETE(makeRequest(), makeParams())
+    expect(client.rpc).toHaveBeenCalledWith('user_can', {
+      p_business_id: MOCK_BUSINESS.id,
+      p_capability: 'connect_accounts',
+    })
   })
 })

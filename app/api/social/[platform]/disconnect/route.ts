@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
 import { getActiveByBusinessAndPlatform, deactivateSocialAccount } from '@/lib/db/social-accounts'
 import { isPlatform } from '@/lib/social'
+import { CAPABILITIES } from '@/lib/members/capabilities'
 
 export async function DELETE(
   _request: NextRequest,
@@ -25,6 +26,16 @@ export async function DELETE(
     const business = await getBusinessForUser(supabase, user.id)
     if (!business) {
       return new NextResponse(null, { status: 404 })
+    }
+
+    // Authoritative gate (ADR 0014 §7): the write below runs service-role and
+    // bypasses RLS, so this app-layer user_can check is the real boundary.
+    const { data: canConnect, error: capError } = await supabase.rpc('user_can', {
+      p_business_id: business.id,
+      p_capability: CAPABILITIES.CONNECT_ACCOUNTS,
+    })
+    if (capError || !canConnect) {
+      return new NextResponse(null, { status: 403 })
     }
 
     const account = await getActiveByBusinessAndPlatform(supabase, business.id, platform)
