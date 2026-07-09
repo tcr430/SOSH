@@ -86,6 +86,47 @@ export async function createInvite(
   return data as BusinessMemberRow
 }
 
+// Changes a member's role/admin flag (§5.3) — a normal UPDATE under
+// business_members_update (user_can(...,'manage_members')). The primary-admin
+// protection trigger (21A-B1) blocks demoting the owner's own row.
+export async function changeMemberRole(
+  client: SupabaseClient,
+  memberId: string,
+  role: MemberRole,
+  isAdmin: boolean,
+): Promise<BusinessMemberRow> {
+  const { data, error } = await client
+    .from('business_members')
+    .update({ role, is_admin: isAdmin })
+    .eq('id', memberId)
+    .select('*')
+    .single()
+  if (error) throw new Error(getErrorMessage(error))
+  if (!data) throw new Error(`Business member ${memberId} not found`)
+  return data as BusinessMemberRow
+}
+
+// Re-issues an invite on the SAME reserved row (§4.4 resend) — refreshes
+// invited_at so the RPC's own DB-side expiry guard (invited_at > now()-7d,
+// accept_invite.sql) doesn't still reject an app-side-refreshed token. Status
+// stays 'invited'; no new row is inserted (would double-count the seat and
+// trip the (business_id, lower(email)) partial unique index).
+export async function reissueInvite(
+  client: SupabaseClient,
+  memberId: string,
+): Promise<BusinessMemberRow> {
+  const { data, error } = await client
+    .from('business_members')
+    .update({ invited_at: new Date().toISOString() })
+    .eq('id', memberId)
+    .eq('status', 'invited')
+    .select('*')
+    .single()
+  if (error) throw new Error(getErrorMessage(error))
+  if (!data) throw new Error(`Business member ${memberId} not found or not in invited status`)
+  return data as BusinessMemberRow
+}
+
 // Revokes a member/invite (§7.4) — a normal UPDATE under business_members_update
 // (user_can(...,'manage_members')). Frees the seat; the primary-admin protection
 // trigger (21A-B1) blocks revoking the primary admin.

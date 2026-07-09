@@ -1,10 +1,13 @@
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import { getTranslations } from 'next-intl/server'
 import { differenceInDays, addDays, parseISO } from 'date-fns'
 import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
 import { getTrialStateMaybe } from '@/lib/db/trial-state'
 import { getPlanCapabilities } from '@/lib/stripe/plan'
+import { countSeatUsage } from '@/lib/db/business-members'
+import { evaluateSeatState } from '@/lib/members/seats'
 import { PricingCards } from './PricingCards'
 
 type Props = {
@@ -35,6 +38,9 @@ export default async function BillingPage({ params }: Props) {
   const plusCaps = getPlanCapabilities('plus')
   const proCaps = getPlanCapabilities('pro')
 
+  const { activeCount, pendingCount } = await countSeatUsage(client, business.id)
+  const seats = evaluateSeatState({ plan: business.plan, activeCount, pendingCount })
+
   return (
     <div className="max-w-3xl mx-auto py-10 px-4 sm:px-6 space-y-10">
       <div className="space-y-1">
@@ -51,6 +57,24 @@ export default async function BillingPage({ params }: Props) {
         hasStripeCustomer={!!business.stripe_customer_id}
         t={t}
       />
+
+      {/* §8 — overage-lock UX: messaging + gating only, no Stripe schema change.
+          Clearing the lock is a member-count action, not a billing action. */}
+      {seats.overage > 0 && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-5 py-4">
+          <p className="text-sm font-medium text-foreground">
+            {t('overage.notice', { overage: seats.overage })}
+          </p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            <Link
+              href={`/${locale}/settings/team`}
+              className="underline underline-offset-4 hover:text-foreground"
+            >
+              {t('overage.team_link')}
+            </Link>
+          </p>
+        </div>
+      )}
 
       {/* Pricing cards */}
       <PricingCards

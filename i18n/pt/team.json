@@ -1,0 +1,76 @@
+{
+  "title": "Equipa",
+  "subtitle": "Faz a gestão de quem tem acesso ao teu espaço de trabalho.",
+  "seat_meter": {
+    "aria_label": "Lugares usados",
+    "normal": "{used} de {max} lugares",
+    "unlimited": "{used} de lugares Ilimitados",
+    "at_cap": "{used} de {max} lugares — a equipa está completa.",
+    "overage_locked": "{used} de {max} lugares — {overage} acima do limite do teu plano.",
+    "upgrade_cta": "Faz upgrade para Pro para lugares ilimitados",
+    "overage_cta": "Remove {overage} membro(s) ou mantém-te no Pro"
+  },
+  "invite_form": {
+    "heading": "Convidar um colega",
+    "disabled_notice": "Os convites estão em pausa até o número de lugares ser resolvido.",
+    "fields": {
+      "email": "Email profissional",
+      "role": "Função",
+      "is_admin": "Admin"
+    },
+    "cta": "Enviar convite",
+    "sent": "Convite enviado."
+  },
+  "roles": {
+    "viewer": "Visualizador",
+    "editor": "Editor",
+    "approver": "Aprovador",
+    "owner": "Proprietário"
+  },
+  "status": {
+    "active": "Ativo",
+    "invited": "Convidado",
+    "revoked": "Removido"
+  },
+  "member_row": {
+    "you": "(tu)",
+    "admin_badge": "Admin",
+    "role_select_label": "Alterar função de {email}",
+    "confirm_role_change": "Confirmar",
+    "cancel": "Cancelar",
+    "resend": "Reenviar",
+    "resend_sent": "Enviado.",
+    "remove": "Remover"
+  },
+  "remove_dialog": {
+    "title": "Remover {email}?",
+    "description": "Perderá o acesso a este espaço de trabalho imediatamente. Isto não pode ser desfeito aqui, mas o registo é mantido no teu histórico de auditoria.",
+    "cancel": "Cancelar",
+    "confirm": "Remover"
+  },
+  "member_list": {
+    "caption": "Membros da equipa e convites pendentes",
+    "columns": {
+      "email": "Email",
+      "role": "Função",
+      "status": "Estado",
+      "admin": "Admin",
+      "actions": "Ações"
+    }
+  },
+  "errors": {
+    "invalid_member": "Esse membro não foi encontrado.",
+    "invite_invalid": "Por favor verifica os detalhes do convite e tenta novamente.",
+    "seat_cap_reached": "A tua equipa está completa. Faz upgrade para convidar mais membros.",
+    "overage_locked": "Estás acima do limite de lugares do teu plano. Remove membros antes de convidar mais.",
+    "invite_failed": "Não foi possível enviar esse convite. Por favor tenta novamente.",
+    "invalid_role": "Por favor escolhe uma função válida.",
+    "role_change_failed": "Não foi possível alterar a função desse membro.",
+    "revoke_failed": "Não foi possível remover esse membro.",
+    "resend_failed": "Não foi possível reenviar esse convite.",
+    "email": {
+      "work_required": "Por favor utiliza um email profissional",
+      "invalid_format": "Por favor introduz um endereço de email válido"
+    }
+  }
+}

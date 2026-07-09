@@ -1,0 +1,76 @@
+{
+  "title": "Team",
+  "subtitle": "Manage who has access to your workspace.",
+  "seat_meter": {
+    "aria_label": "Seats used",
+    "normal": "{used} of {max} seats",
+    "unlimited": "{used} of Unlimited seats",
+    "at_cap": "{used} of {max} seats — team is full.",
+    "overage_locked": "{used} of {max} seats — {overage} over your plan limit.",
+    "upgrade_cta": "Upgrade to Pro for unlimited seats",
+    "overage_cta": "Remove {overage} member(s) or stay on Pro"
+  },
+  "invite_form": {
+    "heading": "Invite a teammate",
+    "disabled_notice": "Invites are paused until your seat count is resolved.",
+    "fields": {
+      "email": "Work email",
+      "role": "Role",
+      "is_admin": "Admin"
+    },
+    "cta": "Send invite",
+    "sent": "Invite sent."
+  },
+  "roles": {
+    "viewer": "Viewer",
+    "editor": "Editor",
+    "approver": "Approver",
+    "owner": "Owner"
+  },
+  "status": {
+    "active": "Active",
+    "invited": "Invited",
+    "revoked": "Removed"
+  },
+  "member_row": {
+    "you": "(you)",
+    "admin_badge": "Admin",
+    "role_select_label": "Change role for {email}",
+    "confirm_role_change": "Confirm",
+    "cancel": "Cancel",
+    "resend": "Resend",
+    "resend_sent": "Sent.",
+    "remove": "Remove"
+  },
+  "remove_dialog": {
+    "title": "Remove {email}?",
+    "description": "They'll lose access to this workspace immediately. This can't be undone from here, but the record is kept for your audit history.",
+    "cancel": "Cancel",
+    "confirm": "Remove"
+  },
+  "member_list": {
+    "caption": "Team members and pending invites",
+    "columns": {
+      "email": "Email",
+      "role": "Role",
+      "status": "Status",
+      "admin": "Admin",
+      "actions": "Actions"
+    }
+  },
+  "errors": {
+    "invalid_member": "That member could not be found.",
+    "invite_invalid": "Please check the invite details and try again.",
+    "seat_cap_reached": "Your team is full. Upgrade to invite more members.",
+    "overage_locked": "You're over your plan's seat limit. Remove members before inviting more.",
+    "invite_failed": "Couldn't send that invite. Please try again.",
+    "invalid_role": "Please choose a valid role.",
+    "role_change_failed": "Couldn't change that member's role.",
+    "revoke_failed": "Couldn't remove that member.",
+    "resend_failed": "Couldn't resend that invite.",
+    "email": {
+      "work_required": "Please use a work email address",
+      "invalid_format": "Please enter a valid email address"
+    }
+  }
+}

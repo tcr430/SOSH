@@ -1,0 +1,76 @@
+{
+  "title": "Equipo",
+  "subtitle": "Gestiona quién tiene acceso a tu espacio de trabajo.",
+  "seat_meter": {
+    "aria_label": "Asientos usados",
+    "normal": "{used} de {max} asientos",
+    "unlimited": "{used} de asientos Ilimitados",
+    "at_cap": "{used} de {max} asientos — el equipo está completo.",
+    "overage_locked": "{used} de {max} asientos — {overage} por encima del límite de tu plan.",
+    "upgrade_cta": "Actualiza a Pro para asientos ilimitados",
+    "overage_cta": "Elimina {overage} miembro(s) o mantente en Pro"
+  },
+  "invite_form": {
+    "heading": "Invitar a un compañero",
+    "disabled_notice": "Las invitaciones están en pausa hasta resolver el número de asientos.",
+    "fields": {
+      "email": "Correo profesional",
+      "role": "Rol",
+      "is_admin": "Admin"
+    },
+    "cta": "Enviar invitación",
+    "sent": "Invitación enviada."
+  },
+  "roles": {
+    "viewer": "Visualizador",
+    "editor": "Editor",
+    "approver": "Aprobador",
+    "owner": "Propietario"
+  },
+  "status": {
+    "active": "Activo",
+    "invited": "Invitado",
+    "revoked": "Eliminado"
+  },
+  "member_row": {
+    "you": "(tú)",
+    "admin_badge": "Admin",
+    "role_select_label": "Cambiar rol de {email}",
+    "confirm_role_change": "Confirmar",
+    "cancel": "Cancelar",
+    "resend": "Reenviar",
+    "resend_sent": "Enviado.",
+    "remove": "Eliminar"
+  },
+  "remove_dialog": {
+    "title": "¿Eliminar a {email}?",
+    "description": "Perderá el acceso a este espacio de trabajo de inmediato. Esto no se puede deshacer aquí, pero el registro se conserva en tu historial de auditoría.",
+    "cancel": "Cancelar",
+    "confirm": "Eliminar"
+  },
+  "member_list": {
+    "caption": "Miembros del equipo e invitaciones pendientes",
+    "columns": {
+      "email": "Correo",
+      "role": "Rol",
+      "status": "Estado",
+      "admin": "Admin",
+      "actions": "Acciones"
+    }
+  },
+  "errors": {
+    "invalid_member": "No se encontró ese miembro.",
+    "invite_invalid": "Revisa los datos de la invitación e inténtalo de nuevo.",
+    "seat_cap_reached": "Tu equipo está completo. Actualiza tu plan para invitar a más miembros.",
+    "overage_locked": "Estás por encima del límite de asientos de tu plan. Elimina miembros antes de invitar a más.",
+    "invite_failed": "No se pudo enviar esa invitación. Inténtalo de nuevo.",
+    "invalid_role": "Elige un rol válido.",
+    "role_change_failed": "No se pudo cambiar el rol de ese miembro.",
+    "revoke_failed": "No se pudo eliminar a ese miembro.",
+    "resend_failed": "No se pudo reenviar esa invitación.",
+    "email": {
+      "work_required": "Utiliza un correo profesional",
+      "invalid_format": "Introduce una dirección de correo válida"
+    }
+  }
+}

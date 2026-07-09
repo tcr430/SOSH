@@ -8,6 +8,10 @@
     "days_remaining": "{days} dia restante no seu teste | {days} dias restantes no seu teste",
     "manage": "Gerir faturação →"
   },
+  "overage": {
+    "notice": "Tem {overage} membro(s) acima do limite do Plus. Remova membros na página de Equipa, ou mantenha-se no Pro.",
+    "team_link": "Ir para a página de Equipa"
+  },
   "tiers": {
     "plus": {
       "name": "Plus",

@@ -8,6 +8,10 @@
     "days_remaining": "{days} day left in your trial | {days} days left in your trial",
     "manage": "Manage billing →"
   },
+  "overage": {
+    "notice": "You have {overage} member(s) over the Plus limit. Remove members on your Team page, or stay on Pro.",
+    "team_link": "Go to your Team page"
+  },
   "tiers": {
     "plus": {
       "name": "Plus",

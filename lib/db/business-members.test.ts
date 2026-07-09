@@ -5,6 +5,8 @@ import {
   listMembers,
   countSeatUsage,
   createInvite,
+  changeMemberRole,
+  reissueInvite,
   revokeMember,
   acceptInvite,
 } from './business-members'
@@ -133,6 +135,55 @@ describe('createInvite', () => {
     await expect(
       createInvite(client, { businessId: 'biz-1', email: 'x@example.com', role: 'viewer', invitedBy: 'user-1' }),
     ).rejects.toThrow('seat cap reached')
+  })
+})
+
+describe('changeMemberRole', () => {
+  it('updates role and is_admin', async () => {
+    const updated: BusinessMemberRow = { ...mockMember, role: 'approver', is_admin: true }
+    const { client, builder } = createMockClient(updated)
+    const result = await changeMemberRole(client, 'member-1', 'approver', true)
+    expect(result).toEqual(updated)
+    expect(builder.update).toHaveBeenCalledWith({ role: 'approver', is_admin: true })
+  })
+
+  it('throws when the primary-admin protection trigger rejects the update', async () => {
+    const { client } = createMockClient(null, {
+      message: 'primary admin membership cannot be demoted, revoked, or rebound',
+    })
+    await expect(changeMemberRole(client, 'member-1', 'viewer', false)).rejects.toThrow(
+      'primary admin membership cannot be demoted',
+    )
+  })
+
+  it('throws when data is null', async () => {
+    const { client } = createMockClient(null, null)
+    await expect(changeMemberRole(client, 'missing', 'viewer', false)).rejects.toThrow(
+      'Business member missing not found',
+    )
+  })
+})
+
+describe('reissueInvite', () => {
+  it('refreshes invited_at on the same row, scoped to status=invited', async () => {
+    const reissued: BusinessMemberRow = { ...mockMember, invited_at: '2026-07-09T00:00:00Z' }
+    const { client, builder } = createMockClient(reissued)
+    const result = await reissueInvite(client, 'member-1')
+    expect(result).toEqual(reissued)
+    expect(builder.eq).toHaveBeenCalledWith('id', 'member-1')
+    expect(builder.eq).toHaveBeenCalledWith('status', 'invited')
+  })
+
+  it('throws when the row is missing or not in invited status', async () => {
+    const { client } = createMockClient(null, null)
+    await expect(reissueInvite(client, 'member-1')).rejects.toThrow(
+      'Business member member-1 not found or not in invited status',
+    )
+  })
+
+  it('throws when supabase returns an error', async () => {
+    const { client } = createMockClient(null, { message: 'DB error' })
+    await expect(reissueInvite(client, 'member-1')).rejects.toThrow('DB error')
   })
 })
 
