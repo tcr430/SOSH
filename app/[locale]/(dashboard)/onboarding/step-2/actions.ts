@@ -2,7 +2,7 @@
 
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { getBusinessByOwner } from '@/lib/db/businesses'
+import { getBusinessForUser } from '@/lib/db/businesses'
 import { getBrandVoice, upsertBrandVoice } from '@/lib/db/brand-voices'
 import { voicePayloadSchema } from '@/lib/validation/voice'
 import type { BrandVoiceRow } from '@/lib/db/types'
@@ -24,7 +24,7 @@ export async function saveVoiceAxesAction(
   const { data: { user } } = await client.auth.getUser()
   if (!user) return { error: 'generic' }
 
-  const business = await getBusinessByOwner(client, user.id)
+  const business = await getBusinessForUser(client, user.id)
   if (!business) return { error: 'generic' }
 
   await upsertBrandVoice(client, {
@@ -44,7 +44,7 @@ export async function getBrandVoiceAction(): Promise<BrandVoiceRow | null> {
   const { data: { user } } = await client.auth.getUser()
   if (!user) return null
 
-  const business = await getBusinessByOwner(client, user.id)
+  const business = await getBusinessForUser(client, user.id)
   if (!business) return null
 
   return getBrandVoice(client, business.id)

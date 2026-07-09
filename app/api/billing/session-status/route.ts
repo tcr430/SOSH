@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { getBusinessByOwner } from '@/lib/db/businesses'
+import { getBusinessForUser } from '@/lib/db/businesses'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,7 +10,7 @@ export async function GET(): Promise<Response> {
     return Response.json({ error: 'auth' }, { status: 401 })
   }
 
-  const business = await getBusinessByOwner(client, user.id)
+  const business = await getBusinessForUser(client, user.id)
   if (!business) {
     return Response.json({ error: 'no_business' }, { status: 404 })
   }

@@ -5,7 +5,7 @@ vi.mock('@/lib/supabase/server', () => ({
 }))
 
 vi.mock('@/lib/db/businesses', () => ({
-  getBusinessByOwner: vi.fn(),
+  getBusinessForUser: vi.fn(),
 }))
 
 vi.mock('@/lib/db/brand-voices', () => ({
@@ -36,7 +36,7 @@ import {
   type VoiceVariationActionState,
 } from './actions'
 import { createClient } from '@/lib/supabase/server'
-import { getBusinessByOwner } from '@/lib/db/businesses'
+import { getBusinessForUser } from '@/lib/db/businesses'
 import { upsertBrandVoice } from '@/lib/db/brand-voices'
 import { addVariation, renameVariation, deleteVariation, VoiceVariationCapError } from '@/lib/db/voice'
 import { revalidatePath } from 'next/cache'
@@ -96,7 +96,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(createClient).mockResolvedValue(mockClient as never)
   vi.mocked(mockClient.auth.getUser).mockResolvedValue({ data: { user: { id: 'user-1' } } })
-  vi.mocked(getBusinessByOwner).mockResolvedValue(mockBusiness)
+  vi.mocked(getBusinessForUser).mockResolvedValue(mockBusiness)
   vi.mocked(addVariation).mockResolvedValue(mockVariationRow)
   vi.mocked(renameVariation).mockResolvedValue(undefined)
   vi.mocked(deleteVariation).mockResolvedValue(undefined)

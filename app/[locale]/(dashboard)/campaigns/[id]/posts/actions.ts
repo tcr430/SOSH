@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { formatISO } from 'date-fns'
 import { createClient } from '@/lib/supabase/server'
-import { getBusinessByOwner } from '@/lib/db/businesses'
+import { getBusinessForUser } from '@/lib/db/businesses'
 import { getCampaignById } from '@/lib/db/campaigns'
 import {
   approvePost,
@@ -48,7 +48,7 @@ async function getAuthContext() {
     data: { user },
   } = await client.auth.getUser()
   if (!user) return null
-  const business = await getBusinessByOwner(client, user.id)
+  const business = await getBusinessForUser(client, user.id)
   if (!business) return null
   return { client, business }
 }

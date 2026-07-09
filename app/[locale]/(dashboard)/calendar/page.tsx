@@ -3,7 +3,7 @@ import { fromZonedTime, formatInTimeZone } from 'date-fns-tz'
 import { getTranslations } from 'next-intl/server'
 import { createClient } from '@/lib/supabase/server'
 import { toUtcIso } from '@/lib/utils'
-import { getBusinessByOwner } from '@/lib/db/businesses'
+import { getBusinessForUser } from '@/lib/db/businesses'
 import { listPostsForCalendar } from '@/lib/db/posts'
 import { groupByCampaignDay } from '@/lib/calendar/group'
 import { CalendarView } from './CalendarView'
@@ -26,7 +26,7 @@ export default async function CalendarPage({ params, searchParams }: Props) {
   const { data: { user } } = await client.auth.getUser()
   if (!user) redirect(`/${locale}/login`)
 
-  const business = await getBusinessByOwner(client, user.id)
+  const business = await getBusinessForUser(client, user.id)
   if (!business) redirect(`/${locale}/onboarding`)
 
   const tz = business.timezone

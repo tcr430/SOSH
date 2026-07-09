@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { getBusinessByOwner } from '@/lib/db/businesses'
+import { getBusinessForUser } from '@/lib/db/businesses'
 import { getActiveByBusinessAndPlatform, deactivateSocialAccount } from '@/lib/db/social-accounts'
 import { isPlatform } from '@/lib/social'
 
@@ -22,7 +22,7 @@ export async function DELETE(
       return new NextResponse(null, { status: 401 })
     }
 
-    const business = await getBusinessByOwner(supabase, user.id)
+    const business = await getBusinessForUser(supabase, user.id)
     if (!business) {
       return new NextResponse(null, { status: 404 })
     }

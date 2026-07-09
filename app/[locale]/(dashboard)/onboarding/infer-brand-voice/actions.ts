@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { getBusinessByOwner } from '@/lib/db/businesses'
+import { getBusinessForUser } from '@/lib/db/businesses'
 import { upsertBrandVoice } from '@/lib/db/brand-voices'
 import {
   runPrompt,
@@ -18,7 +18,7 @@ export async function inferBrandVoiceAction(): Promise<{ success: boolean; error
   } = await client.auth.getUser()
   if (!user) return { success: false }
 
-  const business = await getBusinessByOwner(client, user.id)
+  const business = await getBusinessForUser(client, user.id)
   if (!business) return { success: false }
 
   const websiteText = business.website ? await fetchWebsiteText(business.website) : null

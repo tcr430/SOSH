@@ -9,7 +9,7 @@ vi.mock('@/lib/supabase/server', () => ({
 }))
 
 vi.mock('@/lib/db/businesses', () => ({
-  getBusinessByOwner: vi.fn(),
+  getBusinessForUser: vi.fn(),
 }))
 
 vi.mock('@/lib/db/trial-state', () => ({
@@ -43,7 +43,7 @@ vi.mock('@/lib/db/campaigns', async (importOriginal) => {
 
 import { createCampaignAction } from './actions'
 import { createClient } from '@/lib/supabase/server'
-import { getBusinessByOwner } from '@/lib/db/businesses'
+import { getBusinessForUser } from '@/lib/db/businesses'
 import { getTrialStateMaybe, incrementCampaignsCreated } from '@/lib/db/trial-state'
 import { checkCampaignCreationAllowed } from '@/lib/campaigns/enforcement'
 import { listActiveSocialAccounts } from '@/lib/db/social-accounts'
@@ -53,7 +53,7 @@ import type { BusinessRow, BrandVoiceVariationRow } from '@/lib/db/types'
 
 const mockGetVariationById = vi.mocked(getVariationById)
 const mockCreateClient = vi.mocked(createClient)
-const mockGetBusinessByOwner = vi.mocked(getBusinessByOwner)
+const mockGetBusinessByOwner = vi.mocked(getBusinessForUser)
 const mockGetTrialStateMaybe = vi.mocked(getTrialStateMaybe)
 const mockIncrementCampaignsCreated = vi.mocked(incrementCampaignsCreated)
 const mockCheckCampaignCreationAllowed = vi.mocked(checkCampaignCreationAllowed)

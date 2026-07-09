@@ -11,7 +11,7 @@ vi.mock('@/lib/supabase/service', () => ({
 }))
 
 vi.mock('@/lib/db/businesses', () => ({
-  getBusinessByOwner: vi.fn(),
+  getBusinessForUser: vi.fn(),
 }))
 
 vi.mock('@/lib/db/social-accounts', () => ({
@@ -43,7 +43,7 @@ vi.mock('@/lib/ai', () => ({
 import { refineFromPostsAction } from './refine-from-posts-action'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service'
-import { getBusinessByOwner } from '@/lib/db/businesses'
+import { getBusinessForUser } from '@/lib/db/businesses'
 import { listActiveSocialAccounts } from '@/lib/db/social-accounts'
 import { listRecentPublishedPostTexts } from '@/lib/db/posts'
 import { upsertBrandVoice } from '@/lib/db/brand-voices'
@@ -84,7 +84,7 @@ describe('refineFromPostsAction', () => {
     vi.clearAllMocks()
     vi.mocked(createClient).mockResolvedValue(makeAuthClient() as never)
     vi.mocked(createServiceRoleClient).mockReturnValue(MOCK_SERVICE_CLIENT as never)
-    vi.mocked(getBusinessByOwner).mockResolvedValue(MOCK_BUSINESS as never)
+    vi.mocked(getBusinessForUser).mockResolvedValue(MOCK_BUSINESS as never)
     vi.mocked(listActiveSocialAccounts).mockResolvedValue(MOCK_ACCOUNTS as never)
     vi.mocked(listRecentPublishedPostTexts).mockResolvedValue(MOCK_POSTS)
     vi.mocked(buildCustomerContext).mockResolvedValue(MOCK_CTX as never)

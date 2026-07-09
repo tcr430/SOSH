@@ -5,7 +5,7 @@ vi.mock('@/lib/supabase/server', () => ({
 }))
 
 vi.mock('@/lib/db/businesses', () => ({
-  getBusinessByOwner: vi.fn(),
+  getBusinessForUser: vi.fn(),
 }))
 
 vi.mock('@/lib/db/campaigns', async (importOriginal) => {
@@ -20,12 +20,12 @@ vi.mock('@/lib/db/campaigns', async (importOriginal) => {
 
 import { pauseCampaignAction, resumeCampaignAction, deleteCampaignAction } from './actions'
 import { createClient } from '@/lib/supabase/server'
-import { getBusinessByOwner } from '@/lib/db/businesses'
+import { getBusinessForUser } from '@/lib/db/businesses'
 import { pauseCampaign, resumeCampaign, softDeleteCampaignGuarded } from '@/lib/db/campaigns'
 import type { BusinessRow, CampaignRow } from '@/lib/db/types'
 
 const mockCreateClient = vi.mocked(createClient)
-const mockGetBusinessByOwner = vi.mocked(getBusinessByOwner)
+const mockGetBusinessByOwner = vi.mocked(getBusinessForUser)
 const mockPauseCampaign = vi.mocked(pauseCampaign)
 const mockResumeCampaign = vi.mocked(resumeCampaign)
 const mockSoftDeleteCampaignGuarded = vi.mocked(softDeleteCampaignGuarded)

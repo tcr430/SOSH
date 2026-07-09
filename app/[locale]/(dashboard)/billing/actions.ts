@@ -2,7 +2,7 @@
 
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
-import { getBusinessByOwner } from '@/lib/db/businesses'
+import { getBusinessForUser } from '@/lib/db/businesses'
 import { createCheckoutSession, createBillingPortalSession, NoBillingCustomerError } from '@/lib/stripe/checkout'
 import type { PaidPlan } from '@/lib/stripe/products'
 
@@ -21,7 +21,7 @@ export async function startCheckoutAction(
     const { data: { user } } = await client.auth.getUser()
     if (!user) return { error: 'auth' }
 
-    const business = await getBusinessByOwner(client, user.id)
+    const business = await getBusinessForUser(client, user.id)
     if (!business) return { error: 'no_business' }
 
     const { url } = await createCheckoutSession({
@@ -45,7 +45,7 @@ export async function openBillingPortalAction(
     const { data: { user } } = await client.auth.getUser()
     if (!user) return { error: 'auth' }
 
-    const business = await getBusinessByOwner(client, user.id)
+    const business = await getBusinessForUser(client, user.id)
     if (!business) return { error: 'no_business' }
 
     const { url } = await createBillingPortalSession({

@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { getTranslations } from 'next-intl/server'
 import { createClient } from '@/lib/supabase/server'
-import { getBusinessByOwner } from '@/lib/db/businesses'
+import { getBusinessForUser } from '@/lib/db/businesses'
 import { listActiveSocialAccounts } from '@/lib/db/social-accounts'
 import { listVariations } from '@/lib/db/voice'
 import { CampaignForm } from './CampaignForm'
@@ -20,7 +20,7 @@ export default async function NewCampaignPage({ params }: Props) {
   } = await client.auth.getUser()
   if (!user) redirect(`/${locale}/login`)
 
-  const business = await getBusinessByOwner(client, user.id)
+  const business = await getBusinessForUser(client, user.id)
   if (!business) redirect(`/${locale}/onboarding`)
 
   const [connectedAccounts, variations] = await Promise.all([

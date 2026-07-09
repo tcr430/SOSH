@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { getBusinessByOwner } from '@/lib/db/businesses'
+import { getBusinessForUser } from '@/lib/db/businesses'
 import { getBrandVoice } from '@/lib/db/brand-voices'
 
 export default async function OnboardingPage({
@@ -14,7 +14,7 @@ export default async function OnboardingPage({
   const { data: { user } } = await client.auth.getUser()
   if (!user) redirect(`/${locale}/login`)
 
-  const business = await getBusinessByOwner(client, user.id)
+  const business = await getBusinessForUser(client, user.id)
   if (!business) redirect(`/${locale}/signup`)
 
   if (business.onboarding_completed) redirect(`/${locale}/campaigns`)

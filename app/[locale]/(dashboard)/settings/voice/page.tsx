@@ -1,6 +1,6 @@
 import { getTranslations } from 'next-intl/server'
 import { createClient } from '@/lib/supabase/server'
-import { getBusinessByOwner } from '@/lib/db/businesses'
+import { getBusinessForUser } from '@/lib/db/businesses'
 import { getBrandVoice } from '@/lib/db/brand-voices'
 import { listVariations } from '@/lib/db/voice'
 import { listActiveSocialAccounts } from '@/lib/db/social-accounts'
@@ -22,7 +22,7 @@ export default async function VoiceSettingsPage() {
 
   if (!user) return null
 
-  const business = await getBusinessByOwner(client, user.id)
+  const business = await getBusinessForUser(client, user.id)
   if (!business) return null
 
   const [brandVoice, variations, accounts] = await Promise.all([

@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { redirect } from 'next/navigation'
 import { after } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { getBusinessByOwner, updateBusiness } from '@/lib/db/businesses'
+import { getBusinessForUser, updateBusiness } from '@/lib/db/businesses'
 import { inferBrandVoiceAction } from '../infer-brand-voice/actions'
 
 const step1Schema = z.object({
@@ -40,7 +40,7 @@ export async function saveStep1Action(
   const { data: { user } } = await client.auth.getUser()
   if (!user) return { errors: { _form: 'generic' } }
 
-  const business = await getBusinessByOwner(client, user.id)
+  const business = await getBusinessForUser(client, user.id)
   if (!business) return { errors: { _form: 'generic' } }
 
   await updateBusiness(client, business.id, {

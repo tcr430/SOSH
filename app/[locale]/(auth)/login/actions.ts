@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
-import { getBusinessByOwner } from '@/lib/db/businesses'
+import { getBusinessForUser } from '@/lib/db/businesses'
 import { consumeRateLimit, resolveIp } from '@/lib/auth/rate-limit'
 import { isSafeRedirect } from '@/lib/auth/safe-redirect'
 import { canonicalizeEmail } from '@/lib/auth/email'
@@ -71,13 +71,17 @@ export async function loginAction(
     return { errors: { _form: 'errors.login.invalid' }, values: { email } }
   }
 
-  const business = await getBusinessByOwner(client, userId)
+  const business = await getBusinessForUser(client, userId)
 
   if (redirectTo && isSafeRedirect(redirectTo, locale)) {
     redirect(redirectTo)
   }
 
-  if (!business || !business.onboarding_completed) {
+  if (!business) {
+    redirect(`/${locale}/onboarding`)
+  }
+
+  if (business.owner_id === userId && !business.onboarding_completed) {
     redirect(`/${locale}/onboarding`)
   }
 

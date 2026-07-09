@@ -3,7 +3,7 @@
 import { differenceInWeeks, parseISO } from 'date-fns'
 import { createClient } from '@/lib/supabase/server'
 import { createCampaignSchema } from '@/lib/validation/campaign'
-import { getBusinessByOwner } from '@/lib/db/businesses'
+import { getBusinessForUser } from '@/lib/db/businesses'
 import { getTrialStateMaybe, incrementCampaignsCreated } from '@/lib/db/trial-state'
 import { checkCampaignCreationAllowed } from '@/lib/campaigns/enforcement'
 import { createCampaign } from '@/lib/db/campaigns'
@@ -76,7 +76,7 @@ export async function createCampaignAction(
     }
 
     // Step 3: Get business
-    const business = await getBusinessByOwner(client, user.id)
+    const business = await getBusinessForUser(client, user.id)
     if (!business) {
       return { errors: { _form: 'errors.campaign.generic' } }
     }

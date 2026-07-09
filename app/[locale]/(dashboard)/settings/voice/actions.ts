@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { getBusinessByOwner } from '@/lib/db/businesses'
+import { getBusinessForUser } from '@/lib/db/businesses'
 import { upsertBrandVoice } from '@/lib/db/brand-voices'
 import {
   addVariation,
@@ -42,7 +42,7 @@ function parseVoiceAxes(formData: FormData): VoiceAxes {
 async function getAuthenticatedBusiness(client: Awaited<ReturnType<typeof createClient>>) {
   const { data: { user } } = await client.auth.getUser()
   if (!user) return null
-  return getBusinessByOwner(client, user.id)
+  return getBusinessForUser(client, user.id)
 }
 
 export async function saveBaseVoiceAction(payload: VoiceEditorSavePayload): Promise<SaveBaseVoiceResult> {

@@ -2,7 +2,7 @@
 
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
-import { getBusinessByOwner } from '@/lib/db/businesses'
+import { getBusinessForUser } from '@/lib/db/businesses'
 import {
   pauseCampaign,
   resumeCampaign,
@@ -22,7 +22,7 @@ async function getAuthContext() {
     data: { user },
   } = await client.auth.getUser()
   if (!user) return null
-  const business = await getBusinessByOwner(client, user.id)
+  const business = await getBusinessForUser(client, user.id)
   if (!business) return null
   return { client, business }
 }

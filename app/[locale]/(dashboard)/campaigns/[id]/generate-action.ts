@@ -3,7 +3,7 @@
 import { z } from 'zod'
 import { after } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { getBusinessByOwner } from '@/lib/db/businesses'
+import { getBusinessForUser } from '@/lib/db/businesses'
 import { getCampaignById } from '@/lib/db/campaigns'
 import { listPostsByCampaign } from '@/lib/db/posts'
 import { buildCustomerContext } from '@/lib/ai/context'
@@ -17,7 +17,7 @@ async function getAuthContext() {
     data: { user },
   } = await client.auth.getUser()
   if (!user) return null
-  const business = await getBusinessByOwner(client, user.id)
+  const business = await getBusinessForUser(client, user.id)
   if (!business) return null
   return { client, business }
 }

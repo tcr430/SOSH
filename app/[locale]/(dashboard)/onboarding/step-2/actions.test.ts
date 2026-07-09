@@ -9,7 +9,7 @@ vi.mock('@/lib/supabase/server', () => ({
 }))
 
 vi.mock('@/lib/db/businesses', () => ({
-  getBusinessByOwner: vi.fn(),
+  getBusinessForUser: vi.fn(),
 }))
 
 vi.mock('@/lib/db/brand-voices', () => ({
@@ -19,7 +19,7 @@ vi.mock('@/lib/db/brand-voices', () => ({
 
 import { saveVoiceAxesAction } from './actions'
 import { createClient } from '@/lib/supabase/server'
-import { getBusinessByOwner } from '@/lib/db/businesses'
+import { getBusinessForUser } from '@/lib/db/businesses'
 import { upsertBrandVoice } from '@/lib/db/brand-voices'
 import { redirect } from 'next/navigation'
 import type { BusinessRow } from '@/lib/db/types'
@@ -62,7 +62,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(createClient).mockResolvedValue(mockClient as never)
   vi.mocked(mockClient.auth.getUser).mockResolvedValue({ data: { user: { id: 'user-1' } } })
-  vi.mocked(getBusinessByOwner).mockResolvedValue(mockBusiness)
+  vi.mocked(getBusinessForUser).mockResolvedValue(mockBusiness)
   vi.mocked(upsertBrandVoice).mockResolvedValue(undefined as never)
 })
 

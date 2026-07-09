@@ -3,7 +3,7 @@ import { headers } from 'next/headers'
 import { differenceInDays, addDays, parseISO } from 'date-fns'
 import * as Sentry from '@sentry/nextjs'
 import { createClient } from '@/lib/supabase/server'
-import { getBusinessByOwner } from '@/lib/db/businesses'
+import { getBusinessForUser } from '@/lib/db/businesses'
 import { getBrandVoice } from '@/lib/db/brand-voices'
 import { listActiveSocialAccounts } from '@/lib/db/social-accounts'
 import { getTrialStateMaybe } from '@/lib/db/trial-state'
@@ -25,7 +25,7 @@ export default async function DashboardLayout({
 
   Sentry.setUser({ id: user.id })
 
-  const business = await getBusinessByOwner(client, user.id)
+  const business = await getBusinessForUser(client, user.id)
   if (!business) redirect(`/${locale}/signup`)
 
   const [brandVoice, activeAccounts, trialState] = await Promise.all([
@@ -43,8 +43,10 @@ export default async function DashboardLayout({
     )
   }
 
-  // Guard: incomplete onboarding redirects to wizard unless already there
-  if (!business.onboarding_completed) {
+  // Guard: incomplete onboarding redirects to wizard unless already there.
+  // Owner-scoped (ADR 0014 §2.4): a member of a not-yet-onboarded owner's
+  // business must not be bounced into the owner's wizard.
+  if (business.owner_id === user.id && !business.onboarding_completed) {
     const headersList = await headers()
     const pathname = headersList.get('x-pathname') ?? ''
     if (!pathname.includes('/onboarding')) {

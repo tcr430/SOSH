@@ -5,7 +5,7 @@ import { format, parseISO } from 'date-fns'
 import { cn, toUtcIso } from '@/lib/utils'
 import { buttonVariants } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/server'
-import { getBusinessByOwner } from '@/lib/db/businesses'
+import { getBusinessForUser } from '@/lib/db/businesses'
 import { getCampaignById } from '@/lib/db/campaigns'
 import { listPostsByCampaign } from '@/lib/db/posts'
 import { PLATFORM_CONFIGS } from '@/lib/social'
@@ -36,7 +36,7 @@ export default async function CampaignDetailPage({ params }: Props) {
   } = await client.auth.getUser()
   if (!user) redirect(`/${locale}/login`)
 
-  const business = await getBusinessByOwner(client, user.id)
+  const business = await getBusinessForUser(client, user.id)
   if (!business) redirect(`/${locale}/onboarding`)
 
   const campaign = await getCampaignById(client, id).catch(() => null)

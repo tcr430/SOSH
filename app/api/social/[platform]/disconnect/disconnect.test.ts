@@ -19,7 +19,7 @@ vi.mock('@/lib/supabase/server', () => ({
 }))
 
 vi.mock('@/lib/db/businesses', () => ({
-  getBusinessByOwner: vi.fn(),
+  getBusinessForUser: vi.fn(),
 }))
 
 vi.mock('@/lib/db/social-accounts', () => ({
@@ -29,12 +29,12 @@ vi.mock('@/lib/db/social-accounts', () => ({
 
 import { DELETE } from './route'
 import { createClient } from '@/lib/supabase/server'
-import { getBusinessByOwner } from '@/lib/db/businesses'
+import { getBusinessForUser } from '@/lib/db/businesses'
 import { getActiveByBusinessAndPlatform, deactivateSocialAccount } from '@/lib/db/social-accounts'
 import type { VaultSecretId } from '@/lib/db/types'
 
 const mockCreateClient = vi.mocked(createClient)
-const mockGetBusinessByOwner = vi.mocked(getBusinessByOwner)
+const mockGetBusinessByOwner = vi.mocked(getBusinessForUser)
 const mockGetActiveByBusinessAndPlatform = vi.mocked(getActiveByBusinessAndPlatform)
 const mockDeactivateSocialAccount = vi.mocked(deactivateSocialAccount)
 

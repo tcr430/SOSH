@@ -6,7 +6,7 @@ vi.mock('@/lib/supabase/server', () => ({
 }))
 
 vi.mock('@/lib/db/businesses', () => ({
-  getBusinessByOwner: vi.fn(),
+  getBusinessForUser: vi.fn(),
 }))
 
 vi.mock('@/lib/db/social-accounts', () => ({
@@ -15,11 +15,11 @@ vi.mock('@/lib/db/social-accounts', () => ({
 
 import { GET } from './route'
 import { createClient } from '@/lib/supabase/server'
-import { getBusinessByOwner } from '@/lib/db/businesses'
+import { getBusinessForUser } from '@/lib/db/businesses'
 import { listByBusiness } from '@/lib/db/social-accounts'
 
 const mockCreateClient = vi.mocked(createClient)
-const mockGetBusinessByOwner = vi.mocked(getBusinessByOwner)
+const mockGetBusinessByOwner = vi.mocked(getBusinessForUser)
 const mockListByBusiness = vi.mocked(listByBusiness)
 
 const MOCK_USER = { id: 'user-123' }

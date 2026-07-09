@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { getBusinessByOwner } from '@/lib/db/businesses'
+import { getBusinessForUser } from '@/lib/db/businesses'
 import { signOAuthState, getRegistry, getPlatformConfig, isPlatform } from '@/lib/social'
 import type { Language } from '@/lib/db/types'
 
@@ -30,7 +30,7 @@ export async function GET(
       return NextResponse.redirect(new URL(`/${locale}/login`, request.url))
     }
 
-    const business = await getBusinessByOwner(supabase, user.id)
+    const business = await getBusinessForUser(supabase, user.id)
     if (!business) {
       return NextResponse.redirect(new URL(`/${locale}/onboarding`, request.url))
     }

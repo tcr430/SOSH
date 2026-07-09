@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { buttonVariants } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/server'
-import { getBusinessByOwner } from '@/lib/db/businesses'
+import { getBusinessForUser } from '@/lib/db/businesses'
 import { listCampaigns } from '@/lib/db/campaigns'
 import { CampaignCard } from '@/components/campaigns/CampaignCard'
 
@@ -22,7 +22,7 @@ export default async function CampaignsPage({ params }: Props) {
   } = await client.auth.getUser()
   if (!user) redirect(`/${locale}/login`)
 
-  const business = await getBusinessByOwner(client, user.id)
+  const business = await getBusinessForUser(client, user.id)
   if (!business) redirect(`/${locale}/onboarding`)
 
   const campaigns = await listCampaigns(client, business.id)

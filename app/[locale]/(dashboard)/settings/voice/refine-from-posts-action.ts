@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { getBusinessByOwner } from '@/lib/db/businesses'
+import { getBusinessForUser } from '@/lib/db/businesses'
 import { listActiveSocialAccounts } from '@/lib/db/social-accounts'
 import { listRecentPublishedPostTexts } from '@/lib/db/posts'
 import { upsertBrandVoice } from '@/lib/db/brand-voices'
@@ -29,7 +29,7 @@ export async function refineFromPostsAction(): Promise<RefineFromPostsResult> {
   } = await client.auth.getUser()
   if (!user) return { error: 'generic' }
 
-  const business = await getBusinessByOwner(client, user.id)
+  const business = await getBusinessForUser(client, user.id)
   if (!business) return { error: 'generic' }
 
   const accounts = await listActiveSocialAccounts(client, business.id)

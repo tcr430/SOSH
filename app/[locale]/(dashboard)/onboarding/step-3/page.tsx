@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { getTranslations } from 'next-intl/server'
 import { createClient } from '@/lib/supabase/server'
-import { getBusinessByOwner } from '@/lib/db/businesses'
+import { getBusinessForUser } from '@/lib/db/businesses'
 import { listByBusiness } from '@/lib/db/social-accounts'
 import { PLATFORM_CONFIGS } from '@/lib/social'
 import { OnboardingProgress } from '@/components/onboarding/OnboardingProgress'
@@ -25,7 +25,7 @@ export default async function Step3Page({ params, searchParams }: Props) {
   const { data: { user } } = await client.auth.getUser()
   if (!user) redirect(`/${locale}/login`)
 
-  const business = await getBusinessByOwner(client, user.id)
+  const business = await getBusinessForUser(client, user.id)
   if (!business) redirect(`/${locale}/onboarding`)
 
   const accounts = await listByBusiness(client, business.id)

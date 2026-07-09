@@ -5,7 +5,7 @@ vi.mock('@/lib/supabase/server', () => ({
 }))
 
 vi.mock('@/lib/db/businesses', () => ({
-  getBusinessByOwner: vi.fn(),
+  getBusinessForUser: vi.fn(),
 }))
 
 vi.mock('@/lib/db/campaigns', () => ({
@@ -38,7 +38,7 @@ vi.mock('next/cache', () => ({
 
 import { regeneratePostAction } from './actions'
 import { createClient } from '@/lib/supabase/server'
-import { getBusinessByOwner } from '@/lib/db/businesses'
+import { getBusinessForUser } from '@/lib/db/businesses'
 import { getCampaignById } from '@/lib/db/campaigns'
 import {
   getPostById,
@@ -163,7 +163,7 @@ function makeAuthClient() {
     auth: { getUser: vi.fn().mockResolvedValue({ data: { user: MOCK_USER } }) },
   }
   vi.mocked(createClient).mockResolvedValue(client as never)
-  vi.mocked(getBusinessByOwner).mockResolvedValue(MOCK_BUSINESS)
+  vi.mocked(getBusinessForUser).mockResolvedValue(MOCK_BUSINESS)
   return client
 }
 

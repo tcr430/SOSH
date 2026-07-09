@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import { getTranslations } from 'next-intl/server'
 import { differenceInDays, addDays, parseISO } from 'date-fns'
 import { createClient } from '@/lib/supabase/server'
-import { getBusinessByOwner } from '@/lib/db/businesses'
+import { getBusinessForUser } from '@/lib/db/businesses'
 import { getTrialStateMaybe } from '@/lib/db/trial-state'
 import { getPlanCapabilities } from '@/lib/stripe/plan'
 import { PricingCards } from './PricingCards'
@@ -19,7 +19,7 @@ export default async function BillingPage({ params }: Props) {
   const { data: { user } } = await client.auth.getUser()
   if (!user) redirect(`/${locale}/login`)
 
-  const business = await getBusinessByOwner(client, user.id)
+  const business = await getBusinessForUser(client, user.id)
   if (!business) redirect(`/${locale}/onboarding`)
 
   const trialState = await getTrialStateMaybe(client, business.id)

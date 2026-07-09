@@ -13,7 +13,7 @@ vi.mock('next/headers', () => ({
 }))
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }))
-vi.mock('@/lib/db/businesses', () => ({ getBusinessByOwner: vi.fn() }))
+vi.mock('@/lib/db/businesses', () => ({ getBusinessForUser: vi.fn() }))
 vi.mock('@/lib/db/brand-voices', () => ({ getBrandVoice: vi.fn().mockResolvedValue(null) }))
 vi.mock('@/lib/db/social-accounts', () => ({
   listActiveSocialAccounts: vi.fn().mockResolvedValue([]),
@@ -31,7 +31,7 @@ vi.mock('@/components/layout/DashboardShell', () => ({
 }))
 
 import * as serverModule from '@/lib/supabase/server'
-import { getBusinessByOwner } from '@/lib/db/businesses'
+import { getBusinessForUser } from '@/lib/db/businesses'
 import DashboardLayout from './layout'
 
 const MOCK_USER = { id: 'user-abc-123' }
@@ -53,7 +53,7 @@ function mockAuthClient(user: { id: string } | null) {
 describe('DashboardLayout — Sentry.setUser (ADR 0007 §3.3)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(getBusinessByOwner).mockResolvedValue(MOCK_BUSINESS as never)
+    vi.mocked(getBusinessForUser).mockResolvedValue(MOCK_BUSINESS as never)
   })
 
   it('calls Sentry.setUser with { id: user.id } when user is present', async () => {
@@ -93,5 +93,50 @@ describe('DashboardLayout — Sentry.setUser (ADR 0007 §3.3)', () => {
     ).rejects.toThrow('NEXT_REDIRECT')
 
     expect(Sentry.setUser).not.toHaveBeenCalled()
+  })
+})
+
+describe('DashboardLayout — owner-scoped onboarding guard (ADR 0014 §2.4, RES-ONBOARDING-OWNER-SCOPED)', () => {
+  const MOCK_MEMBER = { id: 'member-1' }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('redirects the owner of a not-yet-onboarded business to /onboarding', async () => {
+    mockAuthClient(MOCK_USER)
+    vi.mocked(getBusinessForUser).mockResolvedValue({
+      ...MOCK_BUSINESS,
+      owner_id: MOCK_USER.id,
+      onboarding_completed: false,
+    } as never)
+
+    await expect(
+      DashboardLayout({
+        children: React.createElement('div'),
+        params: Promise.resolve({ locale: 'en' }),
+      }),
+    ).rejects.toThrow('NEXT_REDIRECT')
+
+    const { redirect } = await import('next/navigation')
+    expect(vi.mocked(redirect)).toHaveBeenCalledWith('/en/onboarding')
+  })
+
+  it('does NOT redirect a member of a not-yet-onboarded owner business — renders the dashboard instead', async () => {
+    mockAuthClient(MOCK_MEMBER)
+    vi.mocked(getBusinessForUser).mockResolvedValue({
+      ...MOCK_BUSINESS,
+      owner_id: MOCK_USER.id,
+      onboarding_completed: false,
+    } as never)
+
+    const result = await DashboardLayout({
+      children: React.createElement('div'),
+      params: Promise.resolve({ locale: 'en' }),
+    })
+
+    expect(result).toBeTruthy()
+    const { redirect } = await import('next/navigation')
+    expect(vi.mocked(redirect)).not.toHaveBeenCalled()
   })
 })
