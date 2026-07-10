@@ -16,6 +16,9 @@ import {
 } from '@/app/[locale]/(dashboard)/campaigns/[id]/posts/actions'
 import type { PostRow, Platform, AiGenerationMetadata } from '@/lib/db/types'
 import { parseAiGenerationMetadata } from '@/lib/db/utils'
+import { useCan } from '@/lib/members/useCan'
+import { CAPABILITIES } from '@/lib/members/capabilities'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 // ---------------------------------------------------------------------------
 // Platform constants
@@ -55,6 +58,10 @@ interface PostCardProps {
 export function PostCard({ post, onOptimisticUpdate }: PostCardProps) {
   const t = useTranslations('posts')
   const [isPending, startTransition] = useTransition()
+
+  // ADR 0014 §6 — capability-gate echo (UX only, DB is the boundary — L-3).
+  const canApprove = useCan(CAPABILITIES.APPROVE)
+  const canAuthor = useCan(CAPABILITIES.AUTHOR)
   const [cardError, setCardError] = useState<string | null>(null)
 
   const [isSkipOpen, setIsSkipOpen] = useState(false)
@@ -352,48 +359,67 @@ export function PostCard({ post, onOptimisticUpdate }: PostCardProps) {
         <div className="flex flex-wrap items-center gap-2">
           {post.status === 'draft' && !isEditMode && !isSkipOpen && (
             <>
-              <Button
-                size="sm"
-                disabled={isPending}
-                onClick={handleApprove}
-                className="bg-emerald-700 hover:bg-emerald-600 text-white"
-              >
-                ✓ {t('card.actions.approve')}
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={isPending}
-                onClick={() => setIsSkipOpen(true)}
-                className="text-amber-400 hover:text-amber-300 hover:bg-amber-950/30"
-              >
-                ✗ {t('card.actions.skip')}
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={isPending}
-                onClick={() => {
-                  setEditContent(post.content)
-                  setEditHashtags((post.hashtags ?? []).join(', '))
-                  setIsEditMode(true)
-                }}
-              >
-                ✎ {t('card.actions.edit')}
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={isPending}
-                onClick={() => setIsRegenerateOpen(true)}
-                className="text-muted-foreground"
-              >
-                ↻ {t('card.actions.regenerate')}
-              </Button>
+              {canApprove && (
+                <Button
+                  size="sm"
+                  disabled={isPending}
+                  onClick={handleApprove}
+                  className="bg-emerald-700 hover:bg-emerald-600 text-white"
+                >
+                  ✓ {t('card.actions.approve')}
+                </Button>
+              )}
+              {!canApprove && canAuthor && (
+                <Tooltip>
+                  <TooltipTrigger
+                    aria-disabled="true"
+                    aria-label={t('card.actions.approve_disabled_tooltip')}
+                    onClick={e => e.preventDefault()}
+                    className="inline-flex items-center justify-center rounded-md px-3 py-1.5 text-xs font-medium bg-emerald-700 text-white opacity-50 cursor-not-allowed"
+                  >
+                    ✓ {t('card.actions.approve')}
+                  </TooltipTrigger>
+                  <TooltipContent>{t('card.actions.approve_disabled_tooltip')}</TooltipContent>
+                </Tooltip>
+              )}
+              {canAuthor && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={isPending}
+                    onClick={() => setIsSkipOpen(true)}
+                    className="text-amber-400 hover:text-amber-300 hover:bg-amber-950/30"
+                  >
+                    ✗ {t('card.actions.skip')}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={isPending}
+                    onClick={() => {
+                      setEditContent(post.content)
+                      setEditHashtags((post.hashtags ?? []).join(', '))
+                      setIsEditMode(true)
+                    }}
+                  >
+                    ✎ {t('card.actions.edit')}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={isPending}
+                    onClick={() => setIsRegenerateOpen(true)}
+                    className="text-muted-foreground"
+                  >
+                    ↻ {t('card.actions.regenerate')}
+                  </Button>
+                </>
+              )}
             </>
           )}
 
-          {post.status === 'approved' && !isEditMode && (
+          {post.status === 'approved' && !isEditMode && canAuthor && (
             <>
               <Button
                 size="sm"
@@ -419,7 +445,7 @@ export function PostCard({ post, onOptimisticUpdate }: PostCardProps) {
             </>
           )}
 
-          {post.status === 'skipped' && !isEditMode && !isSkipOpen && (
+          {post.status === 'skipped' && !isEditMode && !isSkipOpen && canAuthor && (
             <Button
               size="sm"
               variant="ghost"
