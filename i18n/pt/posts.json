@@ -55,6 +55,7 @@
     },
     "actions": {
       "approve": "Aprovar",
+      "approve_disabled_tooltip": "Apenas os aprovadores podem aprovar",
       "skip": "Ignorar",
       "undo": "Desfazer",
       "edit": "Editar",

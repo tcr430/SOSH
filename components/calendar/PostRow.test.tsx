@@ -16,6 +16,11 @@ vi.mock('@/app/[locale]/(dashboard)/calendar/actions', () => ({
   reschedulePostAction: vi.fn().mockResolvedValue({ ok: true }),
 }))
 
+// Default: full access (approver-equivalent) — matches this file's pre-existing
+// assertions, which predate the ADR 0014 §6 capability gate. Individual tests
+// below override per capability to exercise the affordance map.
+vi.mock('@/lib/members/useCan', () => ({ useCan: vi.fn(() => true) }))
+
 // formatInTimeZone fixed to return a known "today" date so getTomorrowKeyInBizTz
 // is deterministic — avoids real-clock dependence in CI.
 vi.mock('date-fns-tz', () => ({
@@ -29,6 +34,8 @@ import {
   formatMetricValue,
   getTomorrowKeyInBizTz,
 } from '@/components/calendar/PostRow'
+import { useCan } from '@/lib/members/useCan'
+import type { Capability } from '@/lib/members/capabilities'
 import type { CalendarPostRow } from '@/lib/calendar/types'
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -222,6 +229,55 @@ describe('PostRow — View on platform link', () => {
       platform_post_id: '123456789',
     }))
     expect(container.querySelector('a[href]')).toBeNull()
+    cleanup()
+  })
+})
+
+// ── Render tests — capability-gate retrofit (ADR 0014 §6, UI-AFFORDANCE-MAP /
+//    UI-APPROVE-DISABLED-EDITOR) ──────────────────────────────────────────────
+
+function mockRole(role: 'viewer' | 'editor' | 'approver') {
+  const grants: Record<'viewer' | 'editor' | 'approver', Capability[]> = {
+    viewer: [],
+    editor: ['author', 'reschedule'],
+    approver: ['author', 'reschedule', 'approve'],
+  }
+  vi.mocked(useCan).mockImplementation(
+    (cap: Capability) => grants[role].includes(cap),
+  )
+}
+
+describe('PostRow — capability gate: viewer (clean read-only)', () => {
+  it('hides Approve, Edit, and the reschedule picker on a draft post', () => {
+    mockRole('viewer')
+    const { container, cleanup } = renderRow(makePost({ status: 'draft' }))
+    expect(container.querySelector('[aria-label="post.approve"]')).toBeNull()
+    expect(container.querySelector('[aria-label="post.edit"]')).toBeNull()
+    expect(container.querySelector('input[type="date"]')).toBeNull()
+    cleanup()
+  })
+})
+
+describe('PostRow — capability gate: editor (UI-APPROVE-DISABLED-EDITOR)', () => {
+  it('shows a disabled Approve control with the "only approvers" tooltip, but Edit + reschedule remain enabled', () => {
+    mockRole('editor')
+    const { container, cleanup } = renderRow(makePost({ status: 'draft' }))
+    const approve = container.querySelector('[aria-label="post.approve_disabled_tooltip"]')
+    expect(approve).not.toBeNull()
+    expect(approve?.getAttribute('aria-disabled')).toBe('true')
+    expect(container.querySelector('[aria-label="post.edit"]')).not.toBeNull()
+    expect(container.querySelector('input[type="date"]')).not.toBeNull()
+    cleanup()
+  })
+})
+
+describe('PostRow — capability gate: approver (full access)', () => {
+  it('shows an enabled Approve control on a draft post', () => {
+    mockRole('approver')
+    const { container, cleanup } = renderRow(makePost({ status: 'draft' }))
+    const approve = container.querySelector('[aria-label="post.approve"]')
+    expect(approve).not.toBeNull()
+    expect(approve?.hasAttribute('aria-disabled')).toBe(false)
     cleanup()
   })
 })

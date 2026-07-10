@@ -12,7 +12,8 @@
     "profile": "Profile",
     "logout": "Log out",
     "billing": "Billing",
-    "coming_soon": "Coming soon"
+    "coming_soon": "Coming soon",
+    "approvals": "Approvals"
   },
   "dashboard": {
     "banner": {

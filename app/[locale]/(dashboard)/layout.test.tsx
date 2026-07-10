@@ -14,6 +14,9 @@ vi.mock('next/headers', () => ({
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }))
 vi.mock('@/lib/db/businesses', () => ({ getBusinessForUser: vi.fn() }))
+vi.mock('@/lib/db/business-members', () => ({
+  getMemberForUser: vi.fn().mockResolvedValue(null),
+}))
 vi.mock('@/lib/db/brand-voices', () => ({ getBrandVoice: vi.fn().mockResolvedValue(null) }))
 vi.mock('@/lib/db/social-accounts', () => ({
   listActiveSocialAccounts: vi.fn().mockResolvedValue([]),

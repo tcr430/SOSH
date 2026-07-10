@@ -32,6 +32,7 @@
   },
   "post": {
     "approve": "Approve",
+    "approve_disabled_tooltip": "Only approvers can approve",
     "edit": "Edit",
     "save": "Save",
     "cancel": "Cancel",

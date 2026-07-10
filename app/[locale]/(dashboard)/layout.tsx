@@ -7,6 +7,8 @@ import { getBusinessForUser } from '@/lib/db/businesses'
 import { getBrandVoice } from '@/lib/db/brand-voices'
 import { listActiveSocialAccounts } from '@/lib/db/social-accounts'
 import { getTrialStateMaybe } from '@/lib/db/trial-state'
+import { getMemberForUser } from '@/lib/db/business-members'
+import { resolveMemberContext } from '@/lib/members/capabilities'
 import { BusinessProvider } from '@/lib/contexts/business-context'
 import { DashboardShell } from '@/components/layout/DashboardShell'
 
@@ -28,12 +30,17 @@ export default async function DashboardLayout({
   const business = await getBusinessForUser(client, user.id)
   if (!business) redirect(`/${locale}/signup`)
 
-  const [brandVoice, activeAccounts, trialState] = await Promise.all([
+  const [brandVoice, activeAccounts, trialState, memberRow] = await Promise.all([
     getBrandVoice(client, business.id),
     listActiveSocialAccounts(client, business.id),
     getTrialStateMaybe(client, business.id),
+    business.owner_id === user.id
+      ? Promise.resolve(null)
+      : getMemberForUser(client, business.id, user.id),
   ])
   const hasSocialAccounts = activeAccounts.length > 0
+  // ADR 0014 §6 — resolved once here; BusinessProvider hands it to useCan().
+  const member = resolveMemberContext(business, user.id, memberRow)
 
   let daysRemaining: number | null = null
   if (business.plan === 'trial' && trialState?.trial_started_at) {
@@ -55,7 +62,7 @@ export default async function DashboardLayout({
   }
 
   return (
-    <BusinessProvider user={user} activeBusiness={business} brandVoice={brandVoice}>
+    <BusinessProvider user={user} activeBusiness={business} brandVoice={brandVoice} member={member}>
       <DashboardShell locale={locale} hasSocialAccounts={hasSocialAccounts} daysRemaining={daysRemaining}>
         {children}
       </DashboardShell>

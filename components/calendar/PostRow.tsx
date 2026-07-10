@@ -12,6 +12,9 @@ import {
   updatePostFromCalendarAction,
   reschedulePostAction,
 } from '@/app/[locale]/(dashboard)/calendar/actions'
+import { useCan } from '@/lib/members/useCan'
+import { CAPABILITIES } from '@/lib/members/capabilities'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 // ── Pure helpers (exported for unit tests) ────────────────────────────────────
 
@@ -60,6 +63,11 @@ export function PostRow({ post, tz }: PostRowProps) {
   const isDraft = post.status === 'draft'
   const canReschedule = post.status === 'draft' || post.status === 'approved'
   const minDate = getTomorrowKeyInBizTz(tz)
+
+  // ADR 0014 §6 — capability-gate echo (UX only, DB is the boundary — L-3).
+  const canApprove = useCan(CAPABILITIES.APPROVE)
+  const canAuthor = useCan(CAPABILITIES.AUTHOR)
+  const canReschedulePost = useCan(CAPABILITIES.RESCHEDULE)
 
   // Only show the platform link for published posts where a URL is derivable (R5)
   const platformUrl = post.status === 'published'
@@ -160,7 +168,7 @@ export function PostRow({ post, tz }: PostRowProps) {
       {/* Actions row — hidden while editing */}
       {!isEditing && (
         <div className="flex flex-wrap items-center gap-2">
-          {isDraft && (
+          {isDraft && canApprove && (
             <button
               type="button"
               disabled={isPending}
@@ -172,7 +180,22 @@ export function PostRow({ post, tz }: PostRowProps) {
             </button>
           )}
 
-          {canReschedule && (
+          {isDraft && !canApprove && canAuthor && (
+            <Tooltip>
+              <TooltipTrigger
+                type="button"
+                aria-disabled="true"
+                aria-label={t('post.approve_disabled_tooltip')}
+                onClick={e => e.preventDefault()}
+                className="rounded-md px-2.5 py-1.5 text-xs font-medium bg-primary text-primary-foreground opacity-50 cursor-not-allowed transition-colors"
+              >
+                {t('post.approve')}
+              </TooltipTrigger>
+              <TooltipContent>{t('post.approve_disabled_tooltip')}</TooltipContent>
+            </Tooltip>
+          )}
+
+          {canReschedule && canAuthor && (
             <button
               type="button"
               disabled={isPending}
@@ -184,7 +207,7 @@ export function PostRow({ post, tz }: PostRowProps) {
             </button>
           )}
 
-          {canReschedule && (
+          {canReschedule && canReschedulePost && (
             <label className="flex items-center gap-1 text-xs text-muted-foreground">
               <span>{t('post.move_to')}</span>
               <input
