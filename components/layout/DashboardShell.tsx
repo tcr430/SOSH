@@ -10,6 +10,7 @@ import {
   BarChart2,
   Inbox,
   Settings,
+  Users,
   CreditCard,
   ChevronDown,
   LogOut,
@@ -24,19 +25,28 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useActiveBusiness } from '@/lib/contexts/business-context'
+import { useCan } from '@/lib/members/useCan'
+import { CAPABILITIES } from '@/lib/members/capabilities'
 import { logoutAction } from '@/app/[locale]/(dashboard)/actions'
 
+// ADR 0014 §6/§9.5 — capability-gated nav entries. `capability: null` means
+// visible to every member (echo only — the DB is the real boundary, L-3).
 export const ACTIVE_NAV = [
-  { key: 'campaigns', href: 'campaigns',         icon: Megaphone  },
-  { key: 'calendar',  href: 'calendar',           icon: CalendarDays },
-  { key: 'billing',   href: 'billing',            icon: CreditCard },
-  { key: 'settings',  href: 'settings/accounts', icon: Settings   },
+  { key: 'campaigns', href: 'campaigns',         icon: Megaphone,    capability: null },
+  { key: 'calendar',  href: 'calendar',           icon: CalendarDays, capability: null },
+  { key: 'billing',   href: 'billing',            icon: CreditCard,   capability: CAPABILITIES.MANAGE_BILLING },
+  { key: 'team',      href: 'settings/team',      icon: Users,        capability: CAPABILITIES.MANAGE_MEMBERS },
+  { key: 'settings',  href: 'settings/accounts', icon: Settings,     capability: null },
 ] as const
 
 export const COMING_SOON_NAV = [
   { key: 'inbox',     icon: Inbox        },
   { key: 'analytics', icon: BarChart2    },
 ] as const
+
+// The Approvals surface itself ships in 21C/C1 — this entry is gated
+// (approver + admin) and inert here, matching COMING_SOON_NAV's rendering.
+export const APPROVALS_NAV_CAPABILITY = CAPABILITIES.APPROVE
 
 const BANNER_KEY = 'sosh_connect_banner_dismissed'
 const TRIAL_BILLING_BANNER_KEY = 'sosh_trial_billing_banner_dismissed'
@@ -58,6 +68,18 @@ export function DashboardShell({
   const { activeBusiness, user } = useActiveBusiness()
   const [bannerDismissed, setBannerDismissed] = useState(true)
   const [trialBannerDismissed, setTrialBannerDismissed] = useState(true)
+
+  // ADR 0014 §6/§9.5 — capability-gate echo (UX only, DB is the boundary — L-3).
+  const canManageBilling = useCan(CAPABILITIES.MANAGE_BILLING)
+  const canManageMembers = useCan(CAPABILITIES.MANAGE_MEMBERS)
+  const canApprove = useCan(APPROVALS_NAV_CAPABILITY)
+  const capabilityGrants: Record<string, boolean> = {
+    [CAPABILITIES.MANAGE_BILLING]: canManageBilling,
+    [CAPABILITIES.MANAGE_MEMBERS]: canManageMembers,
+  }
+  const visibleNav = ACTIVE_NAV.filter(
+    item => item.capability === null || capabilityGrants[item.capability],
+  )
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -90,8 +112,8 @@ export function DashboardShell({
           <span className="text-lg font-semibold tracking-tight">SŌSH</span>
         </div>
 
-        {ACTIVE_NAV.map(({ key, href, icon: Icon }) => {
-          const isActive = pathname.includes(`/${key === 'settings' ? 'settings' : href}`)
+        {visibleNav.map(({ key, href, icon: Icon }) => {
+          const isActive = pathname.includes(`/${href}`)
           const showDot = key === 'settings' && !hasSocialAccounts
           return (
             <Link
@@ -127,6 +149,20 @@ export function DashboardShell({
             </span>
           </span>
         ))}
+
+        {/* Approvals ships gated but inert in 21B — activates in 21C/C1 (ADR 0014 §9.5) */}
+        {canApprove && (
+          <span
+            title={t('coming_soon')}
+            className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground opacity-50 cursor-not-allowed select-none"
+          >
+            <Inbox className="h-4 w-4 shrink-0" />
+            {t('approvals')}
+            <span className="ml-auto text-[10px] font-normal leading-none opacity-70">
+              {t('coming_soon')}
+            </span>
+          </span>
+        )}
       </aside>
 
       {/* Main area */}

@@ -7,6 +7,8 @@ import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
 import { listCampaigns } from '@/lib/db/campaigns'
 import { CampaignCard } from '@/components/campaigns/CampaignCard'
+import { canServer } from '@/lib/members/can-server'
+import { CAPABILITIES } from '@/lib/members/capabilities'
 
 type Props = {
   params: Promise<{ locale: string }>
@@ -27,6 +29,9 @@ export default async function CampaignsPage({ params }: Props) {
 
   const campaigns = await listCampaigns(client, business.id)
 
+  // ADR 0014 §6 — capability-gate echo (UX only, DB is the boundary — L-3).
+  const canAuthor = await canServer(client, business, user.id, CAPABILITIES.AUTHOR)
+
   if (campaigns.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
@@ -38,9 +43,11 @@ export default async function CampaignsPage({ params }: Props) {
               {t('empty.description')}
             </p>
           </div>
-          <Link href={`/${locale}/campaigns/new`} className={cn(buttonVariants())}>
-            {t('empty.cta')}
-          </Link>
+          {canAuthor && (
+            <Link href={`/${locale}/campaigns/new`} className={cn(buttonVariants())}>
+              {t('empty.cta')}
+            </Link>
+          )}
         </div>
       </div>
     )
@@ -50,12 +57,14 @@ export default async function CampaignsPage({ params }: Props) {
     <div className="max-w-3xl mx-auto py-8 px-4 sm:px-6">
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-2xl font-semibold tracking-tight">{t('title')}</h1>
-        <Link
-          href={`/${locale}/campaigns/new`}
-          className={cn(buttonVariants({ size: 'sm' }))}
-        >
-          {t('new_button')}
-        </Link>
+        {canAuthor && (
+          <Link
+            href={`/${locale}/campaigns/new`}
+            className={cn(buttonVariants({ size: 'sm' }))}
+          >
+            {t('new_button')}
+          </Link>
+        )}
       </div>
 
       <div className="space-y-4">

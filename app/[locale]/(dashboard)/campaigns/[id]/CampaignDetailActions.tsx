@@ -24,6 +24,8 @@ import {
   deleteCampaignAction,
 } from '@/app/[locale]/(dashboard)/campaigns/actions'
 import { GeneratePostsButton } from './GeneratePostsButton'
+import { useCan } from '@/lib/members/useCan'
+import { CAPABILITIES } from '@/lib/members/capabilities'
 import type { CampaignRow } from '@/lib/db/types'
 
 interface CampaignDetailActionsProps {
@@ -41,6 +43,9 @@ export function CampaignDetailActions({ campaign, locale, pollMaxSeconds, nextSc
   const [dangerOpen, setDangerOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
+
+  // ADR 0014 §6 — capability-gate echo (UX only, DB is the boundary — L-3).
+  const canAuthor = useCan(CAPABILITIES.AUTHOR)
 
   function handleResume() {
     setActionError(null)
@@ -87,7 +92,7 @@ export function CampaignDetailActions({ campaign, locale, pollMaxSeconds, nextSc
   return (
     <div className="space-y-4">
       {/* Generate Posts section (draft) or Posts summary (active/paused/completed) */}
-      {isDraft ? (
+      {isDraft && canAuthor ? (
         <section className="rounded-lg border border-border bg-card p-6">
           <h2 className="text-base font-semibold mb-1.5">{t('generate.title')}</h2>
           <p className="text-sm text-muted-foreground leading-relaxed mb-4">
@@ -139,7 +144,8 @@ export function CampaignDetailActions({ campaign, locale, pollMaxSeconds, nextSc
         </section>
       )}
 
-      {/* Danger zone */}
+      {/* Danger zone — author capability only (ADR 0014 §6) */}
+      {canAuthor && (
       <section className="rounded-lg border border-border">
         <button
           type="button"
@@ -219,6 +225,7 @@ export function CampaignDetailActions({ campaign, locale, pollMaxSeconds, nextSc
           </p>
         )}
       </section>
+      )}
     </div>
   )
 }

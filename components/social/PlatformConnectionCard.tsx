@@ -18,6 +18,8 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { PlatformIcon } from '@/components/social/PlatformIcon'
+import { useCan } from '@/lib/members/useCan'
+import { CAPABILITIES } from '@/lib/members/capabilities'
 import type { Platform } from '@/lib/db/types'
 import type { PlatformOAuthConfig } from '@/lib/social'
 import type { ConnectionStatus } from '@/lib/social'
@@ -53,6 +55,11 @@ export function PlatformConnectionCard({
   const t = useTranslations('settings.accounts')
   const [isDisconnecting, setIsDisconnecting] = useState(false)
   const [disconnectError, setDisconnectError] = useState<string | null>(null)
+
+  // ADR 0014 §6 — capability-gate echo (UX only, DB is the boundary — the
+  // authoritative check is the app-layer user_can gate in the connect/
+  // disconnect route handlers themselves, ADR 0014 §7).
+  const canConnect = useCan(CAPABILITIES.CONNECT_ACCOUNTS)
 
   const isActuallyConnected = account !== null && account.is_active
 
@@ -117,7 +124,7 @@ export function PlatformConnectionCard({
 
       {/* Action */}
       <div className="shrink-0 flex flex-col items-end gap-1.5">
-        {isActuallyConnected ? (
+        {!canConnect ? null : isActuallyConnected ? (
           <AlertDialog>
             <AlertDialogTrigger
               className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}

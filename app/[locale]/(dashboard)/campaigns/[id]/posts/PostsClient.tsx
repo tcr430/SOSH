@@ -9,6 +9,9 @@ import { es } from 'date-fns/locale/es'
 import type { Locale } from 'date-fns'
 import { PostCard } from '@/components/posts/PostCard'
 import { bulkApprovePostsAction } from '@/app/[locale]/(dashboard)/campaigns/[id]/posts/actions'
+import { useCan } from '@/lib/members/useCan'
+import { CAPABILITIES } from '@/lib/members/capabilities'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { PostRow, CampaignRow, Platform } from '@/lib/db/types'
 
 // ---------------------------------------------------------------------------
@@ -72,6 +75,10 @@ export function PostsClient({ posts, campaign, locale, initialFilter = 'all' }: 
   const t = useTranslations('posts')
   const [isPending, startTransition] = useTransition()
   const [activeFilter, setActiveFilter] = useState<FilterValue>(initialFilter)
+
+  // ADR 0014 §6 — capability-gate echo (UX only, DB is the boundary — L-3).
+  const canApprove = useCan(CAPABILITIES.APPROVE)
+  const canAuthor = useCan(CAPABILITIES.AUTHOR)
   const [localPosts, setLocalPosts] = useState<PostRow[]>(posts)
 
   function handleOptimisticUpdate(postId: string, patch: Partial<PostRow>) {
@@ -172,7 +179,7 @@ export function PostsClient({ posts, campaign, locale, initialFilter = 'all' }: 
             )}
           </div>
 
-          {draftCount > 0 && (
+          {draftCount > 0 && canApprove && (
             <button
               type="button"
               onClick={handleBulkApprove}
@@ -181,6 +188,20 @@ export function PostsClient({ posts, campaign, locale, initialFilter = 'all' }: 
             >
               ✓ {t('bulkApprove')}
             </button>
+          )}
+
+          {draftCount > 0 && !canApprove && canAuthor && (
+            <Tooltip>
+              <TooltipTrigger
+                aria-disabled="true"
+                aria-label={t('card.actions.approve_disabled_tooltip')}
+                onClick={e => e.preventDefault()}
+                className="inline-flex items-center rounded-md bg-emerald-700 text-white px-3 py-1.5 text-xs font-medium opacity-50 cursor-not-allowed"
+              >
+                ✓ {t('bulkApprove')}
+              </TooltipTrigger>
+              <TooltipContent>{t('card.actions.approve_disabled_tooltip')}</TooltipContent>
+            </Tooltip>
           )}
         </div>
       </div>

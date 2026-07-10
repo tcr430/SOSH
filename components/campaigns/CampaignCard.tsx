@@ -24,6 +24,8 @@ import {
   resumeCampaignAction,
   deleteCampaignAction,
 } from '@/app/[locale]/(dashboard)/campaigns/actions'
+import { useCan } from '@/lib/members/useCan'
+import { CAPABILITIES } from '@/lib/members/capabilities'
 import type { CampaignRow, CampaignStatus } from '@/lib/db/types'
 
 interface CampaignCardProps {
@@ -52,6 +54,9 @@ export function CampaignCard({ campaign, locale }: CampaignCardProps) {
   const [isPending, startTransition] = useTransition()
   const [errorKey, setErrorKey] = useState<string | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
+
+  // ADR 0014 §6 — capability-gate echo (UX only, DB is the boundary — L-3).
+  const canAuthor = useCan(CAPABILITIES.AUTHOR)
 
   function clearError() {
     setErrorKey(null)
@@ -134,7 +139,7 @@ export function CampaignCard({ campaign, locale }: CampaignCardProps) {
           {t('card.view')}
         </Link>
 
-        {campaign.status === 'active' && (
+        {campaign.status === 'active' && canAuthor && (
           <button
             type="button"
             disabled={isPending}
@@ -148,7 +153,7 @@ export function CampaignCard({ campaign, locale }: CampaignCardProps) {
           </button>
         )}
 
-        {campaign.status === 'paused' && (
+        {campaign.status === 'paused' && canAuthor && (
           <button
             type="button"
             disabled={isPending}
@@ -162,7 +167,7 @@ export function CampaignCard({ campaign, locale }: CampaignCardProps) {
           </button>
         )}
 
-        {(campaign.status === 'draft' || campaign.status === 'completed') && (
+        {(campaign.status === 'draft' || campaign.status === 'completed') && canAuthor && (
           <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
             <AlertDialogTrigger
               disabled={isPending}
