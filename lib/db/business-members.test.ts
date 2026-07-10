@@ -2,6 +2,7 @@ import { vi, describe, it, expect } from 'vitest'
 import { createMockClient } from './__test-utils__/mock-client'
 import {
   getMemberById,
+  getMemberForUser,
   listMembers,
   countSeatUsage,
   createInvite,
@@ -64,6 +65,29 @@ describe('getMemberById', () => {
   it('throws when data is null', async () => {
     const { client } = createMockClient(null, null)
     await expect(getMemberById(client, 'missing')).rejects.toThrow('Business member missing not found')
+  })
+})
+
+describe('getMemberForUser', () => {
+  it('returns the active member row for this business + user', async () => {
+    const { client, builder } = createMockClient(mockMember)
+    const result = await getMemberForUser(client, 'biz-1', 'user-1')
+    expect(result).toEqual(mockMember)
+    expect(client.from).toHaveBeenCalledWith('business_members')
+    expect(builder.eq).toHaveBeenCalledWith('business_id', 'biz-1')
+    expect(builder.eq).toHaveBeenCalledWith('user_id', 'user-1')
+    expect(builder.eq).toHaveBeenCalledWith('status', 'active')
+  })
+
+  it('returns null when no active membership row exists (e.g. owner fallback case)', async () => {
+    const { client } = createMockClient(null, null)
+    const result = await getMemberForUser(client, 'biz-1', 'user-1')
+    expect(result).toBeNull()
+  })
+
+  it('throws when supabase returns an error', async () => {
+    const { client } = createMockClient(null, { message: 'DB error' })
+    await expect(getMemberForUser(client, 'biz-1', 'user-1')).rejects.toThrow('DB error')
   })
 })
 
