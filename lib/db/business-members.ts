@@ -16,6 +16,26 @@ export async function getMemberById(
   return data as BusinessMemberRow
 }
 
+// Resolves the caller's own active membership row for a business (ADR 0014
+// §6 — the capability-gate echo). Returns null when the user has no active
+// membership row (e.g. the owner before/without a backfilled row — callers
+// fall back to owner semantics via resolveMemberContext).
+export async function getMemberForUser(
+  client: SupabaseClient,
+  businessId: string,
+  userId: string,
+): Promise<BusinessMemberRow | null> {
+  const { data, error } = await client
+    .from('business_members')
+    .select('*')
+    .eq('business_id', businessId)
+    .eq('user_id', userId)
+    .eq('status', 'active')
+    .maybeSingle()
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as BusinessMemberRow) ?? null
+}
+
 export async function listMembers(
   client: SupabaseClient,
   businessId: string,
