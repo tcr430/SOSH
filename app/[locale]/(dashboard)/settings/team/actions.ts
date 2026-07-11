@@ -14,6 +14,8 @@ import { checkInviteAllowed } from '@/lib/members/enforcement'
 import { signInviteToken } from '@/lib/members/invite-token'
 import { enqueueTeamInvite } from '@/lib/email/triggers/invite'
 import { workEmailSchema } from '@/lib/validation/email'
+import { canServer } from '@/lib/members/can-server'
+import { CAPABILITIES } from '@/lib/members/capabilities'
 import type { MemberRole } from '@/lib/db/types'
 import type { SupabaseClient, User } from '@supabase/supabase-js'
 import type { BusinessRow } from '@/lib/db/types'
@@ -96,6 +98,10 @@ export async function inviteMemberAction(
   const client = await createClient()
   const { user, business } = await requireBusiness(client)
 
+  if (!(await canServer(client, business, user.id, CAPABILITIES.MANAGE_MEMBERS))) {
+    return { error: 'errors.forbidden' }
+  }
+
   const { allowed, reason } = await checkInviteAllowed(client, business)
   if (!allowed) {
     return {
@@ -149,6 +155,12 @@ export async function changeMemberRoleAction(
   }
 
   const client = await createClient()
+  const { user, business } = await requireBusiness(client)
+
+  if (!(await canServer(client, business, user.id, CAPABILITIES.MANAGE_MEMBERS))) {
+    return { error: 'errors.forbidden' }
+  }
+
   try {
     await changeMemberRole(client, parsed.data.memberId, parsed.data.role, parsed.data.isAdmin)
   } catch {
@@ -169,6 +181,12 @@ export async function revokeMemberAction(
   if (!memberId) return { error: 'errors.invalid_member' }
 
   const client = await createClient()
+  const { user, business } = await requireBusiness(client)
+
+  if (!(await canServer(client, business, user.id, CAPABILITIES.MANAGE_MEMBERS))) {
+    return { error: 'errors.forbidden' }
+  }
+
   try {
     await revokeMember(client, memberId)
   } catch {
@@ -191,6 +209,10 @@ export async function resendInviteAction(
 
   const client = await createClient()
   const { user, business } = await requireBusiness(client)
+
+  if (!(await canServer(client, business, user.id, CAPABILITIES.MANAGE_MEMBERS))) {
+    return { error: 'errors.forbidden' }
+  }
 
   let member
   try {

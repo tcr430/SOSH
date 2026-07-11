@@ -59,6 +59,7 @@
     }
   },
   "errors": {
+    "forbidden": "Não tens permissão para gerir a equipa.",
     "invalid_member": "Esse membro não foi encontrado.",
     "invite_invalid": "Por favor verifica os detalhes do convite e tenta novamente.",
     "seat_cap_reached": "A tua equipa está completa. Faz upgrade para convidar mais membros.",

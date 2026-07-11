@@ -59,6 +59,7 @@
     }
   },
   "errors": {
+    "forbidden": "No tienes permiso para gestionar el equipo.",
     "invalid_member": "No se encontró ese miembro.",
     "invite_invalid": "Revisa los datos de la invitación e inténtalo de nuevo.",
     "seat_cap_reached": "Tu equipo está completo. Actualiza tu plan para invitar a más miembros.",

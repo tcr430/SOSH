@@ -3,7 +3,6 @@ import { createMockClient } from './__test-utils__/mock-client'
 import * as serviceModule from '@/lib/supabase/service'
 import {
   getBusinessById,
-  getBusinessByOwner,
   getBusinessForUser,
   createBusiness,
   updateBusiness,
@@ -59,26 +58,6 @@ describe('getBusinessById', () => {
   })
 })
 
-describe('getBusinessByOwner', () => {
-  it('returns a business when found', async () => {
-    const { client } = createMockClient(mockBusiness)
-    const result = await getBusinessByOwner(client, 'user-1')
-    expect(result).toEqual(mockBusiness)
-    expect(client.from).toHaveBeenCalledWith('businesses')
-  })
-
-  it('returns null when not found', async () => {
-    const { client } = createMockClient(null, null)
-    const result = await getBusinessByOwner(client, 'user-missing')
-    expect(result).toBeNull()
-  })
-
-  it('throws when supabase returns an error', async () => {
-    const { client } = createMockClient(null, { message: 'DB error' })
-    await expect(getBusinessByOwner(client, 'user-1')).rejects.toThrow('DB error')
-  })
-})
-
 describe('getBusinessForUser', () => {
   const owned: BusinessRow = { ...mockBusiness, id: 'biz-owned', owner_id: 'user-1', created_at: '2026-04-30T00:00:00Z' }
   const memberEarlier: BusinessRow = { ...mockBusiness, id: 'biz-member-earlier', owner_id: 'user-other', created_at: '2026-04-01T00:00:00Z' }
@@ -118,6 +97,12 @@ describe('getBusinessForUser', () => {
   it('throws when supabase returns an error', async () => {
     const { client } = createMockClient(null, { message: 'DB error' })
     await expect(getBusinessForUser(client, 'user-1')).rejects.toThrow('DB error')
+  })
+
+  it('m3: caps the query with .limit(50) (list-query convention, CLAUDE.md)', async () => {
+    const { client, builder } = createMockClient([owned])
+    await getBusinessForUser(client, 'user-1')
+    expect(builder.limit).toHaveBeenCalledWith(50)
   })
 })
 

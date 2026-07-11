@@ -1,3 +1,4 @@
+import { formatISO } from 'date-fns'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { BusinessMemberRow, MemberRole } from './types'
 import { getErrorMessage } from './utils'
@@ -137,7 +138,7 @@ export async function reissueInvite(
 ): Promise<BusinessMemberRow> {
   const { data, error } = await client
     .from('business_members')
-    .update({ invited_at: new Date().toISOString() })
+    .update({ invited_at: formatISO(new Date()) })
     .eq('id', memberId)
     .eq('status', 'invited')
     .select('*')

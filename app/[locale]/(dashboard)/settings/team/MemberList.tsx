@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from 'react'
 import { useTranslations } from 'next-intl'
+import { addDays, isAfter, parseISO } from 'date-fns'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -29,9 +30,8 @@ const initialState: ActionState = {}
 
 function isExpiredInvite(row: BusinessMemberRow): boolean {
   if (row.status !== 'invited') return false
-  const invitedAt = new Date(row.invited_at).getTime()
-  const expiresAt = invitedAt + INVITE_EXPIRY_DAYS * 24 * 60 * 60 * 1000
-  return Date.now() > expiresAt
+  const expiresAt = addDays(parseISO(row.invited_at), INVITE_EXPIRY_DAYS)
+  return isAfter(new Date(), expiresAt)
 }
 
 function StatusBadge({ status }: { status: BusinessMemberRow['status'] }) {

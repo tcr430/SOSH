@@ -59,6 +59,7 @@
     }
   },
   "errors": {
+    "forbidden": "You don't have permission to manage the team.",
     "invalid_member": "That member could not be found.",
     "invite_invalid": "Please check the invite details and try again.",
     "seat_cap_reached": "Your team is full. Upgrade to invite more members.",

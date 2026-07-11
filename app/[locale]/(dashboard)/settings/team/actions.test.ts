@@ -13,12 +13,14 @@ vi.mock('@/lib/db/business-members', () => ({
 vi.mock('@/lib/members/enforcement', () => ({ checkInviteAllowed: vi.fn() }))
 vi.mock('@/lib/members/invite-token', () => ({ signInviteToken: vi.fn().mockResolvedValue('signed-jwt') }))
 vi.mock('@/lib/email/triggers/invite', () => ({ enqueueTeamInvite: vi.fn().mockResolvedValue({ outcome: 'enqueued' }) }))
+vi.mock('@/lib/members/can-server', () => ({ canServer: vi.fn() }))
 
 import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
 import { createInvite, changeMemberRole, revokeMember, reissueInvite } from '@/lib/db/business-members'
 import { checkInviteAllowed } from '@/lib/members/enforcement'
 import { enqueueTeamInvite } from '@/lib/email/triggers/invite'
+import { canServer } from '@/lib/members/can-server'
 import {
   inviteMemberAction,
   changeMemberRoleAction,
@@ -53,6 +55,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mockAuthClient()
   vi.mocked(getBusinessForUser).mockResolvedValue(MOCK_BUSINESS as never)
+  vi.mocked(canServer).mockResolvedValue(true)
   vi.mocked(checkInviteAllowed).mockResolvedValue({
     allowed: true,
     seats: { used: 3, max: 10, remaining: 7, atCap: false, overage: 0 },
@@ -207,6 +210,55 @@ describe('resendInviteAction — INV-REISSUE-SAME-ROW (app-layer)', () => {
 
     const result = await resendInviteAction({}, fd)
     expect(result).toEqual({ error: 'errors.resend_failed' })
+    expect(enqueueTeamInvite).not.toHaveBeenCalled()
+  })
+})
+
+// m2 — app-layer capability echo (UX only, L-3: DB RLS/trigger remains the
+// real boundary regardless of this check's outcome).
+describe('team actions — capability echo (canServer, m2)', () => {
+  beforeEach(() => {
+    vi.mocked(canServer).mockResolvedValue(false)
+  })
+
+  it('inviteMemberAction denies with a typed error before checkInviteAllowed/createInvite', async () => {
+    const result = await inviteMemberAction({}, makeInviteFormData())
+
+    expect(result).toEqual({ error: 'errors.forbidden' })
+    expect(checkInviteAllowed).not.toHaveBeenCalled()
+    expect(createInvite).not.toHaveBeenCalled()
+  })
+
+  it('changeMemberRoleAction denies with a typed error before changeMemberRole', async () => {
+    const fd = new FormData()
+    fd.set('memberId', 'member-1')
+    fd.set('role', 'approver')
+    fd.set('isAdmin', 'false')
+
+    const result = await changeMemberRoleAction({}, fd)
+
+    expect(result).toEqual({ error: 'errors.forbidden' })
+    expect(changeMemberRole).not.toHaveBeenCalled()
+  })
+
+  it('revokeMemberAction denies with a typed error before revokeMember', async () => {
+    const fd = new FormData()
+    fd.set('memberId', 'member-1')
+
+    const result = await revokeMemberAction({}, fd)
+
+    expect(result).toEqual({ error: 'errors.forbidden' })
+    expect(revokeMember).not.toHaveBeenCalled()
+  })
+
+  it('resendInviteAction denies with a typed error before reissueInvite', async () => {
+    const fd = new FormData()
+    fd.set('memberId', 'member-1')
+
+    const result = await resendInviteAction({}, fd)
+
+    expect(result).toEqual({ error: 'errors.forbidden' })
+    expect(reissueInvite).not.toHaveBeenCalled()
     expect(enqueueTeamInvite).not.toHaveBeenCalled()
   })
 })

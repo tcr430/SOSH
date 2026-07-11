@@ -19,20 +19,6 @@ export async function getBusinessById(
   return data as BusinessRow
 }
 
-export async function getBusinessByOwner(
-  client: SupabaseClient,
-  ownerId: string,
-): Promise<BusinessRow | null> {
-  const { data, error } = await client
-    .from('businesses')
-    .select('*')
-    .eq('owner_id', ownerId)
-    .is('deleted_at', null)
-    .maybeSingle()
-  if (error) throw new Error(getErrorMessage(error))
-  return (data as BusinessRow | null) ?? null
-}
-
 export async function getBusinessForUser(
   client: SupabaseClient,
   userId: string,
@@ -44,6 +30,7 @@ export async function getBusinessForUser(
     .is('deleted_at', null)
     .order('created_at', { ascending: true })
     .order('id', { ascending: true })
+    .limit(50)
   if (error) throw new Error(getErrorMessage(error))
 
   const businesses = (data as BusinessRow[] | null) ?? []
