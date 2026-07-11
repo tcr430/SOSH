@@ -132,6 +132,7 @@ jobs:
           # its own *_INTEGRATION_TEST_ENABLED flag; setting all of them is how
           # this job opts the whole directory in (ADR 0013 §10 named constraints).
           ACCEPT_INVITE_INTEGRATION_TEST_ENABLED: 'true'
+          REISSUE_INVITE_INTEGRATION_TEST_ENABLED: 'true'
           BACKFILL_PURGE_INTEGRATION_TEST_ENABLED: 'true'
           MEMBERS_INTEGRATION_TEST_ENABLED: 'true'
           CAMPAIGNS_SOCIAL_ROLE_INTEGRATION_TEST_ENABLED: 'true'
