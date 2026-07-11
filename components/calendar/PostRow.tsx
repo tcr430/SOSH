@@ -187,7 +187,7 @@ export function PostRow({ post, tz }: PostRowProps) {
                 aria-disabled="true"
                 aria-label={t('post.approve_disabled_tooltip')}
                 onClick={e => e.preventDefault()}
-                className="rounded-md px-2.5 py-1.5 text-xs font-medium bg-primary text-primary-foreground opacity-50 cursor-not-allowed transition-colors"
+                className="rounded-md px-2.5 py-1.5 text-xs font-medium bg-muted text-muted-foreground cursor-not-allowed transition-colors"
               >
                 {t('post.approve')}
               </TooltipTrigger>

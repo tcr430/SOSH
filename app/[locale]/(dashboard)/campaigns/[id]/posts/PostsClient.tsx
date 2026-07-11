@@ -193,10 +193,11 @@ export function PostsClient({ posts, campaign, locale, initialFilter = 'all' }: 
           {draftCount > 0 && !canApprove && canAuthor && (
             <Tooltip>
               <TooltipTrigger
+                type="button"
                 aria-disabled="true"
                 aria-label={t('card.actions.approve_disabled_tooltip')}
                 onClick={e => e.preventDefault()}
-                className="inline-flex items-center rounded-md bg-emerald-700 text-white px-3 py-1.5 text-xs font-medium opacity-50 cursor-not-allowed"
+                className="inline-flex items-center rounded-md bg-muted text-muted-foreground px-3 py-1.5 text-xs font-medium cursor-not-allowed"
               >
                 ✓ {t('bulkApprove')}
               </TooltipTrigger>

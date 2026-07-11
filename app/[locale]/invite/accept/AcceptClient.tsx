@@ -68,7 +68,7 @@ export function AcceptClient({
             <p className="text-sm text-foreground">{t('invite.accept.already_member.heading')}</p>
             <Link
               href={`/${locale}/campaigns`}
-              className="inline-block text-sm font-medium underline underline-offset-4 hover:text-primary"
+              className="inline-block text-sm font-medium underline underline-offset-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm"
             >
               {t('invite.accept.already_member.cta')}
             </Link>
@@ -80,7 +80,7 @@ export function AcceptClient({
             <p className="text-sm text-muted-foreground">{t('invite.accept.invalid')}</p>
             <Link
               href={`/${locale}/login`}
-              className="inline-block text-sm font-medium underline underline-offset-4 hover:text-primary"
+              className="inline-block text-sm font-medium underline underline-offset-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm"
             >
               {t('invite.accept.go_to_login')}
             </Link>

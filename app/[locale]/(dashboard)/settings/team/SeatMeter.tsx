@@ -28,7 +28,7 @@ export async function SeatMeter({ seats }: { seats: SeatState }) {
         {view.ctaLabelKey && view.ctaHref && (
           <Link
             href={view.ctaHref}
-            className="shrink-0 text-sm font-medium underline underline-offset-4 hover:text-primary"
+            className="shrink-0 text-sm font-medium underline underline-offset-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm"
           >
             {t(view.ctaLabelKey as Parameters<typeof t>[0], { overage: seats.overage })}
           </Link>

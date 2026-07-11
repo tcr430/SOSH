@@ -44,7 +44,7 @@ export function InviteMemberForm({ disabled }: { disabled: boolean }) {
             name="role"
             defaultValue="viewer"
             disabled={disabled}
-            className="border rounded-md px-3 py-2 bg-background text-sm h-9"
+            className="h-9 rounded-md border border-input bg-background px-3 py-2 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
           >
             <option value="viewer">{t('roles.viewer')}</option>
             <option value="editor">{t('roles.editor')}</option>
@@ -53,7 +53,14 @@ export function InviteMemberForm({ disabled }: { disabled: boolean }) {
         </div>
 
         <div className="flex items-end gap-1.5 pb-2">
-          <input id="invite-is-admin" name="isAdmin" type="checkbox" value="true" disabled={disabled} />
+          <input
+            id="invite-is-admin"
+            name="isAdmin"
+            type="checkbox"
+            value="true"
+            disabled={disabled}
+            className="h-4 w-4 rounded border-input outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          />
           <Label htmlFor="invite-is-admin" className="text-sm font-normal">
             {t('invite_form.fields.is_admin')}
           </Label>

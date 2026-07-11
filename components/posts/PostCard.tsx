@@ -372,10 +372,11 @@ export function PostCard({ post, onOptimisticUpdate }: PostCardProps) {
               {!canApprove && canAuthor && (
                 <Tooltip>
                   <TooltipTrigger
+                    type="button"
                     aria-disabled="true"
                     aria-label={t('card.actions.approve_disabled_tooltip')}
                     onClick={e => e.preventDefault()}
-                    className="inline-flex items-center justify-center rounded-md px-3 py-1.5 text-xs font-medium bg-emerald-700 text-white opacity-50 cursor-not-allowed"
+                    className="inline-flex items-center justify-center rounded-md px-3 py-1.5 text-xs font-medium bg-muted text-muted-foreground cursor-not-allowed"
                   >
                     ✓ {t('card.actions.approve')}
                   </TooltipTrigger>

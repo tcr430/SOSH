@@ -63,7 +63,7 @@ function RoleChangeControl({
         name="role"
         defaultValue={member.role}
         onChange={(e) => setPendingRole(e.target.value as MemberRole)}
-        className="border rounded-md px-2 py-1 bg-background text-sm h-8"
+        className="h-8 rounded-md border border-input bg-background px-2 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
         aria-label={t('member_row.role_select_label', { email: member.email })}
       >
         <option value="viewer">{t('roles.viewer')}</option>
