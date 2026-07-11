@@ -1,0 +1,28 @@
+{
+  "title": "Aprovações",
+  "subtitle": "Resolva rascunhos pendentes rapidamente — aprove, ignore ou edite antes da publicação.",
+  "filters": {
+    "campaign": "Campanha",
+    "platform": "Plataforma",
+    "all": "Todos"
+  },
+  "bulk": {
+    "approveAll": "Aprovar tudo ({count})",
+    "announceApproved": "Aprovou {count} publicação(ões) em {campaign}."
+  },
+  "row": {
+    "approve": "Aprovar",
+    "skip": "Ignorar",
+    "edit": "Editar",
+    "cancel": "Cancelar",
+    "skipLabel": "Por que está ignorando esta publicação?",
+    "skipPlaceholder": "Motivo para ignorar",
+    "error": "Algo correu mal. Tente novamente.",
+    "announceApproved": "Publicação aprovada.",
+    "announceSkipped": "Publicação ignorada."
+  },
+  "empty": {
+    "title": "Nenhuma publicação a aguardar aprovação.",
+    "filtered": "Nenhuma publicação corresponde a estes filtros."
+  }
+}

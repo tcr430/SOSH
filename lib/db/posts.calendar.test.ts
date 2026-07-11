@@ -1,10 +1,12 @@
-import { vi, describe, it, expect } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { createMockClient } from './__test-utils__/mock-client'
 import {
   listPostsForCalendar,
   reschedulePost,
   reschedulePostsBatch,
+  listPendingDraftPosts,
   CALENDAR_POST_LIMIT,
+  APPROVALS_POST_LIMIT,
 } from './posts'
 import type { Platform, PostStatus } from './types'
 
@@ -207,6 +209,110 @@ describe('listPostsForCalendar', () => {
         rangeEndUtc: RANGE_END,
       }),
     ).rejects.toThrow('db error')
+  })
+})
+
+// ─── listPendingDraftPosts (ADR 0014 §9.2) ──────────────────────────────────
+
+describe('listPendingDraftPosts', () => {
+  it('filters by business_id and status=draft', async () => {
+    const { client, builder } = createMockClient([], null)
+
+    await listPendingDraftPosts(client, { businessId: BIZ })
+
+    expect(builder.eq).toHaveBeenCalledWith('business_id', BIZ)
+    expect(builder.eq).toHaveBeenCalledWith('status', 'draft')
+  })
+
+  it('applies soft-delete filter (deleted_at IS NULL)', async () => {
+    const { client, builder } = createMockClient([], null)
+
+    await listPendingDraftPosts(client, { businessId: BIZ })
+
+    expect(builder.is).toHaveBeenCalledWith('deleted_at', null)
+  })
+
+  it('orders by scheduled_at ascending (oldest pending first)', async () => {
+    const { client, builder } = createMockClient([], null)
+
+    await listPendingDraftPosts(client, { businessId: BIZ })
+
+    expect(builder.order).toHaveBeenCalledWith('scheduled_at', { ascending: true })
+  })
+
+  it('uses APPROVALS_POST_LIMIT as the default bound', async () => {
+    const { client, builder } = createMockClient([], null)
+
+    await listPendingDraftPosts(client, { businessId: BIZ })
+
+    expect(builder.limit).toHaveBeenCalledWith(APPROVALS_POST_LIMIT)
+  })
+
+  it('honors an explicit limit override', async () => {
+    const { client, builder } = createMockClient([], null)
+
+    await listPendingDraftPosts(client, { businessId: BIZ, limit: 10 })
+
+    expect(builder.limit).toHaveBeenCalledWith(10)
+  })
+
+  it('filters by campaign_id when provided (APV-FILTER)', async () => {
+    const { client, builder } = createMockClient([], null)
+
+    await listPendingDraftPosts(client, { businessId: BIZ, campaignId: CAMPAIGN_1 })
+
+    expect(builder.eq).toHaveBeenCalledWith('campaign_id', CAMPAIGN_1)
+  })
+
+  it('does not filter by campaign_id when omitted', async () => {
+    const { client, builder } = createMockClient([], null)
+
+    await listPendingDraftPosts(client, { businessId: BIZ })
+
+    expect(builder.eq).not.toHaveBeenCalledWith('campaign_id', expect.anything())
+  })
+
+  it('filters by platform when provided (APV-FILTER)', async () => {
+    const { client, builder } = createMockClient([], null)
+
+    await listPendingDraftPosts(client, { businessId: BIZ, platform: 'instagram' })
+
+    expect(builder.eq).toHaveBeenCalledWith('platform', 'instagram')
+  })
+
+  it('maps rows through the same shape the calendar uses', async () => {
+    const rawRow = makeRawRow(POST_1, '2026-06-10T10:00:00Z')
+    const { client } = createMockClient([rawRow], null)
+
+    const rows = await listPendingDraftPosts(client, { businessId: BIZ })
+
+    expect(rows[0]).toEqual({
+      id: POST_1,
+      campaign_id: CAMPAIGN_1,
+      campaign_name: 'Test Campaign',
+      platform: 'linkedin',
+      status: 'draft',
+      content: 'Test content',
+      hashtags: ['#test'],
+      scheduled_at: '2026-06-10T10:00:00Z',
+      published_at: null,
+      platform_post_id: null,
+      metrics: null,
+    })
+  })
+
+  it('returns empty array when none found', async () => {
+    const { client } = createMockClient(null, null)
+
+    const rows = await listPendingDraftPosts(client, { businessId: BIZ })
+
+    expect(rows).toEqual([])
+  })
+
+  it('throws on Supabase error', async () => {
+    const { client } = createMockClient(null, { message: 'db error' })
+
+    await expect(listPendingDraftPosts(client, { businessId: BIZ })).rejects.toThrow('db error')
   })
 })
 

@@ -88,6 +88,51 @@ export async function listPostsForCalendar(
   return { rows, overflow }
 }
 
+// ADR 0014 §9.2 — the Approvals inbox's pending-draft read. Reuses the exact
+// same mapping (mapCalendarRow) and status='draft' notion the calendar badge
+// uses for "Awaiting approval" — no new query surface that could diverge from
+// the calendar's definition of "pending" (C-2/§9.2).
+export const APPROVALS_POST_LIMIT = 200
+
+export async function listPendingDraftPosts(
+  client: SupabaseClient,
+  opts: {
+    businessId: string
+    campaignId?: string
+    platform?: Platform
+    limit?: number
+  },
+): Promise<CalendarPostRow[]> {
+  const effectiveLimit = opts.limit ?? APPROVALS_POST_LIMIT
+  let query = client
+    .from('posts')
+    .select(`
+      id,
+      campaign_id,
+      platform,
+      status,
+      content,
+      hashtags,
+      scheduled_at,
+      published_at,
+      platform_post_id,
+      campaigns!inner(name),
+      post_metrics(likes, comments, shares, saves, clicks, reach, impressions, last_synced_at)
+    `)
+    .eq('business_id', opts.businessId)
+    .eq('status', 'draft')
+    .is('deleted_at', null)
+  if (opts.campaignId) query = query.eq('campaign_id', opts.campaignId)
+  if (opts.platform) query = query.eq('platform', opts.platform)
+  const { data, error } = await query
+    .order('scheduled_at', { ascending: true })
+    .limit(effectiveLimit)
+  if (error) throw new Error(getErrorMessage(error))
+
+  const raw = (data ?? []) as RawCalendarRow[]
+  return raw.map(mapCalendarRow)
+}
+
 export async function reschedulePost(
   client: SupabaseClient,
   opts: {

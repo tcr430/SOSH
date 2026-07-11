@@ -1,0 +1,28 @@
+{
+  "title": "Aprobaciones",
+  "subtitle": "Resuelve los borradores pendientes rápido — aprueba, omite o edita antes de publicar.",
+  "filters": {
+    "campaign": "Campaña",
+    "platform": "Plataforma",
+    "all": "Todos"
+  },
+  "bulk": {
+    "approveAll": "Aprobar todo ({count})",
+    "announceApproved": "Aprobaste {count} publicación(es) en {campaign}."
+  },
+  "row": {
+    "approve": "Aprobar",
+    "skip": "Omitir",
+    "edit": "Editar",
+    "cancel": "Cancelar",
+    "skipLabel": "¿Por qué omites esta publicación?",
+    "skipPlaceholder": "Motivo para omitir",
+    "error": "Algo salió mal. Inténtalo de nuevo.",
+    "announceApproved": "Publicación aprobada.",
+    "announceSkipped": "Publicación omitida."
+  },
+  "empty": {
+    "title": "No hay publicaciones esperando aprobación.",
+    "filtered": "Ninguna publicación coincide con estos filtros."
+  }
+}

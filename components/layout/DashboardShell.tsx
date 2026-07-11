@@ -65,14 +65,17 @@ export function DashboardShell({
   const t = useTranslations('nav')
   const tDashboard = useTranslations('dashboard')
   const pathname = usePathname()
-  const { activeBusiness, user } = useActiveBusiness()
+  const { activeBusiness, user, member } = useActiveBusiness()
   const [bannerDismissed, setBannerDismissed] = useState(true)
   const [trialBannerDismissed, setTrialBannerDismissed] = useState(true)
 
   // ADR 0014 §6/§9.5 — capability-gate echo (UX only, DB is the boundary — L-3).
   const canManageBilling = useCan(CAPABILITIES.MANAGE_BILLING)
   const canManageMembers = useCan(CAPABILITIES.MANAGE_MEMBERS)
-  const canApprove = useCan(APPROVALS_NAV_CAPABILITY)
+  // §9.1: visible to approve-capable members (approver) AND admins — mirrors
+  // the approvals/page.tsx server guard exactly (not a plain APPROVE echo,
+  // which alone would exclude a non-approver admin).
+  const canApprove = useCan(APPROVALS_NAV_CAPABILITY) || member.isAdmin
   const capabilityGrants: Record<string, boolean> = {
     [CAPABILITIES.MANAGE_BILLING]: canManageBilling,
     [CAPABILITIES.MANAGE_MEMBERS]: canManageMembers,
@@ -150,18 +153,19 @@ export function DashboardShell({
           </span>
         ))}
 
-        {/* Approvals ships gated but inert in 21B — activates in 21C/C1 (ADR 0014 §9.5) */}
+        {/* Approvals — activated 21C/C1 (ADR 0014 §9.5); approver + admin only */}
         {canApprove && (
-          <span
-            title={t('coming_soon')}
-            className="flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground opacity-50 cursor-not-allowed select-none"
+          <Link
+            href={`/${locale}/approvals`}
+            className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+              pathname.includes('/approvals')
+                ? 'bg-accent text-accent-foreground'
+                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+            }`}
           >
             <Inbox className="h-4 w-4 shrink-0" />
             {t('approvals')}
-            <span className="ml-auto text-[10px] font-normal leading-none opacity-70">
-              {t('coming_soon')}
-            </span>
-          </span>
+          </Link>
         )}
       </aside>
 

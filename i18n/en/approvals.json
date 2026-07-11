@@ -1,0 +1,28 @@
+{
+  "title": "Approvals",
+  "subtitle": "Clear pending drafts fast — approve, skip, or edit before they publish.",
+  "filters": {
+    "campaign": "Campaign",
+    "platform": "Platform",
+    "all": "All"
+  },
+  "bulk": {
+    "approveAll": "Approve all ({count})",
+    "announceApproved": "Approved {count} post(s) in {campaign}."
+  },
+  "row": {
+    "approve": "Approve",
+    "skip": "Skip",
+    "edit": "Edit",
+    "cancel": "Cancel",
+    "skipLabel": "Why are you skipping this post?",
+    "skipPlaceholder": "Reason for skipping",
+    "error": "Something went wrong. Please try again.",
+    "announceApproved": "Post approved.",
+    "announceSkipped": "Post skipped."
+  },
+  "empty": {
+    "title": "No posts waiting for approval.",
+    "filtered": "No posts match these filters."
+  }
+}
