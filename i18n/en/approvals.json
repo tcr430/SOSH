@@ -8,7 +8,8 @@
   },
   "bulk": {
     "approveAll": "Approve all ({count})",
-    "announceApproved": "Approved {count} post(s) in {campaign}."
+    "announceApproved": "Approved {count} post(s) in {campaign}.",
+    "filterActiveHint": "Clear the platform filter to approve the whole campaign."
   },
   "row": {
     "approve": "Approve",

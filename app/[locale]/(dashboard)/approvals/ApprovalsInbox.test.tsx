@@ -7,7 +7,8 @@ import { act } from 'react'
 // ── Mocks (hoisted before imports) ────────────────────────────────────────────
 
 vi.mock('next-intl', () => ({
-  useTranslations: () => (key: string) => key,
+  useTranslations: () => (key: string, params?: Record<string, unknown>) =>
+    params ? `${key}:${JSON.stringify(params)}` : key,
 }))
 
 vi.mock('next/navigation', () => ({
@@ -204,6 +205,139 @@ describe('ApprovalsInbox — filters by campaign and channel (APV-FILTER)', () =
     const optionLabels = Array.from(campaignSelect.options).map(o => o.textContent)
     expect(optionLabels).toContain('Launch Campaign')
     expect(optionLabels).not.toContain('Unrelated Campaign')
+    cleanup()
+  })
+})
+
+// ── APV-BULK-RESPECTS-FILTER ────────────────────────────────────────────────
+
+describe('ApprovalsInbox — bulk approve respects the active platform filter (APV-BULK-RESPECTS-FILTER, M1)', () => {
+  it('disables the per-campaign bulk approve control while a platform filter is active, with an explanatory hint', () => {
+    const posts = [
+      makePost({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1', platform: 'linkedin' }),
+      makePost({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2', platform: 'twitter' }),
+    ]
+    const { container, cleanup } = renderInbox(posts)
+
+    const platformSelect = container.querySelectorAll('select')[1] as HTMLSelectElement
+    act(() => {
+      platformSelect.value = 'twitter'
+      platformSelect.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+
+    const disabledBulk = container.querySelector('[aria-label="bulk.filterActiveHint"]')
+    expect(disabledBulk).not.toBeNull()
+    expect(disabledBulk?.getAttribute('aria-disabled')).toBe('true')
+    cleanup()
+  })
+
+  it('clicking the disabled bulk control does not call bulkApprovePostsAction, and drafts outside the filter stay pending', () => {
+    const posts = [
+      makePost({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1', platform: 'linkedin' }),
+      makePost({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2', platform: 'twitter' }),
+    ]
+    const { container, cleanup } = renderInbox(posts)
+
+    const platformSelect = container.querySelectorAll('select')[1] as HTMLSelectElement
+    act(() => {
+      platformSelect.value = 'twitter'
+      platformSelect.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+
+    bulkApprovePostsAction.mockClear()
+    const disabledBulk = container.querySelector('[aria-label="bulk.filterActiveHint"]') as HTMLElement
+    act(() => { disabledBulk?.click() })
+
+    expect(bulkApprovePostsAction).not.toHaveBeenCalled()
+    cleanup()
+  })
+
+  it('leaves the bulk approve control enabled when the platform filter is cleared', () => {
+    const post = makePost()
+    const { container, cleanup } = renderInbox([post])
+
+    const bulkButton = buttonWithText(container, 'bulk.approveAll')
+    expect(bulkButton).not.toBeUndefined()
+    expect(bulkButton?.hasAttribute('disabled')).toBe(false)
+    cleanup()
+  })
+
+  it('single-row Approve stays available under an active platform filter', () => {
+    const posts = [
+      makePost({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1', platform: 'linkedin' }),
+      makePost({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2', platform: 'twitter' }),
+    ]
+    const { container, cleanup } = renderInbox(posts)
+
+    const platformSelect = container.querySelectorAll('select')[1] as HTMLSelectElement
+    act(() => {
+      platformSelect.value = 'twitter'
+      platformSelect.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+
+    const approve = buttonWithText(container, 'row.approve')
+    expect(approve).not.toBeUndefined()
+    expect(approve?.hasAttribute('disabled')).toBe(false)
+    cleanup()
+  })
+})
+
+// ── APV-BULK-COUNT-CONSISTENT ────────────────────────────────────────────────
+
+describe('ApprovalsInbox — bulk approve count consistency (APV-BULK-COUNT-CONSISTENT, M1)', () => {
+  it('the button label, rows removed, and announced count are all the same number', async () => {
+    const otherCampaign: CampaignRow = {
+      ...CAMPAIGN,
+      id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      name: 'Other Campaign',
+    }
+    const posts = [
+      makePost({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1', platform: 'linkedin' }),
+      makePost({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2', platform: 'linkedin' }),
+      makePost({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3', platform: 'linkedin' }),
+      // A post in a different campaign, so items stays non-empty after the
+      // bulk approve — otherwise the component's empty-state early-return
+      // (APV-EMPTY-STATE) would remove the live region this test asserts on.
+      makePost({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4', platform: 'linkedin', campaign_id: otherCampaign.id }),
+    ]
+    const { container, cleanup } = renderInbox(posts, [CAMPAIGN, otherCampaign])
+
+    const bulkButton = buttonWithText(container, 'bulk.approveAll')
+    expect(bulkButton?.textContent).toContain('"count":3')
+
+    await act(async () => { bulkButton?.click() })
+
+    expect(bulkApprovePostsAction).toHaveBeenCalledWith(posts[0].campaign_id)
+
+    // All three rows from the approved campaign are gone; only the unrelated
+    // campaign's row remains — row-removal matches the label count exactly.
+    expect(container.querySelectorAll('li').length).toBe(1)
+    // The live-region announcement carries the SAME count as the label ("3"),
+    // not a recomputed/unfiltered figure.
+    const liveRegion = container.querySelector('[aria-live="polite"]')
+    expect(liveRegion?.textContent).toContain('bulk.announceApproved')
+    expect(liveRegion?.textContent).toContain('"count":3')
+    cleanup()
+  })
+})
+
+// ── B1: atomic-batch guarantee stays intact ──────────────────────────────────
+
+describe('ApprovalsInbox — bulk approve remains a single atomic action (B1)', () => {
+  it('calls bulkApprovePostsAction exactly once per bulk click, not once per row', async () => {
+    const posts = [
+      makePost({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1', platform: 'linkedin' }),
+      makePost({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2', platform: 'linkedin' }),
+    ]
+    const { container, cleanup } = renderInbox(posts)
+
+    bulkApprovePostsAction.mockClear()
+    approvePostAction.mockClear()
+    const bulkButton = buttonWithText(container, 'bulk.approveAll')
+    await act(async () => { bulkButton?.click() })
+
+    expect(bulkApprovePostsAction).toHaveBeenCalledTimes(1)
+    expect(approvePostAction).not.toHaveBeenCalled()
     cleanup()
   })
 })

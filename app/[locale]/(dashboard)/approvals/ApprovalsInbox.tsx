@@ -13,6 +13,7 @@ import { useTranslations } from 'next-intl'
 import { format } from 'date-fns'
 import { CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   approvePostAction,
   bulkApprovePostsAction,
@@ -103,13 +104,12 @@ export function ApprovalsInbox({ posts, campaigns }: ApprovalsInboxProps) {
     })
   }
 
-  function handleBulkApprove(campaignId: string) {
+  function handleBulkApprove(campaignId: string, count: number) {
     setErrorKey(null)
     startTransition(async () => {
       const result = await bulkApprovePostsAction(campaignId)
       if (result.success) {
         const campaignName = campaigns.find(c => c.id === campaignId)?.name ?? ''
-        const count = items.filter(p => p.campaign_id === campaignId).length
         setItems(prev => prev.filter(p => p.campaign_id !== campaignId))
         setStatusMessage(t('bulk.announceApproved', { count, campaign: campaignName }))
       } else {
@@ -183,14 +183,29 @@ export function ApprovalsInbox({ posts, campaigns }: ApprovalsInboxProps) {
             {/* Bulk bar — APV-SINGLE-AND-BATCH, wires the EXISTING bulkApprovePostsAction */}
             <div className="flex items-center justify-between gap-3 rounded-md bg-muted/40 px-4 py-2.5">
               <span className="text-sm font-medium">{campaign?.name ?? ''}</span>
-              <Button
-                size="sm"
-                disabled={isPending}
-                onClick={() => handleBulkApprove(campaignId)}
-                className="bg-emerald-700 hover:bg-emerald-600 text-white"
-              >
-                {t('bulk.approveAll', { count: rows.length })}
-              </Button>
+              {platformFilter === 'all' ? (
+                <Button
+                  size="sm"
+                  disabled={isPending}
+                  onClick={() => handleBulkApprove(campaignId, rows.length)}
+                  className="bg-emerald-700 hover:bg-emerald-600 text-white"
+                >
+                  {t('bulk.approveAll', { count: rows.length })}
+                </Button>
+              ) : (
+                <Tooltip>
+                  <TooltipTrigger
+                    type="button"
+                    aria-disabled="true"
+                    aria-label={t('bulk.filterActiveHint')}
+                    onClick={e => e.preventDefault()}
+                    className="inline-flex items-center justify-center rounded-md px-3 py-1.5 text-xs font-medium bg-muted text-muted-foreground cursor-not-allowed"
+                  >
+                    {t('bulk.approveAll', { count: rows.length })}
+                  </TooltipTrigger>
+                  <TooltipContent>{t('bulk.filterActiveHint')}</TooltipContent>
+                </Tooltip>
+              )}
             </div>
             {errorKey === campaignId && (
               <p role="alert" className="text-xs text-destructive">
