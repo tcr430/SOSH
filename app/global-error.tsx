@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import * as Sentry from '@sentry/nextjs'
 
 const GLOBAL_ERROR_COPY = {
@@ -48,6 +49,7 @@ export default function GlobalError({
 
   useEffect(() => {
     const id = Sentry.captureException(error)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setEventId(id)
   }, [error])
 
@@ -157,7 +159,7 @@ export default function GlobalError({
       </head>
       <body>
         <div className="wrap">
-          <a href="/" className="brand">SŌSH</a>
+          <Link href="/" className="brand">SŌSH</Link>
           <div>
             <h1>{copy.title}</h1>
           </div>
@@ -166,9 +168,9 @@ export default function GlobalError({
             <button type="button" className="btn-primary" onClick={reset}>
               {copy.retry}
             </button>
-            <a href={`/${locale}`} className="btn-secondary">
+            <Link href={`/${locale}`} className="btn-secondary">
               {copy.home}
-            </a>
+            </Link>
           </div>
           {eventId && (
             <span className="ref">

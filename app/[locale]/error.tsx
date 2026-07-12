@@ -20,6 +20,7 @@ export default function LocaleError({
 
   useEffect(() => {
     const id = Sentry.captureException(error)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setEventId(id)
   }, [error])
 

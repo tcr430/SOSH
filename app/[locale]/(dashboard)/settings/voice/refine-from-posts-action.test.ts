@@ -89,7 +89,7 @@ describe('refineFromPostsAction', () => {
     vi.mocked(listRecentPublishedPostTexts).mockResolvedValue(MOCK_POSTS)
     vi.mocked(buildCustomerContext).mockResolvedValue(MOCK_CTX as never)
     vi.mocked(runPrompt).mockResolvedValue(MOCK_RESULT)
-    vi.mocked(upsertBrandVoice).mockResolvedValue(undefined)
+    vi.mocked(upsertBrandVoice).mockResolvedValue(undefined as never)
   })
 
   it('returns no_connected_accounts when no active social accounts exist', async () => {

@@ -1,0 +1,28 @@
+name: App tests (tsc + eslint + vitest)
+
+# Tier-2 (ADR 0015 §2). Runs on EVERY push and PR. MUST NOT start the Supabase stack and MUST NOT depend on
+# db-tests — the whole point (L-3 / D-2) is that DB flakiness never masks the app-layer signal.
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  app-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'          # matches db-tests.yml (Node 24 / npm 11) + package-lock resolution
+          cache: 'npm'
+      - name: Install dependencies
+        run: |
+          npm install -g npm@11
+          npm ci
+      - name: Typecheck
+        run: npm run typecheck        # tsc --noEmit --skipLibCheck
+      - name: Lint
+        run: npm run lint             # eslint (existing package.json script)
+      - name: App-layer test suite
+        run: npm run test:app         # vitest run, include-scoped to SOSH (vitest.config.ts)
