@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
 import { getMemberForUser } from '@/lib/db/business-members'
 import { listCampaigns } from '@/lib/db/campaigns'
-import { listPendingDraftPosts } from '@/lib/db/posts'
+import { listPendingDraftPosts, countPendingDraftPosts } from '@/lib/db/posts'
 import { hasCapability, resolveMemberContext, CAPABILITIES } from '@/lib/members/capabilities'
 import { ApprovalsInbox } from './ApprovalsInbox'
 
@@ -36,9 +36,10 @@ export default async function ApprovalsPage({
   const canSeeApprovals = hasCapability(member, CAPABILITIES.APPROVE) || member.isAdmin
   if (!canSeeApprovals) redirect(`/${locale}/campaigns`)
 
-  const [posts, campaigns] = await Promise.all([
+  const [posts, campaigns, totalPendingCount] = await Promise.all([
     listPendingDraftPosts(client, { businessId: business.id }),
     listCampaigns(client, business.id),
+    countPendingDraftPosts(client, business.id),
   ])
 
   return (
@@ -48,7 +49,7 @@ export default async function ApprovalsPage({
         <p className="mt-1 text-sm text-muted-foreground">{t('subtitle')}</p>
       </div>
 
-      <ApprovalsInbox posts={posts} campaigns={campaigns} />
+      <ApprovalsInbox posts={posts} campaigns={campaigns} totalPendingCount={totalPendingCount} />
     </div>
   )
 }

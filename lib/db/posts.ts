@@ -133,6 +133,23 @@ export async function listPendingDraftPosts(
   return raw.map(mapCalendarRow)
 }
 
+// True pending-draft total, unbounded by APPROVALS_POST_LIMIT — lets the
+// Approvals inbox tell the approver when drafts are hidden past the cap
+// instead of silently truncating (ADR 0014 §9.4 overflow signal).
+export async function countPendingDraftPosts(
+  client: SupabaseClient,
+  businessId: string,
+): Promise<number> {
+  const { count, error } = await client
+    .from('posts')
+    .select('id', { count: 'exact', head: true })
+    .eq('business_id', businessId)
+    .eq('status', 'draft')
+    .is('deleted_at', null)
+  if (error) throw new Error(getErrorMessage(error))
+  return count ?? 0
+}
+
 export async function reschedulePost(
   client: SupabaseClient,
   opts: {

@@ -25,5 +25,8 @@
   "empty": {
     "title": "No posts waiting for approval.",
     "filtered": "No posts match these filters."
+  },
+  "overflow": {
+    "notice": "Showing the first {shown} of {total} pending drafts."
   }
 }

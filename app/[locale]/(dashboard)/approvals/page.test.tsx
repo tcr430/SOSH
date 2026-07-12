@@ -11,13 +11,17 @@ vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }))
 vi.mock('@/lib/db/businesses', () => ({ getBusinessForUser: vi.fn() }))
 vi.mock('@/lib/db/business-members', () => ({ getMemberForUser: vi.fn() }))
 vi.mock('@/lib/db/campaigns', () => ({ listCampaigns: vi.fn().mockResolvedValue([]) }))
-vi.mock('@/lib/db/posts', () => ({ listPendingDraftPosts: vi.fn().mockResolvedValue([]) }))
-vi.mock('./ApprovalsInbox', () => ({ ApprovalsInbox: () => null }))
+vi.mock('@/lib/db/posts', () => ({
+  listPendingDraftPosts: vi.fn().mockResolvedValue([]),
+  countPendingDraftPosts: vi.fn().mockResolvedValue(0),
+}))
+vi.mock('./ApprovalsInbox', () => ({ ApprovalsInbox: vi.fn(() => null) }))
 
 import * as serverModule from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
 import { getMemberForUser } from '@/lib/db/business-members'
-import { listPendingDraftPosts } from '@/lib/db/posts'
+import { listPendingDraftPosts, countPendingDraftPosts } from '@/lib/db/posts'
+import { ApprovalsInbox } from './ApprovalsInbox'
 import ApprovalsPage from './page'
 
 const OWNER_ID = 'owner-1'
@@ -114,5 +118,22 @@ describe('ApprovalsPage — ROLE-APPROVALS-GATED (ADR 0014 §9.1)', () => {
     await ApprovalsPage({ params: Promise.resolve({ locale: 'en' }) })
 
     expect(listPendingDraftPosts).toHaveBeenCalledWith(expect.anything(), { businessId: BUSINESS.id })
+  })
+
+  it('APV-OVERFLOW (m1): reads the true pending total and passes it to ApprovalsInbox', async () => {
+    mockClient(OWNER_ID)
+    vi.mocked(getBusinessForUser).mockResolvedValue(BUSINESS as never)
+    vi.mocked(countPendingDraftPosts).mockResolvedValue(341)
+
+    const result = await ApprovalsPage({ params: Promise.resolve({ locale: 'en' }) })
+
+    expect(countPendingDraftPosts).toHaveBeenCalledWith(expect.anything(), BUSINESS.id)
+    // ApprovalsPage is a Server Component — it returns a React element tree
+    // without rendering it, so the mock is never invoked. Read the props off
+    // the un-rendered <ApprovalsInbox> element instead.
+    type ReactElementLike = { type: unknown; props: { totalPendingCount?: number } }
+    const outer = result as unknown as { props: { children: ReactElementLike[] } }
+    const inboxElement = outer.props.children.find(child => child.type === ApprovalsInbox)
+    expect(inboxElement?.props.totalPendingCount).toBe(341)
   })
 })

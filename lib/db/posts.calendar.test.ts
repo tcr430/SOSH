@@ -1,14 +1,31 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { createMockClient } from './__test-utils__/mock-client'
 import {
   listPostsForCalendar,
   reschedulePost,
   reschedulePostsBatch,
   listPendingDraftPosts,
+  countPendingDraftPosts,
   CALENDAR_POST_LIMIT,
   APPROVALS_POST_LIMIT,
 } from './posts'
 import type { Platform, PostStatus } from './types'
+import type { SupabaseClient } from '@supabase/supabase-js'
+
+// Mirrors lib/db/ai-usage.test.ts's makeCountClient — countPendingDraftPosts
+// issues a head:true count query, which returns { count, error } rather than
+// { data, error }; createMockClient's thenable only carries `data`.
+function makeCountClient(count: number | null, error: { message: string } | null = null) {
+  const result = { count, error }
+  const builder: Record<string, unknown> = {
+    then: (res: (v: unknown) => unknown) => Promise.resolve(result).then(res),
+  }
+  for (const m of ['select', 'eq', 'is']) {
+    builder[m] = vi.fn().mockReturnValue(builder)
+  }
+  const client = { from: vi.fn().mockReturnValue(builder) }
+  return { client: client as unknown as SupabaseClient, builder }
+}
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -313,6 +330,40 @@ describe('listPendingDraftPosts', () => {
     const { client } = createMockClient(null, { message: 'db error' })
 
     await expect(listPendingDraftPosts(client, { businessId: BIZ })).rejects.toThrow('db error')
+  })
+})
+
+// ─── countPendingDraftPosts (m1, ADR 0014 §9.4 overflow signal) ────────────
+
+describe('countPendingDraftPosts', () => {
+  it('filters by business_id, status=draft, and soft-delete', async () => {
+    const { client, builder } = makeCountClient(0)
+
+    await countPendingDraftPosts(client, BIZ)
+
+    expect(builder.eq).toHaveBeenCalledWith('business_id', BIZ)
+    expect(builder.eq).toHaveBeenCalledWith('status', 'draft')
+    expect(builder.is).toHaveBeenCalledWith('deleted_at', null)
+  })
+
+  it('returns the true total, unbounded by APPROVALS_POST_LIMIT', async () => {
+    const { client } = makeCountClient(341)
+
+    const total = await countPendingDraftPosts(client, BIZ)
+
+    expect(total).toBe(341)
+  })
+
+  it('defaults a null count to 0', async () => {
+    const { client } = makeCountClient(null)
+
+    expect(await countPendingDraftPosts(client, BIZ)).toBe(0)
+  })
+
+  it('throws on Supabase error', async () => {
+    const { client } = makeCountClient(null, { message: 'db error' })
+
+    await expect(countPendingDraftPosts(client, BIZ)).rejects.toThrow('db error')
   })
 })
 

@@ -25,5 +25,8 @@
   "empty": {
     "title": "No hay publicaciones esperando aprobación.",
     "filtered": "Ninguna publicación coincide con estos filtros."
+  },
+  "overflow": {
+    "notice": "Mostrando las primeras {shown} de {total} publicaciones pendientes."
   }
 }

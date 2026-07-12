@@ -75,12 +75,16 @@ const CAMPAIGN: CampaignRow = {
   updated_at: '2026-07-01T00:00:00Z',
 }
 
-function renderInbox(posts: CalendarPostRow[], campaigns: CampaignRow[] = [CAMPAIGN]) {
+function renderInbox(
+  posts: CalendarPostRow[],
+  campaigns: CampaignRow[] = [CAMPAIGN],
+  totalPendingCount: number = posts.length,
+) {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
   act(() => {
-    root.render(React.createElement(ApprovalsInbox, { posts, campaigns }))
+    root.render(React.createElement(ApprovalsInbox, { posts, campaigns, totalPendingCount }))
   })
   return {
     container,
@@ -338,6 +342,119 @@ describe('ApprovalsInbox — bulk approve remains a single atomic action (B1)', 
 
     expect(bulkApprovePostsAction).toHaveBeenCalledTimes(1)
     expect(approvePostAction).not.toHaveBeenCalled()
+    cleanup()
+  })
+})
+
+// ── APV-OVERFLOW (m1, ADR 0014 §9.4) ────────────────────────────────────────
+
+describe('ApprovalsInbox — overflow notice when the pending total exceeds the fetched cap (m1)', () => {
+  it('shows no overflow notice when the total equals the fetched count', () => {
+    const post = makePost()
+    const { container, cleanup } = renderInbox([post], [CAMPAIGN], 1)
+
+    expect(container.textContent).not.toContain('overflow.notice')
+    cleanup()
+  })
+
+  it('shows the true total when the pending count exceeds the fetched cap', () => {
+    const post = makePost()
+    const { container, cleanup } = renderInbox([post], [CAMPAIGN], 341)
+
+    expect(container.textContent).toContain('overflow.notice')
+    expect(container.textContent).toContain('"shown":1')
+    expect(container.textContent).toContain('"total":341')
+    cleanup()
+  })
+
+  it('still surfaces the overflow notice in the empty state, so approving the visible cap does not read as "done"', async () => {
+    const post = makePost()
+    const { container, cleanup } = renderInbox([post], [CAMPAIGN], 341)
+
+    await act(async () => { buttonWithText(container, 'row.approve')?.click() })
+
+    expect(container.textContent).toContain('empty.title')
+    expect(container.textContent).toContain('overflow.notice')
+    cleanup()
+  })
+})
+
+// ── m2: Skip label meets the WCAG AA contrast floor (4.5:1) in both themes ──
+
+describe('ApprovalsInbox — Skip label contrast (m2, WCAG AA)', () => {
+  // Standard WCAG relative-luminance / contrast-ratio math, computed directly
+  // from this app's actual CSS custom properties (app/globals.css --card) and
+  // Tailwind's amber-700/amber-300 hex values — not eyeballed.
+  function srgbChannelToLinear(c: number): number {
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+  }
+
+  function relativeLuminanceFromLinearRgb(r: number, g: number, b: number): number {
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+  }
+
+  function hexToRelativeLuminance(hex: string): number {
+    const n = parseInt(hex.replace('#', ''), 16)
+    const r = srgbChannelToLinear(((n >> 16) & 255) / 255)
+    const g = srgbChannelToLinear(((n >> 8) & 255) / 255)
+    const b = srgbChannelToLinear((n & 255) / 255)
+    return relativeLuminanceFromLinearRgb(r, g, b)
+  }
+
+  // oklch(L C H) -> linear sRGB -> relative luminance, per the Oklab reference
+  // formulas (Björn Ottosson). Used to derive --card's actual luminance in
+  // each theme (app/globals.css: light `--card: oklch(0.985 0.002 75)`,
+  // dark `.dark --card: oklch(0.205 0.004 75)`).
+  function oklchToRelativeLuminance(L: number, C: number, hueDeg: number): number {
+    const hueRad = (hueDeg * Math.PI) / 180
+    const a = C * Math.cos(hueRad)
+    const b = C * Math.sin(hueRad)
+
+    const l_ = L + 0.3963377774 * a + 0.2158037573 * b
+    const m_ = L - 0.1055613458 * a - 0.0638541728 * b
+    const s_ = L - 0.0894841775 * a - 1.2914855480 * b
+
+    const l = l_ ** 3
+    const m = m_ ** 3
+    const s = s_ ** 3
+
+    const r = 4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s
+    const g = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s
+    const bLin = -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s
+
+    // oklch conversion yields linear sRGB directly (WCAG's luminance formula
+    // wants linear values) — just clamp to a valid channel range.
+    const clamp = (v: number) => Math.min(1, Math.max(0, v))
+    return relativeLuminanceFromLinearRgb(clamp(r), clamp(g), clamp(bLin))
+  }
+
+  function contrastRatio(l1: number, l2: number): number {
+    const lighter = Math.max(l1, l2)
+    const darker = Math.min(l1, l2)
+    return (lighter + 0.05) / (darker + 0.05)
+  }
+
+  const LIGHT_CARD_LUMINANCE = oklchToRelativeLuminance(0.985, 0.002, 75)
+  const DARK_CARD_LUMINANCE = oklchToRelativeLuminance(0.205, 0.004, 75)
+  const AMBER_700_LUMINANCE = hexToRelativeLuminance('#b45309')
+  const AMBER_300_LUMINANCE = hexToRelativeLuminance('#fcd34d')
+
+  it('text-amber-700 on the light-theme card meets the 4.5:1 AA floor', () => {
+    expect(contrastRatio(AMBER_700_LUMINANCE, LIGHT_CARD_LUMINANCE)).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it('dark:text-amber-300 on the dark-theme card meets the 4.5:1 AA floor', () => {
+    expect(contrastRatio(AMBER_300_LUMINANCE, DARK_CARD_LUMINANCE)).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it('the Skip button no longer uses the failing amber-400 base color', () => {
+    const post = makePost()
+    const { container, cleanup } = renderInbox([post])
+
+    const skip = buttonWithText(container, 'row.skip')
+    expect(skip?.className).not.toContain('text-amber-400')
+    expect(skip?.className).toContain('text-amber-700')
+    expect(skip?.className).toContain('dark:text-amber-300')
     cleanup()
   })
 })

@@ -33,12 +33,21 @@ const PLATFORM_LABELS: Record<Platform, string> = {
 interface ApprovalsInboxProps {
   posts: CalendarPostRow[]
   campaigns: CampaignRow[]
+  // True pending-draft total (unbounded by APPROVALS_POST_LIMIT) — lets the
+  // overflow notice tell the approver when drafts are hidden past the cap
+  // (m1, ADR 0014 §9.4). Real pagination is deferred; this is the honesty
+  // signal only.
+  totalPendingCount: number
 }
 
-export function ApprovalsInbox({ posts, campaigns }: ApprovalsInboxProps) {
+export function ApprovalsInbox({ posts, campaigns, totalPendingCount }: ApprovalsInboxProps) {
   const t = useTranslations('approvals')
   const params = useParams<{ locale: string }>()
   const locale = params.locale
+
+  // Fixed at the initial fetch — `items` shrinks as posts are approved/skipped,
+  // but that doesn't change how many drafts exist beyond the cap.
+  const hasOverflow = totalPendingCount > posts.length
 
   const [items, setItems] = useState(posts)
   const [campaignFilter, setCampaignFilter] = useState('all')
@@ -118,12 +127,19 @@ export function ApprovalsInbox({ posts, campaigns }: ApprovalsInboxProps) {
     })
   }
 
-  // APV-EMPTY-STATE — positive, finished feeling, not an error.
+  // APV-EMPTY-STATE — positive, finished feeling, not an error. Still surfaces
+  // the overflow notice: approving all visible drafts must not read as "done"
+  // when more exist past the cap (m1).
   if (items.length === 0) {
     return (
       <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border bg-card p-10 text-center">
         <CheckCircle2 className="size-8 text-emerald-600" aria-hidden="true" />
         <p className="text-sm font-medium text-foreground">{t('empty.title')}</p>
+        {hasOverflow && (
+          <p className="text-xs text-muted-foreground">
+            {t('overflow.notice', { shown: posts.length, total: totalPendingCount })}
+          </p>
+        )}
       </div>
     )
   }
@@ -135,6 +151,14 @@ export function ApprovalsInbox({ posts, campaigns }: ApprovalsInboxProps) {
       <div aria-live="polite" className="sr-only">
         {statusMessage}
       </div>
+
+      {/* Overflow notice (m1) — quiet, factual, not an alarm. Only rendered
+          when the true pending total exceeds the fetched (APPROVALS_POST_LIMIT) list. */}
+      {hasOverflow && (
+        <p className="text-xs text-muted-foreground">
+          {t('overflow.notice', { shown: posts.length, total: totalPendingCount })}
+        </p>
+      )}
 
       {/* Filters — APV-FILTER */}
       <div className="flex flex-wrap items-center gap-3">
@@ -282,7 +306,7 @@ function DraftRow({
               variant="ghost"
               disabled={isPending}
               onClick={() => setIsSkipOpen(true)}
-              className="text-amber-400 hover:bg-amber-950/30 hover:text-amber-300"
+              className="text-amber-700 hover:bg-amber-100 hover:text-amber-800 dark:text-amber-300 dark:hover:bg-amber-950/30 dark:hover:text-amber-200"
             >
               <span aria-hidden="true">✗</span> {t('row.skip')}
             </Button>

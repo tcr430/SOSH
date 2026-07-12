@@ -44,8 +44,9 @@ export const COMING_SOON_NAV = [
   { key: 'analytics', icon: BarChart2    },
 ] as const
 
-// The Approvals surface itself ships in 21C/C1 — this entry is gated
-// (approver + admin) and inert here, matching COMING_SOON_NAV's rendering.
+// The Approvals surface shipped in 21C/C1 — this entry renders as a live,
+// capability-gated <Link> below (approver + admin only), not a COMING_SOON_NAV
+// placeholder.
 export const APPROVALS_NAV_CAPABILITY = CAPABILITIES.APPROVE
 
 const BANNER_KEY = 'sosh_connect_banner_dismissed'
