@@ -9,7 +9,7 @@
   "bulk": {
     "approveAll": "Aprovar tudo ({count})",
     "announceApproved": "Aprovou {count} publicação(ões) em {campaign}.",
-    "filterActiveHint": "Remova o filtro de plataforma para aprovar a campanha inteira."
+    "incompleteSetHint": "Alguns rascunhos pendentes não são mostrados — restrinja a vista (ou aguarde a paginação completa) antes de aprovar em massa."
   },
   "row": {
     "approve": "Aprovar",

@@ -365,6 +365,24 @@ describe('bulkApproveDraftPosts', () => {
     const { client } = createMockClient(null, { message: 'permission denied' })
     await expect(bulkApproveDraftPosts(client, 'camp-1')).rejects.toThrow('permission denied')
   })
+
+  it('appends .in("platform", platforms) to the same builder when platforms is given (M1)', async () => {
+    const { client, builder } = createMockClient([{ id: 'p1' }])
+    await bulkApproveDraftPosts(client, 'camp-1', ['twitter'])
+    expect(builder.in).toHaveBeenCalledWith('platform', ['twitter'])
+  })
+
+  it('does not call .in when platforms is omitted (regression pin — unfiltered behaviour unchanged)', async () => {
+    const { client, builder } = createMockClient([{ id: 'p1' }, { id: 'p2' }, { id: 'p3' }])
+    await bulkApproveDraftPosts(client, 'camp-1')
+    expect(builder.in).not.toHaveBeenCalled()
+  })
+
+  it('does not call .in when platforms is an empty array', async () => {
+    const { client, builder } = createMockClient([{ id: 'p1' }])
+    await bulkApproveDraftPosts(client, 'camp-1', [])
+    expect(builder.in).not.toHaveBeenCalled()
+  })
 })
 
 describe('getPostSiblingTopics', () => {

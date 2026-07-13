@@ -14,6 +14,8 @@ import {
   updatePostContent,
   updatePostContentAndMetadata,
   bulkApproveDraftPosts,
+  countPendingDraftPosts,
+  APPROVALS_POST_LIMIT,
   getPostById,
   getPostSiblingTopics,
 } from '@/lib/db/posts'
@@ -64,7 +66,11 @@ function revalidateCampaignPosts(campaignId: string): void {
 // ---------------------------------------------------------------------------
 
 const postIdSchema = z.object({ postId: z.string().uuid() })
-const campaignIdSchema = z.object({ campaignId: z.string().uuid() })
+const platformEnum = z.enum(['linkedin', 'twitter', 'instagram', 'facebook', 'threads'])
+const bulkApproveSchema = z.object({
+  campaignId: z.string().uuid(),
+  platforms: z.array(platformEnum).optional(),
+})
 
 // ---------------------------------------------------------------------------
 // approvePostAction
@@ -188,15 +194,26 @@ export async function updatePostContentAction(
 // bulkApprovePostsAction
 // ---------------------------------------------------------------------------
 
-export async function bulkApprovePostsAction(campaignId: string): Promise<PostActionState> {
-  const parsed = campaignIdSchema.safeParse({ campaignId })
+export async function bulkApprovePostsAction(
+  campaignId: string,
+  platforms?: Platform[],
+): Promise<PostActionState> {
+  const parsed = bulkApproveSchema.safeParse({ campaignId, platforms })
   if (!parsed.success) return { error: 'invalid_input' }
 
   try {
     const ctx = await getAuthContext()
     if (!ctx) return { error: 'generic' }
 
-    const count = await bulkApproveDraftPosts(ctx.client, campaignId)
+    // APV-BULK-VISIBLE-ONLY (ADR 0014 A1.1): the Approvals inbox only ever
+    // fetches up to APPROVALS_POST_LIMIT pending drafts business-wide. If the
+    // true total exceeds that cap, no rendered group — filtered or not — can
+    // be proven complete, so refuse the write even if this action is invoked
+    // directly, bypassing the UI's disabled control. Zero rows may flip.
+    const totalPending = await countPendingDraftPosts(ctx.client, ctx.business.id)
+    if (totalPending > APPROVALS_POST_LIMIT) return { error: 'not_eligible' }
+
+    const count = await bulkApproveDraftPosts(ctx.client, campaignId, parsed.data.platforms)
     revalidateCampaignPosts(campaignId)
     return { success: true, count }
   } catch {

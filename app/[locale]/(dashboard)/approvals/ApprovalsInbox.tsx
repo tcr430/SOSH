@@ -116,7 +116,11 @@ export function ApprovalsInbox({ posts, campaigns, totalPendingCount }: Approval
   function handleBulkApprove(campaignId: string, count: number) {
     setErrorKey(null)
     startTransition(async () => {
-      const result = await bulkApprovePostsAction(campaignId)
+      // ADR 0014 Amendment A1 — the platform predicate narrows the write to
+      // exactly the currently-filtered rows (21C M1: bulk must never approve
+      // drafts outside the active filter).
+      const platforms = platformFilter === 'all' ? undefined : [platformFilter as Platform]
+      const result = await bulkApprovePostsAction(campaignId, platforms)
       if (result.success) {
         const campaignName = campaigns.find(c => c.id === campaignId)?.name ?? ''
         setItems(prev => prev.filter(p => p.campaign_id !== campaignId))
@@ -207,7 +211,12 @@ export function ApprovalsInbox({ posts, campaigns, totalPendingCount }: Approval
             {/* Bulk bar — APV-SINGLE-AND-BATCH, wires the EXISTING bulkApprovePostsAction */}
             <div className="flex items-center justify-between gap-3 rounded-md bg-muted/40 px-4 py-2.5">
               <span className="text-sm font-medium">{campaign?.name ?? ''}</span>
-              {platformFilter === 'all' ? (
+              {/* ADR 0014 A1.1 (APV-BULK-VISIBLE-ONLY): bulk is offered iff the
+                  rendered set is provably complete. hasOverflow means the
+                  business-wide pending total exceeds what was ever fetched —
+                  in that case NO group (filtered or not) can be proven
+                  complete, so bulk is disabled everywhere, not just here. */}
+              {!hasOverflow ? (
                 <Button
                   size="sm"
                   disabled={isPending}
@@ -221,13 +230,13 @@ export function ApprovalsInbox({ posts, campaigns, totalPendingCount }: Approval
                   <TooltipTrigger
                     type="button"
                     aria-disabled="true"
-                    aria-label={t('bulk.filterActiveHint')}
+                    aria-label={t('bulk.incompleteSetHint')}
                     onClick={e => e.preventDefault()}
                     className="inline-flex items-center justify-center rounded-md px-3 py-1.5 text-xs font-medium bg-muted text-muted-foreground cursor-not-allowed"
                   >
                     {t('bulk.approveAll', { count: rows.length })}
                   </TooltipTrigger>
-                  <TooltipContent>{t('bulk.filterActiveHint')}</TooltipContent>
+                  <TooltipContent>{t('bulk.incompleteSetHint')}</TooltipContent>
                 </Tooltip>
               )}
             </div>

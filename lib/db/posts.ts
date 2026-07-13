@@ -488,17 +488,24 @@ export async function updatePostContentAndMetadata(
   return row as PostRow
 }
 
+// ADR 0014 Amendment A1 — the platform predicate narrows the SAME update
+// statement that was already gated by enforce_post_transition_capability
+// (0013 §5); it is not a second query or a new write path (A1's hard
+// constraint). Undefined/empty platforms leaves the statement unfiltered,
+// preserving the exact prior (campaign-wide) behaviour.
 export async function bulkApproveDraftPosts(
   client: SupabaseClient,
   campaignId: string,
+  platforms?: Platform[],
 ): Promise<number> {
-  const { data, error } = await client
+  let query = client
     .from('posts')
     .update({ status: 'approved' })
     .eq('campaign_id', campaignId)
     .eq('status', 'draft')
     .is('deleted_at', null)
-    .select('id')
+  if (platforms && platforms.length > 0) query = query.in('platform', platforms)
+  const { data, error } = await query.select('id')
   if (error) throw new Error(getErrorMessage(error))
   return (data as { id: string }[] | null)?.length ?? 0
 }

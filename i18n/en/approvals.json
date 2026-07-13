@@ -9,7 +9,7 @@
   "bulk": {
     "approveAll": "Approve all ({count})",
     "announceApproved": "Approved {count} post(s) in {campaign}.",
-    "filterActiveHint": "Clear the platform filter to approve the whole campaign."
+    "incompleteSetHint": "Some pending drafts aren't shown — narrow the view (or wait for full pagination) before bulk approving."
   },
   "row": {
     "approve": "Approve",

@@ -235,4 +235,78 @@ describe('posts approval boundary — DB-enforced (ADR 0013 §5)', () => {
     expect(error).toBeNull()
     expect(data ?? []).toHaveLength(0)
   })
+
+  // ADR 0014 Amendment A1 — bulk approve's platform predicate narrows the SAME
+  // update statement, it does not open a new write path. These two tests prove
+  // that at the real DB boundary, not just at the mock/unit layer.
+
+  async function createPostOnPlatform(platform: 'linkedin' | 'twitter', status: 'draft' | 'approved') {
+    const { data, error } = await admin
+      .from('posts')
+      .insert({
+        campaign_id: campaignId,
+        business_id: businessId,
+        platform,
+        content: 'Bulk approve boundary test post',
+        scheduled_at: '2026-07-15T12:00:00Z',
+        status,
+      })
+      .select('id')
+      .single()
+    if (error) throw error
+    return data.id as string
+  }
+
+  it('APV-BULK-DB-BOUNDARY: an editor calling the predicate\'d bulk-approve UPDATE directly is denied by the trigger; zero rows flip', async () => {
+    const postId = await createPostOnPlatform('linkedin', 'draft')
+    const client = await signInAs(editorEmail)
+    const { error } = await client
+      .from('posts')
+      .update({ status: 'approved' })
+      .eq('campaign_id', campaignId)
+      .eq('status', 'draft')
+      .is('deleted_at', null)
+      .in('platform', ['linkedin'])
+      .select()
+    expect(error).not.toBeNull()
+    expect(error!.message).toMatch(/approve capability required/)
+
+    const { data: check } = await admin.from('posts').select('status').eq('id', postId).single()
+    expect(check.status).toBe('draft')
+    // Cleanup: keep the fixture set isolated from later tests in this file.
+    await admin.from('posts').delete().eq('id', postId)
+  })
+
+  it('THE 21C M1 SCENARIO: 3 linkedin + 2 twitter drafts, filtered bulk approve flips EXACTLY the 2 twitter drafts', async () => {
+    const linkedinIds = await Promise.all([
+      createPostOnPlatform('linkedin', 'draft'),
+      createPostOnPlatform('linkedin', 'draft'),
+      createPostOnPlatform('linkedin', 'draft'),
+    ])
+    const twitterIds = await Promise.all([
+      createPostOnPlatform('twitter', 'draft'),
+      createPostOnPlatform('twitter', 'draft'),
+    ])
+
+    const client = await signInAs(approverEmail)
+    const { data, error } = await client
+      .from('posts')
+      .update({ status: 'approved' })
+      .eq('campaign_id', campaignId)
+      .eq('status', 'draft')
+      .is('deleted_at', null)
+      .in('platform', ['twitter'])
+      .select('id')
+    expect(error).toBeNull()
+    expect(data).toHaveLength(2)
+    expect(new Set(data!.map(r => r.id))).toEqual(new Set(twitterIds))
+
+    const { data: linkedinRows } = await admin
+      .from('posts')
+      .select('status')
+      .in('id', linkedinIds)
+    expect(linkedinRows!.every((r: { status: string }) => r.status === 'draft')).toBe(true)
+
+    await admin.from('posts').delete().in('id', [...linkedinIds, ...twitterIds])
+  })
 })

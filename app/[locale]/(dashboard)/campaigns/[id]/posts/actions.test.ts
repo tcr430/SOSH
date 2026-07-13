@@ -21,6 +21,8 @@ vi.mock('@/lib/db/posts', () => ({
   updatePostContent: vi.fn(),
   updatePostContentAndMetadata: vi.fn(),
   bulkApproveDraftPosts: vi.fn(),
+  countPendingDraftPosts: vi.fn(),
+  APPROVALS_POST_LIMIT: 200,
   getPostSiblingTopics: vi.fn(),
 }))
 
@@ -36,7 +38,7 @@ vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),
 }))
 
-import { regeneratePostAction } from './actions'
+import { regeneratePostAction, bulkApprovePostsAction } from './actions'
 import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
 import { getCampaignById } from '@/lib/db/campaigns'
@@ -44,6 +46,8 @@ import {
   getPostById,
   getPostSiblingTopics,
   updatePostContentAndMetadata,
+  bulkApproveDraftPosts,
+  countPendingDraftPosts,
 } from '@/lib/db/posts'
 import { buildCustomerContext } from '@/lib/ai/context'
 import { runPrompt } from '@/lib/ai/runner'
@@ -290,5 +294,58 @@ describe('regeneratePostAction', () => {
     // Assert
     expect(result).toEqual({ error: 'rate_limited' })
     expect(updatePostContentAndMetadata).not.toHaveBeenCalled()
+  })
+})
+
+// ── bulkApprovePostsAction (ADR 0014 Amendment A1/A1.1) ────────────────────────
+
+describe('bulkApprovePostsAction', () => {
+  it('passes the platforms array through to bulkApproveDraftPosts (M1)', async () => {
+    makeAuthClient()
+    vi.mocked(countPendingDraftPosts).mockResolvedValue(2)
+    vi.mocked(bulkApproveDraftPosts).mockResolvedValue(2)
+
+    const result = await bulkApprovePostsAction(VALID_CAMPAIGN_ID, ['twitter'])
+
+    expect(bulkApproveDraftPosts).toHaveBeenCalledWith(expect.anything(), VALID_CAMPAIGN_ID, ['twitter'])
+    expect(result).toEqual({ success: true, count: 2 })
+  })
+
+  it('calls bulkApproveDraftPosts with undefined platforms when unfiltered (regression pin)', async () => {
+    makeAuthClient()
+    vi.mocked(countPendingDraftPosts).mockResolvedValue(3)
+    vi.mocked(bulkApproveDraftPosts).mockResolvedValue(3)
+
+    await bulkApprovePostsAction(VALID_CAMPAIGN_ID)
+
+    expect(bulkApproveDraftPosts).toHaveBeenCalledWith(expect.anything(), VALID_CAMPAIGN_ID, undefined)
+  })
+
+  it('rejects an invalid platform value (Zod)', async () => {
+    makeAuthClient()
+    const result = await bulkApprovePostsAction(VALID_CAMPAIGN_ID, ['myspace' as never])
+    expect(result).toEqual({ error: 'invalid_input' })
+    expect(bulkApproveDraftPosts).not.toHaveBeenCalled()
+  })
+
+  it('APV-BULK-VISIBLE-ONLY (F1): refuses the write and flips zero rows when the business-wide pending total exceeds APPROVALS_POST_LIMIT, even called directly bypassing the UI', async () => {
+    makeAuthClient()
+    vi.mocked(countPendingDraftPosts).mockResolvedValue(201)
+
+    const result = await bulkApprovePostsAction(VALID_CAMPAIGN_ID)
+
+    expect(result).toEqual({ error: 'not_eligible' })
+    expect(bulkApproveDraftPosts).not.toHaveBeenCalled()
+  })
+
+  it('allows the write when the pending total is exactly at the limit (boundary)', async () => {
+    makeAuthClient()
+    vi.mocked(countPendingDraftPosts).mockResolvedValue(200)
+    vi.mocked(bulkApproveDraftPosts).mockResolvedValue(1)
+
+    const result = await bulkApprovePostsAction(VALID_CAMPAIGN_ID)
+
+    expect(result).toEqual({ success: true, count: 1 })
+    expect(bulkApproveDraftPosts).toHaveBeenCalled()
   })
 })
