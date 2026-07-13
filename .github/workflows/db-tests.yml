@@ -81,52 +81,24 @@ jobs:
             echo "DATABASE_URL=$DB_URL"
           } >> "$GITHUB_ENV"
 
-      # ADR 0015 §3.2b: config.toml cannot hold Postgres memory knobs (it exposes only
-      # db.port/shadow_port/major_version/pooler), so cap them here where Postgres actually
-      # reads them. One rationale per knob — a future editor must not raise these back without
-      # understanding the 2-core/7GB OOM they prevent.
-      - name: Cap Postgres memory for a 2-core / 7GB runner
-        run: |
-          set -euo pipefail
-          psql "$DATABASE_URL" <<'SQL'
-            -- max_connections: the suites run --no-file-parallelism so real concurrency is low;
-            -- each backend reserves work_mem per sort/hash node, so fewer allowed backends = a
-            -- hard ceiling on the worst-case memory fan-out behind the recovery-mode crash
-            -- (S427-S430). Restart-only param.
-            ALTER SYSTEM SET max_connections = 50;
-            -- shared_buffers: default is 128MB; on a 7GB runner shared with GoTrue+PostgREST+
-            -- Docker, keeping this modest leaves headroom for the auth-heavy setup
-            -- (admin.createUser/bcrypt) rather than the OS cache. Restart-only param.
-            ALTER SYSTEM SET shared_buffers = '256MB';
-            -- work_mem: per-sort/hash allocation. The RLS-matrix suites do many small scans, not
-            -- big sorts, so a low cap prevents a pathological query from ballooning *
-            -- max_connections. Reloadable.
-            ALTER SYSTEM SET work_mem = '8MB';
-            -- maintenance_work_mem: db reset re-applies all migrations (index builds); a modest
-            -- bump keeps resets fast without competing with the connection pool at test time.
-            -- Reloadable.
-            ALTER SYSTEM SET maintenance_work_mem = '128MB';
-          SQL
-          # shared_buffers + max_connections are RESTART-only. Restart ONLY the Postgres
-          # CONTAINER so the volume (and postgresql.auto.conf, written by ALTER SYSTEM inside
-          # PGDATA) SURVIVES. A `supabase stop --no-backup` would DELETE the volume and silently
-          # revert the knobs to defaults (F3, ADR 0015 §3.2b correction). `docker restart` stops
-          # + starts the same container against the same volume — auto.conf persists and is
-          # re-read on boot. Container name is supabase_db_<project_id>; project_id = "SOSH"
-          # (config.toml:5).
-          docker restart "supabase_db_SOSH"
-
-      # MANDATORY verification — the caps must actually be in effect, or the job FAILS and the
-      # Builder STOPS. An unverified remedy reports green while doing nothing (F3). No `|| true`,
-      # no continue-on-error here (CI-KNOBS-VERIFIED).
+      # ADR 0015 §3.2b, CORRECTED (session-22 B2 live-CI finding): the original ALTER-SYSTEM +
+      # container-restart plan failed in real CI with "permission denied to set parameter" — the
+      # `postgres` role in Supabase's local dev stack is not a superuser and cannot run ALTER
+      # SYSTEM (mirrors hosted Supabase's permission model). The knobs now live in
+      # supabase/config.toml's `[db.settings]` (the CLI-native, documented mechanism), baked into
+      # postgresql.conf before the container starts — so on this fresh runner (no pre-existing
+      # container) they take effect on the `supabase start` above with no restart needed. This
+      # step only VERIFIES they took effect; the job FAILS and the Builder STOPS if they didn't —
+      # an unverified remedy reports green while doing nothing (F3, CI-KNOBS-VERIFIED). No
+      # `|| true`, no continue-on-error here.
       - name: Verify Postgres knobs took effect
         run: |
           set -euo pipefail
           vals=$(psql "$DATABASE_URL" -tA -c "SHOW shared_buffers; SHOW max_connections; SHOW work_mem;")
-          echo "post-restart knobs: $vals"
-          echo "$vals" | grep -qx '256MB' || { echo "::error::shared_buffers did not stick (expected 256MB)"; exit 1; }
-          echo "$vals" | grep -qx '50'    || { echo "::error::max_connections did not stick (expected 50)"; exit 1; }
-          echo "$vals" | grep -qx '8MB'   || { echo "::error::work_mem did not stick (expected 8MB)"; exit 1; }
+          echo "knobs: $vals"
+          echo "$vals" | grep -qx '256MB' || { echo "::error::shared_buffers did not stick (expected 256MB) — check supabase/config.toml [db.settings]"; exit 1; }
+          echo "$vals" | grep -qx '50'    || { echo "::error::max_connections did not stick (expected 50) — check supabase/config.toml [db.settings]"; exit 1; }
+          echo "$vals" | grep -qx '8MB'   || { echo "::error::work_mem did not stick (expected 8MB) — check supabase/config.toml [db.settings]"; exit 1; }
 
       - name: Reset DB (deterministic re-apply of all migrations)
         run: supabase db reset

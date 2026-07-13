@@ -64,6 +64,34 @@ enabled = true
 # Supports glob patterns relative to supabase directory: "./seeds/*.sql"
 sql_paths = ["./seed.sql"]
 
+# Postgres runtime knobs for a 2-core/7GB CI runner (session-22 B2, ADR 0015 §3.2b
+# correction). CORRECTION: the ADR's original plan (`ALTER SYSTEM` over psql, then a
+# container restart) failed in CI with "ERROR: permission denied to set parameter" —
+# the `postgres` role in Supabase's local dev stack is not a superuser and cannot run
+# ALTER SYSTEM, mirroring hosted Supabase's permission model. `[db.settings]` is the
+# CLI-native, documented mechanism: it is baked into postgresql.conf before the
+# container ever starts, so on a fresh CI runner (no pre-existing container) it takes
+# effect on the very first `supabase start` — no restart, no elevated-privilege SQL
+# needed. One rationale per knob, so a future editor understands the 2-core/7GB OOM
+# these prevent before raising them back.
+[db.settings]
+# max_connections: the suites run --no-file-parallelism so real concurrency is low;
+# each backend reserves work_mem per sort/hash node, so fewer allowed backends is a
+# hard ceiling on the worst-case memory fan-out behind the recovery-mode crash
+# (S427-S430).
+max_connections = 50
+# shared_buffers: default is 128MB; on a 7GB runner shared with GoTrue+PostgREST+
+# Docker, keeping this modest leaves headroom for the auth-heavy setup
+# (admin.createUser/bcrypt) rather than the OS cache.
+shared_buffers = "256MB"
+# work_mem: per-sort/hash allocation. The RLS-matrix suites do many small scans, not
+# big sorts, so a low cap prevents a pathological query from ballooning *
+# max_connections.
+work_mem = "8MB"
+# maintenance_work_mem: db reset re-applies all migrations (index builds); a modest
+# bump keeps resets fast without competing with the connection pool at test time.
+maintenance_work_mem = "128MB"
+
 [db.network_restrictions]
 # Enable management of network restrictions.
 enabled = false
