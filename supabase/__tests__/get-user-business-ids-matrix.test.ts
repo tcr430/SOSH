@@ -1,14 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { createClient } from '@supabase/supabase-js'
 
-// Gates on a live Supabase instance, like the other supabase/__tests__ integration suites.
-// Reads process.env directly (not @/lib/config) so this file has no import-time env
-// validation cost when skipped — matches lib/email/__integration__/round-trip.test.ts.
-const INTEGRATION = process.env.RLS_MATRIX_INTEGRATION_TEST_ENABLED === 'true'
-
 const PASSWORD = 'TestPass123!'
 
-describe.skipIf(!INTEGRATION)('get_user_business_ids() — read blast-radius matrix (ADR 0013 §3)', () => {
+describe('get_user_business_ids() — read blast-radius matrix (ADR 0013 §3)', () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let admin: any
 

@@ -2,11 +2,6 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { createClient } from '@supabase/supabase-js'
 import type { MemberRole } from '@/lib/db/types'
 
-// Gates on a live Supabase instance, like the other supabase/__tests__ integration suites.
-// Reads process.env directly (not @/lib/config) so this file has no import-time env
-// validation cost when skipped — matches lib/email/__integration__/round-trip.test.ts.
-const INTEGRATION = process.env.USER_CAN_INTEGRATION_TEST_ENABLED === 'true'
-
 const PASSWORD = 'TestPass123!'
 
 // Experimental (2026-07-07): a Postgres backend SIGSEGV in CI (see
@@ -38,7 +33,7 @@ function expectedFor(role: MemberRole, isAdmin: boolean): Record<(typeof CAPABIL
   }
 }
 
-describe.skipIf(!INTEGRATION)('user_can() — role×capability matrix (ADR 0013 §4)', () => {
+describe('user_can() — role×capability matrix (ADR 0013 §4)', () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let admin: any
   let businessId: string

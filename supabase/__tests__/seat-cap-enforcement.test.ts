@@ -5,9 +5,6 @@ import type { Plan } from '@/lib/db/types'
 
 const PASSWORD = 'TestPass123!'
 
-// Gates on a live Supabase instance, like the other supabase/__tests__ integration suites.
-const INTEGRATION = process.env.SEAT_CAP_INTEGRATION_TEST_ENABLED === 'true'
-
 // Experimental (2026-07-07): a rapid-fire burst of business_members INSERTs
 // (each firing enforce_seat_cap + protect_primary_admin_membership triggers)
 // immediately preceded a Postgres backend SIGSEGV in CI (see .wolf/buglog.json
@@ -19,7 +16,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 const ALL_PLANS: Plan[] = ['trial', 'plus', 'pro', 'agency']
 
-describe.skipIf(!INTEGRATION)('seat cap enforcement (ADR 0013 §6.6)', () => {
+describe('seat cap enforcement (ADR 0013 §6.6)', () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let admin: any
   const businessIds: string[] = []

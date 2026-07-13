@@ -2,14 +2,9 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { createClient } from '@supabase/supabase-js'
 import { countSeatUsage } from '@/lib/db/business-members'
 
-// Gates on a live Supabase instance, like the other supabase/__tests__ integration suites.
-// Reads process.env directly (not @/lib/config) so this file has no import-time env
-// validation cost when skipped — matches lib/email/__integration__/round-trip.test.ts.
-const INTEGRATION = process.env.ACCEPT_INVITE_INTEGRATION_TEST_ENABLED === 'true'
-
 const PASSWORD = 'TestPass123!'
 
-describe.skipIf(!INTEGRATION)('accept_invite() RPC (ADR 0013 §7.3)', () => {
+describe('accept_invite() RPC (ADR 0013 §7.3)', () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let admin: any
   let businessId: string

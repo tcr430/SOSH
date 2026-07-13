@@ -1,12 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { createClient } from '@supabase/supabase-js'
 
-// Gates on a live Supabase instance, like lib/deletion/__integration__/purge-business.test.ts.
-const INTEGRATION = process.env.MEMBERS_INTEGRATION_TEST_ENABLED === 'true'
-
 const PASSWORD = 'TestPass123!'
 
-describe.skipIf(!INTEGRATION)('business_members — CHECK/unique-index/trigger integration', () => {
+describe('business_members — CHECK/unique-index/trigger integration', () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let client: any
   let businessId: string

@@ -2,9 +2,6 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { createBusiness } from '@/lib/db/businesses'
 import { countSeatUsage, listMembers } from '@/lib/db/business-members'
 
-// Gates on a live Supabase instance, like the other supabase/__tests__ integration suites.
-const INTEGRATION = process.env.ENSURE_OWNER_MEMBERSHIP_INTEGRATION_TEST_ENABLED === 'true'
-
 const PASSWORD = 'TestPass123!'
 
 // Experimental (2026-07-07): a rapid-fire burst of business_members INSERTs
@@ -16,7 +13,7 @@ const PASSWORD = 'TestPass123!'
 const HEAVY_LOOP_DELAY_MS = 50
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
-describe.skipIf(!INTEGRATION)('trg_ensure_owner_membership (ADR 0013 Rev B / 21A-D / MAJOR-1)', () => {
+describe('trg_ensure_owner_membership (ADR 0013 Rev B / 21A-D / MAJOR-1)', () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let admin: any
   const businessIds: string[] = []

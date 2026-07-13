@@ -1,9 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { createClient } from '@supabase/supabase-js'
 
-// Gates on a live Supabase instance, like the other supabase/__tests__ integration suites.
-const INTEGRATION = process.env.BACKFILL_PURGE_INTEGRATION_TEST_ENABLED === 'true'
-
 const PASSWORD = 'TestPass123!'
 
 const CAPABILITIES = [
@@ -15,7 +12,7 @@ const CAPABILITIES = [
   'manage_billing',
 ] as const
 
-describe.skipIf(!INTEGRATION)('backfill_owner_members (ADR 0013 §9 M7) + purge_business member delete (§8 M8)', () => {
+describe('backfill_owner_members (ADR 0013 §9 M7) + purge_business member delete (§8 M8)', () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let admin: any
   const businessIds: string[] = []

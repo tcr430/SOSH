@@ -1,11 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { Client } from 'pg'
 
-// Gates on DATABASE_URL being present — requires a live Supabase instance.
-// Set DELETION_INTEGRATION_TEST_ENABLED=true locally to run.
-const INTEGRATION = process.env.DELETION_INTEGRATION_TEST_ENABLED === 'true'
-
-describe.skipIf(!INTEGRATION)('RLS policy lockdown — pg_catalog audit', () => {
+describe('RLS policy lockdown — pg_catalog audit', () => {
   let pg: Client
 
   beforeAll(async () => {

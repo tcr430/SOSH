@@ -2,12 +2,9 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { addDays, formatISO, subDays } from 'date-fns'
 import { reissueInvite, acceptInvite } from '@/lib/db/business-members'
 
-// Gates on a live Supabase instance, like the other supabase/__tests__ integration suites.
-const INTEGRATION = process.env.REISSUE_INVITE_INTEGRATION_TEST_ENABLED === 'true'
-
 const PASSWORD = 'TestPass123!'
 
-describe.skipIf(!INTEGRATION)('reissueInvite (ADR 0014 §4.4, INV-REISSUE-SAME-ROW)', () => {
+describe('reissueInvite (ADR 0014 §4.4, INV-REISSUE-SAME-ROW)', () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let admin: any
   let businessId: string
