@@ -25,4 +25,4 @@ jobs:
       - name: Lint
         run: npm run lint             # eslint (existing package.json script)
       - name: App-layer test suite
-        run: npm run test:app         # vitest run, include-scoped to SOSH (vitest.config.ts)
+        run: npm run test:app         # vitest run app/ lib/ components/ — never supabase/__tests__ (L-3)

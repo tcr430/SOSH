@@ -15,7 +15,7 @@
     "postiz:down": "docker-compose -f infra/docker-compose.yml down",
     "postiz:logs": "docker-compose -f infra/docker-compose.yml logs -f",
     "typecheck": "tsc --noEmit --skipLibCheck",
-    "test:app": "vitest run",
+    "test:app": "vitest run app/ lib/ components/",
     "test:db": "vitest run supabase/__tests__ --no-file-parallelism --retry=2"
   },
   "dependencies": {
