@@ -102,7 +102,7 @@ export async function listPendingDraftPosts(
     platform?: Platform
     limit?: number
   },
-): Promise<CalendarPostRow[]> {
+): Promise<{ rows: CalendarPostRow[]; total: number }> {
   const effectiveLimit = opts.limit ?? APPROVALS_POST_LIMIT
   let query = client
     .from('posts')
@@ -130,22 +130,37 @@ export async function listPendingDraftPosts(
   if (error) throw new Error(getErrorMessage(error))
 
   const raw = (data ?? []) as RawCalendarRow[]
-  return raw.map(mapCalendarRow)
+  const rows = raw.map(mapCalendarRow)
+  // ADR 0014 Amendment A2 (APV-SERVER-FILTER) — total must match the SAME
+  // predicate as `rows`, never a business-wide number, or a filtered view
+  // lies in the other direction (understating overflow).
+  const total = await countPendingDraftPosts(client, opts.businessId, {
+    campaignId: opts.campaignId,
+    platform: opts.platform,
+  })
+  return { rows, total }
 }
 
 // True pending-draft total, unbounded by APPROVALS_POST_LIMIT — lets the
 // Approvals inbox tell the approver when drafts are hidden past the cap
-// instead of silently truncating (ADR 0014 §9.4 overflow signal).
+// instead of silently truncating (ADR 0014 §9.4 overflow signal). Optional
+// campaignId/platform narrow the predicate to match a filtered view (A2);
+// omitted, it stays business-wide — the shape bulkApprovePostsAction's
+// APV-BULK-VISIBLE-ONLY gate (actions.ts) relies on.
 export async function countPendingDraftPosts(
   client: SupabaseClient,
   businessId: string,
+  opts: { campaignId?: string; platform?: Platform } = {},
 ): Promise<number> {
-  const { count, error } = await client
+  let query = client
     .from('posts')
     .select('id', { count: 'exact', head: true })
     .eq('business_id', businessId)
     .eq('status', 'draft')
     .is('deleted_at', null)
+  if (opts.campaignId) query = query.eq('campaign_id', opts.campaignId)
+  if (opts.platform) query = query.eq('platform', opts.platform)
+  const { count, error } = await query
   if (error) throw new Error(getErrorMessage(error))
   return count ?? 0
 }

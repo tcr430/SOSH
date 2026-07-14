@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { createMockClient } from './__test-utils__/mock-client'
+import { createMockClient, createSequentialMockClient } from './__test-utils__/mock-client'
 import {
   listPostsForCalendar,
   reschedulePost,
@@ -301,7 +301,7 @@ describe('listPendingDraftPosts', () => {
     const rawRow = makeRawRow(POST_1, '2026-06-10T10:00:00Z')
     const { client } = createMockClient([rawRow], null)
 
-    const rows = await listPendingDraftPosts(client, { businessId: BIZ })
+    const { rows } = await listPendingDraftPosts(client, { businessId: BIZ })
 
     expect(rows[0]).toEqual({
       id: POST_1,
@@ -318,18 +318,85 @@ describe('listPendingDraftPosts', () => {
     })
   })
 
-  it('returns empty array when none found', async () => {
-    const { client } = createMockClient(null, null)
+  it('returns empty rows when none found', async () => {
+    const { client } = createSequentialMockClient([
+      { data: null, error: null },
+      { data: null, error: null, count: 0 },
+    ])
 
-    const rows = await listPendingDraftPosts(client, { businessId: BIZ })
+    const { rows, total } = await listPendingDraftPosts(client, { businessId: BIZ })
 
     expect(rows).toEqual([])
+    expect(total).toBe(0)
   })
 
-  it('throws on Supabase error', async () => {
+  it('throws on Supabase error from the rows query', async () => {
     const { client } = createMockClient(null, { message: 'db error' })
 
     await expect(listPendingDraftPosts(client, { businessId: BIZ })).rejects.toThrow('db error')
+  })
+
+  // ─── A2: filter-scoped total (ADR 0014 Amendment A2 / APV-SERVER-FILTER) ──
+
+  it('total is FILTER-SCOPED — the count query uses the SAME predicate as the rows query, not business-wide', async () => {
+    const rawRow = makeRawRow(POST_1, '2026-06-10T10:00:00Z')
+    const { client, builders } = createSequentialMockClient([
+      { data: [rawRow], error: null },
+      { data: null, error: null, count: 1 },
+    ])
+
+    const { total } = await listPendingDraftPosts(client, {
+      businessId: BIZ,
+      campaignId: CAMPAIGN_1,
+      platform: 'linkedin',
+    })
+
+    expect(total).toBe(1)
+    // The count leg (builders[1]) must carry the same campaign_id/platform
+    // narrowing as the rows leg — a filtered view must never fall back to a
+    // business-wide total (the "lie in the other direction" the ADR forbids).
+    expect(builders[1].eq).toHaveBeenCalledWith('campaign_id', CAMPAIGN_1)
+    expect(builders[1].eq).toHaveBeenCalledWith('platform', 'linkedin')
+  })
+
+  it('overflow: total exceeds the returned (bounded) rows when more drafts exist than APPROVALS_POST_LIMIT', async () => {
+    const rows = [
+      makeRawRow(POST_1, '2026-06-10T10:00:00Z'),
+      makeRawRow(POST_2, '2026-06-11T10:00:00Z'),
+    ]
+    const { client } = createSequentialMockClient([
+      { data: rows, error: null },
+      { data: null, error: null, count: 341 },
+    ])
+
+    const { rows: resultRows, total } = await listPendingDraftPosts(client, { businessId: BIZ })
+
+    expect(resultRows).toHaveLength(2)
+    expect(total).toBe(341)
+    expect(total > resultRows.length).toBe(true)
+  })
+
+  it('no overflow: total equals the returned rows when nothing is hidden past the cap', async () => {
+    const rows = [makeRawRow(POST_1, '2026-06-10T10:00:00Z')]
+    const { client } = createSequentialMockClient([
+      { data: rows, error: null },
+      { data: null, error: null, count: 1 },
+    ])
+
+    const { rows: resultRows, total } = await listPendingDraftPosts(client, { businessId: BIZ })
+
+    expect(total > resultRows.length).toBe(false)
+  })
+
+  it('the total is a bounded head:true count — no unbounded data scan introduced', async () => {
+    const { client, builders } = createSequentialMockClient([
+      { data: [], error: null },
+      { data: null, error: null, count: 0 },
+    ])
+
+    await listPendingDraftPosts(client, { businessId: BIZ })
+
+    expect(builders[1].select).toHaveBeenCalledWith('id', { count: 'exact', head: true })
   })
 })
 
@@ -364,6 +431,42 @@ describe('countPendingDraftPosts', () => {
     const { client } = makeCountClient(null, { message: 'db error' })
 
     await expect(countPendingDraftPosts(client, BIZ)).rejects.toThrow('db error')
+  })
+
+  // ─── A2: optional campaignId/platform predicate ────────────────────────
+
+  it('does not filter by campaign_id or platform when opts omitted (business-wide, unchanged behaviour)', async () => {
+    const { client, builder } = makeCountClient(0)
+
+    await countPendingDraftPosts(client, BIZ)
+
+    expect(builder.eq).not.toHaveBeenCalledWith('campaign_id', expect.anything())
+    expect(builder.eq).not.toHaveBeenCalledWith('platform', expect.anything())
+  })
+
+  it('filters by campaign_id when provided', async () => {
+    const { client, builder } = makeCountClient(3)
+
+    await countPendingDraftPosts(client, BIZ, { campaignId: CAMPAIGN_1 })
+
+    expect(builder.eq).toHaveBeenCalledWith('campaign_id', CAMPAIGN_1)
+  })
+
+  it('filters by platform when provided', async () => {
+    const { client, builder } = makeCountClient(3)
+
+    await countPendingDraftPosts(client, BIZ, { platform: 'instagram' })
+
+    expect(builder.eq).toHaveBeenCalledWith('platform', 'instagram')
+  })
+
+  it('combines campaign_id and platform when both provided', async () => {
+    const { client, builder } = makeCountClient(1)
+
+    await countPendingDraftPosts(client, BIZ, { campaignId: CAMPAIGN_1, platform: 'linkedin' })
+
+    expect(builder.eq).toHaveBeenCalledWith('campaign_id', CAMPAIGN_1)
+    expect(builder.eq).toHaveBeenCalledWith('platform', 'linkedin')
   })
 })
 

@@ -4,16 +4,36 @@ import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
 import { getMemberForUser } from '@/lib/db/business-members'
 import { listCampaigns } from '@/lib/db/campaigns'
-import { listPendingDraftPosts, countPendingDraftPosts } from '@/lib/db/posts'
+import { listPendingDraftPosts } from '@/lib/db/posts'
 import { hasCapability, resolveMemberContext, CAPABILITIES } from '@/lib/members/capabilities'
+import type { Platform } from '@/lib/db/types'
 import { ApprovalsInbox } from './ApprovalsInbox'
+
+const PLATFORMS: readonly Platform[] = ['linkedin', 'twitter', 'instagram', 'facebook', 'threads']
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+function parsePlatform(value: string | undefined): Platform | undefined {
+  return value && (PLATFORMS as readonly string[]).includes(value) ? (value as Platform) : undefined
+}
+
+function parseCampaignId(value: string | undefined): string | undefined {
+  return value && UUID_RE.test(value) ? value : undefined
+}
 
 export default async function ApprovalsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>
+  searchParams: Promise<{ campaign?: string; platform?: string }>
 }) {
   const { locale } = await params
+  // ADR 0014 Amendment A2 (APV-SERVER-FILTER, closing 21C n3) — a deep-linked
+  // filtered view fetches server-filtered rows and a matching total, not just
+  // the business-wide set.
+  const { campaign: campaignParam, platform: platformParam } = await searchParams
+  const campaignId = parseCampaignId(campaignParam)
+  const platform = parsePlatform(platformParam)
   const t = await getTranslations('approvals')
 
   const client = await createClient()
@@ -36,10 +56,9 @@ export default async function ApprovalsPage({
   const canSeeApprovals = hasCapability(member, CAPABILITIES.APPROVE) || member.isAdmin
   if (!canSeeApprovals) redirect(`/${locale}/campaigns`)
 
-  const [posts, campaigns, totalPendingCount] = await Promise.all([
-    listPendingDraftPosts(client, { businessId: business.id }),
+  const [{ rows: posts, total: totalPendingCount }, campaigns] = await Promise.all([
+    listPendingDraftPosts(client, { businessId: business.id, campaignId, platform }),
     listCampaigns(client, business.id),
-    countPendingDraftPosts(client, business.id),
   ])
 
   return (

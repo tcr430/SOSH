@@ -12,17 +12,18 @@ vi.mock('@/lib/db/businesses', () => ({ getBusinessForUser: vi.fn() }))
 vi.mock('@/lib/db/business-members', () => ({ getMemberForUser: vi.fn() }))
 vi.mock('@/lib/db/campaigns', () => ({ listCampaigns: vi.fn().mockResolvedValue([]) }))
 vi.mock('@/lib/db/posts', () => ({
-  listPendingDraftPosts: vi.fn().mockResolvedValue([]),
-  countPendingDraftPosts: vi.fn().mockResolvedValue(0),
+  listPendingDraftPosts: vi.fn().mockResolvedValue({ rows: [], total: 0 }),
 }))
 vi.mock('./ApprovalsInbox', () => ({ ApprovalsInbox: vi.fn(() => null) }))
 
 import * as serverModule from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
 import { getMemberForUser } from '@/lib/db/business-members'
-import { listPendingDraftPosts, countPendingDraftPosts } from '@/lib/db/posts'
+import { listPendingDraftPosts } from '@/lib/db/posts'
 import { ApprovalsInbox } from './ApprovalsInbox'
 import ApprovalsPage from './page'
+
+const NO_SEARCH_PARAMS = Promise.resolve({})
 
 const OWNER_ID = 'owner-1'
 const BUSINESS = { id: 'biz-1', owner_id: OWNER_ID, name: 'Acme' }
@@ -45,7 +46,7 @@ describe('ApprovalsPage — ROLE-APPROVALS-GATED (ADR 0014 §9.1)', () => {
     } as unknown as SupabaseClient)
 
     await expect(
-      ApprovalsPage({ params: Promise.resolve({ locale: 'en' }) }),
+      ApprovalsPage({ params: Promise.resolve({ locale: 'en' }), searchParams: NO_SEARCH_PARAMS }),
     ).rejects.toThrow('NEXT_REDIRECT')
     expect(vi.mocked((await import('next/navigation')).redirect)).toHaveBeenCalledWith('/en/login')
   })
@@ -55,7 +56,7 @@ describe('ApprovalsPage — ROLE-APPROVALS-GATED (ADR 0014 §9.1)', () => {
     vi.mocked(getBusinessForUser).mockResolvedValue(null)
 
     await expect(
-      ApprovalsPage({ params: Promise.resolve({ locale: 'en' }) }),
+      ApprovalsPage({ params: Promise.resolve({ locale: 'en' }), searchParams: NO_SEARCH_PARAMS }),
     ).rejects.toThrow('NEXT_REDIRECT')
     expect(vi.mocked((await import('next/navigation')).redirect)).toHaveBeenCalledWith('/en/onboarding')
   })
@@ -64,7 +65,7 @@ describe('ApprovalsPage — ROLE-APPROVALS-GATED (ADR 0014 §9.1)', () => {
     mockClient(OWNER_ID)
     vi.mocked(getBusinessForUser).mockResolvedValue(BUSINESS as never)
 
-    const result = await ApprovalsPage({ params: Promise.resolve({ locale: 'en' }) })
+    const result = await ApprovalsPage({ params: Promise.resolve({ locale: 'en' }), searchParams: NO_SEARCH_PARAMS })
     expect(result).toBeTruthy()
     expect(vi.mocked((await import('next/navigation')).redirect)).not.toHaveBeenCalled()
   })
@@ -74,7 +75,7 @@ describe('ApprovalsPage — ROLE-APPROVALS-GATED (ADR 0014 §9.1)', () => {
     vi.mocked(getBusinessForUser).mockResolvedValue(BUSINESS as never)
     vi.mocked(getMemberForUser).mockResolvedValue({ role: 'approver', is_admin: false } as never)
 
-    const result = await ApprovalsPage({ params: Promise.resolve({ locale: 'en' }) })
+    const result = await ApprovalsPage({ params: Promise.resolve({ locale: 'en' }), searchParams: NO_SEARCH_PARAMS })
     expect(result).toBeTruthy()
     expect(vi.mocked((await import('next/navigation')).redirect)).not.toHaveBeenCalled()
   })
@@ -84,7 +85,7 @@ describe('ApprovalsPage — ROLE-APPROVALS-GATED (ADR 0014 §9.1)', () => {
     vi.mocked(getBusinessForUser).mockResolvedValue(BUSINESS as never)
     vi.mocked(getMemberForUser).mockResolvedValue({ role: 'editor', is_admin: true } as never)
 
-    const result = await ApprovalsPage({ params: Promise.resolve({ locale: 'en' }) })
+    const result = await ApprovalsPage({ params: Promise.resolve({ locale: 'en' }), searchParams: NO_SEARCH_PARAMS })
     expect(result).toBeTruthy()
     expect(vi.mocked((await import('next/navigation')).redirect)).not.toHaveBeenCalled()
   })
@@ -95,7 +96,7 @@ describe('ApprovalsPage — ROLE-APPROVALS-GATED (ADR 0014 §9.1)', () => {
     vi.mocked(getMemberForUser).mockResolvedValue({ role: 'editor', is_admin: false } as never)
 
     await expect(
-      ApprovalsPage({ params: Promise.resolve({ locale: 'en' }) }),
+      ApprovalsPage({ params: Promise.resolve({ locale: 'en' }), searchParams: NO_SEARCH_PARAMS }),
     ).rejects.toThrow('NEXT_REDIRECT')
     expect(vi.mocked((await import('next/navigation')).redirect)).toHaveBeenCalledWith('/en/campaigns')
   })
@@ -106,7 +107,7 @@ describe('ApprovalsPage — ROLE-APPROVALS-GATED (ADR 0014 §9.1)', () => {
     vi.mocked(getMemberForUser).mockResolvedValue({ role: 'viewer', is_admin: false } as never)
 
     await expect(
-      ApprovalsPage({ params: Promise.resolve({ locale: 'en' }) }),
+      ApprovalsPage({ params: Promise.resolve({ locale: 'en' }), searchParams: NO_SEARCH_PARAMS }),
     ).rejects.toThrow('NEXT_REDIRECT')
     expect(vi.mocked((await import('next/navigation')).redirect)).toHaveBeenCalledWith('/en/campaigns')
   })
@@ -115,19 +116,18 @@ describe('ApprovalsPage — ROLE-APPROVALS-GATED (ADR 0014 §9.1)', () => {
     mockClient(OWNER_ID)
     vi.mocked(getBusinessForUser).mockResolvedValue(BUSINESS as never)
 
-    await ApprovalsPage({ params: Promise.resolve({ locale: 'en' }) })
+    await ApprovalsPage({ params: Promise.resolve({ locale: 'en' }), searchParams: NO_SEARCH_PARAMS })
 
     expect(listPendingDraftPosts).toHaveBeenCalledWith(expect.anything(), { businessId: BUSINESS.id })
   })
 
-  it('APV-OVERFLOW (m1): reads the true pending total and passes it to ApprovalsInbox', async () => {
+  it('APV-OVERFLOW (m1): reads the filter-scoped total (from listPendingDraftPosts) and passes it to ApprovalsInbox', async () => {
     mockClient(OWNER_ID)
     vi.mocked(getBusinessForUser).mockResolvedValue(BUSINESS as never)
-    vi.mocked(countPendingDraftPosts).mockResolvedValue(341)
+    vi.mocked(listPendingDraftPosts).mockResolvedValue({ rows: [], total: 341 })
 
-    const result = await ApprovalsPage({ params: Promise.resolve({ locale: 'en' }) })
+    const result = await ApprovalsPage({ params: Promise.resolve({ locale: 'en' }), searchParams: NO_SEARCH_PARAMS })
 
-    expect(countPendingDraftPosts).toHaveBeenCalledWith(expect.anything(), BUSINESS.id)
     // ApprovalsPage is a Server Component — it returns a React element tree
     // without rendering it, so the mock is never invoked. Read the props off
     // the un-rendered <ApprovalsInbox> element instead.
@@ -135,5 +135,78 @@ describe('ApprovalsPage — ROLE-APPROVALS-GATED (ADR 0014 §9.1)', () => {
     const outer = result as unknown as { props: { children: ReactElementLike[] } }
     const inboxElement = outer.props.children.find(child => child.type === ApprovalsInbox)
     expect(inboxElement?.props.totalPendingCount).toBe(341)
+  })
+
+  // ─── A2: server-side filter searchParams (ADR 0014 Amendment A2, closing 21C n3) ───
+
+  it('APV-SERVER-FILTER: passes campaign from searchParams through to listPendingDraftPosts', async () => {
+    mockClient(OWNER_ID)
+    vi.mocked(getBusinessForUser).mockResolvedValue(BUSINESS as never)
+    const campaignId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+
+    await ApprovalsPage({
+      params: Promise.resolve({ locale: 'en' }),
+      searchParams: Promise.resolve({ campaign: campaignId }),
+    })
+
+    expect(listPendingDraftPosts).toHaveBeenCalledWith(expect.anything(), {
+      businessId: BUSINESS.id,
+      campaignId,
+    })
+  })
+
+  it('APV-SERVER-FILTER: passes a valid platform from searchParams through to listPendingDraftPosts', async () => {
+    mockClient(OWNER_ID)
+    vi.mocked(getBusinessForUser).mockResolvedValue(BUSINESS as never)
+
+    await ApprovalsPage({
+      params: Promise.resolve({ locale: 'en' }),
+      searchParams: Promise.resolve({ platform: 'instagram' }),
+    })
+
+    expect(listPendingDraftPosts).toHaveBeenCalledWith(expect.anything(), {
+      businessId: BUSINESS.id,
+      platform: 'instagram',
+    })
+  })
+
+  it('ignores an invalid platform searchParam rather than passing an unknown literal through', async () => {
+    mockClient(OWNER_ID)
+    vi.mocked(getBusinessForUser).mockResolvedValue(BUSINESS as never)
+
+    await ApprovalsPage({
+      params: Promise.resolve({ locale: 'en' }),
+      searchParams: Promise.resolve({ platform: 'myspace' }),
+    })
+
+    expect(listPendingDraftPosts).toHaveBeenCalledWith(expect.anything(), { businessId: BUSINESS.id })
+  })
+
+  it('ignores a malformed (non-UUID) campaign searchParam rather than passing it through', async () => {
+    mockClient(OWNER_ID)
+    vi.mocked(getBusinessForUser).mockResolvedValue(BUSINESS as never)
+
+    await ApprovalsPage({
+      params: Promise.resolve({ locale: 'en' }),
+      searchParams: Promise.resolve({ campaign: 'not-a-uuid' }),
+    })
+
+    expect(listPendingDraftPosts).toHaveBeenCalledWith(expect.anything(), { businessId: BUSINESS.id })
+  })
+
+  it('threads the filter-scoped total to ApprovalsInbox for a deep-linked filtered view', async () => {
+    mockClient(OWNER_ID)
+    vi.mocked(getBusinessForUser).mockResolvedValue(BUSINESS as never)
+    vi.mocked(listPendingDraftPosts).mockResolvedValue({ rows: [], total: 12 })
+
+    const result = await ApprovalsPage({
+      params: Promise.resolve({ locale: 'en' }),
+      searchParams: Promise.resolve({ platform: 'linkedin' }),
+    })
+
+    type ReactElementLike = { type: unknown; props: { totalPendingCount?: number } }
+    const outer = result as unknown as { props: { children: ReactElementLike[] } }
+    const inboxElement = outer.props.children.find(child => child.type === ApprovalsInbox)
+    expect(inboxElement?.props.totalPendingCount).toBe(12)
   })
 })
