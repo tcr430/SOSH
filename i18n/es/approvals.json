@@ -8,8 +8,10 @@
   },
   "bulk": {
     "approveAll": "Aprobar todo ({count})",
+    "approveAllLabel": "Aprobar {count} publicaciones en {campaign}",
+    "approveAllLabelFiltered": "Aprobar {count} publicaciones de {platform} en {campaign}",
     "announceApproved": "Aprobaste {count} publicación(es) en {campaign}.",
-    "incompleteSetHint": "Algunos borradores pendientes no se muestran — acota la vista (o espera la paginación completa) antes de aprobar en lote."
+    "incompleteSetHint": "Algunos borradores pendientes no se muestran — acota por campaña o plataforma para aprobar en lote."
   },
   "row": {
     "approve": "Aprobar",
@@ -27,6 +29,6 @@
     "filtered": "Ninguna publicación coincide con estos filtros."
   },
   "overflow": {
-    "notice": "Mostrando las primeras {shown} de {total} publicaciones pendientes."
+    "notice": "Mostrando las primeras {shown} de {total} publicaciones pendientes — acota con un filtro de campaña o plataforma."
   }
 }

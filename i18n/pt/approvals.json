@@ -8,8 +8,10 @@
   },
   "bulk": {
     "approveAll": "Aprovar tudo ({count})",
+    "approveAllLabel": "Aprovar {count} publicações em {campaign}",
+    "approveAllLabelFiltered": "Aprovar {count} publicações de {platform} em {campaign}",
     "announceApproved": "Aprovou {count} publicação(ões) em {campaign}.",
-    "incompleteSetHint": "Alguns rascunhos pendentes não são mostrados — restrinja a vista (ou aguarde a paginação completa) antes de aprovar em massa."
+    "incompleteSetHint": "Alguns rascunhos pendentes não são mostrados — restrinja por campanha ou plataforma para aprovar em massa."
   },
   "row": {
     "approve": "Aprovar",
@@ -27,6 +29,6 @@
     "filtered": "Nenhuma publicação corresponde a estes filtros."
   },
   "overflow": {
-    "notice": "A mostrar as primeiras {shown} de {total} publicações pendentes."
+    "notice": "A mostrar as primeiras {shown} de {total} publicações pendentes — restrinja com um filtro de campanha ou plataforma."
   }
 }

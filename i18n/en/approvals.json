@@ -8,8 +8,10 @@
   },
   "bulk": {
     "approveAll": "Approve all ({count})",
+    "approveAllLabel": "Approve all {count} posts in {campaign}",
+    "approveAllLabelFiltered": "Approve all {count} {platform} posts in {campaign}",
     "announceApproved": "Approved {count} post(s) in {campaign}.",
-    "incompleteSetHint": "Some pending drafts aren't shown — narrow the view (or wait for full pagination) before bulk approving."
+    "incompleteSetHint": "Some pending drafts aren't shown — narrow by campaign or platform to approve in bulk."
   },
   "row": {
     "approve": "Approve",
@@ -27,6 +29,6 @@
     "filtered": "No posts match these filters."
   },
   "overflow": {
-    "notice": "Showing the first {shown} of {total} pending drafts."
+    "notice": "Showing the first {shown} of {total} pending posts — narrow with a campaign or platform filter."
   }
 }

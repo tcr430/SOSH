@@ -35,6 +35,9 @@ vi.mock('@/app/[locale]/(dashboard)/campaigns/[id]/posts/actions', () => ({
 import { ApprovalsInbox } from './ApprovalsInbox'
 import type { CalendarPostRow } from '@/lib/calendar/types'
 import type { CampaignRow } from '@/lib/db/types'
+import en from '@/i18n/en/approvals.json'
+import pt from '@/i18n/pt/approvals.json'
+import es from '@/i18n/es/approvals.json'
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -495,5 +498,107 @@ describe('ApprovalsInbox — Skip label contrast (m2, WCAG AA)', () => {
     expect(skip?.className).toContain('text-amber-700')
     expect(skip?.className).toContain('dark:text-amber-300')
     cleanup()
+  })
+})
+
+// ── B5: disabled-bulk badge contrast fix (text-muted-foreground on bg-muted
+// measured 4.34:1 in light theme, under the 4.5:1 AA floor; text-foreground
+// on the same bg-muted clears both themes) ─────────────────────────────────
+
+describe('ApprovalsInbox — disabled bulk badge contrast (B5, WCAG AA)', () => {
+  it('the disabled bulk trigger uses text-foreground, not the under-AA text-muted-foreground, on bg-muted', () => {
+    const post = makePost()
+    // totalPendingCount (341) > posts.length (1) => hasOverflow => disabled trigger
+    const { container, cleanup } = renderInbox([post], [CAMPAIGN], 341)
+
+    const disabledBulk = container.querySelector('[aria-label="bulk.incompleteSetHint"]')
+    expect(disabledBulk?.className).toContain('bg-muted')
+    expect(disabledBulk?.className).toContain('text-foreground')
+    expect(disabledBulk?.className).not.toContain('text-muted-foreground')
+    cleanup()
+  })
+})
+
+// ── B5: bulk button accessible name states scope, not just count ───────────
+
+describe('ApprovalsInbox — bulk button accessible name states WHAT it approves (B5)', () => {
+  it('unfiltered: aria-label uses approveAllLabel with count and campaign, not just the count', () => {
+    const post = makePost()
+    const { container, cleanup } = renderInbox([post])
+
+    const bulkButton = buttonWithText(container, 'bulk.approveAll')
+    const ariaLabel = bulkButton?.getAttribute('aria-label') ?? ''
+    expect(ariaLabel).toContain('bulk.approveAllLabel')
+    expect(ariaLabel).not.toContain('bulk.approveAllLabelFiltered')
+    expect(ariaLabel).toContain('"count":1')
+    expect(ariaLabel).toContain(`"campaign":"${CAMPAIGN.name}"`)
+    cleanup()
+  })
+
+  it('filtered: aria-label uses approveAllLabelFiltered and names the active platform', () => {
+    const posts = [
+      makePost({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1', platform: 'linkedin' }),
+      makePost({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2', platform: 'twitter' }),
+    ]
+    const { container, cleanup } = renderInbox(posts)
+
+    const platformSelect = container.querySelectorAll('select')[1] as HTMLSelectElement
+    act(() => {
+      platformSelect.value = 'twitter'
+      platformSelect.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+
+    const bulkButton = buttonWithText(container, 'bulk.approveAll')
+    const ariaLabel = bulkButton?.getAttribute('aria-label') ?? ''
+    expect(ariaLabel).toContain('bulk.approveAllLabelFiltered')
+    expect(ariaLabel).toContain('"platform":"X"')
+    expect(ariaLabel).toContain('"count":1')
+    cleanup()
+  })
+
+  it('the disabled (truncated) trigger states WHY, not just that it is inert', () => {
+    const post = makePost()
+    const { container, cleanup } = renderInbox([post], [CAMPAIGN], 341)
+
+    const disabledBulk = container.querySelector('[aria-label="bulk.incompleteSetHint"]')
+    expect(disabledBulk).not.toBeNull()
+    expect(disabledBulk?.getAttribute('aria-label')).toBe('bulk.incompleteSetHint')
+    cleanup()
+  })
+})
+
+// ── B5: i18n key completeness across en/pt/es ───────────────────────────────
+
+describe('ApprovalsInbox — i18n key completeness (B5)', () => {
+  function flattenKeys(obj: Record<string, unknown>, prefix = ''): string[] {
+    return Object.entries(obj).flatMap(([key, value]) => {
+      const path = prefix ? `${prefix}.${key}` : key
+      return typeof value === 'object' && value !== null
+        ? flattenKeys(value as Record<string, unknown>, path)
+        : [path]
+    })
+  }
+
+  const enKeys = flattenKeys(en).sort()
+
+  it('pt has exactly the same key set as en (no missing/extra keys)', () => {
+    expect(flattenKeys(pt).sort()).toEqual(enKeys)
+  })
+
+  it('es has exactly the same key set as en (no missing/extra keys)', () => {
+    expect(flattenKeys(es).sort()).toEqual(enKeys)
+  })
+
+  it('the new B5 bulk-scope and overflow keys exist in every locale', () => {
+    for (const locale of [en, pt, es]) {
+      expect(locale.bulk.approveAllLabel).toBeTruthy()
+      expect(locale.bulk.approveAllLabelFiltered).toBeTruthy()
+      expect(locale.overflow.notice).toBeTruthy()
+    }
+  })
+
+  it('no locale hardcodes English inside the overflow notice (pt/es must differ from en)', () => {
+    expect(pt.overflow.notice).not.toBe(en.overflow.notice)
+    expect(es.overflow.notice).not.toBe(en.overflow.notice)
   })
 })

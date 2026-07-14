@@ -206,6 +206,18 @@ export function ApprovalsInbox({ posts, campaigns, totalPendingCount }: Approval
 
       {Array.from(grouped.entries()).map(([campaignId, rows]) => {
         const campaign = campaigns.find(c => c.id === campaignId)
+        // The visible label is just the count ("Approve all (12)") — a blind
+        // approver must not have to infer the active platform filter from a
+        // number, so the accessible name states the actual scope (ADR 0014
+        // Amendment A, B5 a11y pass).
+        const bulkAriaLabel =
+          platformFilter === 'all'
+            ? t('bulk.approveAllLabel', { count: rows.length, campaign: campaign?.name ?? '' })
+            : t('bulk.approveAllLabelFiltered', {
+                count: rows.length,
+                platform: PLATFORM_LABELS[platformFilter as Platform],
+                campaign: campaign?.name ?? '',
+              })
         return (
           <section key={campaignId} className="space-y-3" aria-label={campaign?.name ?? ''}>
             {/* Bulk bar — APV-SINGLE-AND-BATCH, wires the EXISTING bulkApprovePostsAction */}
@@ -220,6 +232,7 @@ export function ApprovalsInbox({ posts, campaigns, totalPendingCount }: Approval
                 <Button
                   size="sm"
                   disabled={isPending}
+                  aria-label={bulkAriaLabel}
                   onClick={() => handleBulkApprove(campaignId, rows.length)}
                   className="bg-emerald-700 hover:bg-emerald-600 text-white"
                 >
@@ -232,7 +245,11 @@ export function ApprovalsInbox({ posts, campaigns, totalPendingCount }: Approval
                     aria-disabled="true"
                     aria-label={t('bulk.incompleteSetHint')}
                     onClick={e => e.preventDefault()}
-                    className="inline-flex items-center justify-center rounded-md px-3 py-1.5 text-xs font-medium bg-muted text-muted-foreground cursor-not-allowed"
+                    // WCAG AA (B5): text-muted-foreground on bg-muted measured
+                    // 4.34:1 in the light theme — under the 4.5:1 floor.
+                    // text-foreground on the same bg-muted clears both themes
+                    // (18.15:1 light / 14.48:1 dark) without a new token.
+                    className="inline-flex items-center justify-center rounded-md px-3 py-1.5 text-xs font-medium bg-muted text-foreground cursor-not-allowed"
                   >
                     {t('bulk.approveAll', { count: rows.length })}
                   </TooltipTrigger>
