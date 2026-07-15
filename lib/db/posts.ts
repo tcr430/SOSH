@@ -503,24 +503,29 @@ export async function updatePostContentAndMetadata(
   return row as PostRow
 }
 
-// ADR 0014 Amendment A1 — the platform predicate narrows the SAME update
-// statement that was already gated by enforce_post_transition_capability
-// (0013 §5); it is not a second query or a new write path (A1's hard
-// constraint). Undefined/empty platforms leaves the statement unfiltered,
-// preserving the exact prior (campaign-wide) behaviour.
+// Session 22-D (BLOCKER-1/2) — approves EXACTLY the ids the caller rendered.
+// "Approve what I can see" is the literal WHERE clause, not a platform
+// predicate or a window-size argument: this makes APV-BULK-VISIBLE-ONLY true
+// by construction and closes the TOCTOU race a separate count-then-write
+// gate had. campaignId/status/deleted_at stay as defence-in-depth on top of
+// enforce_post_transition_capability (0013 §5); businessId closes the one
+// write path (campaigns/[id]/posts) that previously relied on RLS alone.
 export async function bulkApproveDraftPosts(
   client: SupabaseClient,
   campaignId: string,
-  platforms?: Platform[],
+  renderedIds: string[],
+  businessId: string,
 ): Promise<number> {
-  let query = client
+  if (renderedIds.length === 0) return 0
+  const { data, error } = await client
     .from('posts')
     .update({ status: 'approved' })
+    .in('id', renderedIds)
     .eq('campaign_id', campaignId)
+    .eq('business_id', businessId)
     .eq('status', 'draft')
     .is('deleted_at', null)
-  if (platforms && platforms.length > 0) query = query.in('platform', platforms)
-  const { data, error } = await query.select('id')
+    .select('id')
   if (error) throw new Error(getErrorMessage(error))
   return (data as { id: string }[] | null)?.length ?? 0
 }

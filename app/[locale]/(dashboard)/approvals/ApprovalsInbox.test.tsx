@@ -125,13 +125,13 @@ describe('ApprovalsInbox — single and batch approve (APV-SINGLE-AND-BATCH)', (
     cleanup()
   })
 
-  it('the bulk bar calls the existing bulkApprovePostsAction with the campaign id', () => {
+  it('the bulk bar calls the existing bulkApprovePostsAction with the campaign id and rendered ids', () => {
     const post = makePost()
     const { container, cleanup } = renderInbox([post])
 
     act(() => { buttonWithText(container, 'bulk.approveAll')?.click() })
 
-    expect(bulkApprovePostsAction).toHaveBeenCalledWith(post.campaign_id, undefined)
+    expect(bulkApprovePostsAction).toHaveBeenCalledWith(post.campaign_id, [post.id])
     cleanup()
   })
 })
@@ -239,17 +239,17 @@ describe('ApprovalsInbox — bulk approve respects the active platform filter (2
     expect(bulkButton?.hasAttribute('disabled')).toBe(false)
     act(() => { bulkButton?.click() })
 
-    expect(bulkApprovePostsAction).toHaveBeenCalledWith(posts[0].campaign_id, ['twitter'])
+    expect(bulkApprovePostsAction).toHaveBeenCalledWith(posts[0].campaign_id, [posts[3].id, posts[4].id])
     cleanup()
   })
 
-  it('unfiltered bulk calls the action with undefined platforms (regression pin)', () => {
+  it('unfiltered bulk calls the action with all rendered ids (regression pin)', () => {
     const post = makePost()
     const { container, cleanup } = renderInbox([post])
 
     act(() => { buttonWithText(container, 'bulk.approveAll')?.click() })
 
-    expect(bulkApprovePostsAction).toHaveBeenCalledWith(post.campaign_id, undefined)
+    expect(bulkApprovePostsAction).toHaveBeenCalledWith(post.campaign_id, [post.id])
     cleanup()
   })
 
@@ -353,7 +353,7 @@ describe('ApprovalsInbox — bulk approve count consistency (APV-BULK-COUNT-CONS
 
     await act(async () => { bulkButton?.click() })
 
-    expect(bulkApprovePostsAction).toHaveBeenCalledWith(posts[0].campaign_id, undefined)
+    expect(bulkApprovePostsAction).toHaveBeenCalledWith(posts[0].campaign_id, [posts[0].id, posts[1].id, posts[2].id])
 
     // All three rows from the approved campaign are gone; only the unrelated
     // campaign's row remains — row-removal matches the label count exactly.

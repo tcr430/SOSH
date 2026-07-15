@@ -113,18 +113,19 @@ export function ApprovalsInbox({ posts, campaigns, totalPendingCount }: Approval
     })
   }
 
-  function handleBulkApprove(campaignId: string, count: number) {
+  // Session 22-D (BLOCKER-1/2) — renderedIds are exactly the rows this group
+  // is currently showing (already filtered by campaign + platform), so the
+  // write can never reach a draft the approver didn't see, and the label,
+  // optimistic removal, and announcement all derive from the same set.
+  function handleBulkApprove(campaignId: string, renderedIds: string[]) {
     setErrorKey(null)
     startTransition(async () => {
-      // ADR 0014 Amendment A1 — the platform predicate narrows the write to
-      // exactly the currently-filtered rows (21C M1: bulk must never approve
-      // drafts outside the active filter).
-      const platforms = platformFilter === 'all' ? undefined : [platformFilter as Platform]
-      const result = await bulkApprovePostsAction(campaignId, platforms)
+      const result = await bulkApprovePostsAction(campaignId, renderedIds)
       if (result.success) {
         const campaignName = campaigns.find(c => c.id === campaignId)?.name ?? ''
-        setItems(prev => prev.filter(p => p.campaign_id !== campaignId))
-        setStatusMessage(t('bulk.announceApproved', { count, campaign: campaignName }))
+        const idSet = new Set(renderedIds)
+        setItems(prev => prev.filter(p => !idSet.has(p.id)))
+        setStatusMessage(t('bulk.announceApproved', { count: renderedIds.length, campaign: campaignName }))
       } else {
         setErrorKey(campaignId)
       }
@@ -233,7 +234,7 @@ export function ApprovalsInbox({ posts, campaigns, totalPendingCount }: Approval
                   size="sm"
                   disabled={isPending}
                   aria-label={bulkAriaLabel}
-                  onClick={() => handleBulkApprove(campaignId, rows.length)}
+                  onClick={() => handleBulkApprove(campaignId, rows.map(r => r.id))}
                   className="bg-emerald-700 hover:bg-emerald-600 text-white"
                 >
                   {t('bulk.approveAll', { count: rows.length })}

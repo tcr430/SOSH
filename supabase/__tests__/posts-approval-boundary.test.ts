@@ -257,16 +257,22 @@ describe('posts approval boundary — DB-enforced (ADR 0013 §5)', () => {
     return data.id as string
   }
 
-  it('APV-BULK-DB-BOUNDARY: an editor calling the predicate\'d bulk-approve UPDATE directly is denied by the trigger; zero rows flip', async () => {
-    const postId = await createPostOnPlatform('linkedin', 'draft')
+  // Session 22-D (BLOCKER-1/2) — bulkApproveDraftPosts now issues
+  // `.in('id', renderedIds).eq('campaign_id', ...).eq('business_id', ...)`
+  // instead of a platform predicate. These tests exercise that exact shape
+  // at the real DB boundary, not just at the mock/unit layer.
+
+  it('APV-BULK-DB-BOUNDARY: an editor calling the predicate\'d (id-based) bulk-approve UPDATE directly is denied by the trigger; zero rows flip', async () => {
+    const postId = await createPost('draft')
     const client = await signInAs(editorEmail)
     const { error } = await client
       .from('posts')
       .update({ status: 'approved' })
+      .in('id', [postId])
       .eq('campaign_id', campaignId)
+      .eq('business_id', businessId)
       .eq('status', 'draft')
       .is('deleted_at', null)
-      .in('platform', ['linkedin'])
       .select()
     expect(error).not.toBeNull()
     expect(error!.message).toMatch(/approve capability required/)
@@ -277,7 +283,7 @@ describe('posts approval boundary — DB-enforced (ADR 0013 §5)', () => {
     await admin.from('posts').delete().eq('id', postId)
   })
 
-  it('THE 21C M1 SCENARIO: 3 linkedin + 2 twitter drafts, filtered bulk approve flips EXACTLY the 2 twitter drafts', async () => {
+  it('THE 21C M1 SCENARIO, now id-based: 3 linkedin + 2 twitter drafts, an id list of just the 2 twitter ids flips EXACTLY those 2', async () => {
     const linkedinIds = await Promise.all([
       createPostOnPlatform('linkedin', 'draft'),
       createPostOnPlatform('linkedin', 'draft'),
@@ -292,10 +298,11 @@ describe('posts approval boundary — DB-enforced (ADR 0013 §5)', () => {
     const { data, error } = await client
       .from('posts')
       .update({ status: 'approved' })
+      .in('id', twitterIds)
       .eq('campaign_id', campaignId)
+      .eq('business_id', businessId)
       .eq('status', 'draft')
       .is('deleted_at', null)
-      .in('platform', ['twitter'])
       .select('id')
     expect(error).toBeNull()
     expect(data).toHaveLength(2)
@@ -308,5 +315,67 @@ describe('posts approval boundary — DB-enforced (ADR 0013 §5)', () => {
     expect(linkedinRows!.every((r: { status: string }) => r.status === 'draft')).toBe(true)
 
     await admin.from('posts').delete().in('id', [...linkedinIds, ...twitterIds])
+  })
+
+  it('BLOCKER-1/2: renderedIds spanning multiple campaigns/businesses cannot approve a row outside campaignId+businessId', async () => {
+    const inScopeId = await createPostOnPlatform('linkedin', 'draft')
+
+    // A second, unrelated business/campaign/draft — never owned or scoped to
+    // the approver's business under test.
+    const { data: otherBiz, error: otherBizErr } = await admin
+      .from('businesses')
+      .insert({ name: 'Cross-Tenant Business', owner_id: ownerId, plan: 'plus' })
+      .select('id')
+      .single()
+    if (otherBizErr) throw otherBizErr
+    const { data: otherCampaign, error: otherCampaignErr } = await admin
+      .from('campaigns')
+      .insert({
+        business_id: otherBiz.id,
+        name: 'Cross-Tenant Campaign',
+        objective: 'Test cross-tenant isolation',
+        platforms: ['linkedin'],
+        frequency: 'weekly',
+        posts_per_week: 1,
+        start_date: '2026-07-01',
+      })
+      .select('id')
+      .single()
+    if (otherCampaignErr) throw otherCampaignErr
+    const { data: otherPost, error: otherPostErr } = await admin
+      .from('posts')
+      .insert({
+        campaign_id: otherCampaign.id,
+        business_id: otherBiz.id,
+        platform: 'linkedin',
+        content: 'Cross-tenant draft',
+        scheduled_at: '2026-07-15T12:00:00Z',
+        status: 'draft',
+      })
+      .select('id')
+      .single()
+    if (otherPostErr) throw otherPostErr
+
+    const client = await signInAs(approverEmail)
+    const { data, error } = await client
+      .from('posts')
+      .update({ status: 'approved' })
+      .in('id', [inScopeId, otherPost.id])
+      .eq('campaign_id', campaignId)
+      .eq('business_id', businessId)
+      .eq('status', 'draft')
+      .is('deleted_at', null)
+      .select('id')
+    expect(error).toBeNull()
+    expect(data).toHaveLength(1)
+    expect(data![0].id).toBe(inScopeId)
+
+    const { data: otherCheck } = await admin.from('posts').select('status').eq('id', otherPost.id).single()
+    expect(otherCheck.status).toBe('draft')
+
+    await admin.from('posts').delete().eq('id', otherPost.id)
+    await admin.from('campaigns').delete().eq('id', otherCampaign.id)
+    await admin.from('businesses').delete().eq('id', otherBiz.id)
+    await admin.from('posts').delete().eq('id', inScopeId)
   })
 })

@@ -88,7 +88,6 @@ export function PostsClient({ posts, campaign, locale, initialFilter = 'all' }: 
   }
 
   // Counts
-  const draftCount = localPosts.filter(p => p.status === 'draft').length
   const approvedCount = localPosts.filter(p => p.status === 'approved').length
   const skippedCount = localPosts.filter(p => p.status === 'skipped').length
   const failedCount = localPosts.filter(p => p.status === 'failed').length
@@ -97,22 +96,6 @@ export function PostsClient({ posts, campaign, locale, initialFilter = 'all' }: 
   const platformsPresent = Array.from(
     new Set(localPosts.map(p => p.platform)),
   ) as Platform[]
-
-  // Bulk approve
-  function handleBulkApprove() {
-    const snapshot = localPosts
-    setLocalPosts(prev =>
-      prev.map(p =>
-        p.status === 'draft' ? { ...p, status: 'approved' as const } : p,
-      ),
-    )
-    startTransition(async () => {
-      const result = await bulkApprovePostsAction(campaign.id)
-      if (!result.success) {
-        setLocalPosts(snapshot)
-      }
-    })
-  }
 
   // Filtered + sorted list
   const filtered = localPosts
@@ -123,6 +106,30 @@ export function PostsClient({ posts, campaign, locale, initialFilter = 'all' }: 
       if (activeFilter === 'failed') return p.status === 'failed'
       return p.platform === activeFilter
     })
+
+  // Session 22-D (BLOCKER-1/2) — bulk approve targets EXACTLY the drafts
+  // rendered under the active filter, never the business-wide draft set.
+  const renderedDraftIds = filtered
+    .filter(p => p.status === 'draft')
+    .map(p => p.id)
+
+  // Bulk approve
+  function handleBulkApprove() {
+    if (renderedDraftIds.length === 0) return
+    const idSet = new Set(renderedDraftIds)
+    const snapshot = localPosts
+    setLocalPosts(prev =>
+      prev.map(p =>
+        idSet.has(p.id) ? { ...p, status: 'approved' as const } : p,
+      ),
+    )
+    startTransition(async () => {
+      const result = await bulkApprovePostsAction(campaign.id, renderedDraftIds)
+      if (!result.success) {
+        setLocalPosts(snapshot)
+      }
+    })
+  }
 
   const dateFnsLocale = DATE_FNS_LOCALES[locale] ?? enUS
 
@@ -179,7 +186,7 @@ export function PostsClient({ posts, campaign, locale, initialFilter = 'all' }: 
             )}
           </div>
 
-          {draftCount > 0 && canApprove && (
+          {renderedDraftIds.length > 0 && canApprove && (
             <button
               type="button"
               onClick={handleBulkApprove}
@@ -190,7 +197,7 @@ export function PostsClient({ posts, campaign, locale, initialFilter = 'all' }: 
             </button>
           )}
 
-          {draftCount > 0 && !canApprove && canAuthor && (
+          {renderedDraftIds.length > 0 && !canApprove && canAuthor && (
             <Tooltip>
               <TooltipTrigger
                 type="button"

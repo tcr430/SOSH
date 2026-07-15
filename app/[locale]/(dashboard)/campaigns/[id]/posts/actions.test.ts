@@ -21,8 +21,6 @@ vi.mock('@/lib/db/posts', () => ({
   updatePostContent: vi.fn(),
   updatePostContentAndMetadata: vi.fn(),
   bulkApproveDraftPosts: vi.fn(),
-  countPendingDraftPosts: vi.fn(),
-  APPROVALS_POST_LIMIT: 200,
   getPostSiblingTopics: vi.fn(),
 }))
 
@@ -47,7 +45,6 @@ import {
   getPostSiblingTopics,
   updatePostContentAndMetadata,
   bulkApproveDraftPosts,
-  countPendingDraftPosts,
 } from '@/lib/db/posts'
 import { buildCustomerContext } from '@/lib/ai/context'
 import { runPrompt } from '@/lib/ai/runner'
@@ -297,55 +294,57 @@ describe('regeneratePostAction', () => {
   })
 })
 
-// ── bulkApprovePostsAction (ADR 0014 Amendment A1/A1.1) ────────────────────────
+// ── bulkApprovePostsAction (Session 22-D: renderedIds only, BLOCKER-1/2) ───────
 
 describe('bulkApprovePostsAction', () => {
-  it('passes the platforms array through to bulkApproveDraftPosts (M1)', async () => {
+  const RENDERED_ID_1 = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'
+  const RENDERED_ID_2 = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2'
+
+  it('passes renderedIds and the caller business id through to bulkApproveDraftPosts', async () => {
     makeAuthClient()
-    vi.mocked(countPendingDraftPosts).mockResolvedValue(2)
     vi.mocked(bulkApproveDraftPosts).mockResolvedValue(2)
 
-    const result = await bulkApprovePostsAction(VALID_CAMPAIGN_ID, ['twitter'])
+    const result = await bulkApprovePostsAction(VALID_CAMPAIGN_ID, [RENDERED_ID_1, RENDERED_ID_2])
 
-    expect(bulkApproveDraftPosts).toHaveBeenCalledWith(expect.anything(), VALID_CAMPAIGN_ID, ['twitter'])
+    expect(bulkApproveDraftPosts).toHaveBeenCalledWith(
+      expect.anything(),
+      VALID_CAMPAIGN_ID,
+      [RENDERED_ID_1, RENDERED_ID_2],
+      MOCK_BUSINESS.id,
+    )
     expect(result).toEqual({ success: true, count: 2 })
   })
 
-  it('calls bulkApproveDraftPosts with undefined platforms when unfiltered (regression pin)', async () => {
+  it('regression: unfiltered bulk over a fully-rendered small campaign still approves all of them', async () => {
     makeAuthClient()
-    vi.mocked(countPendingDraftPosts).mockResolvedValue(3)
     vi.mocked(bulkApproveDraftPosts).mockResolvedValue(3)
+    const allIds = [RENDERED_ID_1, RENDERED_ID_2, VALID_POST_ID]
 
-    await bulkApprovePostsAction(VALID_CAMPAIGN_ID)
+    const result = await bulkApprovePostsAction(VALID_CAMPAIGN_ID, allIds)
 
-    expect(bulkApproveDraftPosts).toHaveBeenCalledWith(expect.anything(), VALID_CAMPAIGN_ID, undefined)
+    expect(bulkApproveDraftPosts).toHaveBeenCalledWith(
+      expect.anything(),
+      VALID_CAMPAIGN_ID,
+      allIds,
+      MOCK_BUSINESS.id,
+    )
+    expect(result).toEqual({ success: true, count: 3 })
   })
 
-  it('rejects an invalid platform value (Zod)', async () => {
+  it('rejects a non-uuid renderedIds entry (Zod)', async () => {
     makeAuthClient()
-    const result = await bulkApprovePostsAction(VALID_CAMPAIGN_ID, ['myspace' as never])
+    const result = await bulkApprovePostsAction(VALID_CAMPAIGN_ID, ['not-a-uuid'])
     expect(result).toEqual({ error: 'invalid_input' })
     expect(bulkApproveDraftPosts).not.toHaveBeenCalled()
   })
 
-  it('APV-BULK-VISIBLE-ONLY (F1): refuses the write and flips zero rows when the business-wide pending total exceeds APPROVALS_POST_LIMIT, even called directly bypassing the UI', async () => {
+  it('empty renderedIds still calls through (bulkApproveDraftPosts short-circuits to 0)', async () => {
     makeAuthClient()
-    vi.mocked(countPendingDraftPosts).mockResolvedValue(201)
+    vi.mocked(bulkApproveDraftPosts).mockResolvedValue(0)
 
-    const result = await bulkApprovePostsAction(VALID_CAMPAIGN_ID)
+    const result = await bulkApprovePostsAction(VALID_CAMPAIGN_ID, [])
 
-    expect(result).toEqual({ error: 'not_eligible' })
-    expect(bulkApproveDraftPosts).not.toHaveBeenCalled()
-  })
-
-  it('allows the write when the pending total is exactly at the limit (boundary)', async () => {
-    makeAuthClient()
-    vi.mocked(countPendingDraftPosts).mockResolvedValue(200)
-    vi.mocked(bulkApproveDraftPosts).mockResolvedValue(1)
-
-    const result = await bulkApprovePostsAction(VALID_CAMPAIGN_ID)
-
-    expect(result).toEqual({ success: true, count: 1 })
-    expect(bulkApproveDraftPosts).toHaveBeenCalled()
+    expect(bulkApproveDraftPosts).toHaveBeenCalledWith(expect.anything(), VALID_CAMPAIGN_ID, [], MOCK_BUSINESS.id)
+    expect(result).toEqual({ success: true, count: 0 })
   })
 })
