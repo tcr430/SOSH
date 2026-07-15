@@ -1,19 +1,32 @@
-import { toZonedTime, fromZonedTime } from 'date-fns-tz'
+import { formatInTimeZone, fromZonedTime } from 'date-fns-tz'
 import { toUtcIso } from '@/lib/utils'
 
 /**
  * Preserves the post's business-tz wall-clock time-of-day onto a new target day.
  *
  * Algorithm (CAL-2 / ADR 0012 §7b):
- * 1. Convert the current UTC instant to a "zoned" Date via toZonedTime so that
- *    the UTC fields of the returned Date equal the LOCAL hour/minute/second.
- * 2. Overwrite the UTC date components (year/month/day) with the target day —
- *    machine-timezone-independent because we use UTC setters.
- * 3. fromZonedTime converts the local-time-in-tz back to UTC.
+ * 1. formatInTimeZone reads the current instant's wall-clock time-of-day in `tz`
+ *    as a plain string — no Date object with ambiguous local/UTC fields involved.
+ * 2. Splice that time-of-day onto `targetDayKey` as a naive datetime string.
+ * 3. fromZonedTime parses the naive string as wall-clock time IN `tz` and
+ *    resolves it to a UTC instant using tz's own offset rules.
  *
- * DST policy (R8, adopted intentionally):
- * - Gap (spring forward): date-fns-tz forward-shifts the non-existent local time.
- * - Overlap (autumn back): date-fns-tz picks the later UTC+0 occurrence.
+ * Genuinely machine-timezone-independent (verified: identical output under
+ * TZ=UTC / TZ=Europe/Lisbon / TZ=America/New_York for every case below,
+ * including the DST gap). The prior implementation mutated a Date via
+ * setFullYear() and relied on the *machine's own* local Date engine to
+ * auto-normalize an out-of-range hour across a DST transition — that side
+ * effect only fires when the machine's local timezone has a transition at
+ * that same point, i.e. it silently gave a different (wrong) answer on any
+ * server whose machine TZ != the business's tz (Vercel runs UTC — this was
+ * a live production bug for Lisbon DST-gap reschedules, not just a test
+ * artifact of developing on a Lisbon-timezone machine).
+ *
+ * DST policy (R8 — "date-fns-tz default; test encodes intent", ADR 0012 §7b):
+ * whatever fromZonedTime resolves a gap/overlap wall-clock string to. Gap
+ * time 01:30 on the 2026-03-29 Lisbon spring-forward lands at 2026-03-29T00:30:00Z
+ * (UTC+1 WEST offset applied to the literal 01:30 value, not a clock-shift to
+ * 02:30) — pinned by the reschedule.test.ts DST-gap case.
  *
  * Returns a UTC ISO string via toUtcIso() (CLAUDE.md date rule).
  */
@@ -23,18 +36,7 @@ export function computeRescheduledInstant(
   tz: string,
 ): string {
   const source = new Date(currentScheduledAtUtc)
-
-  // toZonedTime stores the LOCAL time in the UTC fields of the returned Date,
-  // making subsequent UTC-field reads portable across machine timezones.
-  const zoned = toZonedTime(source, tz)
-
-  // Replace only the date component; preserve the local-stored time-of-day.
-  // toZonedTime stores the tz-local values in getDate()/getHours() (machine-local
-  // fields), so we must use setFullYear (not setUTCFullYear) to stay in sync
-  // with what fromZonedTime will read back.
-  const [y, mo, d] = targetDayKey.split('-').map(Number)
-  zoned.setFullYear(y, mo - 1, d)
-
-  // Convert the local (tz) wall time back to UTC.
-  return toUtcIso(fromZonedTime(zoned, tz))
+  const timeOfDay = formatInTimeZone(source, tz, 'HH:mm:ss.SSS')
+  const naiveTargetDateTime = `${targetDayKey}T${timeOfDay}`
+  return toUtcIso(fromZonedTime(naiveTargetDateTime, tz))
 }

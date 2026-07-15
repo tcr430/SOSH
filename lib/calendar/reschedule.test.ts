@@ -31,15 +31,17 @@ describe('computeRescheduledInstant', () => {
 
   // ---- DST: spring forward (gap) -----------------------------------------
 
-  it('DST spring-forward gap: 01:30 WET source lands on gap day — forward-shifts to 02:30 WEST (R8)', () => {
+  it('DST spring-forward gap: 01:30 WET source lands on gap day — resolved via WEST offset, machine-tz-independent (R8)', () => {
     // Source: 2026-03-28T01:30:00Z = 01:30 WET in Lisbon
-    // Target: 2026-03-29 — gap day; 01:30 local doesn't exist
-    // date-fns-tz forward-shifts: 01:30 → 02:30 WEST = 01:30 UTC  (R8 named behaviour)
+    // Target: 2026-03-29 — gap day; 01:30 local doesn't exist (clocks jump 01:00->02:00)
+    // fromZonedTime resolves the literal '01:30' wall-clock string against the WEST
+    // (UTC+1, post-transition) offset => 01:30 - 1h = 00:30 UTC. Verified identical
+    // under TZ=UTC / TZ=Europe/Lisbon / TZ=America/New_York (R8: "date-fns-tz default").
     expect(computeRescheduledInstant(
       '2026-03-28T01:30:00Z',
       '2026-03-29',
       'Europe/Lisbon',
-    )).toBe('2026-03-29T01:30:00.000Z')
+    )).toBe('2026-03-29T00:30:00.000Z')
   })
 
   it('DST spring-forward: a time outside the gap is correctly mapped on the transition day', () => {
