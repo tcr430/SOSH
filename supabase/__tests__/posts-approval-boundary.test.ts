@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { createClient } from '@supabase/supabase-js'
+// Session 22-E (review finding NEW-2): the bulk case below calls the REAL
+// function rather than re-typing its WHERE clause inline. A hand-rolled mirror
+// of the query proves only that Postgres honours a predicate — it stays green
+// if someone deletes a filter from bulkApproveDraftPosts itself, which is the
+// mutation this suite exists to catch.
+import { bulkApproveDraftPosts } from '@/lib/db/posts'
 
 const PASSWORD = 'TestPass123!'
 
@@ -320,14 +326,38 @@ describe('posts approval boundary — DB-enforced (ADR 0013 §5)', () => {
   it('BLOCKER-1/2: renderedIds spanning multiple campaigns/businesses cannot approve a row outside campaignId+businessId', async () => {
     const inScopeId = await createPostOnPlatform('linkedin', 'draft')
 
-    // A second, unrelated business/campaign/draft — never owned or scoped to
-    // the approver's business under test.
+    // A second business the approver is an ACTIVE APPROVER OF — deliberately,
+    // and this is the whole point of the fixture (Session 22-E, NEW-3).
+    //
+    // The pre-22-E version made this business one the approver had no
+    // membership in. That looked like a cross-tenant test but wasn't a useful
+    // one: get_user_business_ids() = owned ∪ active memberships, so RLS
+    // (posts_update_own) rejected the foreign row before the function's own
+    // predicate was ever consulted. The test therefore passed identically with
+    // bulkApproveDraftPosts' filters deleted — it pinned RLS, which is covered
+    // by get-user-business-ids-matrix.test.ts, not the function under test.
+    //
+    // With membership, RLS permits BOTH rows and the function's own
+    // campaign_id/business_id predicate is the only thing that narrows the
+    // write. Honest scope note: campaign_id is what actually excludes here,
+    // since a campaign belongs to exactly one business and therefore pins
+    // business_id transitively via the FK. business_id is defence-in-depth —
+    // no fixture can make it independently load-bearing, because a
+    // same-campaign cross-business row cannot exist.
     const { data: otherBiz, error: otherBizErr } = await admin
       .from('businesses')
-      .insert({ name: 'Cross-Tenant Business', owner_id: ownerId, plan: 'plus' })
+      .insert({ name: 'Second Business (approver is an active member)', owner_id: ownerId, plan: 'plus' })
       .select('id')
       .single()
     if (otherBizErr) throw otherBizErr
+    const { error: otherMemberErr } = await admin.from('business_members').insert({
+      business_id: otherBiz.id,
+      user_id: approverId,
+      email: approverEmail,
+      role: 'approver',
+      status: 'active',
+    })
+    if (otherMemberErr) throw otherMemberErr
     const { data: otherCampaign, error: otherCampaignErr } = await admin
       .from('campaigns')
       .insert({
@@ -357,24 +387,34 @@ describe('posts approval boundary — DB-enforced (ADR 0013 §5)', () => {
     if (otherPostErr) throw otherPostErr
 
     const client = await signInAs(approverEmail)
-    const { data, error } = await client
+
+    // Sanity-check the premise: this approver CAN reach the other business's
+    // draft under RLS. If this write were permitted, the exclusion below would
+    // be the function's doing, not RLS's. (Rolled straight back.)
+    const { data: rlsReach } = await client
       .from('posts')
       .update({ status: 'approved' })
-      .in('id', [inScopeId, otherPost.id])
-      .eq('campaign_id', campaignId)
-      .eq('business_id', businessId)
-      .eq('status', 'draft')
-      .is('deleted_at', null)
+      .eq('id', otherPost.id)
       .select('id')
-    expect(error).toBeNull()
-    expect(data).toHaveLength(1)
-    expect(data![0].id).toBe(inScopeId)
+    expect(rlsReach).toHaveLength(1)
+    await admin.from('posts').update({ status: 'draft' }).eq('id', otherPost.id)
 
+    const count = await bulkApproveDraftPosts(
+      client,
+      campaignId,
+      [inScopeId, otherPost.id],
+      businessId,
+    )
+    expect(count).toBe(1)
+
+    const { data: inScopeCheck } = await admin.from('posts').select('status').eq('id', inScopeId).single()
+    expect(inScopeCheck.status).toBe('approved')
     const { data: otherCheck } = await admin.from('posts').select('status').eq('id', otherPost.id).single()
     expect(otherCheck.status).toBe('draft')
 
     await admin.from('posts').delete().eq('id', otherPost.id)
     await admin.from('campaigns').delete().eq('id', otherCampaign.id)
+    await admin.from('business_members').delete().eq('business_id', otherBiz.id)
     await admin.from('businesses').delete().eq('id', otherBiz.id)
     await admin.from('posts').delete().eq('id', inScopeId)
   })
