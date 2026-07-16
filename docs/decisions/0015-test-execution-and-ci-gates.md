@@ -105,8 +105,34 @@ The mechanism survives: **eleven** `*_INTEGRATION_TEST_ENABLED` flags gate `supa
 `supabase/__tests__/posts-approval-boundary.test.ts:7`). Any one left off re-creates a green suite that
 tested nothing — indistinguishable, in the Actions UI, from a suite that ran and passed.
 
-**Both classes defeat the same rule.** "Covered" must mean *executed green on every push*. A test that no
-job runs, and a suite an env flag silently empties, are the same lie told two ways.
+### (c) EXECUTED-AND-PROVING-NOTHING — a suite runs green in CI but its assertion is not attached to the claim
+
+The precedent is the Session 22-D re-review (`docs/reviews/session-22d-reviewer.md`). Two constraints each
+had a test file, the file ran in CI, and the run was green — yet neither test could have failed if the
+guarded behavior had never shipped:
+
+- `posts-approval-boundary.test.ts` asserted that a hand-built Postgres query respected a `WHERE` clause the
+  test itself constructed. It proved Postgres honours `WHERE`, not that `bulkApproveDraftPosts` emits that
+  clause. Removing the guard from the real function would not turn this test red.
+- `ApprovalsInbox.test.tsx`'s contrast assertions compared rendered output against a **hand-transcribed copy**
+  of the CSS custom-property values, not the shipped `app/globals.css` tokens. Editing `globals.css` to a
+  non-compliant color would not turn this test red either — only editing the test's transcription would.
+
+Both were fixed the same way (22-D correction pass): call the real function under test and mutate a live
+fixture so the assertion tracks the actual guard, or read the token from the shipped source file at test
+time instead of a copy of it. This is the same family as the SHARED-FUNCTION CALLERS lesson (`CLAUDE.md`) —
+a test verifying the wrong thing, one level down: there, the wrong *caller* was untested; here, the right
+caller is tested but the wrong *thing about it* is asserted.
+
+**The rule that closes it (CONS-ATTACHED):** covered = executed **and** attached to the claim. A boundary
+test must call the real function/component under test and mutate a live fixture (the actual guard, the
+actual source token) so the assertion **fails when the guard is removed** — not a hand-built substitute that
+merely resembles it. If deleting the production guard and re-running the test suite doesn't turn it red,
+the test is `EXECUTED-AND-PROVING-NOTHING`, regardless of how green it looks in CI.
+
+**All three classes defeat the same rule.** "Covered" must mean *executed green on every push, and the green
+outcome is caused by the guard under test.* A test that no job runs, a suite an env flag silently empties,
+and a suite that exercises something merely adjacent to the claim, are the same lie told three ways.
 
 ---
 
@@ -144,7 +170,11 @@ no `supabase/` or `.sql` change), `PROC-REVIEW-AT-COMMIT` (§6 — a process con
 > Every named constraint in every ADR maps to exactly one tier. A Reviewer's coverage table MUST, for each
 > constraint, state **(1) its tier and (2) the CI job that executes its test** (or, for Tier 3, the
 > diff-fact that verifies it). A constraint whose "executing job" column is empty for a Tier-1 or Tier-2
-> constraint is a defect of the same class this ADR exists to eliminate — it is `AUTHORED-NOT-EXECUTED`.
+> constraint is a defect of the same class this ADR exists to eliminate — it is `AUTHORED-NOT-EXECUTED`. A
+> constraint whose test runs green but does not call the real function/component under test, or asserts
+> against a hand-copied value instead of the shipped source, is `EXECUTED-AND-PROVING-NOTHING` (§1(c)) — the
+> Reviewer must additionally confirm, for Tier-1 and Tier-2 constraints, that removing the production guard
+> would turn the test red.
 
 ---
 

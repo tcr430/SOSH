@@ -289,6 +289,14 @@ function/action as tested, `git grep` its callers and list, per caller, which te
 it. A caller with no listed test is `AUTHORED-NOT-EXECUTED` for that caller, even if another caller is
 fully covered.
 
+**REVIEWER-REPORT IMMUTABILITY.** A reviewer's report is append-only history and is NEVER edited in place
+by the correction pass it audits. Resolutions go in a SEPARATE `docs/reviews/session-NN-D-corrections.md`
+(or the next delta review), never as RESOLVED verdicts written back into the original by the fix's author.
+The finding record and the fix record must not share an author in the same file. Session 22-D violated this
+— `docs/reviews/session-22-reviewer.md` carries RESOLVED verdicts written by 22-D itself, the author of the
+fixes those verdicts describe, collapsing the independent-audit trail this rule exists to preserve. That
+file is left as-is (history is not rewritten after the fact); this rule prevents recurrence going forward.
+
 **Merge gates (`docs/decisions/0015-test-execution-and-ci-gates.md` §5):**
 
 | Check | Required? | What a RED means | Who can override |
