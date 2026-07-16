@@ -418,7 +418,7 @@ describe('ApprovalsInbox — truncation scenario disables bulk everywhere (F1, A
 // ── APV-BULK-COUNT-CONSISTENT ────────────────────────────────────────────────
 
 describe('ApprovalsInbox — bulk approve count consistency (APV-BULK-COUNT-CONSISTENT, M1)', () => {
-  it('the button label, rows removed, and announced count are all the same number', async () => {
+  it('the button label states the rendered count, and rows removed matches the rendered set (no concurrent conflict)', async () => {
     const otherCampaign: CampaignRow = {
       ...CAMPAIGN,
       id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
@@ -433,6 +433,7 @@ describe('ApprovalsInbox — bulk approve count consistency (APV-BULK-COUNT-CONS
       // (APV-EMPTY-STATE) would remove the live region this test asserts on.
       makePost({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4', platform: 'linkedin', campaign_id: otherCampaign.id }),
     ]
+    bulkApprovePostsAction.mockResolvedValueOnce({ success: true, count: 3 })
     const { container, cleanup } = renderInbox(posts, [CAMPAIGN, otherCampaign])
 
     const bulkButton = buttonWithText(container, 'bulk.approveAll')
@@ -443,13 +444,60 @@ describe('ApprovalsInbox — bulk approve count consistency (APV-BULK-COUNT-CONS
     expect(bulkApprovePostsAction).toHaveBeenCalledWith(posts[0].campaign_id, [posts[0].id, posts[1].id, posts[2].id])
 
     // All three rows from the approved campaign are gone; only the unrelated
-    // campaign's row remains — row-removal matches the label count exactly.
+    // campaign's row remains — row-removal matches the label count exactly
+    // (the DB reported it flipped exactly what was rendered, no conflict).
     expect(container.querySelectorAll('li').length).toBe(1)
     // The live-region announcement carries the SAME count as the label ("3"),
     // not a recomputed/unfiltered figure.
     const liveRegion = container.querySelector('[aria-live="polite"]')
     expect(liveRegion?.textContent).toContain('bulk.announceApproved')
     expect(liveRegion?.textContent).toContain('"count":3')
+    cleanup()
+  })
+
+  // Session 22 P2 (NEW-1) — the 22-D re-review's genuine product gap: the
+  // rendered length and the DB-reported count can legitimately diverge under
+  // concurrency (another approver flips a rendered draft between render and
+  // write; the atomic .eq('status','draft') guard correctly drops it from
+  // the UPDATE). The announcement must report what the write actually did,
+  // not what the UI offered to do.
+  it('THE CONCURRENCY SCENARIO: when the DB count is lower than the rendered set, the announcement reports the DB count, not renderedIds.length', async () => {
+    const otherCampaign: CampaignRow = {
+      ...CAMPAIGN,
+      id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+      name: 'Other Campaign',
+    }
+    const posts = [
+      makePost({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1', platform: 'linkedin' }),
+      makePost({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2', platform: 'linkedin' }),
+      makePost({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3', platform: 'linkedin' }),
+      // Keeps items non-empty after the bulk approve, so the empty-state
+      // early-return doesn't remove the live region this test asserts on.
+      makePost({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4', platform: 'linkedin', campaign_id: otherCampaign.id }),
+    ]
+    // 3 rows rendered, but another approver already flipped one of them —
+    // the write only actually approves 2.
+    bulkApprovePostsAction.mockResolvedValueOnce({ success: true, count: 2 })
+    const { container, cleanup } = renderInbox(posts, [CAMPAIGN, otherCampaign])
+
+    const bulkButton = buttonWithText(container, 'bulk.approveAll')
+    // The pre-click label is necessarily the rendered count (3) — it can only
+    // reflect what the UI is about to offer, not the write's future outcome.
+    expect(bulkButton?.textContent).toContain('"count":3')
+
+    await act(async () => { bulkButton?.click() })
+
+    expect(bulkApprovePostsAction).toHaveBeenCalledWith(
+      posts[0].campaign_id,
+      [posts[0].id, posts[1].id, posts[2].id],
+    )
+
+    // The announcement reports 2 (the DB's actual count), NOT 3 (rendered
+    // length) — this is the assertion that failed before the P2 fix.
+    const liveRegion = container.querySelector('[aria-live="polite"]')
+    expect(liveRegion?.textContent).toContain('bulk.announceApproved')
+    expect(liveRegion?.textContent).toContain('"count":2')
+    expect(liveRegion?.textContent).not.toContain('"count":3')
     cleanup()
   })
 })

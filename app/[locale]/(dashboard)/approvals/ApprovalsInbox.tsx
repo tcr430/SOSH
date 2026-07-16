@@ -124,8 +124,16 @@ export function ApprovalsInbox({ posts, campaigns, totalPendingCount }: Approval
       if (result.success) {
         const campaignName = campaigns.find(c => c.id === campaignId)?.name ?? ''
         const idSet = new Set(renderedIds)
+        // Rows are removed from the DOM regardless (their end state is
+        // 'approved' either way) — but the ANNOUNCED number is the DB row
+        // count the write actually flipped (result.count), not the rendered
+        // length. Session 22 P2 (NEW-1): under concurrency another approver
+        // may flip a rendered draft between render and write; the atomic
+        // .eq('status','draft') guard correctly drops it from the UPDATE,
+        // count comes back lower, and renderedIds.length would overstate
+        // what the action did.
         setItems(prev => prev.filter(p => !idSet.has(p.id)))
-        setStatusMessage(t('bulk.announceApproved', { count: renderedIds.length, campaign: campaignName }))
+        setStatusMessage(t('bulk.announceApproved', { count: result.count ?? 0, campaign: campaignName }))
       } else {
         setErrorKey(campaignId)
       }

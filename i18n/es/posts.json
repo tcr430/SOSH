@@ -22,7 +22,7 @@
     "skipped": "Omitidas ({count})",
     "failed": "Fallidas ({count})"
   },
-  "bulkApprove": "Aprobar todos los borradores",
+  "bulkApprove": "Aprobar todos los borradores ({count})",
   "bulkApproveSuccess": "{count} publicaciones aprobadas",
   "card": {
     "utcNote": "UTC",

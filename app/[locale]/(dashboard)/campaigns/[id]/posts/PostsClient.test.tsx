@@ -170,3 +170,93 @@ describe('PostsClient — regression: unfiltered bulk over a fully-rendered camp
     cleanup()
   })
 })
+
+// ── Session 22 P2 (NEW-1): count-in-label + aria-live parity with the inbox ──
+
+describe('PostsClient — bulk approve count label and a11y announcement (P2, NEW-1)', () => {
+  it('the bulk control label states the rendered count, at parity with ApprovalsInbox', () => {
+    const posts = [
+      makePost({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1' }),
+      makePost({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2' }),
+      makePost({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3' }),
+    ]
+    const { container, cleanup } = renderClient(posts)
+
+    expect(bulkButton(container)?.textContent).toContain('"count":3')
+    cleanup()
+  })
+
+  it('exposes an aria-live="polite" region, empty before any action', () => {
+    const posts = [makePost()]
+    const { container, cleanup } = renderClient(posts)
+
+    const liveRegion = container.querySelector('[aria-live="polite"]')
+    expect(liveRegion).not.toBeNull()
+    expect(liveRegion?.textContent).toBe('')
+    cleanup()
+  })
+
+  it('announces the DB-reported count (result.count) on success, not renderedDraftIds.length', async () => {
+    const posts = [
+      makePost({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1' }),
+      makePost({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2' }),
+      makePost({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3' }),
+    ]
+    const { container, cleanup } = renderClient(posts)
+
+    const liveRegion = container.querySelector('[aria-live="polite"]')
+    await act(async () => { bulkButton(container)?.click() })
+
+    // beforeEach's default mock resolves { success: true, count: 0 } — the
+    // announcement must carry that DB count, not 3 (the rendered length).
+    expect(liveRegion?.textContent).toContain('bulkApproveSuccess')
+    expect(liveRegion?.textContent).toContain('"count":0')
+    cleanup()
+  })
+
+  // THE CONCURRENCY SCENARIO (mirrors ApprovalsInbox.test.tsx): another
+  // approver flips a rendered draft between render and write; the atomic
+  // .eq('status','draft') guard on bulkApproveDraftPosts correctly drops it,
+  // so the DB-reported count comes back lower than what was rendered. The
+  // announcement must not overstate what the write actually did.
+  it('THE CONCURRENCY SCENARIO: announces the lower DB count, not the rendered length', async () => {
+    const posts = [
+      makePost({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1' }),
+      makePost({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2' }),
+      makePost({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3' }),
+    ]
+    bulkApprovePostsAction.mockResolvedValueOnce({ success: true, count: 2 })
+    const { container, cleanup } = renderClient(posts)
+
+    const liveRegion = container.querySelector('[aria-live="polite"]')
+    expect(bulkButton(container)?.textContent).toContain('"count":3')
+
+    await act(async () => { bulkButton(container)?.click() })
+
+    expect(liveRegion?.textContent).toContain('bulkApproveSuccess')
+    expect(liveRegion?.textContent).toContain('"count":2')
+    expect(liveRegion?.textContent).not.toContain('"count":3')
+    cleanup()
+  })
+})
+
+// ── i18n key completeness across en/pt/es (bulkApprove now carries {count}) ──
+
+describe('PostsClient — i18n key completeness for bulk-approve keys (P2)', () => {
+  it('bulkApprove and bulkApproveSuccess exist and are non-empty in every locale', async () => {
+    const en = (await import('@/i18n/en/posts.json')).default
+    const pt = (await import('@/i18n/pt/posts.json')).default
+    const es = (await import('@/i18n/es/posts.json')).default
+
+    for (const locale of [en, pt, es]) {
+      expect(locale.bulkApprove).toBeTruthy()
+      expect(locale.bulkApprove).toContain('{count}')
+      expect(locale.bulkApproveSuccess).toBeTruthy()
+      expect(locale.bulkApproveSuccess).toContain('{count}')
+    }
+
+    // No locale hardcodes the English copy.
+    expect(pt.bulkApprove).not.toBe(en.bulkApprove)
+    expect(es.bulkApprove).not.toBe(en.bulkApprove)
+  })
+})

@@ -926,5 +926,237 @@ single sentence you'd want the NEXT session's Architect to read first. Then comm
 Session 22 + 22-D" and stop.
 ```
 
+### §4.3 — 22-D re-review outcome  (range `fe6da7e1..462e49eb`)
+
+The 22-D re-review (`docs/reviews/session-22d-reviewer.md`) re-derived both blockers from the code (not from
+test names) and **confirmed every 22-D correction closed**:
+
+- **BLOCKER-1 + BLOCKER-2 → closed by construction on BOTH surfaces.** `bulkApproveDraftPosts(client,
+  campaignId, renderedIds, businessId)` issues one statement `id = ANY(renderedIds) AND campaign_id AND
+  business_id AND status='draft' AND deleted_at IS NULL`; a draft outside the rendered window is not in
+  `renderedIds` and cannot flip. `PostsClient.tsx` derives `renderedDraftIds` from the filtered set;
+  `PostsClient.test.tsx` — the caller unaudited for three sessions — now covers the M1 + truncation scenarios.
+- **MAJOR-1 → closed, DEMONSTRATED live** (run 29488958422): four `__integration__` suites ABSENT, not skipped;
+  skip-guard extended to app-tests (126 files, both arms, no `|| true`); postiz moved-not-deleted with rationale
+  in ADR 0015's fate table.
+- **MAJOR-2 → enforced** via ruleset **19038239** (`app-tests` required, `db-tests` not, bypass none).
+- **MAJOR-3 → tracked** (`git ls-files docs/` → 76 files); secret scan re-run independently, clean.
+- **MINOR-1 → closed** (real contrast assertion), **2/3 → dissolved/closed by the blocker fix**, **4 →
+  recorded**, **NIT-3 → filed**, **SHARED-FUNCTION-CALLERS rule → in CLAUDE.md**.
+
+**Two structural cautions the re-review attaches to those greens** (both fed into §4.4):
+
+- The re-review is **not independent** — the same reviewer audited 22-D, was told to fix its own findings,
+  authored the 22-E commits, *then* wrote the report (its own **NEW-4**). Its ✅ marks are evidence-backed but
+  have had no adversarial second pair of eyes.
+- At review time the 22-D range was **unpushed with zero CI runs** — so MAJOR-1's skip-guard, written to catch
+  `AUTHORED-NOT-EXECUTED`, was itself `AUTHORED-NOT-EXECUTED` until the session pushed the range to get the runs
+  now cited. The greens are real; they are also new as of that push.
+
+---
+
+## §4.4 — 22-E resolution + 22-F independent re-audit
+
+The re-review surfaced **six NEW findings and one merge condition**. **22-E is already committed**
+(`5f9a89b0`, `578255c3`, `fa8b4bdf`, `98a9f7c7` on PR #1) and closes most of them — but 22-E was authored by
+the same reviewer, so **nothing in 22-E has been independently reviewed.** The guide therefore needs: one
+genuinely-open code fix (NEW-1), two doc corrections (NEW-6 + the MINOR-5 record), two durable process/ADR
+rules (NEW-4, NEW-2), and an **independent 22-F pass** that re-audits the 22-E range.
+
+**Disposition ledger:**
+
+| # | Sev | Finding | State | Handled by |
+|---|-----|---------|-------|-----------|
+| Merge condition | MAJOR | 22-D shipped the `.in('id',…)` mechanism ADR §A1.1 *rejected*, with no cap, ADR unamended | **22-E** `5f9a89b0`+`fa8b4bdf` (Zod `.max(APPROVALS_POST_LIMIT)` + §A1.2) → **22-F verifies** | §4.4 P4 |
+| NEW-2 | MAJOR | Tier-1 boundary suite proves the wrong proposition (hand-rolls the chain, never calls the fn; RLS masks cross-scope) | **22-E** `578255c3` → **22-F verifies** + ADR rule | §4.4 P1 (rule), P4 (verify) |
+| NEW-3 | MINOR | Contrast test pins a *transcribed copy* of theme tokens | **22-E** `98a9f7c7` (mutation-verified) → **22-F verifies** | §4.4 P4 |
+| NEW-1 | MINOR | Count invariant holds on neither surface: both announce `renderedIds.length` not `result.count`; campaign surface has no count + no `aria-live` | **OPEN** | §4.4 P2 (fix) |
+| NEW-6 | MINOR | `master` is push-locked (`GH013`); undocumented; §5's verify command 404s (wrong endpoint) | **OPEN** | §4.4 P3 (doc) |
+| NEW-4 | MINOR (process) | Reviewer amended its own report in place; independence lost | **OPEN** | §4.4 P1 (rule) |
+| NEW-5 | NIT | Skip-guard can't detect a single *named* file vanishing (dir stays non-empty) | backlog | §4.4 P3 |
+| MINOR-5 | — | Self-corrected: **NOT moot** (the count-predicate index stands as filed) | backlog stays open | §4.4 P3 |
+
+> **Ordering:** P1 (rules) and P3 (docs) are safe to do any time. **P2 (NEW-1) is real code** — run it, let
+> it land, then run **P4 (22-F)** so the independent pass audits NEW-1 *and* the 22-E range in one sweep.
+
+### §4.4 · P1 — Two durable rules  (Sonnet · docs only)
+
+```
+Session 22 · P1 — process + ADR rules from the 22-D re-review. Docs only, no code. /ecc:plan then commit.
+
+DO:
+- CLAUDE.md — REVIEWER-REPORT IMMUTABILITY rule (NEW-4): a reviewer's report is append-only history and is
+  NEVER edited in place by the correction pass it audits. Resolutions go in a SEPARATE
+  docs/reviews/session-NN-D-corrections.md (or the next delta review), never as RESOLVED verdicts written
+  back into the original by the fix's author. The finding record and the fix record must not share an author
+  in the same file. (Session 22-D violated this — session-22-reviewer.md carries RESOLVED verdicts written by
+  22-D; leave it as-is now, but the rule prevents recurrence.)
+- docs/decisions/0015-test-execution-and-ci-gates.md §2 — name the third failure mode (NEW-2). The taxonomy
+  today is AUTHORED-NOT-EXECUTED and FALSE-GREEN; add EXECUTED-AND-PROVING-NOTHING: a test that runs green
+  while proving something ADJACENT to the claim (e.g. Postgres honouring a WHERE clause, rather than the
+  function under test EMITTING that clause; or a transcribed copy of a theme token rather than the shipped
+  token). State the rule that closes it: "covered = executed AND attached to the claim" — a boundary test
+  must call the real function and mutate a fixture so the assertion FAILS when the guard is removed. This is
+  the same family as the SHARED-FUNCTION-CALLERS lesson: a test verifying the wrong thing, one level down.
+
+On commit, output "P1 complete — reviewer-immutability + EXECUTED-AND-PROVING-NOTHING recorded." Stop.
+```
+
+### §4.4 · P2 — NEW-1: count/announcement parity on both surfaces  (Sonnet · code)
+
+```
+Session 22 · P2 — NEW-1 (the one genuine product gap 22-D left open). The bulk WRITE is already exact; this
+is announcement HONESTY + campaign-surface a11y parity. Run /ecc:plan → /ecc:tdd-workflow →
+/ecc:verification-loop.
+
+CONTEXT (docs/reviews/session-22d-reviewer.md NEW-1): bulkApprovePostsAction returns { success, count } where
+count is the rows the statement ACTUALLY flipped (posts.ts:528-530, from .select('id')). BOTH callers discard
+it and announce renderedIds.length instead — so under concurrency (another approver flips a rendered draft
+between render and write, .eq('status','draft') correctly drops it, count comes back lower) the announcement
+OVERSTATES what the action did. Separately, PostsClient has NO count in its label and NO aria-live region at
+all — a screen-reader user gets zero confirmation a bulk approve happened.
+
+BUILD:
+- Both callers announce result.count, not renderedIds.length. ApprovalsInbox.tsx:128 —
+  t('bulk.announceApproved', { count: result.count, campaign }). Optimistic removal may still remove the
+  rendered rows (their end state is 'approved' regardless), but the ANNOUNCEMENT and any count label must use
+  result.count.
+- PostsClient.tsx — give the bulk control a count in its label AT PARITY with the inbox, and add an
+  aria-live="polite" sr-only region that announces result.count on success (mirror ApprovalsInbox.tsx:156 +
+  :128). i18n en/pt/es; no hardcoded English.
+
+TESTS (TDD):
+- concurrency case: mock bulkApprovePostsAction to return count < renderedIds.length → the announced number is
+  result.count, NOT the rendered length (this is the assertion that fails today);
+- PostsClient now renders a count in its label and exposes an aria-live region with the approved count;
+- i18n key parity across en/pt/es for any new/changed keys.
+
+Hard rules as §2. UI + wiring only — no change to bulkApproveDraftPosts, no DB change, no new capability.
+On green + commit, output "P2 complete — both surfaces announce the DB count; PostsClient at a11y parity." Stop.
+```
+
+### §4.4 · P3 — Doc corrections + backlog  (Sonnet · docs only)
+
+```
+Session 22 · P3 — record what the re-review found about enforcement and the corrected index verdict. Docs
+only. /ecc:plan then commit.
+
+DO:
+- NEW-6 (master is push-locked, and §5's verify command is wrong): in docs/current-phase.md state the PR-ONLY
+  workflow plainly — the master-app-tests ruleset (19038239) rejects DIRECT pushes with
+  "GH013 … Required status check 'app-tests' is expected", so every future session lands via PR, not push. In
+  ADR 0015 §5, correct the verification command: it is the RULESETS endpoint
+  (`gh api repos/:owner/:repo/rulesets/19038239`), NOT `branches/master/protection` — the latter returns 404
+  for a ruleset-based gate and reads falsely as "no gate" (this reviewer nearly mis-reported it).
+- MINOR-5 correction: the re-review's own earlier pass wrongly called the count-predicate index "moot." It is
+  NOT — that reasoning was about the .in('id', renderedIds) WRITE (a PK lookup), whereas MINOR-5 concerns
+  countPendingDraftPosts's (business_id, status, deleted_at, scheduled_at) READ predicate, which is still live
+  as A2's overflow signal. Confirm docs/backlog.md STILL carries the index entry
+  ((business_id, status, scheduled_at) WHERE deleted_at IS NULL, tied to the Pro-account un-defer trigger).
+  Do NOT create the index.
+- NEW-5 (nit) to backlog: the skip-guard fails on an empty dir or an empty collected file, but not on ONE
+  named file silently dropping out of the glob (dir stays non-empty, the uncollected file has no entry). File
+  a hardening item: assert a floor on the collected file count, or pin an explicit manifest of required
+  suites. Low likelihood; the 126-count matching a local run is current counter-evidence.
+
+On commit, output "P3 complete — PR-only + rulesets endpoint documented; MINOR-5 stands; NEW-5 filed." Stop.
+```
+
+### §4.4 · P4 — 22-F independent re-audit  (Opus · a DIFFERENT reviewer than authored 22-E)
+
+> **Why this exists:** the 22-D re-review honestly disclosed it was not independent — it authored the 22-E
+> commits it now vouches for, and asked for exactly this pass. 22-E closes the merge condition (the cap +
+> §A1.2), NEW-2, and NEW-3, but no adversarial eye has checked that. Run this in a **fresh session**; the
+> reviewer must not be the one who wrote 22-E.
+
+#### §4.4 · P4a — primer  (paste first · wait for acknowledgement)
+
+```
+Session 22-F — INDEPENDENT re-audit of the 22-E correction commits. You are independent: you did NOT write
+22-E and you modify nothing. Output is a review document only.
+
+INDEPENDENCE (hard): the 22-D re-review (docs/reviews/session-22d-reviewer.md) was authored by the same
+reviewer who wrote the 22-E commits — it says so in its own Independence Disclosure and asks for this pass.
+If YOU authored any of 5f9a89b0 / 578255c3 / fa8b4bdf / 98a9f7c7, STOP and say so — this pass must be run by
+someone who did not. Confirm you did not before proceeding.
+
+⚠️ PROC-REVIEW-AT-COMMIT (ADR 0015 §6): read at the stated range — `git diff 462e49eb..98a9f7c7`,
+`git show <sha>:<path>` — NEVER at HEAD. Open your report by naming the range. (Docs are tracked now, so the
+ADRs ARE readable at the range — verify `git ls-files docs/` is non-empty first.)
+
+Read now, at the range:
+- docs/reviews/session-22d-reviewer.md — the six NEW findings + the merge condition. You are auditing 22-E's
+  claim to close NEW-2, NEW-3, and the cap/ADR condition, plus P2's NEW-1 fix if it landed in-range.
+- The 22-E commits, each individually: 5f9a89b0 (cap), fa8b4bdf (ADR §A1.2), 578255c3 (NEW-2 boundary test),
+  98a9f7c7 (NEW-3 contrast).
+- docs/decisions/0014-…-surface.md §A1 / §A1.1 / §A1.2 and 0015 §2.
+- lib/db/posts.ts, campaigns/[id]/posts/actions.ts, supabase/__tests__/posts-approval-boundary.test.ts,
+  ApprovalsInbox.test.tsx.
+
+Invoke security-reviewer AND database-reviewer.
+
+Establish and report before reviewing:
+(1) confirm you are not the 22-E author;
+(2) the cap: is there a Zod .max(APPROVALS_POST_LIMIT) on renderedIds, and does ADR §A1.2 now match the
+    shipped .in('id', renderedIds) signature (no stale platforms?: Platform[] left normative in §A1)?
+(3) NEW-2: does posts-approval-boundary.test.ts now CALL bulkApproveDraftPosts (not a hand-rolled chain), and
+    does deleting .eq('business_id', businessId) from posts.ts make a test FAIL? If not, NEW-2 is not closed.
+Then "Ready to audit 22-E (range 462e49eb..98a9f7c7)." Wait.
+```
+
+#### §4.4 · P4b — prompt  (paste after acknowledgement)
+
+```
+REVIEWER — 22-F. Audit each 22-E commit against the finding it claims to close. RE-DERIVE — mutate the
+fixture, read the ADR text — don't trust a commit message. Tier any NEW finding. Citations at the range.
+
+THE MERGE CONDITION (was MAJOR): 22-D shipped .in('id', renderedIds) — the mechanism ADR §A1.1 explicitly
+REJECTED over the ~7KB-URL-at-200-ids risk — with no cap and without amending the ADR.
+- Cap: renderedIds is bounded by Zod .max(APPROVALS_POST_LIMIT) at the action boundary; a request over the cap
+  is rejected, not truncated-and-approved. Prove the URL-length failure mode is now unreachable.
+- ADR coherence: §A1 no longer normatively specifies a signature that does not exist; §A1.2 documents the
+  chosen mechanism, the cap, and WHY the original rejection was reversed. A stale normative §A1 is a MAJOR —
+  the ADR would misdescribe the shipped code, the exact drift PROC-REVIEW-AT-COMMIT exists to prevent.
+
+NEW-2 (was MAJOR — EXECUTED-AND-PROVING-NOTHING): the Tier-1 boundary suite must now CALL
+bulkApproveDraftPosts, and its cross-scope fixture must make the FUNCTION's business_id predicate load-bearing
+(the approver an active member of the second business so RLS permits both rows and only the function narrows).
+- MUTATION TEST: delete .eq('business_id', businessId) from posts.ts:525 → a test must go RED. If everything
+  still passes, NEW-2 is NOT closed and this is a MAJOR (the suite still proves the wrong proposition).
+- Confirm ADR 0015 §2 names EXECUTED-AND-PROVING-NOTHING and states "attached to the claim" (P1).
+
+NEW-3 (was MINOR): the contrast test parses tokens from globals.css, not a transcription.
+- MUTATION: change --card / --muted in globals.css → the test must go RED. A transcribed copy that stays green
+  is the finding unclosed.
+
+NEW-1 (if P2 landed in-range): both surfaces announce result.count, not renderedIds.length; PostsClient has a
+count label + aria-live at parity with the inbox. Re-derive the concurrency case (count < rendered → announced
+number is the DB count).
+
+REGRESSION: nothing green at 462e49eb went red — both blockers still dead by construction on both surfaces;
+MAJOR-1 skip-guard intact (both arms, no || true, four suites absent); ruleset 19038239 still active;
+docs still tracked. The cap must not have narrowed a legitimate bulk approve at/under the cap.
+
+OUTPUT: docs/reviews/session-22f-reviewer.md — open by naming the range AND confirming independence; a status
+table (finding → ✅closed/⚠️partial/❌open, with the mutation result as evidence for NEW-2/NEW-3); any new
+findings tiered; a VERDICT: are 22 + 22-D + 22-E together mergeable, and does "covered = executed AND attached
+to the claim" now hold. Do NOT modify code.
+```
+
+### §4.5 — Close-out  (paste into Claude Code · Sonnet · ONLY after 22-F returns no BLOCKER/MAJOR)
+
+Run the **§4.2 close-out prompt** — with these additions folded in:
+
+- Do not run it until **P4 (22-F)** is clean. 22-E is unaudited until then; closing before that repeats the
+  NEW-4 mistake (trusting a fix nobody independent checked).
+- In the retrospective, add the two rules P1 recorded (reviewer-report immutability; EXECUTED-AND-PROVING-
+  NOTHING → "attached to the claim") to the standing-rules list, and note the correction lineage plainly:
+  **22 → 22-D (2 blockers + MAJORs) → 22-E (cap + NEW-2/3, non-independent) → 22-F (independent clear).**
+- Confirm the backlog carries: cursor pagination + un-defer trigger, the MINOR-5 count-predicate index,
+  NEW-5 (named-file-vanish guard hardening), 21B n4, NIT-3 (claude-mem), and `22E-integration-discovery`
+  (no job runs the four opt-in suites — recorded in ADR 0015's fate table).
+
+---
+
 **Next (unchanged pre-launch sequence):** remove Postiz for direct LinkedIn + X API integration → legal
 copy PR → lawyer ratification → Stripe live-mode flip → launch.

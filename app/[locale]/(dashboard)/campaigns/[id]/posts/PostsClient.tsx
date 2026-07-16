@@ -80,6 +80,12 @@ export function PostsClient({ posts, campaign, locale, initialFilter = 'all' }: 
   const canApprove = useCan(CAPABILITIES.APPROVE)
   const canAuthor = useCan(CAPABILITIES.AUTHOR)
   const [localPosts, setLocalPosts] = useState<PostRow[]>(posts)
+  // Session 22 P2 (NEW-1) — screen-reader confirmation for bulk approve, at
+  // parity with ApprovalsInbox.tsx's live region. Rows stay in the DOM here
+  // (status flips in place, unlike the inbox's row removal), but a bulk
+  // action with zero feedback beyond a color change is still a silent
+  // no-op for a screen-reader user.
+  const [statusMessage, setStatusMessage] = useState('')
 
   function handleOptimisticUpdate(postId: string, patch: Partial<PostRow>) {
     setLocalPosts(prev =>
@@ -125,7 +131,15 @@ export function PostsClient({ posts, campaign, locale, initialFilter = 'all' }: 
     )
     startTransition(async () => {
       const result = await bulkApprovePostsAction(campaign.id, renderedDraftIds)
-      if (!result.success) {
+      if (result.success) {
+        // Session 22 P2 (NEW-1) — announce the DB row count the write
+        // actually flipped, not renderedDraftIds.length: under concurrency
+        // another approver may have flipped a rendered draft between render
+        // and write, .eq('status','draft') correctly drops it, and count
+        // comes back lower. Announcing the rendered length would overstate
+        // what the action did.
+        setStatusMessage(t('bulkApproveSuccess', { count: result.count ?? 0 }))
+      } else {
         setLocalPosts(snapshot)
       }
     })
@@ -141,6 +155,14 @@ export function PostsClient({ posts, campaign, locale, initialFilter = 'all' }: 
 
   return (
     <div>
+      {/* Live region — announces bulk-approve outcomes to screen readers, at
+          parity with ApprovalsInbox.tsx (§12/NEW-1). Rows here flip status in
+          place rather than being removed, so without this a bulk approve is
+          silent for anyone not watching the pixels change. */}
+      <div aria-live="polite" className="sr-only">
+        {statusMessage}
+      </div>
+
       {/* Filter bar */}
       <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border pb-3 mb-6 -mx-4 px-4 pt-2 sm:-mx-6 sm:px-6">
         <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -193,7 +215,7 @@ export function PostsClient({ posts, campaign, locale, initialFilter = 'all' }: 
               disabled={isPending}
               className="inline-flex items-center rounded-md bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 text-xs font-medium transition-colors disabled:pointer-events-none disabled:opacity-50"
             >
-              ✓ {t('bulkApprove')}
+              ✓ {t('bulkApprove', { count: renderedDraftIds.length })}
             </button>
           )}
 
@@ -206,7 +228,7 @@ export function PostsClient({ posts, campaign, locale, initialFilter = 'all' }: 
                 onClick={e => e.preventDefault()}
                 className="inline-flex items-center rounded-md bg-muted text-muted-foreground px-3 py-1.5 text-xs font-medium cursor-not-allowed"
               >
-                ✓ {t('bulkApprove')}
+                ✓ {t('bulkApprove', { count: renderedDraftIds.length })}
               </TooltipTrigger>
               <TooltipContent>{t('card.actions.approve_disabled_tooltip')}</TooltipContent>
             </Tooltip>
