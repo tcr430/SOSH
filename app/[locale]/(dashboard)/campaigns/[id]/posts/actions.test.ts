@@ -21,6 +21,10 @@ vi.mock('@/lib/db/posts', () => ({
   updatePostContent: vi.fn(),
   updatePostContentAndMetadata: vi.fn(),
   bulkApproveDraftPosts: vi.fn(),
+  // Real value, not vi.fn(): actions.ts reads this at module scope to build
+  // bulkApproveSchema's .max() bound, so a missing/mocked constant would
+  // silently produce .max(undefined) (Session 22-E, ADR 0014 §A1.2).
+  APPROVALS_POST_LIMIT: 200,
   getPostSiblingTopics: vi.fn(),
 }))
 
@@ -45,6 +49,7 @@ import {
   getPostSiblingTopics,
   updatePostContentAndMetadata,
   bulkApproveDraftPosts,
+  APPROVALS_POST_LIMIT,
 } from '@/lib/db/posts'
 import { buildCustomerContext } from '@/lib/ai/context'
 import { runPrompt } from '@/lib/ai/runner'
@@ -336,6 +341,37 @@ describe('bulkApprovePostsAction', () => {
     const result = await bulkApprovePostsAction(VALID_CAMPAIGN_ID, ['not-a-uuid'])
     expect(result).toEqual({ error: 'invalid_input' })
     expect(bulkApproveDraftPosts).not.toHaveBeenCalled()
+  })
+
+  it('rejects a renderedIds array longer than APPROVALS_POST_LIMIT (Session 22-E, ADR 0014 §A1.2)', async () => {
+    makeAuthClient()
+    // One past the cap. Above ~210 ids the PostgREST query string crosses the
+    // 8 KB request-line limit and the write fails closed with an opaque error
+    // — §A1.1 rejected the id-list mechanism over exactly this, so the cap is
+    // what makes §A1.2's reversal safe. A Server Action is a public endpoint;
+    // Zod is the only real bound, not the UI's render count.
+    const tooMany = Array.from(
+      { length: APPROVALS_POST_LIMIT + 1 },
+      (_, i) => `aaaaaaaa-aaaa-4aaa-8aaa-${String(i).padStart(12, '0')}`,
+    )
+
+    const result = await bulkApprovePostsAction(VALID_CAMPAIGN_ID, tooMany)
+
+    expect(result).toEqual({ error: 'invalid_input' })
+    expect(bulkApproveDraftPosts).not.toHaveBeenCalled()
+  })
+
+  it('accepts a renderedIds array exactly at APPROVALS_POST_LIMIT (boundary)', async () => {
+    makeAuthClient()
+    vi.mocked(bulkApproveDraftPosts).mockResolvedValue(APPROVALS_POST_LIMIT)
+    const atCap = Array.from(
+      { length: APPROVALS_POST_LIMIT },
+      (_, i) => `aaaaaaaa-aaaa-4aaa-8aaa-${String(i).padStart(12, '0')}`,
+    )
+
+    const result = await bulkApprovePostsAction(VALID_CAMPAIGN_ID, atCap)
+
+    expect(result).toEqual({ success: true, count: APPROVALS_POST_LIMIT })
   })
 
   it('empty renderedIds still calls through (bulkApproveDraftPosts short-circuits to 0)', async () => {

@@ -145,8 +145,10 @@ export async function listPendingDraftPosts(
 // Approvals inbox tell the approver when drafts are hidden past the cap
 // instead of silently truncating (ADR 0014 §9.4 overflow signal). Optional
 // campaignId/platform narrow the predicate to match a filtered view (A2);
-// omitted, it stays business-wide — the shape bulkApprovePostsAction's
-// APV-BULK-VISIBLE-ONLY gate (actions.ts) relies on.
+// omitted, it stays business-wide. NOT a write-path gate: bulk approve stopped
+// consulting this count in Session 22-D (ADR 0014 §A1.2) — APV-BULK-VISIBLE-ONLY
+// is now true by construction from the rendered id list. Read-side display
+// signal only.
 export async function countPendingDraftPosts(
   client: SupabaseClient,
   businessId: string,

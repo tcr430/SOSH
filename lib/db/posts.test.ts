@@ -374,6 +374,9 @@ describe('bulkApproveDraftPosts', () => {
     expect(builder.eq).toHaveBeenCalledWith('campaign_id', 'camp-1')
     expect(builder.eq).toHaveBeenCalledWith('business_id', 'biz-1')
     expect(builder.eq).toHaveBeenCalledWith('status', 'draft')
+    // Soft-delete filtering is a /lib/db/ responsibility (CLAUDE.md), so the
+    // clause belongs in the pinned chain like every other predicate.
+    expect(builder.is).toHaveBeenCalledWith('deleted_at', null)
   })
 })
 
