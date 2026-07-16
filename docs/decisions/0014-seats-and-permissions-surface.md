@@ -655,6 +655,11 @@ _End ADR 0014 (original body)._
 
 ## A1 — Bulk approve: filter-scoped and atomic (L-6 / D-5) — `APV-BULK-*`
 
+> **⚠️ MECHANISM SUPERSEDED BY §A1.2 (2026-07-16).** The `platforms?: Platform[]` signature and
+> `.in('platform', platforms)` predicate specified below **no longer exist in the code**. Bulk approve takes
+> an explicit `renderedIds: string[]`. A1's *constraints* still hold; read §A1.2 for the mechanism that
+> satisfies them. Do not "restore" the code to match this section.
+
 **Current state (grounded).** `bulkApproveDraftPosts(client, campaignId): Promise<number>`
 (`lib/db/posts.ts:491-504`) runs one statement:
 `.eq('campaign_id', campaignId).eq('status','draft').is('deleted_at', null).select('id')` — **campaign-scoped,
@@ -754,6 +759,11 @@ Unfiltered bulk (`platforms` omitted / `'all'`) keeps its exact current behaviou
 
 ## A1.1 — Bulk approve only over a COMPLETE rendered set (F3 founder-review correction, 2026-07-12) — `APV-BULK-VISIBLE-ONLY`
 
+> **⚠️ MECHANISM SUPERSEDED BY §A1.2 (2026-07-16).** The `APV-BULK-VISIBLE-ONLY` **invariant below still
+> binds**, but the count-based completeness gate that enforced it is gone — the invariant is now true by
+> construction from the rendered id list. Note especially that this section's "Rejected alternatives (i)"
+> **is the mechanism now in use**; §A1.2 records why the rejection was revisited and what makes it safe.
+
 **Supersedes the pre-correction A1 to the extent A1's count invariant implied the platform filter was the
 *only* way the rendered set and the DB set can diverge.** They also diverge by **truncation**, and A2 (in
 this same amendment) is what introduces it.
@@ -811,6 +821,100 @@ approver has lost bulk approve. `backlog.md` records this sharpened trigger (ses
 `APV-BULK-VISIBLE-ONLY` is added to the A3 constraint table (Tier-2). *(A1's `APV-BULK-FILTER-SCOPED`,
 `-ATOMIC`, `-DB-BOUNDARY`, `-COUNT-CONSISTENT`, `-NO-NEW-DB-OBJECT` are unchanged and still hold; A1.1 adds
 the completeness precondition under which the count invariant is even askable.)*
+
+---
+
+## A1.2 — Reversal: bulk approve IS by explicit rendered ids (Session 22-D/22-E correction, 2026-07-16)
+
+**This section supersedes A1's `platforms?: Platform[]` mechanism and A1.1's count-based completeness gate.**
+Where A1/A1.1 and this section conflict, A1.2 governs. A1's *constraints* (`APV-BULK-FILTER-SCOPED`,
+`-ATOMIC`, `-DB-BOUNDARY`, `-COUNT-CONSISTENT`, `-NO-NEW-DB-OBJECT`) and A1.1's *invariant*
+(`APV-BULK-VISIBLE-ONLY`) all still hold — only the mechanism that satisfies them changed.
+
+**What happened.** Sessions 21C, 22-B3 and the Session 22 review each verified `APV-BULK-*` against only one
+of `bulkApprovePostsAction`'s two callers. `PostsClient.tsx` (`/campaigns/[id]/posts`) went unaudited for
+three consecutive sessions while exhibiting both bugs the constraints existed to prevent — bulk ignoring the
+active platform filter (21C M1, re-found as Session 22 BLOCKER-1) and approving drafts outside the rendered
+50-row window (BLOCKER-2). The platform-predicate mechanism made the invariant something each caller had to
+*re-implement correctly*; the review's own recommendation was that ids make it true **by construction**.
+Session 22-D adopted that. This section records the reversal, which 22-D performed but did not write down.
+
+**The adopted mechanism.**
+
+```typescript
+export async function bulkApproveDraftPosts(
+  client: SupabaseClient,
+  campaignId: string,
+  renderedIds: string[],   // exactly the ids the caller painted for the human
+  businessId: string,      // server-derived (ctx.business.id); defence-in-depth
+): Promise<number>
+```
+```sql
+UPDATE posts SET status = 'approved'
+WHERE id = ANY(:renderedIds)
+  AND campaign_id = :campaignId
+  AND business_id = :businessId
+  AND status      = 'draft'
+  AND deleted_at IS NULL
+RETURNING id;
+```
+
+Still ONE statement, no loop, no RPC, no new DB object. `enforce_post_transition_capability` (0013 §5)
+remains the approval boundary and aborts the whole statement on an unauthorised row.
+
+**Why A1.1 rejected this, and what changed.** A1.1 rejected alternative (i) because ~200 UUIDs ≈ 7 KB of
+PostgREST query string, "uncomfortably near the 8 KB request-line limit — it works at 12 ids and silently
+breaks near the cap." **That analysis was correct and remains correct.** Two things make the reversal sound
+anyway:
+
+1. **The failure is fail-closed, not silent.** An oversized list is rejected by the gateway (414/400); the
+   error propagates, the action returns `{ error: 'generic' }`, and the optimistic UI rolls back. It cannot
+   over-approve. A1.1's word "silently" overstated the risk — the *availability* cost is real, the
+   *correctness* cost is not.
+2. **The cap is now explicit.** `bulkApproveSchema.renderedIds` is
+   `z.array(z.string().uuid()).max(APPROVALS_POST_LIMIT)` (200). Both surfaces sit at or under it (Approvals
+   fetches `APPROVALS_POST_LIMIT`; campaign posts fetches 50, `posts/page.tsx`). The A1.1 carve-out ("the
+   already-complete case, since there the id list is small by definition") was **false at the cap** — a
+   complete inbox group can be 200 ids — so the bound is stated in code rather than assumed from the UI.
+
+Against that: the id list makes `APV-BULK-VISIBLE-ONLY` **unconditionally true by construction** for every
+caller, present and future, instead of a property each caller re-derives and one of two got wrong for three
+sessions. That trade is worth 7 KB of URL.
+
+**What this deletes.** The business-wide `countPendingDraftPosts()` gate in `bulkApprovePostsAction` is gone.
+It was never the guarantee A1.1 named: it refused when a *business-wide* total exceeded 200 — an orthogonal
+proxy for "is this group complete?" — and it was a separate statement in a separate snapshot, i.e.
+TOCTOU-racy (Session 22 MINOR-2). The predicate and the write are now the same statement, so the race cannot
+exist. `countPendingDraftPosts` remains live as the A2 **read-side overflow signal** only.
+
+**What is NOT server-verifiable, stated plainly.** The server cannot verify that `renderedIds` is what a
+human actually saw — it trusts the caller's list. This is not a regression: `approvePostAction(id)` in a loop
+already achieves any state bulk can reach, so bulk grants no capability the caller lacks, and the old count
+gate did not verify renderedness either. `APV-BULK-VISIBLE-ONLY` is therefore a **UI-integrity constraint
+enforced at the caller**, and its Tier-2 tests must pin *each caller* (both are now pinned:
+`ApprovalsInbox.test.tsx`, `PostsClient.test.tsx`). The DB-layer scoping (`campaign_id`, `business_id`,
+`status`, RLS, trigger) is what bounds the blast radius of a forged list.
+
+**Scope note on `business_id`.** It is honest defence-in-depth, not load-bearing: a campaign belongs to
+exactly one business, so `campaign_id` pins `business_id` transitively via the FK. No fixture can make it
+independently load-bearing, and `supabase/__tests__/posts-approval-boundary.test.ts` says so rather than
+claiming otherwise. Its value is that this write path no longer relies on RLS alone (Session 22 MINOR-3).
+
+**Index note — and a correction.** The *bulk write* needs no new index: `id = ANY(:renderedIds)` is a
+unique-key lookup on `posts_pkey` bounded by the input array (≤200 rows), with `campaign_id`/`business_id`/
+`status`/`deleted_at` applied as a recheck on those ≤200 heap tuples. No composite index can beat that.
+**This does not touch Session 22 MINOR-5**, which concerns a different query — `countPendingDraftPosts`'s
+`(business_id, status, deleted_at, scheduled_at)` *read* predicate (`lib/db/posts.ts:150-166`). That function
+stays live as A2's overflow signal, so MINOR-5 stands as filed and its backlog entry remains open under the
+same Pro-account un-defer trigger. (The 22-E review initially reported MINOR-5 as moot by conflating the two
+predicates; recorded here so the error is not re-inherited.)
+
+**Consequence for A2's un-defer trigger.** Unchanged in substance but softened in urgency: overflow no longer
+*kills* bulk for a campaign (ids work regardless of the business-wide total) — it only means the rendered set
+is a subset, which the approver is told. `total > APPROVALS_POST_LIMIT` remains the cursor-pagination trigger.
+
+`APV-BULK-CAP` is added to the A3 constraint table (Tier-2): *`renderedIds` is bounded by
+`APPROVALS_POST_LIMIT` at the Zod boundary; an over-cap array is rejected before any DB call.*
 
 ---
 
@@ -886,7 +990,8 @@ whose posts are uncapped). The banner is the monitoring signal that unlocks the 
 | Constraint | Assertion | Tier (ADR 0015 §2) | Test home / executing job |
 |---|---|---|---|
 | **APV-BULK-FILTER-SCOPED** | bulk approves only drafts matching the active platform filter (3 LinkedIn + 2 X, filter=X → exactly the 2 X flip; the 3 LinkedIn stay `draft`) | Tier-2 (behaviour) + Tier-1 (predicate live) | `campaigns/[id]/posts/actions` + `approvals/ApprovalsInbox` tests (`app-tests`); predicate exercised live in `posts-approval-boundary` (`db-tests`) |
-| **APV-BULK-VISIBLE-ONLY** (A1.1) | bulk offered IFF rendered count == server total for that campaign+filter; when incomplete (e.g. 60 pending, 12 rendered) the button is DISABLED ("Filter down to approve in bulk"), never a silent over-approve | Tier-2 | `approvals/ApprovalsInbox` test (`app-tests`) — asserts truncated campaign disables bulk and approves nothing outside the rendered set |
+| **APV-BULK-VISIBLE-ONLY** (A1.1, mechanism per A1.2) | the write reaches exactly the ids the caller rendered — true by construction from `renderedIds`, not by a count gate. Enforced **per caller**: every caller must pass only what it painted | Tier-2 | **Both** callers pinned (`app-tests`): `approvals/ApprovalsInbox.test.tsx` (filter → exactly the filtered ids; truncated group disables bulk) **and** `campaigns/[id]/posts/PostsClient.test.tsx` (21C-M1 scenario; rendered-window scenario). A new caller with no test is `AUTHORED-NOT-EXECUTED` for this constraint (CLAUDE.md SHARED-FUNCTION CALLERS) |
+| **APV-BULK-CAP** (A1.2) | `renderedIds` is bounded by `APPROVALS_POST_LIMIT` (200) at the Zod boundary; an over-cap array is rejected with `invalid_input` before any DB call, so the id list cannot cross PostgREST's ~8 KB request-line limit | Tier-2 | `campaigns/[id]/posts/actions.test.ts` (`app-tests`) — asserts `APPROVALS_POST_LIMIT + 1` ids → `invalid_input` with zero DB calls, and exactly `APPROVALS_POST_LIMIT` ids → success |
 | **APV-BULK-ATOMIC** | one statement; caller lacking `approve` flips ZERO rows; nothing removed from list | Tier-1 | `supabase/__tests__/posts-approval-boundary.test.ts` (`db-tests`) |
 | **APV-BULK-DB-BOUNDARY** | raw authenticated EDITOR client calling the predicate'd UPDATE is denied by `enforce_post_transition_capability` | Tier-1 | `supabase/__tests__/posts-approval-boundary.test.ts` (`db-tests`) |
 | **APV-BULK-NO-NEW-DB-OBJECT** | the predicate is a query change; diff contains no new function/RPC/policy/migration | Tier-3 (diff-verified) | Reviewer diff-scan (`supabase/`/`.sql` empty in the bulk-approve commit) |
