@@ -3,6 +3,8 @@ import { describe, it, expect, vi } from 'vitest'
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 
 // ── Mocks (hoisted before imports) ────────────────────────────────────────────
 
@@ -153,6 +155,38 @@ function contrastRatio(l1: number, l2: number): number {
   const lighter = Math.max(l1, l2)
   const darker = Math.min(l1, l2)
   return (lighter + 0.05) / (darker + 0.05)
+}
+
+// Session 22-E (review finding NEW-4) — read the theme tokens OUT of
+// app/globals.css instead of transcribing them into this file.
+//
+// 22-D's version copied the oklch triples here by hand. The assertions were
+// real and executing, but they pinned a *copy*: editing --card or --muted in
+// globals.css left these tests green while the shipped contrast regressed —
+// the assertion could not fail for the reason it exists. Parsing the real file
+// closes that gap; a token rename or a value change now fails here.
+//
+// (The amber hexes stay literal: they come from Tailwind's own palette, not
+// from our CSS, so there is no project file to be their source of truth.)
+const GLOBALS_CSS = readFileSync(path.resolve(process.cwd(), 'app/globals.css'), 'utf8')
+
+function cssBlock(selector: string): string {
+  const start = GLOBALS_CSS.indexOf(`${selector} {`)
+  if (start === -1) throw new Error(`globals.css: no "${selector} {" block found`)
+  const end = GLOBALS_CSS.indexOf('}', start)
+  if (end === -1) throw new Error(`globals.css: "${selector}" block is unterminated`)
+  return GLOBALS_CSS.slice(start, end)
+}
+
+// Relative luminance of a `--token: oklch(L C H)` custom property, read from
+// the given selector's block. Throws (rather than silently defaulting) if the
+// token is missing or is not an oklch triple — a token that moved should break
+// this test loudly.
+function tokenLuminance(selector: string, token: string): number {
+  const block = cssBlock(selector)
+  const m = block.match(new RegExp(`--${token}:\\s*oklch\\(\\s*([\\d.]+)\\s+([\\d.]+)\\s+([\\d.]+)\\s*\\)`))
+  if (!m) throw new Error(`globals.css: "${selector}" has no --${token}: oklch(L C H)`)
+  return oklchToRelativeLuminance(parseFloat(m[1]), parseFloat(m[2]), parseFloat(m[3]))
 }
 
 // ── APV-EMPTY-STATE ────────────────────────────────────────────────────────────
@@ -477,10 +511,9 @@ describe('ApprovalsInbox — overflow notice when the pending total exceeds the 
 // ── m2: Skip label meets the WCAG AA contrast floor (4.5:1) in both themes ──
 
 describe('ApprovalsInbox — Skip label contrast (m2, WCAG AA)', () => {
-  // Used to derive --card's actual luminance in each theme (app/globals.css:
-  // light `--card: oklch(0.985 0.002 75)`, dark `.dark --card: oklch(0.205 0.004 75)`).
-  const LIGHT_CARD_LUMINANCE = oklchToRelativeLuminance(0.985, 0.002, 75)
-  const DARK_CARD_LUMINANCE = oklchToRelativeLuminance(0.205, 0.004, 75)
+  // --card's actual luminance in each theme, read from app/globals.css.
+  const LIGHT_CARD_LUMINANCE = tokenLuminance(':root', 'card')
+  const DARK_CARD_LUMINANCE = tokenLuminance('.dark', 'card')
   const AMBER_700_LUMINANCE = hexToRelativeLuminance('#b45309')
   const AMBER_300_LUMINANCE = hexToRelativeLuminance('#fcd34d')
 
@@ -516,12 +549,11 @@ describe('ApprovalsInbox — Skip label contrast (m2, WCAG AA)', () => {
 // this test being the actual proof.
 
 describe('ApprovalsInbox — disabled bulk badge contrast (B5/MINOR-1, WCAG AA)', () => {
-  // app/globals.css — light: --foreground: oklch(0.145 0.004 75), --muted: oklch(0.97 0.002 75)
-  // app/globals.css — dark:  --foreground: oklch(0.985 0.002 75), --muted: oklch(0.269 0.004 75)
-  const LIGHT_FOREGROUND_LUMINANCE = oklchToRelativeLuminance(0.145, 0.004, 75)
-  const LIGHT_MUTED_LUMINANCE = oklchToRelativeLuminance(0.97, 0.002, 75)
-  const DARK_FOREGROUND_LUMINANCE = oklchToRelativeLuminance(0.985, 0.002, 75)
-  const DARK_MUTED_LUMINANCE = oklchToRelativeLuminance(0.269, 0.004, 75)
+  // --foreground / --muted in each theme, read from app/globals.css.
+  const LIGHT_FOREGROUND_LUMINANCE = tokenLuminance(':root', 'foreground')
+  const LIGHT_MUTED_LUMINANCE = tokenLuminance(':root', 'muted')
+  const DARK_FOREGROUND_LUMINANCE = tokenLuminance('.dark', 'foreground')
+  const DARK_MUTED_LUMINANCE = tokenLuminance('.dark', 'muted')
 
   it('text-foreground on bg-muted meets the 4.5:1 AA floor in the light theme', () => {
     expect(contrastRatio(LIGHT_FOREGROUND_LUMINANCE, LIGHT_MUTED_LUMINANCE)).toBeGreaterThanOrEqual(4.5)
