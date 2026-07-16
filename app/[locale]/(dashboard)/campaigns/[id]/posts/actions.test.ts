@@ -24,7 +24,10 @@ vi.mock('@/lib/db/posts', () => ({
   // Real value, not vi.fn(): actions.ts reads this at module scope to build
   // bulkApproveSchema's .max() bound, so a missing/mocked constant would
   // silently produce .max(undefined) (Session 22-E, ADR 0014 §A1.2).
+  // BULK_APPROVE_ID_CAP is a SEPARATE constant from APPROVALS_POST_LIMIT
+  // (Session 22-F, NEW-7) even though both are 200 today — see lib/db/posts.ts.
   APPROVALS_POST_LIMIT: 200,
+  BULK_APPROVE_ID_CAP: 200,
   getPostSiblingTopics: vi.fn(),
 }))
 
@@ -49,7 +52,7 @@ import {
   getPostSiblingTopics,
   updatePostContentAndMetadata,
   bulkApproveDraftPosts,
-  APPROVALS_POST_LIMIT,
+  BULK_APPROVE_ID_CAP,
 } from '@/lib/db/posts'
 import { buildCustomerContext } from '@/lib/ai/context'
 import { runPrompt } from '@/lib/ai/runner'
@@ -343,7 +346,7 @@ describe('bulkApprovePostsAction', () => {
     expect(bulkApproveDraftPosts).not.toHaveBeenCalled()
   })
 
-  it('rejects a renderedIds array longer than APPROVALS_POST_LIMIT (Session 22-E, ADR 0014 §A1.2)', async () => {
+  it('rejects a renderedIds array longer than BULK_APPROVE_ID_CAP (Session 22-E, ADR 0014 §A1.2)', async () => {
     makeAuthClient()
     // One past the cap. Above ~210 ids the PostgREST query string crosses the
     // 8 KB request-line limit and the write fails closed with an opaque error
@@ -351,7 +354,7 @@ describe('bulkApprovePostsAction', () => {
     // what makes §A1.2's reversal safe. A Server Action is a public endpoint;
     // Zod is the only real bound, not the UI's render count.
     const tooMany = Array.from(
-      { length: APPROVALS_POST_LIMIT + 1 },
+      { length: BULK_APPROVE_ID_CAP + 1 },
       (_, i) => `aaaaaaaa-aaaa-4aaa-8aaa-${String(i).padStart(12, '0')}`,
     )
 
@@ -361,17 +364,40 @@ describe('bulkApprovePostsAction', () => {
     expect(bulkApproveDraftPosts).not.toHaveBeenCalled()
   })
 
-  it('accepts a renderedIds array exactly at APPROVALS_POST_LIMIT (boundary)', async () => {
+  it('accepts a renderedIds array exactly at BULK_APPROVE_ID_CAP (boundary)', async () => {
     makeAuthClient()
-    vi.mocked(bulkApproveDraftPosts).mockResolvedValue(APPROVALS_POST_LIMIT)
+    vi.mocked(bulkApproveDraftPosts).mockResolvedValue(BULK_APPROVE_ID_CAP)
     const atCap = Array.from(
-      { length: APPROVALS_POST_LIMIT },
+      { length: BULK_APPROVE_ID_CAP },
       (_, i) => `aaaaaaaa-aaaa-4aaa-8aaa-${String(i).padStart(12, '0')}`,
     )
 
     const result = await bulkApprovePostsAction(VALID_CAMPAIGN_ID, atCap)
 
-    expect(result).toEqual({ success: true, count: APPROVALS_POST_LIMIT })
+    expect(result).toEqual({ success: true, count: BULK_APPROVE_ID_CAP })
+  })
+
+  it('NEW-7: the PostgREST request line at BULK_APPROVE_ID_CAP stays under the ~8 KB request-line budget', () => {
+    // Pins the coupling ADR 0014 §A1.2 / Session 22-F NEW-7 describes: this
+    // must independently stay true even if APPROVALS_POST_LIMIT (the
+    // Approvals page size) is later changed for an unrelated product reason.
+    const atCap = Array.from(
+      { length: BULK_APPROVE_ID_CAP },
+      (_, i) => `aaaaaaaa-aaaa-4aaa-8aaa-${String(i).padStart(12, '0')}`,
+    )
+    const campaignId = VALID_CAMPAIGN_ID
+    const businessId = MOCK_BUSINESS.id
+
+    // Worst case: every comma percent-encoded (%2C), the wider of the two
+    // encodings session-22f-reviewer.md measured.
+    const idListEncoded = atCap.join('%2C')
+    const requestLine =
+      `PATCH /rest/v1/posts?id=in.(${idListEncoded})` +
+      `&campaign_id=eq.${campaignId}` +
+      `&business_id=eq.${businessId}` +
+      `&status=eq.draft&deleted_at=is.null`
+
+    expect(requestLine.length).toBeLessThan(8000)
   })
 
   it('empty renderedIds still calls through (bulkApproveDraftPosts short-circuits to 0)', async () => {

@@ -290,6 +290,19 @@ describe('posts approval boundary — DB-enforced (ADR 0013 §5)', () => {
   })
 
   it('THE 21C M1 SCENARIO, now id-based: 3 linkedin + 2 twitter drafts, an id list of just the 2 twitter ids flips EXACTLY those 2', async () => {
+    // NEW-10 (Session 22-F): earlier tests in this file leave undeleted draft
+    // rows in the same campaign. The `.in('id', renderedIds)` predicate relies
+    // on those leftovers to turn RED if deleted — but only incidentally, since
+    // that depends on fixture order and vitest not shuffling. Capture them
+    // explicitly and assert they're untouched, so the protection is intended
+    // rather than emergent from other tests' hygiene.
+    const { data: preExistingDrafts } = await admin
+      .from('posts')
+      .select('id')
+      .eq('campaign_id', campaignId)
+      .eq('status', 'draft')
+    const preExistingDraftIds = (preExistingDrafts ?? []).map((r: { id: string }) => r.id)
+
     const linkedinIds = await Promise.all([
       createPostOnPlatform('linkedin', 'draft'),
       createPostOnPlatform('linkedin', 'draft'),
@@ -320,11 +333,36 @@ describe('posts approval boundary — DB-enforced (ADR 0013 §5)', () => {
       .in('id', linkedinIds)
     expect(linkedinRows!.every((r: { status: string }) => r.status === 'draft')).toBe(true)
 
+    if (preExistingDraftIds.length > 0) {
+      const { data: preExistingCheck } = await admin
+        .from('posts')
+        .select('status')
+        .in('id', preExistingDraftIds)
+      expect(preExistingCheck!.every((r: { status: string }) => r.status === 'draft')).toBe(true)
+    }
+
     await admin.from('posts').delete().in('id', [...linkedinIds, ...twitterIds])
   })
 
   it('BLOCKER-1/2: renderedIds spanning multiple campaigns/businesses cannot approve a row outside campaignId+businessId', async () => {
     const inScopeId = await createPostOnPlatform('linkedin', 'draft')
+
+    // NEW-9 (Session 22-F): pin .eq('status','draft') and .is('deleted_at',
+    // null) against the REAL function, not just the Tier-2 mock. Unlike
+    // campaign_id/business_id (see the honest-scope note below), no FK
+    // forbids either state, so each is independently achievable here:
+    // alreadyApprovedId is in-scope but already approved; softDeletedId is
+    // in-scope, draft, but soft-deleted. Neither should flip, and if either
+    // guard predicate is removed from bulkApproveDraftPosts, `count` below
+    // stops matching 1 (verified locally by temporarily deleting each
+    // predicate and confirming this test goes RED, then restoring it).
+    const alreadyApprovedId = await createPostOnPlatform('linkedin', 'approved')
+    const softDeletedId = await createPostOnPlatform('linkedin', 'draft')
+    const { error: softDeleteErr } = await admin
+      .from('posts')
+      .update({ deleted_at: '2026-07-15T00:00:00Z' })
+      .eq('id', softDeletedId)
+    if (softDeleteErr) throw softDeleteErr
 
     // A second business the approver is an ACTIVE APPROVER OF — deliberately,
     // and this is the whole point of the fixture (Session 22-E, NEW-3).
@@ -339,83 +377,116 @@ describe('posts approval boundary — DB-enforced (ADR 0013 §5)', () => {
     //
     // With membership, RLS permits BOTH rows and the function's own
     // campaign_id/business_id predicate is the only thing that narrows the
-    // write. Honest scope note: campaign_id is what actually excludes here,
-    // since a campaign belongs to exactly one business and therefore pins
-    // business_id transitively via the FK. business_id is defence-in-depth —
-    // no fixture can make it independently load-bearing, because a
-    // same-campaign cross-business row cannot exist.
-    const { data: otherBiz, error: otherBizErr } = await admin
-      .from('businesses')
-      .insert({ name: 'Second Business (approver is an active member)', owner_id: ownerId, plan: 'plus' })
-      .select('id')
-      .single()
-    if (otherBizErr) throw otherBizErr
-    const { error: otherMemberErr } = await admin.from('business_members').insert({
-      business_id: otherBiz.id,
-      user_id: approverId,
-      email: approverEmail,
-      role: 'approver',
-      status: 'active',
-    })
-    if (otherMemberErr) throw otherMemberErr
-    const { data: otherCampaign, error: otherCampaignErr } = await admin
-      .from('campaigns')
-      .insert({
-        business_id: otherBiz.id,
-        name: 'Cross-Tenant Campaign',
-        objective: 'Test cross-tenant isolation',
-        platforms: ['linkedin'],
-        frequency: 'weekly',
-        posts_per_week: 1,
-        start_date: '2026-07-01',
+    // write. Honest scope note (corrected, Session 22-F NEW-8): campaign_id
+    // and business_id are JOINTLY-but-not-individually load-bearing here, by
+    // the FK — a campaign belongs to exactly one business, so a same-campaign
+    // cross-business row cannot exist. Deleting campaign_id ALONE still
+    // leaves this test green (business_id then excludes otherPost, since it
+    // lives in otherBiz); deleting business_id ALONE also leaves it green
+    // (campaign_id excludes otherPost, since it lives in otherCampaign). Only
+    // their conjunction is provable by any fixture — neither predicate is
+    // individually load-bearing, and the asymmetry is not real.
+    //
+    // NEW-11 (Session 22-F): otherBiz/otherCampaign/otherPost teardown runs in
+    // a finally block so a failing assertion above can't strand this business
+    // tree — businesses.owner_id is ON DELETE RESTRICT, so an orphaned
+    // otherBiz blocks afterAll's deleteUser(ownerId) too.
+    let otherBiz: { id: string } | null = null
+    let otherCampaign: { id: string } | null = null
+    let otherPost: { id: string } | null = null
+
+    try {
+      const { data: otherBizData, error: otherBizErr } = await admin
+        .from('businesses')
+        .insert({ name: 'Second Business (approver is an active member)', owner_id: ownerId, plan: 'plus' })
+        .select('id')
+        .single()
+      if (otherBizErr) throw otherBizErr
+      otherBiz = otherBizData
+      const { error: otherMemberErr } = await admin.from('business_members').insert({
+        business_id: otherBiz!.id,
+        user_id: approverId,
+        email: approverEmail,
+        role: 'approver',
+        status: 'active',
       })
-      .select('id')
-      .single()
-    if (otherCampaignErr) throw otherCampaignErr
-    const { data: otherPost, error: otherPostErr } = await admin
-      .from('posts')
-      .insert({
-        campaign_id: otherCampaign.id,
-        business_id: otherBiz.id,
-        platform: 'linkedin',
-        content: 'Cross-tenant draft',
-        scheduled_at: '2026-07-15T12:00:00Z',
-        status: 'draft',
-      })
-      .select('id')
-      .single()
-    if (otherPostErr) throw otherPostErr
+      if (otherMemberErr) throw otherMemberErr
+      const { data: otherCampaignData, error: otherCampaignErr } = await admin
+        .from('campaigns')
+        .insert({
+          business_id: otherBiz!.id,
+          name: 'Cross-Tenant Campaign',
+          objective: 'Test cross-tenant isolation',
+          platforms: ['linkedin'],
+          frequency: 'weekly',
+          posts_per_week: 1,
+          start_date: '2026-07-01',
+        })
+        .select('id')
+        .single()
+      if (otherCampaignErr) throw otherCampaignErr
+      otherCampaign = otherCampaignData
+      const { data: otherPostData, error: otherPostErr } = await admin
+        .from('posts')
+        .insert({
+          campaign_id: otherCampaign!.id,
+          business_id: otherBiz!.id,
+          platform: 'linkedin',
+          content: 'Cross-tenant draft',
+          scheduled_at: '2026-07-15T12:00:00Z',
+          status: 'draft',
+        })
+        .select('id')
+        .single()
+      if (otherPostErr) throw otherPostErr
+      otherPost = otherPostData
 
-    const client = await signInAs(approverEmail)
+      const client = await signInAs(approverEmail)
 
-    // Sanity-check the premise: this approver CAN reach the other business's
-    // draft under RLS. If this write were permitted, the exclusion below would
-    // be the function's doing, not RLS's. (Rolled straight back.)
-    const { data: rlsReach } = await client
-      .from('posts')
-      .update({ status: 'approved' })
-      .eq('id', otherPost.id)
-      .select('id')
-    expect(rlsReach).toHaveLength(1)
-    await admin.from('posts').update({ status: 'draft' }).eq('id', otherPost.id)
+      // Sanity-check the premise: this approver CAN reach the other business's
+      // draft under RLS. If this write were permitted, the exclusion below would
+      // be the function's doing, not RLS's. (Rolled straight back.)
+      const { data: rlsReach } = await client
+        .from('posts')
+        .update({ status: 'approved' })
+        .eq('id', otherPost!.id)
+        .select('id')
+      expect(rlsReach).toHaveLength(1)
+      await admin.from('posts').update({ status: 'draft' }).eq('id', otherPost!.id)
 
-    const count = await bulkApproveDraftPosts(
-      client,
-      campaignId,
-      [inScopeId, otherPost.id],
-      businessId,
-    )
-    expect(count).toBe(1)
+      const count = await bulkApproveDraftPosts(
+        client,
+        campaignId,
+        [inScopeId, otherPost!.id, alreadyApprovedId, softDeletedId],
+        businessId,
+      )
+      expect(count).toBe(1)
 
-    const { data: inScopeCheck } = await admin.from('posts').select('status').eq('id', inScopeId).single()
-    expect(inScopeCheck.status).toBe('approved')
-    const { data: otherCheck } = await admin.from('posts').select('status').eq('id', otherPost.id).single()
-    expect(otherCheck.status).toBe('draft')
-
-    await admin.from('posts').delete().eq('id', otherPost.id)
-    await admin.from('campaigns').delete().eq('id', otherCampaign.id)
-    await admin.from('business_members').delete().eq('business_id', otherBiz.id)
-    await admin.from('businesses').delete().eq('id', otherBiz.id)
-    await admin.from('posts').delete().eq('id', inScopeId)
+      const { data: inScopeCheck } = await admin.from('posts').select('status').eq('id', inScopeId).single()
+      expect(inScopeCheck.status).toBe('approved')
+      const { data: otherCheck } = await admin.from('posts').select('status').eq('id', otherPost!.id).single()
+      expect(otherCheck.status).toBe('draft')
+      const { data: approvedCheck } = await admin
+        .from('posts')
+        .select('status')
+        .eq('id', alreadyApprovedId)
+        .single()
+      expect(approvedCheck.status).toBe('approved')
+      const { data: deletedCheck } = await admin
+        .from('posts')
+        .select('status, deleted_at')
+        .eq('id', softDeletedId)
+        .single()
+      expect(deletedCheck.status).toBe('draft')
+      expect(deletedCheck.deleted_at).not.toBeNull()
+    } finally {
+      if (otherPost) await admin.from('posts').delete().eq('id', otherPost!.id)
+      if (otherCampaign) await admin.from('campaigns').delete().eq('id', otherCampaign.id)
+      if (otherBiz) {
+        await admin.from('business_members').delete().eq('business_id', otherBiz.id)
+        await admin.from('businesses').delete().eq('id', otherBiz.id)
+      }
+      await admin.from('posts').delete().in('id', [inScopeId, alreadyApprovedId, softDeletedId])
+    }
   })
 })

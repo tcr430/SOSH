@@ -14,7 +14,7 @@ import {
   updatePostContent,
   updatePostContentAndMetadata,
   bulkApproveDraftPosts,
-  APPROVALS_POST_LIMIT,
+  BULK_APPROVE_ID_CAP,
   getPostById,
   getPostSiblingTopics,
 } from '@/lib/db/posts'
@@ -67,13 +67,16 @@ function revalidateCampaignPosts(campaignId: string): void {
 const postIdSchema = z.object({ postId: z.string().uuid() })
 const bulkApproveSchema = z.object({
   campaignId: z.string().uuid(),
-  // Capped at APPROVALS_POST_LIMIT (ADR 0014 §A1.2): a Server Action is a public
-  // endpoint, so Zod — not the UI — is the only real bound on this array. Both
-  // rendering surfaces sit at or under it (Approvals fetches APPROVALS_POST_LIMIT;
-  // campaign posts fetches 50). Above ~210 ids the PostgREST query string crosses
-  // the 8 KB request-line limit and the write fails closed with an opaque error —
-  // the failure mode §A1.1 rejected the id-list mechanism over.
-  renderedIds: z.array(z.string().uuid()).max(APPROVALS_POST_LIMIT),
+  // Capped at BULK_APPROVE_ID_CAP (ADR 0014 §A1.2, Session 22-F NEW-7): a
+  // Server Action is a public endpoint, so Zod — not the UI — is the only real
+  // bound on this array. Both rendering surfaces sit at or under it (Approvals
+  // fetches APPROVALS_POST_LIMIT posts; campaign posts fetches 50) — but this
+  // cap is deliberately its OWN constant, not APPROVALS_POST_LIMIT, because it
+  // bounds a different thing (the PostgREST request-line length, not a page
+  // size). Above ~210 ids the query string crosses the ~8 KB request-line
+  // limit and the write fails closed with an opaque error — the failure mode
+  // §A1.1 rejected the id-list mechanism over.
+  renderedIds: z.array(z.string().uuid()).max(BULK_APPROVE_ID_CAP),
 })
 
 // ---------------------------------------------------------------------------

@@ -279,6 +279,17 @@ withdrew it). Every Reviewer report MUST **open by naming the exact commit range
 (e.g. *"Scope reviewed: `c07dafda..9acc0133`; all citations are `git show <sha>:<path>` at that range,
 never HEAD."*) — a report that doesn't name its range is not a valid review.
 
+**Exception (Session 22-F, NEW-12): the findings document itself.** The rule above governs the
+**reviewed artefacts** (source, tests, ADRs, migrations). It does not — and cannot — govern the
+**findings document a prior review produced**, because that document is written *after* the range it
+describes and is therefore untracked at that range (`docs/reviews/session-22d-reviewer.md` did not exist
+at `98a9f7c7`, the commit its own audit describes; it entered git only at `354bdd9a`). A reviewer auditing
+a correction pass against a prior review's checklist necessarily reads that checklist outside the audited
+range. This is not a lapse — every reviewer to date has done it silently, and the rule as originally
+written admitted no exception for it. Going forward: **the reviewed artefacts are read at the audited
+range; the findings document being audited against is read at its own commit, which the report must name**
+(e.g. *"Findings document read at `354bdd9a`; reviewed artefacts read at `462e49eb..98a9f7c7`."*).
+
 **SHARED-FUNCTION CALLERS.** A constraint written against a shared function MUST enumerate that
 function's callers and state which ones the tests cover. Both Session 22 blockers (BLOCKER-1, BLOCKER-2)
 were the same root cause: `APV-BULK-*` was verified against only one of `bulkApprovePostsAction`'s two

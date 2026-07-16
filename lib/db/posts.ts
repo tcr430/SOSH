@@ -94,6 +94,17 @@ export async function listPostsForCalendar(
 // the calendar's definition of "pending" (C-2/§9.2).
 export const APPROVALS_POST_LIMIT = 200
 
+// ADR 0014 §A1.2 / Session 22-F (NEW-7) — the bulk-approve URL-length cap.
+// Deliberately a SEPARATE constant from APPROVALS_POST_LIMIT even though both
+// are 200 today: the PostgREST request line for bulkApproveDraftPosts' UPDATE
+// (id list + campaign_id + business_id + status + deleted_at predicates) has
+// only ~2.6%-7.5% headroom under the ~8 KB request-line budget at 200 ids (the
+// cliff is ~206-217 ids). APPROVALS_POST_LIMIT is a page-size choice that can
+// legitimately grow for product reasons; if it shared this constant, raising
+// it would silently reintroduce the 414 that ADR 0014 §A1.1 rejected the
+// mechanism over. Keep the two numbers free to move independently.
+export const BULK_APPROVE_ID_CAP = 200
+
 export async function listPendingDraftPosts(
   client: SupabaseClient,
   opts: {
