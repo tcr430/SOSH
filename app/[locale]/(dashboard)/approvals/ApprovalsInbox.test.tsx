@@ -102,6 +102,59 @@ function buttonWithText(container: HTMLElement, text: string) {
   return Array.from(container.querySelectorAll('button')).find(b => b.textContent?.includes(text))
 }
 
+// ── WCAG contrast math (module scope — shared by the m2 and MINOR-1/B5 blocks) ─
+//
+// Standard WCAG relative-luminance / contrast-ratio math, computed directly
+// from this app's actual CSS custom properties (app/globals.css) and
+// Tailwind's amber-700/amber-300 hex values — not eyeballed.
+
+function srgbChannelToLinear(c: number): number {
+  return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+}
+
+function relativeLuminanceFromLinearRgb(r: number, g: number, b: number): number {
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+
+function hexToRelativeLuminance(hex: string): number {
+  const n = parseInt(hex.replace('#', ''), 16)
+  const r = srgbChannelToLinear(((n >> 16) & 255) / 255)
+  const g = srgbChannelToLinear(((n >> 8) & 255) / 255)
+  const b = srgbChannelToLinear((n & 255) / 255)
+  return relativeLuminanceFromLinearRgb(r, g, b)
+}
+
+// oklch(L C H) -> linear sRGB -> relative luminance, per the Oklab reference
+// formulas (Björn Ottosson).
+function oklchToRelativeLuminance(L: number, C: number, hueDeg: number): number {
+  const hueRad = (hueDeg * Math.PI) / 180
+  const a = C * Math.cos(hueRad)
+  const b = C * Math.sin(hueRad)
+
+  const l_ = L + 0.3963377774 * a + 0.2158037573 * b
+  const m_ = L - 0.1055613458 * a - 0.0638541728 * b
+  const s_ = L - 0.0894841775 * a - 1.2914855480 * b
+
+  const l = l_ ** 3
+  const m = m_ ** 3
+  const s = s_ ** 3
+
+  const r = 4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s
+  const g = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s
+  const bLin = -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s
+
+  // oklch conversion yields linear sRGB directly (WCAG's luminance formula
+  // wants linear values) — just clamp to a valid channel range.
+  const clamp = (v: number) => Math.min(1, Math.max(0, v))
+  return relativeLuminanceFromLinearRgb(clamp(r), clamp(g), clamp(bLin))
+}
+
+function contrastRatio(l1: number, l2: number): number {
+  const lighter = Math.max(l1, l2)
+  const darker = Math.min(l1, l2)
+  return (lighter + 0.05) / (darker + 0.05)
+}
+
 // ── APV-EMPTY-STATE ────────────────────────────────────────────────────────────
 
 describe('ApprovalsInbox — empty state', () => {
@@ -424,58 +477,8 @@ describe('ApprovalsInbox — overflow notice when the pending total exceeds the 
 // ── m2: Skip label meets the WCAG AA contrast floor (4.5:1) in both themes ──
 
 describe('ApprovalsInbox — Skip label contrast (m2, WCAG AA)', () => {
-  // Standard WCAG relative-luminance / contrast-ratio math, computed directly
-  // from this app's actual CSS custom properties (app/globals.css --card) and
-  // Tailwind's amber-700/amber-300 hex values — not eyeballed.
-  function srgbChannelToLinear(c: number): number {
-    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
-  }
-
-  function relativeLuminanceFromLinearRgb(r: number, g: number, b: number): number {
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b
-  }
-
-  function hexToRelativeLuminance(hex: string): number {
-    const n = parseInt(hex.replace('#', ''), 16)
-    const r = srgbChannelToLinear(((n >> 16) & 255) / 255)
-    const g = srgbChannelToLinear(((n >> 8) & 255) / 255)
-    const b = srgbChannelToLinear((n & 255) / 255)
-    return relativeLuminanceFromLinearRgb(r, g, b)
-  }
-
-  // oklch(L C H) -> linear sRGB -> relative luminance, per the Oklab reference
-  // formulas (Björn Ottosson). Used to derive --card's actual luminance in
-  // each theme (app/globals.css: light `--card: oklch(0.985 0.002 75)`,
-  // dark `.dark --card: oklch(0.205 0.004 75)`).
-  function oklchToRelativeLuminance(L: number, C: number, hueDeg: number): number {
-    const hueRad = (hueDeg * Math.PI) / 180
-    const a = C * Math.cos(hueRad)
-    const b = C * Math.sin(hueRad)
-
-    const l_ = L + 0.3963377774 * a + 0.2158037573 * b
-    const m_ = L - 0.1055613458 * a - 0.0638541728 * b
-    const s_ = L - 0.0894841775 * a - 1.2914855480 * b
-
-    const l = l_ ** 3
-    const m = m_ ** 3
-    const s = s_ ** 3
-
-    const r = 4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s
-    const g = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s
-    const bLin = -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s
-
-    // oklch conversion yields linear sRGB directly (WCAG's luminance formula
-    // wants linear values) — just clamp to a valid channel range.
-    const clamp = (v: number) => Math.min(1, Math.max(0, v))
-    return relativeLuminanceFromLinearRgb(clamp(r), clamp(g), clamp(bLin))
-  }
-
-  function contrastRatio(l1: number, l2: number): number {
-    const lighter = Math.max(l1, l2)
-    const darker = Math.min(l1, l2)
-    return (lighter + 0.05) / (darker + 0.05)
-  }
-
+  // Used to derive --card's actual luminance in each theme (app/globals.css:
+  // light `--card: oklch(0.985 0.002 75)`, dark `.dark --card: oklch(0.205 0.004 75)`).
   const LIGHT_CARD_LUMINANCE = oklchToRelativeLuminance(0.985, 0.002, 75)
   const DARK_CARD_LUMINANCE = oklchToRelativeLuminance(0.205, 0.004, 75)
   const AMBER_700_LUMINANCE = hexToRelativeLuminance('#b45309')
@@ -501,11 +504,33 @@ describe('ApprovalsInbox — Skip label contrast (m2, WCAG AA)', () => {
   })
 })
 
-// ── B5: disabled-bulk badge contrast fix (text-muted-foreground on bg-muted
-// measured 4.34:1 in light theme, under the 4.5:1 AA floor; text-foreground
-// on the same bg-muted clears both themes) ─────────────────────────────────
+// ── B5/MINOR-1: disabled-bulk badge contrast — real assertion, not a comment ──
+//
+// text-muted-foreground on bg-muted computes under the 4.5:1 AA floor in the
+// light theme; text-foreground on the same bg-muted clears both themes. This
+// used to be asserted only by a code comment at ApprovalsInbox.tsx ("measured
+// 4.34:1…") — the exact "authored, not executed" shape ADR 0015 exists to
+// name (session-22 review MINOR-1). The ratios below are computed from this
+// app's actual CSS custom properties (app/globals.css --foreground/--muted),
+// not eyeballed, and the comment in the component was deleted in favour of
+// this test being the actual proof.
 
-describe('ApprovalsInbox — disabled bulk badge contrast (B5, WCAG AA)', () => {
+describe('ApprovalsInbox — disabled bulk badge contrast (B5/MINOR-1, WCAG AA)', () => {
+  // app/globals.css — light: --foreground: oklch(0.145 0.004 75), --muted: oklch(0.97 0.002 75)
+  // app/globals.css — dark:  --foreground: oklch(0.985 0.002 75), --muted: oklch(0.269 0.004 75)
+  const LIGHT_FOREGROUND_LUMINANCE = oklchToRelativeLuminance(0.145, 0.004, 75)
+  const LIGHT_MUTED_LUMINANCE = oklchToRelativeLuminance(0.97, 0.002, 75)
+  const DARK_FOREGROUND_LUMINANCE = oklchToRelativeLuminance(0.985, 0.002, 75)
+  const DARK_MUTED_LUMINANCE = oklchToRelativeLuminance(0.269, 0.004, 75)
+
+  it('text-foreground on bg-muted meets the 4.5:1 AA floor in the light theme', () => {
+    expect(contrastRatio(LIGHT_FOREGROUND_LUMINANCE, LIGHT_MUTED_LUMINANCE)).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it('text-foreground on bg-muted meets the 4.5:1 AA floor in the dark theme', () => {
+    expect(contrastRatio(DARK_FOREGROUND_LUMINANCE, DARK_MUTED_LUMINANCE)).toBeGreaterThanOrEqual(4.5)
+  })
+
   it('the disabled bulk trigger uses text-foreground, not the under-AA text-muted-foreground, on bg-muted', () => {
     const post = makePost()
     // totalPendingCount (341) > posts.length (1) => hasOverflow => disabled trigger

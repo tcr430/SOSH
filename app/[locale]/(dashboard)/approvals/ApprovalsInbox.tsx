@@ -246,10 +246,9 @@ export function ApprovalsInbox({ posts, campaigns, totalPendingCount }: Approval
                     aria-disabled="true"
                     aria-label={t('bulk.incompleteSetHint')}
                     onClick={e => e.preventDefault()}
-                    // WCAG AA (B5): text-muted-foreground on bg-muted measured
-                    // 4.34:1 in the light theme — under the 4.5:1 floor.
-                    // text-foreground on the same bg-muted clears both themes
-                    // (18.15:1 light / 14.48:1 dark) without a new token.
+                    // WCAG AA (B5/MINOR-1): text-foreground on bg-muted — see the
+                    // real contrast assertion in ApprovalsInbox.test.tsx (both
+                    // themes), not a comment claiming a measurement.
                     className="inline-flex items-center justify-center rounded-md px-3 py-1.5 text-xs font-medium bg-muted text-foreground cursor-not-allowed"
                   >
                     {t('bulk.approveAll', { count: rows.length })}
