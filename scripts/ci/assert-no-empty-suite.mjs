@@ -1,28 +1,38 @@
 #!/usr/bin/env node
 // ADR 0015 §4 (CI-NO-SKIPPED-SUITE + CI-NO-SWALLOWED-FAILURE) — the skip-guard meta-test.
 //
-// Asserts BOTH invariants against a vitest --reporter=json --outputFile result:
-//   (i)  INVISIBILITY — every test file under supabase/__tests__ must have run at least one
+// Asserts BOTH invariants against a vitest --reporter=json --outputFile result, scoped to one or
+// more target directories:
+//   (i)  INVISIBILITY — every test file under a target directory must have run at least one
 //        non-skipped assertion. A file with zero assertionResults, or whose assertionResults are
-//        all 'skipped', is invisible — the exact false-green shape the INV-REISSUE-SAME-ROW bug
-//        (21B) came from (a flag left off). Also fails if the JSON lists zero test files at all
-//        under supabase/__tests__ (nothing matched the glob).
+//        all 'skipped'/'pending', is invisible — the exact false-green shape the INV-REISSUE-SAME-ROW
+//        bug (21B) came from (a flag left off). Also fails if a target directory matched zero test
+//        files at all (nothing matched the glob for that directory — the whole-suite-disappeared
+//        shape session-22 B2 found in supabase/__tests__, now guarded generically).
 //   (ii) FAILURE — if the JSON reports any failed test, the job fails too. A suite may be RED,
 //        but red must never be swallowed into green.
 //
 // Exits non-zero if EITHER invariant is violated. Green requires: every file visible AND zero
 // failures. No `|| true` anywhere in this script or its caller (CI-NO-SWALLOWED-FAILURE) — a
 // gate step that cannot fail the job is not a gate.
+//
+// Usage: assert-no-empty-suite.mjs <path-to-vitest-json-output> [targetDir...]
+// With no targetDir args, defaults to ['supabase/__tests__'] (db-tests.yml's original call shape).
+// app-tests.yml passes its own target dirs (app, lib, components) — session 22-D (MAJOR-1) extends
+// the guard from db-tests-only to app-tests, now that the four real-network __integration__ suites
+// are absent from app-tests' glob rather than present-but-skipped: with no allowlist needed, nothing
+// inside a target dir may be empty.
 
 import { readFileSync } from 'node:fs'
 
-const SUITE_DIR = 'supabase/__tests__'
-
 const resultsPath = process.argv[2]
 if (!resultsPath) {
-  console.error('::error::usage: assert-no-empty-suite.mjs <path-to-vitest-json-output>')
+  console.error('::error::usage: assert-no-empty-suite.mjs <path-to-vitest-json-output> [targetDir...]')
   process.exit(1)
 }
+
+const targetDirArgs = process.argv.slice(3)
+const SUITE_DIRS = targetDirArgs.length > 0 ? targetDirArgs : ['supabase/__tests__']
 
 let report
 try {
@@ -33,14 +43,31 @@ try {
 }
 
 const testResults = Array.isArray(report.testResults) ? report.testResults : []
-const suiteFiles = testResults.filter((r) => (r.name ?? r.testFilePath ?? '').split(/[\\/]/).join('/').includes(`${SUITE_DIR}/`))
+function normalizedPath(r) {
+  return (r.name ?? r.testFilePath ?? '').split(/[\\/]/).join('/')
+}
+const suiteFiles = testResults.filter((r) => {
+  const p = normalizedPath(r)
+  return SUITE_DIRS.some((dir) => p.includes(`${dir}/`) || p.includes(`/${dir}/`))
+})
 
 let failed = false
 
 // --- Invariant (i): INVISIBILITY ---
 if (suiteFiles.length === 0) {
-  console.error(`::error::skip-guard: zero test files matched under ${SUITE_DIR} — nothing ran (invisible suite, the false-green shape)`)
+  console.error(`::error::skip-guard: zero test files matched under [${SUITE_DIRS.join(', ')}] — nothing ran (invisible suite, the false-green shape)`)
   failed = true
+}
+
+for (const dir of SUITE_DIRS) {
+  const matchedDir = suiteFiles.some((r) => {
+    const p = normalizedPath(r)
+    return p.includes(`${dir}/`) || p.includes(`/${dir}/`)
+  })
+  if (!matchedDir) {
+    console.error(`::error::skip-guard: zero test files matched under ${dir} — the whole directory disappeared from the run (invisible, the session-22 B2 shape)`)
+    failed = true
+  }
 }
 
 for (const file of suiteFiles) {
@@ -82,4 +109,4 @@ if (failed) {
   process.exit(1)
 }
 
-console.log(`skip-guard: ${suiteFiles.length} file(s) under ${SUITE_DIR} all visible, zero failures — green.`)
+console.log(`skip-guard: ${suiteFiles.length} file(s) under [${SUITE_DIRS.join(', ')}] all visible, zero failures — green.`)

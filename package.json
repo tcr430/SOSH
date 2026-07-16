@@ -16,7 +16,8 @@
     "postiz:logs": "docker-compose -f infra/docker-compose.yml logs -f",
     "typecheck": "tsc --noEmit --skipLibCheck",
     "test:app": "vitest run app/ lib/ components/",
-    "test:db": "vitest run supabase/__tests__ --no-file-parallelism --retry=2"
+    "test:db": "vitest run supabase/__tests__ --no-file-parallelism --retry=2",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",
