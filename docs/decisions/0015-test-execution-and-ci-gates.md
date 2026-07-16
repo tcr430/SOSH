@@ -512,12 +512,20 @@ enforceable without opening this ADR.
 
 **Enforcement (Session 22-D, GitHub ruleset `master-app-tests`, id `19038239`).** A repository ruleset
 targeting `refs/heads/master` exists with `enforcement: active`, `bypass_actors: []`
-(`current_user_can_bypass: "never"`), and one `required_status_checks` rule naming `app-tests`. Verified via
-`gh api repos/tcr430/SOSH/rules/branches/master` (the rulesets-aware endpoint — the legacy
-`branches/master/protection` endpoint 404s regardless, since it only reflects classic branch protection, not
-rulesets, and is not evidence of anything here). `db-tests` is deliberately **absent** from this ruleset,
-matching the not-yet-promoted state in the table above — adding it is a future ruleset update, not a new
-ruleset, once the three-green tally (`docs/current-phase.md`) completes.
+(`current_user_can_bypass: "never"`), and one `required_status_checks` rule naming `app-tests`. **Verify with
+`gh api repos/:owner/:repo/rulesets/19038239`** — the ruleset-by-ID endpoint, which returns this ruleset's
+`enforcement`/`bypass_actors`/`rules` directly. **Do not use `branches/master/protection`**: that endpoint
+only reflects classic branch protection, not rulesets, and 404s here regardless of whether the ruleset is
+active — a 404 on that path is not evidence of "no gate," and a reviewer who runs it and reports the gate
+missing is wrong (Session 22-D re-review NEW-6 nearly made this exact mistake). `db-tests` is deliberately
+**absent** from this ruleset, matching the not-yet-promoted state in the table above — adding it is a future
+ruleset update, not a new ruleset, once the three-green tally (`docs/current-phase.md`) completes.
+
+**Push-lock, demonstrated (Session 22-D re-review, NEW-6).** The ruleset's `required_status_checks` rule
+enforces on **direct pushes to `master`**, not just PR merges: pushing the 22-D commit range straight to
+`master` was rejected with `GH013 … Required status check "app-tests" is expected`. Every future session
+lands via PR — open a branch, push it, `gh pr create`, let `app-tests` run, then merge. `docs/current-phase.md`
+records this plainly so it is not rediscovered by trial and error each session.
 
 ---
 

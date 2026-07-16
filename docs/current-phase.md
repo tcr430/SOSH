@@ -50,6 +50,11 @@
     `refs/heads/master`, requiring `app-tests` with no bypass actors. `db-tests` is intentionally **not**
     in any ruleset yet — it stays advisory until the tally above reaches 3/3, at which point the ruleset is
     updated (not recreated) to add it.
+  - **PR-only, demonstrated (Session 22-D re-review, NEW-6):** the ruleset enforces on **direct pushes to
+    `master`**, not just PR merges — pushing the 22-D range straight to `master` was rejected with
+    `GH013 … Required status check "app-tests" is expected`. Every future session lands via PR (open a
+    branch, push it, `gh pr create`, let `app-tests` run, merge) — a direct `git push origin master` will
+    bounce. See `docs/decisions/0015-test-execution-and-ci-gates.md` §5 for the verification command.
   - Full detail: `docs/decisions/0015-test-execution-and-ci-gates.md`,
     `docs/decisions/0014-seats-and-permissions-surface.md` (Amendment A).
 
