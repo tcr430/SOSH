@@ -957,29 +957,54 @@ test names) and **confirmed every 22-D correction closed**:
 
 ## §4.4 — 22-E resolution + 22-F independent re-audit
 
-The re-review surfaced **six NEW findings and one merge condition**. **22-E is already committed**
-(`5f9a89b0`, `578255c3`, `fa8b4bdf`, `98a9f7c7` on PR #1) and closes most of them — but 22-E was authored by
-the same reviewer, so **nothing in 22-E has been independently reviewed.** The guide therefore needs: one
-genuinely-open code fix (NEW-1), two doc corrections (NEW-6 + the MINOR-5 record), two durable process/ADR
-rules (NEW-4, NEW-2), and an **independent 22-F pass** that re-audits the 22-E range.
+The 22-D re-review surfaced **six NEW findings and one merge condition**, which were then addressed across two
+already-committed passes. **Read the lineage carefully — it is the crux of what remains:**
 
-**Disposition ledger:**
+- **22-E** (`5f9a89b0`, `578255c3`, `fa8b4bdf`, `98a9f7c7`) — the cap, ADR §A1.2, the NEW-2 boundary test, the
+  NEW-3 contrast fix. Authored by the 22-D reviewer's session.
+- **P1/P2/P3** (`70b5bc37`, `354bdd9a`, `0e966791`) — the ADR §2 doctrine + immutability rule (P1), the NEW-1
+  count-parity fix (P2), the doc corrections (P3). **These are the prompts below, and they are ALREADY
+  COMMITTED** — by the same lineage as 22-F.
 
-| # | Sev | Finding | State | Handled by |
-|---|-----|---------|-------|-----------|
-| Merge condition | MAJOR | 22-D shipped the `.in('id',…)` mechanism ADR §A1.1 *rejected*, with no cap, ADR unamended | **22-E** `5f9a89b0`+`fa8b4bdf` (Zod `.max(APPROVALS_POST_LIMIT)` + §A1.2) → **22-F verifies** | §4.4 P4 |
-| NEW-2 | MAJOR | Tier-1 boundary suite proves the wrong proposition (hand-rolls the chain, never calls the fn; RLS masks cross-scope) | **22-E** `578255c3` → **22-F verifies** + ADR rule | §4.4 P1 (rule), P4 (verify) |
-| NEW-3 | MINOR | Contrast test pins a *transcribed copy* of theme tokens | **22-E** `98a9f7c7` (mutation-verified) → **22-F verifies** | §4.4 P4 |
-| NEW-1 | MINOR | Count invariant holds on neither surface: both announce `renderedIds.length` not `result.count`; campaign surface has no count + no `aria-live` | **OPEN** | §4.4 P2 (fix) |
-| NEW-6 | MINOR | `master` is push-locked (`GH013`); undocumented; §5's verify command 404s (wrong endpoint) | **OPEN** | §4.4 P3 (doc) |
-| NEW-4 | MINOR (process) | Reviewer amended its own report in place; independence lost | **OPEN** | §4.4 P1 (rule) |
-| NEW-5 | NIT | Skip-guard can't detect a single *named* file vanishing (dir stays non-empty) | backlog | §4.4 P3 |
-| MINOR-5 | — | Self-corrected: **NOT moot** (the count-predicate index stands as filed) | backlog stays open | §4.4 P3 |
+**22-F independently audited 22-E only** (`462e49eb..98a9f7c7`) and returned **mergeable ✅, merge condition
+discharged, no new BLOCKER/MAJOR** — verifying the cap arithmetically (cliff at ~206–217 ids; cap 200) and the
+ADR coherence. But 22-F explicitly **refuses to certify its own lineage's work**: NEW-1 (P2), the ADR §2
+doctrine text (P1), and P3 are all after its audited range and authored by its own session. **That is the only
+gap left: the P1/P2/P3 pass has never had independent eyes.** It is closed by the required **22-G** pass (§4.6).
 
-> **Ordering:** P1 (rules) and P3 (docs) are safe to do any time. **P2 (NEW-1) is real code** — run it, let
-> it land, then run **P4 (22-F)** so the independent pass audits NEW-1 *and* the 22-E range in one sweep.
+> **What this corrects in the guide:** the P1/P2/P3 prompts below were written as *forward work*; they have
+> since been **committed** (`70b5bc37` / `354bdd9a` / `0e966791`). They are retained as the record of what was
+> done, marked ✅ COMMITTED. The live remaining work is §4.6 (22-G), not these.
 
-### §4.4 · P1 — Two durable rules  (Sonnet · docs only)
+**Disposition ledger (final):**
+
+| # | Sev | Finding | State |
+|---|-----|---------|-------|
+| Merge condition | MAJOR | 22-D shipped the `.in('id',…)` mechanism §A1.1 *rejected*, no cap, ADR unamended | ✅ **discharged** — 22-E cap + §A1.2; 22-F verified arithmetically |
+| NEW-2 | MAJOR | Tier-1 boundary suite proved the wrong proposition (EXECUTED-AND-PROVING-NOTHING) | ⚠️ **closed as specified, not as worded** — 22-E `578255c3` joins Tier-1 to the real fn; `business_id` individually unprovable *by FK theorem* (22-F, non-blocking). Residual NEW-9 |
+| NEW-3 | MINOR | Contrast test pinned a transcribed copy of theme tokens | ✅ **closed** — 22-E `98a9f7c7`, mutation-verified ×3 by 22-F |
+| NEW-1 | MINOR | Both surfaces announced `renderedIds.length`, not `result.count`; campaign surface no count/`aria-live` | ✅ **committed (P2 `354bdd9a`)** — ⚠️ **not independently reviewed** → 22-G |
+| ADR §2 doctrine | — | name EXECUTED-AND-PROVING-NOTHING; "attached to the claim" | ✅ **committed (P1 `70b5bc37`)** — ⚠️ **not independently reviewed** → 22-G |
+| NEW-4 | MINOR (process) | Reviewer amended its own report in place | ✅ **committed (P1)** — immutability rule in CLAUDE.md |
+| NEW-6 | MINOR | `master` push-locked, undocumented; §5 verify command 404s (wrong endpoint) | ✅ **committed (P3 `0e966791`)** — ⚠️ not independently reviewed → 22-G |
+| NEW-5 | NIT | Skip-guard can't see a single *named* file vanish | filed (P3) |
+| MINOR-5 | — | Count-predicate index — NOT moot; stands as filed | backlog open (P3) |
+| **NEW-7** | **MINOR** | `APPROVALS_POST_LIMIT` does double duty (page size *and* URL cap); ~2.6% headroom → raising page size silently reintroduces the 414 | **OPEN** → §4.6 P5 |
+| **NEW-8** | **MINOR** | Tier-1 honest-scope comment is asymmetric — `campaign_id`+`business_id` are jointly-not-individually load-bearing | **OPEN** → §4.6 P5 |
+| **NEW-9** | **MINOR** | `.eq('status','draft')` + `.is('deleted_at',null)` unpinned at Tier-1 (the atomic-transition guard among them) — and this one **is** achievable | **OPEN** → §4.6 P5 |
+| **NEW-10** | **NIT** | `.in('id',…)` caught only incidentally (relies on other tests' fixture hygiene + no shuffle) | **OPEN** → §4.6 P5 |
+| **NEW-11** | **NIT** | `otherBiz` fixture leaks on failure path; `ON DELETE RESTRICT` compounds it (can strand 3 business trees under `--retry=2`) | **OPEN** → §4.6 P5 |
+| **NEW-12** | **MINOR (process)** | PROC-REVIEW-AT-COMMIT blind spot: the *findings document* never exists at the range it describes | **OPEN** → §4.6 P5 |
+
+> **Plan (your call):** a small **22-G-fix pass P5** (NEW-7/8/9/12 + the two NITs) lands first, then the
+> **independent 22-G review P6** audits P1/P2/P3 **and** P5 in one sweep. P5 fixes are all MINOR/NIT — none
+> blocks a merge; they harden the test suite against the exact EXECUTED-AND-PROVING-NOTHING family the session
+> exists to kill, so they are worth doing before the arc closes.
+
+### §4.4 · P1 — Two durable rules  ✅ COMMITTED `70b5bc37`  (Sonnet · docs only)
+
+> Retained as the record of what shipped. **Already committed** — do not re-run. 22-G (§4.6) gives it the
+> independent review it has not yet had.
 
 ```
 Session 22 · P1 — process + ADR rules from the 22-D re-review. Docs only, no code. /ecc:plan then commit.
@@ -1002,7 +1027,7 @@ DO:
 On commit, output "P1 complete — reviewer-immutability + EXECUTED-AND-PROVING-NOTHING recorded." Stop.
 ```
 
-### §4.4 · P2 — NEW-1: count/announcement parity on both surfaces  (Sonnet · code)
+### §4.4 · P2 — NEW-1: count/announcement parity on both surfaces  ✅ COMMITTED `354bdd9a`  (Sonnet · code)
 
 ```
 Session 22 · P2 — NEW-1 (the one genuine product gap 22-D left open). The bulk WRITE is already exact; this
@@ -1035,7 +1060,9 @@ Hard rules as §2. UI + wiring only — no change to bulkApproveDraftPosts, no D
 On green + commit, output "P2 complete — both surfaces announce the DB count; PostsClient at a11y parity." Stop.
 ```
 
-### §4.4 · P3 — Doc corrections + backlog  (Sonnet · docs only)
+### §4.4 · P3 — Doc corrections + backlog  ✅ COMMITTED `0e966791`  (Sonnet · docs only)
+
+> Retained as the record of what shipped. **Already committed** — do not re-run.
 
 ```
 Session 22 · P3 — record what the re-review found about enforcement and the corrected index verdict. Docs
@@ -1062,101 +1089,336 @@ DO:
 On commit, output "P3 complete — PR-only + rulesets endpoint documented; MINOR-5 stands; NEW-5 filed." Stop.
 ```
 
-### §4.4 · P4 — 22-F independent re-audit  (Opus · a DIFFERENT reviewer than authored 22-E)
+### §4.4 · P4 — 22-F independent re-audit  ✅ DONE  (`docs/reviews/session-22f-reviewer.md`, range `462e49eb..98a9f7c7`)
 
-> **Why this exists:** the 22-D re-review honestly disclosed it was not independent — it authored the 22-E
-> commits it now vouches for, and asked for exactly this pass. 22-E closes the merge condition (the cap +
-> §A1.2), NEW-2, and NEW-3, but no adversarial eye has checked that. Run this in a **fresh session**; the
-> reviewer must not be the one who wrote 22-E.
+A **genuinely independent** reviewer (sibling lineage — audited a peer's work, not its own; confirmed by the
+session-timing evidence in its Independence section) audited the **22-E** commits and returned:
 
-#### §4.4 · P4a — primer  (paste first · wait for acknowledgement)
+- **Mergeable ✅ — 22 + 22-D + 22-E together are sound. No new BLOCKER/MAJOR.** All six of *its* new findings
+  (NEW-7…NEW-12) are MINOR/NIT.
+- **Merge condition DISCHARGED.** The cap is a real bound at the action boundary (`z.array(z.string().uuid())
+  .max(APPROVALS_POST_LIMIT)`, rejects rather than truncates, `businessId` server-derived). 22-F **re-derived
+  the URL arithmetic** rather than trusting the commit message: at 200 ids the request fits under both comma
+  encodings (214–616 B headroom); the cliff is ~206–217; §A1.2's "above ~210" is well-calibrated. The §A1.1
+  failure mode is unreachable through this action.
+- **ADR coherent.** §A1.2 documents the shipped signature, the cap, and the reversal's reasoning; the dead
+  `platforms?` strings survive only under explicit supersession banners with §A1.2 governing.
+- **NEW-3 CLOSED**, mutation-verified ×3 (breaking `--card`/`--muted` turns it red; one mutation reproduces the
+  commit message's ratio to 16 significant figures). The strongest work in the range.
+- **NEW-2 ⚠️ PARTIAL — closed as specified, not as worded.** Tier-1 now calls the real function, but deleting
+  `.eq('business_id')` reddens only **Tier-2**, not Tier-1. 22-F judges this **non-blocking**: `business_id`
+  is individually unprovable at Tier-1 *by FK theorem* (a campaign belongs to one business; a same-campaign
+  cross-business row cannot exist), which NEW-2 itself proved and whose achievable fix 22-E built. A tech lead
+  who holds Tier-1 as the only valid home for a DB-behaviour claim could escalate this; 22-F lays out the
+  reasoning so that call is someone else's to make. **The achievable residual is NEW-9.**
+
+**What 22-F explicitly refuses to certify** (and asks a 22-G pass to cover): **NEW-1 (P2 `354bdd9a`), the
+ADR §2 doctrine text (P1 `70b5bc37`), and P3 (`0e966791`)** — all after its range and **authored by its own
+lineage**. Plus its own six new findings. That is §4.6.
+
+---
+
+## §4.6 — 22-G: harden the residuals, then independently clear the P1/P2/P3 lineage
+
+Two things remain between here and an honest close, both flowing from 22-F's scope limits:
+
+1. **Six MINOR/NIT residuals** (NEW-7…NEW-12) — none blocks a merge, but four have real fixes and they harden
+   the suite against the exact `EXECUTED-AND-PROVING-NOTHING` family this whole session exists to kill. A small
+   fix pass (**P5**) lands them.
+2. **The P1/P2/P3 pass is uncertified.** NEW-1, the ADR §2 doctrine, and the doc corrections were authored by
+   22-F's own lineage; 22-F could not grade them. An independent pass (**P6**) audits P1/P2/P3 **and** P5 in
+   one sweep.
+
+Order: **P5 first** (so P6 audits a settled tree), then **P6**. Both land via PR (master is push-locked — P3).
+
+### §4.6 · P5 — Residual test-hardening + the PROC blind spot  (Sonnet · code + docs)
 
 ```
-Session 22-F — INDEPENDENT re-audit of the 22-E correction commits. You are independent: you did NOT write
-22-E and you modify nothing. Output is a review document only.
+Session 22 · P5 — close the 22-F residuals (NEW-7…NEW-12). All MINOR/NIT; none is a blocker; together they
+remove the last EXECUTED-AND-PROVING-NOTHING gaps in the approvals boundary suite. Run /ecc:plan ->
+/ecc:tdd-workflow -> /ecc:verification-loop.
 
-INDEPENDENCE (hard): the 22-D re-review (docs/reviews/session-22d-reviewer.md) was authored by the same
-reviewer who wrote the 22-E commits — it says so in its own Independence Disclosure and asks for this pass.
-If YOU authored any of 5f9a89b0 / 578255c3 / fa8b4bdf / 98a9f7c7, STOP and say so — this pass must be run by
-someone who did not. Confirm you did not before proceeding.
+Read docs/reviews/session-22f-reviewer.md NEW-7...NEW-12 in full first.
 
-⚠️ PROC-REVIEW-AT-COMMIT (ADR 0015 §6): read at the stated range — `git diff 462e49eb..98a9f7c7`,
-`git show <sha>:<path>` — NEVER at HEAD. Open your report by naming the range. (Docs are tracked now, so the
-ADRs ARE readable at the range — verify `git ls-files docs/` is non-empty first.)
+BUILD:
+- NEW-7 (MINOR - the coupled constant): APPROVALS_POST_LIMIT is doing double duty as BOTH the Approvals page
+  size AND the bulk-approve URL-length cap, with only ~2.6% headroom - so raising the page size for an
+  ordinary product reason silently reintroduces the 414 that A1.1 rejected. Split them: introduce a dedicated
+  BULK_APPROVE_ID_CAP (= 200) with a comment tying it to the ~8 KB PostgREST request-line budget, and point
+  the Zod .max() at BULK_APPROVE_ID_CAP (not the page-size constant). Then add a test that constructs the
+  worst-case request string at the cap and asserts it stays under ~8000 bytes - so the coupling is pinned, not
+  just commented. Keep the page-size value wherever it legitimately is; the point is the two numbers can now
+  move independently.
+- NEW-9 (MINOR - the achievable Tier-1 gap): in posts-approval-boundary.test.ts, pass an already-approved row
+  AND a soft-deleted (deleted_at set) row through the REAL bulkApproveDraftPosts in the Tier-1 bulk case, and
+  assert neither flips. This pins .eq('status','draft') and .is('deleted_at', null) - the former is the
+  atomic-transition guard - against the real function, not just the Tier-2 mock. (Unlike business_id, no FK
+  forbids these states, so this IS achievable - 22-F says so explicitly.)
+- NEW-10 (NIT - incidental protection): the .in('id', renderedIds) mutation currently reddens Tier-1 only
+  because earlier tests leave stray drafts in the campaign and vitest doesn't shuffle. Make it intentional:
+  assert the leftover drafts are untouched by the bulk call, so the protection is explicit rather than
+  emergent from fixture order.
+- NEW-11 (NIT - fixture leak on failure): otherBiz is cleaned only on the all-assertions-pass path, and
+  businesses.owner_id is ON DELETE RESTRICT, so a failing run can strand up to three business trees under
+  --retry=2. Move otherBiz teardown into afterAll (or wrap the fixture in try/finally) so a red test cannot
+  orphan it.
+- NEW-8 (MINOR - the misleading comment): the honest-scope note claims business_id is the un-provable
+  predicate; 22-F showed campaign_id and business_id are JOINTLY-but-not-individually load-bearing (deleting
+  either alone leaves the test green, by the FK). Correct the comment to say exactly that - it is the artefact
+  a future session will trust.
+- NEW-12 (MINOR, process): CLAUDE.md - amend PROC-REVIEW-AT-COMMIT for its own blind spot: a reviewer's
+  FINDINGS document never exists at the range it describes (it is written after). State the exception: the
+  REVIEWED ARTEFACTS are read at the audited range; the FINDINGS document is read at its OWN commit, which the
+  report must name. (A rule refinement, not a behavioural change - every prior reviewer already did this
+  silently.)
 
-Read now, at the range:
-- docs/reviews/session-22d-reviewer.md — the six NEW findings + the merge condition. You are auditing 22-E's
-  claim to close NEW-2, NEW-3, and the cap/ADR condition, plus P2's NEW-1 fix if it landed in-range.
-- The 22-E commits, each individually: 5f9a89b0 (cap), fa8b4bdf (ADR §A1.2), 578255c3 (NEW-2 boundary test),
-  98a9f7c7 (NEW-3 contrast).
-- docs/decisions/0014-…-surface.md §A1 / §A1.1 / §A1.2 and 0015 §2.
-- lib/db/posts.ts, campaigns/[id]/posts/actions.ts, supabase/__tests__/posts-approval-boundary.test.ts,
-  ApprovalsInbox.test.tsx.
+TESTS: NEW-7 URL-budget assertion; NEW-9 approved-row + soft-deleted-row non-flip via the real function;
+NEW-10 leftover-drafts-untouched assertion. Run the NEW-9 mutations locally to confirm they'd catch a deleted
+predicate (delete .eq('status','draft') -> your new test must go RED; restore).
+
+Hard rules as section 2. No new capability, no DB migration, no change to the shipped bulk mechanism.
+On green + commit (via PR), output "P5 complete - cap decoupled (NEW-7), Tier-1 pins status/deleted_at
+(NEW-9), incidental protections made explicit (NEW-10/11), comment corrected (NEW-8), PROC blind spot amended
+(NEW-12)." Stop.
+```
+
+### §4.6 · P6 — Independent audit of P1/P2/P3 + P5  (Opus · a reviewer NOT in the 22-D/E/F lineage)
+
+> **Independence (your call: strong note, self-enforced).** 22-F could not certify P1/P2/P3 because its own
+> lineage wrote them. Do not let the same be true of P6: run it in a **fresh session**, ideally by a reviewer
+> that did not author 22-D, 22-E, 22-F, or P5. The primer states this and asks the reviewer to disclose its
+> lineage; enforcement is yours.
+
+#### §4.6 · P6a — primer  (paste first · wait for acknowledgement)
+
+```
+Session 22-G - INDEPENDENT audit of the P1/P2/P3 correction lineage and the P5 residual-hardening pass. You
+review; you modify nothing. Output is a review document only.
+
+INDEPENDENCE (disclose, then proceed): 22-F (docs/reviews/session-22f-reviewer.md) explicitly could NOT
+certify commits 70b5bc37 (P1 / ADR section 2 doctrine), 354bdd9a (P2 / NEW-1), 0e966791 (P3 / docs) - they
+were authored by its own lineage - and asked for exactly this pass. State whether you authored any of those,
+or 22-D / 22-E / 22-F / P5. If you did, say so plainly in the report's independence section; the founder is
+self-enforcing this and needs the disclosure to make the call.
+
+PROC-REVIEW-AT-COMMIT (ADR 0015 section 6, as amended by P5/NEW-12): read the REVIEWED ARTEFACTS at their
+range - git show <sha>:<path>, git diff <range> - never at HEAD. Read each FINDINGS document at its OWN commit
+and name it. Open your report by naming both the reviewed range and the findings-doc commit you read.
+
+Read now:
+- docs/reviews/session-22d-reviewer.md (findings for NEW-1) and session-22f-reviewer.md (findings for
+  NEW-7...12 and the P1/P2/P3 certification gap) - each at its own commit.
+- P1 70b5bc37: ADR 0015 section 2 - does it name EXECUTED-AND-PROVING-NOTHING and state "covered = executed
+  AND attached to the claim"? CLAUDE.md - the reviewer-report immutability rule (NEW-4).
+- P2 354bdd9a: the NEW-1 count-parity fix (both surfaces announce result.count; PostsClient count label +
+  aria-live).
+- P3 0e966791: current-phase.md PR-only note; ADR 0015 section 5 rulesets-endpoint correction; backlog
+  MINOR-5 + NEW-5.
+- P5 (the just-landed pass): NEW-7 constant split + URL-budget test; NEW-9 Tier-1 status/deleted_at pins;
+  NEW-8/10/11 test hygiene; NEW-12 PROC amendment.
 
 Invoke security-reviewer AND database-reviewer.
 
 Establish and report before reviewing:
-(1) confirm you are not the 22-E author;
-(2) the cap: is there a Zod .max(APPROVALS_POST_LIMIT) on renderedIds, and does ADR §A1.2 now match the
-    shipped .in('id', renderedIds) signature (no stale platforms?: Platform[] left normative in §A1)?
-(3) NEW-2: does posts-approval-boundary.test.ts now CALL bulkApproveDraftPosts (not a hand-rolled chain), and
-    does deleting .eq('business_id', businessId) from posts.ts make a test FAIL? If not, NEW-2 is not closed.
-Then "Ready to audit 22-E (range 462e49eb..98a9f7c7)." Wait.
+(1) your lineage disclosure (above);
+(2) NEW-1: mock bulkApprovePostsAction to return count < renderedIds.length - is the ANNOUNCED number
+    result.count on BOTH surfaces? Does PostsClient now have a count label + an aria-live region?
+(3) NEW-7: is there a distinct BULK_APPROVE_ID_CAP, is the Zod .max() pointed at IT (not the page size), and
+    does a test pin the request string under ~8 KB at the cap?
+(4) NEW-9 mutation: delete .eq('status','draft') from bulkApproveDraftPosts -> does a Tier-1 test go RED now?
+Then "Ready to audit 22-G (ranges: <P1..P3>, <P5>)." Wait.
 ```
 
-#### §4.4 · P4b — prompt  (paste after acknowledgement)
+#### §4.6 · P6b — prompt  (paste after acknowledgement)
 
 ```
-REVIEWER — 22-F. Audit each 22-E commit against the finding it claims to close. RE-DERIVE — mutate the
-fixture, read the ADR text — don't trust a commit message. Tier any NEW finding. Citations at the range.
+REVIEWER - 22-G. Audit P1/P2/P3 (the lineage 22-F could not certify) and P5 (residual hardening). RE-DERIVE:
+mutate fixtures, read the ADR/CLAUDE.md text, run the concurrency case - don't trust commit messages. Tier any
+new finding. Citations at each artefact's own commit.
 
-THE MERGE CONDITION (was MAJOR): 22-D shipped .in('id', renderedIds) — the mechanism ADR §A1.1 explicitly
-REJECTED over the ~7KB-URL-at-200-ids risk — with no cap and without amending the ADR.
-- Cap: renderedIds is bounded by Zod .max(APPROVALS_POST_LIMIT) at the action boundary; a request over the cap
-  is rejected, not truncated-and-approved. Prove the URL-length failure mode is now unreachable.
-- ADR coherence: §A1 no longer normatively specifies a signature that does not exist; §A1.2 documents the
-  chosen mechanism, the cap, and WHY the original rejection was reversed. A stale normative §A1 is a MAJOR —
-  the ADR would misdescribe the shipped code, the exact drift PROC-REVIEW-AT-COMMIT exists to prevent.
+NEW-1 (P2 354bdd9a) - the one product-facing fix nobody independent has checked:
+- Both surfaces announce result.count (the DB-flipped count), NOT renderedIds.length. Re-derive the
+  concurrency case: mock the action to return count < rendered -> the announced/label number is the DB count.
+  An announcement that still overstates under concurrency is a MINOR (it is the finding, unclosed).
+- PostsClient has a count in its label AND an aria-live region at parity with ApprovalsInbox. Missing
+  aria-live is the a11y half of NEW-1 unclosed.
 
-NEW-2 (was MAJOR — EXECUTED-AND-PROVING-NOTHING): the Tier-1 boundary suite must now CALL
-bulkApproveDraftPosts, and its cross-scope fixture must make the FUNCTION's business_id predicate load-bearing
-(the approver an active member of the second business so RLS permits both rows and only the function narrows).
-- MUTATION TEST: delete .eq('business_id', businessId) from posts.ts:525 → a test must go RED. If everything
-  still passes, NEW-2 is NOT closed and this is a MAJOR (the suite still proves the wrong proposition).
-- Confirm ADR 0015 §2 names EXECUTED-AND-PROVING-NOTHING and states "attached to the claim" (P1).
+ADR section 2 DOCTRINE (P1 70b5bc37): section 2 names EXECUTED-AND-PROVING-NOTHING and states the rule
+"covered = executed AND attached to the claim" (a boundary test must call the real function and a fixture
+mutation must redden it). CLAUDE.md carries the reviewer-report immutability rule. Wording that is present but
+toothless (names the mode without the mutation obligation) is a MINOR.
 
-NEW-3 (was MINOR): the contrast test parses tokens from globals.css, not a transcription.
-- MUTATION: change --card / --muted in globals.css → the test must go RED. A transcribed copy that stays green
-  is the finding unclosed.
+NEW-7 (P5): BULK_APPROVE_ID_CAP is a DISTINCT constant from the page size; the Zod .max() points at it; a test
+constructs the worst-case request line at the cap and asserts < ~8 KB. If the cap still rides on the page-size
+constant, the silent-414-on-page-size-bump trap is NOT closed -> MINOR.
 
-NEW-1 (if P2 landed in-range): both surfaces announce result.count, not renderedIds.length; PostsClient has a
-count label + aria-live at parity with the inbox. Re-derive the concurrency case (count < rendered → announced
-number is the DB count).
+NEW-9 (P5) - the achievable Tier-1 pin, MUTATION-VERIFY:
+- delete .eq('status','draft') from bulkApproveDraftPosts -> a Tier-1 test must go RED (the atomic-transition
+  guard is now pinned to the real function);
+- delete .is('deleted_at', null) -> a Tier-1 test must go RED.
+If either mutation leaves Tier-1 green, NEW-9 is not closed. This is the residual 22-F flagged as the one that
+IS achievable, so hold it to the mutation bar.
 
-REGRESSION: nothing green at 462e49eb went red — both blockers still dead by construction on both surfaces;
-MAJOR-1 skip-guard intact (both arms, no || true, four suites absent); ruleset 19038239 still active;
-docs still tracked. The cap must not have narrowed a legitimate bulk approve at/under the cap.
+NEW-8/10/11 (P5): the honest-scope comment now says campaign_id+business_id are jointly-not-individually
+load-bearing (NEW-8); the .in('id',...) protection asserts leftover drafts untouched rather than riding on
+fixture order (NEW-10); otherBiz teardown is in afterAll/try-finally so a red run cannot orphan it (NEW-11).
 
-OUTPUT: docs/reviews/session-22f-reviewer.md — open by naming the range AND confirming independence; a status
-table (finding → ✅closed/⚠️partial/❌open, with the mutation result as evidence for NEW-2/NEW-3); any new
-findings tiered; a VERDICT: are 22 + 22-D + 22-E together mergeable, and does "covered = executed AND attached
-to the claim" now hold. Do NOT modify code.
+NEW-12 (P5): PROC-REVIEW-AT-COMMIT now distinguishes reviewed-artefacts-at-range from findings-doc-at-own-
+commit. Confirm the rule reads coherently and does not weaken the at-range requirement for the artefacts.
+
+REGRESSION: nothing certified by 22-F went red - cap intact and still rejects over-cap; both blockers dead by
+construction; NEW-3 contrast test still mutation-reddening; ruleset 19038239 active; docs tracked; skip-guard
+both arms. P5 must not have relaxed any of these to make a residual test pass.
+
+OUTPUT: docs/reviews/session-22g-reviewer.md - open by naming the ranges + findings-doc commits + your lineage
+disclosure; a status table (finding -> pass/partial/fail with mutation evidence for NEW-9); any new findings
+tiered; a VERDICT: is the FULL arc (22 -> 22-D -> 22-E -> 22-F -> P1/P2/P3 -> P5) mergeable and closeable, and
+does "covered = executed AND attached to the claim" now hold UNIFORMLY (22-F said "in practice, not yet in the
+ADR, not uniformly" - say whether P1 + P5 changed that). Do NOT modify code.
 ```
 
-### §4.5 — Close-out  (paste into Claude Code · Sonnet · ONLY after 22-F returns no BLOCKER/MAJOR)
+### §4.6 · P6 — 22-G independent audit  ✅ DONE  (`docs/reviews/session-22g-reviewer.md`, ranges `98a9f7c7..0e966791` + `0e966791..d2063875`)
 
-Run the **§4.2 close-out prompt** — with these additions folded in:
+The sharpest pass in the arc. It disclosed weaker-than-22-F independence honestly (its predecessor P5 session
+summary was in context at startup — a new *lineage* but not an uncontaminated one), and **compensated by
+trusting no commit message: every verdict rests on a mutation it ran itself, a quoted command, or an explicit
+"could not verify."** That discipline caught a defect the commit message and the ADR both call fixed.
 
-- Do not run it until **P4 (22-F)** is clean. 22-E is unaudited until then; closing before that repeats the
-  NEW-4 mistake (trusting a fix nobody independent checked).
-- In the retrospective, add the two rules P1 recorded (reviewer-report immutability; EXECUTED-AND-PROVING-
-  NOTHING → "attached to the claim") to the standing-rules list, and note the correction lineage plainly:
-  **22 → 22-D (2 blockers + MAJORs) → 22-E (cap + NEW-2/3, non-independent) → 22-F (independent clear).**
-- Confirm the backlog carries: cursor pagination + un-defer trigger, the MINOR-5 count-predicate index,
-  NEW-5 (named-file-vanish guard hardening), 21B n4, NIT-3 (claude-mem), and `22E-integration-discovery`
-  (no job runs the four opt-in suites — recorded in ADR 0015's fate table).
+**PASS (independently mutation-verified):** NEW-1 on both surfaces (mutating back to `renderedIds.length` →
+3 RED; `PostsClient` has the `aria-live` region + count label); the **P1 doctrine has teeth** (located in
+ADR §1(c)/CONS-ATTACHED + §2/CONS-TIERED, both carry the mutation obligation — not a name-without-teeth); NEW-4
+immutability rule real (its cited precedent is 4 genuine `RESOLVED` markers); NEW-6/P3 (both API calls re-run
+live); NEW-10, NEW-11. Regression battery clean — cap rejects over-cap, both blockers dead by construction,
+NEW-3 still mutation-reddens, ruleset `19038239` active, skip-guard both arms, Tier-2 555/555.
+
+**VERDICT: code mergeable ✅ (no BLOCKER, no code-MAJOR; both security- and database-reviewer clean). Not
+closeable yet**, for findings carried into P7 / your action below.
+
+| 22-G finding | Sev | Disposition |
+|---|-----|-------------|
+| **NEW-13** — the NEW-7 budget test **mocks** `@/lib/db/posts` and hardcodes the cap, so it **cannot fail**: the reviewer bumped the *shipped* `BULK_APPROVE_ID_CAP` 200→400 (request line 15,765 B, guaranteed 414) and **all 12 tests stayed green**. The real constant-split half of NEW-7 is genuinely fixed; the *test* is `EXECUTED-AND-PROVING-NOTHING` — the exact class P1 defined three commits earlier. | MINOR (T2) | **P7 fixes.** Do NOT record "NEW-7 closed" — the half a future session relies on is the half that doesn't work |
+| **NEW-14** — the honest-scope comment now says `campaign_id`+`business_id` are jointly-load-bearing **"by the FK."** Wrong mechanism: they are **two independent** `ON DELETE CASCADE` FKs; `business_id` is *denormalised* (`sole writer must keep it consistent`), so a service-role path bypassing `lib/db/` *could* create the "impossible" row. It's sole-writer **convention**, not a DB invariant. Behaviourally fine; the *explanation* is what the next session trusts, and it's now been "corrected" twice and is still wrong about *why*. | MINOR (doc) | **P7 fixes** — cite the sole-writer convention, drop "FK" |
+| **NEW-16** — NEW-9 is **sound by static derivation** (reviewer + `database-reviewer` agree both mutations predict RED; no RLS/trigger masks either) but **unrun** — the review env has no Docker, so the whole Tier-1 suite self-skipped. Under CONS-ATTACHED, an author's "verified locally" claim with no artefact does not count. | MINOR (T1) | **Founder action** — run the two mutations on a live stack (~10 min); until then "not certified," not "closed" |
+| **NEW-15** — `/docs` is git-ignored again | — | **INTENTIONAL (founder).** Not a defect. Recorded as a known deviation in §4.7; it makes NEW-12's "name the findings-doc commit" clause inoperable — neutralised below |
+
+### §4.6 · P7 — NEW-13 (real test defect) + NEW-14 (doc) + NEW-12 neutralisation  (Sonnet · code + docs)
+
+```
+Session 22 · P7 — close the two 22-G findings that are actually fixable in-repo, and neutralise a rule the
+repo can no longer obey. All MINOR. Run /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop.
+
+Read docs/reviews/session-22g-reviewer.md NEW-13, NEW-14, NEW-15, NEW-16 in full first.
+
+BUILD:
+- NEW-13 (the one that matters — P5's budget test is EXECUTED-AND-PROVING-NOTHING): the constant split is
+  REAL and stays. The problem is the TEST: actions.test.ts mocks @/lib/db/posts and hardcodes
+  BULK_APPROVE_ID_CAP: 200, so all three cap tests read the MOCK, never the shipped constant — bumping the
+  real cap to 400 (a guaranteed 414) leaves them green. Fix by the CONS-ATTACHED bar P1 committed:
+  * Move the URL-budget assertion to an UNMOCKED file (e.g. beside lib/db/posts.calendar.test.ts, which
+    imports the real APPROVALS_POST_LIMIT) OR add an unmocked guard test that imports the SHIPPED
+    BULK_APPROVE_ID_CAP and asserts it <= 205 (the ~206 cliff vs the 8192-byte budget).
+  * BETTER, and the point of the doctrine: derive the worst-case request line from the ACTUAL query builder
+    (bulkApproveDraftPosts against N ids) rather than hand-building a string literal, so a future 6th
+    predicate on the real query is caught. If deriving from the builder is impractical in a unit test,
+    the unmocked-constant guard is the floor.
+  * PROVE it: with the fix in place, bump the shipped BULK_APPROVE_ID_CAP to 400 in a throwaway edit and
+    confirm a test now goes RED; restore. Quote the red in the commit message. A fix for an
+    EXECUTED-AND-PROVING-NOTHING test that isn't itself mutation-verified is the same defect a third time.
+- NEW-14 (doc, third correction — get the mechanism right this time): in
+  supabase/__tests__/posts-approval-boundary.test.ts, the "jointly-not-individually load-bearing" comment
+  must NOT say "by the FK." There is no composite FK: posts.campaign_id and posts.business_id are two
+  independent ON DELETE CASCADE references, and business_id is denormalised from the parent campaign
+  (migration 20260430120010_posts.sql:6-7: "sole writer must keep it consistent"). State it as: the cross-
+  business-same-campaign row cannot arise ONLY because lib/db/posts.ts is the sole writer and keeps
+  business_id consistent — an application-level convention, NOT a DB invariant; a service-role path bypassing
+  lib/db/ could create it. Keep the symmetry point (deleting either predicate alone leaves the test green).
+- NEW-12 neutralisation (the rule the repo cannot obey): /docs is intentionally git-ignored (NEW-15 is a
+  deliberate founder choice, not a regression). That makes the P5/NEW-12 clause "the reviewer must name the
+  findings document's OWN commit" UNSATISFIABLE, because findings docs under /docs are never committed. In
+  CLAUDE.md, amend PROC-REVIEW-AT-COMMIT: KEEP the load-bearing half (reviewed ARTEFACTS — code, tests, ADRs,
+  migrations — are read at the audited commit range, never at HEAD). REPLACE the findings-doc-commit clause
+  with: "review documents live under the git-ignored /docs tree by project convention; a reviewer reads prior
+  findings docs from the working tree and notes that they are un-committable by design, rather than naming a
+  commit." No rule should demand what the repo forbids.
+
+TESTS: the NEW-13 unmocked guard (mutation-proven RED at cap=400); no test regressions.
+
+Hard rules as section 2. No new capability, no DB migration, no change to the shipped bulk mechanism or the
+cap value.
+On green + commit (via PR), output "P7 complete - NEW-13 budget test now unmocked + mutation-proven; NEW-14
+cites sole-writer convention not FK; NEW-12 clause neutralised for the ignored /docs tree." Stop.
+```
+
+### §4.6 · P7 — ACTUAL OUTCOME (correction, not a rewrite of the prompt above)
+
+The prompt's NEW-12 premise did not hold. Before touching CLAUDE.md, P7 checked `.gitignore` directly:
+`/docs` carries **no ignore line** (removed at `462e49eb`, "docs: track the governance layer", and never
+re-added — `git diff HEAD -- .gitignore` is empty, `git log -- .gitignore` shows no later touch), and
+`git status` shows `docs/reviews/session-22f-reviewer.md` / `session-22g-reviewer.md` as **untracked**, not
+ignored. Line 1302's "`/docs` is git-ignored again — INTENTIONAL (founder)" is itself stale: it was true of
+the working tree the P6/22-G reviewer sat in, and 22-G's own NEW-15 recommended fixing it, not codifying it.
+Between 22-G and P7, that working-tree edit to `.gitignore` was reverted (matches the committed `462e49eb`
+state) — so by the time P7 ran, NEW-15 was no longer reproducing.
+
+Founder decision when asked: **skip the NEW-12 CLAUDE.md change**; commit the two pending review docs
+instead. So P7 shipped only:
+- **NEW-13** — fixed as specified (unmocked guard test `lib/db/posts.bulk-approve-url-budget.test.ts`,
+  deriving the real request line from `bulkApproveDraftPosts` via a real `@supabase/supabase-js` client with
+  a captured `fetch`; mutation-proven RED at cap=400 — `15,773` vs budget `8000`, matching 22-G's measured
+  `15,765`; restored, green).
+- **NEW-14** — fixed as specified (comment no longer says "by the FK"; cites `lib/db/posts.ts` as sole
+  writer, application-level convention, migration `20260430120010_posts.sql:7-8` — corrected from the
+  prompt's `:6-7`).
+- **NEW-12 / CLAUDE.md** — **not touched.** PROC-REVIEW-AT-COMMIT's findings-document-commit clause is
+  satisfiable as written, because `/docs` is tracked.
+- **NEW-15** — resolved as a side effect: `session-22f-reviewer.md` and `session-22g-reviewer.md` committed
+  in the same PR as the NEW-13/NEW-14 fixes, so both findings documents now have a real commit.
+
+Line 1302 and the "Known deviation" paragraph in §4.7 below are therefore **not current** — left as written
+(what P6/22-G saw and what P7 was asked to do), corrected here rather than edited in place.
+
+> **Founder action, parallel to P7 — NEW-16 (NEW-9 mutation run).** On a machine with Docker + the Supabase
+> stack up, in a throwaway worktree at the P5 commit: delete `.eq('status','draft')` from
+> `bulkApproveDraftPosts` and run `posts-approval-boundary.test.ts` (expect RED); restore; delete
+> `.is('deleted_at', null)` and re-run (expect RED); restore. Both are predicted RED by the reviewer and
+> `database-reviewer` independently. If both redden, NEW-9 flips from *not certified* to *closed*; paste the
+> two reds into the close-out. If either stays green, that is a real finding — stop and report.
+
+### §4.7 — Close-out  (paste into Claude Code · Sonnet · after P7 is green AND the NEW-9 mutations are run)
+
+Verifies P7 inline (no separate independent pass — both findings are MINOR and P7's own fix is
+mutation-gated). Run the **§4.2 close-out prompt**, with these additions:
+
+- **Gate:** run only after (1) **P7** is green — including its own mutation proof that the NEW-13 guard goes
+  RED at an over-budget cap — and (2) the **NEW-9 mutations (NEW-16)** have been run on a live stack with both
+  reds captured. If NEW-9 wasn't run, close out everything else and leave NEW-9 explicitly marked *not
+  certified* rather than claiming it — do not launder a static prediction into a pass (22-G's words).
+- **Verify P7 inline before closing:** confirm the NEW-13 budget test now imports the SHIPPED constant (grep
+  the test file for a mock of `@/lib/db/posts` in the same file — there must be none for that assertion), and
+  that the NEW-14 comment no longer contains the phrase "by the FK."
+- **Retrospective — record the full lineage honestly:**
+  `22 -> 22-D (2 blockers + 3 MAJORs) -> 22-E (cap + NEW-2/3, non-independent) -> 22-F (independent: mergeable,
+  condition discharged) -> P1/P2/P3 (NEW-1 + doctrine + docs) -> P5 (residuals) -> 22-G (independent; caught
+  NEW-13, a fresh instance of the named defect class) -> P7 (NEW-13/14 + NEW-12 neutralised) + NEW-9 run.`
+  The arc's real lesson, in one line: **EXECUTED-AND-PROVING-NOTHING survived being named, defined, and made a
+  merge-gate obligation in the same week (P1 defined it; P5 shipped a fresh instance; 22-G caught it by
+  mutation) — which is exactly why the mutation obligation must be exercised by the reviewer, never asserted by
+  the author.**
+- Standing-rules list: SHARED-FUNCTION-CALLERS; covered = executed AND **attached to the claim** (a boundary
+  test must import the real artefact and redden under mutation — mocked constants do not count); reviewer-report
+  immutability; PROC-REVIEW-AT-COMMIT = reviewed artefacts at range (findings-doc-commit clause retired for the
+  git-ignored /docs tree, P7).
+- **Executed-test delta** (CI before Session 22 -> after the full arc) and the **db-tests three-green tally**.
+- **Backlog carries:** cursor pagination + un-defer trigger; MINOR-5 count-predicate index; NEW-5
+  (named-file-vanish guard hardening); 21B n4; NIT-3 (claude-mem injection); `22E-integration-discovery`
+  (no job runs the four opt-in suites). Confirm each is present, not just mentioned.
+- **Known deviation, recorded not fixed:** `/docs` is git-ignored by founder choice (22-G NEW-15). Consequence
+  to hold consciously: new ADRs and review docs under `/docs` are invisible to `git status`, so the review
+  trail for this and future sessions lives outside version control by design. PROC-REVIEW-AT-COMMIT was
+  adjusted to match (P7); it is not treated as a defect.
+- One sentence for the next session's Architect to read first.
 
 ---
 
-**Next (unchanged pre-launch sequence):** remove Postiz for direct LinkedIn + X API integration → legal
-copy PR → lawyer ratification → Stripe live-mode flip → launch.
+**Next (unchanged pre-launch sequence):** remove Postiz for direct LinkedIn + X API integration -> legal
+copy PR -> lawyer ratification -> Stripe live-mode flip -> launch.

@@ -377,10 +377,21 @@ describe('posts approval boundary — DB-enforced (ADR 0013 §5)', () => {
     //
     // With membership, RLS permits BOTH rows and the function's own
     // campaign_id/business_id predicate is the only thing that narrows the
-    // write. Honest scope note (corrected, Session 22-F NEW-8): campaign_id
-    // and business_id are JOINTLY-but-not-individually load-bearing here, by
-    // the FK — a campaign belongs to exactly one business, so a same-campaign
-    // cross-business row cannot exist. Deleting campaign_id ALONE still
+    // write. Honest scope note (corrected twice now — Session 22-F NEW-8,
+    // Session 22-G NEW-14): campaign_id and business_id are
+    // JOINTLY-but-not-individually load-bearing here — NOT "by the FK".
+    // posts.campaign_id -> campaigns(id) and posts.business_id ->
+    // businesses(id) are two INDEPENDENT ON DELETE CASCADE foreign keys;
+    // there is no composite FK, CHECK, generated column, or trigger tying
+    // posts.business_id to campaigns(campaign_id).business_id. business_id is
+    // denormalised from the parent campaign, and lib/db/posts.ts being the
+    // sole writer that keeps it consistent
+    // (supabase/migrations/20260430120010_posts.sql:7-8) is an
+    // APPLICATION-LEVEL CONVENTION, not a DB invariant — a service-role path
+    // that bypasses lib/db/ could create the very same-campaign
+    // cross-business row this comment says "cannot exist," at which point
+    // both predicates would become independently provable. Given that
+    // convention holds for this fixture, deleting campaign_id ALONE still
     // leaves this test green (business_id then excludes otherPost, since it
     // lives in otherBiz); deleting business_id ALONE also leaves it green
     // (campaign_id excludes otherPost, since it lives in otherCampaign). Only
