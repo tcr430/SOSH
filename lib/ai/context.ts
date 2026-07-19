@@ -2,11 +2,10 @@ import type { BusinessRow, BrandVoiceRow, CampaignRow, Platform } from '@/lib/db
 import { getBusinessById } from '@/lib/db/businesses'
 import { getBrandVoice } from '@/lib/db/brand-voices'
 import { listCampaigns } from '@/lib/db/campaigns'
-import { listTopPostMetrics } from '@/lib/db/post-metrics'
-import { listPostsByIds } from '@/lib/db/posts'
 import { getTrialStateMaybe } from '@/lib/db/trial-state'
 import { getVariationForBusiness } from '@/lib/db/voice'
 import { vectorToVoiceFields } from '@/lib/voice/translate'
+import { retrievePerformancePatterns } from '@/lib/memory'
 
 export type BrandVoiceContext = BrandVoiceRow & { readonly descriptor: string }
 
@@ -36,28 +35,20 @@ export async function buildCustomerContext(
   const { config } = await import('@/lib/config')
   const client = createServiceRoleClient()
 
-  const [business, brandVoice, campaigns, topMetrics, trialStateRow] = await Promise.all([
+  // ADR 0016 §6 — recentPostPerformance is sourced through lib/memory's
+  // governed retrieval (scored + capped at PERFORMANCE_CAP=3) instead of a
+  // direct lib/db fan-out. No campaign/post-specific queryContext is known
+  // at this call site (buildCustomerContext is business-scoped, not
+  // per-post), so an empty queryContext is passed — lib/memory/performance.ts
+  // falls back to today's post_metrics-derived behaviour while
+  // performance_memory ships empty in Track A (ADR §3.4).
+  const [business, brandVoice, campaigns, recentPostPerformance, trialStateRow] = await Promise.all([
     getBusinessById(client, businessId),
     getBrandVoice(client, businessId),
     listCampaigns(client, businessId, 5),
-    listTopPostMetrics(client, businessId, 10),
+    retrievePerformancePatterns(client, businessId, {}),
     getTrialStateMaybe(client, businessId),
   ])
-
-  let recentPostPerformance: CustomerContext['recentPostPerformance'] = []
-  if (topMetrics.length > 0) {
-    const postIds = topMetrics.map(m => m.post_id)
-    const posts = await listPostsByIds(client, postIds)
-    const postsById = Object.fromEntries(posts.map(p => [p.id, p]))
-    recentPostPerformance = topMetrics
-      .filter(m => postsById[m.post_id] !== undefined)
-      .map(m => ({
-        platform: postsById[m.post_id].platform,
-        topContent: postsById[m.post_id].content,
-        likes: m.likes ?? 0,
-        impressions: m.impressions ?? 0,
-      }))
-  }
 
   let trialState: CustomerContext['trialState'] = null
   if (business.plan === 'trial') {

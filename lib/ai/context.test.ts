@@ -34,6 +34,16 @@ vi.mock('@/lib/db/posts', () => ({
   listPostsByIds: vi.fn(),
 }))
 
+// New call in the graph since B3: recentPostPerformance now goes through
+// lib/memory/performance.ts, which checks performance_memory FIRST and
+// falls back to the post_metrics-derived path (mocked above) only when it's
+// empty. Defaulted to [] so every existing test exercises the same
+// post_metrics fallback behaviour it always has (performance_memory ships
+// empty in Track A — ADR 0016 §3.4).
+vi.mock('@/lib/db/memory-performance', () => ({
+  listPerformanceMemoryCandidates: vi.fn(),
+}))
+
 vi.mock('@/lib/db/trial-state', () => ({
   getTrialStateMaybe: vi.fn(),
 }))
@@ -50,6 +60,7 @@ import { listTopPostMetrics } from '@/lib/db/post-metrics'
 import { listPostsByIds } from '@/lib/db/posts'
 import { getTrialStateMaybe } from '@/lib/db/trial-state'
 import { getVariationForBusiness } from '@/lib/db/voice'
+import { listPerformanceMemoryCandidates } from '@/lib/db/memory-performance'
 import type {
   BusinessRow,
   BrandVoiceRow,
@@ -193,6 +204,7 @@ beforeEach(() => {
   vi.mocked(listPostsByIds).mockResolvedValue([mockPost])
   vi.mocked(getTrialStateMaybe).mockResolvedValue(mockTrialState)
   vi.mocked(getVariationForBusiness).mockResolvedValue(null)
+  vi.mocked(listPerformanceMemoryCandidates).mockResolvedValue([])
 })
 
 describe('buildCustomerContext', () => {
@@ -245,9 +257,15 @@ describe('buildCustomerContext', () => {
     expect(listCampaigns).toHaveBeenCalledWith(expect.anything(), 'biz-1', 5)
   })
 
-  it('queries listTopPostMetrics with limit=10', async () => {
+  // ADR 0016 §6.2 — the ONE pre-authorised assertion change in this file.
+  // This case pinned the pre-cap "fetch top-10" behaviour L-4 exists to
+  // kill; performance.ts's post_metrics fallback now requests
+  // PERFORMANCE_CAP (3), not 10. This is a content change the ADR
+  // explicitly ratifies, not a masked regression — every other case in
+  // this file passes unchanged.
+  it('queries listTopPostMetrics with limit=PERFORMANCE_CAP (3), not the pre-cap 10', async () => {
     await buildCustomerContext('biz-1')
-    expect(listTopPostMetrics).toHaveBeenCalledWith(expect.anything(), 'biz-1', 10)
+    expect(listTopPostMetrics).toHaveBeenCalledWith(expect.anything(), 'biz-1', 3)
   })
 
   it('maps post performance by joining metrics with posts', async () => {
@@ -396,5 +414,64 @@ describe('buildCustomerContext — voice variation read-through (BP7 §4.3/§8.2
     type HasVoiceVariationId = 'voice_variation_id' extends keyof import('@/lib/db/types').CampaignUpdate ? true : false
     const check: HasVoiceVariationId = true
     expect(check).toBe(true)
+  })
+})
+
+describe('buildCustomerContext — B3 behaviour-equivalence (ADR 0016 §6, MEM-CONTEXT-EQUIVALENT)', () => {
+  it('CustomerContext contract shape is unchanged: exactly the 5 known top-level fields', async () => {
+    const ctx = await buildCustomerContext('biz-1')
+    expect(Object.keys(ctx).sort()).toEqual(
+      ['brandVoice', 'business', 'recentCampaigns', 'recentPostPerformance', 'trialState'].sort(),
+    )
+  })
+
+  it('recentPostPerformance never exceeds PERFORMANCE_CAP (3), even when the underlying source returns more', async () => {
+    const overflowMetrics = Array.from({ length: 6 }, (_, i) => ({ ...mockMetric, post_id: `post-${i}` }))
+    const overflowPosts = Array.from({ length: 6 }, (_, i) => ({ ...mockPost, id: `post-${i}` }))
+    vi.mocked(listTopPostMetrics).mockResolvedValue(overflowMetrics)
+    vi.mocked(listPostsByIds).mockResolvedValue(overflowPosts)
+
+    const ctx = await buildCustomerContext('biz-1')
+
+    expect(ctx.recentPostPerformance.length).toBeLessThanOrEqual(3)
+  })
+
+  it('core voice (brandVoice) is still returned through the rewired call — the rewire touches ONLY recentPostPerformance', async () => {
+    const ctx = await buildCustomerContext('biz-1')
+    expect(ctx.brandVoice).not.toBeNull()
+    expect(ctx.brandVoice?.descriptor).toBe('A balanced, neutral voice with no strong leanings.')
+  })
+
+  it('prefers governed performance_memory rows over the post_metrics fallback when any exist', async () => {
+    vi.mocked(listPerformanceMemoryCandidates).mockResolvedValue([
+      {
+        id: 'pf-1',
+        business_id: 'biz-1',
+        source: 'distilled',
+        confidence: 0.8,
+        observation_count: 4,
+        status: 'active',
+        sensitivity: 'internal',
+        public_use_permission: false,
+        scope: 'brand',
+        scope_ref: null,
+        last_confirmed_at: '2026-07-19T00:00:00Z',
+        recency_at: '2026-07-19T00:00:00Z',
+        expires_at: null,
+        deleted_at: null,
+        created_at: '2026-06-01T00:00:00Z',
+        updated_at: '2026-07-19T00:00:00Z',
+        dimension: 'topic',
+        pattern: 'technical-comparison posts perform well for CTO audiences',
+        platform: 'linkedin',
+      },
+    ])
+
+    const ctx = await buildCustomerContext('biz-1')
+
+    expect(ctx.recentPostPerformance).toEqual([
+      { platform: 'linkedin', topContent: 'technical-comparison posts perform well for CTO audiences', likes: 0, impressions: 0 },
+    ])
+    expect(listTopPostMetrics).not.toHaveBeenCalled()
   })
 })

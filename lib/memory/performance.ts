@@ -79,4 +79,8 @@ export async function retrieveRelevant(
       likes: m.likes ?? 0,
       impressions: m.impressions ?? 0,
     }))
+    // Defense-in-depth (L-4): don't rely solely on listTopPostMetrics's
+    // limit param honouring PERFORMANCE_CAP — this layer enforces its own
+    // output cap regardless of what the DB layer returns.
+    .slice(0, PERFORMANCE_CAP)
 }

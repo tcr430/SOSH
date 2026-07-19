@@ -163,6 +163,27 @@ describe('retrieveRelevant (performance) — post_metrics fallback (Track A empt
     expect(postMetricsDb.listTopPostMetrics).toHaveBeenCalledWith(client, 'biz-1', PERFORMANCE_CAP)
   })
 
+  it('enforces PERFORMANCE_CAP itself, independent of whether listTopPostMetrics honoured the limit it was asked for', async () => {
+    // Defense-in-depth: even if the (mocked, or a hypothetically buggy real)
+    // post_metrics query ignored its limit argument and returned more than
+    // PERFORMANCE_CAP rows, this layer must not pass that overflow through.
+    const overflowMetrics = Array.from({ length: PERFORMANCE_CAP + 4 }, (_, i) =>
+      makeMetricsRow({ post_id: `post-${i}`, likes: i }),
+    )
+    const overflowPosts = Array.from({ length: PERFORMANCE_CAP + 4 }, (_, i) =>
+      makePostRow({ id: `post-${i}`, content: `content-${i}` }),
+    )
+    vi.mocked(memoryPerformanceDb.listPerformanceMemoryCandidates).mockResolvedValue([])
+    vi.mocked(postMetricsDb.listTopPostMetrics).mockResolvedValue(overflowMetrics)
+    vi.mocked(postsDb.listPostsByIds).mockResolvedValue(overflowPosts)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const client = {} as any
+
+    const result = await retrieveRelevant(client, 'biz-1', {})
+
+    expect(result).toHaveLength(PERFORMANCE_CAP)
+  })
+
   it('preserves null-vs-zero: a metric with null likes becomes 0, not dropped or NaN', async () => {
     vi.mocked(memoryPerformanceDb.listPerformanceMemoryCandidates).mockResolvedValue([])
     vi.mocked(postMetricsDb.listTopPostMetrics).mockResolvedValue([makeMetricsRow({ likes: null, impressions: null })])
