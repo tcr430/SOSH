@@ -335,3 +335,64 @@ describe('Step 3 — cache_control', () => {
     expect(callArgs.system[0].cache_control).toBeUndefined()
   })
 })
+
+// ── Context assembly — no raw JSON dump (B4, ADR 0016 §7, L-8) ────────────
+
+describe('Step 3 — context assembly (no raw JSON.stringify(context) dump)', () => {
+  it('sends exactly ONE user text block (buildUserMessage output), not two', async () => {
+    await runPrompt(mockPrompt, mockContext, { text: 'hello' })
+    const callArgs = mockCreate.mock.calls[0][0]
+    expect(callArgs.messages[0].content).toHaveLength(1)
+    expect(callArgs.messages[0].content[0]).toEqual({ type: 'text', text: 'hello' })
+  })
+
+  it('the user message does NOT contain a JSON.stringify(context) dump of the full context object', async () => {
+    // If the dump were still present, a field unique to CustomerContext but
+    // absent from mockPrompt's trivial buildUserMessage (which just echoes
+    // input.text) would leak into the request — e.g. the business id.
+    await runPrompt(mockPrompt, mockContext, { text: 'hello' })
+    const callArgs = mockCreate.mock.calls[0][0]
+    const sentText = callArgs.messages[0].content[0].text as string
+    expect(sentText).not.toContain(mockContext.business.id)
+    expect(sentText).not.toContain('"trialState"')
+  })
+
+  it('generation output is fixture-identical after removing the dump (bounds the change to L-7)', async () => {
+    // MockAnthropicClient-style flows route on _sosh.promptId/model, not on
+    // message content, so the parsed OUTPUT is unaffected by what rides in
+    // the request — this proves the SDK call still succeeds end-to-end and
+    // returns the exact same parsed shape as before the dump was removed.
+    const result = await runPrompt(mockPrompt, mockContext, { text: 'hello' })
+    expect(result).toEqual(validOutput)
+  })
+
+  it('the retrieved (per-call) slice rides the UNCACHED user message, and the stable slice rides the CACHED system block — they do not cross', async () => {
+    const STABLE_MARKER = 'STABLE-BUSINESS-IDENTITY-MARKER'
+    const RETRIEVED_MARKER = 'RETRIEVED-PERFORMANCE-PATTERN-MARKER'
+
+    const splitPrompt: Prompt<MockInput, MockOutput> = {
+      ...mockPrompt,
+      // Padded past CACHE_CONTROL_CHAR_THRESHOLD so cache_control actually
+      // applies — proving the split matters where the token economics pay
+      // off, not just in a short prompt that skips caching entirely.
+      buildSystemPrompt: () => `${STABLE_MARKER} ${'x'.repeat(4200)}`,
+      buildUserMessage: () => RETRIEVED_MARKER,
+    }
+
+    await runPrompt(splitPrompt, mockContext, { text: 'hello' })
+    const callArgs = mockCreate.mock.calls[0][0]
+
+    const systemText = callArgs.system[0].text as string
+    const userText = callArgs.messages[0].content[0].text as string
+
+    expect(systemText).toContain(STABLE_MARKER)
+    expect(systemText).not.toContain(RETRIEVED_MARKER)
+    expect(callArgs.system[0].cache_control).toEqual({ type: 'ephemeral' })
+
+    expect(userText).toContain(RETRIEVED_MARKER)
+    expect(userText).not.toContain(STABLE_MARKER)
+    // The user message carries no cache_control of its own — it is the
+    // uncached per-call slice, never entering the cached prefix.
+    expect(callArgs.messages[0].content[0].cache_control).toBeUndefined()
+  })
+})
