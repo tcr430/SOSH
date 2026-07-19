@@ -1,0 +1,202 @@
+import { vi, describe, it, expect, beforeEach } from 'vitest'
+import { retrieveRelevant } from './performance'
+import * as memoryPerformanceDb from '@/lib/db/memory-performance'
+import * as postMetricsDb from '@/lib/db/post-metrics'
+import * as postsDb from '@/lib/db/posts'
+import type { PerformanceMemoryRow, PostMetricsRow, PostRow } from '@/lib/db/types'
+import { PERFORMANCE_CAP } from './constants'
+
+vi.mock('@/lib/db/memory-performance', () => ({
+  listPerformanceMemoryCandidates: vi.fn(),
+}))
+vi.mock('@/lib/db/post-metrics', () => ({
+  listTopPostMetrics: vi.fn(),
+}))
+vi.mock('@/lib/db/posts', () => ({
+  listPostsByIds: vi.fn(),
+}))
+
+beforeEach(() => {
+  vi.clearAllMocks()
+})
+
+function makeGovernedRow(overrides: Partial<PerformanceMemoryRow> = {}): PerformanceMemoryRow {
+  return {
+    id: 'pf-1',
+    business_id: 'biz-1',
+    source: 'distilled',
+    confidence: 0.7,
+    observation_count: 3,
+    status: 'active',
+    sensitivity: 'internal',
+    public_use_permission: false,
+    scope: 'brand',
+    scope_ref: null,
+    last_confirmed_at: '2026-07-19T00:00:00Z',
+    recency_at: '2026-07-19T00:00:00Z',
+    expires_at: null,
+    deleted_at: null,
+    created_at: '2026-06-01T00:00:00Z',
+    updated_at: '2026-07-19T00:00:00Z',
+    dimension: 'topic',
+    pattern: 'technical-comparison posts perform well for CTO audiences',
+    platform: 'linkedin',
+    ...overrides,
+  }
+}
+
+function makeMetricsRow(overrides: Partial<PostMetricsRow> = {}): PostMetricsRow {
+  return {
+    id: 'pm-1',
+    post_id: 'post-1',
+    business_id: 'biz-1',
+    likes: 42,
+    comments: 3,
+    shares: 1,
+    saves: 0,
+    clicks: 5,
+    reach: 900,
+    impressions: 1200,
+    last_synced_at: '2026-07-19T00:00:00Z',
+    created_at: '2026-06-01T00:00:00Z',
+    updated_at: '2026-07-19T00:00:00Z',
+    ...overrides,
+  }
+}
+
+function makePostRow(overrides: Partial<PostRow> = {}): PostRow {
+  return {
+    id: 'post-1',
+    campaign_id: 'camp-1',
+    business_id: 'biz-1',
+    platform: 'linkedin',
+    content: 'Why technical comparisons win CTO trust',
+    hashtags: [],
+    media_urls: [],
+    scheduled_at: '2026-07-01T00:00:00Z',
+    published_at: '2026-07-01T00:00:00Z',
+    platform_post_id: 'li-123',
+    platform_url: null,
+    status: 'published',
+    rejection_note: null,
+    ai_generation_metadata: {},
+    publish_attempts: 1,
+    last_publish_attempt_at: '2026-07-01T00:00:00Z',
+    last_publish_error: null,
+    deleted_at: null,
+    created_at: '2026-06-25T00:00:00Z',
+    updated_at: '2026-07-01T00:00:00Z',
+    ...overrides,
+  }
+}
+
+describe('retrieveRelevant (performance) — governed rows preferred', () => {
+  it('prefers scored performance_memory rows when any exist, and does not touch post_metrics', async () => {
+    vi.mocked(memoryPerformanceDb.listPerformanceMemoryCandidates).mockResolvedValue([makeGovernedRow()])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const client = {} as any
+
+    const result = await retrieveRelevant(client, 'biz-1', {})
+
+    expect(result).toEqual([
+      { platform: 'linkedin', topContent: 'technical-comparison posts perform well for CTO audiences', likes: 0, impressions: 0 },
+    ])
+    expect(postMetricsDb.listTopPostMetrics).not.toHaveBeenCalled()
+  })
+
+  it('excludes a governed row with NULL platform rather than guessing one (never asserts a platform the row does not claim)', async () => {
+    vi.mocked(memoryPerformanceDb.listPerformanceMemoryCandidates).mockResolvedValue([
+      makeGovernedRow({ id: 'pf-no-platform', platform: null, confidence: 0.9 }),
+      makeGovernedRow({ id: 'pf-linkedin', platform: 'linkedin', confidence: 0.1 }),
+    ])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const client = {} as any
+
+    const result = await retrieveRelevant(client, 'biz-1', {})
+
+    // The higher-confidence row is excluded (unmappable — no platform to
+    // report), not silently defaulted to 'linkedin'; only the mappable,
+    // lower-confidence row surfaces.
+    expect(result).toEqual([
+      { platform: 'linkedin', topContent: 'technical-comparison posts perform well for CTO audiences', likes: 0, impressions: 0 },
+    ])
+  })
+
+  it('caps governed results at PERFORMANCE_CAP', async () => {
+    const candidates = Array.from({ length: PERFORMANCE_CAP + 2 }, (_, i) =>
+      makeGovernedRow({ id: `pf-${i}`, confidence: (i + 1) / 10, pattern: `pattern-${i}` }),
+    )
+    vi.mocked(memoryPerformanceDb.listPerformanceMemoryCandidates).mockResolvedValue(candidates)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const client = {} as any
+
+    const result = await retrieveRelevant(client, 'biz-1', {})
+
+    expect(result).toHaveLength(PERFORMANCE_CAP)
+  })
+})
+
+describe('retrieveRelevant (performance) — post_metrics fallback (Track A empty-table reality)', () => {
+  it('falls back to post_metrics when performance_memory has no rows yet', async () => {
+    vi.mocked(memoryPerformanceDb.listPerformanceMemoryCandidates).mockResolvedValue([])
+    vi.mocked(postMetricsDb.listTopPostMetrics).mockResolvedValue([makeMetricsRow()])
+    vi.mocked(postsDb.listPostsByIds).mockResolvedValue([makePostRow()])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const client = {} as any
+
+    const result = await retrieveRelevant(client, 'biz-1', {})
+
+    expect(result).toEqual([
+      { platform: 'linkedin', topContent: 'Why technical comparisons win CTO trust', likes: 42, impressions: 1200 },
+    ])
+  })
+
+  it('requests at most PERFORMANCE_CAP metrics from post_metrics (not the old cap of 10)', async () => {
+    vi.mocked(memoryPerformanceDb.listPerformanceMemoryCandidates).mockResolvedValue([])
+    vi.mocked(postMetricsDb.listTopPostMetrics).mockResolvedValue([])
+    vi.mocked(postsDb.listPostsByIds).mockResolvedValue([])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const client = {} as any
+
+    await retrieveRelevant(client, 'biz-1', {})
+
+    expect(postMetricsDb.listTopPostMetrics).toHaveBeenCalledWith(client, 'biz-1', PERFORMANCE_CAP)
+  })
+
+  it('preserves null-vs-zero: a metric with null likes becomes 0, not dropped or NaN', async () => {
+    vi.mocked(memoryPerformanceDb.listPerformanceMemoryCandidates).mockResolvedValue([])
+    vi.mocked(postMetricsDb.listTopPostMetrics).mockResolvedValue([makeMetricsRow({ likes: null, impressions: null })])
+    vi.mocked(postsDb.listPostsByIds).mockResolvedValue([makePostRow()])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const client = {} as any
+
+    const result = await retrieveRelevant(client, 'biz-1', {})
+
+    expect(result[0].likes).toBe(0)
+    expect(result[0].impressions).toBe(0)
+  })
+
+  it('filters out a metric row whose post was not found (soft-deleted or missing)', async () => {
+    vi.mocked(memoryPerformanceDb.listPerformanceMemoryCandidates).mockResolvedValue([])
+    vi.mocked(postMetricsDb.listTopPostMetrics).mockResolvedValue([makeMetricsRow({ post_id: 'missing-post' })])
+    vi.mocked(postsDb.listPostsByIds).mockResolvedValue([]) // post not found (e.g. soft-deleted)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const client = {} as any
+
+    const result = await retrieveRelevant(client, 'biz-1', {})
+
+    expect(result).toEqual([])
+  })
+
+  it('returns empty immediately when there are no post_metrics rows at all', async () => {
+    vi.mocked(memoryPerformanceDb.listPerformanceMemoryCandidates).mockResolvedValue([])
+    vi.mocked(postMetricsDb.listTopPostMetrics).mockResolvedValue([])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const client = {} as any
+
+    const result = await retrieveRelevant(client, 'biz-1', {})
+
+    expect(result).toEqual([])
+    expect(postsDb.listPostsByIds).not.toHaveBeenCalled()
+  })
+})
