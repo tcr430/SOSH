@@ -1063,6 +1063,10 @@ GRANT EXECUTE ON FUNCTION public.purge_business(uuid) TO service_role;
 | post_generation_sessions | yes (business_id + campaign_id) | CASCADE | yes | none |
 | business_members | yes (business_id) | CASCADE | yes | none — cascade = erasure (holds `email` + `user_id` identity PII of members); `purge_business` also deletes explicitly (ADR 0013 §8/M8), independent of the cascade |
 | email_outbox | yes (business_id) | CASCADE | yes | none — cascade = erasure (holds `recipient` PII) |
+| brand_memory | yes (business_id) | CASCADE | yes | none — cascade = erasure |
+| evidence_memory | yes (business_id) | CASCADE | yes | none — cascade = erasure (may hold third-party quote PII) |
+| audience_memory | yes (business_id) | CASCADE | yes | none — cascade = erasure |
+| performance_memory | yes (business_id) | CASCADE | yes | none — cascade = erasure |
 | **billing_events** | yes (business_id nullable) | **SET NULL** | no | **RETAIN (tax/audit); REDACT PII before root delete** |
 | **business_deletion_requests** | self (business_id) | **NO ACTION → FK DROPPED (D2.1)** | no | **RETAIN as audit; orchestrator sets `completed` + `purged_at`** |
 | email_suppressions | no (keyed by email, global) | — | n/a | RETAIN (deliverability / legitimate interest; not business-reachable) |
