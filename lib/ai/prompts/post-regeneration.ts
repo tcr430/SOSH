@@ -106,6 +106,40 @@ Unique value proposition: ${bv.unique_value_prop}
 [/DATA]`)
     }
 
+    // MAJOR-1b (Session 23-D, founder-adjudicated: RESTORE). Both sections
+    // below reached this prompt before B4 — not because this template
+    // rendered them, but because runner.ts dumped the whole CustomerContext
+    // as JSON into the first user message. B4 removed that dump (correctly:
+    // it was redundant and uncached) and, as a side effect, removed these two
+    // sections from regeneration's view under a comment asserting no
+    // behaviour change had occurred.
+    //
+    // They are restored explicitly so that claim is true. Regeneration is the
+    // same job as generation — write a post for this campaign in this voice —
+    // differing only in that it starts from a rejected draft plus feedback.
+    // Two templates that should behave alike but silently diverge is the
+    // maintenance hazard; the token cost (≤5 campaign lines + ≤3 capped
+    // snippets, uncached) is trivial on a user-triggered action.
+    //
+    // These ride buildUserMessage, NOT buildSystemPrompt: recentPostPerformance
+    // is the per-call RETRIEVED slice and must never enter the cached prefix
+    // (ADR 0016 §7 — it would poison the cache).
+    //
+    // Wording mirrors post-generation.ts so the two prompts stay comparable.
+    if (ctx.recentCampaigns.length > 0) {
+      sections.push(`## Recent Campaigns (avoid repeating these themes)
+[DATA]
+${ctx.recentCampaigns.map(c => `- ${sanitizeDataField(c.name)}: ${sanitizeDataField(c.objective)}`).join('\n')}
+[/DATA]`)
+    }
+
+    if (ctx.recentPostPerformance.length > 0) {
+      sections.push(`## Top-Performing Post Snippets (use for tone calibration)
+[DATA]
+${ctx.recentPostPerformance.map(p => `- ${sanitizeDataField(p.topContent)}`).join('\n')}
+[/DATA]`)
+    }
+
     sections.push(`## Business Context
 [DATA]
 Name: ${ctx.business.name}

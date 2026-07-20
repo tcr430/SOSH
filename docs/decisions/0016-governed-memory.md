@@ -179,20 +179,36 @@ Indexes:
 > Track C populates them**. The table + RLS + cascade are shipped now so Track C has a governed target;
 > the *source* of performance retrieval in Track A is `post_metrics`.
 
-> **UN-DEFER TRIGGER (named — MINOR-2, Session 23 review).** `lib/memory/performance.ts` maps governed
-> `performance_memory` rows to `PerformancePattern` with **literal `likes: 0, impressions: 0`**, because
-> a distilled pattern has no single post's metrics. `post-generation.ts:153-154` renders those numbers
-> verbatim. **While the table ships empty this is inert.** The moment **Track C (ADR 0018) populates
-> `performance_memory`**, the model begins reading distilled insights annotated *"0 likes, 0
-> impressions"* — plausibly interpreted as evidence the pattern performs **badly**, inverting the
-> intent of the whole store.
+> **UN-DEFER TRIGGER (named — MINOR-2, Session 23 review · CORRECTED at D3).**
+> `lib/memory/performance.ts` maps governed `performance_memory` rows to `PerformancePattern` with
+> **literal `likes: 0, impressions: 0`**, because a distilled pattern has no single post's metrics.
 >
-> **ADR 0018 MUST NOT ship on top of this without resolving it.** Resolution options, for whoever picks
-> it up: make the numerics **optional** on `PerformancePattern` and have `post-generation.ts` omit the
-> metrics clause when absent; or carry **`observation_count`** as the credibility signal instead
-> ("appeared in 3 campaigns"), which is what L-5's probabilistic framing actually wants. This trigger is
-> recorded here rather than in a code comment precisely so a future session cannot ship past it
-> unnoticed. Deferred in Session 23-D §4.4; **owner: ADR 0018.**
+> **Correction to this note as first written at D0, and to MINOR-2 as the Reviewer stated it.** Both
+> claimed `post-generation.ts:153-154` renders those numbers verbatim, so a populated
+> `performance_memory` would feed the model insights annotated *"0 likes, 0 impressions"* — read as
+> evidence the pattern performs **badly**. **That is not what the template does.** The render is:
+>
+> ```js
+> const perfList = ctx.recentPostPerformance.map(p => `- ${p.topContent}`).join('\n')
+> ```
+>
+> **Only `topContent` reaches the prompt.** `grep -n "likes\|impressions" lib/ai/prompts/*.ts` matches
+> nothing outside a test fixture — no template renders either number, in any of the three. The
+> prompt-corruption risk as described **does not currently exist**, and did not at any commit in the
+> reviewed range.
+>
+> **What remains real, and why this trigger still stands.** The zeroes are a **latent type-shape trap**,
+> not a live defect: `PerformancePattern` requires `number` for both, so every governed row must invent
+> a value it does not have. Any future template that starts rendering the metrics clause — a plausible
+> ADR 0017 change, since richer pattern context is exactly what Mode 2 wants — would silently activate
+> the inversion. The trigger is therefore **downgraded in severity but kept**, and the resolution is
+> unchanged: make the numerics **optional** on `PerformancePattern` and omit the metrics clause when
+> absent, or carry **`observation_count`** as the credibility signal ("appeared in 3 campaigns"), which
+> is what L-5's probabilistic framing actually wants.
+>
+> **ADR 0018 must not ship a `performance_memory` writer without resolving the placeholder**, and
+> **ADR 0017 must not add a metrics clause to any template while it stands.** Deferred in Session 23-D
+> §4.4; **owner: ADR 0018.**
 
 ### 3.5 Voice — read THROUGH the existing tables, never duplicated (MEM-VOICE-THROUGH-EXISTING)
 
@@ -453,6 +469,47 @@ against the existing generation fixtures (`MockAnthropicClient` routes by `promp
 prompt genuinely relied on a field only present in the raw dump, that **single field** is added
 explicitly to that prompt's `buildUserMessage` — never the whole-object JSON. No prompt-template
 behaviour change beyond restoring an input a template already assumed.
+
+### 7.1 Amendment (Session 23-D · D3) — the escape hatch above was INVOKED, for `post-regeneration`
+
+**Founder-adjudicated. Recorded here because the Session 23 review (MAJOR-1) found the narrowing had
+been adopted under a code comment asserting no behaviour change, with no test able to detect it.**
+
+B4 implemented the dump removal correctly, but the paragraph above understates a consequence. Before
+B4, the dump put **all five** `CustomerContext` fields into **every** call regardless of template.
+After it, each prompt sees only what it explicitly renders. Re-derived from `lib/ai/prompts/*.ts`
+(there are **three** templates, not four):
+
+| Template | Rendered before B4 (via dump) | Rendered after B4 | Lost |
+|---|---|---|---|
+| `post-generation` | all 5 | business, brandVoice, recentCampaigns, recentPostPerformance | `trialState` |
+| `post-regeneration` | all 5 | business, brandVoice | **`recentCampaigns`, `recentPostPerformance`**, `trialState` |
+| `brand-voice-inference` | all 5 | business | **`brandVoice`, `recentCampaigns`, `recentPostPerformance`**, `trialState` |
+
+**Adjudication:**
+
+1. **`post-regeneration` — RESTORED.** `recentCampaigns` and `recentPostPerformance` are now rendered
+   explicitly in its `buildUserMessage`, invoking this section's escape hatch verbatim. Rationale:
+   regeneration is the *same job* as generation (write a post for this campaign in this voice),
+   differing only in that it starts from a rejected draft plus user feedback — it is the product's
+   quality-recovery path. The pre-B4 state was never designed; those fields arrived by accident of the
+   dump. Restoring them makes B4's own "not a behaviour change" claim **true**, and keeps the two
+   post-writing templates comparable. Cost is ≤5 campaign lines + ≤3 capped snippets, uncached, on a
+   user-triggered action. They ride `buildUserMessage`, never `buildSystemPrompt` — `recentPostPerformance`
+   is the per-call retrieved slice and would poison the cached prefix.
+2. **`trialState` — ACCEPTED as removed, from all three.** A billing/quota concern enforced in
+   `runner.ts` Step 1. The model has no use for it; it was only ever present because the dump swept it
+   in. **Not re-added.**
+3. **`brand-voice-inference` losing `brandVoice` — ACCEPTED, and desirable.** Inferring a voice from
+   writing samples must not be primed by the voice already on file, or the inference biases toward the
+   existing record instead of the evidence. `recentCampaigns` / `recentPostPerformance` are likewise
+   irrelevant to that task.
+
+**Now pinned by tests, which is the part that was missing.** `lib/ai/runner.test.ts` asserts, per
+template, which `CustomerContext` fields appear in `system[0].text` + the user message, using sentinel
+values. The case previously offered as proof ("generation output is fixture-identical") was **deleted**:
+the mock routes on `_sosh.promptId`, not message content, so it could not fail by construction — it
+would have stayed green if B4 had deleted the entire user message.
 
 ---
 
