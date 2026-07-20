@@ -421,7 +421,7 @@ the findings and the resolutions is what makes the trail unreadable later (§4.2
 | **MAJOR-3** — two voice resolvers; `voice.ts` duplicates live logic it was written to replace | D2 | Took the Reviewer's option (a). `buildCustomerContext` now calls `retrieveVoice` **through the barrel**; the inline copy at `context.ts:78-87` is deleted, along with the three imports only it used. `retrieveVoice` moved **into** the existing `Promise.all`, so the variation fetch is no longer a sequential round-trip after it — same calls, same arguments. `CustomerContext.brandVoice` shape unchanged (`CoreVoiceRules` is structurally identical to `BrandVoiceContext`), so L-7 holds. | `lib/ai/context.test.ts` — **all 9 voice cases pass UNCHANGED** (file byte-identical to D1; that is the equivalence proof). **Live-path dependency proven by mutation:** forcing `retrieveVoice` to return `null` reddens **10** cases, incl. the variation-override and the §3.3 cross-tenant defense. Reverted. | `f17760f3` |
 | **MAJOR-1a** — the "fixture-identical" test cannot fail by construction | D3 | **Deleted**, with a tombstone comment recording why it was inert. Replaced by per-template assertions over the **request actually sent**, using the **real** templates (the existing `mockPrompt` echoes `input.text` and never touches the context, so it could not serve). Sentinel values per context field make presence/absence unambiguous. | `lib/ai/runner.test.ts` — 4 new cases, one per template + a no-raw-dump case. **Redden verified by mutation:** suppressing the `recentPostPerformance` render in `post-generation.ts` ⇒ exactly 1 failure. Reverted. | `33afb06e` |
 | **MAJOR-1b** — `post-regeneration` lost `recentCampaigns` + `recentPostPerformance` from the model's view | D3 | **Founder-adjudicated: RESTORED.** Both are now rendered explicitly in `post-regeneration.ts`'s `buildUserMessage`, invoking ADR 0016 §7's own escape hatch verbatim. This makes B4's "not a behaviour change" claim **true** and keeps the two post-writing templates comparable. `trialState` (all three) and `brandVoice` on `brand-voice-inference` **accepted as removed** — see §7.1 for why each. Recorded as an **ADR amendment (§7.1)**, not only a code comment. | `lib/ai/runner.test.ts` — *"post-regeneration sends business + brandVoice + recentCampaigns + recentPostPerformance, but NOT trialState"* | `33afb06e` |
-| **MAJOR-4** — 10→3 narrowing reaches 5 callers; 0 caller-level tests | D4 | *pending* | *pending* | — |
+| **MAJOR-4** — 10→3 narrowing reaches 5 callers; 0 caller-level tests | D4 | Added caller-level Tier-2 tests for **all 5** callers (the step's minimum was 2). The existing suite for each caller **mocks `buildCustomerContext`** — which is precisely why none covered the rewire; the new files keep `buildCustomerContext` + `runPrompt` **real** and mock only `lib/db` beneath + the Anthropic client above, asserting on the **assembled prompt**, not the context object. | See per-caller table below. **Redden verified:** `PERFORMANCE_CAP`→5 reddens 4 of the 6 generate.ts cases. Reverted. | `_D4 — see commit_` |
 | **BLOCKER-1** — the range has never executed in CI; 8 Tier-1/2 constraints `AUTHORED-NOT-EXECUTED` | D5 | *pending* | *pending* | — |
 | **MINOR-1** (Tier-2 half) — no test pins `.eq('business_id')` on the built query | — | **Deferred to Session 24**, not fixed here. Doc-side risk note landed at D0. | none — deferred, recorded as a decision | — |
 | **MINOR-3** — `platform: null` rows silently dropped, can under-fill the cap | (D1) | **Still deferred to ADR 0017** — no behaviour change. But D1 **pinned the current behaviour**, including the degenerate case the Reviewer implies: when *every* governed row is platform-less the result is `[]` and the `post_metrics` fallback is **not** reconsidered. The deferral is now safe: changing it reddens a test and forces an explicit decision. | `lib/ai/context.test.ts` — *"excludes governed rows with a null platform…"* and *"returns empty when every governed row is platform-less, without falling back to post_metrics"* | `66e66517` |
@@ -556,6 +556,32 @@ Session 9D). **`post-generation.ts` does not sanitise the same fields** — `rec
 there. Campaign names and objectives are user-supplied. This is a pre-existing inconsistency in a file
 D3 was not asked to change, so it is **recorded rather than fixed**; it belongs to whoever next audits
 prompt-injection surface.
+
+---
+
+### D4 — the caller enumeration, reproduced FROM THE TESTS (not `git grep`)
+
+The build guide requires the SHARED-FUNCTION CALLERS table be reproducible from the tests. Each of the
+five production callers of `buildCustomerContext`, and the test file that now exercises it through the
+**real** rewired path:
+
+| # | Caller | Kind | Test file (real `buildCustomerContext` + `runPrompt`) | What it pins |
+|---|---|---|---|---|
+| 1 | `lib/campaigns/generate.ts` | generation | `lib/campaigns/generate.context-equivalence.test.ts` (6 cases) | perf capped at 3 in the **prompt**; highest-ranked three; metrics queried at 3 not 10; **voice VARIATION** override → descriptor in prompt (only caller passing `voiceVariationId`); governed-memory preferred over fallback, still capped; no trialState/dump leak |
+| 2 | `app/[locale]/(dashboard)/campaigns/[id]/posts/actions.ts` (`regeneratePostAction`) | generation | `…/posts/actions.context-equivalence.test.ts` (5 cases) | perf capped at 3 + highest-ranked; metrics at 3; **recentCampaigns + recentPostPerformance present (D3/MAJOR-1b restore)**; base voice in prompt; no leak |
+| 3 | `app/[locale]/(dashboard)/campaigns/[id]/generate-action.ts` (`startGenerationAction`) | non-generation | `…/(dashboard)/context-callers.context-equivalence.test.ts` (cases 3.x) | context assembles + reaches success branch (⇒ voice resolved non-null via lib/memory); metrics queried at 3 |
+| 4 | `app/[locale]/(dashboard)/onboarding/infer-brand-voice/actions.ts` (`inferBrandVoiceAction`) | non-generation | `…/(dashboard)/context-callers.context-equivalence.test.ts` (cases 4.x) | assembles + no throw; **business only** in prompt (voice NOT leaked into inference), §7.1 narrowing holds |
+| 5 | `app/[locale]/(dashboard)/settings/voice/refine-from-posts-action.ts` (`refineFromPostsAction`) | non-generation | `…/(dashboard)/context-callers.context-equivalence.test.ts` (cases 5.x) | assembles + no throw; business only (same template as #4) |
+
+**Zero callers remain `AUTHORED-NOT-EXECUTED` for the rewire.** All five have a listed, executing
+test file — the enumeration above is derived from those files, not from `git grep`.
+
+**Why new files rather than extending the existing suites.** Each caller already has a suite
+(`generate.test.ts`, `posts/actions.test.ts`, `refine-from-posts-action.test.ts`), and **each mocks
+`buildCustomerContext`** — correct for testing the caller's own orchestration, wrong for observing the
+rewire. Rather than unpick those mocks (which the orchestration tests depend on), each new
+`*.context-equivalence.test.ts` sets up the opposite seam: real context + real runner, mocked `lib/db`
+and SDK. The two suites are complementary, not redundant.
 
 ### Deferred, carried not dropped (build guide §4.4)
 
