@@ -10,9 +10,15 @@ export type CoreVoiceRules = BrandVoiceRow & { readonly descriptor: string }
 // table; it reads through the existing brand_voices / brand_voice_variations
 // stores (ADR 0011). Core voice rules are ALWAYS returned, uncapped,
 // unscored — voice is the baseline every generation call needs, not
-// "additional evidence" to rank against a query context. This mirrors the
-// resolvedBrandVoice logic in lib/ai/context.ts:87-96 exactly, so B3's
-// rewire can call this instead of duplicating it.
+// "additional evidence" to rank against a query context.
+//
+// This is the SOLE implementation of voice resolution as of Session 23-D
+// (D2). It previously mirrored an inline copy in lib/ai/context.ts, which is
+// now deleted — buildCustomerContext calls this function through the
+// lib/memory barrel. Do not reintroduce a second copy: the variation-override
+// branch below is depended on by lib/campaigns/generate.ts, the only caller
+// that passes a voiceVariationId, and two copies drifting apart is what
+// MAJOR-3 of the Session 23 review caught.
 export async function retrieveVoice(
   client: SupabaseClient,
   businessId: string,
