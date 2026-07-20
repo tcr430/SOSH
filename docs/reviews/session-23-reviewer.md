@@ -415,11 +415,12 @@ the findings and the resolutions is what makes the trail unreadable later (§4.2
 | Finding | Step | Fix | Test that now proves it | SHA |
 |---|---|---|---|---|
 | **BLOCKER-2** — ADR 0016 + build guide + `current-phase.md` + `brainstorm/` untracked; the MEM-* checklist and the §6.2 authorisation exist at no commit | D0 | Committed all four paths, plus this report, as one `docs(adr):` commit. History **not** rewritten — disclosure below. | n/a (docs; Tier-3 diff-verified — `git status` shows no untracked `docs/` paths) | `5edb090d` |
-| **MINOR-2** (doc half) — `likes: 0 / impressions: 0` inverts meaning once Track C populates the store | D0 | Named **un-defer trigger** in ADR 0016 §3.4: ADR 0018 may not ship on top of it unresolved; two resolution options + owner recorded. | n/a (doc-only; code half deferred) | `5edb090d` |
+| **MINOR-2** (doc half) — `likes: 0 / impressions: 0` inverts meaning once Track C populates the store | D0, **corrected D3** | Named **un-defer trigger** in ADR 0016 §3.4. **At D3 the finding's premise was found to be factually wrong and the note was corrected** — see the erratum below. Trigger kept, severity downgraded, owner unchanged (ADR 0018), and a second guard added for ADR 0017. | n/a (doc-only; code half deferred) | `5edb090d`, `33afb06e` |
 | **MINOR-1** (doc half) — production tenancy rests on one `.eq()`, not RLS | D0 | **Named risk** in ADR 0016 §4. The existing note framed the service-role split as *intended*; this records what it *costs* — a dropped `.eq()` leaks cross-tenant with every RLS test still green. | n/a (doc-only; Tier-2 half deferred to Session 24) | `5edb090d` |
 | **MAJOR-2** — `toBeLessThanOrEqual(3)` passes at 0 | D1 | Assertion replaced with **exact length + survivor identity**; one case added per silent-empty path performance.ts has. Identity is pinned via `topContent` (`PerformancePattern` carries no post id). `3` written **literally**, not imported as `PERFORMANCE_CAP` — importing it would make the assertion self-fulfilling and survive a cap mutation. | `lib/ai/context.test.ts` — *"recentPostPerformance is EXACTLY the cap (3) — the top-ranked three, never silently fewer"*, plus 4 path cases. **Redden verified by mutation, not asserted:** `PERFORMANCE_CAP`→5 ⇒ 2 fail; `performance.ts`→`return []` ⇒ 7 fail. Both reverted. | `66e66517` |
 | **MAJOR-3** — two voice resolvers; `voice.ts` duplicates live logic it was written to replace | D2 | Took the Reviewer's option (a). `buildCustomerContext` now calls `retrieveVoice` **through the barrel**; the inline copy at `context.ts:78-87` is deleted, along with the three imports only it used. `retrieveVoice` moved **into** the existing `Promise.all`, so the variation fetch is no longer a sequential round-trip after it — same calls, same arguments. `CustomerContext.brandVoice` shape unchanged (`CoreVoiceRules` is structurally identical to `BrandVoiceContext`), so L-7 holds. | `lib/ai/context.test.ts` — **all 9 voice cases pass UNCHANGED** (file byte-identical to D1; that is the equivalence proof). **Live-path dependency proven by mutation:** forcing `retrieveVoice` to return `null` reddens **10** cases, incl. the variation-override and the §3.3 cross-tenant defense. Reverted. | `f17760f3` |
-| **MAJOR-1** — B4 narrows model input; the proof test cannot fail by construction | D3 | *pending* | *pending* | — |
+| **MAJOR-1a** — the "fixture-identical" test cannot fail by construction | D3 | **Deleted**, with a tombstone comment recording why it was inert. Replaced by per-template assertions over the **request actually sent**, using the **real** templates (the existing `mockPrompt` echoes `input.text` and never touches the context, so it could not serve). Sentinel values per context field make presence/absence unambiguous. | `lib/ai/runner.test.ts` — 4 new cases, one per template + a no-raw-dump case. **Redden verified by mutation:** suppressing the `recentPostPerformance` render in `post-generation.ts` ⇒ exactly 1 failure. Reverted. | `33afb06e` |
+| **MAJOR-1b** — `post-regeneration` lost `recentCampaigns` + `recentPostPerformance` from the model's view | D3 | **Founder-adjudicated: RESTORED.** Both are now rendered explicitly in `post-regeneration.ts`'s `buildUserMessage`, invoking ADR 0016 §7's own escape hatch verbatim. This makes B4's "not a behaviour change" claim **true** and keeps the two post-writing templates comparable. `trialState` (all three) and `brandVoice` on `brand-voice-inference` **accepted as removed** — see §7.1 for why each. Recorded as an **ADR amendment (§7.1)**, not only a code comment. | `lib/ai/runner.test.ts` — *"post-regeneration sends business + brandVoice + recentCampaigns + recentPostPerformance, but NOT trialState"* | `33afb06e` |
 | **MAJOR-4** — 10→3 narrowing reaches 5 callers; 0 caller-level tests | D4 | *pending* | *pending* | — |
 | **BLOCKER-1** — the range has never executed in CI; 8 Tier-1/2 constraints `AUTHORED-NOT-EXECUTED` | D5 | *pending* | *pending* | — |
 | **MINOR-1** (Tier-2 half) — no test pins `.eq('business_id')` on the built query | — | **Deferred to Session 24**, not fixed here. Doc-side risk note landed at D0. | none — deferred, recorded as a decision | — |
@@ -506,6 +507,55 @@ append-only rule, the Reviewer's text is left exactly as written and the correct
 - No `.ts` / `.sql` file touched in this step.
 
 ---
+
+---
+
+### D3 — MAJOR-1, and a correction to MINOR-2
+
+#### Erratum: MINOR-2's premise is factually wrong (and so was my own D0 note)
+
+**Raised by the correction pass, founder-approved for correction. The finding above is left exactly as
+the Reviewer wrote it (append-only condition 1); this is the argument against it.**
+
+MINOR-2 states that `lib/memory/performance.ts` maps governed rows to `likes: 0, impressions: 0` and
+that **`post-generation.ts:153-154` renders those numbers**, so once Track C populates
+`performance_memory` the model reads insights annotated *"0 likes, 0 impressions"* and infers the
+pattern performs badly. **The template does not do this.** The render at that location is:
+
+```js
+const perfList = ctx.recentPostPerformance.map(p => `- ${p.topContent}`).join('\n')
+```
+
+Only `topContent` reaches the prompt. `grep -n "likes\|impressions" lib/ai/prompts/*.ts` matches
+**nothing** outside a test fixture — no template renders either number, in any of the three. **The
+prompt-corruption risk as described does not exist, and did not at any commit in the reviewed range.**
+
+**My D0 entry repeated the claim as established fact** ("`post-generation.ts:153-154` renders them
+verbatim"), which it is not. That was my error, not the Reviewer's alone: I wrote an ADR amendment on
+an unverified premise instead of reading the render. Corrected in ADR 0016 §3.4 at `33afb06e`.
+
+**What survives.** The zeroes remain a **latent type-shape trap**: `PerformancePattern` requires
+`number`, so every governed row invents a value it does not have. A future template that adds a
+metrics clause — plausible for ADR 0017, which wants richer pattern context — would activate the
+inversion silently. So the trigger is **kept and downgraded**, with a second guard added: ADR 0017 must
+not add a metrics clause while the placeholder stands.
+
+#### The MAJOR-1 adjudication in one line
+
+`post-regeneration` **restored** (both fields); `trialState` **accepted as removed** from all three;
+`brand-voice-inference` losing `brandVoice` **accepted and desirable**. Full reasoning in ADR 0016
+§7.1 — the point being that it is resolved by an ADR amendment, not by a code comment asserting no
+change occurred, which is how the problem arose.
+
+#### Observation, not fixed (out of scope, L-1)
+
+The fields restored to `post-regeneration` are passed through `sanitizeDataField`, matching that
+file's local convention for `[DATA]` content (the control added after the delimiter-injection issue in
+Session 9D). **`post-generation.ts` does not sanitise the same fields** — `recentCampaigns[].name`,
+`[].objective` and `recentPostPerformance[].topContent` are interpolated raw into `[DATA]` blocks
+there. Campaign names and objectives are user-supplied. This is a pre-existing inconsistency in a file
+D3 was not asked to change, so it is **recorded rather than fixed**; it belongs to whoever next audits
+prompt-injection surface.
 
 ### Deferred, carried not dropped (build guide §4.4)
 
