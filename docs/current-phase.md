@@ -1099,8 +1099,7 @@ Choose one:
 ### Next up — post-Session 22 (Pre-launch hardening)
 
 Session 21 (Seats & Permissions) and Session 22 (test-execution integrity + approvals hardening) are both
-closed — see their CLOSED entries in What's done. `21C-ci-gap` and `21C-pg-oom` (the two items that used to
-head this list) are resolved by Session 22 W1 and marked closed in `backlog.md`; `21C-bulk-platform` is
+closed — resolved by Session 22 W1 and marked closed in `backlog.md`; `21C-bulk-platform` is
 resolved by W2 A1. What remains, in priority order:
 
 1. **Postiz removal workstream (launch-checklist §16):** migrate `lib/social/` to direct LinkedIn/X APIs —
