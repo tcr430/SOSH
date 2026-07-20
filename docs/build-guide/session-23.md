@@ -679,26 +679,9 @@ until the range is final. Running it first would green a range that D1–D4 then
 therefore closes the pass, not opens it.** State this reasoning in the resolution log so the ordering
 does not read as a downgrade of a BLOCKER.
 
-**REVIEWER-REPORT IMMUTABILITY — founder-ratified amendment (Session 23-D).** The original rule sent
-resolutions to a separate `session-NN-D-corrections.md`. The founder has ratified the house practice
-instead: **resolutions live in the reviewer's own report, appended, never overwriting it.** The harm the
-rule guards against is *eliminating the reviewer* — findings rewritten or downgraded by the author of
-the fix, as 22-D did. Appending is the opposite: the findings stand verbatim and the record shows how
-each was corrected.
-
-Binding form, therefore:
-
-- The Reviewer's findings — every BLOCKER/MAJOR/MINOR/NIT block, the tables, the VERDICT — are **read-only
-  to 23-D**. Not one word edited, no `RESOLVED` stamped into a finding, no status flipped.
-- 23-D appends **one new section at the BOTTOM** of `docs/reviews/session-23-reviewer.md`, headed
-  `## Correction pass resolutions (Session 23-D)` and opening with an attribution line naming 23-D as
-  its author and stating the findings above are unmodified.
-- Cross-reference by ID (`BLOCKER-2 → D0`), never by editing the finding.
-- **`docs/reviews/session-23-D-corrections.md` is NOT created.** Any earlier instruction in this guide
-  to create it is superseded by this paragraph.
-- **D0 amends `CLAUDE.md`'s REVIEWER-REPORT IMMUTABILITY paragraph** to record this ratified form, so
-  the next session does not re-litigate it. The rule is not deleted — it is narrowed to what it was
-  always for: no in-place edits, no self-authored verdicts on someone else's findings.
+**Where resolutions go (founder decision).** Directly into `docs/reviews/session-23-reviewer.md` — no
+separate corrections file. The point is not to eliminate the Reviewer but to show how each finding was
+corrected, so the findings themselves stay as written and the resolutions are recorded against them.
 
 ### §4.0 — Correction primer  (paste first · wait for acknowledgement)
 
@@ -707,10 +690,9 @@ Session 23-D — Governed Memory Foundation, CORRECTION pass. You are fixing the
 docs/reviews/session-23-reviewer.md (range f688fc54^..708fe468). Six steps, D0…D5, each its own commit.
 
 Read now, before anything else:
-- docs/reviews/session-23-reviewer.md — IN FULL. It is your work order AND the file your resolutions
-  land in. You do NOT edit its findings — not one word, no RESOLVED stamps, no status flips. You APPEND
-  a "## Correction pass resolutions (Session 23-D)" section at the BOTTOM. See §4 of the build guide;
-  the founder ratified this form. Do NOT create session-23-D-corrections.md.
+- docs/reviews/session-23-reviewer.md — IN FULL. It is your work order AND the file you record
+  resolutions in. Do NOT create a separate corrections file. Record how each finding was corrected
+  without rewriting the findings themselves.
 - docs/build-guide/session-23.md §0 (Locked, esp. L-1 scope, L-7 equivalence gate, L-8) and §4 (this
   section — the step list and the ordering rationale).
 - docs/decisions/0016-governed-memory.md — the MEM-* constraint table you are discharging.
@@ -751,8 +733,8 @@ BUILD:
   docs/current-phase.md modification as a single `docs(adr): ADR 0016 governed memory + session 23
   build guide` commit.
 - History is NOT rewritten (the five build commits are already authored against it). The ADR therefore
-  post-dates the code it governs — state that explicitly in docs/reviews/session-23-D-corrections.md,
-  as the Reviewer's fix instruction requires. Do not rebase.
+  post-dates the code it governs — state that explicitly in the resolutions section of
+  docs/reviews/session-23-reviewer.md, as the Reviewer's fix instruction requires. Do not rebase.
 - docs/brainstorm/: commit it (it is the source the ADR was derived from and three build-guide sections
   cite it by path). Leaving it untracked is the exact ambiguity that produced BLOCKER-2.
 - MINOR-2 (doc-only part): add the `likes: 0 / impressions: 0` placeholder to ADR 0016 §3.4 as a NAMED
@@ -760,30 +742,16 @@ BUILD:
   populating performance_memory is what makes the placeholder start reaching real prompts.
 - MINOR-1 (doc-only part): record the service-role + single-.eq() dependency in ADR 0016 §4 as a named
   risk. The Tier-2 test half of MINOR-1 is deferred (§4.4).
-- APPEND to docs/reviews/session-23-reviewer.md — do NOT create a separate corrections file — a new
-  final section:
+- Add a "## Correction pass resolutions (Session 23-D)" section to
+  docs/reviews/session-23-reviewer.md with a `| Finding | Step | Fix | Test that now proves it | SHA |`
+  table, seeded with the D0 row. Each later step adds its own row. Do NOT create a separate
+  corrections file. Leave the Reviewer's findings as written — record how each was corrected rather
+  than rewriting the finding.
 
-    ## Correction pass resolutions (Session 23-D)
-
-    *Appended by Session 23-D, author of the fixes below. Every finding above is UNMODIFIED — no
-    verdict was edited, downgraded, or stamped RESOLVED in place. This section records how each
-    finding was corrected; the Reviewer's assessment stands as written.*
-
-    | Finding | Step | Fix | Test that now proves it | SHA |
-
-  Seed it with the D0 row. Each later step appends its own row. Nothing above this heading is touched.
-- Amend CLAUDE.md's REVIEWER-REPORT IMMUTABILITY paragraph to the founder-ratified form: resolutions
-  are APPENDED to the reviewer's report in an attributed section; findings are never edited in place
-  and never carry self-authored RESOLVED verdicts. Keep the 22-D precedent sentence — it explains what
-  the rule prevents. Mirror the same amendment into docs/decisions/0015-test-execution-and-ci-gates.md
-  if it restates the rule there.
-
-VERIFY: git log shows the docs commit; git status shows no untracked docs/ paths; git diff confirms
-session-23-reviewer.md gained ONLY an appended section (no edits above the new heading) — check this
-with `git diff docs/reviews/session-23-reviewer.md` and read every hunk.
+VERIFY: git log shows the docs commit; git status shows no untracked docs/ paths.
 On commit: "D0 complete — ADR 0016 + build guide + brainstorm + current-phase committed (BLOCKER-2);
-ADR post-dates its code, recorded; MINOR-1/MINOR-2 doc notes added; resolutions section appended to
-reviewer report; CLAUDE.md immutability rule narrowed to ratified form." Then stop.
+ADR post-dates its code, recorded; MINOR-1/MINOR-2 doc notes added; resolutions section started in the
+reviewer report." Then stop.
 ```
 
 #### D1 — MAJOR-2: the production cap assertion that passes at zero
@@ -918,8 +886,7 @@ DO:
 - In the db-tests run, OPEN THE LOG and confirm governed-memory-rls.test.ts and
   governed-memory-recency-column.test.ts each report a NON-ZERO executed count. The skip-guard covers
   this, but read it yourself — a suite a flag empties to zero tests is a FALSE-GREEN, not coverage.
-- Paste BOTH run URLs into the "Correction pass resolutions (Session 23-D)" section appended to
-  docs/reviews/session-23-reviewer.md. Append only — the findings above stay untouched.
+- Paste BOTH run URLs into the resolutions section of docs/reviews/session-23-reviewer.md.
 - Update the db-tests promotion tally in docs/current-phase.md (currently 0 of 3) with this run's
   outcome. NOTE EXPLICITLY in the log: until it reaches 3/3, db-tests remains ADVISORY — a green run
   here does not yet block a bad merge, and a RED one must be READ BY A HUMAN and classified
@@ -933,10 +900,11 @@ RLS suites confirmed non-zero executed; promotion tally now N of 3." Then stop.
 
 ### §4.2 — Resolution log
 
-Each correction commit appends to `docs/reviews/session-23-D-corrections.md`: **finding → fix → the
-test that now proves it → the commit sha**. This is the audit trail; it is not the Reviewer's report
-and does not edit it. Three things the Reviewer specifically asked to see recorded there, which are
-easy to lose:
+Each correction commit adds a row to the resolutions section of `docs/reviews/session-23-reviewer.md`:
+**finding → step → fix → the test that now proves it → the commit sha**. A finding that was deferred,
+declined, or adjudicated the other way still gets a row — an unexplained gap between the findings and
+the resolutions is what makes the trail unreadable later. Three things the Reviewer specifically asked
+to see recorded, which are easy to lose:
 
 1. **The D0/D5 ordering rationale** — why a BLOCKER ran last.
 2. **That ADR 0016 post-dates the code it governs** (D0, since history was not rewritten).

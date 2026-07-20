@@ -379,3 +379,171 @@ has never run. That is the same class of gap as Sessions 21C/22, arriving throug
 
 *Reviewed by: independent Reviewer session, 2026-07-20. Range `f688fc54^..708fe468`. No files were
 modified by this review. Correction prompts are out of scope for this document (§4).*
+
+---
+---
+
+## Correction pass resolutions (Session 23-D)
+
+> *Appended by Session 23-D, author of the fixes below.* **Every finding above is UNMODIFIED** — no
+> verdict was edited, downgraded, or stamped RESOLVED in place; not one character above this heading
+> was changed. This section records how each finding was corrected; **the Reviewer's assessment stands
+> as written.** Where this section disputes a finding, it argues the point here and leaves the original
+> claim standing.
+>
+> **Author:** Session 23-D correction pass (Claude Opus 4.8, founder-directed) · **Date:** 2026-07-20
+> **Fixing:** the findings above, Reviewer range `f688fc54^..708fe468`
+> **Governed by:** CLAUDE.md *REVIEWER-REPORT APPEND-ONLY* · build guide §4.
+
+### Ordering rationale — why a BLOCKER runs last
+
+Steps run **D0 → D1 → D2 → D3 → D4 → D5**, deliberately *not* "BLOCKERs first":
+
+- **BLOCKER-2 leads (D0).** It is a commit of governing docs. Nothing depends on it, and every later
+  step cites the ADR it lands.
+- **BLOCKER-1 closes (D5).** Its fix instruction is *"push and get both CI jobs green on this exact
+  range"* — unsatisfiable until the range is **final**. Running it first would certify a range that
+  D1–D4 then invalidate, producing a green run that proves nothing about what ships.
+
+**Not a downgrade of BLOCKER-1.** It is the only order in which its fix is meaningful.
+
+### Resolution table
+
+Every finding above gets a row — including the deferred and declined ones. An unexplained gap between
+the findings and the resolutions is what makes the trail unreadable later (§4.2).
+
+| Finding | Step | Fix | Test that now proves it | SHA |
+|---|---|---|---|---|
+| **BLOCKER-2** — ADR 0016 + build guide + `current-phase.md` + `brainstorm/` untracked; the MEM-* checklist and the §6.2 authorisation exist at no commit | D0 | Committed all four paths, plus this report, as one `docs(adr):` commit. History **not** rewritten — disclosure below. | n/a (docs; Tier-3 diff-verified — `git status` shows no untracked `docs/` paths) | `5edb090d` |
+| **MINOR-2** (doc half) — `likes: 0 / impressions: 0` inverts meaning once Track C populates the store | D0 | Named **un-defer trigger** in ADR 0016 §3.4: ADR 0018 may not ship on top of it unresolved; two resolution options + owner recorded. | n/a (doc-only; code half deferred) | `5edb090d` |
+| **MINOR-1** (doc half) — production tenancy rests on one `.eq()`, not RLS | D0 | **Named risk** in ADR 0016 §4. The existing note framed the service-role split as *intended*; this records what it *costs* — a dropped `.eq()` leaks cross-tenant with every RLS test still green. | n/a (doc-only; Tier-2 half deferred to Session 24) | `5edb090d` |
+| **MAJOR-2** — `toBeLessThanOrEqual(3)` passes at 0 | D1 | *pending* | *pending* | — |
+| **MAJOR-3** — two voice resolvers; `voice.ts` duplicates live logic it was written to replace | D2 | *pending* | *pending* | — |
+| **MAJOR-1** — B4 narrows model input; the proof test cannot fail by construction | D3 | *pending* | *pending* | — |
+| **MAJOR-4** — 10→3 narrowing reaches 5 callers; 0 caller-level tests | D4 | *pending* | *pending* | — |
+| **BLOCKER-1** — the range has never executed in CI; 8 Tier-1/2 constraints `AUTHORED-NOT-EXECUTED` | D5 | *pending* | *pending* | — |
+| **MINOR-1** (Tier-2 half) — no test pins `.eq('business_id')` on the built query | — | **Deferred to Session 24**, not fixed here. Doc-side risk note landed at D0. | none — deferred, recorded as a decision | — |
+| **MINOR-3** — `platform: null` rows silently dropped, can under-fill the cap | — | **Deferred to ADR 0017**, which owns the retrieval consumers. | none — deferred | — |
+| **MINOR-4** — brand/evidence/audience tests thin; wrong cap constant would not redden | — | **Deferred to ADR 0017**, when those modules gain real consumers. | none — deferred | — |
+| **NIT-1** — squash the two migrations | — | **Declined.** The Reviewer itself says do not rewrite history for this. | n/a | — |
+| **NIT-2** — `let admin: any` | — | **No action — not a defect.** The Reviewer records it as compliant with the CLAUDE.md carve-out (2). | n/a | — |
+| **NIT-3** — stale `lib/memory/index.ts` header | D2 | *pending* (folded into the D2 voice rewire) | *pending* | — |
+
+---
+
+### D0 — BLOCKER-2, plus the doc halves of MINOR-1 and MINOR-2
+
+#### Disclosure: ADR 0016 post-dates the code it governs
+
+The Reviewer offered two remedies: rebase the ADR to sit before `f688fc54`, or commit on top and
+disclose. **History was not rewritten** — the five B0–B4 commits are already authored and cited by SHA
+throughout this report, and rebasing would invalidate every one of those citations.
+
+The consequence, unsoftened: **`git show <any-B-sha>:docs/decisions/0016-governed-memory.md` returns
+nothing.** Source comments across B0–B4 cite `ADR 0016 §2 / §3.4 / §5.4 / §6.2 / §7` as binding
+authority — including the one pre-authorised test-assertion change (`limit=10`→`limit=3` in
+`lib/ai/context.test.ts`, ratified by §6.2). **At the commits where those citations were written, the
+authority they cite did not exist in git.** From `5edb090d` forward it does. A reader auditing the
+B-range in isolation cannot verify the §6.2 authorisation and must read the ADR at D0 or later.
+
+Whether the §1 phase gate (*"ADR written and Accepted before the Builder starts"*) was honoured
+**cannot be established from git**, and is not claimed here.
+
+#### What was committed (`5edb090d`)
+
+| Path | Prior state | Note |
+|---|---|---|
+| `docs/decisions/0016-governed-memory.md` | untracked | The governing ADR. +2 amendments (below). |
+| `docs/build-guide/session-23.md` | untracked | §0 Locked, §0.1's four questions, §4's step list. |
+| `docs/current-phase.md` | modified | See note — **not** a Session 23 change. |
+| `docs/brainstorm/` | untracked | Committed, not gitignored — three build-guide sections cite it **by path** as the ADR's source. |
+| `docs/reviews/session-23-reviewer.md` | untracked | **Added beyond D0's literal list** — see below. |
+
+**Two departures from D0's literal instruction, flagged rather than made silently:**
+
+1. **This report was added to the commit.** §4.1's D0 text names four paths and omits the Reviewer's
+   own report, which was also untracked. Committing the work order while leaving the report that *is*
+   the work order untracked would reproduce BLOCKER-2 in miniature; Session 22-G set the precedent
+   (NEW-15, *"track findings docs"*).
+2. **`docs/current-phase.md`'s diff is not Session 23 work.** It is a two-line Session 22 prose tidy
+   (removing a stale reference to `21C-ci-gap` / `21C-pg-oom`, already closed by Session 22 W1). It
+   carries the `db-tests` promotion tally that **D5** will update; the tally is untouched at D0 and
+   still reads **0 of 3**.
+
+#### ADR amendments made in this step
+
+1. **§3.4 — un-defer trigger (MINOR-2).** Records that `performance.ts` maps governed rows to literal
+   `likes: 0, impressions: 0`, that `post-generation.ts:153-154` renders them verbatim, and that this
+   is **inert only while the table ships empty**. ADR 0018 populating `performance_memory` is exactly
+   what makes the placeholder reach real prompts, where "0 likes, 0 impressions" plausibly reads as
+   evidence the pattern performs *badly* — inverting the store's intent. Two resolution options
+   recorded (optional numerics with an omitted metrics clause, or `observation_count` as the
+   credibility signal). Owner: ADR 0018.
+2. **§4 — named risk (MINOR-1).** §4 already documented the service-role/RLS-bypass split as
+   *intended*. That note explains the architecture but never states the **failure mode**, which is what
+   MINOR-1 asks for: isolation rests on a single `.eq('business_id', …)` per query, the Tier-1 RLS
+   suite proves a property **no production path currently exercises**, and a future edit dropping that
+   `.eq()` leaks cross-tenant memory into a generation prompt **with every RLS test still green**.
+   Tier-2 mitigation deferred to Session 24 as a recorded decision.
+
+#### Erratum to MAJOR-1 (non-material, raised by the correction pass)
+
+MAJOR-1's heading reads *"three of four prompt templates"*. Re-deriving independently from
+`lib/ai/prompts/*.ts`: there are **three** templates — `post-generation.ts`, `post-regeneration.ts`,
+`brand-voice-inference.ts` (`types.ts` is type-only). All three lose something, so the accurate
+statement is *"all three of three"*.
+
+**The finding stands unaltered and its substance is confirmed.** The per-template render sets were
+re-derived from source in this pass and match the Reviewer's table exactly, including that `trialState`
+is read by **no** template and that `post-regeneration.ts` renders neither `recentCampaigns` nor
+`recentPostPerformance`. Only the count in the prose heading is off by one. Per condition 4 of the
+append-only rule, the Reviewer's text is left exactly as written and the correction is argued here.
+
+#### Verification
+
+- `git log` shows `5edb090d`; `git status` shows no untracked `docs/` paths.
+- No `.ts` / `.sql` file touched in this step.
+
+---
+
+### Deferred, carried not dropped (build guide §4.4)
+
+| Item | Disposition |
+|---|---|
+| MINOR-1 (Tier-2 `.eq('business_id')` assertions per `lib/db/memory-*.ts`) | **Session 24.** Doc-side risk note landed at D0. |
+| MINOR-2 (`likes: 0` placeholder) | **Un-defer trigger in ADR 0016 §3.4 at D0.** Owner: ADR 0018. |
+| MINOR-3 (`platform: null` rows silently dropped) | **ADR 0017**, which owns the retrieval consumers. |
+| MINOR-4 (brand/evidence/audience tests thin) | **ADR 0017**, when those modules gain real consumers. |
+| NIT-1 (squash the two migrations) | **Declined** — Reviewer says do not rewrite history for this. |
+| NIT-2 (`let admin: any`) | **Not a defect** — compliant with the CLAUDE.md carve-out (2). |
+| NIT-3 (stale `lib/memory/index.ts` header) | **D2.** |
+
+### Process note — the rule changed mid-pass, and D0 got it wrong first
+
+Recorded because the git history of this pass is otherwise confusing to a later reader.
+
+D0 initially created a separate `docs/reviews/session-23-D-corrections.md`, per CLAUDE.md's then-current
+*REVIEWER-REPORT IMMUTABILITY* rule. The founder rejected the split as unreadable — the problem and its
+fix were never visible together — and directed that resolutions live in the Reviewer's own file,
+amending CLAUDE.md if needed.
+
+**CLAUDE.md was therefore revised, not overridden.** The rule is now *REVIEWER-REPORT APPEND-ONLY*: the
+Reviewer's **findings** stay immutable (condition 1 — no in-place edit, ever), while the **file** is
+append-only via one attributed section (condition 2). The property the old rule protected —
+**attributable authorship, and findings that cannot be silently mutated** — is fully preserved; only
+the file-separation mechanism changed. The Session 22-D failure the rule was written against (RESOLVED
+verdicts written *into* finding text) remains a violation under condition 1.
+
+**Two process defects in D0 itself, recorded rather than quietly repaired:**
+
+1. **`5edb090d` committed a build guide the pass had not read.** `docs/build-guide/session-23.md` was
+   edited in the working tree between D0's read of it and D0's `git add`. The committed version already
+   said *"append to the reviewer report, do NOT create a separate corrections file"* — the opposite of
+   the version D0 had read and acted on. D0 staged it without re-reading. **Lesson: re-read a file
+   between reading it and committing it if any time has passed** — a stale read produced a commit whose
+   own instructions contradict the actions in that same commit.
+2. **`docs/reviews/session-23-D-corrections.md` was created and committed at `5edb090d`, then deleted.**
+   Its content is folded into this section. It exists in history at exactly one commit; it is not a
+   parallel record and must not be resurrected.
+
+Build guide §4, §4.0, D0, D5 and §4.2 now specify this file as the sole destination for resolutions.

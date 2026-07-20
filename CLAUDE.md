@@ -300,13 +300,36 @@ function/action as tested, `git grep` its callers and list, per caller, which te
 it. A caller with no listed test is `AUTHORED-NOT-EXECUTED` for that caller, even if another caller is
 fully covered.
 
-**REVIEWER-REPORT IMMUTABILITY.** A reviewer's report is append-only history and is NEVER edited in place
-by the correction pass it audits. Resolutions go in a SEPARATE `docs/reviews/session-NN-D-corrections.md`
-(or the next delta review), never as RESOLVED verdicts written back into the original by the fix's author.
-The finding record and the fix record must not share an author in the same file. Session 22-D violated this
-— `docs/reviews/session-22-reviewer.md` carries RESOLVED verdicts written by 22-D itself, the author of the
-fixes those verdicts describe, collapsing the independent-audit trail this rule exists to preserve. That
-file is left as-is (history is not rewritten after the fact); this rule prevents recurrence going forward.
+**REVIEWER-REPORT APPEND-ONLY** *(revised Session 23-D — supersedes REVIEWER-REPORT IMMUTABILITY; see
+"Why the rule changed" below).* A reviewer's findings are **immutable**; the report **file** is
+**append-only**. A correction pass records its resolutions **in the reviewer's own file**, so a reader
+sees the problem and its fix in one place — under four conditions, all of which are load-bearing:
+
+1. **No in-place edit, ever.** Not one character of the reviewer's text changes — no verdict flipped
+   ✅/❌, no status column rewritten, no RESOLVED stamped onto a finding, no finding reworded, deleted
+   or reordered. If a finding turns out to be wrong, the correction says so **in the appendix**; the
+   original claim stays exactly as the reviewer wrote it.
+2. **One appended, attributed section.** Resolutions go in a single `## CORRECTION PASS (Session NN-D)`
+   section at the **end** of the file, opening with its author, date, and the commit range it fixed.
+   Everything above it is the reviewer's; everything below it is the fix author's. **A reader must be
+   able to tell, from any line, which of the two wrote it** — that is the whole point of the rule.
+3. **Findings are referenced, never restated as resolved.** The appendix cites each finding by ID
+   (BLOCKER-1, MAJOR-2, …) and records *finding → fix → the test that now proves it → the commit SHA*.
+   Cross-reference, don't overwrite.
+4. **A disputed or withdrawn finding is argued, not erased.** Say why in the appendix and let the
+   reader judge. The reviewer's original text is the evidence they judge against.
+
+**Why the rule changed.** The previous form mandated a separate `session-NN-D-corrections.md`. It
+protected the audit trail but split every review across two files, so the problem and its fix were never
+readable together. The property that actually matters is **attributable authorship, and findings that
+cannot be silently mutated** — not physical file separation. Conditions 1–2 preserve that property
+exactly while restoring co-location. **The Session 22-D failure remains prohibited**: it wrote RESOLVED
+verdicts *into* the reviewer's finding text, in place, making the reviewer's claim and the fixer's
+self-assessment indistinguishable. That is condition 1, and it is still a violation.
+
+`docs/reviews/session-22-reviewer.md` is left as-is (history is not rewritten after the fact).
+`docs/reviews/session-23-D-corrections.md` existed briefly during Session 23-D and was folded into
+`docs/reviews/session-23-reviewer.md` as the first appendix written under this revision.
 
 **Merge gates (`docs/decisions/0015-test-execution-and-ci-gates.md` §5):**
 
