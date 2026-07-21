@@ -46,6 +46,14 @@
     landed in this session, so the count starts now. `db-tests` stays **advisory-but-must-be-read** until
     three consecutive full-green runs land on `master`; update this line with each green/red run rather
     than waiting for the third to backfill the count.
+    - **2026-07-21 (Session 23-D · D5):** `db-tests` ran **green** on PR #1 (branch `session-22-d`,
+      head `f022e08f`) — [run 29860240741](https://github.com/tcr430/SOSH/actions/runs/29860240741);
+      skip-guard confirmed all 13 `supabase/__tests__` suites visible (non-zero executed), incl. the two
+      governed-memory suites. **Tally UNCHANGED at 0 of 3** — the promotion rule counts full-green runs
+      **on `master`**, and this was a `pull_request`-event run on a branch, not a `master` run. It is a
+      pre-merge signal only: it does **not** yet block a bad merge, and a RED `db-tests` here would have
+      required a human to classify it (DB-behaviour regression vs stack OOM), never assumed transient.
+      The count begins to move only once this range lands on `master`.
   - **Merge-gate enforcement (Session 22-D):** GitHub ruleset `master-app-tests` (id `19038239`) is live on
     `refs/heads/master`, requiring `app-tests` with no bypass actors. `db-tests` is intentionally **not**
     in any ruleset yet — it stays advisory until the tally above reaches 3/3, at which point the ruleset is

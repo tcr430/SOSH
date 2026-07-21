@@ -422,7 +422,7 @@ the findings and the resolutions is what makes the trail unreadable later (§4.2
 | **MAJOR-1a** — the "fixture-identical" test cannot fail by construction | D3 | **Deleted**, with a tombstone comment recording why it was inert. Replaced by per-template assertions over the **request actually sent**, using the **real** templates (the existing `mockPrompt` echoes `input.text` and never touches the context, so it could not serve). Sentinel values per context field make presence/absence unambiguous. | `lib/ai/runner.test.ts` — 4 new cases, one per template + a no-raw-dump case. **Redden verified by mutation:** suppressing the `recentPostPerformance` render in `post-generation.ts` ⇒ exactly 1 failure. Reverted. | `33afb06e` |
 | **MAJOR-1b** — `post-regeneration` lost `recentCampaigns` + `recentPostPerformance` from the model's view | D3 | **Founder-adjudicated: RESTORED.** Both are now rendered explicitly in `post-regeneration.ts`'s `buildUserMessage`, invoking ADR 0016 §7's own escape hatch verbatim. This makes B4's "not a behaviour change" claim **true** and keeps the two post-writing templates comparable. `trialState` (all three) and `brandVoice` on `brand-voice-inference` **accepted as removed** — see §7.1 for why each. Recorded as an **ADR amendment (§7.1)**, not only a code comment. | `lib/ai/runner.test.ts` — *"post-regeneration sends business + brandVoice + recentCampaigns + recentPostPerformance, but NOT trialState"* | `33afb06e` |
 | **MAJOR-4** — 10→3 narrowing reaches 5 callers; 0 caller-level tests | D4 | Added caller-level Tier-2 tests for **all 5** callers (the step's minimum was 2). The existing suite for each caller **mocks `buildCustomerContext`** — which is precisely why none covered the rewire; the new files keep `buildCustomerContext` + `runPrompt` **real** and mock only `lib/db` beneath + the Anthropic client above, asserting on the **assembled prompt**, not the context object. | See per-caller table below. **Redden verified:** `PERFORMANCE_CAP`→5 reddens 4 of the 6 generate.ts cases. Reverted. | `beed6010` |
-| **BLOCKER-1** — the range has never executed in CI; 8 Tier-1/2 constraints `AUTHORED-NOT-EXECUTED` | D5 | *pending* | *pending* | — |
+| **BLOCKER-1** — the range has never executed in CI; 8 Tier-1/2 constraints `AUTHORED-NOT-EXECUTED` | D5 | Pushed the full B0–B4 + D0–D4 range to PR #1 (head `f022e08f`). **Both CI jobs `success`:** `app-tests` (tsc+eslint+vitest) and `db-tests` (live-Postgres RLS). The 8 constraints are now **EXECUTED green in CI**, not merely authored. | Both runs recorded in the D5 subsection below. `db-tests` skip-guard confirms all **13** `supabase/__tests__` suites *visible (non-zero executed)* — incl. `governed-memory-rls` + `governed-memory-recency-column`. app-tests [`29860240035`](https://github.com/tcr430/SOSH/actions/runs/29860240035), db-tests [`29860240741`](https://github.com/tcr430/SOSH/actions/runs/29860240741). | `f022e08f` (range head) |
 | **MINOR-1** (Tier-2 half) — no test pins `.eq('business_id')` on the built query | — | **Deferred to Session 24**, not fixed here. Doc-side risk note landed at D0. | none — deferred, recorded as a decision | — |
 | **MINOR-3** — `platform: null` rows silently dropped, can under-fill the cap | (D1) | **Still deferred to ADR 0017** — no behaviour change. But D1 **pinned the current behaviour**, including the degenerate case the Reviewer implies: when *every* governed row is platform-less the result is `[]` and the `post_metrics` fallback is **not** reconsidered. The deferral is now safe: changing it reddens a test and forces an explicit decision. | `lib/ai/context.test.ts` — *"excludes governed rows with a null platform…"* and *"returns empty when every governed row is platform-less, without falling back to post_metrics"* | `66e66517` |
 | **MINOR-4** — brand/evidence/audience tests thin; wrong cap constant would not redden | — | **Deferred to ADR 0017**, when those modules gain real consumers. | none — deferred | — |
@@ -624,3 +624,51 @@ verdicts written *into* finding text) remains a violation under condition 1.
    parallel record and must not be resurrected.
 
 Build guide §4, §4.0, D0, D5 and §4.2 now specify this file as the sole destination for resolutions.
+
+### D5 — BLOCKER-1: the range executed green in CI
+
+The whole session moves from **AUTHORED** to **COVERED** here, and only here. D5 ran last so it would
+certify the *final* range — the five B0–B4 commits **plus** D0–D4 — not an intermediate one that the
+later steps would invalidate.
+
+**What was done.** The full local stack (`f688fc54..f022e08f`, 14 commits) was pushed to
+`origin/session-22-d`, updating the existing **PR #1** (retitled to name both sessions —
+founder-directed; a new PR was not viable because Session 22 is unmerged and Session 23 is stacked
+directly on it). Both required workflows fired on the `pull_request` event — `db-tests`'s path filter
+matches `supabase/**` + `lib/db/**`, which B0 (migration) and B1 (candidate-query layer) both touch.
+
+**Both jobs green on head `f022e08f`:**
+
+| Job | Run | Result |
+|---|---|---|
+| `app-tests` (tsc + eslint + vitest) | https://github.com/tcr430/SOSH/actions/runs/29860240035 | ✅ success |
+| `db-tests` (ADR 0013 live-Postgres RLS/migration suite) | https://github.com/tcr430/SOSH/actions/runs/29860240741 | ✅ success |
+
+**Non-zero executed counts — read from the log, not assumed.** D5's instruction is explicit that a
+suite a flag empties to zero tests is a FALSE-GREEN, so the two governed-memory suites had to be
+confirmed as actually executing. The `db-tests` run's **skip-guard** step printed:
+
+> `skip-guard: 13 file(s) under [supabase/__tests__] all visible, zero failures — green.`
+
+That is a machine-checked non-zero guarantee, and its semantics were read at source:
+`scripts/ci/assert-no-empty-suite.mjs:76-77` **hard-fails the job** for any file whose
+`assertions.length === 0` (*"ran zero tests — invisible — not covered"*), and `:82` fails if every test
+in a file is skipped. `supabase/__tests__` contains **exactly 13** `*.test.ts` files, of which
+`governed-memory-rls.test.ts` and `governed-memory-recency-column.test.ts` are two. "13 file(s) … all
+visible" therefore means **each of the 13 — both governed-memory suites included — executed ≥1
+non-skipped test**; a zero-count in either would have reddened `db-tests`, which was green. (The vitest
+JSON reporter writes per-file counts to a runner-local `/tmp/db-results.json` that is not in the log
+stdout; the skip-guard is the artefact that reads that JSON and is itself the proof.) The migration log
+also shows both `20260719010000_governed_memory.sql` and `20260719020000_governed_memory_recency_column.sql`
+applying cleanly on the fresh stack.
+
+**Promotion tally — this run does NOT advance it, and that is correct.** The `CI-DB-SUITE-STABLE`
+promotion rule counts **three consecutive full-green runs on `master`** (`docs/current-phase.md`,
+ADR 0015 §5) — not runs on a PR branch. This green run is on `session-22-d` via the `pull_request`
+event, so it leaves the tally at **0 of 3**. `db-tests` accordingly **remains ADVISORY**: this green run
+is a pre-merge signal, it does **not** yet block a bad merge, and a RED `db-tests` here would have to be
+**read by a human and classified** (DB-behaviour regression vs stack OOM), never assumed transient. The
+tally will only begin to move when this range lands on `master` and the workflow runs there.
+
+**BLOCKER-1 is closed:** the range is no longer `AUTHORED-NOT-EXECUTED` — it is executed green in CI,
+with the Tier-1 RLS/cascade suites proven non-empty by the skip-guard.
