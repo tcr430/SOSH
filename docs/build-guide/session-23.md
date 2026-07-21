@@ -911,24 +911,27 @@ to see recorded, which are easy to lose:
 3. **The per-caller → test-file table** from D4, and the plain statement that `brand`/`evidence`/
    `audience` ship with no production consumer by design (ADR §10 → ADR 0017).
 
+Items not fixed during the session are to be added to backlog.md.
+
 ### §4.3 — Close-out
 
 After the corrections are green and the resolution log is complete, the founder reviews and updates
 the docs (§5). If any correction shows an ADR 0016 constraint is infeasible, **amend the ADR** — never
 weaken a test to reach green.
 
-### §4.4 — Explicitly deferred (carried, not dropped)
+### §4.4 — MINORs & NITs (originally deferred; resolved in Session 23-E)
 
-The Reviewer classes all MINORs and NITs as deferrable debt. Carried forward with owners so they do
-not evaporate:
+The Reviewer classed all MINORs and NITs as deferrable debt. **Session 23-E (2026-07-21, commit
+`6149535f`) implemented them anyway, per founder direction** — "implement the suggested fix regardless
+of deferral." Dispositions now:
 
 | Item | Disposition |
 |---|---|
-| MINOR-1 (Tier-2 `.eq('business_id')` assertions per `lib/db/memory-*.ts`) | Deferred to Session 24. The **doc-side** risk note lands in D0. |
-| MINOR-2 (`likes: 0` placeholder inverts meaning once Track C populates the store) | **Un-defer trigger recorded in ADR 0016 §3.4 at D0.** ADR 0018 cannot ship on top of it unnoticed. |
-| MINOR-3 (`platform: null` rows silently dropped, can under-fill the cap) | Deferred to ADR 0017, which owns the retrieval consumers. |
-| MINOR-4 (brand/evidence/audience tests are thin — wrong cap constant would not redden) | Deferred to ADR 0017, when those modules gain real consumers. |
-| NIT-1 (squash the two migrations) | **Declined.** Reviewer says do not rewrite history for this. |
+| MINOR-1 (Tier-2 `.eq('business_id')` assertions per `lib/db/memory-*.ts`) | **Done — but was an erratum.** The assertion already existed inside each file's omnibus filter test at `708fe468`; the Reviewer's constraint-table claim that it was "not asserted" is wrong. A **dedicated, single-purpose** tenancy test was added per file so the guard is pinned by its own named case. Doc-side risk note landed at D0. |
+| MINOR-2 (`likes: 0` placeholder inverts meaning once Track C populates the store) | **Fixed.** `likes`/`impressions` made **optional** on `PerformancePattern`/`CustomerContext`; governed rows **omit** them rather than inventing `0`. Fallback keeps real counts. ADR 0016 §3.4 trigger marked RESOLVED. |
+| MINOR-3 (`platform: null` rows silently dropped, can under-fill the cap) | **Fixed (widen + render provenance).** `platform` widened to `Platform \| null`; cross-platform rows kept; both post-writing templates render provenance (`On {platform}:` / `Across platforms:`). Live fallback prompt gains a platform label — recorded as an ADR 0016 §3.4 behaviour-change note. |
+| MINOR-4 (brand/evidence/audience tests are thin — wrong cap constant would not redden) | **Suggested fix already present (erratum).** Each module already has a per-type cap test (`brand/evidence/audience.test.ts` — feed `CAP+3`, assert length `=== X_CAP`). The residual *"a swap between constants would not redden"* is **inherent to `BRAND_CAP === EVIDENCE_CAP === AUDIENCE_CAP === 5`** — no behavioural test can distinguish equal-valued constants. Closing it needs distinct caps (a product decision) or an import-level check; stays with **ADR 0017**, when those modules gain consumers. |
+| NIT-1 (squash the two migrations) | **Declined.** Both migrations are committed and pushed; the Reviewer says do not rewrite history for this. |
 | NIT-2 (`let admin: any`) | **Not a defect** — Reviewer records it as compliant with the CLAUDE.md carve-out. No action. |
 | NIT-3 (stale `lib/memory/index.ts` header) | Fixed in D2. |
 

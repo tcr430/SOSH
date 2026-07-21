@@ -210,6 +210,26 @@ Indexes:
 > **ADR 0017 must not add a metrics clause to any template while it stands.** Deferred in Session 23-D
 > §4.4; **owner: ADR 0018.**
 
+> **RESOLVED — Session 23-E (2026-07-21), commit `6149535f`.** The trigger's own resolution was
+> implemented rather than carried to ADR 0018:
+> - **MINOR-2:** `likes`/`impressions` are now **optional** on `PerformancePattern` (and on
+>   `CustomerContext.recentPostPerformance`); the governed branch **omits** them instead of inventing
+>   `0`. The `post_metrics` fallback still carries real per-post counts. The latent type-shape trap is
+>   closed — a governed row no longer invents metrics it does not have.
+> - **MINOR-3:** `platform` is widened to `Platform | null`; the governed branch **no longer drops**
+>   cross-platform (null-platform) rows (which silently under-filled the cap for a business whose
+>   patterns were all cross-platform). Both post-writing templates now render each example's platform as
+>   **provenance** — `On {platform}: …` for a platform-specific example, `Across platforms: …` for a
+>   cross-platform one — so the model can calibrate tone when the target platform differs.
+>
+> **Behaviour change on the live path (recorded, not silent):** the `post_metrics` fallback ships
+> today, so this adds an `On {platform}: ` prefix to performance snippets in real generation prompts
+> **now**, not only once Track C populates the table. This is an information gain — the model previously
+> saw the snippet with no provenance — accepted deliberately. The constraint *"ADR 0017 must not add a
+> metrics clause while the placeholder stands"* is **discharged, not violated**: no metrics clause is
+> rendered, and the numerics now being optional means a future clause cannot resurrect the `0/0`
+> inversion.
+
 ### 3.5 Voice — read THROUGH the existing tables, never duplicated (MEM-VOICE-THROUGH-EXISTING)
 
 Voice already has governed stores: `brand_voices` (`lib/db/brand-voices.ts`) and

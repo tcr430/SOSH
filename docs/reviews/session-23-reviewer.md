@@ -672,3 +672,58 @@ tally will only begin to move when this range lands on `master` and the workflow
 
 **BLOCKER-1 is closed:** the range is no longer `AUTHORED-NOT-EXECUTED` — it is executed green in CI,
 with the Tier-1 RLS/cascade suites proven non-empty by the skip-guard.
+
+---
+
+## Correction pass 2 — deferred MINORs & NITs (Session 23-E)
+
+> *Appended by Session 23-E, a second correction pass.* **Every finding above, and the entire Session
+> 23-D section, is UNMODIFIED.** The Session 23-D pass deferred all MINORs/NITs (§4.4). This pass
+> implemented them anyway, on founder direction — *"implement the Minor and NITs identified in the
+> reviewer session as per the suggested fix, regardless of having been identified to defer."* Two of the
+> findings turned out to be already-satisfied at the reviewed range; those are recorded as errata, with
+> the Reviewer's original claim left standing as written.
+>
+> **Author:** Session 23-E (Claude Opus 4.8, founder-directed) · **Date:** 2026-07-21
+> **Fixing:** MINOR-1..4, NIT-1..3 · **Code commit:** `6149535f` · reviewed artefacts read at that commit.
+> **Governed by:** CLAUDE.md *REVIEWER-REPORT APPEND-ONLY*.
+
+### Resolution table (MINORs & NITs)
+
+| Finding | Fix | Test that now proves it | SHA |
+|---|---|---|---|
+| **MINOR-1** — production tenancy rests on one `.eq('business_id')`, not RLS; a future drop leaks cross-tenant with every RLS test still green | **Done, and the finding's test-side premise was an erratum** (see below). Added a **dedicated, single-purpose** tenancy test per `lib/db/memory-*.ts` asserting `.eq('business_id', …)`, so the guard is pinned by its own named case rather than incidentally inside the omnibus filter test. | `lib/db/memory-{brand,evidence,audience,performance}.test.ts` — *"scopes the read to business_id — the sole tenancy guard on this service-role query (MINOR-1)"* (4 files) | `6149535f` |
+| **MINOR-2** — governed rows inject literal `likes: 0, impressions: 0`; a latent type-shape trap (per the D3 erratum, no template renders them today) | **Fixed.** `likes`/`impressions` made **optional** on `PerformancePattern` and `CustomerContext.recentPostPerformance`; the governed branch **omits** them rather than inventing `0`. The `post_metrics` fallback still carries real counts. ADR 0016 §3.4 trigger marked RESOLVED. | `lib/memory/performance.test.ts` — governed result has **no** `likes`/`impressions` keys (`not.toHaveProperty`); `lib/ai/context.test.ts` — governed expectation drops the zeroes | `6149535f` |
+| **MINOR-3** — `platform: null` rows silently dropped, under-filling the cap for cross-platform-only businesses | **Fixed via the Reviewer's option (i), extended to render provenance** (founder-chosen). `platform` widened to `Platform \| null`; the governed branch **no longer drops** null-platform rows; both post-writing templates render each example's platform as provenance — `On {platform}: …` / `Across platforms: …` — so the model can calibrate tone across target platforms. | `lib/memory/performance.test.ts` + `lib/ai/context.test.ts` — cross-platform rows KEPT with `platform: null`; `lib/ai/prompts/post-generation.test.ts` — `"On linkedin: …"` and `"Across platforms: …"` render cases | `6149535f` |
+| **MINOR-4** — brand/evidence/audience per-type tests thin; a wrong cap constant would not redden | **Suggested fix already present (erratum).** Each module already has a per-type cap test (feed `X_CAP + 3`, assert length `=== X_CAP`) at `lib/memory/{brand,evidence,audience}.test.ts`. The *residual* concern — a **swap** between constants wouldn't redden — is **inherent to `BRAND_CAP === EVIDENCE_CAP === AUDIENCE_CAP === 5`**: no behavioural test can distinguish equal-valued constants. Closing it needs distinct caps (a product decision) or an import-level check. **Left with ADR 0017**, when those modules gain consumers. | existing `brand/evidence/audience.test.ts` cap cases (unchanged) | — |
+| **NIT-1** — squash the two migrations | **Declined**, as the Reviewer itself advised. Both migrations are committed **and pushed**; rewriting shared history for a cosmetic record is not worth it. | n/a | — |
+| **NIT-2** — `let admin: any` | **No action — not a defect.** Compliant with the CLAUDE.md carve-out (2). | n/a | — |
+| **NIT-3** — stale `lib/memory/index.ts` header | **Already fixed at D2** (`f17760f3`) — header names `lib/ai/context.ts` as the consumer of both retrievers and states brand/evidence/audience are unwired by design. | n/a (comment) | `f17760f3` |
+
+### Errata (Reviewer claims left standing, argued here)
+
+Two findings were already satisfied at `708fe468`; per append-only condition 4, the Reviewer's text is
+not edited — the correction is argued here.
+
+1. **MINOR-1 constraint-table claim** (line ~313): *"`limit`/`order` asserted; `.eq('business_id')`
+   not."* It **was** asserted — `git show 708fe468:lib/db/memory-brand.test.ts` line 38 is
+   `expect(builder.eq).toHaveBeenCalledWith('business_id', 'biz-1')`, and the same line exists in all
+   four `memory-*.test.ts`. The finding's *risk* is real (a service-role read with RLS bypassed rests on
+   one `.eq()`), which is why a dedicated named test was still added; but the specific "not asserted"
+   claim is an erratum.
+2. **MINOR-4** — the suggested fix (*"one test per module … feed cap+1, assert exact length per type"*)
+   already existed as the *"never returns more than X_CAP"* case in each of the three module test files.
+   What the finding's deeper wording implies — that a wrong-constant swap should redden — is not
+   achievable while the three caps share the value `5`, and is recorded as such rather than papered over
+   with a test that cannot fail for the reason it exists (the ADR 0015 anti-pattern).
+
+### Behaviour change recorded (not silent)
+
+MINOR-3's provenance render changes what reaches the model on the **live** `post_metrics` fallback path
+(which ships today), not only the dormant governed path: performance snippets now carry an
+`On {platform}: ` prefix. This is an information gain, accepted deliberately, and recorded as a
+behaviour-change note under ADR 0016 §3.4 (RESOLVED block) so it is not mistaken for a silent drift.
+
+**Verification:** RED confirmed pre-change (7 failing across the 3 behaviour files); GREEN 726 passing
+(`lib/memory lib/ai lib/db lib/campaigns` + the two context-equivalence suites); `tsc --noEmit
+--skipLibCheck` clean; eslint clean on all touched files.
