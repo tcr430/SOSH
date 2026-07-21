@@ -231,6 +231,28 @@ describe('postGenerationPrompt — buildUserMessage', () => {
     expect(msg).toContain('saves 10h/week')
   })
 
+  test('renders the example platform as provenance for a platform-specific snippet (MINOR-3)', () => {
+    const ctx = makeCtx({
+      recentPostPerformance: [
+        { platform: 'linkedin', topContent: 'Our dashboard saves 10h/week', likes: 50, impressions: 1200 },
+      ],
+    })
+    const msg = postGenerationPrompt.buildUserMessage(makeInput(), ctx)
+    // The model is told which platform the example came from, so it can
+    // calibrate tone when generating for a different target platform.
+    expect(msg).toContain('On linkedin: Our dashboard saves 10h/week')
+  })
+
+  test('renders a null-platform (cross-platform) snippet as "Across platforms" rather than dropping it (MINOR-3)', () => {
+    const ctx = makeCtx({
+      recentPostPerformance: [
+        { platform: null, topContent: 'Founders trust specifics over adjectives' },
+      ],
+    })
+    const msg = postGenerationPrompt.buildUserMessage(makeInput(), ctx)
+    expect(msg).toContain('Across platforms: Founders trust specifics over adjectives')
+  })
+
   test('wraps brand voice in [DATA] tags', () => {
     const msg = postGenerationPrompt.buildUserMessage(makeInput(), makeCtx())
     expect(msg).toMatch(/\[DATA\][\s\S]*balanced, neutral[\s\S]*\[\/DATA\]/)

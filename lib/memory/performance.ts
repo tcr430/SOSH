@@ -9,10 +9,17 @@ import { PERFORMANCE_CAP } from './constants'
 // this is what B3 rewires context.ts to consume, so the shape must match it
 // exactly (MEM-CONTEXT-EQUIVALENT, ADR §6).
 export type PerformancePattern = {
-  platform: Platform
+  // platform is nullable: a distilled governed pattern can be cross-platform
+  // (MINOR-3). null means "across platforms", NOT "unknown" — the prompt
+  // renders it as such rather than dropping the row or guessing a platform.
+  platform: Platform | null
   topContent: string
-  likes: number
-  impressions: number
+  // Optional: a governed pattern is a distilled insight, not a specific post,
+  // so it carries no per-post metrics — these are OMITTED for governed rows
+  // rather than invented as 0 (MINOR-2). The post_metrics fallback still
+  // populates them with real counts.
+  likes?: number
+  impressions?: number
 }
 
 // ADR 0016 §3.4 SPECIAL CASE — performance_memory ships EMPTY in Track A;
@@ -33,31 +40,22 @@ export async function retrieveRelevant(
   const governedCandidates = await listPerformanceMemoryCandidates(client, businessId, limit)
 
   if (governedCandidates.length > 0) {
-    // A governed row's platform is nullable (a pattern can be cross-platform
-    // or platform-agnostic). PerformancePattern's shape requires a real
-    // Platform — silently guessing one (e.g. defaulting null to 'linkedin')
-    // would assert a specific platform as fact when the record doesn't
-    // claim one, corrupting what reaches the generation prompt. A row this
-    // shape genuinely cannot represent is excluded, not guessed at — filtered
-    // BEFORE ranking so an unmappable low-value row can't crowd out a
-    // mappable one within the cap.
-    const mappable = governedCandidates.filter(
-      (record): record is typeof record & { platform: NonNullable<typeof record.platform> } =>
-        record.platform !== null,
-    )
-    const ranked = rankAndCap(mappable, queryContext, PERFORMANCE_CAP)
+    // A governed row's platform is nullable — a distilled pattern can be
+    // cross-platform. Such rows are KEPT (MINOR-3), carrying platform: null
+    // through to the prompt, which renders them "Across platforms". They are
+    // never guessed at (e.g. defaulting null to 'linkedin' would assert a
+    // platform the record does not claim), and never dropped (dropping them
+    // silently under-filled the cap for cross-platform-only businesses).
+    const ranked = rankAndCap(governedCandidates, queryContext, PERFORMANCE_CAP)
     // A governed pattern ("technical-comparison posts perform well for CTO
     // audiences") is a distilled insight, not a specific post — it has no
-    // real per-post like/impression counts. likes/impressions are 0, not
-    // omitted, because PerformancePattern's shape (matching CustomerContext)
-    // requires numbers; this mapping is Track A's placeholder and is
-    // expected to be revisited once Track C (ADR 0018) actually populates
-    // this table and a consumer (ADR 0017) needs richer pattern context.
+    // real per-post like/impression counts. likes/impressions are OMITTED
+    // (MINOR-2), not invented as 0: a literal "0 likes, 0 impressions" would
+    // read to the model as evidence the pattern performs badly, inverting the
+    // store's intent once Track C (ADR 0018) populates this table.
     return ranked.map(record => ({
       platform: record.platform,
       topContent: record.pattern,
-      likes: 0,
-      impressions: 0,
     }))
   }
 

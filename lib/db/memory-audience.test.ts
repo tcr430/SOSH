@@ -43,6 +43,17 @@ describe('listAudienceMemoryCandidates', () => {
     expect(builder.order).not.toHaveBeenCalledWith('last_confirmed_at', expect.anything())
   })
 
+  it('scopes the read to business_id — the sole tenancy guard on this service-role query (MINOR-1)', async () => {
+    // The generation path reads via service-role, which BYPASSES RLS (ADR
+    // 0016 §4), so this .eq('business_id') is the ONLY thing preventing a
+    // cross-tenant memory leak. Pinned on its own — not incidentally inside
+    // the omnibus filter test above — so dropping it reddens loudly and
+    // unmistakably.
+    const { client, builder } = createMockClient([makeRow()], null)
+    await listAudienceMemoryCandidates(client, 'biz-42')
+    expect(builder.eq).toHaveBeenCalledWith('business_id', 'biz-42')
+  })
+
   it('applies the given limit, defaulting to MEMORY_CANDIDATE_LIMIT', async () => {
     const { client, builder } = createMockClient([makeRow()], null)
 

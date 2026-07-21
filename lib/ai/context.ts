@@ -11,10 +11,14 @@ export interface CustomerContext {
   brandVoice: BrandVoiceContext | null
   recentCampaigns: Array<Pick<CampaignRow, 'id' | 'name' | 'objective' | 'status'>>
   recentPostPerformance: Array<{
-    platform: Platform
+    // platform is nullable (MINOR-3): a cross-platform governed pattern
+    // carries null, rendered "Across platforms" rather than dropped/guessed.
+    platform: Platform | null
     topContent: string
-    likes: number
-    impressions: number
+    // Optional (MINOR-2): governed patterns omit per-post metrics rather than
+    // inventing 0s; the post_metrics fallback still provides real counts.
+    likes?: number
+    impressions?: number
   }>
   trialState: {
     isTrial: boolean

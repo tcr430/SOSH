@@ -136,7 +136,7 @@ ${ctx.recentCampaigns.map(c => `- ${sanitizeDataField(c.name)}: ${sanitizeDataFi
     if (ctx.recentPostPerformance.length > 0) {
       sections.push(`## Top-Performing Post Snippets (use for tone calibration)
 [DATA]
-${ctx.recentPostPerformance.map(p => `- ${sanitizeDataField(p.topContent)}`).join('\n')}
+${ctx.recentPostPerformance.map(p => `- ${p.platform ? `On ${p.platform}: ` : 'Across platforms: '}${sanitizeDataField(p.topContent)}`).join('\n')}
 [/DATA]`)
     }
 

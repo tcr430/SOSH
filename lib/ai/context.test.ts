@@ -458,9 +458,11 @@ describe('buildCustomerContext — B3 behaviour-equivalence (ADR 0016 §6, MEM-C
   // `expect(ctx.recentPostPerformance.length).toBeLessThanOrEqual(3)`, which
   // is green at ZERO — it could not distinguish "capped correctly" from
   // "returned nothing", and returning nothing is the most likely regression
-  // in this design: performance.ts has THREE paths that can silently empty
-  // the result (the early return on no metrics, the metric→post join filter,
-  // and the governed platform===null filter — one case each, below).
+  // in this design: performance.ts has two paths that can silently empty
+  // the result (the early return on no metrics, and the metric→post join
+  // filter — one case each, below). The governed branch no longer drops
+  // platform-less rows (MINOR-3, fixed), so it is no longer a silent-empty
+  // path.
   //
   // Pinned now as EXACT length AND survivor identity, mirroring
   // lib/memory/scoring.test.ts:158-170. PerformancePattern carries no post
@@ -531,11 +533,12 @@ describe('buildCustomerContext — B3 behaviour-equivalence (ADR 0016 §6, MEM-C
     ])
   })
 
-  // PATH 3 — the governed branch's `platform !== null` filter. A governed row
-  // with no platform cannot be mapped to PerformancePattern (which requires a
-  // real Platform) and is excluded rather than guessed at. Proves the
-  // mappable rows still come through.
-  it('excludes governed rows with a null platform while keeping the mappable ones', async () => {
+  // MINOR-3 (Session 23 review, now FIXED). The governed branch previously
+  // DROPPED rows with a null platform, so a business whose distilled patterns
+  // were all cross-platform got zero performance context. That filter is
+  // removed: cross-platform rows are kept and carry platform: null (the prompt
+  // renders them "Across platforms"), never a guessed platform.
+  it('keeps governed rows with a null platform (cross-platform) alongside the platform-specific ones (MINOR-3)', async () => {
     vi.mocked(listPerformanceMemoryCandidates).mockResolvedValue([
       makeGovernedPerfRow({ id: 'pf-1', pattern: 'cross-platform pattern', platform: null, confidence: 0.9 }),
       makeGovernedPerfRow({ id: 'pf-2', pattern: 'linkedin pattern', platform: 'linkedin', confidence: 0.8 }),
@@ -543,21 +546,23 @@ describe('buildCustomerContext — B3 behaviour-equivalence (ADR 0016 §6, MEM-C
 
     const ctx = await buildCustomerContext('biz-1')
 
-    expect(ctx.recentPostPerformance).toHaveLength(1)
-    expect(ctx.recentPostPerformance[0].topContent).toBe('linkedin pattern')
+    expect(ctx.recentPostPerformance).toHaveLength(2)
+    expect(ctx.recentPostPerformance.map(p => p.topContent)).toEqual([
+      'cross-platform pattern',
+      'linkedin pattern',
+    ])
+    // The cross-platform row carries an explicit null, not a guessed platform.
+    expect(ctx.recentPostPerformance[0].platform).toBeNull()
   })
 
   // PATH 3, the degenerate case — ALL governed rows are platform-less. The
-  // governed branch is entered (candidates exist), everything is filtered
-  // out, and the post_metrics fallback is NOT reconsidered, so the business
-  // gets zero performance context despite having both governed rows AND post
-  // metrics. Pinned as CURRENT INTENDED behaviour so it cannot change
-  // silently — the Reviewer raised the underlying design question as MINOR-3
-  // ("platform: null rows can under-fill the cap"), deferred to ADR 0017,
-  // which owns the retrieval consumers. This test is what makes that
-  // deferral safe: if ADR 0017 changes the behaviour, this case reddens and
-  // forces the decision to be explicit.
-  it('returns empty when every governed row is platform-less, without falling back to post_metrics (MINOR-3, deferred to ADR 0017)', async () => {
+  // governed branch is entered (candidates exist) and, since MINOR-3 removed
+  // the platform===null drop, all the rows are KEPT with platform: null. The
+  // post_metrics fallback is still NOT reconsidered — the governed branch is
+  // preferred whenever candidates exist. Previously this returned [] (every
+  // row dropped); pinned now as the fixed behaviour so it cannot silently
+  // regress back to dropping.
+  it('keeps all-cross-platform governed rows and does not fall back to post_metrics (MINOR-3, fixed)', async () => {
     vi.mocked(listPerformanceMemoryCandidates).mockResolvedValue([
       makeGovernedPerfRow({ id: 'pf-1', pattern: 'cross-platform A', platform: null }),
       makeGovernedPerfRow({ id: 'pf-2', pattern: 'cross-platform B', platform: null }),
@@ -565,7 +570,9 @@ describe('buildCustomerContext — B3 behaviour-equivalence (ADR 0016 §6, MEM-C
 
     const ctx = await buildCustomerContext('biz-1')
 
-    expect(ctx.recentPostPerformance).toEqual([])
+    expect(ctx.recentPostPerformance).toHaveLength(2)
+    expect(ctx.recentPostPerformance.every(p => p.platform === null)).toBe(true)
+    expect(ctx.recentPostPerformance.map(p => p.topContent)).toEqual(['cross-platform A', 'cross-platform B'])
     expect(listTopPostMetrics).not.toHaveBeenCalled()
   })
 
@@ -602,8 +609,10 @@ describe('buildCustomerContext — B3 behaviour-equivalence (ADR 0016 §6, MEM-C
 
     const ctx = await buildCustomerContext('biz-1')
 
+    // Governed rows carry no per-post metrics — likes/impressions omitted, not
+    // invented as 0 (MINOR-2).
     expect(ctx.recentPostPerformance).toEqual([
-      { platform: 'linkedin', topContent: 'technical-comparison posts perform well for CTO audiences', likes: 0, impressions: 0 },
+      { platform: 'linkedin', topContent: 'technical-comparison posts perform well for CTO audiences' },
     ])
     expect(listTopPostMetrics).not.toHaveBeenCalled()
   })

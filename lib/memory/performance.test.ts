@@ -98,27 +98,33 @@ describe('retrieveRelevant (performance) — governed rows preferred', () => {
 
     const result = await retrieveRelevant(client, 'biz-1', {})
 
+    // A governed pattern is a distilled insight, not a specific post — it has
+    // no per-post likes/impressions, so those keys are OMITTED, not invented
+    // as 0 (MINOR-2). Only platform + topContent are carried.
     expect(result).toEqual([
-      { platform: 'linkedin', topContent: 'technical-comparison posts perform well for CTO audiences', likes: 0, impressions: 0 },
+      { platform: 'linkedin', topContent: 'technical-comparison posts perform well for CTO audiences' },
     ])
+    expect(result[0]).not.toHaveProperty('likes')
+    expect(result[0]).not.toHaveProperty('impressions')
     expect(postMetricsDb.listTopPostMetrics).not.toHaveBeenCalled()
   })
 
-  it('excludes a governed row with NULL platform rather than guessing one (never asserts a platform the row does not claim)', async () => {
+  it('keeps a governed row with a NULL platform (cross-platform) rather than dropping it, carrying platform: null (MINOR-3)', async () => {
     vi.mocked(memoryPerformanceDb.listPerformanceMemoryCandidates).mockResolvedValue([
-      makeGovernedRow({ id: 'pf-no-platform', platform: null, confidence: 0.9 }),
-      makeGovernedRow({ id: 'pf-linkedin', platform: 'linkedin', confidence: 0.1 }),
+      makeGovernedRow({ id: 'pf-no-platform', pattern: 'cross-platform pattern', platform: null, confidence: 0.9 }),
+      makeGovernedRow({ id: 'pf-linkedin', pattern: 'linkedin pattern', platform: 'linkedin', confidence: 0.1 }),
     ])
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const client = {} as any
 
     const result = await retrieveRelevant(client, 'biz-1', {})
 
-    // The higher-confidence row is excluded (unmappable — no platform to
-    // report), not silently defaulted to 'linkedin'; only the mappable,
-    // lower-confidence row surfaces.
+    // Both survive — the cross-platform row is no longer silently dropped. It
+    // carries platform: null (the prompt renders it "Across platforms"), never
+    // a guessed platform. The higher-confidence null-platform row ranks first.
     expect(result).toEqual([
-      { platform: 'linkedin', topContent: 'technical-comparison posts perform well for CTO audiences', likes: 0, impressions: 0 },
+      { platform: null, topContent: 'cross-platform pattern' },
+      { platform: 'linkedin', topContent: 'linkedin pattern' },
     ])
   })
 

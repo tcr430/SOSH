@@ -152,7 +152,10 @@ ${campaignList}
 
     if (ctx.recentPostPerformance.length > 0) {
       const perfList = ctx.recentPostPerformance
-        .map(p => `- ${p.topContent}`)
+        // Render the example's platform as provenance (MINOR-3) so the model
+        // can calibrate tone when the target platform differs. A null platform
+        // is a cross-platform pattern, shown as "Across platforms".
+        .map(p => `- ${p.platform ? `On ${p.platform}: ` : 'Across platforms: '}${p.topContent}`)
         .join('\n')
       sections.push(`## Top-Performing Post Snippets (use for tone calibration)
 [DATA]
