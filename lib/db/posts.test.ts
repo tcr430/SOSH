@@ -32,6 +32,7 @@ const mockPost: PostRow = {
   platform_post_id: null,
   platform_url: null,
   status: 'approved',
+  role: null,
   rejection_note: null,
   ai_generation_metadata: {},
   publish_attempts: 0,

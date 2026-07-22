@@ -78,6 +78,7 @@ function makePostRow(overrides: Partial<PostRow> = {}): PostRow {
     platform_post_id: 'li-123',
     platform_url: null,
     status: 'published',
+    role: null,
     rejection_note: null,
     ai_generation_metadata: {},
     publish_attempts: 1,

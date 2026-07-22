@@ -153,6 +153,7 @@ describe('get_user_business_ids() — read blast-radius matrix (ADR 0013 §3)', 
         frequency: 'weekly',
         posts_per_week: 1,
         start_date: '2026-07-01',
+        origin: 'objective_generated',
       })
       .select('id')
       .single()

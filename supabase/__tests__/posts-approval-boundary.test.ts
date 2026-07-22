@@ -90,6 +90,7 @@ describe('posts approval boundary — DB-enforced (ADR 0013 §5)', () => {
         frequency: 'weekly',
         posts_per_week: 1,
         start_date: '2026-07-01',
+        origin: 'objective_generated',
       })
       .select('id')
       .single()
@@ -432,6 +433,7 @@ describe('posts approval boundary — DB-enforced (ADR 0013 §5)', () => {
           frequency: 'weekly',
           posts_per_week: 1,
           start_date: '2026-07-01',
+          origin: 'objective_generated',
         })
         .select('id')
         .single()

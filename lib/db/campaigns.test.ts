@@ -26,6 +26,7 @@ const mockCampaign: CampaignRow = {
   total_posts_planned: 20,
   total_posts_published: 0,
   voice_variation_id: null,
+  origin: 'objective_generated',
   deleted_at: null,
   created_at: '2026-04-30T00:00:00Z',
   updated_at: '2026-04-30T00:00:00Z',
@@ -79,6 +80,7 @@ describe('createCampaign', () => {
     frequency: 'daily',
     posts_per_week: 5,
     start_date: '2026-05-01',
+    origin: 'objective_generated',
   }
 
   it('returns the created campaign', async () => {

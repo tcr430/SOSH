@@ -1067,6 +1067,7 @@ GRANT EXECUTE ON FUNCTION public.purge_business(uuid) TO service_role;
 | evidence_memory | yes (business_id) | CASCADE | yes | none — cascade = erasure (may hold third-party quote PII) |
 | audience_memory | yes (business_id) | CASCADE | yes | none — cascade = erasure |
 | performance_memory | yes (business_id) | CASCADE | yes | none — cascade = erasure |
+| campaign_briefs | yes (business_id) | CASCADE | yes | none — cascade = erasure (ADR 0017 §2.5) |
 | **billing_events** | yes (business_id nullable) | **SET NULL** | no | **RETAIN (tax/audit); REDACT PII before root delete** |
 | **business_deletion_requests** | self (business_id) | **NO ACTION → FK DROPPED (D2.1)** | no | **RETAIN as audit; orchestrator sets `completed` + `purged_at`** |
 | email_suppressions | no (keyed by email, global) | — | n/a | RETAIN (deliverability / legitimate interest; not business-reachable) |

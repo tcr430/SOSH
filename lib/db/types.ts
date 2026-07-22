@@ -30,8 +30,19 @@ export type Plan = 'trial' | 'plus' | 'pro' | 'agency'
 export type Language = 'en' | 'pt' | 'es'
 export type Platform = 'linkedin' | 'twitter' | 'instagram' | 'facebook' | 'threads'
 export type CampaignFrequency = 'daily' | '3x_week' | 'weekly' | 'custom'
-export type CampaignStatus = 'draft' | 'active' | 'paused' | 'completed'
+export type CampaignStatus = 'draft' | 'awaiting_brief' | 'active' | 'paused' | 'completed'
+export type CampaignOrigin = 'manual' | 'objective_generated' | 'signal_generated'
 export type PostStatus = 'draft' | 'approved' | 'scheduled' | 'published' | 'failed' | 'skipped'
+// Campaign post-role vocabulary (ADR 0017 §3.2, L-5) — distinct from the
+// thread-internal tweet-role (hook|body|pull_quote|close, L-4), which lives
+// inside the thread format-family JSON and never touches this type.
+export type PostRole =
+  | 'anchor_thesis'
+  | 'founder_perspective'
+  | 'customer_proof'
+  | 'objection_response'
+  | 'conversation_starter'
+  | 'follow_up'
 export type EngagementType = 'comment' | 'dm' | 'mention'
 export type EngagementSentiment = 'positive' | 'neutral' | 'negative' | 'urgent'
 export type EngagementStatus = 'pending' | 'replied' | 'ignored' | 'auto_replied'
@@ -213,6 +224,7 @@ export type CampaignRow = {
   total_posts_planned: number
   total_posts_published: number
   voice_variation_id: string | null
+  origin: CampaignOrigin
   deleted_at: string | null
   created_at: string
   updated_at: string
@@ -233,6 +245,10 @@ export type CampaignInsert = {
   total_posts_planned?: number
   total_posts_published?: number
   voice_variation_id?: string | null
+  // Required (ADR 0017 §3.1, [db-MAJOR-3]): the DB column has no default
+  // after backfill, so every call site must state its origin explicitly
+  // rather than silently mislabeling Mode 1/3 rows as objective_generated.
+  origin: CampaignOrigin
   deleted_at?: string | null
   created_at?: string
   updated_at?: string
@@ -257,6 +273,11 @@ export type PostRow = {
   platform_post_id: string | null
   platform_url: string | null
   status: PostStatus
+  // Campaign post-role (ADR 0017 §3.2). NULL for pre-Mode-2 rows and for any
+  // row not yet assigned one; write-once once set (DB trigger enforces the
+  // service-role write path; this Omit-exclusion from PostUpdate below
+  // enforces the app-layer authenticated path).
+  role: PostRole | null
   rejection_note: string | null
   ai_generation_metadata: Record<string, unknown>
   publish_attempts: number
@@ -290,7 +311,7 @@ export type PostInsert = {
   updated_at?: string
 }
 
-export type PostUpdate = Partial<Omit<PostRow, 'id' | 'created_at' | 'business_id' | 'campaign_id' | 'published_at' | 'platform_post_id' | 'platform_url' | 'deleted_at'>>
+export type PostUpdate = Partial<Omit<PostRow, 'id' | 'created_at' | 'business_id' | 'campaign_id' | 'published_at' | 'platform_post_id' | 'platform_url' | 'deleted_at' | 'role'>>
 
 // ---------------------------------------------------------------------------
 // 6. post_metrics — upsert-in-place; nullable metrics mean "not exposed by platform"

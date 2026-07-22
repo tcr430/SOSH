@@ -209,6 +209,7 @@
     },
     "status": {
       "draft": "Borrador",
+      "awaiting_brief": "Esperando brief",
       "active": "Activa",
       "paused": "Pausada",
       "completed": "Completada"
