@@ -24,5 +24,18 @@ jobs:
         run: npm run typecheck        # tsc --noEmit --skipLibCheck
       - name: Lint
         run: npm run lint             # eslint (existing package.json script)
-      - name: App-layer test suite
-        run: npm run test:app         # vitest run app/ lib/ components/ — never supabase/__tests__ (L-3)
+      # Session 22-D (MAJOR-1): JSON-reportered, guarded the same way db-tests.yml is (ADR 0015 §4)
+      # — no `|| true`, vitest's own exit code propagates, and the skip-guard step below is the
+      # single authority that can still fail the job on an invisible (empty/all-skipped) suite.
+      - name: App-layer test suite (JSON-reportered)
+        run: npm run test:app -- --reporter=json --outputFile=/tmp/app-results.json
+                                       # vitest run app/ lib/ components/ — never supabase/__tests__ (L-3)
+
+      # ADR 0015 §4, extended to app-tests (session 22-D MAJOR-1): fails the job if any file under
+      # app/, lib/, or components/ ran zero/all-skipped tests, or if any test genuinely failed. With
+      # the four real-network __integration__ suites now absent from vitest.config.ts's default
+      # include (see vitest.integration.config.ts), no allowlist is needed here — nothing inside
+      # app-tests may be empty.
+      - name: Skip-guard — fail if any app-tests suite is INVISIBLE or RED
+        if: always()
+        run: node scripts/ci/assert-no-empty-suite.mjs /tmp/app-results.json app lib components

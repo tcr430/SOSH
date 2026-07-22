@@ -113,18 +113,27 @@ export function ApprovalsInbox({ posts, campaigns, totalPendingCount }: Approval
     })
   }
 
-  function handleBulkApprove(campaignId: string, count: number) {
+  // Session 22-D (BLOCKER-1/2) — renderedIds are exactly the rows this group
+  // is currently showing (already filtered by campaign + platform), so the
+  // write can never reach a draft the approver didn't see, and the label,
+  // optimistic removal, and announcement all derive from the same set.
+  function handleBulkApprove(campaignId: string, renderedIds: string[]) {
     setErrorKey(null)
     startTransition(async () => {
-      // ADR 0014 Amendment A1 — the platform predicate narrows the write to
-      // exactly the currently-filtered rows (21C M1: bulk must never approve
-      // drafts outside the active filter).
-      const platforms = platformFilter === 'all' ? undefined : [platformFilter as Platform]
-      const result = await bulkApprovePostsAction(campaignId, platforms)
+      const result = await bulkApprovePostsAction(campaignId, renderedIds)
       if (result.success) {
         const campaignName = campaigns.find(c => c.id === campaignId)?.name ?? ''
-        setItems(prev => prev.filter(p => p.campaign_id !== campaignId))
-        setStatusMessage(t('bulk.announceApproved', { count, campaign: campaignName }))
+        const idSet = new Set(renderedIds)
+        // Rows are removed from the DOM regardless (their end state is
+        // 'approved' either way) — but the ANNOUNCED number is the DB row
+        // count the write actually flipped (result.count), not the rendered
+        // length. Session 22 P2 (NEW-1): under concurrency another approver
+        // may flip a rendered draft between render and write; the atomic
+        // .eq('status','draft') guard correctly drops it from the UPDATE,
+        // count comes back lower, and renderedIds.length would overstate
+        // what the action did.
+        setItems(prev => prev.filter(p => !idSet.has(p.id)))
+        setStatusMessage(t('bulk.announceApproved', { count: result.count ?? 0, campaign: campaignName }))
       } else {
         setErrorKey(campaignId)
       }
@@ -233,7 +242,7 @@ export function ApprovalsInbox({ posts, campaigns, totalPendingCount }: Approval
                   size="sm"
                   disabled={isPending}
                   aria-label={bulkAriaLabel}
-                  onClick={() => handleBulkApprove(campaignId, rows.length)}
+                  onClick={() => handleBulkApprove(campaignId, rows.map(r => r.id))}
                   className="bg-emerald-700 hover:bg-emerald-600 text-white"
                 >
                   {t('bulk.approveAll', { count: rows.length })}
@@ -245,10 +254,9 @@ export function ApprovalsInbox({ posts, campaigns, totalPendingCount }: Approval
                     aria-disabled="true"
                     aria-label={t('bulk.incompleteSetHint')}
                     onClick={e => e.preventDefault()}
-                    // WCAG AA (B5): text-muted-foreground on bg-muted measured
-                    // 4.34:1 in the light theme — under the 4.5:1 floor.
-                    // text-foreground on the same bg-muted clears both themes
-                    // (18.15:1 light / 14.48:1 dark) without a new token.
+                    // WCAG AA (B5/MINOR-1): text-foreground on bg-muted — see the
+                    // real contrast assertion in ApprovalsInbox.test.tsx (both
+                    // themes), not a comment claiming a measurement.
                     className="inline-flex items-center justify-center rounded-md px-3 py-1.5 text-xs font-medium bg-muted text-foreground cursor-not-allowed"
                   >
                     {t('bulk.approveAll', { count: rows.length })}

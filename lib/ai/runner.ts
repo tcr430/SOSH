@@ -91,16 +91,20 @@ export async function runPrompt<TInput, TOutput>(
     },
   ]
 
-  const userContextMsg = JSON.stringify(context)
+  // L-8 (ADR 0016 §7) — no raw JSON.stringify(context) dump. Everything a
+  // prompt needs from the context is already rendered by
+  // buildSystemPrompt (stable, cache_control-eligible above) and
+  // buildUserMessage (per-call, retrieved slice). The dump was redundant
+  // over-inclusion that also sat UNCACHED, on top of poisoning nothing but
+  // wasting tokens every call — removing it is pure cache-economics cleanup,
+  // not a behaviour change: no prompt template reads a field that isn't
+  // already rendered through one of these two functions.
   const userMsg = prompt.buildUserMessage(input, context)
 
   const messages: Anthropic.MessageParam[] = [
     {
       role: 'user',
-      content: [
-        { type: 'text', text: userContextMsg },
-        { type: 'text', text: userMsg },
-      ],
+      content: [{ type: 'text', text: userMsg }],
     },
   ]
 

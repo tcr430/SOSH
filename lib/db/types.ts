@@ -584,3 +584,68 @@ export type BusinessMemberInsert = {
 export type BusinessMemberUpdate = Partial<
   Omit<BusinessMemberRow, 'id' | 'created_at' | 'business_id' | 'invited_by' | 'invited_at'>
 >
+
+// ---------------------------------------------------------------------------
+// 15. Governed memory (ADR 0016) — brand_memory, evidence_memory,
+//     audience_memory, performance_memory
+// ---------------------------------------------------------------------------
+
+export type MemorySource = 'manual' | 'distilled' | 'import'
+export type MemoryStatus = 'candidate' | 'active' | 'retired'
+export type MemorySensitivity = 'public' | 'internal' | 'confidential'
+export type MemoryScope = 'brand' | 'campaign' | 'platform' | 'contact'
+
+// The governance column block (ADR 0016 §2) shared by all four memory
+// tables. `recency_at` is a STORED generated column
+// (`COALESCE(last_confirmed_at, created_at)`, migration 20260719020000)
+// that lets PostgREST .order() reference the retrieval index's sort key
+// directly — see ADR §5.3 and lib/db/memory-*.ts.
+type MemoryGovernanceRow = {
+  id: string
+  business_id: string
+  source: MemorySource
+  confidence: number
+  observation_count: number
+  status: MemoryStatus
+  sensitivity: MemorySensitivity
+  public_use_permission: boolean
+  scope: MemoryScope
+  scope_ref: string | null
+  last_confirmed_at: string | null
+  recency_at: string
+  expires_at: string | null
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type BrandMemoryCategory = 'positioning' | 'capability' | 'pricing' | 'competitor' | 'other'
+
+export type BrandMemoryRow = MemoryGovernanceRow & {
+  category: BrandMemoryCategory
+  statement: string
+}
+
+export type EvidenceMemoryKind = 'quote' | 'case_study' | 'usage_data' | 'other'
+
+export type EvidenceMemoryRow = MemoryGovernanceRow & {
+  kind: EvidenceMemoryKind
+  content: string
+  source_url: string | null
+}
+
+export type AudienceMemoryKind = 'problem' | 'objection' | 'question' | 'trigger' | 'other'
+
+export type AudienceMemoryRow = MemoryGovernanceRow & {
+  segment: string | null
+  kind: AudienceMemoryKind
+  statement: string
+}
+
+export type PerformanceMemoryDimension = 'topic' | 'hook' | 'format' | 'proof_type'
+
+export type PerformanceMemoryRow = MemoryGovernanceRow & {
+  dimension: PerformanceMemoryDimension
+  pattern: string
+  platform: Platform | null
+}

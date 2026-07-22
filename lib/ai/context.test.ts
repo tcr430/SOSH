@@ -34,6 +34,16 @@ vi.mock('@/lib/db/posts', () => ({
   listPostsByIds: vi.fn(),
 }))
 
+// New call in the graph since B3: recentPostPerformance now goes through
+// lib/memory/performance.ts, which checks performance_memory FIRST and
+// falls back to the post_metrics-derived path (mocked above) only when it's
+// empty. Defaulted to [] so every existing test exercises the same
+// post_metrics fallback behaviour it always has (performance_memory ships
+// empty in Track A — ADR 0016 §3.4).
+vi.mock('@/lib/db/memory-performance', () => ({
+  listPerformanceMemoryCandidates: vi.fn(),
+}))
+
 vi.mock('@/lib/db/trial-state', () => ({
   getTrialStateMaybe: vi.fn(),
 }))
@@ -50,11 +60,13 @@ import { listTopPostMetrics } from '@/lib/db/post-metrics'
 import { listPostsByIds } from '@/lib/db/posts'
 import { getTrialStateMaybe } from '@/lib/db/trial-state'
 import { getVariationForBusiness } from '@/lib/db/voice'
+import { listPerformanceMemoryCandidates } from '@/lib/db/memory-performance'
 import type {
   BusinessRow,
   BrandVoiceRow,
   BrandVoiceVariationRow,
   CampaignRow,
+  PerformanceMemoryRow,
   PostMetricsRow,
   PostRow,
   TrialStatePublicRow,
@@ -155,6 +167,34 @@ const mockPost: PostRow = {
   updated_at: '2026-01-01T00:00:00Z',
 }
 
+// A governed performance_memory row (ADR 0016 §3.4). Track A ships this
+// table empty, so every case that wants the governed branch must supply its
+// own rows; the overrides keep each case's intent (platform, confidence)
+// visible at the call site instead of buried in a 20-field literal.
+const makeGovernedPerfRow = (
+  overrides: Partial<PerformanceMemoryRow> & Pick<PerformanceMemoryRow, 'id'>,
+): PerformanceMemoryRow => ({
+  business_id: 'biz-1',
+  source: 'distilled',
+  confidence: 0.8,
+  observation_count: 4,
+  status: 'active',
+  sensitivity: 'internal',
+  public_use_permission: false,
+  scope: 'brand',
+  scope_ref: null,
+  last_confirmed_at: '2026-07-19T00:00:00Z',
+  recency_at: '2026-07-19T00:00:00Z',
+  expires_at: null,
+  deleted_at: null,
+  created_at: '2026-06-01T00:00:00Z',
+  updated_at: '2026-07-19T00:00:00Z',
+  dimension: 'topic',
+  pattern: 'a distilled pattern',
+  platform: 'linkedin',
+  ...overrides,
+})
+
 const mockTrialState: TrialStatePublicRow = {
   id: 'ts-1',
   business_id: 'biz-1',
@@ -193,6 +233,7 @@ beforeEach(() => {
   vi.mocked(listPostsByIds).mockResolvedValue([mockPost])
   vi.mocked(getTrialStateMaybe).mockResolvedValue(mockTrialState)
   vi.mocked(getVariationForBusiness).mockResolvedValue(null)
+  vi.mocked(listPerformanceMemoryCandidates).mockResolvedValue([])
 })
 
 describe('buildCustomerContext', () => {
@@ -245,9 +286,15 @@ describe('buildCustomerContext', () => {
     expect(listCampaigns).toHaveBeenCalledWith(expect.anything(), 'biz-1', 5)
   })
 
-  it('queries listTopPostMetrics with limit=10', async () => {
+  // ADR 0016 §6.2 — the ONE pre-authorised assertion change in this file.
+  // This case pinned the pre-cap "fetch top-10" behaviour L-4 exists to
+  // kill; performance.ts's post_metrics fallback now requests
+  // PERFORMANCE_CAP (3), not 10. This is a content change the ADR
+  // explicitly ratifies, not a masked regression — every other case in
+  // this file passes unchanged.
+  it('queries listTopPostMetrics with limit=PERFORMANCE_CAP (3), not the pre-cap 10', async () => {
     await buildCustomerContext('biz-1')
-    expect(listTopPostMetrics).toHaveBeenCalledWith(expect.anything(), 'biz-1', 10)
+    expect(listTopPostMetrics).toHaveBeenCalledWith(expect.anything(), 'biz-1', 3)
   })
 
   it('maps post performance by joining metrics with posts', async () => {
@@ -396,5 +443,177 @@ describe('buildCustomerContext — voice variation read-through (BP7 §4.3/§8.2
     type HasVoiceVariationId = 'voice_variation_id' extends keyof import('@/lib/db/types').CampaignUpdate ? true : false
     const check: HasVoiceVariationId = true
     expect(check).toBe(true)
+  })
+})
+
+describe('buildCustomerContext — B3 behaviour-equivalence (ADR 0016 §6, MEM-CONTEXT-EQUIVALENT)', () => {
+  it('CustomerContext contract shape is unchanged: exactly the 5 known top-level fields', async () => {
+    const ctx = await buildCustomerContext('biz-1')
+    expect(Object.keys(ctx).sort()).toEqual(
+      ['brandVoice', 'business', 'recentCampaigns', 'recentPostPerformance', 'trialState'].sort(),
+    )
+  })
+
+  // MAJOR-2 (Session 23 review). This case previously asserted only
+  // `expect(ctx.recentPostPerformance.length).toBeLessThanOrEqual(3)`, which
+  // is green at ZERO — it could not distinguish "capped correctly" from
+  // "returned nothing", and returning nothing is the most likely regression
+  // in this design: performance.ts has two paths that can silently empty
+  // the result (the early return on no metrics, and the metric→post join
+  // filter — one case each, below). The governed branch no longer drops
+  // platform-less rows (MINOR-3, fixed), so it is no longer a silent-empty
+  // path.
+  //
+  // Pinned now as EXACT length AND survivor identity, mirroring
+  // lib/memory/scoring.test.ts:158-170. PerformancePattern carries no post
+  // id, so identity is pinned through `topContent`, the per-post field.
+  //
+  // 3 is written LITERALLY, not imported as PERFORMANCE_CAP: importing the
+  // constant would make the assertion self-fulfilling and it would survive a
+  // cap mutation, which is the exact failure this fix exists to close.
+  it('recentPostPerformance is EXACTLY the cap (3) — the top-ranked three, never silently fewer', async () => {
+    const overflowMetrics = Array.from({ length: 6 }, (_, i) => ({ ...mockMetric, id: `pm-${i}`, post_id: `post-${i}` }))
+    const overflowPosts = Array.from({ length: 6 }, (_, i) => ({ ...mockPost, id: `post-${i}`, content: `Content for post-${i}` }))
+    vi.mocked(listTopPostMetrics).mockResolvedValue(overflowMetrics)
+    vi.mocked(listPostsByIds).mockResolvedValue(overflowPosts)
+
+    const ctx = await buildCustomerContext('biz-1')
+
+    expect(ctx.recentPostPerformance).toHaveLength(3)
+    // Identity AND order: the fallback path maps over topMetrics, preserving
+    // listTopPostMetrics' ranking, so the retained three are the FIRST three
+    // it returned — not an arbitrary three, not the last three.
+    expect(ctx.recentPostPerformance.map(p => p.topContent)).toEqual([
+      'Content for post-0',
+      'Content for post-1',
+      'Content for post-2',
+    ])
+  })
+
+  // --- The three silent-empty paths named by the Reviewer (MAJOR-2). Each is
+  // --- pinned either as "a non-empty result survives it" or as "the emptying
+  // --- is intentional", so none of them can start returning [] unnoticed.
+
+  // PATH 1 — performance.ts's early `if (topMetrics.length === 0) return []`.
+  // Emptying here is INTENTIONAL and pinned as such: a business with no post
+  // metrics genuinely has no performance evidence to offer the model. What
+  // must NOT happen silently is this path being reached when metrics DO
+  // exist — the two cases above and below cover that.
+  it('recentPostPerformance is empty when there are no post metrics at all — intentional, not a cap failure', async () => {
+    vi.mocked(listTopPostMetrics).mockResolvedValue([])
+
+    const ctx = await buildCustomerContext('biz-1')
+
+    expect(ctx.recentPostPerformance).toEqual([])
+    // The join is not even attempted — proves we took the early return, not
+    // a path that filtered everything away downstream.
+    expect(listPostsByIds).not.toHaveBeenCalled()
+  })
+
+  // PATH 2 — the metric→post join `.filter(m => postsById[m.post_id] !== undefined)`.
+  // A metric whose post is missing (deleted, or outside the fetched set) is
+  // dropped. Proves a NON-EMPTY result survives a partial drop rather than
+  // the whole slice collapsing.
+  it('drops only the metrics whose post is missing, keeping the rest — a partial join miss does not empty the result', async () => {
+    vi.mocked(listTopPostMetrics).mockResolvedValue(
+      Array.from({ length: 4 }, (_, i) => ({ ...mockMetric, id: `pm-${i}`, post_id: `post-${i}` })),
+    )
+    // post-1 and post-3 are absent from the join result.
+    vi.mocked(listPostsByIds).mockResolvedValue([
+      { ...mockPost, id: 'post-0', content: 'Content for post-0' },
+      { ...mockPost, id: 'post-2', content: 'Content for post-2' },
+    ])
+
+    const ctx = await buildCustomerContext('biz-1')
+
+    expect(ctx.recentPostPerformance).toHaveLength(2)
+    expect(ctx.recentPostPerformance.map(p => p.topContent)).toEqual([
+      'Content for post-0',
+      'Content for post-2',
+    ])
+  })
+
+  // MINOR-3 (Session 23 review, now FIXED). The governed branch previously
+  // DROPPED rows with a null platform, so a business whose distilled patterns
+  // were all cross-platform got zero performance context. That filter is
+  // removed: cross-platform rows are kept and carry platform: null (the prompt
+  // renders them "Across platforms"), never a guessed platform.
+  it('keeps governed rows with a null platform (cross-platform) alongside the platform-specific ones (MINOR-3)', async () => {
+    vi.mocked(listPerformanceMemoryCandidates).mockResolvedValue([
+      makeGovernedPerfRow({ id: 'pf-1', pattern: 'cross-platform pattern', platform: null, confidence: 0.9 }),
+      makeGovernedPerfRow({ id: 'pf-2', pattern: 'linkedin pattern', platform: 'linkedin', confidence: 0.8 }),
+    ])
+
+    const ctx = await buildCustomerContext('biz-1')
+
+    expect(ctx.recentPostPerformance).toHaveLength(2)
+    expect(ctx.recentPostPerformance.map(p => p.topContent)).toEqual([
+      'cross-platform pattern',
+      'linkedin pattern',
+    ])
+    // The cross-platform row carries an explicit null, not a guessed platform.
+    expect(ctx.recentPostPerformance[0].platform).toBeNull()
+  })
+
+  // PATH 3, the degenerate case — ALL governed rows are platform-less. The
+  // governed branch is entered (candidates exist) and, since MINOR-3 removed
+  // the platform===null drop, all the rows are KEPT with platform: null. The
+  // post_metrics fallback is still NOT reconsidered — the governed branch is
+  // preferred whenever candidates exist. Previously this returned [] (every
+  // row dropped); pinned now as the fixed behaviour so it cannot silently
+  // regress back to dropping.
+  it('keeps all-cross-platform governed rows and does not fall back to post_metrics (MINOR-3, fixed)', async () => {
+    vi.mocked(listPerformanceMemoryCandidates).mockResolvedValue([
+      makeGovernedPerfRow({ id: 'pf-1', pattern: 'cross-platform A', platform: null }),
+      makeGovernedPerfRow({ id: 'pf-2', pattern: 'cross-platform B', platform: null }),
+    ])
+
+    const ctx = await buildCustomerContext('biz-1')
+
+    expect(ctx.recentPostPerformance).toHaveLength(2)
+    expect(ctx.recentPostPerformance.every(p => p.platform === null)).toBe(true)
+    expect(ctx.recentPostPerformance.map(p => p.topContent)).toEqual(['cross-platform A', 'cross-platform B'])
+    expect(listTopPostMetrics).not.toHaveBeenCalled()
+  })
+
+  it('core voice (brandVoice) is still returned through the rewired call — the rewire touches ONLY recentPostPerformance', async () => {
+    const ctx = await buildCustomerContext('biz-1')
+    expect(ctx.brandVoice).not.toBeNull()
+    expect(ctx.brandVoice?.descriptor).toBe('A balanced, neutral voice with no strong leanings.')
+  })
+
+  it('prefers governed performance_memory rows over the post_metrics fallback when any exist', async () => {
+    vi.mocked(listPerformanceMemoryCandidates).mockResolvedValue([
+      {
+        id: 'pf-1',
+        business_id: 'biz-1',
+        source: 'distilled',
+        confidence: 0.8,
+        observation_count: 4,
+        status: 'active',
+        sensitivity: 'internal',
+        public_use_permission: false,
+        scope: 'brand',
+        scope_ref: null,
+        last_confirmed_at: '2026-07-19T00:00:00Z',
+        recency_at: '2026-07-19T00:00:00Z',
+        expires_at: null,
+        deleted_at: null,
+        created_at: '2026-06-01T00:00:00Z',
+        updated_at: '2026-07-19T00:00:00Z',
+        dimension: 'topic',
+        pattern: 'technical-comparison posts perform well for CTO audiences',
+        platform: 'linkedin',
+      },
+    ])
+
+    const ctx = await buildCustomerContext('biz-1')
+
+    // Governed rows carry no per-post metrics — likes/impressions omitted, not
+    // invented as 0 (MINOR-2).
+    expect(ctx.recentPostPerformance).toEqual([
+      { platform: 'linkedin', topContent: 'technical-comparison posts perform well for CTO audiences' },
+    ])
+    expect(listTopPostMetrics).not.toHaveBeenCalled()
   })
 })

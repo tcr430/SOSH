@@ -22,7 +22,7 @@
     "skipped": "Skipped ({count})",
     "failed": "Failed ({count})"
   },
-  "bulkApprove": "Approve all drafts",
+  "bulkApprove": "Approve all drafts ({count})",
   "bulkApproveSuccess": "Approved {count} posts",
   "card": {
     "utcNote": "UTC",

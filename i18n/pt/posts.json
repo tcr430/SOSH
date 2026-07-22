@@ -22,7 +22,7 @@
     "skipped": "Ignoradas ({count})",
     "failed": "Falhadas ({count})"
   },
-  "bulkApprove": "Aprovar todos os rascunhos",
+  "bulkApprove": "Aprovar todos os rascunhos ({count})",
   "bulkApproveSuccess": "{count} publicações aprovadas",
   "card": {
     "utcNote": "UTC",

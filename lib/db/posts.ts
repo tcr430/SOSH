@@ -94,6 +94,17 @@ export async function listPostsForCalendar(
 // the calendar's definition of "pending" (C-2/§9.2).
 export const APPROVALS_POST_LIMIT = 200
 
+// ADR 0014 §A1.2 / Session 22-F (NEW-7) — the bulk-approve URL-length cap.
+// Deliberately a SEPARATE constant from APPROVALS_POST_LIMIT even though both
+// are 200 today: the PostgREST request line for bulkApproveDraftPosts' UPDATE
+// (id list + campaign_id + business_id + status + deleted_at predicates) has
+// only ~2.6%-7.5% headroom under the ~8 KB request-line budget at 200 ids (the
+// cliff is ~206-217 ids). APPROVALS_POST_LIMIT is a page-size choice that can
+// legitimately grow for product reasons; if it shared this constant, raising
+// it would silently reintroduce the 414 that ADR 0014 §A1.1 rejected the
+// mechanism over. Keep the two numbers free to move independently.
+export const BULK_APPROVE_ID_CAP = 200
+
 export async function listPendingDraftPosts(
   client: SupabaseClient,
   opts: {
@@ -145,8 +156,10 @@ export async function listPendingDraftPosts(
 // Approvals inbox tell the approver when drafts are hidden past the cap
 // instead of silently truncating (ADR 0014 §9.4 overflow signal). Optional
 // campaignId/platform narrow the predicate to match a filtered view (A2);
-// omitted, it stays business-wide — the shape bulkApprovePostsAction's
-// APV-BULK-VISIBLE-ONLY gate (actions.ts) relies on.
+// omitted, it stays business-wide. NOT a write-path gate: bulk approve stopped
+// consulting this count in Session 22-D (ADR 0014 §A1.2) — APV-BULK-VISIBLE-ONLY
+// is now true by construction from the rendered id list. Read-side display
+// signal only.
 export async function countPendingDraftPosts(
   client: SupabaseClient,
   businessId: string,
@@ -503,24 +516,29 @@ export async function updatePostContentAndMetadata(
   return row as PostRow
 }
 
-// ADR 0014 Amendment A1 — the platform predicate narrows the SAME update
-// statement that was already gated by enforce_post_transition_capability
-// (0013 §5); it is not a second query or a new write path (A1's hard
-// constraint). Undefined/empty platforms leaves the statement unfiltered,
-// preserving the exact prior (campaign-wide) behaviour.
+// Session 22-D (BLOCKER-1/2) — approves EXACTLY the ids the caller rendered.
+// "Approve what I can see" is the literal WHERE clause, not a platform
+// predicate or a window-size argument: this makes APV-BULK-VISIBLE-ONLY true
+// by construction and closes the TOCTOU race a separate count-then-write
+// gate had. campaignId/status/deleted_at stay as defence-in-depth on top of
+// enforce_post_transition_capability (0013 §5); businessId closes the one
+// write path (campaigns/[id]/posts) that previously relied on RLS alone.
 export async function bulkApproveDraftPosts(
   client: SupabaseClient,
   campaignId: string,
-  platforms?: Platform[],
+  renderedIds: string[],
+  businessId: string,
 ): Promise<number> {
-  let query = client
+  if (renderedIds.length === 0) return 0
+  const { data, error } = await client
     .from('posts')
     .update({ status: 'approved' })
+    .in('id', renderedIds)
     .eq('campaign_id', campaignId)
+    .eq('business_id', businessId)
     .eq('status', 'draft')
     .is('deleted_at', null)
-  if (platforms && platforms.length > 0) query = query.in('platform', platforms)
-  const { data, error } = await query.select('id')
+    .select('id')
   if (error) throw new Error(getErrorMessage(error))
   return (data as { id: string }[] | null)?.length ?? 0
 }

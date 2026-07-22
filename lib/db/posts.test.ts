@@ -339,49 +339,44 @@ describe('updatePostContent', () => {
 describe('bulkApproveDraftPosts', () => {
   it('returns the count of approved posts (3)', async () => {
     const { client } = createMockClient([{ id: 'p1' }, { id: 'p2' }, { id: 'p3' }])
-    const count = await bulkApproveDraftPosts(client, 'camp-1')
+    const count = await bulkApproveDraftPosts(client, 'camp-1', ['p1', 'p2', 'p3'], 'biz-1')
     expect(count).toBe(3)
   })
 
   it('returns the count of approved posts (1)', async () => {
     const { client } = createMockClient([{ id: 'p1' }])
-    const count = await bulkApproveDraftPosts(client, 'camp-1')
+    const count = await bulkApproveDraftPosts(client, 'camp-1', ['p1'], 'biz-1')
     expect(count).toBe(1)
-  })
-
-  it('returns 0 when no draft posts exist', async () => {
-    const { client } = createMockClient([])
-    const count = await bulkApproveDraftPosts(client, 'camp-1')
-    expect(count).toBe(0)
   })
 
   it('returns 0 when data is null', async () => {
     const { client } = createMockClient(null, null)
-    const count = await bulkApproveDraftPosts(client, 'camp-1')
+    const count = await bulkApproveDraftPosts(client, 'camp-1', ['p1'], 'biz-1')
     expect(count).toBe(0)
   })
 
   it('throws supabase error message', async () => {
     const { client } = createMockClient(null, { message: 'permission denied' })
-    await expect(bulkApproveDraftPosts(client, 'camp-1')).rejects.toThrow('permission denied')
+    await expect(bulkApproveDraftPosts(client, 'camp-1', ['p1'], 'biz-1')).rejects.toThrow('permission denied')
   })
 
-  it('appends .in("platform", platforms) to the same builder when platforms is given (M1)', async () => {
-    const { client, builder } = createMockClient([{ id: 'p1' }])
-    await bulkApproveDraftPosts(client, 'camp-1', ['twitter'])
-    expect(builder.in).toHaveBeenCalledWith('platform', ['twitter'])
+  it('returns 0 without calling the DB when renderedIds is empty', async () => {
+    const { client, from } = createMockClient([{ id: 'p1' }])
+    const count = await bulkApproveDraftPosts(client, 'camp-1', [], 'biz-1')
+    expect(count).toBe(0)
+    expect(from).not.toHaveBeenCalled()
   })
 
-  it('does not call .in when platforms is omitted (regression pin — unfiltered behaviour unchanged)', async () => {
-    const { client, builder } = createMockClient([{ id: 'p1' }, { id: 'p2' }, { id: 'p3' }])
-    await bulkApproveDraftPosts(client, 'camp-1')
-    expect(builder.in).not.toHaveBeenCalled()
-  })
-
-  it('does not call .in when platforms is an empty array', async () => {
-    const { client, builder } = createMockClient([{ id: 'p1' }])
-    await bulkApproveDraftPosts(client, 'camp-1', [])
-    expect(builder.in).not.toHaveBeenCalled()
+  it('scopes the update with .in("id", renderedIds), .eq("campaign_id", ...) and .eq("business_id", ...) (Session 22-D)', async () => {
+    const { client, builder } = createMockClient([{ id: 'p1' }, { id: 'p2' }])
+    await bulkApproveDraftPosts(client, 'camp-1', ['p1', 'p2'], 'biz-1')
+    expect(builder.in).toHaveBeenCalledWith('id', ['p1', 'p2'])
+    expect(builder.eq).toHaveBeenCalledWith('campaign_id', 'camp-1')
+    expect(builder.eq).toHaveBeenCalledWith('business_id', 'biz-1')
+    expect(builder.eq).toHaveBeenCalledWith('status', 'draft')
+    // Soft-delete filtering is a /lib/db/ responsibility (CLAUDE.md), so the
+    // clause belongs in the pinned chain like every other predicate.
+    expect(builder.is).toHaveBeenCalledWith('deleted_at', null)
   })
 })
 

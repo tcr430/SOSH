@@ -21,8 +21,13 @@ vi.mock('@/lib/db/posts', () => ({
   updatePostContent: vi.fn(),
   updatePostContentAndMetadata: vi.fn(),
   bulkApproveDraftPosts: vi.fn(),
-  countPendingDraftPosts: vi.fn(),
+  // Real value, not vi.fn(): actions.ts reads this at module scope to build
+  // bulkApproveSchema's .max() bound, so a missing/mocked constant would
+  // silently produce .max(undefined) (Session 22-E, ADR 0014 §A1.2).
+  // BULK_APPROVE_ID_CAP is a SEPARATE constant from APPROVALS_POST_LIMIT
+  // (Session 22-F, NEW-7) even though both are 200 today — see lib/db/posts.ts.
   APPROVALS_POST_LIMIT: 200,
+  BULK_APPROVE_ID_CAP: 200,
   getPostSiblingTopics: vi.fn(),
 }))
 
@@ -47,7 +52,7 @@ import {
   getPostSiblingTopics,
   updatePostContentAndMetadata,
   bulkApproveDraftPosts,
-  countPendingDraftPosts,
+  BULK_APPROVE_ID_CAP,
 } from '@/lib/db/posts'
 import { buildCustomerContext } from '@/lib/ai/context'
 import { runPrompt } from '@/lib/ai/runner'
@@ -297,55 +302,111 @@ describe('regeneratePostAction', () => {
   })
 })
 
-// ── bulkApprovePostsAction (ADR 0014 Amendment A1/A1.1) ────────────────────────
+// ── bulkApprovePostsAction (Session 22-D: renderedIds only, BLOCKER-1/2) ───────
 
 describe('bulkApprovePostsAction', () => {
-  it('passes the platforms array through to bulkApproveDraftPosts (M1)', async () => {
+  const RENDERED_ID_1 = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'
+  const RENDERED_ID_2 = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2'
+
+  it('passes renderedIds and the caller business id through to bulkApproveDraftPosts', async () => {
     makeAuthClient()
-    vi.mocked(countPendingDraftPosts).mockResolvedValue(2)
     vi.mocked(bulkApproveDraftPosts).mockResolvedValue(2)
 
-    const result = await bulkApprovePostsAction(VALID_CAMPAIGN_ID, ['twitter'])
+    const result = await bulkApprovePostsAction(VALID_CAMPAIGN_ID, [RENDERED_ID_1, RENDERED_ID_2])
 
-    expect(bulkApproveDraftPosts).toHaveBeenCalledWith(expect.anything(), VALID_CAMPAIGN_ID, ['twitter'])
+    expect(bulkApproveDraftPosts).toHaveBeenCalledWith(
+      expect.anything(),
+      VALID_CAMPAIGN_ID,
+      [RENDERED_ID_1, RENDERED_ID_2],
+      MOCK_BUSINESS.id,
+    )
     expect(result).toEqual({ success: true, count: 2 })
   })
 
-  it('calls bulkApproveDraftPosts with undefined platforms when unfiltered (regression pin)', async () => {
+  it('regression: unfiltered bulk over a fully-rendered small campaign still approves all of them', async () => {
     makeAuthClient()
-    vi.mocked(countPendingDraftPosts).mockResolvedValue(3)
     vi.mocked(bulkApproveDraftPosts).mockResolvedValue(3)
+    const allIds = [RENDERED_ID_1, RENDERED_ID_2, VALID_POST_ID]
 
-    await bulkApprovePostsAction(VALID_CAMPAIGN_ID)
+    const result = await bulkApprovePostsAction(VALID_CAMPAIGN_ID, allIds)
 
-    expect(bulkApproveDraftPosts).toHaveBeenCalledWith(expect.anything(), VALID_CAMPAIGN_ID, undefined)
+    expect(bulkApproveDraftPosts).toHaveBeenCalledWith(
+      expect.anything(),
+      VALID_CAMPAIGN_ID,
+      allIds,
+      MOCK_BUSINESS.id,
+    )
+    expect(result).toEqual({ success: true, count: 3 })
   })
 
-  it('rejects an invalid platform value (Zod)', async () => {
+  it('rejects a non-uuid renderedIds entry (Zod)', async () => {
     makeAuthClient()
-    const result = await bulkApprovePostsAction(VALID_CAMPAIGN_ID, ['myspace' as never])
+    const result = await bulkApprovePostsAction(VALID_CAMPAIGN_ID, ['not-a-uuid'])
     expect(result).toEqual({ error: 'invalid_input' })
     expect(bulkApproveDraftPosts).not.toHaveBeenCalled()
   })
 
-  it('APV-BULK-VISIBLE-ONLY (F1): refuses the write and flips zero rows when the business-wide pending total exceeds APPROVALS_POST_LIMIT, even called directly bypassing the UI', async () => {
+  it('rejects a renderedIds array longer than BULK_APPROVE_ID_CAP (Session 22-E, ADR 0014 §A1.2)', async () => {
     makeAuthClient()
-    vi.mocked(countPendingDraftPosts).mockResolvedValue(201)
+    // One past the cap. Above ~210 ids the PostgREST query string crosses the
+    // 8 KB request-line limit and the write fails closed with an opaque error
+    // — §A1.1 rejected the id-list mechanism over exactly this, so the cap is
+    // what makes §A1.2's reversal safe. A Server Action is a public endpoint;
+    // Zod is the only real bound, not the UI's render count.
+    const tooMany = Array.from(
+      { length: BULK_APPROVE_ID_CAP + 1 },
+      (_, i) => `aaaaaaaa-aaaa-4aaa-8aaa-${String(i).padStart(12, '0')}`,
+    )
 
-    const result = await bulkApprovePostsAction(VALID_CAMPAIGN_ID)
+    const result = await bulkApprovePostsAction(VALID_CAMPAIGN_ID, tooMany)
 
-    expect(result).toEqual({ error: 'not_eligible' })
+    expect(result).toEqual({ error: 'invalid_input' })
     expect(bulkApproveDraftPosts).not.toHaveBeenCalled()
   })
 
-  it('allows the write when the pending total is exactly at the limit (boundary)', async () => {
+  it('accepts a renderedIds array exactly at BULK_APPROVE_ID_CAP (boundary)', async () => {
     makeAuthClient()
-    vi.mocked(countPendingDraftPosts).mockResolvedValue(200)
-    vi.mocked(bulkApproveDraftPosts).mockResolvedValue(1)
+    vi.mocked(bulkApproveDraftPosts).mockResolvedValue(BULK_APPROVE_ID_CAP)
+    const atCap = Array.from(
+      { length: BULK_APPROVE_ID_CAP },
+      (_, i) => `aaaaaaaa-aaaa-4aaa-8aaa-${String(i).padStart(12, '0')}`,
+    )
 
-    const result = await bulkApprovePostsAction(VALID_CAMPAIGN_ID)
+    const result = await bulkApprovePostsAction(VALID_CAMPAIGN_ID, atCap)
 
-    expect(result).toEqual({ success: true, count: 1 })
-    expect(bulkApproveDraftPosts).toHaveBeenCalled()
+    expect(result).toEqual({ success: true, count: BULK_APPROVE_ID_CAP })
+  })
+
+  it('NEW-7: the PostgREST request line at BULK_APPROVE_ID_CAP stays under the ~8 KB request-line budget', () => {
+    // Pins the coupling ADR 0014 §A1.2 / Session 22-F NEW-7 describes: this
+    // must independently stay true even if APPROVALS_POST_LIMIT (the
+    // Approvals page size) is later changed for an unrelated product reason.
+    const atCap = Array.from(
+      { length: BULK_APPROVE_ID_CAP },
+      (_, i) => `aaaaaaaa-aaaa-4aaa-8aaa-${String(i).padStart(12, '0')}`,
+    )
+    const campaignId = VALID_CAMPAIGN_ID
+    const businessId = MOCK_BUSINESS.id
+
+    // Worst case: every comma percent-encoded (%2C), the wider of the two
+    // encodings session-22f-reviewer.md measured.
+    const idListEncoded = atCap.join('%2C')
+    const requestLine =
+      `PATCH /rest/v1/posts?id=in.(${idListEncoded})` +
+      `&campaign_id=eq.${campaignId}` +
+      `&business_id=eq.${businessId}` +
+      `&status=eq.draft&deleted_at=is.null`
+
+    expect(requestLine.length).toBeLessThan(8000)
+  })
+
+  it('empty renderedIds still calls through (bulkApproveDraftPosts short-circuits to 0)', async () => {
+    makeAuthClient()
+    vi.mocked(bulkApproveDraftPosts).mockResolvedValue(0)
+
+    const result = await bulkApprovePostsAction(VALID_CAMPAIGN_ID, [])
+
+    expect(bulkApproveDraftPosts).toHaveBeenCalledWith(expect.anything(), VALID_CAMPAIGN_ID, [], MOCK_BUSINESS.id)
+    expect(result).toEqual({ success: true, count: 0 })
   })
 })
