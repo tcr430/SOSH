@@ -670,3 +670,69 @@ export type PerformanceMemoryRow = MemoryGovernanceRow & {
   pattern: string
   platform: Platform | null
 }
+
+// ---------------------------------------------------------------------------
+// 16. campaign_briefs (ADR 0017 §2) — the brief artifact, brief-first Mode 2
+// ---------------------------------------------------------------------------
+
+export type CampaignBriefStatus = 'draft' | 'critiqued' | 'approved' | 'generated'
+
+// The campaign post-role vocabulary (ADR 0017 §3.2) as it appears inside a
+// brief's roleSequence — identical value set to PostRow.role's PostRole, but
+// named distinctly per ADR §2.2 because it's read in a different context
+// (a brief's planned sequence vs. a generated post's assigned role).
+export type CampaignPostRole = PostRole
+
+// ADR 0017 §2.2 — the campaign_briefs.content JSONB shape. Named (never
+// Record<string, unknown>, [db-NIT-1]) so the brief-assembly/critique/
+// generation pipeline (B2.2+) has a single typed contract for the brief's
+// argument, pinned evidence, and role sequence.
+export type CampaignBriefContent = {
+  narrative: string
+  proofPlan: string
+  // Citation-by-id, not inlined text (ADR §2.2, §9 [sec-MEDIUM-1]): evidence
+  // bytes are re-fetched and guarded at render time.
+  pinnedEvidence: Array<{ evidenceMemoryId: string; note?: string }>
+  roleSequence: Array<{ order: number; role: CampaignPostRole; platform: Platform; angle: string }>
+}
+
+export type CampaignBriefRow = {
+  id: string
+  business_id: string
+  campaign_id: string
+  content: CampaignBriefContent
+  status: CampaignBriefStatus
+  version: number
+  overall_score: number | null
+  // Latest rubric critique payload (ADR §6.2). Open-shape until B2.5 defines
+  // RubricOutput in lib/ai/prompts/rubric.ts — tightened there, not here.
+  critique: Record<string, unknown> | null
+  frozen_at: string | null
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type CampaignBriefInsert = {
+  id?: string
+  business_id: string
+  campaign_id: string
+  content: CampaignBriefContent
+  status?: CampaignBriefStatus
+  version?: number
+  overall_score?: number | null
+  critique?: Record<string, unknown> | null
+  frozen_at?: string | null
+  deleted_at?: string | null
+  created_at?: string
+  updated_at?: string
+}
+
+// Tenancy-critical + lifecycle-managed fields excluded, mirroring
+// CampaignUpdate (lib/db/types.ts:257): id/created_at/business_id/
+// campaign_id/deleted_at are never mutated through a generic update — status/
+// version/frozen_at are exclusively written through campaign-briefs.ts's four
+// atomic transition helpers, never a raw .update() call.
+export type CampaignBriefUpdate = Partial<
+  Omit<CampaignBriefRow, 'id' | 'created_at' | 'business_id' | 'campaign_id' | 'deleted_at'>
+>
