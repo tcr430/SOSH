@@ -8,6 +8,7 @@ import {
   pauseCampaign,
   resumeCampaign,
   softDeleteCampaignGuarded,
+  moveCampaignToAwaitingBrief,
 } from './campaigns'
 import type { CampaignRow, CampaignInsert } from './types'
 
@@ -167,5 +168,25 @@ describe('softDeleteCampaignGuarded', () => {
   it('throws when supabase returns an error', async () => {
     const { client } = createMockClient(null, { message: 'Delete error' })
     await expect(softDeleteCampaignGuarded(client, 'camp-1')).rejects.toThrow('Delete error')
+  })
+})
+
+describe('moveCampaignToAwaitingBrief', () => {
+  it('returns updated row when campaign is draft', async () => {
+    const { client, builder } = createMockClient({ ...mockCampaign, status: 'awaiting_brief' })
+    const result = await moveCampaignToAwaitingBrief(client, 'camp-1')
+    expect(result).toMatchObject({ id: 'camp-1', status: 'awaiting_brief' })
+    expect(builder.eq).toHaveBeenCalledWith('status', 'draft')
+  })
+
+  it('returns null when guard fails (non-draft status)', async () => {
+    const { client } = createMockClient(null, null)
+    const result = await moveCampaignToAwaitingBrief(client, 'camp-1')
+    expect(result).toBeNull()
+  })
+
+  it('throws when supabase returns an error', async () => {
+    const { client } = createMockClient(null, { message: 'Update error' })
+    await expect(moveCampaignToAwaitingBrief(client, 'camp-1')).rejects.toThrow('Update error')
   })
 })

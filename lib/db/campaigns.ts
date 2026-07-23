@@ -64,6 +64,26 @@ export async function updateCampaign(
   return row as CampaignRow
 }
 
+// ADR 0017 §11 — Stage A's atomic pause point: brief assembly moves a
+// campaign out of the old one-shot 'draft' generation path into
+// 'awaiting_brief', where it stays until the brief pipeline (B2.1-B2.5)
+// approves and generates. Mirrors activateCampaign's guard shape exactly.
+export async function moveCampaignToAwaitingBrief(
+  client: SupabaseClient,
+  id: string,
+): Promise<CampaignRow | null> {
+  const { data, error } = await client
+    .from('campaigns')
+    .update({ status: 'awaiting_brief' })
+    .eq('id', id)
+    .eq('status', 'draft')
+    .is('deleted_at', null)
+    .select()
+    .maybeSingle()
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as CampaignRow | null) ?? null
+}
+
 export async function activateCampaign(
   client: SupabaseClient,
   id: string,

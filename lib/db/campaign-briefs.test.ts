@@ -114,20 +114,25 @@ describe('submitBriefForCritique (draft -> critiqued)', () => {
   it('succeeds when the brief is in draft', async () => {
     const critiqued = { ...mockBrief, status: 'critiqued' as const }
     const { client, builder } = createMockClient(critiqued)
-    const result = await submitBriefForCritique(client, 'brief-1')
+    const result = await submitBriefForCritique(client, 'brief-1', { overallScore: 82, critique: { note: 'ok' } })
     expect(result).toEqual(critiqued)
     expect(builder.eq).toHaveBeenCalledWith('status', 'draft')
+    expect(builder.update).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'critiqued', overall_score: 82, critique: { note: 'ok' } }),
+    )
   })
 
   it('is a no-op (returns null) when the brief is not in draft', async () => {
     const { client } = createMockClient(null, null)
-    const result = await submitBriefForCritique(client, 'brief-1')
+    const result = await submitBriefForCritique(client, 'brief-1', { overallScore: 82, critique: {} })
     expect(result).toBeNull()
   })
 
   it('throws when supabase returns an error', async () => {
     const { client } = createMockClient(null, { message: 'Update error' })
-    await expect(submitBriefForCritique(client, 'brief-1')).rejects.toThrow('Update error')
+    await expect(
+      submitBriefForCritique(client, 'brief-1', { overallScore: 82, critique: {} }),
+    ).rejects.toThrow('Update error')
   })
 })
 

@@ -70,7 +70,17 @@ function stripInvisibleFormatChars(text: string): string {
 //      a code block containing its own (attacker-controlled) JSON payload.
 //   3. a LEADING { or [ — could read as the start of the expected JSON
 //      output, confusing a safeParse-based consumer downstream.
-function neutralize(rawText: string): string {
+// B2.5 security-reviewer correction pass (MEDIUM, chained) — exported so
+// callers rendering OTHER DB-stored/AI-generated text into a prompt (brief
+// assembly's audience/brand candidates and the critique step's own
+// narrative/proofPlan, lib/campaigns/brief.ts + lib/ai/prompts/brief.ts) can
+// reuse this SAME Unicode-hardened guard instead of a local, ASCII-literal-
+// only sanitizeDataField. The finding: those fields had no structural
+// guarantee of trustworthiness (a compromised distillation worker, or the
+// assembly model itself echoing an injected instruction into its own
+// output) but were getting a strictly weaker guard than evidence_memory —
+// an inconsistency in the threat model, not a justified design choice.
+export function neutralize(rawText: string): string {
   let out = stripInvisibleFormatChars(rawText)
   out = out.replace(/\[\/DATA\]/gi, '[/data-blocked]')
   out = out.replace(/```/g, '`' + ZWSP + '`' + ZWSP + '`')

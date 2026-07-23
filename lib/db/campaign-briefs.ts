@@ -52,13 +52,19 @@ export async function createBrief(
 // failure (null — the WHERE clause excluded the row because it wasn't in the
 // expected status).
 
+// B2.5: extended to persist the rubric's score/critique in the SAME atomic
+// UPDATE as the status transition — score is co-produced with the
+// transition (Stage B runs the rubric, then transitions), not written
+// separately in a second call. Safe to extend: this function has zero
+// production callers before B2.5 (only its own B2.1 tests, updated here).
 export async function submitBriefForCritique(
   client: SupabaseClient,
   id: string,
+  score: { overallScore: number; critique: Record<string, unknown> },
 ): Promise<CampaignBriefRow | null> {
   const { data, error } = await client
     .from('campaign_briefs')
-    .update({ status: 'critiqued' })
+    .update({ status: 'critiqued', overall_score: score.overallScore, critique: score.critique })
     .eq('id', id)
     .eq('status', 'draft')
     .is('deleted_at', null)
