@@ -24,3 +24,26 @@ export async function listEvidenceMemoryCandidates(
   if (error) throw new Error(getErrorMessage(error))
   return (data as EvidenceMemoryRow[]) ?? []
 }
+
+// ADR 0017 §9 [db-NIT-2] — the citation-by-id re-fetch that closes the
+// freeze→generate staleness gap: a brief pins evidence ids at assembly time,
+// but a row can retire between then and generation. Bounded by the caller's
+// id array (not MEMORY_CANDIDATE_LIMIT — there is no separate scan to cap),
+// filtered to status='active' so a retired id is silently dropped, never
+// rendered. This IS the guard, not a bug — lib/ai/wrap-evidence.ts is the
+// sole caller.
+export async function getEvidenceMemoryByIds(
+  client: SupabaseClient,
+  ids: string[],
+): Promise<EvidenceMemoryRow[]> {
+  if (ids.length === 0) return []
+  const { data, error } = await client
+    .from('evidence_memory')
+    .select('*')
+    .in('id', ids)
+    .eq('status', 'active')
+    .is('deleted_at', null)
+    .order('created_at', { ascending: true })
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as EvidenceMemoryRow[]) ?? []
+}

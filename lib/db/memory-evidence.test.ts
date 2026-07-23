@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { createMockClient } from './__test-utils__/mock-client'
-import { listEvidenceMemoryCandidates } from './memory-evidence'
+import { listEvidenceMemoryCandidates, getEvidenceMemoryByIds } from './memory-evidence'
 import type { EvidenceMemoryRow } from './types'
 
 function makeRow(overrides: Partial<EvidenceMemoryRow> = {}): EvidenceMemoryRow {
@@ -97,5 +97,37 @@ describe('listEvidenceMemoryCandidates', () => {
     const { client } = createMockClient([], null)
     const result = await listEvidenceMemoryCandidates(client, 'biz-1')
     expect(result).toEqual([])
+  })
+})
+
+describe('getEvidenceMemoryByIds', () => {
+  it('queries evidence_memory filtered by id list, status=active, deleted_at null', async () => {
+    const { client, builder } = createMockClient([makeRow()], null)
+
+    await getEvidenceMemoryByIds(client, ['ev-1', 'ev-2'])
+
+    expect(client.from).toHaveBeenCalledWith('evidence_memory')
+    expect(builder.in).toHaveBeenCalledWith('id', ['ev-1', 'ev-2'])
+    expect(builder.eq).toHaveBeenCalledWith('status', 'active')
+    expect(builder.is).toHaveBeenCalledWith('deleted_at', null)
+  })
+
+  it('returns an empty array when given an empty id list (no query needed)', async () => {
+    const { client, from } = createMockClient([makeRow()], null)
+    const result = await getEvidenceMemoryByIds(client, [])
+    expect(result).toEqual([])
+    expect(from).not.toHaveBeenCalled()
+  })
+
+  it('throws when the query returns an error', async () => {
+    const { client } = createMockClient(null, { message: 'connection reset' })
+    await expect(getEvidenceMemoryByIds(client, ['ev-1'])).rejects.toThrow('connection reset')
+  })
+
+  it('returns fewer rows than ids requested when some are retired/deleted (the staleness-gap close)', async () => {
+    const { client } = createMockClient([makeRow({ id: 'ev-1' })], null)
+    const result = await getEvidenceMemoryByIds(client, ['ev-1', 'ev-retired'])
+    expect(result).toHaveLength(1)
+    expect(result[0].id).toBe('ev-1')
   })
 })
