@@ -214,6 +214,31 @@
       "paused": "Pausada",
       "completed": "Completada"
     },
+    "brief": {
+      "title": "Brief de la campaña",
+      "narrative_label": "Narrativa",
+      "proof_plan_label": "Plan de prueba",
+      "role_sequence_label": "Publicaciones planificadas",
+      "critique_label": "Crítica",
+      "score_label": "Puntuación: {score}/100",
+      "pending": "El brief todavía se está preparando y evaluando. Vuelve a comprobarlo pronto.",
+      "already_approved": "Este brief ya ha sido aprobado.",
+      "approve": "Aprobar",
+      "reject": "Devolver",
+      "edit": "Guardar cambios",
+      "edit_narrative_field": "Narrativa",
+      "edit_proof_plan_field": "Plan de prueba",
+      "gate_refused": "Este brief obtuvo {score}/100, por debajo del nivel de calidad requerido para aprobarlo. Revísalo e inténtalo de nuevo.",
+      "approved_success": "Brief aprobado.",
+      "rejected_success": "Brief devuelto para revisión.",
+      "saved_success": "Cambios guardados.",
+      "error_invalid_input": "Comprueba los datos introducidos e inténtalo de nuevo.",
+      "error_invalid_brief_state": "Este brief ya no está en evaluación.",
+      "error_concurrent_edit": "Este brief se modificó en otro lugar — recarga e inténtalo de nuevo.",
+      "error_not_found": "Brief no encontrado.",
+      "error_unauthorized": "No tienes acceso a esta campaña.",
+      "error_generic": "Algo salió mal. Inténtalo de nuevo."
+    },
     "new": {
       "title": "Nueva campaña",
       "section1": {

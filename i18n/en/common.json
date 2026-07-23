@@ -214,6 +214,31 @@
       "paused": "Paused",
       "completed": "Completed"
     },
+    "brief": {
+      "title": "Campaign brief",
+      "narrative_label": "Narrative",
+      "proof_plan_label": "Proof plan",
+      "role_sequence_label": "Planned posts",
+      "critique_label": "Critique",
+      "score_label": "Score: {score}/100",
+      "pending": "The brief is still being assembled and critiqued. Check back shortly.",
+      "already_approved": "This brief has already been approved.",
+      "approve": "Approve",
+      "reject": "Send back",
+      "edit": "Save changes",
+      "edit_narrative_field": "Narrative",
+      "edit_proof_plan_field": "Proof plan",
+      "gate_refused": "This brief scored {score}/100, below the quality bar required to approve. Revise it and try again.",
+      "approved_success": "Brief approved.",
+      "rejected_success": "Brief sent back for revision.",
+      "saved_success": "Changes saved.",
+      "error_invalid_input": "Please check your input and try again.",
+      "error_invalid_brief_state": "This brief is no longer awaiting review.",
+      "error_concurrent_edit": "This brief was changed elsewhere — reload and try again.",
+      "error_not_found": "Brief not found.",
+      "error_unauthorized": "You don't have access to this campaign.",
+      "error_generic": "Something went wrong. Please try again."
+    },
     "new": {
       "title": "New campaign",
       "section1": {
