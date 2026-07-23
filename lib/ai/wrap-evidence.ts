@@ -1,6 +1,15 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getEvidenceMemoryByIds } from '@/lib/db/memory-evidence'
 
+// B2.4 type-design-analyzer finding (MINOR) — a bare `string` didn't
+// distinguish "output of wrapEvidenceForPrompt (guarded/capped/sanitized)"
+// from "any string a caller assembled by hand," even though the ADR treats
+// this guard as security-load-bearing (§9, MODE2-EVIDENCE-DATA-GUARDED).
+// Branded the same way lib/db/types.ts's VaultSecretId is: only this
+// module's own return statement below can produce one, so a prompt that
+// requires RenderedEvidence cannot silently accept unguarded evidence text.
+export type RenderedEvidence = string & { readonly _brand: 'RenderedEvidence' }
+
 // ADR 0017 §9 [sec-HIGH-1] — hard cap, TRUNCATE not warn. Applied to each
 // evidence item's rendered body (after neutralization, before wrapping), so
 // the actual bytes reaching the prompt are bounded regardless of how long
@@ -109,8 +118,8 @@ function guard(rawContent: string): string {
 export async function wrapEvidenceForPrompt(
   client: SupabaseClient,
   evidenceIds: string[],
-): Promise<string> {
-  if (evidenceIds.length === 0) return ''
+): Promise<RenderedEvidence> {
+  if (evidenceIds.length === 0) return '' as RenderedEvidence
   const rows = await getEvidenceMemoryByIds(client, evidenceIds)
-  return rows.map((row) => guard(row.content)).join('\n\n')
+  return rows.map((row) => guard(row.content)).join('\n\n') as RenderedEvidence
 }
