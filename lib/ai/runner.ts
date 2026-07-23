@@ -10,6 +10,17 @@ import { incrementBrandVoiceAttempts, incrementPostsGenerated } from '@/lib/db/t
 
 const BRAND_VOICE_PROMPT_ID = 'brand-voice-inference'
 const POST_GENERATION_PROMPT_ID = 'post-generation'
+// ADR 0017 §4.4/§7 (B2.6 BLOCKER fix) — both native-generation format-family
+// prompts (lib/ai/prompts/formats/native-generation-prompt.ts) join
+// 'post-generation' in the batch-tracked set: generate.ts's STEP 11 calls
+// incrementPostsGeneratedBy(businessId, postsCreated) ONCE after the batch
+// insert, exactly like the old flat post-generation flow did. Without this,
+// every native-generation call (N per campaign, not 1) AND every hook-loop
+// regeneration would ALSO increment the per-call counter here, on top of the
+// batch increment — B2.4 flagged this exact gap as "B2.6 must resolve";
+// it was not resolved when generate.ts first landed, and is fixed here.
+const NATIVE_GENERATION_PROMPT_IDS = new Set(['native-generation-single', 'native-generation-thread'])
+const RUBRIC_PROMPT_ID = 'rubric'
 const RETRY_DELAY_MS = 2000
 const CACHE_CONTROL_CHAR_THRESHOLD = 4096 // chars / 4 ≈ tokens; 4096 chars ≈ 1024 tokens
 const DEFAULT_MAX_TOKENS = 4096
@@ -18,10 +29,17 @@ function isBrandVoice(promptId: string): boolean {
   return promptId === BRAND_VOICE_PROMPT_ID
 }
 
-// R-1 (ADR 0004): orchestrator owns the bulk counter increment for post-generation.
-// Runner skips step-8 for this prompt id to avoid per-call undercounting.
+// R-1 (ADR 0004) + B2.6 — orchestrator owns the bulk counter increment for
+// post-generation. Runner skips step-8 for these prompt ids to avoid
+// per-call over-counting; the caller batch-increments once after insert.
 function isPostGeneration(promptId: string): boolean {
-  return promptId === POST_GENERATION_PROMPT_ID
+  return promptId === POST_GENERATION_PROMPT_ID || NATIVE_GENERATION_PROMPT_IDS.has(promptId)
+}
+
+// A scoring call (the rubric, ADR §6/§7) never generates a post and never
+// consumes brand-voice quota — it must increment NEITHER trial counter.
+function isScoringOnly(promptId: string): boolean {
+  return promptId === RUBRIC_PROMPT_ID
 }
 
 async function sleep(ms: number): Promise<void> {
@@ -163,9 +181,11 @@ export async function runPrompt<TInput, TOutput>(
     )
 
     // Step 8: Increment trial counter (success path only).
-    // R-1 (ADR 0004): post-generation skips this — orchestrator calls
-    // incrementPostsGeneratedBy(businessId, count) once after batch insert.
-    if (context.trialState !== null && !isPostGeneration(prompt.id)) {
+    // R-1 (ADR 0004): post-generation (flat + native-generation-*) skips this
+    // — the orchestrator batch-increments once after insert. A scoring-only
+    // call (rubric) skips this too — it never generates a post or consumes
+    // brand-voice quota (B2.6 BLOCKER fix).
+    if (context.trialState !== null && !isPostGeneration(prompt.id) && !isScoringOnly(prompt.id)) {
       try {
         if (isBrandVoice(prompt.id)) {
           await incrementBrandVoiceAttempts(context.business.id)

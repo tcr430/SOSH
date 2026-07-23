@@ -69,6 +69,20 @@ const brandVoicePrompt: Prompt<MockInput, MockOutput> = {
   id: 'brand-voice-inference',
 }
 
+// B2.6 BLOCKER fix — these must ALSO skip Step 8, exactly like post-generation.
+const nativeGenerationSinglePrompt: Prompt<MockInput, MockOutput> = {
+  ...mockPrompt,
+  id: 'native-generation-single',
+}
+const nativeGenerationThreadPrompt: Prompt<MockInput, MockOutput> = {
+  ...mockPrompt,
+  id: 'native-generation-thread',
+}
+const rubricScoringPrompt: Prompt<MockInput, MockOutput> = {
+  ...mockPrompt,
+  id: 'rubric',
+}
+
 const mockContext: CustomerContext = {
   business: {
     id: 'biz-1',
@@ -318,6 +332,30 @@ describe('Step 8 — trial counter', () => {
 
   it('does NOT increment trial counter for paid plan', async () => {
     await runPrompt(mockPrompt, paidContext, { text: 'hello' })
+    expect(incrementPostsGenerated).not.toHaveBeenCalled()
+    expect(incrementBrandVoiceAttempts).not.toHaveBeenCalled()
+  })
+
+  // B2.6 BLOCKER fix — native-generation-* prompt ids match neither
+  // isBrandVoice nor (pre-fix) isPostGeneration, so every native-generation
+  // call AND every hook-loop rubric-scoring call was ALSO incrementing
+  // posts_generated_count on top of generate.ts's own batch increment
+  // (STEP 11) — silently over-counting trial quota 3-4x. These three tests
+  // prove the fix: NEITHER counter fires for any of these prompt ids.
+  it('does NOT increment posts_generated_count for native-generation-single (B2.6 BLOCKER fix)', async () => {
+    await runPrompt(nativeGenerationSinglePrompt, mockContext, { text: 'hello' })
+    expect(incrementPostsGenerated).not.toHaveBeenCalled()
+    expect(incrementBrandVoiceAttempts).not.toHaveBeenCalled()
+  })
+
+  it('does NOT increment posts_generated_count for native-generation-thread (B2.6 BLOCKER fix)', async () => {
+    await runPrompt(nativeGenerationThreadPrompt, mockContext, { text: 'hello' })
+    expect(incrementPostsGenerated).not.toHaveBeenCalled()
+    expect(incrementBrandVoiceAttempts).not.toHaveBeenCalled()
+  })
+
+  it('does NOT increment EITHER trial counter for a rubric scoring call (B2.6 BLOCKER fix)', async () => {
+    await runPrompt(rubricScoringPrompt, mockContext, { text: 'hello' })
     expect(incrementPostsGenerated).not.toHaveBeenCalled()
     expect(incrementBrandVoiceAttempts).not.toHaveBeenCalled()
   })

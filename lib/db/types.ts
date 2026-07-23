@@ -294,6 +294,12 @@ export type PostInsert = {
   business_id: string
   platform: Platform
   content: string
+  // Optional (B2.6): the service-role generation orchestrator (generate.ts)
+  // sets this from the frozen brief's roleSequence at insert time. Absent
+  // for any pre-Mode-2 or non-brief-routed insert path. Write-once from here
+  // on (PostUpdate omits it, and the DB trigger enforces it regardless of
+  // caller — ADR 0017 §3.2).
+  role?: PostRole | null
   hashtags?: string[]
   media_urls?: string[]
   scheduled_at: string
