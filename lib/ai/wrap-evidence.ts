@@ -122,14 +122,19 @@ function guard(rawContent: string): string {
 // content directly.
 //
 // `client` must be a service-role client — evidence_memory reads here cross
-// the citation-by-id boundary rather than an RLS-scoped business_id filter;
-// the pinned id set itself is the trust boundary, established when the ids
-// were written into the brief.
+// the citation-by-id boundary rather than an RLS-scoped SELECT policy.
+// Session 24-D (MAJOR-1 correction) — the pinned id set was PREVIOUSLY
+// asserted, not enforced, as the sole trust boundary; getEvidenceMemoryByIds
+// now also filters by businessId (the campaign's tenant, threaded in by every
+// caller below), so a foreign-tenant id renders nothing even if one were ever
+// pinned. Defense in depth: citation-by-id AND business_id scoping, not one
+// or the other.
 export async function wrapEvidenceForPrompt(
   client: SupabaseClient,
+  businessId: string,
   evidenceIds: string[],
 ): Promise<RenderedEvidence> {
   if (evidenceIds.length === 0) return '' as RenderedEvidence
-  const rows = await getEvidenceMemoryByIds(client, evidenceIds)
+  const rows = await getEvidenceMemoryByIds(client, businessId, evidenceIds)
   return rows.map((row) => guard(row.content)).join('\n\n') as RenderedEvidence
 }

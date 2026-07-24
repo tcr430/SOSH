@@ -87,7 +87,7 @@ export async function assembleBrief(campaignId: string): Promise<CampaignBriefRo
   const evidenceCandidates = await Promise.all(
     evidenceRows.map(async (row) => ({
       id: row.id,
-      guardedContent: await wrapEvidenceForPrompt(client, [row.id]),
+      guardedContent: await wrapEvidenceForPrompt(client, campaign.business_id, [row.id]),
     })),
   )
 
@@ -102,7 +102,20 @@ export async function assembleBrief(campaignId: string): Promise<CampaignBriefRo
     brandCandidates: brandRows.map((r) => ({ statement: r.statement, category: r.category })),
   })
 
-  const brief = await createBrief(client, campaignId, content as CampaignBriefContent)
+  // Session 24-D (MAJOR-1 correction, acceptance-gap close) — the render-time
+  // guard (wrapEvidenceForPrompt, above) is defense-in-depth, not the ONLY
+  // check: PINNED_EVIDENCE_SCHEMA validates evidenceMemoryId as a non-empty
+  // string, not membership in the candidate set the model was actually shown.
+  // Reject any id outside that set HERE, at the point untrusted model output
+  // is first accepted — before persistence, not just before rendering.
+  const candidateIds = new Set(evidenceCandidates.map((c) => c.id))
+  const typedContent = content as CampaignBriefContent
+  const sanitizedContent: CampaignBriefContent = {
+    ...typedContent,
+    pinnedEvidence: typedContent.pinnedEvidence.filter((e) => candidateIds.has(e.evidenceMemoryId)),
+  }
+
+  const brief = await createBrief(client, campaignId, sanitizedContent)
   await moveCampaignToAwaitingBrief(client, campaignId)
   return brief
 }
@@ -124,7 +137,7 @@ export async function critiqueBrief(campaignId: string): Promise<CampaignBriefRo
   // rubric call also sees brief content and independently applies the guard
   // ([sec-MEDIUM-2]); it is not covered "for free" by assembly's guarding.
   const evidenceBlocks = await Promise.all(
-    brief.content.pinnedEvidence.map((e) => wrapEvidenceForPrompt(client, [e.evidenceMemoryId])),
+    brief.content.pinnedEvidence.map((e) => wrapEvidenceForPrompt(client, brief.business_id, [e.evidenceMemoryId])),
   )
 
   const campaign = await getCampaignById(client, campaignId)

@@ -220,6 +220,7 @@ export async function generatePostsForCampaign(
         // object literals at each call site — a future field addition now only
         // needs updating here.
         const genInput = () => ({
+          businessId,
           angle: entry.angle,
           role: entry.role,
           platform: entry.platform,

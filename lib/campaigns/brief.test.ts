@@ -171,10 +171,12 @@ describe('assembleBrief — Stage A (MODE2-MEMORY-WIRED)', () => {
 
     await assembleBrief('camp-1')
 
-    expect(wrapEvidenceForPrompt).toHaveBeenCalledWith(expect.anything(), ['ev-1'])
+    expect(wrapEvidenceForPrompt).toHaveBeenCalledWith(expect.anything(), 'biz-1', ['ev-1'])
   })
 
   it('persists a draft brief and atomically moves the campaign to awaiting_brief', async () => {
+    const evidenceRow = { id: 'ev-1', content: 'A great customer quote' } as EvidenceMemoryRow
+    vi.mocked(retrieveEvidenceMemory).mockResolvedValue([evidenceRow])
     vi.mocked(getBriefByCampaign).mockResolvedValue(null)
     vi.mocked(runPrompt).mockResolvedValue(mockContent)
     const created = makeBrief()
@@ -185,6 +187,22 @@ describe('assembleBrief — Stage A (MODE2-MEMORY-WIRED)', () => {
     expect(result).toEqual(created)
     expect(createBrief).toHaveBeenCalledWith(expect.anything(), 'camp-1', mockContent)
     expect(moveCampaignToAwaitingBrief).toHaveBeenCalledWith(expect.anything(), 'camp-1')
+  })
+
+  it('rejects a pinnedEvidence id the model cited but was never shown as a candidate (MAJOR-1 acceptance-gap close)', async () => {
+    const evidenceRow = { id: 'ev-1', content: 'A great customer quote' } as EvidenceMemoryRow
+    vi.mocked(retrieveEvidenceMemory).mockResolvedValue([evidenceRow])
+    vi.mocked(getBriefByCampaign).mockResolvedValue(null)
+    vi.mocked(runPrompt).mockResolvedValue({
+      ...mockContent,
+      pinnedEvidence: [{ evidenceMemoryId: 'ev-1' }, { evidenceMemoryId: 'ev-999-not-a-candidate' }],
+    })
+    vi.mocked(createBrief).mockResolvedValue(makeBrief())
+
+    await assembleBrief('camp-1')
+
+    const persisted = vi.mocked(createBrief).mock.calls[0][2] as CampaignBriefContent
+    expect(persisted.pinnedEvidence).toEqual([{ evidenceMemoryId: 'ev-1' }])
   })
 
   it('refuses to assemble when the campaign is not in draft', async () => {
@@ -219,7 +237,7 @@ describe('critiqueBrief — Stage B', () => {
 
     await critiqueBrief('camp-1')
 
-    expect(wrapEvidenceForPrompt).toHaveBeenCalledWith(expect.anything(), ['ev-1'])
+    expect(wrapEvidenceForPrompt).toHaveBeenCalledWith(expect.anything(), 'biz-1', ['ev-1'])
   })
 
   it("routes the brief's own narrative and proofPlan through neutralize() before they reach the rubric (B2.5 security-reviewer finding)", async () => {

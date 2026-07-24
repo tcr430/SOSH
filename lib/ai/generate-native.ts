@@ -10,6 +10,7 @@ import { validateThreadPolicy } from './prompts/formats/policy'
 import type { SinglePostOutput, ThreadOutput } from './prompts/formats/schemas'
 
 export interface GenerateNativeContentInput {
+  businessId: string
   angle: string
   role: CampaignPostRole
   platform: Platform
@@ -92,7 +93,7 @@ export async function generateNativeContent(
   input: GenerateNativeContentInput,
 ): Promise<SinglePostOutput | ThreadOutput> {
   const family = selectFormatFamily(input.platform, input.estimatedTweetsWorth)
-  const renderedEvidence = await wrapEvidenceForPrompt(client, input.pinnedEvidenceIds)
+  const renderedEvidence = await wrapEvidenceForPrompt(client, input.businessId, input.pinnedEvidenceIds)
 
   const genInput: NativeGenInput = {
     angle: input.angle,

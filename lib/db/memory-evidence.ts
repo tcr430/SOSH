@@ -32,14 +32,22 @@ export async function listEvidenceMemoryCandidates(
 // filtered to status='active' so a retired id is silently dropped, never
 // rendered. This IS the guard, not a bug — lib/ai/wrap-evidence.ts is the
 // sole caller.
+// Session 24-D (MAJOR-1 correction) — business_id is filtered explicitly,
+// same rule as listEvidenceMemoryCandidates above and the same reason: this
+// runs under a service-role client on the generation/critique paths, which
+// BYPASSES RLS. The citation-by-id boundary (a caller only ever passes ids
+// it itself pinned) is real, but was asserted, not enforced — this filter
+// is the enforcement, defense in depth alongside it, not a replacement for it.
 export async function getEvidenceMemoryByIds(
   client: SupabaseClient,
+  businessId: string,
   ids: string[],
 ): Promise<EvidenceMemoryRow[]> {
   if (ids.length === 0) return []
   const { data, error } = await client
     .from('evidence_memory')
     .select('*')
+    .eq('business_id', businessId)
     .in('id', ids)
     .eq('status', 'active')
     .is('deleted_at', null)

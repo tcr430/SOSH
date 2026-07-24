@@ -8,6 +8,7 @@ vi.mock('./wrap-evidence', () => ({
 }))
 
 import { runPrompt } from './runner'
+import { wrapEvidenceForPrompt } from './wrap-evidence'
 import { generateNativeContent, type GenerateNativeContentInput } from './generate-native'
 import { AiError } from './errors'
 import type { CustomerContext } from './context'
@@ -45,6 +46,7 @@ const policyBrokenThread: ThreadOutput = {
 
 function singleInput(overrides: Partial<GenerateNativeContentInput> = {}): GenerateNativeContentInput {
   return {
+    businessId: 'biz-1',
     angle: 'proof point',
     role: 'customer_proof',
     platform: 'linkedin',
@@ -58,6 +60,7 @@ function singleInput(overrides: Partial<GenerateNativeContentInput> = {}): Gener
 
 function threadInput(overrides: Partial<GenerateNativeContentInput> = {}): GenerateNativeContentInput {
   return {
+    businessId: 'biz-1',
     angle: 'proof point',
     role: 'customer_proof',
     platform: 'twitter',
@@ -74,6 +77,7 @@ const client = {} as any
 
 beforeEach(() => {
   vi.mocked(runPrompt).mockReset()
+  vi.mocked(wrapEvidenceForPrompt).mockReset().mockResolvedValue('' as never)
 })
 
 describe('generateNativeContent — bounded re-prompt (MODE2-NATIVE-RETRY)', () => {
@@ -158,6 +162,12 @@ describe('generateNativeContent — bounded re-prompt (MODE2-NATIVE-RETRY)', () 
     const result = await generateNativeContent(client, makeCtx(), threadInput())
     expect(result).toEqual(validThread)
     expect(runPrompt).toHaveBeenCalledTimes(1)
+  })
+
+  it('threads businessId through to wrapEvidenceForPrompt (MAJOR-1 correction, Session 24-D D1)', async () => {
+    vi.mocked(runPrompt).mockResolvedValueOnce(validSingle)
+    await generateNativeContent(client, makeCtx(), singleInput({ businessId: 'biz-42', pinnedEvidenceIds: ['ev-1'] }))
+    expect(wrapEvidenceForPrompt).toHaveBeenCalledWith(client, 'biz-42', ['ev-1'])
   })
 
   it('low content-volume twitter input selects single, not thread', async () => {
