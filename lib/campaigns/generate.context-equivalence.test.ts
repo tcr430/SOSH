@@ -95,6 +95,7 @@ vi.mock('@/lib/db/ai-usage', () => ({
 // @/lib/voice/translate.
 
 import { generatePostsForCampaign } from './generate'
+import * as contextModule from '@/lib/ai/context'
 import { buildCustomerContext } from '@/lib/ai/context'
 import { getCampaignById, listCampaigns } from '@/lib/db/campaigns'
 import { getBriefByCampaign, markBriefGenerated } from '@/lib/db/campaign-briefs'
@@ -272,10 +273,19 @@ function allPromptText(): string {
 
 describe('lib/campaigns/generate.ts caller — buildCustomerContext is called byte-identically (MODE2-CONTEXT-EQUIVALENT)', () => {
   it('calls buildCustomerContext with the exact same args as before B2.6', async () => {
+    // Session 24-D (MINOR-1 correction) — buildCustomerContext itself is not
+    // mocked in this file (module-level intent, see header note above), but
+    // spying on it (calls-through to the REAL implementation, only records
+    // invocations) lets this test assert the exact call shape rather than
+    // just letting the real function run unobserved. Previously this test
+    // had ZERO expect() calls — it could never redden on an args regression.
+    const spy = vi.spyOn(contextModule, 'buildCustomerContext')
+
     await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+
     // Same call shape as the pre-B2.6 STEP 4: (businessId, campaign.voice_variation_id).
-    // buildCustomerContext itself is not mocked in this file — this proves
-    // the REAL function was invoked with unchanged arguments, not a stub.
+    expect(spy).toHaveBeenCalledWith(BUSINESS_ID, VARIATION_ID)
+    expect(spy).toHaveBeenCalledTimes(1)
   })
 
   it('resolves the campaign voice VARIATION and sends its descriptor into the native-generation prompt', async () => {

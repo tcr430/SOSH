@@ -373,6 +373,15 @@ describe('generatePostsForCampaign — hook Tier-2 loop (ADR §7, MODE2-HOOK-STA
 
     // 6 roleSequence entries, one of which regenerates once = 7 native calls.
     expect(generateNativeContent).toHaveBeenCalledTimes(7)
+    // Session 24-D (MINOR-2 correction) — pins the exact double-count the ADR
+    // worries about: the trial counter must increment by POSTS CREATED (6,
+    // one row per roleSequence entry — createPosts inserts exactly one row
+    // per entry regardless of how many native-generation attempts it took),
+    // never by the native-CALL count (7, which would double-count the single
+    // regenerated post). generate.ts:377 sources this from
+    // `postsCreated = inserted.length` (generate.ts:355), not from a
+    // native-call counter.
+    expect(incrementPostsGeneratedBy).toHaveBeenCalledWith(BUSINESS_ID, 6)
   })
 
   it('does NOT regenerate when the opener already scores at/above threshold', async () => {
@@ -494,6 +503,43 @@ describe('generatePostsForCampaign — consistency pass wiring (ADR §8)', () =>
       imageBrief: null,
     }
     vi.mocked(generateNativeContent).mockResolvedValue(badThread)
+
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+
+    expect(createPosts).not.toHaveBeenCalled()
+    expect(updateGenerationSessionStatus).toHaveBeenCalledWith(
+      expect.anything(), SESSION_ID,
+      expect.objectContaining({ status: 'failed', error_code: 'consistency_check_failed' }),
+    )
+  })
+
+  // Session 24-D (MINOR-6 correction) — checkRoleCoverage's own unit tests
+  // (consistency.test.ts) already prove the pure function is correct in
+  // isolation, but that alone doesn't prove generate.ts's real STEP 7 loop
+  // can actually PRODUCE a `generated` set narrower than `roleSequence` for
+  // checkRoleCoverage to catch — under today's control flow, activePlatforms
+  // is built by filtering CANONICAL_PLATFORM_ORDER against roleSequence, so
+  // every entry whose platform IS one of the five canonical platforms gets
+  // iterated 1:1. This orchestrator-level test drives the ACTUAL reachable
+  // gap: a roleSequence entry citing a platform outside
+  // CANONICAL_PLATFORM_ORDER (a corrupted/future-schema brief — freezeBrief
+  // does not validate platform values, only status/frozen_at) is silently
+  // never iterated by the STEP 7 loop, so `generated` ends up short by
+  // exactly that one entry. This is the safety net a future "continue on
+  // per-post error" refactor (ADR §7/§8 note) must not be able to silently
+  // lose — pinned here against the REAL orchestrator, not just the pure
+  // function.
+  it('ORCHESTRATOR-LEVEL: a roleSequence entry citing a platform outside CANONICAL_PLATFORM_ORDER is never generated — checkRoleCoverage catches the gap and aborts (MINOR-6)', async () => {
+    vi.mocked(getBriefByCampaign).mockResolvedValue({
+      ...mockBrief,
+      content: {
+        ...mockBrief.content,
+        roleSequence: [
+          ...mockBrief.content.roleSequence,
+          { order: 99, role: 'follow_up', platform: 'pinterest' as never, angle: 'not a launch platform yet' },
+        ],
+      },
+    })
 
     await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
 
