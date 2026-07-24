@@ -37,7 +37,7 @@ export default async function CampaignBriefPage({ params }: Props) {
   return (
     <div className="max-w-3xl mx-auto py-8 space-y-6">
       <h1 className="text-2xl font-semibold tracking-tight">{t('title')}</h1>
-      <BriefReviewForm campaignId={id} brief={brief} />
+      <BriefReviewForm key={brief.id} campaignId={id} brief={brief} />
     </div>
   )
 }
