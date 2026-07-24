@@ -81,12 +81,15 @@ async function generateThread(ctx: CustomerContext, genInput: NativeGenInput): P
 // ORIGINAL error type unchanged.
 //
 // Runner-routing note (same posture as rubric.ts, B2.2): prompt.id
-// 'native-generation-single'/'native-generation-thread' match neither
-// isBrandVoice('brand-voice-inference') nor isPostGeneration('post-generation')
-// in runner.ts, so each call here increments the trial's posts_generated
-// counter individually (runner.ts step 8) — once B2.6's orchestrator ALSO
-// does its own batch increment (R-1 pattern), that will double-count.
-// Flagged for B2.6 to resolve; not addressed here (out of B2.4 scope).
+// 'native-generation-single'/'native-generation-thread' now DO match
+// isPostGeneration('post-generation') in runner.ts — B2.6 added both ids to
+// NATIVE_GENERATION_PROMPT_IDS there (runner.ts:13-22), so the runner skips
+// its own per-call step-8 increment for these calls and only the
+// orchestrator's single batch increment (generate.ts STEP 11,
+// incrementPostsGeneratedBy) counts each generated post. Session 24-D
+// (MINOR-3 doc-rot correction) — this comment previously said the double-
+// count "will" happen and was "Flagged for B2.6 to resolve; not addressed
+// here"; B2.6 landed and fixed it in runner.ts, this file needed no change.
 export async function generateNativeContent(
   client: SupabaseClient,
   ctx: CustomerContext,

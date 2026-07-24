@@ -61,7 +61,7 @@ export type ApproveBriefError =
 export type ApproveBriefState =
   | { status: 'idle' }
   | { status: 'approved' }
-  | { status: 'gate_refused'; overallScore: number }
+  | { status: 'gate_refused'; overallScore: number; critique: Record<string, unknown> | null }
   | { status: 'error'; error: ApproveBriefError }
 
 export async function approveBriefAction(
@@ -82,7 +82,7 @@ export async function approveBriefAction(
     // any more than it can be approved programmatically.
     const result = await approveBriefIfQualified(parsed.data.campaignId)
     if (!result.approved) {
-      return { status: 'gate_refused', overallScore: result.overallScore }
+      return { status: 'gate_refused', overallScore: result.overallScore, critique: result.critique }
     }
     revalidatePath(`/[locale]/campaigns/${parsed.data.campaignId}/brief`, 'page')
     return { status: 'approved' }

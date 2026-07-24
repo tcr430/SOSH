@@ -109,10 +109,9 @@ export async function assembleBrief(campaignId: string): Promise<CampaignBriefRo
   // Reject any id outside that set HERE, at the point untrusted model output
   // is first accepted — before persistence, not just before rendering.
   const candidateIds = new Set(evidenceCandidates.map((c) => c.id))
-  const typedContent = content as CampaignBriefContent
   const sanitizedContent: CampaignBriefContent = {
-    ...typedContent,
-    pinnedEvidence: typedContent.pinnedEvidence.filter((e) => candidateIds.has(e.evidenceMemoryId)),
+    ...content,
+    pinnedEvidence: content.pinnedEvidence.filter((e) => candidateIds.has(e.evidenceMemoryId)),
   }
 
   const brief = await createBrief(client, campaignId, sanitizedContent)

@@ -5,6 +5,7 @@ import { runPrompt } from '@/lib/ai/runner'
 import { rubricPrompt, BRIEF_QUALITY_THRESHOLD } from '@/lib/ai/prompts/rubric'
 import { PLATFORM_CONSTRAINTS, getPlatformConstraintsVersion } from '@/lib/ai/prompts/post-generation'
 import { generateNativeContent } from '@/lib/ai/generate-native'
+import { neutralize } from '@/lib/ai/wrap-evidence'
 import { MODELS } from '@/lib/ai/models'
 import { AiError } from '@/lib/ai/errors'
 import { getCampaignById, activateCampaign } from '@/lib/db/campaigns'
@@ -251,10 +252,17 @@ export async function generatePostsForCampaign(
         let regenerationCount = 0
         let previousContent: string | null = null
         try {
+          // Session 24-D (MINOR-7 correction) — the opener is the model's OWN
+          // prior output being fed back into a second AI call, same reused-
+          // AI-generated-text shape as brief.ts's narrative/proofPlan
+          // (B2.5 security-reviewer pass) — neutralize() (wrap-evidence.ts,
+          // NFKC + Cf-strip + fence/brace/[/DATA]-closer defusal) is the
+          // stated L-9 posture for that shape, stronger than rubric.ts's own
+          // local ASCII-literal-only sanitizeDataField.
           const openerScore = await runPrompt(rubricPrompt, ctx, {
             mode: 'post' as const,
             contentLabel: `${entry.platform} post opener`,
-            content: extractOpener(output),
+            content: neutralize(extractOpener(output)),
             platform: entry.platform,
           })
           if (openerScore.dimensions.openingStrength.score < BRIEF_QUALITY_THRESHOLD) {

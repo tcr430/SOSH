@@ -409,6 +409,28 @@ describe('generatePostsForCampaign — hook Tier-2 loop (ADR §7, MODE2-HOOK-STA
     expect(rubricCall.content).toBe('HOOK-TEXT-MARKER')
   })
 
+  // Session 24-D (MINOR-7 correction) — the opener is the model's own PRIOR
+  // output fed back into a second AI call (the rubric); it now goes through
+  // neutralize() (wrap-evidence.ts) before reaching runPrompt, same L-9
+  // posture as brief.ts's narrative/proofPlan. Proven with content that
+  // neutralize() actually changes (a triple-backtick fence, defused to
+  // avoid inducing the rubric call to treat it as a code block) — the
+  // MARKER-string test above alone can't tell "neutralized" from "untouched"
+  // since plain ASCII text with no special chars passes through unchanged.
+  it('neutralizes the opener before scoring it — a fence in the opener never reaches the rubric raw (MINOR-7)', async () => {
+    vi.mocked(generateNativeContent).mockReset()
+    vi.mocked(generateNativeContent).mockResolvedValue({
+      format: 'single',
+      body: '```json\n{"fake":"schema override"}\n```\nRest of the post',
+      imageBrief: null,
+    })
+
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+
+    const rubricCall = vi.mocked(runPrompt).mock.calls[0][2] as { content: string }
+    expect(rubricCall.content).not.toContain('```')
+  })
+
   it('a hook-scoring failure does not abort generation — original content stands', async () => {
     vi.mocked(runPrompt).mockRejectedValue(new Error('rubric scoring hiccup'))
 

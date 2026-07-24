@@ -96,7 +96,24 @@ describe('approveBriefAction — the HARD gate holds at the app layer (MODE2-CRI
       formDataOf({ campaignId: '11111111-1111-4111-8111-111111111111' }),
     )
 
-    expect(result).toEqual({ status: 'gate_refused', overallScore: 55 })
+    expect(result).toEqual({ status: 'gate_refused', overallScore: 55, critique: null })
+  })
+
+  // Session 24-D (MINOR-4 correction) — critique was previously dropped on
+  // the gate_refused path: approveBriefIfQualified returns it
+  // (ApproveBriefResult, brief.ts), but the action discarded it before it
+  // ever reached ApproveBriefState. Pinned with a NON-null critique so this
+  // can't pass by accident on the always-null case above.
+  it('threads critique through on gate_refused — survives the refusal, not dropped (MINOR-4)', async () => {
+    const critique = { critique: ['Add a stronger opening line.'], overall: 55 }
+    vi.mocked(approveBriefIfQualified).mockResolvedValue({ approved: false, overallScore: 55, critique })
+
+    const result = await approveBriefAction(
+      { status: 'idle' },
+      formDataOf({ campaignId: '11111111-1111-4111-8111-111111111111' }),
+    )
+
+    expect(result).toEqual({ status: 'gate_refused', overallScore: 55, critique })
   })
 
   it('succeeds above threshold', async () => {
