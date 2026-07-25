@@ -354,4 +354,21 @@ describe('freezeBrief — the ONE FrozenBrief producer (ADR §5.2 [type-5])', ()
     const row = makeBrief({ status: 'approved', frozen_at: null })
     expect(() => freezeBrief(row)).toThrow()
   })
+
+  // Session 24-D (MINOR-5 correction) — compile-time proof that
+  // FrozenBrief.content is now DEEP-readonly, not just shallow: TS must
+  // reject a .push() on roleSequence/pinnedEvidence, matching what
+  // Object.freeze already rejects at runtime (the test above). Before this
+  // correction, `content: Readonly<CampaignBriefContent>` left the ARRAY
+  // properties typed-mutable — this .push() would have typechecked fine
+  // even though it threw at runtime. @ts-expect-error itself fails the
+  // build if the line it's attached to stops erroring (e.g. the deep-
+  // readonly retype is ever accidentally reverted to shallow) — this is a
+  // real compile-time assertion, not a runtime one.
+  it('TYPE-LEVEL: a mutating call on frozen content is rejected by TypeScript, not just by Object.freeze at runtime', () => {
+    const row = makeBrief({ status: 'approved', frozen_at: '2026-08-01T01:00:00Z' })
+    const frozen = freezeBrief(row)
+    // @ts-expect-error — roleSequence is ReadonlyArray; .push does not exist on it.
+    expect(() => frozen.content.roleSequence.push(frozen.content.roleSequence[0])).toThrow()
+  })
 })

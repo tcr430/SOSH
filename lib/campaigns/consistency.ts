@@ -20,9 +20,15 @@ export interface RoleCoverageResult {
 // to produce a post actually did. A pure function, independently testable
 // with a deliberately incomplete `generated` set regardless of whether
 // generate.ts's own control flow can currently produce that state.
+// Session 24-D (MINOR-5 correction) — both params widened to ReadonlyArray:
+// this function only ever reads via .map(), never mutates, so the caller's
+// FrozenBrief.content.roleSequence being deep-readonly (generate.ts:303) is
+// a genuine, correctly-surfaced consumer change, not something to cast
+// around — it strictly widens acceptance (still takes a plain mutable array
+// too), doesn't narrow it.
 export function checkRoleCoverage(
-  generated: Array<{ order: number }>,
-  expected: CampaignBriefContent['roleSequence'],
+  generated: ReadonlyArray<{ order: number }>,
+  expected: ReadonlyArray<CampaignBriefContent['roleSequence'][number]>,
 ): RoleCoverageResult {
   const generatedOrders = new Set(generated.map((g) => g.order))
   const missingOrders = expected.map((e) => e.order).filter((order) => !generatedOrders.has(order))

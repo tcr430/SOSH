@@ -13,22 +13,39 @@ import {
 } from '@/lib/db/campaign-briefs'
 import type { CampaignBriefContent, CampaignBriefRow } from '@/lib/db/types'
 
-// ADR 0017 §5.2 [type-5] — the branded, deeply-readonly FrozenBrief. Produced
-// by EXACTLY this one function; a plain CampaignBriefRow cannot be passed
-// where a FrozenBrief is required (a caller must go through freezeBrief,
-// which enforces the row is actually approved+frozen — you cannot construct
-// one by casting a draft). This is the type-layer half of the freeze
-// guarantee; the DB-layer half (the frozen_at guard trigger rejecting a
-// content UPDATE once frozen) shipped in B2.0.
+// Session 24-D (MINOR-5 correction) — a generic structural utility, not a
+// one-off inline type: recurses into arrays (ReadonlyArray, not just a
+// readonly array PROPERTY) and objects so `content`'s arrays reject
+// mutating methods (.push/.splice/...) at compile time, matching what
+// deepFreezeContent's Object.freeze calls already enforce at runtime.
+type DeepReadonly<T> = T extends ReadonlyArray<infer U>
+  ? ReadonlyArray<DeepReadonly<U>>
+  : T extends object
+    ? { readonly [K in keyof T]: DeepReadonly<T[K]> }
+    : T
+
+// ADR 0017 §5.2 [type-5] — the branded, deeply-readonly FrozenBrief.
+// Session 24-D (MINOR-5 correction) — softened from the prior wording, which
+// overstated what TS enforces: `_brand` is a string-literal tag (the same
+// convention as VaultSecretId/RenderedEvidence elsewhere in this codebase),
+// not a nominal type — a single-step `{ ... } as FrozenBrief` from a
+// close-enough shape IS legal TypeScript, freezeBrief is not the only
+// conceivable way to produce a value typed FrozenBrief. `freezeBrief` IS,
+// today, the only function in the tree that actually does so (confirmed via
+// `git grep FrozenBrief` — generate.ts:149 is the only consumer), and the
+// REAL backstop against a caller shipping bad data even if that changed is
+// the DB-layer half: the frozen_at guard trigger rejecting a content UPDATE
+// once frozen (shipped in B2.0). The type documents intent; the DB trigger
+// enforces it.
 export type FrozenBrief = Readonly<{
   id: string
   businessId: string
   campaignId: string
-  content: Readonly<CampaignBriefContent>
+  content: DeepReadonly<CampaignBriefContent>
   frozenAt: string
 }> & { readonly _brand: 'FrozenBrief' }
 
-function deepFreezeContent(content: CampaignBriefContent): Readonly<CampaignBriefContent> {
+function deepFreezeContent(content: CampaignBriefContent): DeepReadonly<CampaignBriefContent> {
   content.pinnedEvidence.forEach((e) => Object.freeze(e))
   Object.freeze(content.pinnedEvidence)
   content.roleSequence.forEach((r) => Object.freeze(r))
