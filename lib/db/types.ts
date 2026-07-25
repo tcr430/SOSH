@@ -30,8 +30,19 @@ export type Plan = 'trial' | 'plus' | 'pro' | 'agency'
 export type Language = 'en' | 'pt' | 'es'
 export type Platform = 'linkedin' | 'twitter' | 'instagram' | 'facebook' | 'threads'
 export type CampaignFrequency = 'daily' | '3x_week' | 'weekly' | 'custom'
-export type CampaignStatus = 'draft' | 'active' | 'paused' | 'completed'
+export type CampaignStatus = 'draft' | 'awaiting_brief' | 'active' | 'paused' | 'completed'
+export type CampaignOrigin = 'manual' | 'objective_generated' | 'signal_generated'
 export type PostStatus = 'draft' | 'approved' | 'scheduled' | 'published' | 'failed' | 'skipped'
+// Campaign post-role vocabulary (ADR 0017 §3.2, L-5) — distinct from the
+// thread-internal tweet-role (hook|body|pull_quote|close, L-4), which lives
+// inside the thread format-family JSON and never touches this type.
+export type PostRole =
+  | 'anchor_thesis'
+  | 'founder_perspective'
+  | 'customer_proof'
+  | 'objection_response'
+  | 'conversation_starter'
+  | 'follow_up'
 export type EngagementType = 'comment' | 'dm' | 'mention'
 export type EngagementSentiment = 'positive' | 'neutral' | 'negative' | 'urgent'
 export type EngagementStatus = 'pending' | 'replied' | 'ignored' | 'auto_replied'
@@ -213,6 +224,7 @@ export type CampaignRow = {
   total_posts_planned: number
   total_posts_published: number
   voice_variation_id: string | null
+  origin: CampaignOrigin
   deleted_at: string | null
   created_at: string
   updated_at: string
@@ -233,6 +245,10 @@ export type CampaignInsert = {
   total_posts_planned?: number
   total_posts_published?: number
   voice_variation_id?: string | null
+  // Required (ADR 0017 §3.1, [db-MAJOR-3]): the DB column has no default
+  // after backfill, so every call site must state its origin explicitly
+  // rather than silently mislabeling Mode 1/3 rows as objective_generated.
+  origin: CampaignOrigin
   deleted_at?: string | null
   created_at?: string
   updated_at?: string
@@ -257,6 +273,11 @@ export type PostRow = {
   platform_post_id: string | null
   platform_url: string | null
   status: PostStatus
+  // Campaign post-role (ADR 0017 §3.2). NULL for pre-Mode-2 rows and for any
+  // row not yet assigned one; write-once once set (DB trigger enforces the
+  // service-role write path; this Omit-exclusion from PostUpdate below
+  // enforces the app-layer authenticated path).
+  role: PostRole | null
   rejection_note: string | null
   ai_generation_metadata: Record<string, unknown>
   publish_attempts: number
@@ -273,6 +294,12 @@ export type PostInsert = {
   business_id: string
   platform: Platform
   content: string
+  // Optional (B2.6): the service-role generation orchestrator (generate.ts)
+  // sets this from the frozen brief's roleSequence at insert time. Absent
+  // for any pre-Mode-2 or non-brief-routed insert path. Write-once from here
+  // on (PostUpdate omits it, and the DB trigger enforces it regardless of
+  // caller — ADR 0017 §3.2).
+  role?: PostRole | null
   hashtags?: string[]
   media_urls?: string[]
   scheduled_at: string
@@ -290,7 +317,7 @@ export type PostInsert = {
   updated_at?: string
 }
 
-export type PostUpdate = Partial<Omit<PostRow, 'id' | 'created_at' | 'business_id' | 'campaign_id' | 'published_at' | 'platform_post_id' | 'platform_url' | 'deleted_at'>>
+export type PostUpdate = Partial<Omit<PostRow, 'id' | 'created_at' | 'business_id' | 'campaign_id' | 'published_at' | 'platform_post_id' | 'platform_url' | 'deleted_at' | 'role'>>
 
 // ---------------------------------------------------------------------------
 // 6. post_metrics — upsert-in-place; nullable metrics mean "not exposed by platform"
@@ -649,3 +676,75 @@ export type PerformanceMemoryRow = MemoryGovernanceRow & {
   pattern: string
   platform: Platform | null
 }
+
+// ---------------------------------------------------------------------------
+// 16. campaign_briefs (ADR 0017 §2) — the brief artifact, brief-first Mode 2
+// ---------------------------------------------------------------------------
+
+export type CampaignBriefStatus = 'draft' | 'critiqued' | 'approved' | 'generated'
+
+// Session 24-D (NIT-3) — chose to KEEP this bare alias rather than inline
+// PostRole at its two use sites: the campaign post-role vocabulary (ADR 0017
+// §3.2, build-guide L-5) as it appears inside a brief's roleSequence is
+// identical in VALUE SET to PostRow.role's PostRole, but the two are named
+// distinctly on purpose — L-5 is explicit that post ROLES are a field
+// assigned at the brief stage, a deliberately separate concept from the
+// generated post's own role column, even though today they share one
+// underlying string union. The alias documents that intent; inlining
+// PostRole would erase the distinction the ADR draws, for a false
+// "simplification."
+export type CampaignPostRole = PostRole
+
+// ADR 0017 §2.2 — the campaign_briefs.content JSONB shape. Named (never
+// Record<string, unknown>, [db-NIT-1]) so the brief-assembly/critique/
+// generation pipeline (B2.2+) has a single typed contract for the brief's
+// argument, pinned evidence, and role sequence.
+export type CampaignBriefContent = {
+  narrative: string
+  proofPlan: string
+  // Citation-by-id, not inlined text (ADR §2.2, §9 [sec-MEDIUM-1]): evidence
+  // bytes are re-fetched and guarded at render time.
+  pinnedEvidence: Array<{ evidenceMemoryId: string; note?: string }>
+  roleSequence: Array<{ order: number; role: CampaignPostRole; platform: Platform; angle: string }>
+}
+
+export type CampaignBriefRow = {
+  id: string
+  business_id: string
+  campaign_id: string
+  content: CampaignBriefContent
+  status: CampaignBriefStatus
+  version: number
+  overall_score: number | null
+  // Latest rubric critique payload (ADR §6.2). Open-shape until B2.5 defines
+  // RubricOutput in lib/ai/prompts/rubric.ts — tightened there, not here.
+  critique: Record<string, unknown> | null
+  frozen_at: string | null
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type CampaignBriefInsert = {
+  id?: string
+  business_id: string
+  campaign_id: string
+  content: CampaignBriefContent
+  status?: CampaignBriefStatus
+  version?: number
+  overall_score?: number | null
+  critique?: Record<string, unknown> | null
+  frozen_at?: string | null
+  deleted_at?: string | null
+  created_at?: string
+  updated_at?: string
+}
+
+// Tenancy-critical + lifecycle-managed fields excluded, mirroring
+// CampaignUpdate (lib/db/types.ts:257): id/created_at/business_id/
+// campaign_id/deleted_at are never mutated through a generic update — status/
+// version/frozen_at are exclusively written through campaign-briefs.ts's four
+// atomic transition helpers, never a raw .update() call.
+export type CampaignBriefUpdate = Partial<
+  Omit<CampaignBriefRow, 'id' | 'created_at' | 'business_id' | 'campaign_id' | 'deleted_at'>
+>

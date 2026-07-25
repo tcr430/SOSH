@@ -8,6 +8,8 @@ import {
   pauseCampaign,
   resumeCampaign,
   softDeleteCampaignGuarded,
+  moveCampaignToAwaitingBrief,
+  activateCampaign,
 } from './campaigns'
 import type { CampaignRow, CampaignInsert } from './types'
 
@@ -26,6 +28,7 @@ const mockCampaign: CampaignRow = {
   total_posts_planned: 20,
   total_posts_published: 0,
   voice_variation_id: null,
+  origin: 'objective_generated',
   deleted_at: null,
   created_at: '2026-04-30T00:00:00Z',
   updated_at: '2026-04-30T00:00:00Z',
@@ -79,6 +82,7 @@ describe('createCampaign', () => {
     frequency: 'daily',
     posts_per_week: 5,
     start_date: '2026-05-01',
+    origin: 'objective_generated',
   }
 
   it('returns the created campaign', async () => {
@@ -165,5 +169,52 @@ describe('softDeleteCampaignGuarded', () => {
   it('throws when supabase returns an error', async () => {
     const { client } = createMockClient(null, { message: 'Delete error' })
     await expect(softDeleteCampaignGuarded(client, 'camp-1')).rejects.toThrow('Delete error')
+  })
+})
+
+describe('moveCampaignToAwaitingBrief', () => {
+  it('returns updated row when campaign is draft', async () => {
+    const { client, builder } = createMockClient({ ...mockCampaign, status: 'awaiting_brief' })
+    const result = await moveCampaignToAwaitingBrief(client, 'camp-1')
+    expect(result).toMatchObject({ id: 'camp-1', status: 'awaiting_brief' })
+    expect(builder.eq).toHaveBeenCalledWith('status', 'draft')
+  })
+
+  it('returns null when guard fails (non-draft status)', async () => {
+    const { client } = createMockClient(null, null)
+    const result = await moveCampaignToAwaitingBrief(client, 'camp-1')
+    expect(result).toBeNull()
+  })
+
+  it('throws when supabase returns an error', async () => {
+    const { client } = createMockClient(null, { message: 'Update error' })
+    await expect(moveCampaignToAwaitingBrief(client, 'camp-1')).rejects.toThrow('Update error')
+  })
+})
+
+// No test existed for activateCampaign before B2.6 (a pre-existing gap this
+// session found and closed) — now load-bearing since its guard value changed
+// (ADR 0017 §11: 'draft' -> 'awaiting_brief').
+describe('activateCampaign', () => {
+  it('returns updated row and guards on awaiting_brief (not the old draft value)', async () => {
+    const { client, builder } = createMockClient({ ...mockCampaign, status: 'active', total_posts_planned: 5 })
+    const result = await activateCampaign(client, 'camp-1', 5)
+    expect(result).toMatchObject({ id: 'camp-1', status: 'active' })
+    expect(builder.eq).toHaveBeenCalledWith('status', 'awaiting_brief')
+    expect(builder.eq).not.toHaveBeenCalledWith('status', 'draft')
+    expect(builder.update).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'active', total_posts_planned: 5 }),
+    )
+  })
+
+  it('returns null when guard fails (non-awaiting_brief status)', async () => {
+    const { client } = createMockClient(null, null)
+    const result = await activateCampaign(client, 'camp-1', 5)
+    expect(result).toBeNull()
+  })
+
+  it('throws when supabase returns an error', async () => {
+    const { client } = createMockClient(null, { message: 'Update error' })
+    await expect(activateCampaign(client, 'camp-1', 5)).rejects.toThrow('Update error')
   })
 })

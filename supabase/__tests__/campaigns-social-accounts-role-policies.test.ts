@@ -98,6 +98,7 @@ describe('campaigns/social_accounts role policies (ADR 0013 §5.3/§5.4)', () =>
         frequency: 'weekly',
         posts_per_week: 1,
         start_date: '2026-07-01',
+        origin: 'objective_generated',
       })
       .select()
     expect(error).not.toBeNull()
@@ -116,6 +117,7 @@ describe('campaigns/social_accounts role policies (ADR 0013 §5.3/§5.4)', () =>
         frequency: 'weekly',
         posts_per_week: 1,
         start_date: '2026-07-01',
+        origin: 'objective_generated',
       })
       .select()
     expect(error).toBeNull()

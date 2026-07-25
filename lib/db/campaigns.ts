@@ -64,6 +64,31 @@ export async function updateCampaign(
   return row as CampaignRow
 }
 
+// ADR 0017 §11 — Stage A's atomic pause point: brief assembly moves a
+// campaign out of the old one-shot 'draft' generation path into
+// 'awaiting_brief', where it stays until the brief pipeline (B2.1-B2.5)
+// approves and generates. Mirrors activateCampaign's guard shape exactly.
+export async function moveCampaignToAwaitingBrief(
+  client: SupabaseClient,
+  id: string,
+): Promise<CampaignRow | null> {
+  const { data, error } = await client
+    .from('campaigns')
+    .update({ status: 'awaiting_brief' })
+    .eq('id', id)
+    .eq('status', 'draft')
+    .is('deleted_at', null)
+    .select()
+    .maybeSingle()
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as CampaignRow | null) ?? null
+}
+
+// ADR 0017 §11 — sole caller is generate.ts:210 (confirmed via git grep;
+// safe to change the guard in place rather than add a parallel function).
+// Guard moved from 'draft' to 'awaiting_brief': generation is now gated on
+// the brief pipeline (draft -[assembleBrief]-> awaiting_brief -[approved
+// brief, Stage D]-> active), not the old one-shot 'draft' entry point.
 export async function activateCampaign(
   client: SupabaseClient,
   id: string,
@@ -73,7 +98,7 @@ export async function activateCampaign(
     .from('campaigns')
     .update({ status: 'active', total_posts_planned: totalPostsPlanned })
     .eq('id', id)
-    .eq('status', 'draft')
+    .eq('status', 'awaiting_brief')
     .is('deleted_at', null)
     .select()
     .maybeSingle()

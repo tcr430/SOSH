@@ -17,7 +17,9 @@ import type {
   Platform,
   CampaignFrequency,
   CampaignStatus,
+  CampaignOrigin,
   PostStatus,
+  PostRole,
   EngagementType,
   EngagementSentiment,
   EngagementStatus,
@@ -64,8 +66,10 @@ type _PlanValues = Assert<Equals<Plan, 'trial' | 'plus' | 'pro' | 'agency'>>
 type _LanguageValues = Assert<Equals<Language, 'en' | 'pt' | 'es'>>
 type _PlatformValues = Assert<Equals<Platform, 'linkedin' | 'twitter' | 'instagram' | 'facebook' | 'threads'>>
 type _FrequencyValues = Assert<Equals<CampaignFrequency, 'daily' | '3x_week' | 'weekly' | 'custom'>>
-type _CampaignStatusValues = Assert<Equals<CampaignStatus, 'draft' | 'active' | 'paused' | 'completed'>>
+type _CampaignStatusValues = Assert<Equals<CampaignStatus, 'draft' | 'awaiting_brief' | 'active' | 'paused' | 'completed'>>
+type _CampaignOriginValues = Assert<Equals<CampaignOrigin, 'manual' | 'objective_generated' | 'signal_generated'>>
 type _PostStatusValues = Assert<Equals<PostStatus, 'draft' | 'approved' | 'scheduled' | 'published' | 'failed' | 'skipped'>>
+type _PostRoleValues = Assert<Equals<PostRole, 'anchor_thesis' | 'founder_perspective' | 'customer_proof' | 'objection_response' | 'conversation_starter' | 'follow_up'>>
 type _EngagementTypeValues = Assert<Equals<EngagementType, 'comment' | 'dm' | 'mention'>>
 type _SentimentValues = Assert<Equals<EngagementSentiment, 'positive' | 'neutral' | 'negative' | 'urgent'>>
 type _EngagementStatusValues = Assert<Equals<EngagementStatus, 'pending' | 'replied' | 'ignored' | 'auto_replied'>>
@@ -159,13 +163,16 @@ const _campaignInsertMinimal = {
   frequency: 'weekly' as CampaignFrequency,
   posts_per_week: 3,
   start_date: '2026-06-01',
+  origin: 'objective_generated' as CampaignOrigin,
 } satisfies CampaignInsert
 
 // Negative: missing required fields (single-line)
 // @ts-expect-error — business_id is required
-const _campaignMissingBusiness = { name: 'Q3', objective: 'X', platforms: ['linkedin' as Platform], frequency: 'weekly' as CampaignFrequency, posts_per_week: 3, start_date: '2026-06-01' } satisfies CampaignInsert
+const _campaignMissingBusiness = { name: 'Q3', objective: 'X', platforms: ['linkedin' as Platform], frequency: 'weekly' as CampaignFrequency, posts_per_week: 3, start_date: '2026-06-01', origin: 'objective_generated' as CampaignOrigin } satisfies CampaignInsert
 // @ts-expect-error — platforms is required
-const _campaignMissingPlatforms = { business_id: 'uuid', name: 'Q3', objective: 'X', frequency: 'weekly' as CampaignFrequency, posts_per_week: 3, start_date: '2026-06-01' } satisfies CampaignInsert
+const _campaignMissingPlatforms = { business_id: 'uuid', name: 'Q3', objective: 'X', frequency: 'weekly' as CampaignFrequency, posts_per_week: 3, start_date: '2026-06-01', origin: 'objective_generated' as CampaignOrigin } satisfies CampaignInsert
+// @ts-expect-error — origin is required (ADR 0017 §3.1, [db-MAJOR-3])
+const _campaignMissingOrigin = { business_id: 'uuid', name: 'Q3', objective: 'X', platforms: ['linkedin' as Platform], frequency: 'weekly' as CampaignFrequency, posts_per_week: 3, start_date: '2026-06-01' } satisfies CampaignInsert
 
 const _campaignUpdateEmpty = {} satisfies CampaignUpdate
 

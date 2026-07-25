@@ -131,6 +131,8 @@ export async function createCampaignAction(
       total_posts_planned: totalPostsPlanned,
       total_posts_published: 0,
       voice_variation_id: parsed.data.voiceVariationId ?? null,
+      // ADR 0017 §3.1: the only origin Track B (this form) produces today.
+      origin: 'objective_generated',
     })
 
     // Step 8: Increment trial counter (errors swallowed — must not block the user)

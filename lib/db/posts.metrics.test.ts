@@ -19,6 +19,7 @@ const mockPublishedPost: PostRow = {
   platform_post_id: 'linkedin-post-123',
   platform_url: 'https://linkedin.com/test',
   status: 'published',
+  role: null,
   rejection_note: null,
   ai_generation_metadata: {},
   publish_attempts: 1,

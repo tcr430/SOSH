@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { createMockClient } from './__test-utils__/mock-client'
-import { listEvidenceMemoryCandidates } from './memory-evidence'
+import { listEvidenceMemoryCandidates, getEvidenceMemoryByIds } from './memory-evidence'
 import type { EvidenceMemoryRow } from './types'
 
 function makeRow(overrides: Partial<EvidenceMemoryRow> = {}): EvidenceMemoryRow {
@@ -96,6 +96,57 @@ describe('listEvidenceMemoryCandidates', () => {
   it('returns an empty array when no rows match', async () => {
     const { client } = createMockClient([], null)
     const result = await listEvidenceMemoryCandidates(client, 'biz-1')
+    expect(result).toEqual([])
+  })
+})
+
+describe('getEvidenceMemoryByIds', () => {
+  it('queries evidence_memory filtered by business_id, id list, status=active, deleted_at null', async () => {
+    const { client, builder } = createMockClient([makeRow()], null)
+
+    await getEvidenceMemoryByIds(client, 'biz-1', ['ev-1', 'ev-2'])
+
+    expect(client.from).toHaveBeenCalledWith('evidence_memory')
+    expect(builder.eq).toHaveBeenCalledWith('business_id', 'biz-1')
+    expect(builder.in).toHaveBeenCalledWith('id', ['ev-1', 'ev-2'])
+    expect(builder.eq).toHaveBeenCalledWith('status', 'active')
+    expect(builder.is).toHaveBeenCalledWith('deleted_at', null)
+  })
+
+  // Session 24-D (MAJOR-1 correction) — mirrors listEvidenceMemoryCandidates's
+  // own dedicated tenancy test above: pinned on its own, not incidentally
+  // inside the omnibus filter test, so dropping the .eq('business_id', ...)
+  // reddens loudly and unmistakably. This function runs under a service-role
+  // client on the generation/critique paths (RLS bypassed) — business_id is
+  // the ONLY thing preventing a cross-tenant evidence render via a pinned id.
+  it('scopes the read to business_id — the tenancy guard for the citation-by-id fetch (MAJOR-1)', async () => {
+    const { client, builder } = createMockClient([makeRow()], null)
+    await getEvidenceMemoryByIds(client, 'biz-42', ['ev-1'])
+    expect(builder.eq).toHaveBeenCalledWith('business_id', 'biz-42')
+  })
+
+  it('returns an empty array when given an empty id list (no query needed)', async () => {
+    const { client, from } = createMockClient([makeRow()], null)
+    const result = await getEvidenceMemoryByIds(client, 'biz-1', [])
+    expect(result).toEqual([])
+    expect(from).not.toHaveBeenCalled()
+  })
+
+  it('throws when the query returns an error', async () => {
+    const { client } = createMockClient(null, { message: 'connection reset' })
+    await expect(getEvidenceMemoryByIds(client, 'biz-1', ['ev-1'])).rejects.toThrow('connection reset')
+  })
+
+  it('returns fewer rows than ids requested when some are retired/deleted (the staleness-gap close)', async () => {
+    const { client } = createMockClient([makeRow({ id: 'ev-1' })], null)
+    const result = await getEvidenceMemoryByIds(client, 'biz-1', ['ev-1', 'ev-retired'])
+    expect(result).toHaveLength(1)
+    expect(result[0].id).toBe('ev-1')
+  })
+
+  it('renders nothing for a foreign-tenant id — mocked fetch legitimately returns zero rows, matching the scoped query at the DB layer', async () => {
+    const { client } = createMockClient([], null)
+    const result = await getEvidenceMemoryByIds(client, 'biz-1', ['ev-owned-by-biz-99'])
     expect(result).toEqual([])
   })
 })

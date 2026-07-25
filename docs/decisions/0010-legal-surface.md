@@ -1067,6 +1067,7 @@ GRANT EXECUTE ON FUNCTION public.purge_business(uuid) TO service_role;
 | evidence_memory | yes (business_id) | CASCADE | yes | none — cascade = erasure (may hold third-party quote PII) |
 | audience_memory | yes (business_id) | CASCADE | yes | none — cascade = erasure |
 | performance_memory | yes (business_id) | CASCADE | yes | none — cascade = erasure |
+| campaign_briefs | yes (business_id) | CASCADE | yes | none — cascade = erasure (ADR 0017 §2.5) |
 | **billing_events** | yes (business_id nullable) | **SET NULL** | no | **RETAIN (tax/audit); REDACT PII before root delete** |
 | **business_deletion_requests** | self (business_id) | **NO ACTION → FK DROPPED (D2.1)** | no | **RETAIN as audit; orchestrator sets `completed` + `purged_at`** |
 | email_suppressions | no (keyed by email, global) | — | n/a | RETAIN (deliverability / legitimate interest; not business-reachable) |
@@ -1075,6 +1076,11 @@ GRANT EXECUTE ON FUNCTION public.purge_business(uuid) TO service_role;
 | cron_health | no | — | n/a | RETAIN (ops) |
 
 Only `business_deletion_requests` (NO ACTION) would have blocked the root delete; D2.1 resolves it. Every other business-scoped table either cascades or is deliberately retained.
+
+**Session 24-D confirmation (2026-07-24):** the `campaign_briefs` row above (added when ADR 0017's B2.0
+migration shipped, per the §D2.5/A3 note in `docs/reviews/session-24-reviewer.md`) is present and correct
+— `business_id` FK, `CASCADE`, no redaction needed. No table-level change; this is the doc-side
+confirmation the correction pass's D6 step was asked to record.
 
 #### D2.6 — Retention & redaction (D1 / D2)
 

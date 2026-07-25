@@ -117,6 +117,7 @@ const mockCampaign: CampaignRow = {
   platforms: ['linkedin'], frequency: 'weekly', posts_per_week: 1,
   start_date: '2026-06-01', end_date: null, status: 'active',
   total_posts_planned: 6, total_posts_published: 0, voice_variation_id: null,
+  origin: 'objective_generated',
   deleted_at: null,
   created_at: '2026-05-01T00:00:00Z', updated_at: '2026-05-01T00:00:00Z',
 }
@@ -126,7 +127,7 @@ const mockDraftPost: PostRow = {
   platform: 'linkedin', content: 'The previous draft', hashtags: ['#saas'],
   media_urls: [], scheduled_at: '2026-08-01T10:00:00Z', published_at: null,
   platform_post_id: null, platform_url: null, status: 'draft',
-  rejection_note: null, ai_generation_metadata: {}, publish_attempts: 0,
+  role: null, rejection_note: null, ai_generation_metadata: {}, publish_attempts: 0,
   last_publish_attempt_at: null, last_publish_error: null, deleted_at: null,
   created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
 }

@@ -52,7 +52,7 @@ vi.mock('@/lib/db/voice', () => ({
   getVariationForBusiness: vi.fn(),
 }))
 
-import { buildCustomerContext } from './context'
+import { buildCustomerContext, type CustomerContext } from './context'
 import { getBusinessById } from '@/lib/db/businesses'
 import { getBrandVoice } from '@/lib/db/brand-voices'
 import { listCampaigns } from '@/lib/db/campaigns'
@@ -123,6 +123,7 @@ const makeCampaign = (n: number): CampaignRow => ({
   total_posts_planned: 10,
   total_posts_published: 0,
   voice_variation_id: null,
+  origin: 'objective_generated',
   deleted_at: null,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
@@ -157,6 +158,7 @@ const mockPost: PostRow = {
   platform_post_id: null,
   platform_url: null,
   status: 'published',
+  role: null,
   rejection_note: null,
   ai_generation_metadata: {},
   publish_attempts: 0,
@@ -617,3 +619,19 @@ describe('buildCustomerContext — B3 behaviour-equivalence (ADR 0016 §6, MEM-C
     expect(listTopPostMetrics).not.toHaveBeenCalled()
   })
 })
+
+// ADR 0017 §5.1 (L-10) — B2.5 wires memory into the BRIEF assembly input
+// only; CustomerContext itself must be byte-for-byte unchanged. A compile-time
+// shape diff (not a runtime check — TS types don't exist at runtime), mirroring
+// lib/db/types.test.ts's Assert<Equals<...>> pattern: this reddens at BUILD
+// TIME if a field is ever added to, removed from, or renamed on
+// CustomerContext without deliberately updating this literal alongside it.
+type Equals<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false
+type Assert<T extends true> = T
+
+type _CustomerContextShapeUnchanged = Assert<
+  Equals<
+    keyof CustomerContext,
+    'business' | 'brandVoice' | 'recentCampaigns' | 'recentPostPerformance' | 'trialState'
+  >
+>

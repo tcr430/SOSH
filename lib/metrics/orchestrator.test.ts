@@ -68,6 +68,7 @@ function makePost(overrides: Partial<PostRow> = {}): PostRow {
     platform_post_id: 'li-post-1',
     platform_url: 'https://linkedin.com/test',
     status: 'published',
+    role: null,
     rejection_note: null,
     ai_generation_metadata: {},
     publish_attempts: 1,
