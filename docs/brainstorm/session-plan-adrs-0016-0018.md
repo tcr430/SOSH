@@ -126,6 +126,6 @@ Track A without re-deriving this plan from the strategy docs.
 **Update (Session 24-D, 2026-07-25):** Track B (ADR 0017, Mode 2 upgrade) landed — B2.0–B2.7 built,
 Session 24 reviewed, Session 24-D correction pass (D0–D7) closed every finding including BLOCKER-1:
 PR [#2](https://github.com/tcr430/SOSH/pull/2) ran both `app-tests` and `db-tests` green
-(`docs/current-phase.md`, 2026-07-25 entry). Track B's range SHA is *(this D7 commit — backfilled below)*.
+(`docs/current-phase.md`, 2026-07-25 entry). Track B's range SHA (D7, the correction-pass close-out commit) is `93454d94`.
 Track C (ADR 0018, diff-based learning capture) is the remaining queued work from this plan — not yet
 started.
