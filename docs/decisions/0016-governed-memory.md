@@ -600,3 +600,21 @@ table here.** If Track A's Builder finds a step needs any of them, that is a STO
 ---
 
 ADR 0016 written and accepted — 10 MEM-* constraints, 4 new tables, embeddings deferred, relationship-memory deferred.
+
+---
+
+## Amendment A — §10 evidence/audience/brand consumers now WIRED (2026-07-24)
+
+**Author:** Session 24-D (Claude Code, Sonnet 5), noting a state closed by ADR 0017's Track B landing.
+§10 named ADR 0017 (Mode 2 upgrade) as the intended consumer of `retrieveBrandMemory`/
+`retrieveEvidenceMemory`/`retrieveAudienceMemory`, and `lib/memory/index.ts` carried a header comment
+recording that, as of Track A, those three had "NO production consumer yet, by design." ADR 0017's brief
+assembly (`lib/campaigns/brief.ts`'s `assembleBrief`, B2.5) now calls all three (`retrieveEvidenceMemory`,
+`retrieveAudienceMemory`, `retrieveBrandMemory`) to build the brief-assembly prompt's evidence/audience/
+brand candidates — closing the "unwired by design" state `lib/memory/index.ts`'s comment describes. That
+comment is a code artifact, not this ADR, and is unchanged by this Session 24-D correction pass (D6 is
+docs-only); a future session touching `lib/memory/index.ts` should update its header comment to reflect
+that the deferred-consumer state is now closed, rather than treating this note as having already done so.
+
+**Evidence:** `lib/campaigns/brief.ts:76-79` (Session 24 B2.5, `bc3b2d4b`); `docs/decisions/0017-mode-2-upgrade.md`
+§5.1 (`MODE2-MEMORY-WIRED`).

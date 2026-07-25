@@ -1077,6 +1077,11 @@ GRANT EXECUTE ON FUNCTION public.purge_business(uuid) TO service_role;
 
 Only `business_deletion_requests` (NO ACTION) would have blocked the root delete; D2.1 resolves it. Every other business-scoped table either cascades or is deliberately retained.
 
+**Session 24-D confirmation (2026-07-24):** the `campaign_briefs` row above (added when ADR 0017's B2.0
+migration shipped, per the §D2.5/A3 note in `docs/reviews/session-24-reviewer.md`) is present and correct
+— `business_id` FK, `CASCADE`, no redaction needed. No table-level change; this is the doc-side
+confirmation the correction pass's D6 step was asked to record.
+
 #### D2.6 — Retention & redaction (D1 / D2)
 
 - **Retain `billing_events`** — tax/financial record (10-year retention, §5). `business_id` auto-nulled by its SET NULL FK on root delete; redact `stripe_customer_id` → NULL and `payload` → `{redacted:true,type}` **before** the delete (the SET NULL means the rows can no longer be found by `business_id` afterward). PK `id` retained (pseudonymous Stripe event ref, audit key).

@@ -122,3 +122,9 @@ The active branch (`session-22-*`) is closing out ADR 0015's test-execution-inte
 findings. This session plan is the next queued work stream — worth a line in
 `docs/current-phase.md` once Session 22's work lands, so a future session picks up
 Track A without re-deriving this plan from the strategy docs.
+
+**Update (Session 24-D, 2026-07-24):** Track B (ADR 0017, Mode 2 upgrade) landed — B2.0–B2.7 built,
+Session 24 reviewed, Session 24-D correction pass (D0–D6 committed; D7 CI-green pending) closing the
+review's findings. Track B's own SHA is pending D7 (the range's final commit, once CI is confirmed green
+per BLOCKER-1). Track C (ADR 0018, diff-based learning capture) is the remaining queued work from this
+plan — not yet started.

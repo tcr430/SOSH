@@ -672,3 +672,60 @@ Explicitly **NOT** built in Track B — a future session must not build these he
 ADR 0017 written and accepted — 21 MODE2-* constraints, brief as **table** (`campaign_briefs`), format
 families **single-post + thread**, brief-review UI **minimal-in-scope / high-touch-deferred**, cross-set
 redundancy **deferred** (behind `MODE2-REDUNDANCY-UNDEFER`).
+
+---
+
+## Amendment A — Session 24-D correction pass (2026-07-24)
+
+**Author:** Session 24-D (Claude Code, Sonnet 5). **Scope:** two clarifying corrections surfaced by the
+Session 24 independent review (`docs/reviews/session-24-reviewer.md`, MAJOR-1 and MINOR-5). No section of
+the original ADR body is rewritten; both are additive.
+
+### A.1 — §9/§12 citation-by-id boundary: hardened from "asserted" to "business_id-enforced" (MAJOR-1)
+
+§9's `MODE2-EVIDENCE-DATA-GUARDED` and §12's caller table describe the citation-by-id boundary
+(`wrapEvidenceForPrompt()` re-fetching evidence by pinned id at render time) as the guard against a stale
+or cross-tenant row reaching a prompt. As originally shipped (B2.3–B2.6), the underlying fetch
+(`getEvidenceMemoryByIds`, `lib/db/memory-evidence.ts`) filtered by id + `status='active'` only — **no
+`business_id` filter** — while running under a service-role client (RLS bypassed) on the generation and
+critique paths. The boundary was real in practice (ids are unguessable `gen_random_uuid()`s and the
+assembly model only ever sees its own tenant's candidate ids), but it was **asserted, not enforced**: a
+code comment claimed "the pinned id set itself is the trust boundary" without a query-level guarantee
+behind it.
+
+**Effect on ADR prose:** §9 and §12's caller table should be read as now also stating: `wrapEvidenceForPrompt()`
+requires a `businessId` argument and threads it into `getEvidenceMemoryByIds`, which filters
+`.eq('business_id', businessId)` — the same rule `lib/db/memory-evidence.ts`'s sibling function
+(`listEvidenceMemoryCandidates`) already followed. Defense in depth, not a replacement: citation-by-id
+AND business_id scoping, both present at the render-time choke point. Additionally, `assembleBrief` now
+rejects any `pinnedEvidence` id the model returns that was not in the candidate set it was actually shown,
+before persistence — closing the acceptance-time gap alongside the render-time one.
+
+**Evidence:** Session 24-D correction pass D1 (`fc3bb063`); `security-reviewer` and `database-reviewer`
+both re-ran clean against the hardened query. `docs/reviews/session-24-reviewer.md`'s CORRECTION PASS
+section, MAJOR-1 row.
+
+### A.2 — §5.2 `FrozenBrief` type: comment softened, `content` now deep-readonly (MINOR-5)
+
+§5.2 states "A caller cannot pass a plain `Brief` where a `FrozenBrief` is required" — this overstates
+what the `_brand: 'FrozenBrief'` string-literal tag actually enforces at the type level (the same
+convention-strength brand pattern as `VaultSecretId`/`RenderedEvidence` elsewhere in this codebase; a
+single-step `{...} as FrozenBrief` from a close-enough shape is legal TypeScript). §5.2's own next sentence
+already correctly identifies the DB-layer `frozen_at` guard trigger as the real backstop — this amendment
+just removes the type-layer overclaim that sat alongside it. Separately, `content` was typed shallowly
+(`Readonly<CampaignBriefContent>`), so its arrays (`pinnedEvidence`/`roleSequence`) stayed typed-mutable —
+TypeScript would have permitted a `.push()` that `deepFreezeContent`'s `Object.freeze()` calls already
+threw on at runtime.
+
+**Effect on ADR prose:** §5.2's "Type layer" bullet should be read as: `FrozenBrief` is produced by exactly
+one function today (`freezeBrief`, confirmed via `git grep`), and its `content` field is now genuinely
+deep-readonly (a local `DeepReadonly<T>` mapped type), matching what the runtime freeze already
+guaranteed — but the brand itself remains convention-strength, not nominal; the DB trigger is, and was
+always meant to be, the actual enforcement layer. One real consumer changed as a result:
+`checkRoleCoverage` (`lib/campaigns/consistency.ts`, §8) had its `expected` parameter widened from a
+mutable array type to `ReadonlyArray<...>` — a strict widening (still accepts the old mutable-array
+callers), not a behavior change, since the function only ever reads via `.map()`.
+
+**Evidence:** Session 24-D correction pass D4 (`f9797d4c`); `type-design-analyzer` confirmed the retype is
+sound and the softened comment now matches both code and this ADR. `docs/reviews/session-24-reviewer.md`'s
+CORRECTION PASS section, MINOR-5 row.
