@@ -683,10 +683,16 @@ export type PerformanceMemoryRow = MemoryGovernanceRow & {
 
 export type CampaignBriefStatus = 'draft' | 'critiqued' | 'approved' | 'generated'
 
-// The campaign post-role vocabulary (ADR 0017 §3.2) as it appears inside a
-// brief's roleSequence — identical value set to PostRow.role's PostRole, but
-// named distinctly per ADR §2.2 because it's read in a different context
-// (a brief's planned sequence vs. a generated post's assigned role).
+// Session 24-D (NIT-3) — chose to KEEP this bare alias rather than inline
+// PostRole at its two use sites: the campaign post-role vocabulary (ADR 0017
+// §3.2, build-guide L-5) as it appears inside a brief's roleSequence is
+// identical in VALUE SET to PostRow.role's PostRole, but the two are named
+// distinctly on purpose — L-5 is explicit that post ROLES are a field
+// assigned at the brief stage, a deliberately separate concept from the
+// generated post's own role column, even though today they share one
+// underlying string union. The alias documents that intent; inlining
+// PostRole would erase the distinction the ADR draws, for a false
+// "simplification."
 export type CampaignPostRole = PostRole
 
 // ADR 0017 §2.2 — the campaign_briefs.content JSONB shape. Named (never

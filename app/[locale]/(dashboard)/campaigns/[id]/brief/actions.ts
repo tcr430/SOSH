@@ -87,6 +87,7 @@ export async function approveBriefAction(
     revalidatePath(`/[locale]/campaigns/${parsed.data.campaignId}/brief`, 'page')
     return { status: 'approved' }
   } catch {
+    // TODO(logger): log the swallowed error once the project logger lands (CLAUDE.md — 'we'll add this later'); NIT-4, Session 24-D. Matches the pre-existing generate-action.ts convention.
     return { status: 'error', error: 'generic' }
   }
 }
@@ -137,6 +138,7 @@ export async function rejectBriefAction(
     revalidatePath(`/[locale]/campaigns/${parsed.data.campaignId}/brief`, 'page')
     return { status: 'rejected' }
   } catch {
+    // TODO(logger): log the swallowed error once the project logger lands (CLAUDE.md — 'we'll add this later'); NIT-4, Session 24-D. Matches the pre-existing generate-action.ts convention.
     return { status: 'error', error: 'generic' }
   }
 }
@@ -193,6 +195,7 @@ export async function editBriefAction(
     revalidatePath(`/[locale]/campaigns/${parsed.data.campaignId}/brief`, 'page')
     return { status: 'saved' }
   } catch {
+    // TODO(logger): log the swallowed error once the project logger lands (CLAUDE.md — 'we'll add this later'); NIT-4, Session 24-D. Matches the pre-existing generate-action.ts convention.
     return { status: 'error', error: 'generic' }
   }
 }

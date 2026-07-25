@@ -43,12 +43,43 @@ export function BriefReviewForm({ campaignId, brief }: BriefReviewFormProps) {
     }
   }, [approveState.status, rejectState.status, editState.status, router])
 
+  // Session 24-D (NIT-1 correction) — approved_success/rejected_success/
+  // saved_success were authored in all three locales but never consumed;
+  // router.refresh() alone gave no user-facing approve/reject/edit feedback.
+  // Computed once, ABOVE the status switch below, so it renders regardless
+  // of which branch the switch takes — approve transitions brief.status to
+  // 'approved'/'generated' (an early-return branch), while reject/edit keep
+  // it 'critiqued' (the main render path); the confirmation must survive
+  // either.
+  const successMessage =
+    approveState.status === 'approved'
+      ? t('approved_success')
+      : rejectState.status === 'rejected'
+        ? t('rejected_success')
+        : editState.status === 'saved'
+          ? t('saved_success')
+          : null
+
+  // Session 24-D (NIT-2 correction) — was called twice (length check + map)
+  // on the same brief.critique input; hoisted to one call.
+  const critiqueLines = getCritiqueLines(brief.critique)
+
   switch (brief.status) {
     case 'draft':
-      return <p className="text-sm text-muted-foreground">{t('pending')}</p>
+      return (
+        <>
+          {successMessage && <p role="status" className="text-sm text-emerald-600">{successMessage}</p>}
+          <p className="text-sm text-muted-foreground">{t('pending')}</p>
+        </>
+      )
     case 'approved':
     case 'generated':
-      return <p className="text-sm text-muted-foreground">{t('already_approved')}</p>
+      return (
+        <>
+          {successMessage && <p role="status" className="text-sm text-emerald-600">{successMessage}</p>}
+          <p className="text-sm text-muted-foreground">{t('already_approved')}</p>
+        </>
+      )
     case 'critiqued':
       break
     default: {
@@ -59,6 +90,7 @@ export function BriefReviewForm({ campaignId, brief }: BriefReviewFormProps) {
 
   return (
     <div className="space-y-6">
+      {successMessage && <p role="status" className="text-sm text-emerald-600">{successMessage}</p>}
       <section className="space-y-4 rounded-lg border border-border bg-card p-6">
         <div>
           <h2 className="text-sm font-medium text-muted-foreground mb-1">{t('narrative_label')}</h2>
@@ -84,9 +116,13 @@ export function BriefReviewForm({ campaignId, brief }: BriefReviewFormProps) {
             <h2 className="text-sm font-medium text-muted-foreground mb-1">
               {t('critique_label')} — {t('score_label', { score: brief.overall_score })}
             </h2>
-            {getCritiqueLines(brief.critique).length > 0 && (
+            {critiqueLines.length > 0 && (
               <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-                {getCritiqueLines(brief.critique).map((line, i) => (
+                {/* NIT-4 (Session 24-D) — key={i}: low-risk (critiqueLines is an
+                    immutable, server-derived array rendered once per brief
+                    critique, never reordered/filtered client-side), but the
+                    same "index as key" class the logger TODOs below track. */}
+                {critiqueLines.map((line, i) => (
                   <li key={i}>{line}</li>
                 ))}
               </ul>
