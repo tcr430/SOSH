@@ -748,3 +748,90 @@ export type CampaignBriefInsert = {
 export type CampaignBriefUpdate = Partial<
   Omit<CampaignBriefRow, 'id' | 'created_at' | 'business_id' | 'campaign_id' | 'deleted_at'>
 >
+
+// ---------------------------------------------------------------------------
+// 17. post_ai_originals / post_edit_signals (ADR 0018 §2.3/§3.3) — Session 25
+// C2.2. post_ai_originals is immutable (write-once trigger, no updated_at);
+// post_edit_signals is the durable outbox row per (post, ai_original) pending
+// Tier-0/Tier-1 distillation. PostUpdate (lib/db/types.ts:320) is NOT changed
+// by this addition — stated explicitly per ADR §2.6, so no speculative Omit
+// is added there.
+// ---------------------------------------------------------------------------
+
+export type PostAiOriginalGenerationKind = 'initial' | 'regeneration'
+export type PostAiOriginalFormat = 'single' | 'thread'
+
+export type PostAiOriginalRow = {
+  id: string
+  business_id: string
+  post_id: string
+  campaign_id: string
+  revision: number
+  generation_kind: PostAiOriginalGenerationKind
+  format: PostAiOriginalFormat
+  payload: Record<string, unknown>
+  rendered_content: string
+  hashtags: string[]
+  schema_version: number
+  created_at: string
+}
+
+export type PostAiOriginalInsert = {
+  id?: string
+  business_id: string
+  post_id: string
+  campaign_id: string
+  revision?: number
+  generation_kind: PostAiOriginalGenerationKind
+  format: PostAiOriginalFormat
+  payload: Record<string, unknown>
+  rendered_content: string
+  hashtags?: string[]
+  schema_version: number
+  created_at?: string
+}
+
+export type PostEditSignalStatus = 'pending' | 'processing' | 'processed' | 'failed' | 'abandoned'
+export type PostEditSignalClass = 'preference' | 'correction' | 'inconclusive'
+
+export type PostEditSignalRow = {
+  id: string
+  business_id: string
+  post_id: string
+  campaign_id: string
+  ai_original_id: string
+  human_content: string
+  human_hashtags: string[]
+  approved_at: string
+  status: PostEditSignalStatus
+  attempts: number
+  next_attempt_at: string
+  last_error: string | null
+  processed_at: string | null
+  class: PostEditSignalClass | null
+  pattern_key: string | null
+  signals: Record<string, unknown> | null
+  created_at: string
+  updated_at: string
+}
+
+export type PostEditSignalInsert = {
+  id?: string
+  business_id: string
+  post_id: string
+  campaign_id: string
+  ai_original_id: string
+  human_content: string
+  human_hashtags?: string[]
+  approved_at: string
+  status?: PostEditSignalStatus
+  attempts?: number
+  next_attempt_at?: string
+  last_error?: string | null
+  processed_at?: string | null
+  class?: PostEditSignalClass | null
+  pattern_key?: string | null
+  signals?: Record<string, unknown> | null
+  created_at?: string
+  updated_at?: string
+}
