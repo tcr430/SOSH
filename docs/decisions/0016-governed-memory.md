@@ -618,3 +618,33 @@ that the deferred-consumer state is now closed, rather than treating this note a
 
 **Evidence:** `lib/campaigns/brief.ts:76-79` (Session 24 B2.5, `bc3b2d4b`); `docs/decisions/0017-mode-2-upgrade.md`
 §5.1 (`MODE2-MEMORY-WIRED`).
+
+## Amendment B — §3.4 `performance_memory.pattern_key` (2026-07-26)
+
+**Author:** Session 25 C2.3 (Claude Code, Sonnet 5), closing ADR 0018's §7.2 amendment and its §10
+"ADR 0018 — the WRITER" deferral. §3.4's original table definition and text above are **not edited** —
+this amendment is additive, per this ADR's own append-only convention (Amendment A).
+
+**What changed:** one additive column, `performance_memory.pattern_key text`, plus a `CHECK (source <>
+'distilled' OR pattern_key IS NOT NULL)` and a partial `UNIQUE (business_id, dimension,
+coalesce(platform,''), pattern_key) WHERE source = 'distilled' AND deleted_at IS NULL` index. `pattern_key`
+is the deterministic identity slug (ADR 0018 §7.2) that lets `observation_count` recompute correctly across
+repeated observations of the same phenomenon — without it, Postgres cannot dedupe distilled rows on a NULL
+key, and ADR 0018 §9.6's recompute (which is scoped *by* `pattern_key`) would never see repeat observations
+land on the same row. The CHECK closes that gap by construction rather than by convention. `manual`/`import`
+rows are unaffected and may still carry a NULL `pattern_key`.
+
+Also added in the same migration: `LEARN-VOICE-WRITE-TRIGGER` (ADR 0018 §5.3), a `BEFORE INSERT OR UPDATE`
+trigger on `performance_memory` that rejects any `source = 'distilled'` write with `dimension IN ('format',
+'hook')` if any `post_edit_signals` row sharing its `(business_id, pattern_key)` carries a class other than
+`'preference'` (including an unclassified NULL, treated as fail-closed). This is DB-level enforcement, not
+an app-layer re-derivation — it holds for every write path, not only the one a service-role `if` happens to
+guard.
+
+**RLS + erasure cascade are unaffected.** `pattern_key` is an additive column on an already-cascaded,
+already-RLS-enabled table (§4's `performance_memory` policies, ON DELETE CASCADE from `businesses`) — no
+policy or cascade behaviour changes, and the existing `docs/decisions/0010-legal-surface.md` §D2.5 row for
+`performance_memory` already covers it. No new cascade row is needed.
+
+**Evidence:** `supabase/migrations/20260726020000_performance_memory_pattern_key.sql`; `docs/decisions/
+0018-diff-based-learning-capture.md` §7.2, §5.3.
