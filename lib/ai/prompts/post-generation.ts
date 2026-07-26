@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { Prompt } from './types'
 import type { CustomerContext } from '@/lib/ai/context'
 import type { CampaignRow, Platform } from '@/lib/db/types'
+import { neutralize } from '@/lib/ai/wrap-evidence'
 
 function sanitizeDataField(value: string): string {
   return value.replace(/\[\/DATA\]/gi, '[/data-blocked]')
@@ -155,7 +156,27 @@ ${campaignList}
         // Render the example's platform as provenance (MINOR-3) so the model
         // can calibrate tone when the target platform differs. A null platform
         // is a cross-platform pattern, shown as "Across platforms".
-        .map(p => `- ${p.platform ? `On ${p.platform}: ` : 'Across platforms: '}${p.topContent}`)
+        //
+        // ADR 0018 §10.4 (LEARN-PATTERN-RENDER-GUARDED) — topContent routed
+        // through the shared neutralize() (lib/ai/wrap-evidence.ts), bare, no
+        // additional [DATA]-wrap: this line already lives inside one
+        // section-level [DATA] fence (below), matching how the neighbouring
+        // sanitizeDataField calls in this same function guard bare rather
+        // than re-wrapping each item.
+        //
+        // No length cap added here (security-reviewed, C2.1): today's only
+        // live source is real posts.content via retrieveRelevant's fallback
+        // branch (performance_memory ships empty pre-Track-C), capped to
+        // PERFORMANCE_CAP=3 items; the DB column and the AI output schema are
+        // both otherwise unbounded, the one enforced content-length limit in
+        // the repo is the manual-edit path's z.string().max(5000). Worst case
+        // today is ~3x5000 extra chars, not a meaningful cost escalation.
+        // Once Track C's distillation writer populates performance_memory.
+        // pattern (also an unbounded text column) with synthesized, not
+        // platform-constrained, values, THAT writer must enforce its own
+        // length bound at write time — neutralize() was never designed to
+        // bound length, only to defuse injection primitives.
+        .map(p => `- ${p.platform ? `On ${p.platform}: ` : 'Across platforms: '}${neutralize(p.topContent)}`)
         .join('\n')
       sections.push(`## Top-Performing Post Snippets (use for tone calibration)
 [DATA]
