@@ -675,6 +675,32 @@ export type PerformanceMemoryRow = MemoryGovernanceRow & {
   dimension: PerformanceMemoryDimension
   pattern: string
   platform: Platform | null
+  // ADR 0016 Amendment B / ADR 0018 §7.2 (Session 25 C2.3 migration,
+  // C2.6 type addition) — the deterministic dedup/aggregation key for
+  // distilled rows; NULL for source='manual'/'import' rows, which have no
+  // signal-derived identity. Was missing from this type since the C2.3
+  // migration added the column — added now because C2.6 is the first
+  // writer/reader that needs it in TypeScript.
+  pattern_key: string | null
+}
+
+// Session 25 C2.6 — the FIRST writer for this table (ADR 0018 §7.1). The
+// governance columns source/status/sensitivity/public_use_permission are
+// NOT part of this Insert type: they are fixed by the
+// upsert_distilled_performance_pattern RPC itself (lib/db/memory-performance.ts),
+// never caller-supplied, so there is no way to call the writer with a wrong
+// governance value. last_confirmed_at/expires_at are likewise RPC-computed
+// (now() / now()+90d), not caller inputs.
+export type PerformanceMemoryInsert = {
+  business_id: string
+  dimension: PerformanceMemoryDimension
+  pattern: string
+  pattern_key: string
+  platform: Platform | null
+  scope: MemoryScope
+  scope_ref: string | null
+  confidence: number
+  observation_count: number
 }
 
 // ---------------------------------------------------------------------------
