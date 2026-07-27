@@ -116,4 +116,9 @@ All seven confirmed true by inspection this session:
 
 ## 5. CI — pushed and executed
 
-See commit message for the `app-tests`/`db-tests` run URLs and the `db-tests` executed count, recorded after push per ADR 0015 ("covered" means executed green in CI, never authored). Per `docs/build-guide/session-25.md`'s own note: a `pull_request`-event run does **not** count toward the three-consecutive-green-on-`master` promotion rule — this PR's run is recorded, promotion is not claimed.
+PR: https://github.com/tcr430/SOSH/pull/3 (`session-22-d` → `master`).
+
+- **app-tests:** https://github.com/tcr430/SOSH/actions/runs/30301387745 — **success**.
+- **db-tests:** https://github.com/tcr430/SOSH/actions/runs/30301387919 — **success**. Skip-guard step: `20 file(s) under [supabase/__tests__] all visible, zero failures — green` — non-zero executed count confirmed directly from the CI log, per ADR 0015 ("covered" means executed green in CI, never authored). CI runs against a fresh, freshly-migrated local Postgres (via `supabase/setup-cli`), not the shared dev Supabase project used for the local run in §1 — this is why CI is fully green where the local run had two unrelated pre-existing failures (§1): those were local dev-environment drift on the shared project, not defects in this range.
+
+Per `docs/build-guide/session-25.md`'s own note: a `pull_request`-event run does **not** count toward the three-consecutive-green-on-`master` promotion rule — this PR's run is recorded, promotion is not claimed.
