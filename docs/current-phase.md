@@ -54,6 +54,32 @@
       pre-merge signal only: it does **not** yet block a bad merge, and a RED `db-tests` here would have
       required a human to classify it (DB-behaviour regression vs stack OOM), never assumed transient.
       The count begins to move only once this range lands on `master`.
+    - **2026-07-25 (Session 24-D · D7, BLOCKER-1 closure):** both required checks ran **green** on PR #2
+      (branch `session-22-d`, head `e0809294` — the Session 24 Mode 2 upgrade, B2.0–B2.7, plus the full
+      Session 24-D correction pass, D0–D6) — `app-tests`:
+      [run 30156008250](https://github.com/tcr430/SOSH/actions/runs/30156008250) (1m40s);
+      `db-tests`: [run 30156008266](https://github.com/tcr430/SOSH/actions/runs/30156008266) (2m34s).
+      Skip-guard log: `skip-guard: 15 file(s) under [supabase/__tests__] all visible, zero failures —
+      green.` — 15 matches the on-disk file count in `supabase/__tests__/` exactly (`ls | wc -l` = 15),
+      confirming no file silently dropped from the glob. `mode2-brief-rls.test.ts` and
+      `mode2-role-origin.test.ts` are both present in that directory, so both are covered by the guard's
+      per-file invariant (`scripts/ci/assert-no-empty-suite.mjs`: any file with zero or all-skipped
+      assertions fails the job with `::error::skip-guard: <file> ran zero tests` — read the guard's own
+      source to confirm this before trusting the aggregate line). **Caveat, stated plainly:** this run
+      used `--reporter=json --outputFile=/tmp/db-results.json`, which suppresses vitest's console test
+      count summary, and `db-tests.yml`'s `upload-artifact` step for that JSON only fires `if: failure()`
+      — so the literal PER-FILE executed-test COUNT for the two `mode2-*` suites (e.g. "12 tests") is not
+      independently extractable from a green run's log or artifacts with the tools available this
+      session (no local Docker/Supabase CLI to reproduce `test:db` locally either). What IS verified,
+      by reading the guard's actual pass/fail logic rather than trusting its one-line summary: the job
+      would have hard-failed with a named `::error::` line naming either file specifically had its
+      executed count been zero or all-skipped, and it did not. **This resolves BLOCKER-1** — both this
+      run and `app-tests` above executed the FINAL, fully-corrected D0–D6 range green in CI; every
+      MODE2-\* constraint moves from `AUTHORED-NOT-EXECUTED` to executed. **Tally still 0 of 3** — same
+      rule as above: this is a `pull_request`-event run on `session-22-d`, not a `master` run; it does
+      not yet count toward promotion and does not yet block a bad merge on its own. See
+      `docs/reviews/session-24-reviewer.md`'s CORRECTION PASS section (BLOCKER-1 row) for the full
+      resolution record.
   - **Merge-gate enforcement (Session 22-D):** GitHub ruleset `master-app-tests` (id `19038239`) is live on
     `refs/heads/master`, requiring `app-tests` with no bypass actors. `db-tests` is intentionally **not**
     in any ruleset yet — it stays advisory until the tally above reaches 3/3, at which point the ruleset is

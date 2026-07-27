@@ -41,6 +41,7 @@ function makeGovernedRow(overrides: Partial<PerformanceMemoryRow> = {}): Perform
     dimension: 'topic',
     pattern: 'technical-comparison posts perform well for CTO audiences',
     platform: 'linkedin',
+    pattern_key: null,
     ...overrides,
   }
 }

@@ -35,6 +35,31 @@ export async function countRecentCalls(
   return count ?? 0
 }
 
+// ADR 0018 §6.2 — the cadence gate's "since its last summary" reference
+// point, and §6.2's monthly ceiling both count FROM this existing table
+// rather than a new tracking column — one less piece of state to keep in
+// sync. Returns null when no successful call has ever been recorded (first
+// summarization for this business), which callers must treat as "the
+// interval gate is trivially satisfied" (ADR §6.2: nothing to wait for
+// yet), never as an error.
+export async function getLastSuccessfulCallAt(
+  client: SupabaseClient,
+  businessId: string,
+  promptId: string,
+): Promise<string | null> {
+  const { data, error } = await client
+    .from('ai_usage')
+    .select('created_at')
+    .eq('business_id', businessId)
+    .eq('prompt_id', promptId)
+    .eq('success', true)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as { created_at: string } | null)?.created_at ?? null
+}
+
 export async function listAiUsageByBusiness(
   client: SupabaseClient,
   businessId: string,

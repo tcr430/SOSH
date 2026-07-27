@@ -67,6 +67,28 @@ Note the **Schedule ID** for your ops log.
 
 ---
 
+## Step 2c — Create QStash schedule: capture-learning route
+
+Create a fourth schedule for the diff-based learning capture tick (ADR 0018 §9.2):
+
+| Field       | Value                                                   |
+|-------------|----------------------------------------------------------|
+| Destination | `https://<prod-domain>/api/cron/capture-learning`       |
+| Method      | `POST`                                                  |
+| Cron        | `0 * * * *`                                             |
+| Retries     | `3` (default)                                           |
+| Body        | _(empty)_                                               |
+
+> **Why retries=3, unlike process-deletions?** This tick's own claim RPC (`claim_post_edit_signals`,
+> `FOR UPDATE SKIP LOCKED`) already makes a redelivered tick safe to re-run — a row claimed and
+> finished by the first delivery simply isn't claimable by a retry (LEARN-TICK-IDEMPOTENT). There is
+> no doubled-attempt risk the way there would be for a bespoke retry loop, so the default QStash
+> retry policy is fine here.
+
+Note the **Schedule ID** for your ops log.
+
+---
+
 ## Step 3 — Set production environment variables
 
 Add these in a single Vercel deployment (all three must be present before the deploy goes live):
@@ -161,7 +183,8 @@ The `@upstash/qstash` `Receiver` singleton accepts **either** `CURRENT_SIGNING_K
 ## Step 7 — Alerting
 
 **Primary alert path:** Sentry Cron Monitors (ADR 0007).
-Sentry tracks `publish-tick`, `metrics-sync-tick`, and `process-deletions` by monitor slug.
+Sentry tracks `publish-tick`, `metrics-sync-tick`, `process-deletions`, and `capture-learning`
+(ADR 0018 §9.2/§11) by monitor slug.
 A missed tick (no check-in within the expected window) pages via the Sentry alert rule —
 regardless of whether the trigger source is QStash or Vercel Cron.
 

@@ -1,7 +1,14 @@
 import { describe, it, expect } from 'vitest'
 import { createMockClient } from './__test-utils__/mock-client'
-import { listPerformanceMemoryCandidates } from './memory-performance'
-import type { PerformanceMemoryRow } from './types'
+import {
+  listPerformanceMemoryCandidates,
+  listDistilledPatternsForSummary,
+  upsertDistilledPerformancePattern,
+  countProcessedSignalsForPattern,
+  promotePerformancePattern,
+  demotePerformancePattern,
+} from './memory-performance'
+import type { PerformanceMemoryRow, PerformanceMemoryInsert } from './types'
 
 function makeRow(overrides: Partial<PerformanceMemoryRow> = {}): PerformanceMemoryRow {
   return {
@@ -24,6 +31,7 @@ function makeRow(overrides: Partial<PerformanceMemoryRow> = {}): PerformanceMemo
     dimension: 'topic',
     pattern: 'technical-comparison posts perform well for CTO audiences',
     platform: 'linkedin',
+    pattern_key: null,
     ...overrides,
   }
 }
@@ -97,5 +105,173 @@ describe('listPerformanceMemoryCandidates', () => {
     const { client } = createMockClient([], null)
     const result = await listPerformanceMemoryCandidates(client, 'biz-1')
     expect(result).toEqual([])
+  })
+})
+
+describe('listDistilledPatternsForSummary', () => {
+  it('filters by business_id and source=distilled, excludes retired, requires deleted_at null — but NOT status=active', async () => {
+    const { client, builder } = createMockClient([makeRow({ source: 'distilled', status: 'candidate' })], null)
+
+    await listDistilledPatternsForSummary(client, 'biz-1')
+
+    expect(client.from).toHaveBeenCalledWith('performance_memory')
+    expect(builder.eq).toHaveBeenCalledWith('business_id', 'biz-1')
+    expect(builder.eq).toHaveBeenCalledWith('source', 'distilled')
+    expect(builder.neq).toHaveBeenCalledWith('status', 'retired')
+    expect(builder.is).toHaveBeenCalledWith('deleted_at', null)
+    expect(builder.eq).not.toHaveBeenCalledWith('status', 'active')
+  })
+
+  it('applies the given limit, defaulting to MEMORY_CANDIDATE_LIMIT', async () => {
+    const { client, builder } = createMockClient([], null)
+    await listDistilledPatternsForSummary(client, 'biz-1')
+    expect(builder.limit).toHaveBeenCalledWith(50)
+
+    await listDistilledPatternsForSummary(client, 'biz-1', 10)
+    expect(builder.limit).toHaveBeenCalledWith(10)
+  })
+
+  it('throws when the query returns an error', async () => {
+    const { client } = createMockClient(null, { message: 'connection reset' })
+    await expect(listDistilledPatternsForSummary(client, 'biz-1')).rejects.toThrow('connection reset')
+  })
+})
+
+function makeInsert(overrides: Partial<PerformanceMemoryInsert> = {}): PerformanceMemoryInsert {
+  return {
+    business_id: 'biz-1',
+    dimension: 'format',
+    pattern: 'Human editors shorten AI-generated LinkedIn posts by ~22%',
+    pattern_key: 'length_delta:shorter:linkedin',
+    platform: 'linkedin',
+    scope: 'platform',
+    scope_ref: 'linkedin',
+    confidence: 0.714,
+    observation_count: 5,
+    ...overrides,
+  }
+}
+
+describe('upsertDistilledPerformancePattern', () => {
+  it('calls the upsert RPC with the full parameter set, mapped from the insert shape', async () => {
+    const row = makeRow({ id: 'pf-new', source: 'distilled', status: 'candidate' })
+    const { client } = createMockClient(row, null)
+
+    await upsertDistilledPerformancePattern(client, makeInsert())
+
+    expect(client.rpc).toHaveBeenCalledWith('upsert_distilled_performance_pattern', {
+      p_business_id: 'biz-1',
+      p_dimension: 'format',
+      p_pattern: 'Human editors shorten AI-generated LinkedIn posts by ~22%',
+      p_pattern_key: 'length_delta:shorter:linkedin',
+      p_platform: 'linkedin',
+      p_scope: 'platform',
+      p_scope_ref: 'linkedin',
+      p_confidence: 0.714,
+      p_observation_count: 5,
+    })
+  })
+
+  it('unwraps a SETOF-shaped array response to the single row', async () => {
+    const row = makeRow({ id: 'pf-new' })
+    const { client } = createMockClient([row], null)
+    const result = await upsertDistilledPerformancePattern(client, makeInsert())
+    expect(result.id).toBe('pf-new')
+  })
+
+  it('throws when the RPC returns an error', async () => {
+    const { client } = createMockClient(null, { message: 'constraint violation' })
+    await expect(upsertDistilledPerformancePattern(client, makeInsert())).rejects.toThrow('constraint violation')
+  })
+
+  it('throws when the RPC returns no row at all', async () => {
+    const { client } = createMockClient([], null)
+    await expect(upsertDistilledPerformancePattern(client, makeInsert())).rejects.toThrow(
+      'upsert_distilled_performance_pattern returned no row',
+    )
+  })
+})
+
+describe('countProcessedSignalsForPattern', () => {
+  it('queries post_edit_signals filtered by business_id, pattern_key, status=processed, AND class=preference', async () => {
+    const { client, builder } = createMockClient(null, null)
+    await countProcessedSignalsForPattern(client, 'biz-1', 'length_delta:shorter:linkedin')
+
+    expect(client.from).toHaveBeenCalledWith('post_edit_signals')
+    expect(builder.eq).toHaveBeenCalledWith('business_id', 'biz-1')
+    expect(builder.eq).toHaveBeenCalledWith('pattern_key', 'length_delta:shorter:linkedin')
+    expect(builder.eq).toHaveBeenCalledWith('status', 'processed')
+    // database-reviewer (C2.6, MAJOR): without this filter, a signal
+    // reclassified away from 'preference' after a pattern_key row already
+    // exists would still be counted on every future recompute, since the
+    // upsert's ON CONFLICT DO UPDATE never re-arms the DB-side voice-write
+    // guard (its conflict target IS the columns that guard re-checks).
+    expect(builder.eq).toHaveBeenCalledWith('class', 'preference')
+  })
+
+  it('returns 0 when count is null/undefined rather than throwing', async () => {
+    const { client } = createMockClient(null, null)
+    const result = await countProcessedSignalsForPattern(client, 'biz-1', 'k')
+    expect(result).toBe(0)
+  })
+
+  it('throws when the query returns an error', async () => {
+    const { client } = createMockClient(null, { message: 'connection reset' })
+    await expect(countProcessedSignalsForPattern(client, 'biz-1', 'k')).rejects.toThrow('connection reset')
+  })
+})
+
+describe('promotePerformancePattern', () => {
+  it('calls the promote RPC with business_id/pattern_key/dimension/platform', async () => {
+    const { client } = createMockClient([makeRow({ status: 'active' })], null)
+    await promotePerformancePattern(client, 'biz-1', 'length_delta:shorter:linkedin', 'format', 'linkedin')
+
+    expect(client.rpc).toHaveBeenCalledWith('promote_performance_pattern', {
+      p_business_id: 'biz-1',
+      p_pattern_key: 'length_delta:shorter:linkedin',
+      p_dimension: 'format',
+      p_platform: 'linkedin',
+    })
+  })
+
+  it('returns null (not an error) when the guard did not hold — no row promoted', async () => {
+    const { client } = createMockClient([], null)
+    const result = await promotePerformancePattern(client, 'biz-1', 'k', 'format', 'linkedin')
+    expect(result).toBeNull()
+  })
+
+  it('throws when the RPC returns an error', async () => {
+    const { client } = createMockClient(null, { message: 'permission denied' })
+    await expect(promotePerformancePattern(client, 'biz-1', 'k', 'format', 'linkedin')).rejects.toThrow(
+      'permission denied',
+    )
+  })
+})
+
+describe('demotePerformancePattern', () => {
+  it('calls the demote RPC with business_id/pattern_key/dimension/platform/net', async () => {
+    const { client } = createMockClient([makeRow({ status: 'candidate' })], null)
+    await demotePerformancePattern(client, 'biz-1', 'length_delta:shorter:linkedin', 'format', 'linkedin', 2)
+
+    expect(client.rpc).toHaveBeenCalledWith('demote_performance_pattern', {
+      p_business_id: 'biz-1',
+      p_pattern_key: 'length_delta:shorter:linkedin',
+      p_dimension: 'format',
+      p_platform: 'linkedin',
+      p_net: 2,
+    })
+  })
+
+  it('returns null (not an error) when the guard did not hold — no row demoted', async () => {
+    const { client } = createMockClient([], null)
+    const result = await demotePerformancePattern(client, 'biz-1', 'k', 'format', 'linkedin', 5)
+    expect(result).toBeNull()
+  })
+
+  it('throws when the RPC returns an error', async () => {
+    const { client } = createMockClient(null, { message: 'permission denied' })
+    await expect(demotePerformancePattern(client, 'biz-1', 'k', 'format', 'linkedin', 1)).rejects.toThrow(
+      'permission denied',
+    )
   })
 })

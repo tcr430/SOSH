@@ -12,6 +12,7 @@ import { getCampaignById, activateCampaign } from '@/lib/db/campaigns'
 import { getBriefByCampaign, markBriefGenerated } from '@/lib/db/campaign-briefs'
 import { freezeBrief, type FrozenBrief } from '@/lib/campaigns/brief'
 import { listPostsByCampaign, createPosts } from '@/lib/db/posts'
+import { createPostAiOriginal, AI_ORIGINAL_SCHEMA_VERSION } from '@/lib/db/post-ai-originals'
 import { updateGenerationSessionStatus } from '@/lib/db/post-generation-sessions'
 import { incrementPostsGeneratedBy } from '@/lib/db/trial-state'
 import { schedulePosts } from '@/lib/campaigns/schedule'
@@ -325,8 +326,24 @@ export async function generatePostsForCampaign(
 
     // STEP 8 — Build insert rows, role assigned from the brief (write-once,
     // DB-trigger-enforced from B2.0 — never mutated after this insert).
+    //
+    // ADR 0018 §2.6 — each post's id is generated HERE, client-side, and
+    // passed explicitly into the insert row (PostInsert.id is optional,
+    // posts.id defaults to gen_random_uuid() but accepts a caller-supplied
+    // value). This is deliberate: createPosts's multi-row INSERT ... VALUES
+    // ... RETURNING is not formally guaranteed by Postgres/PostgREST to
+    // return rows in the same order the VALUES were supplied, so relying on
+    // positional zip between `generated` and `inserted` to know which
+    // post_ai_originals row belongs to which post would be a silent
+    // correctness risk. Knowing the id up front removes that dependency
+    // entirely — the snapshot write below never reads `inserted`.
     const generatedAt = formatISO(new Date())
-    const allInserts: PostInsert[] = generated.map((g) => {
+    const generatedWithIds = generated.map((g) => ({
+      g,
+      id: crypto.randomUUID(),
+      renderedContent: joinContent(g.output),
+    }))
+    const allInserts: PostInsert[] = generatedWithIds.map(({ g, id, renderedContent }) => {
       const metadata: AiGenerationMetadata = {
         promptId: g.output.format === 'thread' ? 'native-generation-thread' : 'native-generation-single',
         promptVersion: 1,
@@ -347,10 +364,11 @@ export async function generatePostsForCampaign(
         generatedAt,
       }
       return {
+        id,
         campaign_id: campaignId,
         business_id: businessId,
         platform: g.platform,
-        content: joinContent(g.output),
+        content: renderedContent,
         role: g.role,
         scheduled_at: g.scheduledAt,
         status: 'draft',
@@ -361,6 +379,39 @@ export async function generatePostsForCampaign(
     // STEP 9 — Single batch insert (P-1)
     const inserted = await createPosts(client, allInserts)
     const postsCreated = inserted.length
+
+    // ADR 0018 §2.3/§2.6 — write ONE post_ai_originals row per created post,
+    // from the structured GeneratedItem.output. This is the ground truth of
+    // the whole learning-capture track: a silent failure here loses it
+    // permanently and invisibly, so this call is deliberately NOT wrapped in
+    // a swallowing try/catch — a thrown error here propagates to this
+    // function's outer catch, which marks the session failed. Loud failure
+    // is the correct behaviour, not a regression.
+    //
+    // Uses generatedWithIds directly (the pre-known client-generated id and
+    // the already-computed renderedContent), never `inserted` — see the
+    // comment at generatedWithIds's definition for why.
+    //
+    // typescript-reviewer (C2.4 pass, MEDIUM): each write is independent
+    // (distinct post_id, fixed revision:1, no shared mutable state) so these
+    // run concurrently rather than serialized one-by-one — Promise.all still
+    // propagates the first rejection to the outer catch, preserving the
+    // "loud failure, never swallowed" property this loop exists for.
+    await Promise.all(
+      generatedWithIds.map(({ g, id, renderedContent }) =>
+        createPostAiOriginal(client, {
+          business_id: businessId,
+          post_id: id,
+          campaign_id: campaignId,
+          revision: 1,
+          generation_kind: 'initial',
+          format: g.output.format,
+          payload: g.output,
+          rendered_content: renderedContent,
+          schema_version: AI_ORIGINAL_SCHEMA_VERSION,
+        }),
+      ),
+    )
 
     // STEP 10 — Update campaign atomically (guard on 'awaiting_brief' prevents double-write)
     const activated = await activateCampaign(client, campaignId, postsCreated)
@@ -393,6 +444,22 @@ export async function generatePostsForCampaign(
 
     return { sessionId, postsCreated }
   } catch (err: unknown) {
+    // silent-failure-hunter (C2.4 pass, MAJOR): this catch previously bound
+    // `err` and never read it — no log, no Sentry capture. That made a
+    // post_ai_originals write failure (ADR 0018's ground truth) operationally
+    // indistinguishable from any other failure in this function, which is
+    // exactly the invisibility this step exists to prevent.
+    const message = err instanceof Error ? err.message : String(err)
+    console.log(JSON.stringify({
+      kind: 'campaign.generate.failed',
+      level: 'error',
+      campaign_id: campaignId,
+      session_id: sessionId,
+      error: message,
+    }))
+    Sentry.captureException(err, {
+      tags: { session_id: sessionId, campaign_id: campaignId },
+    })
     await updateGenerationSessionStatus(client, sessionId, {
       status: 'failed',
       error_code: 'generic',

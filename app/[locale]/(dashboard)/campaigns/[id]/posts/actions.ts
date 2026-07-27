@@ -1,6 +1,7 @@
 'use server'
 
 import { z } from 'zod'
+import * as Sentry from '@sentry/nextjs'
 import { revalidatePath } from 'next/cache'
 import { formatISO } from 'date-fns'
 import { createClient } from '@/lib/supabase/server'
@@ -24,6 +25,8 @@ import { AiError, type AiErrorCode } from '@/lib/ai/errors'
 import { postRegenerationPrompt } from '@/lib/ai/prompts/post-regeneration'
 import type { AiGenerationMetadata, Platform } from '@/lib/db/types'
 import { parseAiGenerationMetadata } from '@/lib/db/utils'
+import { createNextPostAiOriginalRevision, AI_ORIGINAL_SCHEMA_VERSION } from '@/lib/db/post-ai-originals'
+import type { SinglePostOutput } from '@/lib/ai/prompts/formats/schemas'
 
 // ---------------------------------------------------------------------------
 // State types
@@ -317,6 +320,54 @@ export async function regeneratePostAction(
       rationale: output.rationale,
     }
 
+    // ADR 0018 §2.6 — write the next post_ai_originals revision BEFORE
+    // updating posts.content (silent-failure-hunter, C2.4 pass, MAJOR:
+    // reordered from "after" — writing the mutable posts row FIRST meant
+    // that if this immutable snapshot write then failed, a caller retrying
+    // regeneratePostAction would re-read the ALREADY-updated post content
+    // via getPostById above, permanently and silently losing that
+    // revision's ground-truth snapshot even though the error surfaced
+    // correctly on the first attempt. Writing the immutable snapshot first
+    // means a failure here leaves posts.content untouched — safe to retry.
+    //
+    // Not wrapped in a swallowing try/catch: a silent failure here loses the
+    // ground truth of the learning-capture track, so it propagates to this
+    // action's outer catch (returns { error: 'generic' }) rather than
+    // silently succeeding. [db-MINOR-1]'s 23505 retry is handled inside
+    // createNextPostAiOriginalRevision itself — a collision here is safe
+    // (the constraint rejected a write, nothing corrupted) and must not
+    // surface as this action's generic error.
+    //
+    // payload is synthesized as a SinglePostOutput, typed explicitly (not
+    // inferred against PostAiOriginalInsert.payload's open Record<string,
+    // unknown> shape, which would silently accept a drifted literal —
+    // typescript-reviewer, C2.4 pass, HIGH): postRegenerationPrompt's output
+    // (PostRegenerationOutput: { content, hashtags, rationale }) is a flat
+    // shape, not the SinglePostOutput | ThreadOutput discriminated union
+    // generate.ts's initial-generation path produces — regeneration in this
+    // codebase only ever produces a single flat post, never a thread.
+    // Synthesizing it into the SAME shape keeps post_ai_originals.payload's
+    // contract consistent for any future reader (e.g. a Tier-1 summarizer)
+    // regardless of which path wrote the row. Typing it as SinglePostOutput
+    // here means a future required field added to that schema would fail
+    // this compile, not silently write an incomplete payload.
+    const regenerationPayload: SinglePostOutput = {
+      format: 'single',
+      body: output.content,
+      imageBrief: null,
+    }
+    await createNextPostAiOriginalRevision(ctx.client, {
+      business_id: post.business_id,
+      post_id: postId,
+      campaign_id: post.campaign_id,
+      generation_kind: 'regeneration',
+      format: 'single',
+      payload: regenerationPayload,
+      rendered_content: output.content,
+      hashtags: output.hashtags,
+      schema_version: AI_ORIGINAL_SCHEMA_VERSION,
+    })
+
     await updatePostContentAndMetadata(ctx.client, postId, {
       content: output.content,
       hashtags: output.hashtags,
@@ -325,7 +376,19 @@ export async function regeneratePostAction(
 
     revalidateCampaignPosts(post.campaign_id)
     return { success: true, content: output.content, hashtags: output.hashtags }
-  } catch {
+  } catch (err: unknown) {
+    // silent-failure-hunter (C2.4 pass, MAJOR): this catch previously
+    // discarded the error entirely (bare `catch {}`) — no log, no Sentry
+    // capture. That made a post_ai_originals write failure operationally
+    // indistinguishable from any other cause (auth, AI call, DB error).
+    const message = err instanceof Error ? err.message : String(err)
+    console.log(JSON.stringify({
+      kind: 'post.regenerate.failed',
+      level: 'error',
+      post_id: postId,
+      error: message,
+    }))
+    Sentry.captureException(err, { tags: { post_id: postId } })
     return { error: 'generic' }
   }
 }

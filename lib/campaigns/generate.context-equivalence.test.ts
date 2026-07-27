@@ -69,6 +69,11 @@ vi.mock('@/lib/db/posts', () => ({
   createPosts: vi.fn(),
   listPostsByIds: vi.fn(),
 }))
+
+vi.mock('@/lib/db/post-ai-originals', () => ({
+  createPostAiOriginal: vi.fn(),
+  AI_ORIGINAL_SCHEMA_VERSION: 1,
+}))
 vi.mock('@/lib/db/businesses', () => ({ getBusinessById: vi.fn() }))
 vi.mock('@/lib/db/brand-voices', () => ({ getBrandVoice: vi.fn() }))
 vi.mock('@/lib/db/voice', () => ({ getVariationForBusiness: vi.fn() }))

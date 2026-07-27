@@ -70,6 +70,10 @@ vi.mock('@/lib/db/ai-usage', () => ({
   recordAiUsage: vi.fn().mockResolvedValue({}),
   countRecentCalls: vi.fn(),
 }))
+vi.mock('@/lib/db/post-ai-originals', () => ({
+  createNextPostAiOriginalRevision: vi.fn().mockResolvedValue({}),
+  AI_ORIGINAL_SCHEMA_VERSION: 1,
+}))
 
 // NOT mocked, deliberately: @/lib/ai/context, @/lib/ai/runner, @/lib/memory/*,
 // @/lib/ai/prompts/*.

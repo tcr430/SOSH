@@ -194,6 +194,7 @@ const makeGovernedPerfRow = (
   dimension: 'topic',
   pattern: 'a distilled pattern',
   platform: 'linkedin',
+  pattern_key: null,
   ...overrides,
 })
 
@@ -606,6 +607,7 @@ describe('buildCustomerContext — B3 behaviour-equivalence (ADR 0016 §6, MEM-C
         dimension: 'topic',
         pattern: 'technical-comparison posts perform well for CTO audiences',
         platform: 'linkedin',
+        pattern_key: null,
       },
     ])
 

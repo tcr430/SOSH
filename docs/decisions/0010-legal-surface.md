@@ -1068,6 +1068,8 @@ GRANT EXECUTE ON FUNCTION public.purge_business(uuid) TO service_role;
 | audience_memory | yes (business_id) | CASCADE | yes | none — cascade = erasure |
 | performance_memory | yes (business_id) | CASCADE | yes | none — cascade = erasure |
 | campaign_briefs | yes (business_id) | CASCADE | yes | none — cascade = erasure (ADR 0017 §2.5) |
+| post_ai_originals | yes (business_id + post_id + campaign_id) | CASCADE (all three) | yes | none — cascade = erasure (holds customer post content, incl. any third-party quote content the AI wove into the generated post, ADR 0018 §2.3); write-once (no authenticated UPDATE/DELETE), but the cascade DELETE from `businesses` is unaffected — the write-once trigger guards UPDATE only, never DELETE ([db-BLOCKER-1]) |
+| post_edit_signals | yes (business_id + post_id + campaign_id) | CASCADE (all three) | yes | none — cascade = erasure (holds customer's human-edited post content, incl. any third-party quote content, ADR 0018 §3.3) |
 | **billing_events** | yes (business_id nullable) | **SET NULL** | no | **RETAIN (tax/audit); REDACT PII before root delete** |
 | **business_deletion_requests** | self (business_id) | **NO ACTION → FK DROPPED (D2.1)** | no | **RETAIN as audit; orchestrator sets `completed` + `purged_at`** |
 | email_suppressions | no (keyed by email, global) | — | n/a | RETAIN (deliverability / legitimate interest; not business-reachable) |

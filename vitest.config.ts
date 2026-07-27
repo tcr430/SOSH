@@ -27,7 +27,12 @@ export default defineConfig({
     // the required app-tests glob. Absent, not present-but-skipped: a green
     // skip inside a required job is the exact false-green shape this ADR
     // exists to eliminate (docs/decisions/0015-test-execution-and-ci-gates.md §4).
-    exclude: ['**/node_modules/**', '**/lib/db/types.test.ts', '**/__integration__/**'],
+    exclude: [
+      '**/node_modules/**',
+      '**/lib/db/types.test.ts',
+      '**/lib/learning/classify.types.test.ts',
+      '**/__integration__/**',
+    ],
     testTimeout: 15000,
   },
   resolve: {

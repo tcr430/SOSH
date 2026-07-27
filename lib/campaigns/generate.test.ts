@@ -25,6 +25,11 @@ vi.mock('@/lib/db/posts', () => ({
   createPosts: vi.fn(),
 }))
 
+vi.mock('@/lib/db/post-ai-originals', () => ({
+  createPostAiOriginal: vi.fn(),
+  AI_ORIGINAL_SCHEMA_VERSION: 1,
+}))
+
 vi.mock('@/lib/ai/context', () => ({
   buildCustomerContext: vi.fn(),
 }))
@@ -52,6 +57,7 @@ import { updateGenerationSessionStatus } from '@/lib/db/post-generation-sessions
 import { getCampaignById, activateCampaign } from '@/lib/db/campaigns'
 import { getBriefByCampaign, markBriefGenerated } from '@/lib/db/campaign-briefs'
 import { listPostsByCampaign, createPosts } from '@/lib/db/posts'
+import { createPostAiOriginal } from '@/lib/db/post-ai-originals'
 import { buildCustomerContext } from '@/lib/ai/context'
 import { runPrompt } from '@/lib/ai/runner'
 import { generateNativeContent } from '@/lib/ai/generate-native'
@@ -221,6 +227,7 @@ beforeEach(() => {
   // High opener score by default — hook loop stays quiet unless a test overrides it.
   vi.mocked(runPrompt).mockResolvedValue(highOpenerScore)
   vi.mocked(createPosts).mockResolvedValue(makeInsertedRows(6))
+  vi.mocked(createPostAiOriginal).mockResolvedValue({} as never)
 })
 
 // ── Tests ────────────────────────────────────────────────────────────────────
@@ -319,6 +326,70 @@ describe('generatePostsForCampaign — MODE2-BRIEF-FROZEN', () => {
     expect([...narratives][0]).toBe(mockBrief.content.narrative)
     expect(evidenceSets.size).toBe(1)
     expect(JSON.parse([...evidenceSets][0])).toEqual(['ev-1'])
+  })
+})
+
+describe('generatePostsForCampaign — post_ai_originals snapshot write (ADR 0018 §2.6)', () => {
+  it('writes one post_ai_originals row per created post', async () => {
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+    expect(createPostAiOriginal).toHaveBeenCalledTimes(6)
+  })
+
+  it('rendered_content is byte-identical to the content that lands in the posts insert row (single format)', async () => {
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+
+    const insertedPosts = vi.mocked(createPosts).mock.calls[0][1]
+    const snapshotCalls = vi.mocked(createPostAiOriginal).mock.calls.map((c) => c[1])
+
+    for (const post of insertedPosts) {
+      const matchingSnapshot = snapshotCalls.find((s) => s.post_id === post.id)
+      expect(matchingSnapshot).toBeDefined()
+      expect(matchingSnapshot?.rendered_content).toBe(post.content)
+      expect(matchingSnapshot?.generation_kind).toBe('initial')
+      expect(matchingSnapshot?.revision).toBe(1)
+      expect(matchingSnapshot?.schema_version).toBe(1)
+    }
+  })
+
+  it('payload round-trips a thread output\'s posts[] array intact (§2.3 — the whole reason payload exists)', async () => {
+    const threadOutput: ThreadOutput = {
+      format: 'thread',
+      posts: [
+        { text: 'Hook text', role: 'hook' },
+        { text: 'Body text', role: 'body' },
+        { text: 'Close text', role: 'close' },
+      ],
+      imageBrief: null,
+    }
+    vi.mocked(generateNativeContent).mockReset()
+    vi.mocked(generateNativeContent).mockResolvedValue(threadOutput)
+
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+
+    const snapshotCalls = vi.mocked(createPostAiOriginal).mock.calls.map((c) => c[1])
+    expect(snapshotCalls.length).toBeGreaterThan(0)
+    for (const snapshot of snapshotCalls) {
+      expect(snapshot.format).toBe('thread')
+      expect(snapshot.payload).toEqual(threadOutput)
+      const payload = snapshot.payload as ThreadOutput
+      expect(payload.posts).toHaveLength(3)
+      expect(payload.posts[0].text).toBe('Hook text')
+    }
+  })
+
+  // silent-failure-hunter's concern: a snapshot write that fails must not be
+  // silently swallowed — it must fail the whole generation session loudly,
+  // since it is the ground truth of the entire learning-capture track.
+  it('a snapshot write failure propagates and fails the session — it is NOT silently swallowed', async () => {
+    vi.mocked(createPostAiOriginal).mockRejectedValueOnce(new Error('snapshot insert failed'))
+
+    const result = await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+
+    expect(result.postsCreated).toBe(0)
+    expect(updateGenerationSessionStatus).toHaveBeenCalledWith(
+      expect.anything(), SESSION_ID,
+      expect.objectContaining({ status: 'failed' }),
+    )
   })
 })
 

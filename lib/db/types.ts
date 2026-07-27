@@ -675,6 +675,32 @@ export type PerformanceMemoryRow = MemoryGovernanceRow & {
   dimension: PerformanceMemoryDimension
   pattern: string
   platform: Platform | null
+  // ADR 0016 Amendment B / ADR 0018 §7.2 (Session 25 C2.3 migration,
+  // C2.6 type addition) — the deterministic dedup/aggregation key for
+  // distilled rows; NULL for source='manual'/'import' rows, which have no
+  // signal-derived identity. Was missing from this type since the C2.3
+  // migration added the column — added now because C2.6 is the first
+  // writer/reader that needs it in TypeScript.
+  pattern_key: string | null
+}
+
+// Session 25 C2.6 — the FIRST writer for this table (ADR 0018 §7.1). The
+// governance columns source/status/sensitivity/public_use_permission are
+// NOT part of this Insert type: they are fixed by the
+// upsert_distilled_performance_pattern RPC itself (lib/db/memory-performance.ts),
+// never caller-supplied, so there is no way to call the writer with a wrong
+// governance value. last_confirmed_at/expires_at are likewise RPC-computed
+// (now() / now()+90d), not caller inputs.
+export type PerformanceMemoryInsert = {
+  business_id: string
+  dimension: PerformanceMemoryDimension
+  pattern: string
+  pattern_key: string
+  platform: Platform | null
+  scope: MemoryScope
+  scope_ref: string | null
+  confidence: number
+  observation_count: number
 }
 
 // ---------------------------------------------------------------------------
@@ -748,3 +774,90 @@ export type CampaignBriefInsert = {
 export type CampaignBriefUpdate = Partial<
   Omit<CampaignBriefRow, 'id' | 'created_at' | 'business_id' | 'campaign_id' | 'deleted_at'>
 >
+
+// ---------------------------------------------------------------------------
+// 17. post_ai_originals / post_edit_signals (ADR 0018 §2.3/§3.3) — Session 25
+// C2.2. post_ai_originals is immutable (write-once trigger, no updated_at);
+// post_edit_signals is the durable outbox row per (post, ai_original) pending
+// Tier-0/Tier-1 distillation. PostUpdate (lib/db/types.ts:320) is NOT changed
+// by this addition — stated explicitly per ADR §2.6, so no speculative Omit
+// is added there.
+// ---------------------------------------------------------------------------
+
+export type PostAiOriginalGenerationKind = 'initial' | 'regeneration'
+export type PostAiOriginalFormat = 'single' | 'thread'
+
+export type PostAiOriginalRow = {
+  id: string
+  business_id: string
+  post_id: string
+  campaign_id: string
+  revision: number
+  generation_kind: PostAiOriginalGenerationKind
+  format: PostAiOriginalFormat
+  payload: Record<string, unknown>
+  rendered_content: string
+  hashtags: string[]
+  schema_version: number
+  created_at: string
+}
+
+export type PostAiOriginalInsert = {
+  id?: string
+  business_id: string
+  post_id: string
+  campaign_id: string
+  revision?: number
+  generation_kind: PostAiOriginalGenerationKind
+  format: PostAiOriginalFormat
+  payload: Record<string, unknown>
+  rendered_content: string
+  hashtags?: string[]
+  schema_version: number
+  created_at?: string
+}
+
+export type PostEditSignalStatus = 'pending' | 'processing' | 'processed' | 'failed' | 'abandoned'
+export type PostEditSignalClass = 'preference' | 'correction' | 'inconclusive'
+
+export type PostEditSignalRow = {
+  id: string
+  business_id: string
+  post_id: string
+  campaign_id: string
+  ai_original_id: string
+  human_content: string
+  human_hashtags: string[]
+  approved_at: string
+  status: PostEditSignalStatus
+  attempts: number
+  next_attempt_at: string
+  last_error: string | null
+  processed_at: string | null
+  class: PostEditSignalClass | null
+  pattern_key: string | null
+  signals: Record<string, unknown> | null
+  created_at: string
+  updated_at: string
+}
+
+export type PostEditSignalInsert = {
+  id?: string
+  business_id: string
+  post_id: string
+  campaign_id: string
+  ai_original_id: string
+  human_content: string
+  human_hashtags?: string[]
+  approved_at: string
+  status?: PostEditSignalStatus
+  attempts?: number
+  next_attempt_at?: string
+  last_error?: string | null
+  processed_at?: string | null
+  class?: PostEditSignalClass | null
+  pattern_key?: string | null
+  signals?: Record<string, unknown> | null
+  created_at?: string
+  updated_at?: string
+}

@@ -3,6 +3,7 @@ import type { Prompt } from './types'
 import type { CustomerContext } from '@/lib/ai/context'
 import type { CampaignRow, Platform } from '@/lib/db/types'
 import { PLATFORM_CONSTRAINTS } from './post-generation'
+import { neutralize } from '@/lib/ai/wrap-evidence'
 
 function sanitizeDataField(value: string): string {
   return value.replace(/\[\/DATA\]/gi, '[/data-blocked]')
@@ -134,9 +135,16 @@ ${ctx.recentCampaigns.map(c => `- ${sanitizeDataField(c.name)}: ${sanitizeDataFi
     }
 
     if (ctx.recentPostPerformance.length > 0) {
+      // ADR 0018 §10.4 (LEARN-PATTERN-RENDER-GUARDED) — upgraded from the
+      // local sanitizeDataField ([/DATA]-only) to the shared neutralize(),
+      // bare, no additional [DATA]-wrap: this line already lives inside one
+      // section-level [DATA] fence (below), matching how post-generation.ts
+      // guards the same field. No length cap here either — see the
+      // security-reviewed rationale on the mirror-image call site in
+      // post-generation.ts.
       sections.push(`## Top-Performing Post Snippets (use for tone calibration)
 [DATA]
-${ctx.recentPostPerformance.map(p => `- ${p.platform ? `On ${p.platform}: ` : 'Across platforms: '}${sanitizeDataField(p.topContent)}`).join('\n')}
+${ctx.recentPostPerformance.map(p => `- ${p.platform ? `On ${p.platform}: ` : 'Across platforms: '}${neutralize(p.topContent)}`).join('\n')}
 [/DATA]`)
     }
 

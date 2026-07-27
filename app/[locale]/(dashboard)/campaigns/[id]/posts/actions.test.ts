@@ -31,6 +31,11 @@ vi.mock('@/lib/db/posts', () => ({
   getPostSiblingTopics: vi.fn(),
 }))
 
+vi.mock('@/lib/db/post-ai-originals', () => ({
+  createNextPostAiOriginalRevision: vi.fn(),
+  AI_ORIGINAL_SCHEMA_VERSION: 1,
+}))
+
 vi.mock('@/lib/ai/context', () => ({
   buildCustomerContext: vi.fn(),
 }))
@@ -43,7 +48,7 @@ vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),
 }))
 
-import { regeneratePostAction, bulkApprovePostsAction } from './actions'
+import { regeneratePostAction, bulkApprovePostsAction, approvePostAction } from './actions'
 import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
 import { getCampaignById } from '@/lib/db/campaigns'
@@ -52,8 +57,10 @@ import {
   getPostSiblingTopics,
   updatePostContentAndMetadata,
   bulkApproveDraftPosts,
+  approvePost,
   BULK_APPROVE_ID_CAP,
 } from '@/lib/db/posts'
+import { createNextPostAiOriginalRevision } from '@/lib/db/post-ai-originals'
 import { buildCustomerContext } from '@/lib/ai/context'
 import { runPrompt } from '@/lib/ai/runner'
 import { AiError } from '@/lib/ai/errors'
@@ -180,6 +187,7 @@ function makeAuthClient() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.mocked(createNextPostAiOriginalRevision).mockResolvedValue({} as never)
 })
 
 // ── regeneratePostAction ──────────────────────────────────────────────────────
@@ -249,6 +257,58 @@ describe('regeneratePostAction', () => {
     expect(patch.metadata.rationale).toBe(MOCK_REGEN_OUTPUT.rationale)
   })
 
+  it('ADR 0018 §2.6 — writes the next post_ai_originals revision alongside the content update, synthesized as a SinglePostOutput', async () => {
+    makeAuthClient()
+    vi.mocked(getPostById).mockResolvedValue(MOCK_DRAFT_POST)
+    vi.mocked(getCampaignById).mockResolvedValue(MOCK_CAMPAIGN)
+    vi.mocked(getPostSiblingTopics).mockResolvedValue([])
+    vi.mocked(buildCustomerContext).mockResolvedValue(MOCK_AI_CTX as never)
+    vi.mocked(runPrompt).mockResolvedValue(MOCK_REGEN_OUTPUT as never)
+    vi.mocked(updatePostContentAndMetadata).mockResolvedValue({
+      ...MOCK_DRAFT_POST,
+      content: MOCK_REGEN_OUTPUT.content,
+    })
+
+    await regeneratePostAction(VALID_POST_ID, VALID_FEEDBACK)
+
+    expect(createNextPostAiOriginalRevision).toHaveBeenCalledOnce()
+    const [, snapshotInsert] = vi.mocked(createNextPostAiOriginalRevision).mock.calls[0]
+    expect(snapshotInsert).toEqual(
+      expect.objectContaining({
+        business_id: MOCK_DRAFT_POST.business_id,
+        post_id: VALID_POST_ID,
+        campaign_id: MOCK_DRAFT_POST.campaign_id,
+        generation_kind: 'regeneration',
+        format: 'single',
+        payload: { format: 'single', body: MOCK_REGEN_OUTPUT.content, imageBrief: null },
+        rendered_content: MOCK_REGEN_OUTPUT.content,
+        hashtags: MOCK_REGEN_OUTPUT.hashtags,
+      }),
+    )
+  })
+
+  // silent-failure-hunter's concern: a snapshot write failure (after
+  // createNextPostAiOriginalRevision's own internal 23505 retries are
+  // exhausted, or any other error) must not be silently swallowed by this
+  // action — it must surface as a failure, not a false success.
+  it('a snapshot write failure propagates as an error, not a false success', async () => {
+    makeAuthClient()
+    vi.mocked(getPostById).mockResolvedValue(MOCK_DRAFT_POST)
+    vi.mocked(getCampaignById).mockResolvedValue(MOCK_CAMPAIGN)
+    vi.mocked(getPostSiblingTopics).mockResolvedValue([])
+    vi.mocked(buildCustomerContext).mockResolvedValue(MOCK_AI_CTX as never)
+    vi.mocked(runPrompt).mockResolvedValue(MOCK_REGEN_OUTPUT as never)
+    vi.mocked(updatePostContentAndMetadata).mockResolvedValue({
+      ...MOCK_DRAFT_POST,
+      content: MOCK_REGEN_OUTPUT.content,
+    })
+    vi.mocked(createNextPostAiOriginalRevision).mockRejectedValueOnce(new Error('snapshot insert failed'))
+
+    const result = await regeneratePostAction(VALID_POST_ID, VALID_FEEDBACK)
+
+    expect(result).toEqual({ error: 'generic' })
+  })
+
   it('caps previousVersions at 5 — oldest entry is dropped when already at limit', async () => {
     // Arrange: post already has 5 previous versions
     const fullHistory: AiGenerationMetadata['previousVersions'] = [
@@ -301,6 +361,44 @@ describe('regeneratePostAction', () => {
     // Assert
     expect(result).toEqual({ error: 'rate_limited' })
     expect(updatePostContentAndMetadata).not.toHaveBeenCalled()
+  })
+})
+
+// ── approvePostAction (C2.9 SHARED-FUNCTION CALLERS audit) ────────────────────
+//
+// AUTHORED-NOT-EXECUTED gap closed here: approvePostAction was previously only
+// ever referenced via a full vi.fn() mock in ApprovalsInbox.test.tsx/
+// PostCard.test.tsx (proving the UI *wires up* the action, never that the
+// action's own body — Zod validation, approvePost() call, revalidation, error
+// mapping — actually behaves correctly). ADR 0018's own §3.4 caller table
+// claimed this file covered it; it did not. Exactly the class of gap CLAUDE.md's
+// SHARED-FUNCTION CALLERS rule exists to catch before a Reviewer finds it.
+
+describe('approvePostAction', () => {
+  it('calls approvePost with the postId and returns { success: true }', async () => {
+    makeAuthClient()
+    vi.mocked(approvePost).mockResolvedValue({ ...MOCK_DRAFT_POST, status: 'approved' })
+
+    const result = await approvePostAction(VALID_POST_ID)
+
+    expect(approvePost).toHaveBeenCalledWith(expect.anything(), VALID_POST_ID)
+    expect(result).toEqual({ success: true })
+  })
+
+  it('rejects a non-uuid postId (Zod) without calling approvePost', async () => {
+    makeAuthClient()
+    const result = await approvePostAction('not-a-uuid')
+    expect(result).toEqual({ error: 'invalid_input' })
+    expect(approvePost).not.toHaveBeenCalled()
+  })
+
+  it('maps an approvePost failure (e.g. not in draft status) to { error: "generic" }', async () => {
+    makeAuthClient()
+    vi.mocked(approvePost).mockRejectedValue(new Error("post not found or not in 'draft' status"))
+
+    const result = await approvePostAction(VALID_POST_ID)
+
+    expect(result).toEqual({ error: 'generic' })
   })
 })
 

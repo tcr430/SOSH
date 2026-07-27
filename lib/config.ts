@@ -62,6 +62,16 @@ export const serverSchema = z.object({
   DELETION_RETENTION_DAYS: z.coerce.number().int().positive().default(30),
   DELETION_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
   DELETION_RETRY_BACKOFF_BASE_MINUTES: z.coerce.number().int().positive().default(60),
+  // ADR 0018 §9.5 (C2.8) — the learning capture tick's tunables, matching
+  // this file's <DOMAIN>_BATCH_SIZE / <DOMAIN>_MAX_ATTEMPTS /
+  // <DOMAIN>_RETRY_BACKOFF_SECONDS naming convention.
+  LEARNING_BATCH_SIZE: z.coerce.number().int().positive().default(50),
+  LEARNING_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
+  LEARNING_RETRY_BACKOFF_SECONDS: z.coerce.number().int().positive().default(300),
+  LEARNING_SUMMARY_MIN_SIGNALS: z.coerce.number().int().positive().default(20),
+  LEARNING_SUMMARY_MIN_INTERVAL_DAYS: z.coerce.number().int().positive().default(7),
+  LEARNING_SUMMARY_MAX_INPUT_TOKENS: z.coerce.number().int().positive().default(12000),
+  LEARNING_SUMMARY_MAX_MONTHLY_CALLS_PER_BUSINESS: z.coerce.number().int().positive().default(8),
   LINKEDIN_CLIENT_ID: z.string().default(''),
   LINKEDIN_CLIENT_SECRET: z.string().default(''),
   X_CLIENT_ID: z.string().default(''),
@@ -171,6 +181,13 @@ function parseServerEnv() {
     DELETION_RETENTION_DAYS: process.env.DELETION_RETENTION_DAYS,
     DELETION_MAX_ATTEMPTS: process.env.DELETION_MAX_ATTEMPTS,
     DELETION_RETRY_BACKOFF_BASE_MINUTES: process.env.DELETION_RETRY_BACKOFF_BASE_MINUTES,
+    LEARNING_BATCH_SIZE: process.env.LEARNING_BATCH_SIZE,
+    LEARNING_MAX_ATTEMPTS: process.env.LEARNING_MAX_ATTEMPTS,
+    LEARNING_RETRY_BACKOFF_SECONDS: process.env.LEARNING_RETRY_BACKOFF_SECONDS,
+    LEARNING_SUMMARY_MIN_SIGNALS: process.env.LEARNING_SUMMARY_MIN_SIGNALS,
+    LEARNING_SUMMARY_MIN_INTERVAL_DAYS: process.env.LEARNING_SUMMARY_MIN_INTERVAL_DAYS,
+    LEARNING_SUMMARY_MAX_INPUT_TOKENS: process.env.LEARNING_SUMMARY_MAX_INPUT_TOKENS,
+    LEARNING_SUMMARY_MAX_MONTHLY_CALLS_PER_BUSINESS: process.env.LEARNING_SUMMARY_MAX_MONTHLY_CALLS_PER_BUSINESS,
     LINKEDIN_CLIENT_ID: process.env.LINKEDIN_CLIENT_ID,
     LINKEDIN_CLIENT_SECRET: process.env.LINKEDIN_CLIENT_SECRET,
     X_CLIENT_ID: process.env.X_CLIENT_ID,
@@ -344,6 +361,27 @@ export const config = {
     },
     get DELETION_RETRY_BACKOFF_BASE_MINUTES() {
       return serverOnly("DELETION_RETRY_BACKOFF_BASE_MINUTES", () => server().DELETION_RETRY_BACKOFF_BASE_MINUTES);
+    },
+    get LEARNING_BATCH_SIZE() {
+      return serverOnly("LEARNING_BATCH_SIZE", () => server().LEARNING_BATCH_SIZE);
+    },
+    get LEARNING_MAX_ATTEMPTS() {
+      return serverOnly("LEARNING_MAX_ATTEMPTS", () => server().LEARNING_MAX_ATTEMPTS);
+    },
+    get LEARNING_RETRY_BACKOFF_SECONDS() {
+      return serverOnly("LEARNING_RETRY_BACKOFF_SECONDS", () => server().LEARNING_RETRY_BACKOFF_SECONDS);
+    },
+    get LEARNING_SUMMARY_MIN_SIGNALS() {
+      return serverOnly("LEARNING_SUMMARY_MIN_SIGNALS", () => server().LEARNING_SUMMARY_MIN_SIGNALS);
+    },
+    get LEARNING_SUMMARY_MIN_INTERVAL_DAYS() {
+      return serverOnly("LEARNING_SUMMARY_MIN_INTERVAL_DAYS", () => server().LEARNING_SUMMARY_MIN_INTERVAL_DAYS);
+    },
+    get LEARNING_SUMMARY_MAX_INPUT_TOKENS() {
+      return serverOnly("LEARNING_SUMMARY_MAX_INPUT_TOKENS", () => server().LEARNING_SUMMARY_MAX_INPUT_TOKENS);
+    },
+    get LEARNING_SUMMARY_MAX_MONTHLY_CALLS_PER_BUSINESS() {
+      return serverOnly("LEARNING_SUMMARY_MAX_MONTHLY_CALLS_PER_BUSINESS", () => server().LEARNING_SUMMARY_MAX_MONTHLY_CALLS_PER_BUSINESS);
     },
     get LINKEDIN_CLIENT_ID() {
       return serverOnly("LINKEDIN_CLIENT_ID", () => server().LINKEDIN_CLIENT_ID);
