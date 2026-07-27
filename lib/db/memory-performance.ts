@@ -26,6 +26,45 @@ export async function listPerformanceMemoryCandidates(
   return (data as PerformanceMemoryRow[]) ?? []
 }
 
+// ADR 0018 §6.1 (Session 25 C2.7) — the summarizer's "signal summaries for
+// one business" input. Deliberately not filtered to status='active' (unlike
+// listPerformanceMemoryCandidates, which serves generation-time retrieval
+// and must only surface promoted rows, LEARN-NO-SINGLE-DIFF-PROMOTION): the
+// summarizer needs visibility into EVERY distilled pattern already
+// established for this business, promoted or not, so it can avoid
+// re-surfacing something already named. Excludes 'retired' (soft-retired
+// via status, not just deleted_at) since a retired pattern is exactly the
+// kind of stale signal the summarizer should not be reminded of.
+//
+// security-reviewer (C2.7 pass): despite "distilled" implying arithmetic
+// Tier-0 output, source='distilled' rows returned here are NOT guaranteed
+// to be deterministic/arithmetic — the summarizer itself (lib/ai/prompts/
+// learning-summarizer.ts) is currently the ONLY live writer of this bucket
+// via upsertDistilledPerformancePattern below; the arithmetic Tier-0 writer
+// (lib/learning/promote.ts's recomputeAndUpsertPattern) has no production
+// caller yet, and there is no column distinguishing the two once it does.
+// Callers of this function MUST treat every returned `pattern` string as
+// untrusted, attacker-reachable-adjacent text — see
+// learning-summarizer.ts's guardTierZeroSummaries(), which neutralize()s it.
+export async function listDistilledPatternsForSummary(
+  client: SupabaseClient,
+  businessId: string,
+  limit = MEMORY_CANDIDATE_LIMIT,
+): Promise<PerformanceMemoryRow[]> {
+  const { data, error } = await client
+    .from('performance_memory')
+    .select('*')
+    .eq('business_id', businessId)
+    .eq('source', 'distilled')
+    .neq('status', 'retired')
+    .is('deleted_at', null)
+    .order('confidence', { ascending: false })
+    .order('recency_at', { ascending: false })
+    .limit(limit)
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as PerformanceMemoryRow[]) ?? []
+}
+
 // ADR 0018 §7.1/§7.2 (Session 25 C2.6) — THE FIRST WRITER for this table.
 // Routes through upsert_distilled_performance_pattern (20260726030000_
 // performance_memory_promotion.sql) rather than a plain supabase-js

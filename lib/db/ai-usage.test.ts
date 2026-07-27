@@ -1,7 +1,7 @@
 import { vi, describe, it, expect } from 'vitest'
 import { createMockClient } from './__test-utils__/mock-client'
 import * as serviceModule from '@/lib/supabase/service'
-import { recordAiUsage, countRecentCalls, listAiUsageByBusiness } from './ai-usage'
+import { recordAiUsage, countRecentCalls, listAiUsageByBusiness, getLastSuccessfulCallAt } from './ai-usage'
 import type { AiUsageRow, AiUsageInsert } from './types'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
@@ -101,5 +101,31 @@ describe('listAiUsageByBusiness', () => {
   it('throws when supabase returns an error', async () => {
     const { client } = createMockClient(null, { message: 'DB error' })
     await expect(listAiUsageByBusiness(client, 'biz-1')).rejects.toThrow('DB error')
+  })
+})
+
+describe('getLastSuccessfulCallAt', () => {
+  it('filters by business_id, prompt_id, and success=true, ordered/limited to the most recent', async () => {
+    const { client, builder } = createMockClient({ created_at: '2026-07-01T00:00:00Z' }, null)
+    const result = await getLastSuccessfulCallAt(client, 'biz-1', 'learning-summarizer')
+
+    expect(result).toBe('2026-07-01T00:00:00Z')
+    expect(client.from).toHaveBeenCalledWith('ai_usage')
+    expect(builder.eq).toHaveBeenCalledWith('business_id', 'biz-1')
+    expect(builder.eq).toHaveBeenCalledWith('prompt_id', 'learning-summarizer')
+    expect(builder.eq).toHaveBeenCalledWith('success', true)
+    expect(builder.order).toHaveBeenCalledWith('created_at', { ascending: false })
+    expect(builder.limit).toHaveBeenCalledWith(1)
+  })
+
+  it('returns null when no successful call has ever been recorded (never treated as an error)', async () => {
+    const { client } = createMockClient(null, null)
+    const result = await getLastSuccessfulCallAt(client, 'biz-1', 'learning-summarizer')
+    expect(result).toBeNull()
+  })
+
+  it('throws when supabase returns an error', async () => {
+    const { client } = createMockClient(null, { message: 'DB error' })
+    await expect(getLastSuccessfulCallAt(client, 'biz-1', 'learning-summarizer')).rejects.toThrow('DB error')
   })
 })

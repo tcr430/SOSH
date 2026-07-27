@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { createMockClient } from './__test-utils__/mock-client'
 import {
   listPerformanceMemoryCandidates,
+  listDistilledPatternsForSummary,
   upsertDistilledPerformancePattern,
   countProcessedSignalsForPattern,
   promotePerformancePattern,
@@ -104,6 +105,35 @@ describe('listPerformanceMemoryCandidates', () => {
     const { client } = createMockClient([], null)
     const result = await listPerformanceMemoryCandidates(client, 'biz-1')
     expect(result).toEqual([])
+  })
+})
+
+describe('listDistilledPatternsForSummary', () => {
+  it('filters by business_id and source=distilled, excludes retired, requires deleted_at null — but NOT status=active', async () => {
+    const { client, builder } = createMockClient([makeRow({ source: 'distilled', status: 'candidate' })], null)
+
+    await listDistilledPatternsForSummary(client, 'biz-1')
+
+    expect(client.from).toHaveBeenCalledWith('performance_memory')
+    expect(builder.eq).toHaveBeenCalledWith('business_id', 'biz-1')
+    expect(builder.eq).toHaveBeenCalledWith('source', 'distilled')
+    expect(builder.neq).toHaveBeenCalledWith('status', 'retired')
+    expect(builder.is).toHaveBeenCalledWith('deleted_at', null)
+    expect(builder.eq).not.toHaveBeenCalledWith('status', 'active')
+  })
+
+  it('applies the given limit, defaulting to MEMORY_CANDIDATE_LIMIT', async () => {
+    const { client, builder } = createMockClient([], null)
+    await listDistilledPatternsForSummary(client, 'biz-1')
+    expect(builder.limit).toHaveBeenCalledWith(50)
+
+    await listDistilledPatternsForSummary(client, 'biz-1', 10)
+    expect(builder.limit).toHaveBeenCalledWith(10)
+  })
+
+  it('throws when the query returns an error', async () => {
+    const { client } = createMockClient(null, { message: 'connection reset' })
+    await expect(listDistilledPatternsForSummary(client, 'biz-1')).rejects.toThrow('connection reset')
   })
 })
 
