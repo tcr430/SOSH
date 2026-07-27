@@ -80,6 +80,13 @@ describe('governed-memory recency_at generated column (ADR 0016 §5.3)', () => {
         scope: 'brand',
         // last_confirmed_at intentionally omitted — a never-confirmed row.
         ...DOMAIN_COLUMNS[table],
+        // ADR 0018 §7.2 (ADR 0016 Amendment B, C2.9 regression fix) —
+        // performance_memory_distilled_requires_pattern_key CHECK
+        // (supabase/migrations/20260726020000_performance_memory_pattern_key.sql)
+        // rejects any source='distilled' row with a NULL pattern_key. This
+        // fixture predates that constraint; only performance_memory needs
+        // the extra column since the CHECK is scoped to that table/source.
+        ...(table === 'performance_memory' ? { pattern_key: 'recency-fixture:distilled' } : {}),
       })
       .select('recency_at, last_confirmed_at, created_at')
       .single()

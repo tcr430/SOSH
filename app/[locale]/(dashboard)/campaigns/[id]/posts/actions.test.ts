@@ -48,7 +48,7 @@ vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),
 }))
 
-import { regeneratePostAction, bulkApprovePostsAction } from './actions'
+import { regeneratePostAction, bulkApprovePostsAction, approvePostAction } from './actions'
 import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
 import { getCampaignById } from '@/lib/db/campaigns'
@@ -57,6 +57,7 @@ import {
   getPostSiblingTopics,
   updatePostContentAndMetadata,
   bulkApproveDraftPosts,
+  approvePost,
   BULK_APPROVE_ID_CAP,
 } from '@/lib/db/posts'
 import { createNextPostAiOriginalRevision } from '@/lib/db/post-ai-originals'
@@ -360,6 +361,44 @@ describe('regeneratePostAction', () => {
     // Assert
     expect(result).toEqual({ error: 'rate_limited' })
     expect(updatePostContentAndMetadata).not.toHaveBeenCalled()
+  })
+})
+
+// ── approvePostAction (C2.9 SHARED-FUNCTION CALLERS audit) ────────────────────
+//
+// AUTHORED-NOT-EXECUTED gap closed here: approvePostAction was previously only
+// ever referenced via a full vi.fn() mock in ApprovalsInbox.test.tsx/
+// PostCard.test.tsx (proving the UI *wires up* the action, never that the
+// action's own body — Zod validation, approvePost() call, revalidation, error
+// mapping — actually behaves correctly). ADR 0018's own §3.4 caller table
+// claimed this file covered it; it did not. Exactly the class of gap CLAUDE.md's
+// SHARED-FUNCTION CALLERS rule exists to catch before a Reviewer finds it.
+
+describe('approvePostAction', () => {
+  it('calls approvePost with the postId and returns { success: true }', async () => {
+    makeAuthClient()
+    vi.mocked(approvePost).mockResolvedValue({ ...MOCK_DRAFT_POST, status: 'approved' })
+
+    const result = await approvePostAction(VALID_POST_ID)
+
+    expect(approvePost).toHaveBeenCalledWith(expect.anything(), VALID_POST_ID)
+    expect(result).toEqual({ success: true })
+  })
+
+  it('rejects a non-uuid postId (Zod) without calling approvePost', async () => {
+    makeAuthClient()
+    const result = await approvePostAction('not-a-uuid')
+    expect(result).toEqual({ error: 'invalid_input' })
+    expect(approvePost).not.toHaveBeenCalled()
+  })
+
+  it('maps an approvePost failure (e.g. not in draft status) to { error: "generic" }', async () => {
+    makeAuthClient()
+    vi.mocked(approvePost).mockRejectedValue(new Error("post not found or not in 'draft' status"))
+
+    const result = await approvePostAction(VALID_POST_ID)
+
+    expect(result).toEqual({ error: 'generic' })
   })
 })
 
