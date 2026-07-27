@@ -4,6 +4,7 @@ import {
   createPostAiOriginal,
   getLatestRevision,
   createNextPostAiOriginalRevision,
+  getPostAiOriginalById,
   AI_ORIGINAL_SCHEMA_VERSION,
 } from './post-ai-originals'
 import type { PostAiOriginalRow, PostAiOriginalInsert } from './types'
@@ -120,5 +121,28 @@ describe('createNextPostAiOriginalRevision', () => {
         generation_kind: 'regeneration',
       }),
     ).rejects.toThrow('foreign key violation')
+  })
+})
+
+// ADR 0018 §9 (C2.8) — the orchestrator's per-signal lookup: fetch the frozen
+// snapshot a claimed post_edit_signals row points at via ai_original_id.
+describe('getPostAiOriginalById', () => {
+  it('returns the row when found', async () => {
+    const { client, builder } = createMockClient(mockRow, null)
+    const result = await getPostAiOriginalById(client, 'origin-1')
+    expect(result).toEqual(mockRow)
+    expect(client.from).toHaveBeenCalledWith('post_ai_originals')
+    expect(builder.eq).toHaveBeenCalledWith('id', 'origin-1')
+  })
+
+  it('returns null when the row does not exist (permanent-abandon path, §9.4 "missing snapshot row")', async () => {
+    const { client } = createMockClient(null, null)
+    const result = await getPostAiOriginalById(client, 'missing-id')
+    expect(result).toBeNull()
+  })
+
+  it('throws on DB error', async () => {
+    const { client } = createMockClient(null, { message: 'query failed' })
+    await expect(getPostAiOriginalById(client, 'origin-1')).rejects.toThrow('query failed')
   })
 })

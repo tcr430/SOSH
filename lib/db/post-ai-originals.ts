@@ -32,6 +32,24 @@ export async function getLatestRevision(client: SupabaseClient, postId: string):
   return (data as { revision: number } | null)?.revision ?? 0
 }
 
+// ADR 0018 §9 (C2.8) — the orchestrator's per-signal lookup: a claimed
+// post_edit_signals row carries only ai_original_id, never the snapshot
+// content itself. Returns null (not an error) when the row is missing —
+// §9.4 lists "a missing snapshot row" as a PERMANENT failure the caller
+// abandons; this function does not decide that, it just reports absence.
+export async function getPostAiOriginalById(
+  client: SupabaseClient,
+  id: string,
+): Promise<PostAiOriginalRow | null> {
+  const { data, error } = await client
+    .from('post_ai_originals')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle()
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as PostAiOriginalRow | null) ?? null
+}
+
 function isPostgresError(e: unknown): e is { code: string; message: string } {
   return (
     typeof e === 'object' &&
