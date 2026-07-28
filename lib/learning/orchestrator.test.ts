@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { AiError } from '@/lib/ai/errors'
 import type {
   PostEditSignalRow,
   PostAiOriginalRow,
@@ -192,7 +193,7 @@ describe('runLearningTick — counters', () => {
     expect(result.promoted).toBe(0)
     expect(result.demoted).toBe(0)
     expect(result.summarized).toBe(0)
-    expect(result.failed).toBe(0)
+    expect(result.retrying).toBe(0)
     expect(result.abandoned).toBe(0)
   })
 
@@ -328,7 +329,7 @@ describe('runLearningTick — an exception during snapshot/post lookup does not 
     // row 1 failed transiently (retried, not lost) and row 2 was classified —
     // the exception on row 1 must not have aborted the loop before row 2 ran.
     expect(result.classified).toBe(1)
-    expect(result.failed).toBe(1)
+    expect(result.retrying).toBe(1)
     expect(mockTransitionPostEditSignal).toHaveBeenCalledWith(
       expect.anything(),
       'sig-1',
@@ -352,8 +353,27 @@ describe('runLearningTick — unknown schema_version (§9.4 permanent, no best-e
   })
 })
 
+// [Session 25-D correction, MINOR-3] abandonRow's guardedTransition call can
+// itself lose a concurrent race (the row moved out from under this tick
+// between the claim and the abandon write). That already increments
+// raceLost and is Sentry-reported inside guardedTransition — it must NOT
+// ALSO increment `abandoned`, which would claim an abandonment that never
+// actually happened (the write matched zero rows) and double-count one lost
+// race as two distinct terminal outcomes.
+describe('runLearningTick — a lost race on abandonRow does not double-count as an abandonment (MINOR-3)', () => {
+  it('increments raceLost but NOT abandoned when the abandon write itself loses its race', async () => {
+    mockClaimPostEditSignals.mockResolvedValue([signalRow])
+    mockGetPostAiOriginalById.mockResolvedValue({ ...aiOriginalRow, schema_version: 999 })
+    mockTransitionPostEditSignal.mockResolvedValue(null) // guarded UPDATE matched zero rows — lost race
+    const result = await runLearningTick({ triggeredBy: 'secret' })
+    expect(result.raceLost).toBe(1)
+    expect(result.abandoned).toBe(0)
+    expect(Sentry.captureException).toHaveBeenCalled()
+  })
+})
+
 describe('runLearningTick — transient vs permanent branch', () => {
-  it('a transient error (Postgres 40001) retries: status=pending, attempts incremented, failed++', async () => {
+  it('a transient error (Postgres 40001) retries: status=pending, attempts incremented, retrying++', async () => {
     mockClaimPostEditSignals.mockResolvedValue([signalRow])
     mockTransitionPostEditSignal.mockImplementation((_client, _id, next) => {
       if (next.status === 'processed') {
@@ -362,7 +382,7 @@ describe('runLearningTick — transient vs permanent branch', () => {
       return Promise.resolve({ ...signalRow, status: next.status })
     })
     const result = await runLearningTick({ triggeredBy: 'secret' })
-    expect(result.failed).toBe(1)
+    expect(result.retrying).toBe(1)
     expect(result.abandoned).toBe(0)
     expect(mockTransitionPostEditSignal).toHaveBeenCalledWith(
       expect.anything(),
@@ -381,7 +401,7 @@ describe('runLearningTick — transient vs permanent branch', () => {
     })
     const result = await runLearningTick({ triggeredBy: 'secret' })
     expect(result.abandoned).toBe(1)
-    expect(result.failed).toBe(0)
+    expect(result.retrying).toBe(0)
     expect(mockTransitionPostEditSignal).toHaveBeenCalledWith(
       expect.anything(),
       signalRow.id,
@@ -399,7 +419,7 @@ describe('runLearningTick — transient vs permanent branch', () => {
     })
     const result = await runLearningTick({ triggeredBy: 'secret' })
     expect(result.abandoned).toBe(1)
-    expect(result.failed).toBe(0)
+    expect(result.retrying).toBe(0)
   })
 
   it('every terminal outcome writes last_error (no silent swallow)', async () => {
@@ -440,7 +460,29 @@ describe('runLearningTick — a summarizer exception is counted, not just Sentry
     const result = await runLearningTick({ triggeredBy: 'secret' })
     expect(result.summarizeFailed).toBe(1)
     expect(result.summarized).toBe(0)
+    // [Session 25-D correction, MINOR-4] A plain (non-AiError) failure —
+    // e.g. a DB write failure in the upsert loop — falls back to 'unknown'.
+    expect(result.summarizeFailedCode).toBe('unknown')
     expect(Sentry.captureException).toHaveBeenCalled()
+  })
+})
+
+// [Session 25-D correction, MINOR-4] Distinguishing an Anthropic-side
+// failure from a prompt/schema regression requires the actual AiErrorCode,
+// not just "something threw." Proves the code reaches both the Sentry tags
+// AND the tick summary (which the canonical log line spreads verbatim).
+describe('runLearningTick — a summarize failure carries its AiErrorCode into the log line (MINOR-4)', () => {
+  it('tags the Sentry capture and the tick summary with the AiError code', async () => {
+    mockClaimPostEditSignals.mockResolvedValue([signalRow])
+    mockClassify.mockReturnValue(onePreferenceResult)
+    mockSummarizeBusinessLearning.mockRejectedValue(new AiError('provider_error', 'upstream 503'))
+    const result = await runLearningTick({ triggeredBy: 'secret' })
+    expect(result.summarizeFailed).toBe(1)
+    expect(result.summarizeFailedCode).toBe('provider_error')
+    expect(Sentry.captureException).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({ tags: expect.objectContaining({ code: 'provider_error' }) }),
+    )
   })
 })
 
@@ -479,7 +521,7 @@ describe('runLearningTick — a second tick with nothing left to claim (no-op on
     expect(second.promoted).toBe(0)
     expect(second.demoted).toBe(0)
     expect(second.abandoned).toBe(0)
-    expect(second.failed).toBe(0)
+    expect(second.retrying).toBe(0)
     expect(mockTransitionPostEditSignal).not.toHaveBeenCalled()
     expect(mockRecomputeAndUpsertPattern).not.toHaveBeenCalled()
     expect(mockClassify).not.toHaveBeenCalled()
@@ -560,7 +602,8 @@ describe('runLearningTick — canonical tick log', () => {
       demoted: 0,
       summarized: 0,
       summarizeFailed: 0,
-      failed: 0,
+      summarizeFailedCode: null,
+      retrying: 0,
       abandoned: 0,
       raceLost: 0,
     })

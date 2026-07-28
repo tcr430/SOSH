@@ -9,6 +9,7 @@
 
 import * as Sentry from '@sentry/nextjs'
 import { addSeconds, formatISO } from 'date-fns'
+import { AiError, type AiErrorCode } from '@/lib/ai/errors'
 import { config } from '@/lib/config'
 import { claimPostEditSignals, transitionPostEditSignal } from '@/lib/db/post-edit-signals'
 import { getPostAiOriginalById, AI_ORIGINAL_SCHEMA_VERSION } from '@/lib/db/post-ai-originals'
@@ -37,7 +38,28 @@ export interface LearningTickSummary {
   demoted: number
   summarized: number
   summarizeFailed: number
-  failed: number
+  // [Session 25-D correction, MINOR-4] The AiErrorCode of the MOST RECENT
+  // summarize failure this tick ("last one wins", the same convention
+  // post_edit_signals.last_error already uses). Lets an operator watching
+  // summarizeFailed spike distinguish a transient Anthropic-side failure
+  // (provider_error/rate_limit/timeout) from a prompt/schema regression
+  // (invalid_response) from a DB write failure in the upsert loop
+  // ('unknown' — not an AiError at all), without leaving the log line to
+  // cross-reference Sentry. NOTE (silent-failure-hunter, D4 re-invocation):
+  // if two different businesses fail with two different codes in the SAME
+  // tick, only the last one is visible here — `summarizeFailed`'s COUNT is
+  // unaffected (it increments once per failing business regardless of
+  // code), but disambiguating which of several distinct codes occurred
+  // still requires Sentry. Accepted, consistent with `abandoned` already
+  // collapsing "permanent" vs "transient_exhausted" the same way.
+  summarizeFailedCode: AiErrorCode | 'unknown' | null
+  // [Session 25-D correction, NIT-4] Renamed from `failed`: this counter
+  // means "sent back to pending with a backoff, will retry" — not
+  // "failed" in the terminal sense `abandoned`/`promoted`/`demoted` carry.
+  // `failed` sitting beside those in the same object read as though every
+  // ordinary transient retry were an operator-actionable failure; an alert
+  // on `failed > 0` would page on ordinary backoff traffic.
+  retrying: number
   abandoned: number
   raceLost: number
 }
@@ -147,13 +169,20 @@ async function guardedTransition(
   return true
 }
 
+// [Session 25-D correction, MINOR-3] Returns guardedTransition's boolean so
+// every caller can branch on it before bumping its own terminal counter. A
+// lost race already increments raceLost (inside guardedTransition) and
+// returns false — the row was NOT actually abandoned by this call, so
+// unconditionally incrementing abandoned/skippedNoSnapshot afterward would
+// double-count the same lost race as two distinct outcomes and claim an
+// abandonment that never happened.
 async function abandonRow(
   client: SupabaseClient,
   row: PostEditSignalRow,
   lastError: string,
   summary: LearningTickSummary,
-): Promise<void> {
-  await guardedTransition(client, row, {
+): Promise<boolean> {
+  return guardedTransition(client, row, {
     status: 'abandoned',
     attempts: row.attempts + 1,
     last_error: lastError,
@@ -183,16 +212,16 @@ async function processRow(
       // Tracked under skippedNoSnapshot (not the generic abandoned counter)
       // so §11's operator playbook ("a loop starved of snapshots shows a
       // high skippedNoSnapshot") stays meaningful.
-      await abandonRow(client, row, 'missing_snapshot', summary)
-      summary.skippedNoSnapshot++
+      const wroteSkip = await abandonRow(client, row, 'missing_snapshot', summary)
+      if (wroteSkip) summary.skippedNoSnapshot++
       return
     }
 
     if (aiOriginal.schema_version !== AI_ORIGINAL_SCHEMA_VERSION) {
       // ADR 0018 §2.4 — refuse to diff an unknown schema_version rather than
       // best-effort parse a shape this classifier does not understand.
-      await abandonRow(client, row, `unknown_schema_version:${aiOriginal.schema_version}`, summary)
-      summary.abandoned++
+      const wroteAbandon = await abandonRow(client, row, `unknown_schema_version:${aiOriginal.schema_version}`, summary)
+      if (wroteAbandon) summary.abandoned++
       return
     }
 
@@ -257,24 +286,24 @@ async function processRow(
     const message = errorMessage(err)
 
     if (permanent || exhausted) {
-      await guardedTransition(client, row, {
+      const wrote = await guardedTransition(client, row, {
         status: 'abandoned',
         attempts: nextAttempts,
         last_error: message,
       }, summary)
-      summary.abandoned++
+      if (wrote) summary.abandoned++
       Sentry.captureException(err, {
         extra: { class: permanent ? 'permanent' : 'transient_exhausted', row_id: row.id, business_id: row.business_id },
       })
     } else {
       const backoffSeconds = computeBackoff(nextAttempts)
-      await guardedTransition(client, row, {
+      const wrote = await guardedTransition(client, row, {
         status: 'pending',
         attempts: nextAttempts,
         next_attempt_at: formatISO(addSeconds(now, backoffSeconds)),
         last_error: message,
       }, summary)
-      summary.failed++
+      if (wrote) summary.retrying++
     }
   }
 }
@@ -297,7 +326,8 @@ export async function runLearningTick(opts: {
     demoted: 0,
     summarized: 0,
     summarizeFailed: 0,
-    failed: 0,
+    summarizeFailedCode: null,
+    retrying: 0,
     abandoned: 0,
     raceLost: 0,
   }
@@ -331,8 +361,16 @@ export async function runLearningTick(opts: {
             // gives the log itself — the operator surface ADR §9.4/§11
             // designate — a way to show this without cross-referencing
             // Sentry.
+            // [Session 25-D correction, MINOR-4] Tag both the Sentry capture
+            // and the tick log with the underlying AiErrorCode (or
+            // 'unknown' for a non-AiError, e.g. a DB write failure in the
+            // upsert loop) — an operator watching summarizeFailed spike
+            // must not have to leave the log to tell an Anthropic-side
+            // outage from a prompt/schema regression.
+            const code = err instanceof AiError ? err.code : 'unknown'
             summary.summarizeFailed++
-            Sentry.captureException(err, { tags: { business_id: businessId, phase: 'learning-summarize' } })
+            summary.summarizeFailedCode = code
+            Sentry.captureException(err, { tags: { business_id: businessId, phase: 'learning-summarize', code } })
           }
         }
       },

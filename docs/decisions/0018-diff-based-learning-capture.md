@@ -561,9 +561,18 @@ LEARNING_SUMMARY_MAX_MONTHLY_CALLS_PER_BUSINESS  default 8
 console.log(JSON.stringify({
   kind: 'learning.tick', triggeredBy, tick, durationMs,
   claimed, classified, signalsEmitted, skippedNoSnapshot,
-  patternsUpserted, promoted, demoted, summarized, failed, abandoned,
+  patternsUpserted, promoted, demoted, summarized, summarizeFailed,
+  summarizeFailedCode, retrying, abandoned, raceLost,
 }))
 ```
+
+> **[Session 25-D correction, NIT-4]** `failed` is renamed `retrying`: the counter means "sent back to
+> `pending` with a backoff, will retry" — not a terminal failure like `abandoned`. Sitting beside
+> `abandoned`/`promoted`/`demoted` under the old name, an operator alerting on `failed > 0` would page on
+> every ordinary transient retry. `summarizeFailedCode` (added same pass, MINOR-4) carries the underlying
+> `AiErrorCode` (or `'unknown'` for a non-`AiError`, e.g. a DB write failure in the summarizer's upsert
+> loop) of the MOST RECENT summarize failure this tick, so an operator can tell a transient Anthropic-side
+> failure from a prompt/schema regression without leaving the log line to cross-reference Sentry.
 
 All application-layer timestamps use `date-fns` `formatISO`, never `new Date().toISOString()` (L-12); SQL-side defaults use `now()`.
 

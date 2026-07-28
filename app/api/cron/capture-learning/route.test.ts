@@ -84,7 +84,8 @@ const tickSummary = {
   demoted: 0,
   summarized: 0,
   summarizeFailed: 0,
-  failed: 0,
+  summarizeFailedCode: null,
+  retrying: 0,
   abandoned: 0,
   raceLost: 0,
 }

@@ -1083,3 +1083,73 @@ then reverting to green — noted per-item below.
 - Individual files re-run standalone after each mutation-revert cycle:
   `lib/learning/orchestrator.test.ts` (22/22), `lib/learning/promote.test.ts` (19/19),
   `lib/learning/memory-table-boundary.test.ts` (1/1) — all green.
+
+### D4 — MINOR-3, MINOR-4, NIT-4
+
+All three are `fixed`. §11's whole posture is founder-verifiability from ONE log line — this step closes
+three ways that line lied by omission (over-reporting a terminal outcome, collapsing three causes into one
+untagged counter, and a name that would page an operator on ordinary retry traffic).
+
+- **MINOR-3** — `fixed`. `abandonRow` (`lib/learning/orchestrator.ts`) now returns the `boolean` from
+  `guardedTransition` (was `Promise<void>`). Its two call sites in `processRow` (the missing-snapshot path
+  and the unknown-`schema_version` path) and the catch block's two direct `guardedTransition` calls
+  (permanent/exhausted abandon, transient retry) all branch on the returned value before incrementing
+  `skippedNoSnapshot` / `abandoned` / `retrying` — a lost race (already counted once, in `raceLost`, inside
+  `guardedTransition`) no longer ALSO claims a terminal outcome that didn't happen.
+  **Mutation-redenned, confirmed then reverted**: reverted the schema_version-path branch to an
+  unconditional `summary.abandoned++`, ran the new test "a lost race on abandonRow does not double-count
+  as an abandonment (MINOR-3)" — failed (`abandoned` was `1`, expected `0`) — restored the branch; green
+  afterward.
+  Test: `lib/learning/orchestrator.test.ts` — "a lost race on abandonRow does not double-count as an
+  abandonment (MINOR-3)" — asserts `raceLost === 1` and `abandoned === 0` together.
+- **MINOR-4** — `fixed`. The summarize-per-business catch block now computes
+  `err instanceof AiError ? err.code : 'unknown'`, tags the `Sentry.captureException` call with it
+  (`{ tags: { business_id, phase: 'learning-summarize', code } }`), and stores it in a new
+  `summary.summarizeFailedCode: AiErrorCode | 'unknown' | null` field that flows into the canonical
+  `console.log` tick line via the existing `...summary` spread.
+  **Mutation-redenned, confirmed then reverted**: hardcoded `const code = 'unknown'` unconditionally, ran
+  the new "carries its AiErrorCode into the log line" test (rejecting with `new AiError('provider_error',
+  …)`) — failed (`summarizeFailedCode` was `'unknown'`, expected `'provider_error'`) — restored; green
+  afterward.
+  Test: `lib/learning/orchestrator.test.ts` — new describe "a summarize failure carries its AiErrorCode
+  into the log line (MINOR-4)" asserts both the summary field and the Sentry tag; the pre-existing
+  plain-`Error` summarizer-failure test was strengthened to also assert `summarizeFailedCode === 'unknown'`
+  for the non-`AiError` fallback path.
+- **NIT-4** — `fixed`. `LearningTickSummary.failed` renamed to `retrying` (with a doc comment explaining
+  why: it means "sent back to `pending` with a backoff," not a terminal failure like `abandoned` —
+  alerting on the old name would page on every ordinary transient retry). Every reference updated in the
+  same commit: the initializer, the increment site, `lib/learning/orchestrator.test.ts`'s six assertions
+  and one test description, the canonical-log field-set test (which also gained `summarizeFailedCode:
+  null` to stay complete), `app/api/cron/capture-learning/route.ts`'s catch-block fallback object, and
+  `route.test.ts`'s fixture. ADR 0018 §9.5's example log-line snippet updated to match — renamed `failed`
+  to `retrying`, and (closing a pre-existing drift found while touching this section, not itself named by
+  NIT-4) added `summarizeFailed`/`summarizeFailedCode`/`raceLost`, which the snippet was missing entirely
+  even before this pass.
+  Test: the existing "logs exactly one JSON line... and all named counters" test continues to pass with
+  the renamed/added fields.
+
+**Advisory pass** (`ecc:silent-failure-hunter`, re-invoked on the D4 diff):
+- Confirmed MINOR-3's fix is **exhaustive** — independently counted the same four call sites (two
+  `abandonRow` calls, two direct catch-block `guardedTransition` calls) and confirmed the fifth
+  `guardedTransition` call (the success/`processed` transition) was already correctly guarded before this
+  pass and is out of scope for this finding.
+- On `summarizeFailedCode`'s "last write wins" semantics across multiple businesses failing with different
+  codes in one tick: accepted as consistent with the existing design posture (`abandoned` already collapses
+  "permanent" vs. "transient_exhausted" the same way; `summarizeFailed`'s own *count* is unaffected, only
+  which code is visible in the log line). A one-sentence doc-comment addition recording this explicitly was
+  made in this same commit.
+- **New finding, out of scope for D4, recorded not fixed**: the OUTER `try/catch` around
+  `Sentry.withMonitor` (wrapping the whole tick) still lets a total-tick crash (e.g. `claimPostEditSignals`
+  itself throwing) fall through to Sentry-only reporting while the canonical `console.log` still fires
+  with every counter at its initialized value — byte-identical to a legitimately idle hour with nothing
+  pending. This is the same class of bug MAJOR-2 fixed for the summarizer loop specifically, one level up,
+  for the whole tick. Not fixed here: MINOR-3/MINOR-4/NIT-4 were D4's named scope, and this is a fourth,
+  separate defect discovered during D4's re-invocation of silent-failure-hunter, not one of the three. A
+  future session should add a `crashed: boolean` (or similar) field, set in that outer catch before the
+  final `console.log`, so an all-zero line reads differently when the tick genuinely didn't run.
+
+**Verification run:**
+- `npx tsc --noEmit --skipLibCheck` — clean, throughout (checked after each fix and after the doc-comment
+  addition).
+- `npm run test:app` (full scope, all of `app/ lib/ components/`) — 2340/2340 green across 167 files.
+- `lib/learning/orchestrator.test.ts` re-run standalone after each mutation-revert cycle — 24/24 green.
