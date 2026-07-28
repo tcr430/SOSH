@@ -712,10 +712,10 @@ The plan doc's Phase B lists no UI; §8's decision (a) needs none; and an approv
 | **LEARN-NO-SINGLE-DIFF-PROMOTION** | 0 | 2 | one diff never yields an `active` row; retrieval returns `active` only |
 | **LEARN-PROMOTION-THRESHOLD** | 0 | 1 + 2 | Tier-2: the 5 / 0.70 / 2 arithmetic incl. contradiction + demotion at the boundary. Tier-1: the atomic UPDATE under concurrency |
 | **LEARN-TICK-IDEMPOTENT** | 0 | 1 + 2 | Tier-1: UNIQUE rejects duplicates; claim RPC disjoint under concurrency. Tier-2: a replayed tick changes nothing |
-| **LEARN-MEMORY-THROUGH-BOUNDARY** | 0 | 2 + 3 | writes go via `lib/db/memory-performance.ts` + `lib/memory/`; grep proves no direct table access |
+| **LEARN-MEMORY-THROUGH-BOUNDARY** | 0 | 2 + 3 | Tier-2 (Session 25-D, MINOR-2): `lib/learning/memory-table-boundary.test.ts` — source scan over `lib/learning/**` + `app/api/cron/capture-learning/**` asserts no `.from('performance_memory'\|'post_ai_originals'\|'post_edit_signals')`, executed in `app-tests.yml`. Tier-3: the two new tables and `performance_memory` are queried only inside `lib/db/` + `lib/memory/` |
 | **LEARN-SUMMARY-DATA-GUARDED** | 1 | 2 | input `neutralize()`-wrapped + truncated at the cap; bounded output schema rejects over-long/over-count |
 | **LEARN-PATTERN-RENDER-GUARDED** | 0 | 2 | all three §10.4 render sites route `topContent` through `neutralize()` |
-| **LEARN-VOICE-NOT-AUTO-MUTATED** | 0 | 2 + 3 | Tier-2: no write path touches `brand_voices` / `brand_voice_variations`. Tier-3: no voice-memory migration |
+| **LEARN-VOICE-NOT-AUTO-MUTATED** | 0 | 2 + 3 | Tier-2 (Session 25-D, MINOR-2): the SAME `lib/learning/memory-table-boundary.test.ts` scan also asserts no `.from('brand_voice…')` in that same file set, executed in `app-tests.yml`. Tier-3: no voice-memory migration |
 | **LEARN-RLS-ISOLATED** | 0 | 1 | cross-tenant CRUD denied on both new tables, live Postgres, `USING` + `WITH CHECK` |
 | **LEARN-CASCADE-COMPLETE** | 0 | 1 + 3 | Tier-1: business delete **succeeds** and purges both tables. Tier-3: two §D2.5 rows present |
 | **LEARN-BRIEF-DIFF-DEFERRED** | — | 3 | deferred by decision — no `campaign_brief_revisions` table; un-defer recorded (§3.5) |
@@ -841,3 +841,29 @@ test, reddens with the `.eq` removed — verified); `lib/learning/summarize.ts:1
 `supabase/migrations/20260728190000_narrow_voice_write_trigger_message.sql` (RAISE text/comment only);
 `supabase/__tests__/performance-memory-pattern-key.test.ts` (new hook-dimension/correction-class Tier-1
 test); `docs/reviews/session-25-reviewer.md` MAJOR-1, MAJOR-2.
+
+---
+
+## Amendment B — §13 Tier-2 mapping closed for #14/#17 (Session 25-D correction pass, 2026-07-28)
+
+**Author:** Session 25-D (Claude Code, Sonnet 5), closing `docs/reviews/session-25-reviewer.md` MINOR-2.
+§13's table cells for `LEARN-MEMORY-THROUGH-BOUNDARY` and `LEARN-VOICE-NOT-AUTO-MUTATED` are edited
+in place (not appended around) because the table's own stated purpose is to be a live, current
+constraint→test map — unlike §5.3/§6.1's narrative decision text, a stale table cell is simply wrong, not
+a historical claim worth preserving verbatim. This amendment records why the edit happened and when.
+
+**What changed:** both constraints previously read "Tier 2 + 3" with only a Tier-3 grep description — true
+today, per the Reviewer, only by inspection: `promote.test.ts` and `orchestrator.test.ts` mock
+`lib/db/memory-performance.ts`'s exports, so neither would catch a direct `.from('performance_memory')` (or
+`'post_ai_originals'` / `'post_edit_signals'` / `'brand_voice…'`) added anywhere in `lib/learning/**` or the
+`capture-learning` cron route. `lib/learning/memory-table-boundary.test.ts` (new, Session 25-D) closes both
+halves with one source-scan test — the same technique `classify.test.ts`'s `LEARN-HEURISTIC-FIRST` check
+already uses — executed in `app-tests.yml`. Manually confirmed to redden: injecting a
+`.from('performance_memory')` call into `lib/learning/orchestrator.ts` and re-running the test failed it;
+reverting restored green.
+
+**Result:** all 21 `LEARN-*` constraints in §13 now map to an executing test in a named CI job — no
+"unmapped" cell remains.
+
+**Evidence:** `lib/learning/memory-table-boundary.test.ts`; `docs/reviews/session-25-reviewer.md` MINOR-2,
+CORRECTION PASS D3.

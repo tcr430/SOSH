@@ -445,9 +445,20 @@ describe('runLearningTick — a summarizer exception is counted, not just Sentry
 })
 
 // ─── LEARN-TICK-IDEMPOTENT (replayed tick) ───────────────────────────────────
+//
+// [Session 25-D correction, MAJOR-4] The prior version of this describe block
+// stubbed the SECOND claim to return an EMPTY batch
+// (`.mockResolvedValueOnce([signalRow]).mockResolvedValueOnce([])`), which
+// only proves "an empty claim batch is a no-op" — it never replays anything,
+// and would not redden if recompute were mutated to increment. Fixed per the
+// Reviewer's preferred option (b): a REAL replay, where BOTH claims return
+// the SAME signalRow, asserting recomputeAndUpsertPattern is actually
+// invoked (not skipped) on both ticks and resolves to an IDENTICAL,
+// non-cumulative observation count each time — recompute, never increment.
+// The no-op-on-empty-batch case is kept, renamed to what it actually proves.
 
-describe('runLearningTick — replayed tick (LEARN-TICK-IDEMPOTENT)', () => {
-  it('a second tick that claims nothing (rows already processed) produces all-zero counters and performs no writes', async () => {
+describe('runLearningTick — a second tick with nothing left to claim (no-op on an empty batch)', () => {
+  it('produces all-zero counters and performs no writes when the claim returns empty', async () => {
     mockClaimPostEditSignals.mockResolvedValueOnce([signalRow]).mockResolvedValueOnce([])
     mockClassify.mockReturnValue(onePreferenceResult)
 
@@ -472,6 +483,53 @@ describe('runLearningTick — replayed tick (LEARN-TICK-IDEMPOTENT)', () => {
     expect(mockTransitionPostEditSignal).not.toHaveBeenCalled()
     expect(mockRecomputeAndUpsertPattern).not.toHaveBeenCalled()
     expect(mockClassify).not.toHaveBeenCalled()
+  })
+})
+
+describe('runLearningTick — replayed tick over the SAME signal row (LEARN-TICK-IDEMPOTENT)', () => {
+  it('recomputes an identical, non-cumulative observation count on both ticks — never increments', async () => {
+    // BOTH claims return the identical signalRow — a genuine replay, not a
+    // second claim that conveniently finds nothing.
+    mockClaimPostEditSignals.mockResolvedValue([signalRow])
+    mockClassify.mockReturnValue(onePreferenceResult)
+    // A correct recompute (COUNT(*) over the same underlying rows) is
+    // idempotent by construction: the SAME fixed value on every call. A
+    // persistent .mockResolvedValue (not paired .mockResolvedValueOnce
+    // calls) models that.
+    mockRecomputeAndUpsertPattern.mockResolvedValue({
+      row: distillationRow,
+      observations: 5,
+      contradictions: 0,
+      confidence: 0.714,
+      promoted: null,
+      demoted: null,
+    })
+
+    const first = await runLearningTick({ triggeredBy: 'secret' })
+    const second = await runLearningTick({ triggeredBy: 'secret' })
+
+    expect(first.claimed).toBe(1)
+    expect(second.claimed).toBe(1)
+    // Both ticks fully reprocess the row — recomputeAndUpsertPattern is
+    // NEVER skipped on the second tick just because it's "already seen".
+    expect(mockRecomputeAndUpsertPattern).toHaveBeenCalledTimes(2)
+    expect(first.patternsUpserted).toBe(1)
+    expect(second.patternsUpserted).toBe(1)
+
+    // Both calls resolve to the IDENTICAL observation count — recomputed,
+    // not accumulated across ticks.
+    const [firstResult, secondResult] = await Promise.all(
+      mockRecomputeAndUpsertPattern.mock.results.map((r) => r.value),
+    )
+    expect(firstResult.observations).toBe(5)
+    expect(secondResult.observations).toBe(5)
+    expect(secondResult.observations).toBe(firstResult.observations)
+
+    // Both calls also carry identical DistillationInput — the orchestrator
+    // constructs the same call from the same row both times, with no hidden
+    // state carried between ticks.
+    const [firstArgs, secondArgs] = mockRecomputeAndUpsertPattern.mock.calls
+    expect(secondArgs[1]).toEqual(firstArgs[1])
   })
 })
 
@@ -518,5 +576,102 @@ describe('runLearningTick — canonical tick log', () => {
       expect.any(Function),
       expect.objectContaining({ schedule: { type: 'crontab', value: '0 * * * *' } }),
     )
+  })
+})
+
+// ─── Cross-business isolation (MAJOR-6, ADR §14 [sec-Q2]'s test obligation) ──
+//
+// [Session 25-D correction] runLearningTick runs entirely under a
+// service-role client, which BYPASSES RLS — the only tenancy boundary for
+// the whole batch is the business_id threaded through each call. Until this
+// test, only 'biz-1' ever appeared anywhere in this file, so a future
+// closure-capture or shared-variable refactor (the exact bug class Session
+// 24-D's MAJOR-1 closed for wrapEvidenceForPrompt) could leak one business's
+// data into another's downstream calls with nothing here to catch it.
+
+describe('runLearningTick — cross-business isolation in one tick (MAJOR-6)', () => {
+  it('claims two rows for two distinct businesses and keeps every downstream call scoped to its own business', async () => {
+    const signalRowBiz2: PostEditSignalRow = {
+      ...signalRow,
+      id: 'sig-2',
+      business_id: 'biz-2',
+      post_id: 'post-2',
+      campaign_id: 'camp-2',
+      ai_original_id: 'origin-2',
+      human_content: 'Completely unrelated edited content that belongs only to biz-2.',
+    }
+    const aiOriginalRow2: PostAiOriginalRow = {
+      ...aiOriginalRow,
+      id: 'origin-2',
+      business_id: 'biz-2',
+      post_id: 'post-2',
+      campaign_id: 'camp-2',
+    }
+    const postRow2 = {
+      ...postRow,
+      id: 'post-2',
+      business_id: 'biz-2',
+      campaign_id: 'camp-2',
+      platform: 'twitter',
+    } as unknown as PostRow
+
+    mockClaimPostEditSignals.mockResolvedValue([signalRow, signalRowBiz2])
+    mockGetPostAiOriginalById.mockImplementation(async (_client: unknown, id: string) =>
+      id === 'origin-2' ? aiOriginalRow2 : aiOriginalRow,
+    )
+    mockGetPostById.mockImplementation(async (_client: unknown, id: string) => (id === 'post-2' ? postRow2 : postRow))
+    mockClassify.mockReturnValue(onePreferenceResult)
+
+    const result = await runLearningTick({ triggeredBy: 'secret' })
+
+    expect(result.claimed).toBe(2)
+    expect(result.classified).toBe(2)
+
+    // (a) each recomputeAndUpsertPattern call carries its OWN row's
+    // business_id — never the other row's, never a shared/closed-over value.
+    expect(mockRecomputeAndUpsertPattern).toHaveBeenCalledTimes(2)
+    expect(mockRecomputeAndUpsertPattern).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      expect.objectContaining({ businessId: 'biz-1' }),
+    )
+    expect(mockRecomputeAndUpsertPattern).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      expect.objectContaining({ businessId: 'biz-2' }),
+    )
+
+    // (b) summarizeBusinessLearning is called once per business, with the
+    // matching id — not once overall, not with the wrong id.
+    expect(mockSummarizeBusinessLearning).toHaveBeenCalledTimes(2)
+    expect(mockSummarizeBusinessLearning).toHaveBeenCalledWith(expect.anything(), 'biz-1')
+    expect(mockSummarizeBusinessLearning).toHaveBeenCalledWith(expect.anything(), 'biz-2')
+
+    // (c) neither business's human_content appears in the other's call
+    // arguments — classify() is called once per row with THAT row's own
+    // human-edited copy, never a value carried over from the other row.
+    const classifyCalls = mockClassify.mock.calls
+    expect(classifyCalls).toHaveLength(2)
+    const [firstCallArgs, secondCallArgs] = classifyCalls
+    expect(firstCallArgs[1]).toEqual(
+      expect.objectContaining({ humanContent: signalRow.human_content }),
+    )
+    expect(secondCallArgs[1]).toEqual(
+      expect.objectContaining({ humanContent: signalRowBiz2.human_content }),
+    )
+    expect(firstCallArgs[1].humanContent).not.toBe(signalRowBiz2.human_content)
+    expect(secondCallArgs[1].humanContent).not.toBe(signalRow.human_content)
+
+    // [security-reviewer, D3 re-invocation] retrieveVoice and
+    // getBriefByCampaign are ALSO constructed per-row inside processRow
+    // (retrieveVoice(client, row.business_id), getBriefByCampaign(client,
+    // row.campaign_id)) — the same leak vector as (a)-(c) above, just on two
+    // more collaborators. Asserting them closes the gap the security review
+    // found: without this, a swapped business_id/campaign_id reaching either
+    // call would pass silently.
+    expect(mockRetrieveVoice).toHaveBeenCalledWith(expect.anything(), 'biz-1')
+    expect(mockRetrieveVoice).toHaveBeenCalledWith(expect.anything(), 'biz-2')
+    expect(mockGetBriefByCampaign).toHaveBeenCalledWith(expect.anything(), 'camp-1')
+    expect(mockGetBriefByCampaign).toHaveBeenCalledWith(expect.anything(), 'camp-2')
   })
 })

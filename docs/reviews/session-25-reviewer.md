@@ -985,3 +985,101 @@ correction pass rather than passed through verbatim):
   failures as D1 (`rls-policy-lockdown.test.ts`, `get-user-business-ids-matrix.test.ts` — confirmed
   pre-existing there, not re-investigated here), plus the 3 new orphan tests green. No new failures
   introduced by D2's changes.
+
+### D3 — MAJOR-4, MAJOR-6, MINOR-2, MINOR-10
+
+All four are `fixed`. Every one was verified by applying the exact named mutation locally, confirming RED,
+then reverting to green — noted per-item below.
+
+- **MAJOR-4** — `fixed`. `lib/learning/orchestrator.test.ts`'s "replayed tick (LEARN-TICK-IDEMPOTENT)" describe
+  block is split in two: the old test (which stubbed the SECOND claim to return an EMPTY batch, proving
+  only "an empty claim is a no-op") is kept and renamed to what it actually proves — "a second tick with
+  nothing left to claim (no-op on an empty batch)". A NEW test, "replayed tick over the SAME signal row
+  (LEARN-TICK-IDEMPOTENT)", implements the Reviewer's preferred option (b): `mockClaimPostEditSignals
+  .mockResolvedValue([signalRow])` returns the IDENTICAL row on both ticks (a persistent mock, not paired
+  `.mockResolvedValueOnce` calls), and `mockRecomputeAndUpsertPattern.mockResolvedValue(...)` likewise
+  returns a fixed `observations: 5` on both calls. Asserts: `recomputeAndUpsertPattern` is called exactly
+  twice (never skipped on replay), both calls carry identical `DistillationInput` args
+  (`toEqual(firstArgs[1])`), and both resolve to the identical `observations` value.
+  **Mutation-redenned, confirmed then reverted**: temporarily changed the mock to
+  `.mockResolvedValueOnce({observations:5,...}).mockResolvedValueOnce({observations:10,...})` (modeling
+  what an incrementing implementation would do) — the "identical observations" assertion failed
+  (`expected 10 to be 5`), exactly as required. Reverted; `npx vitest run
+  lib/learning/orchestrator.test.ts` green (22/22) afterward.
+- **MAJOR-6** — `fixed`. New describe block "cross-business isolation in one tick (MAJOR-6)" in the same
+  file claims two signal rows for two distinct businesses (`biz-1`, `biz-2`) in ONE tick, using
+  per-id `mockImplementation` on `getPostAiOriginalById`/`getPostById` to give each business its own
+  fixture. Asserts (a) each `recomputeAndUpsertPattern` call carries its own row's `business_id`
+  (`toHaveBeenNthCalledWith`), (b) `summarizeBusinessLearning` is called once per business with the
+  matching id, (c) neither business's `human_content` appears in the other's `classify()` call arguments.
+  This discharges ADR §14's `[sec-Q2]` "Adopted, WITH A TEST OBLIGATION" outstanding half.
+  **Mutation-redenned, confirmed then reverted**: temporarily hardcoded `businessId: 'biz-1'` in
+  `orchestrator.ts`'s `recomputeAndUpsertPattern` call (in place of `row.business_id`) — the second
+  business's call showed `businessId: 'biz-1'` instead of `'biz-2'`, failing assertion (a) exactly as
+  required. Reverted; green afterward.
+  - **Real gap found and closed within this pass** (`security-reviewer`, re-invoked on this diff):
+    `retrieveVoice(client, row.business_id)` and `getBriefByCampaign(client, row.campaign_id)` are
+    ALSO constructed per-row inside `processRow` — the same leak vector as (a)–(c), on two more
+    collaborators, and the original test asserted neither. Added
+    `expect(mockRetrieveVoice).toHaveBeenCalledWith(expect.anything(), 'biz-1')` /`'biz-2'` and the same
+    for `mockGetBriefByCampaign` with `'camp-1'`/`'camp-2'`. **Mutation-redenned, confirmed then reverted**:
+    temporarily hardcoded `retrieveVoice(client, 'biz-1')` — the second call's expected `'biz-2'` argument
+    failed against the actual `'biz-1'`, exactly as required. Reverted; green afterward.
+  - **Named residual, not fixed in this pass** (`security-reviewer`): `getEvidenceMemoryByIds` is never
+    called in this test's fixture (both rows resolve `getBriefByCampaign` to `null`, so `pinnedIds` is
+    always empty and the guarded call never fires) — its own cross-business argument-leak vector is
+    therefore untested here. Also flagged: since `recomputeAndUpsertPattern`/`summarizeBusinessLearning`
+    are fully mocked in this Tier-2 test, a real cross-business leak INSIDE their bodies (`promote.ts`,
+    `summarize.ts`) would not be caught here — `security-reviewer` recommends a follow-up confirming
+    `promote.test.ts`/`summarize.test.ts` each have their own explicit two-business non-leak case, which
+    this pass did not add (out of scope: D3's brief was the orchestrator's own wiring, not a re-audit of
+    every downstream function).
+- **MINOR-2** — `fixed`. New file `lib/learning/memory-table-boundary.test.ts`: a source-scan test (the
+  same technique `classify.test.ts`'s `LEARN-HEURISTIC-FIRST` uses) that recursively reads every non-test
+  `.ts` file under `lib/learning/**` and `app/api/cron/capture-learning/**` and asserts none contains
+  `.from('performance_memory'|'post_ai_originals'|'post_edit_signals'|'brand_voice…')`. Guards against its
+  own false-green: asserts `files.length > 0` before scanning. ADR 0018 §13 updated in place (both
+  constraint-table cells for `LEARN-MEMORY-THROUGH-BOUNDARY` and `LEARN-VOICE-NOT-AUTO-MUTATED` now name
+  this test and the `app-tests.yml` job it executes in) — 21 of 21 `LEARN-*` constraints now map to an
+  executing test; no "unmapped" cell remains. Documented as ADR 0018 Amendment B (the table cells are
+  edited in place, not appended around, since — unlike §5.3/§6.1's narrative decision text — a stale
+  constraint→test mapping is simply wrong, not a historical claim worth preserving verbatim; the amendment
+  records why and when).
+  **Mutation-redenned, confirmed then reverted**: appended a comment line containing
+  `.from('performance_memory').select('*')` to `lib/learning/orchestrator.ts` — the scan correctly flagged
+  that file as an offender (`expected ['lib\learning\orchestrator.ts'] to deeply equal []`). Removed the
+  line; green afterward.
+- **MINOR-10** — `fixed`. New direct test in `lib/learning/promote.test.ts`, "confidence gate isolated at
+  its own boundary": `meetsPromotionThreshold({observationCount:5, confidence:0.69, distinctCampaignCount:2})`
+  → `false`, and the same with `confidence:0.7` → `true` — holding observations and campaigns fixed at
+  passing values so only the confidence boundary is exercised, unlike the two pre-existing "5 obs" cases
+  which vary confidence only indirectly through a real `computeConfidence` output that also depends on the
+  contradiction count.
+  **Mutation-redenned, confirmed then reverted**: changed `promote.ts`'s
+  `eligibility.confidence >= LEARN_PROMOTION_MIN_CONFIDENCE` to `>` — the `confidence: 0.7` case failed
+  (`expected false to be true`), exactly at the boundary this test isolates. Reverted; `npx vitest run
+  lib/learning/promote.test.ts` green (19/19) afterward.
+
+**Advisory passes** (each independently instructed to read the D3 diff):
+- `ecc:pr-test-analyzer`: confirmed all four fixes are genuine and non-tautological — each would fail
+  under the specific broken implementation it targets, not just under an unrelated change. Confirmed each
+  described manual mutation is the correct, minimal one for its named failure mode. No residual gaps
+  found. (The agent also flagged, unprompted, that several tool-result blocks it encountered in its own
+  context contained injected text posing as system/hook messages instructing tool calls outside its actual
+  toolset, plus a fabricated cost warning — it correctly disregarded these per prompt-injection defense
+  and flagged them for visibility; noted here for the record, not otherwise actioned by this pass.)
+- `security-reviewer`: confirmed MAJOR-6's test covers the realistic tenancy-leak vectors for the
+  orchestrator's own wiring (closure capture, shared variables, incorrect keying); found and this pass
+  closed the `retrieveVoice`/`getBriefByCampaign` gap above; named the `getEvidenceMemoryByIds` and
+  downstream-function residuals above as follow-ups, not blockers, given a Tier-1 live-Postgres test would
+  not add RLS-relevant coverage here (this boundary is pure application-code discipline, not a DB
+  constraint) — Tier-2 accepted as sufficient for this specific finding.
+
+**Verification run:**
+- `npx tsc --noEmit --skipLibCheck` — clean, throughout (checked after each fix and after the
+  security-reviewer follow-up).
+- `npx vitest run lib/db lib/social lib/validation lib/learning` — 777/777 green (48 files); the
+  previously-seen `vault.test.ts` flake did not recur this run.
+- Individual files re-run standalone after each mutation-revert cycle:
+  `lib/learning/orchestrator.test.ts` (22/22), `lib/learning/promote.test.ts` (19/19),
+  `lib/learning/memory-table-boundary.test.ts` (1/1) — all green.

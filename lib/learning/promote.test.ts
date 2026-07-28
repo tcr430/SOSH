@@ -81,6 +81,22 @@ describe('meetsPromotionThreshold — boundary arithmetic', () => {
     ).toBe(true)
   })
 
+  // [Session 25-D correction, MINOR-10] The two existing "5 obs" cases above
+  // both exercise the confidence gate only INDIRECTLY, through a real
+  // computeConfidence(5, 0) output that also varies with the contradiction
+  // count — the gate is provably correct for those specific values, but
+  // nothing isolates it at its own 0.70 boundary independent of observation
+  // count or campaign count. This pair holds observations=5 and campaigns=2
+  // fixed and crosses ONLY the confidence boundary directly.
+  it('confidence gate isolated at its own boundary: 0.69 does NOT promote, 0.70 DOES (observations/campaigns held fixed)', () => {
+    expect(
+      meetsPromotionThreshold({ observationCount: 5, confidence: 0.69, distinctCampaignCount: 2 }),
+    ).toBe(false)
+    expect(
+      meetsPromotionThreshold({ observationCount: 5, confidence: 0.7, distinctCampaignCount: 2 }),
+    ).toBe(true)
+  })
+
   it('both the observation gate and the confidence gate bind together — K=2 is load-bearing', () => {
     // Exactly 5 observations, 0 contradictions clears both gates simultaneously.
     // This proves K=3 would have been a lie: 5/(5+3) = 0.625 < 0.70, which
