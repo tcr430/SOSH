@@ -940,3 +940,35 @@ simply unreachable through any transition this codebase performs.
 **Evidence:** `lib/db/post-edit-signals.ts` (`LEGAL_TRANSITIONS`); `lib/db/post-edit-signals.test.ts` (new
 "throws on illegal transition: processing → failed" test); `docs/reviews/session-25-reviewer.md` MINOR-5,
 CORRECTION PASS D5.
+
+---
+
+## Amendment D — Session 25-D correction pass, consolidated index (2026-07-29)
+
+**Author:** Session 25-D (Claude Code, Sonnet 5), step D7 (documentation finalisation, no `.ts`/`.sql`
+changed). This amendment does not introduce new content — it is a single index pointing to everything the
+correction pass changed across this ADR, so a reader does not have to reconstruct the map from six separate
+git diffs. Amendments A, B, and C above, and the inline additions below, are each unedited by this entry.
+
+| Area | What changed | Where | Step |
+|---|---|---|---|
+| §5.3 — `LEARN-VOICE-WRITE-TRIGGER`'s live scope | Narrowed from "must be sourced entirely from preference-class signals" (disproven — the shipped pipeline cannot produce a matching row) to "rejects a shape this pipeline cannot construct; live scope is other write paths" | **Amendment A** | D1 |
+| §6.1 — summarizer output promotability | Narrowed from "no shortcut into active" to "no path whatsoever" — permanently candidate-only, by construction, not merely by convention | **Amendment A** | D1 |
+| §7.4 — demotion rigor vs. promotion | `[db-MINOR-3]`'s "same rigor as promotion" is now literally true: `demote_performance_pattern` recomputes its own contradiction count via a correlated subquery (was: caller-trusted `p_net`) | inline, §7.4's own text (see `20260728220000_demote_recomputes_contradictions.sql`) — no lettered amendment, since this changed the migration/function directly rather than correcting prose | D5 |
+| §9.4 — failure-taxonomy prose | Corrected `→ status='failed'` (disproven — `claim_post_edit_signals` never reclaims `'failed'`) to `→ status='pending'`, matching `LEGAL_TRANSITIONS` as applied | **Amendment C** | D5 |
+| §12 Tier-3 — `rehydrateSignals()` | New entry: no production reader exists yet; mandatory entry point when one is added | inline addition to §12's existing Tier-3 list | D6 |
+| §12 Tier-3 — summarizer unpromotability | New entry: no test asserts promotion of a `summarize:`-keyed row succeeds, by decision | **Amendment A** | D1 |
+| §13 — constraint→test mapping | `#14`/`#17` (`LEARN-MEMORY-THROUGH-BOUNDARY` / `LEARN-VOICE-NOT-AUTO-MUTATED`) closed from unmapped to `lib/learning/memory-table-boundary.test.ts` — **19 of 21 → 21 of 21** | **Amendment B** | D3 |
+| §14 — disposition table | Missing 28th row (`[db-Q1]`, cited inline at §3.1 but never tabled) added — 27 rows → 28, now matching `docs/build-guide/session-25.md`'s "28 advisory findings" prose | inline addition to §14's table | D6 |
+| §15 — deferred/tracked follow-ups | New bullet: `topContent` length cap at the two §10.4 render sites, triggered on the first synthesized-unbounded `performance_memory.pattern` writer; mirrored in `docs/backlog.md` (`25D-MINOR-11`) | inline addition to §15's list | D6 |
+| §0/Q4, §4.2, §4.3, §12, §13 | "Eleven" Tier-0 signal kinds corrected to twelve (9 preference + 1 correction + 2 inconclusive) throughout | inline corrections at each site | D6 |
+| §10.4 | Phantom third render site (`formats/native-generation-prompt.ts`, renders no `topContent`) removed from the citation table and three sibling references (§12, §13, §15) that had gone stale when §10.4 itself was first corrected | inline corrections at each site | D6 |
+| §3.4 (this file's own caller table is separate from the Reviewer's §1 tables) | Four `file:line` citations re-derived and corrected at the current commit; one false test-file citation removed | inline correction to the §3.4 table | D6 |
+
+**No new table, no new migration beyond `20260728220000_demote_recomputes_contradictions.sql` (D5), no
+behaviour change to generation.** The full narrative for each row is in its cited Amendment or inline
+location above; the full narrative for *why* each change was made is in
+`docs/reviews/session-25-reviewer.md`'s `## CORRECTION PASS (Session 25-D)` section, D1 through D7.
+
+**Evidence:** `docs/reviews/session-25-reviewer.md` CORRECTION PASS, D0–D7 (SHAs `052c48fc` through
+`aabe6152`, D7 pending its own commit at the time this amendment was written).

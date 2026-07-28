@@ -129,12 +129,14 @@ Setup runbook: `docs/build-guide/runbooks/qstash-setup.md`
   - publish (`*/10 * * * *`)
   - sync-metrics (`0 * * * *`)
   - process-deletions (`0 3 * * *`, retries=0 — see `docs/build-guide/runbooks/qstash-setup.md` Step 2b)
+  - capture-learning (`0 * * * *`, ADR 0018 §9.2 — see `docs/build-guide/runbooks/qstash-setup.md` Step 2c)
 - [ ] **Email cron schedules visible** in Upstash console: `drain-email-outbox` (`* * * * *`) and `trial-warnings` (`0 9 * * *`), status Active.
 - [ ] **First production tick observed** in Vercel logs with `triggeredBy: 'qstash'`:
   - `/api/cron/publish` — look for `{"kind":"publish-tick","triggeredBy":"qstash",...}` within 10 minutes of deploy.
   - `/api/cron/sync-metrics` — look for `{"kind":"metrics-sync-tick","triggeredBy":"qstash",...}` within the first hour. Expected at launch: `synced=0, skippedNotImplemented=N, errors=0` (ADR 0006 §1 — wired-but-inert is healthy).
   - `/api/cron/drain-email-outbox` — look for `{"kind":"email.drain.tick","triggeredBy":"qstash",...}` within the first minute. Expected on a quiet queue: `claimed=0, sent=0, retried=0, failed=0, suppressed=0`.
   - `/api/cron/process-deletions` — look for `{"kind":"deletion.tick.end","triggeredBy":"qstash",...}` at 03:00 UTC. Expected at launch: `claimed=0, purged=0, retried=0, abandoned=0`.
+  - `/api/cron/capture-learning` — look for `{"kind":"learning.tick","triggeredBy":"qstash",...}` within the first hour. Expected on a quiet queue: `claimed=0, classified=0, patternsUpserted=0, summarized=0, abandoned=0, retrying=0`.
 - [ ] **Drain-email-outbox smoke test.** Manually insert a row into `email_outbox` (`status='pending'`, `next_attempt_at=now()`, `recipient` = a real address you control, `kind='trial-warning-t3'`). Wait up to 90 seconds for the next cron tick. Confirm `status='sent'` and `provider_message_id IS NOT NULL`:
   ```sql
   select id, status, provider_message_id, sent_at

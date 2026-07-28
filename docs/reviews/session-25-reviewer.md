@@ -1349,3 +1349,163 @@ in this step — comments and docs only. All nine are `fixed`.
 - Every changed line number in MINOR-9's fix re-derived and confirmed against the current commit:
   `approvePostAction:89`, `bulkApprovePostsAction:207`, `approvePostFromCalendarAction:270`,
   `createPosts(...)` call site in `generatePostsForCampaign:380`.
+
+### D7 — Finalisation: attribution, resolution table, and the record of what is easy to lose
+
+**Author:** Session 25-D (Claude Code, Sonnet 5). **Date:** 2026-07-29. **Range fixed:** `717263d2..d7cee4a5`
+(`be5779e1^..d7cee4a5`, C2.1 through C2.9, the range this whole reviewer report is scoped to). **This
+correction pass's own commits, in order:**
+
+| Step | SHA | Findings closed |
+|---|---|---|
+| D0 | `052c48fc` | MAJOR-5 |
+| D1 | `e2a5b28b` | MAJOR-1, MAJOR-2 |
+| D2 | `ca37eabc` | MAJOR-3, MINOR-7 |
+| D3 | `07344ae9` | MAJOR-4, MAJOR-6, MINOR-2, MINOR-10 |
+| D4 | `44f35efa` | MINOR-3, MINOR-4, NIT-4 |
+| D5 | `de4cd69e` | MINOR-5, MINOR-6, MINOR-8 |
+| D6 | `aabe6152` | MINOR-1, MINOR-9, MINOR-11, NIT-1, NIT-2, NIT-3, NIT-5, NIT-6, NIT-7 |
+| D7 | *(this commit)* | Documentation finalisation only — no findings closed, none reopened |
+
+**Additions-only, proven, not merely asserted.** `git diff 052c48fc..HEAD -- docs/reviews/session-25-reviewer.md`
+(D0's own commit as the base, since D0 is the first commit in this correction pass and touched this file
+only to commit it unmodified) reports:
+
+```
+docs/reviews/session-25-reviewer.md | 539 ++++++++++++++++++++++++++++++++++++
+1 file changed, 539 insertions(+)
+```
+
+**Zero deletions, zero modifications, across every step D0 through D6 and this D7 append.** A line-level
+check (`git diff 052c48fc..HEAD -- docs/reviews/session-25-reviewer.md | grep -E "^-" | grep -v "^---"`)
+returns no output — not one line above or below the appendix heading was removed or rewritten. Everything
+from line 1 through the `## CORRECTION PASS (Session 25-D)` heading (line 816, at the commit this was
+verified) is the Reviewer's original text, byte-identical to what D0 committed. Everything from that
+heading onward is this correction pass, and within this pass, every step is a pure append onto the one
+before it — condition 2 of CLAUDE.md's REVIEWER-REPORT APPEND-ONLY rule (*"a reader must be able to tell,
+from any line, which of the two wrote it"*) is satisfied structurally: any line above the heading is the
+Reviewer's; any line below it, this pass's.
+
+#### Resolution table — one row per finding, 24 of 24
+
+| Finding | Step | Fix | Test that now proves it | SHA |
+|---|---|---|---|---|
+| MAJOR-1 | D1 | `listRecentHumanEditExcerpts` filters `class='preference'`; `LEARN-VOICE-WRITE-TRIGGER`'s RAISE narrowed to its real scope via a new forward migration | `lib/db/post-edit-signals.test.ts` ("filters by class=preference…"); `supabase/__tests__/performance-memory-pattern-key.test.ts` ("rejects a hook-dimension distilled write sourced from a correction-class signal") | `e2a5b28b` |
+| MAJOR-2 | D1 | Summarizer output recorded as **permanently** candidate-only (not "no shortcut") in `summarize.ts`'s comment and ADR §6.1/§12 Amendment A — founder option (a), resolved not declined | none — Tier-3 by decision, the property recorded is a permanent absence | `e2a5b28b` |
+| MAJOR-3 | D2 | `scripts/learning-report.ts` reports snapshot-orphan posts per business (fix (c), the recommended minimum); (a) transaction and (b) `allSettled` recorded as considered-and-deferred | `supabase/__tests__/learning-report-orphans.test.ts` | `ca37eabc` |
+| MAJOR-4 | D3 | `orchestrator.test.ts`'s replayed-tick test now returns the SAME row on both claims and asserts an identical, non-cumulative `observation_count` | "replayed tick over the SAME signal row (LEARN-TICK-IDEMPOTENT)" | `07344ae9` |
+| MAJOR-5 | D0 | ADR 0018, `session-25.md`, and this reviewer report committed unmodified | the D0 commit itself, plus `git cat-file -e` resolving against it | `052c48fc` |
+| MAJOR-6 | D3 | New two-business, single-tick test closes `[sec-Q2]`'s outstanding test obligation | "cross-business isolation in one tick (MAJOR-6)" (strengthened in the same step to also assert `retrieveVoice`/`getBriefByCampaign` per-business args) | `07344ae9` |
+| MINOR-1 | D6 | ADR §12 gained a Tier-3 entry: no production reader of `rehydrateSignals()` exists yet; it is the mandatory entry point when one is added | none — Tier-3 by decision, per instruction (no caller invented, no type changed) | `aabe6152` |
+| MINOR-2 | D3 | One source-scan test closes the unmapped Tier-2 halves of `LEARN-MEMORY-THROUGH-BOUNDARY` / `LEARN-VOICE-NOT-AUTO-MUTATED`; ADR §13 updated | `lib/learning/memory-table-boundary.test.ts` | `07344ae9` |
+| MINOR-3 | D4 | `abandonRow` returns `guardedTransition`'s boolean; every caller branches before incrementing its terminal counter — a lost race no longer double-counts as an abandonment | "a lost race on abandonRow does not double-count as an abandonment (MINOR-3)" | `44f35efa` |
+| MINOR-4 | D4 | `summarizeFailedCode` field + Sentry tag carry the underlying `AiErrorCode` (or `'unknown'`) into both the log line and Sentry | "a summarize failure carries its AiErrorCode into the log line (MINOR-4)" | `44f35efa` |
+| MINOR-5 | D5 | `'failed'` removed from `LEGAL_TRANSITIONS`' reachable targets (option (i)); ADR §9.4 corrected via Amendment C | "throws on illegal transition: processing → failed (MINOR-5 — failed is no longer reachable)" | `de4cd69e` |
+| MINOR-6 | D5 | `listPerformanceMemoryCandidates` filters `.or('expires_at.is.null,expires_at.gt.now()')`; `listDistilledPatternsForSummary` deliberately left unfiltered, documented | `lib/db/memory-performance.test.ts` (mock-call assertion) + `supabase/__tests__/performance-memory-candidates-expiry.test.ts` (Tier-1 outcome proof) | `de4cd69e` |
+| MINOR-7 | D2 | `scripts/learning-report.ts`'s three list queries bounded with an explicit `ORDER BY` matching an existing index | exercised via `learning-report-orphans.test.ts` and a manual `tsx` run against live Postgres; no dedicated regression test beyond that (a script, not a library function) | `ca37eabc` |
+| MINOR-8 | D5 | `demote_performance_pattern` recomputes the contradiction count itself via a correlated subquery, keyed on `contradictingPatternKey` — the real fix, not the ADR-amendment fallback | `supabase/__tests__/performance-memory-promotion.test.ts` (rewritten demote cases, live Postgres); `lib/learning/promote.test.ts`; `lib/db/memory-performance.test.ts` (null-key case) | `de4cd69e` |
+| MINOR-9 | D6 | ADR §3.4's caller table: four `file:line` citations corrected, one false test citation (`actions.context-equivalence.test.ts`) removed | re-derived directly against source at the current commit (`grep`/`git grep`), not a runtime test — this is a documentation-accuracy fix | `aabe6152` |
+| MINOR-10 | D3 | Direct confidence-gate boundary test isolates 0.69 (false) / 0.70 (true) with observations/campaigns held fixed | "confidence gate isolated at its own boundary: 0.69 does NOT promote, 0.70 DOES" | `07344ae9` |
+| MINOR-11 | D6 | Recorded as a triggered follow-up (ADR §15 + `docs/backlog.md` `25D-MINOR-11`), not implemented — both live writers are bounded today, per instruction | none — a recorded decision, not a defect | `aabe6152` |
+| NIT-1 | D6 | "Eleven kinds" corrected to twelve in six places (five named plus one, ADR §4.2 line 278, found by `comment-analyzer` on re-check) | none — comment/doc correction | `aabe6152` |
+| NIT-2 | D6 | ADR §10.4's phantom third render site removed; three sibling stale references (§12, §13, §15) found by `comment-analyzer` and corrected in the same commit | none — comment/doc correction | `aabe6152` |
+| NIT-3 | D6 | `computeSummaryPatternKey`'s 32-bit hash bound documented with the birthday-bound arithmetic | none — comment addition | `aabe6152` |
+| NIT-4 | D4 | `LearningTickSummary.failed` renamed to `retrying`; ADR §9.5's field list updated to match | the existing "logs exactly one JSON line... and all named counters" test continues to pass with the renamed/added fields | `44f35efa` |
+| NIT-5 | D6 | §14's disposition table was missing a row for the inline-cited `[db-Q1]` finding — added; table now has 28 rows, matching `docs/build-guide/session-25.md`'s "28 advisory findings" prose exactly | none — the fix is the table row itself | `aabe6152` |
+| NIT-6 | D6 | CLAUDE.md's "No console.log" bullet gained a one-sentence carve-out for a single canonical structured-JSON line per worker/route invocation | none — constitution-doc change | `aabe6152` |
+| NIT-7 | D6 | `getLatestRevision` / `getPostAiOriginalById` each gained a comment stating tenancy is enforced by the caller's client, not the function | none — comment addition, no signature change per instruction | `aabe6152` |
+
+24 of 24 findings from this reviewer report — every BLOCKER (none existed), MAJOR-1 through MAJOR-6,
+MINOR-1 through MINOR-11, and NIT-1 through NIT-7 — has a resolution row above.
+
+#### The six things easy to lose
+
+**1. The D0–D8 ordering rationale.** MAJOR-5 (D0) ran **first**, before any other finding, because it is
+the one finding whose fix is a precondition for every other step's own record-keeping: D1 through D6 each
+amend ADR 0018 (Amendments A, B, C) or its build guide, and an amendment is only a diff against a committed
+document if the document is committed. Running D0 last would have meant every later amendment was a diff
+against nothing — untracked, unreviewable, and impossible to `git diff` against. CI (D8, not yet run as of
+this entry — see below) runs **last**, after D0–D7, because it is the one verification step that cannot be
+faked locally: it must green the range as this correction pass leaves it, not as it stood before, and every
+fix D1–D7 makes changes the exact tsc/vitest surface CI checks. Running CI before D7 would have graded an
+incomplete correction.
+
+**2. The MAJOR-1 / MAJOR-2 founder adjudication.** Recorded in `docs/build-guide/session-25.md` §4 and ADR
+0018 Amendment A: **option (a) — record + narrow.** MAJOR-2's campaign gate (`promote_performance_pattern`'s
+distinct-campaign subquery, keyed on `pattern_key`) is precisely the mechanism that makes MAJOR-1's leak
+harmless today — a summarizer row's `summarize:`-namespaced key never matches any `post_edit_signals` row,
+so the campaign count is always `0` and the row can never reach `active`. **Option (b) — making summarizer
+rows promotable — would have made LIVE the exact path MAJOR-1's leak sits on**: the moment a summarizer row
+can be promoted, whether it was built from correction-classed human copy (MAJOR-1's leak, independently
+closed at the query layer in the same step) stops being a theoretical concern and starts being a live
+voice-corruption vector. Fixing (b) without also fully closing (a)'s leak first would have reintroduced the
+exact hazard §5.1 names as this track's highest-stakes failure mode. **MAJOR-2 was resolved, not
+declined** — the fix is the ADR narrowing itself (§6.1 Amendment A, stating the true "no path whatsoever"
+property) plus a code comment; nothing was left unaddressed.
+
+**3. The MAJOR-3 severity split, argued not erased.** `silent-failure-hunter` graded the original finding
+(a partially-failed `createPosts` call leaving snapshot-less posts silently outside the learning loop) a
+**BLOCKER**. The Reviewer regraded it **MAJOR**, reasoning that the blast radius is bounded — no data
+corruption, session-level Sentry/log visibility already existed, and the missing piece was per-post
+attribution and an after-the-fact way to find orphans, a coverage gap rather than a correctness or safety
+failure. Neither original grading was edited; the split is argued in this appendix's D2 section and again
+here. `silent-failure-hunter`, re-invoked during D2 on the shipped fix, accepted the Reviewer's MAJAR
+grading as adequate **conditional on this pass's record being explicit that fix (c) is manual-only** —
+`findSnapshotOrphans` is invoked by an operator running `tsx scripts/learning-report.ts`, not by a
+scheduled job or an alert. Fixes **(a) one Postgres transaction** and **(b) `Promise.allSettled` +
+mark/soft-delete** were both **considered and deferred**: (a) would be a transaction-boundary change to
+`createPosts`'s generation path itself — a behaviour change to already-shipped code, out of scope for a
+pass whose brief is fixing what the Reviewer found wrong, not restructuring it; (b) changes `createPosts`'s
+failure semantics (what it returns, what a caller sees on partial failure) — exactly the class of change
+this correction pass is scoped to avoid. Both reasons are recorded in `scripts/learning-report.ts`'s own
+comment above `findSnapshotOrphans`, not left implicit.
+
+**4. The correction to the C2.9 verification report's §5.** The Reviewer's own report (§J3, "CI execution
+and the promotion tally") states plainly: *"One correction to the C2.9 report. Its §5 states '192 tests
+executed … confirmed directly from the CI log.' Not supportable: `test:db` runs with `--reporter=json
+--outputFile`, which suppresses the human summary, and the skip-guard prints a **file** count, not a test
+count. `192` is the local figure from its own §1."* This correction pass makes the same point explicit here
+so the number is never re-cited as CI-sourced by a future reader skimming only the appendix: `192` is a
+locally-observed figure (`docs/reviews/session-25-c2.9-verification.md` §1), and the CI log's own
+skip-guard output is a **per-file non-zero** guarantee (`20 file(s) under [supabase/__tests__] all visible,
+zero failures`), never a test-count integer. The per-file guarantee holds — CI genuinely proves every
+Tier-1 file executed at least one non-skipped assertion — but `192` itself does not come from CI, and
+should not be repeated as if it did. `docs/reviews/session-25-c2.9-verification.md` is **not edited** —
+same append-only posture as this report; the correction lives here, where the finding that raised it lives.
+
+**5. The four SHARED-FUNCTION CALLERS tables stay valid, unchanged by D1–D6.** The Reviewer's §1 tables
+(`approvePost`, `bulkApproveDraftPosts`, `createPosts`, `neutralize()`) enumerate callers of four specific
+functions. **None of D1 through D6 added, removed, or re-covered a caller of any of those four functions**
+— no row in any of the four tables needed correction on caller-coverage grounds (MINOR-9's fix was to
+`file:line` citations and one test-file citation in the ADR's own separate §3.4 table, not to the
+Reviewer's §1 tables, which were never wrong). Two changes elsewhere are worth naming for completeness,
+neither of which touches these four tables: **D1** added a `.eq('class', 'preference')` filter to
+`listRecentHumanEditExcerpts` (`lib/db/post-edit-signals.ts`) — a query function that feeds the summarizer,
+not a caller of any of the four enumerated functions. **D3** added Tier-2 test coverage of
+`orchestrator.ts`'s own internal calls to `recomputeAndUpsertPattern` and `summarizeBusinessLearning`
+across two businesses — again, internal orchestration calls, not new callers of `approvePost`,
+`bulkApproveDraftPosts`, `createPosts`, or `neutralize()`. The four tables the Reviewer published require
+no update.
+
+**6. ADR §13's constraint mapping — before and after, stated explicitly.** The Reviewer's own §5 table
+(line 690, untouched, Reviewer's original text) reads: *"Result: 19 of 21 map to a test in a named,
+executing CI job. Two (#14, #17) have an unmapped Tier-2 half."* **After D3's fix (MINOR-2)**, ADR 0018
+§13 itself (not the Reviewer's report, which is never edited) now reads **21 of 21** — both `#14`
+(`LEARN-MEMORY-THROUGH-BOUNDARY`) and `#17` (`LEARN-VOICE-NOT-AUTO-MUTATED`) name
+`lib/learning/memory-table-boundary.test.ts` and the `app-tests.yml` job it executes in, closing the two
+previously-unmapped Tier-2 halves. **The Reviewer's "19 of 21" line is the correct historical record of
+what was true when the Reviewer read the range — it is not stale, it is dated**, and this correction pass's
+own fix is what moved the live ADR from 19 to 21. A future reader comparing the Reviewer's report against
+the current ADR should expect this exact discrepancy and know why it exists.
+
+**Verification run (D7):**
+- `git status --short` shows no untracked files under `docs/` at the time of this commit — every file this
+  correction pass touched (`0018-diff-based-learning-capture.md`, `0016-governed-memory.md`,
+  `current-phase.md`, `docs/brainstorm/session-plan-adrs-0016-0018.md`, `backlog.md`, this report, and the
+  `.wolf/` files) is tracked and staged, not left as an untracked artefact.
+- The reviewer report contains exactly one appended `## CORRECTION PASS (Session 25-D)` section, opening
+  with its author and now (as of this D7 append) its date and full range/SHA attribution, with one
+  resolution-table row per finding (24 of 24) and the additions-only diff pasted above.
+- `git diff 052c48fc..HEAD -- docs/reviews/session-25-reviewer.md` re-confirmed additions-only immediately
+  before this commit (539 insertions before this append; this append itself is further pure addition at
+  end-of-file, so the property holds transitively).

@@ -648,3 +648,32 @@ policy or cascade behaviour changes, and the existing `docs/decisions/0010-legal
 
 **Evidence:** `supabase/migrations/20260726020000_performance_memory_pattern_key.sql`; `docs/decisions/
 0018-diff-based-learning-capture.md` §7.2, §5.3.
+
+## Amendment C — §3.4 / §10 "ADR 0018 — the WRITER" deferral now closed (2026-07-29)
+
+**Author:** Session 25-D (Claude Code, Sonnet 5), closing the state Amendment B (2026-07-26) had already
+begun to close. §3.4's original table and §10's original prose above are **not edited** — this amendment
+is additive, per this ADR's own convention (Amendments A, B).
+
+**What changed:** §10 named ADR 0018 as "the WRITER" — the track that would turn `performance_memory` from
+a table with no writer into one with a real distillation pipeline. That deferral is now closed. Track C
+(ADR 0018, Session 25 C2.1–C2.9) shipped the writer: `upsert_distilled_performance_pattern`,
+`promote_performance_pattern`, and `demote_performance_pattern` (all three
+`supabase/migrations/20260726030000_performance_memory_promotion.sql`, the last further hardened by the
+Session 25-D correction pass D5 — `demote_performance_pattern` now recomputes its own contradiction count
+rather than trusting a caller-supplied value, per `20260728220000_demote_recomputes_contradictions.sql`).
+`performance_memory` **no longer ships empty**: `recomputeAndUpsertPattern` (`lib/learning/promote.ts`)
+is invoked once per business-touching row from `runLearningTick` (`lib/learning/orchestrator.ts`), on an
+hourly QStash schedule (`api/cron/capture-learning/route.ts`), writing `source='distilled'` rows subject to
+the `observation_count ≥ 5 AND confidence ≥ 0.70 AND distinct campaigns ≥ 2` promotion threshold §7.3
+specifies. The generation-time reader, `listPerformanceMemoryCandidates` (`lib/db/memory-performance.ts`),
+now also enforces the `expires_at` 90-day decay column at read time (Session 25-D, MINOR-6) — a gap the
+original writer left write-only until this correction pass closed it.
+
+**§3.4's original table definition is unaffected** — no new column, no schema change beyond Amendment B's
+`pattern_key` addition. This amendment records only that the deferred **consumer of the table's writer
+role** is now shipped and hardened, not that the table's shape changed again.
+
+**Evidence:** `docs/decisions/0018-diff-based-learning-capture.md` §7 (the writer, promotion, demotion),
+Amendment A (MAJOR-1/MAJOR-2 narrowing), Amendment D (consolidated index); `docs/reviews/
+session-25-reviewer.md` CORRECTION PASS D1–D7.
