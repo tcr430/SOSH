@@ -19,6 +19,14 @@ export async function listPerformanceMemoryCandidates(
     .eq('business_id', businessId)
     .eq('status', 'active')
     .is('deleted_at', null)
+    // [Session 25-D correction, MINOR-6] upsert_distilled_performance_pattern
+    // writes expires_at = now() + 90 days on every upsert (ADR §7.1), but
+    // until this filter NOTHING read it — a 90-day-stale active pattern
+    // still reached generation, making the decay column write-only. This is
+    // the ONE generation-time reader; NULL is included because manual/import
+    // rows (source != 'distilled') never get an expires_at at all and must
+    // not be treated as expired by omission.
+    .or('expires_at.is.null,expires_at.gt.now()')
     .order('confidence', { ascending: false })
     .order('recency_at', { ascending: false }) // = COALESCE(last_confirmed_at, created_at), matches performance_memory_retrieval_idx
     .limit(limit)
@@ -46,6 +54,15 @@ export async function listPerformanceMemoryCandidates(
 // Callers of this function MUST treat every returned `pattern` string as
 // untrusted, attacker-reachable-adjacent text — see
 // learning-summarizer.ts's guardTierZeroSummaries(), which neutralize()s it.
+//
+// [Session 25-D correction, MINOR-6] Deliberately NOT filtered on
+// expires_at, unlike listPerformanceMemoryCandidates above. The summarizer
+// reads its OWN prior history back (tierZeroSummaries) to avoid re-surfacing
+// a pattern it has already named — a decayed-but-not-yet-retired pattern is
+// still a real thing this business's editors did, and excluding it here
+// would just cause the summarizer to re-describe it as if it were new. Only
+// the generation-time reader needs expires_at enforced, because that is the
+// one place a stale pattern could shape a NEW post.
 export async function listDistilledPatternsForSummary(
   client: SupabaseClient,
   businessId: string,
@@ -163,23 +180,32 @@ export async function promotePerformancePattern(
 
 // ADR 0018 §7.4 — never deletes; moves an 'active' row back to 'candidate',
 // preserving the audit trail and observation history. Carries the SAME
-// explicit status='active' guard as promotion ([db-MINOR-3]). `net` is
-// computed by the caller (lib/learning/promote.ts) since "contradictions"
-// has no stored column this function could recompute from itself.
+// explicit status='active' guard as promotion.
+//
+// [Session 25-D correction, MINOR-8] `net` used to be computed by the
+// caller and passed in as a plain numeric argument — trusted, not
+// recomputed, which was NOT "the same rigor as promotion" ([db-MINOR-3])
+// despite the disposition table reading as if it were. The RPC now
+// recomputes the contradiction count ITSELF from `contradictingPatternKey`
+// via a correlated subquery (net = the row's own stored `observation_count`
+// minus a live COUNT over post_edit_signals), genuinely atomic like
+// promotion's campaign gate. Pass the KEY (from
+// lib/learning/pattern-key.ts's computeContradictingPatternKey), never a
+// pre-computed net.
 export async function demotePerformancePattern(
   client: SupabaseClient,
   businessId: string,
   patternKey: string,
   dimension: string,
   platform: string | null,
-  net: number,
+  contradictingPatternKey: string | null,
 ): Promise<PerformanceMemoryRow | null> {
   const { data, error } = await client.rpc('demote_performance_pattern', {
     p_business_id: businessId,
     p_pattern_key: patternKey,
     p_dimension: dimension,
     p_platform: platform,
-    p_net: net,
+    p_contradicting_pattern_key: contradictingPatternKey,
   })
   if (error) throw new Error(getErrorMessage(error))
   const row = Array.isArray(data) ? data[0] : data

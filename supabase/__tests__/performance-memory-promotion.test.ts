@@ -220,8 +220,17 @@ describe('promote_performance_pattern / demote_performance_pattern concurrency (
     expect(finalRow.status).toBe('candidate')
   })
 
+  // [Session 25-D correction, MINOR-8] p_net (a caller-trusted number) is
+  // replaced by p_contradicting_pattern_key — the RPC now recomputes the
+  // contradiction count itself via a live correlated subquery over
+  // post_edit_signals, the same rigor promotion's campaign gate already
+  // has. net = observation_count (6) - contradictions (4 real seeded
+  // signals) = 2, which is < LEARN_DEMOTION_NET (3).
   it('demote_performance_pattern demotes EXACTLY ONCE under 10 concurrent calls, never deleting the row', async () => {
     const key = `demote-concurrency-${Date.now()}`
+    const contradictingKey = `${key}-opposite`
+
+    for (let i = 0; i < 4; i++) await createProcessedSignal(campaignAId, contradictingKey)
 
     const { error: insertErr } = await admin.from('performance_memory').insert({
       business_id: businessId,
@@ -245,7 +254,7 @@ describe('promote_performance_pattern / demote_performance_pattern concurrency (
           p_pattern_key: key,
           p_dimension: 'format',
           p_platform: 'linkedin',
-          p_net: 2,
+          p_contradicting_pattern_key: contradictingKey,
         }),
       ),
     )
@@ -263,8 +272,15 @@ describe('promote_performance_pattern / demote_performance_pattern concurrency (
     expect(finalRow.deleted_at).toBeNull()
   })
 
-  it('demote_performance_pattern is a no-op when net >= LEARN_DEMOTION_NET', async () => {
+  // net = observation_count (10) - contradictions (5 real seeded signals) =
+  // 5, which is >= LEARN_DEMOTION_NET (3) — a genuine no-op, recomputed by
+  // the RPC itself rather than trusted from a caller-supplied p_net.
+  it('demote_performance_pattern is a no-op when the recomputed net >= LEARN_DEMOTION_NET', async () => {
     const key = `demote-noop-${Date.now()}`
+    const contradictingKey = `${key}-opposite`
+
+    for (let i = 0; i < 5; i++) await createProcessedSignal(campaignBId, contradictingKey)
+
     await admin.from('performance_memory').insert({
       business_id: businessId,
       source: 'distilled',
@@ -284,7 +300,7 @@ describe('promote_performance_pattern / demote_performance_pattern concurrency (
       p_pattern_key: key,
       p_dimension: 'format',
       p_platform: 'linkedin',
-      p_net: 5,
+      p_contradicting_pattern_key: contradictingKey,
     })
     expect(error).toBeNull()
     expect(Array.isArray(data) ? data.length : 0).toBe(0)

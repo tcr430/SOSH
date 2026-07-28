@@ -876,3 +876,37 @@ reverting restored green.
 
 **Evidence:** `lib/learning/memory-table-boundary.test.ts`; `docs/reviews/session-25-reviewer.md` MINOR-2,
 CORRECTION PASS D3.
+
+---
+
+## Amendment C — §9.4's failure-taxonomy prose corrected to match the schema as applied (Session 25-D
+correction pass, 2026-07-28)
+
+**Author:** Session 25-D (Claude Code, Sonnet 5), closing `docs/reviews/session-25-reviewer.md` MINOR-5.
+§9.4's original prose above is **not edited** — this amendment is additive, per this ADR's own convention.
+
+**What was wrong:** §9.4 states a transient failure moves to `→ status='failed'` with backoff, retried up
+to `LEARNING_MAX_ATTEMPTS`, then `abandoned`. Under the schema **as actually applied**, this is false:
+`claim_post_edit_signals` (`20260726010000_learning_capture.sql:231-246`) claims ONLY `status='pending'` —
+unlike its sibling `claim_deletion_requests`, it has no `OR (status='failed' AND attempts < max)` reclaim
+clause. A row genuinely parked at `'failed'` would never be claimed again, silently losing the retry this
+prose promises.
+
+**Resolution: option (i), preferred by the Reviewer over adding a reclaim clause.** Rather than build a
+migration to service a state the orchestrator never actually uses, `'failed'` is removed from
+`LEGAL_TRANSITIONS`' reachable targets entirely (`lib/db/post-edit-signals.ts`) — no code path can
+transition a row into or out of `'failed'` anymore. This makes the schema (as enforced by the app-layer
+transition guard) and this prose agree, and removes the trap (a future writer parking a row at `'failed'`
+expecting reclaim) rather than leaving it in place to be serviced later. `'failed'` remains a legal DB
+value — the table's `CHECK` constraint is unchanged, no migration was needed for an app-layer guard — it is
+simply unreachable through any transition this codebase performs.
+
+**Corrected prose** (§9.4's transient bullet, restated — the original bullet above is not itself edited):
+*Transient — Anthropic 429/5xx/network, Postgres serialization `40001`. → `status='pending'` with
+`next_attempt_at` set by exponential backoff + jitter (reclaimable by `claim_post_edit_signals`'s existing
+`status='pending'` predicate, no reclaim clause needed), retried up to `LEARNING_MAX_ATTEMPTS`, then
+`abandoned`.* Permanent's bullet is unaffected by this correction.
+
+**Evidence:** `lib/db/post-edit-signals.ts` (`LEGAL_TRANSITIONS`); `lib/db/post-edit-signals.test.ts` (new
+"throws on illegal transition: processing → failed" test); `docs/reviews/session-25-reviewer.md` MINOR-5,
+CORRECTION PASS D5.

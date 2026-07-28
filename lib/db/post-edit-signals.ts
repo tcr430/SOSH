@@ -101,27 +101,30 @@ export async function claimPostEditSignals(
 // status → check LEGAL_TRANSITIONS → UPDATE guarded by
 // .eq('status', currentStatus), so a concurrently-moved row updates zero
 // rows (returns null) instead of clobbering a state this call no longer owns.
-// [C2.8 db-note] `claim_post_edit_signals` (already-applied migration
-// 20260726010000_learning_capture.sql:231-246) claims ONLY `status =
-// 'pending'` — unlike its sibling `claim_deletion_requests`
-// (20260615200000_deletion_cron_state_machine.sql:48-51), it does NOT also
-// reclaim `status = 'failed' AND attempts < max`. ADR 0018 §9.4's prose
-// describes a transient failure moving to `status='failed', then abandoned`
-// — but under the schema as actually applied, a row parked at `'failed'`
-// would never be claimed again, silently losing the retry the ADR promises.
-// This transition table stays permissive (mirroring email_outbox's own
-// flexibility) so `'failed'` remains a legal, schema-valid target for any
-// future migration that adds the deletion-style reclaim clause; the
-// ORCHESTRATOR (lib/learning/orchestrator.ts) is what actually implements
-// the retry policy, and it transitions a transient failure back to
-// `'pending'` (reclaimable under the CURRENT claim RPC, exactly like
-// runEmailDrainTick's own sending→pending retry) rather than to `'failed'`,
-// specifically to avoid this gap without requiring a new migration here.
+//
+// [Session 25-D correction, MINOR-5, option (i) — PREFERRED per the
+// Reviewer] `claim_post_edit_signals` (`20260726010000_learning_capture.sql:
+// 231-246`) claims ONLY `status = 'pending'` — unlike its sibling
+// `claim_deletion_requests` (`20260615200000_deletion_cron_state_machine.sql:
+// 48-51`), it has NO `OR (status='failed' AND attempts < max)` reclaim
+// clause. A prior version of this table kept `'failed'` reachable
+// (`processing → failed → processing`) "for a future migration that adds
+// the reclaim clause" — but a row a future writer parks at `'failed'` under
+// THIS schema, as actually applied, is never claimed again and is stranded
+// forever. Rather than service that trap, `'failed'` is removed from every
+// reachable target here: the orchestrator already retries a transient
+// failure by transitioning to `'pending'` (reclaimable under the CURRENT
+// claim RPC, exactly like runEmailDrainTick's own sending→pending retry),
+// which is the only transient-retry path this schema actually supports.
+// `'failed'` remains a legal DB value (the table's CHECK constraint is
+// unchanged — no migration needed for an app-layer guard), but no code path
+// can transition a row INTO or OUT OF it anymore. ADR §9.4's prose is
+// corrected to match in the same commit (ADR 0018 Amendment C).
 const LEGAL_TRANSITIONS: Readonly<Record<PostEditSignalStatus, readonly PostEditSignalStatus[]>> = {
   pending:    ['processing'],
-  processing: ['processed', 'pending', 'failed', 'abandoned'],
+  processing: ['processed', 'pending', 'abandoned'],
   processed:  [],
-  failed:     ['processing'],
+  failed:     [],
   abandoned:  [],
 }
 

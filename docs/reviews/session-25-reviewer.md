@@ -1153,3 +1153,100 @@ untagged counter, and a name that would page an operator on ordinary retry traff
   addition).
 - `npm run test:app` (full scope, all of `app/ lib/ components/`) — 2340/2340 green across 167 files.
 - `lib/learning/orchestrator.test.ts` re-run standalone after each mutation-revert cycle — 24/24 green.
+
+### D5 — MINOR-5, MINOR-6, MINOR-8
+
+Each of these was a guarantee living in caller behaviour rather than in the database. All three are
+`fixed`. Each row below names the option taken and why, per instruction.
+
+- **MINOR-5** — `fixed`, **option (i) taken** (remove `'failed'` from reachable targets and align the ADR
+  prose), **not** option (ii) (add a reclaim clause). Reason: (ii) would have built a migration to service
+  a state the orchestrator never actually writes into — the orchestrator already retries transient
+  failures via `'pending'` (reclaimable under the current claim RPC), so a reclaim clause for `'failed'`
+  would be dead code from day one. (i) makes the schema (as enforced by the app-layer transition guard)
+  and the ADR's own prose agree, and removes the trap (a future writer parking a row at `'failed'`
+  expecting reclaim) rather than leaving it in place to be serviced later. `LEGAL_TRANSITIONS` in
+  `lib/db/post-edit-signals.ts` now maps `processing → ['processed', 'pending', 'abandoned']` (was
+  `..., 'failed', ...`) and `failed → []` (was `['processing']`). `'failed'` remains a legal DB value — the
+  table's `CHECK` constraint is unchanged, no migration was needed for a pure app-layer guard — it is
+  simply unreachable through any transition this codebase performs. ADR 0018 Amendment C corrects §9.4's
+  disproven "→ `status='failed'`" prose to `→ status='pending'`, without editing the original text.
+  Test: `lib/db/post-edit-signals.test.ts` — repurposed the prior `'failed'`-target atomic-guard test to
+  target `'pending'` (the transition it actually exercises now), and added a new "throws on illegal
+  transition: processing → failed (MINOR-5)" test.
+- **MINOR-6** — `fixed`. `listPerformanceMemoryCandidates` (`lib/db/memory-performance.ts`, the ONE
+  generation-time reader) now filters `.or('expires_at.is.null,expires_at.gt.now()')`. NULL is included
+  because manual/import rows never get an `expires_at` and must not be treated as expired by omission.
+  `listDistilledPatternsForSummary` was deliberately left unfiltered — documented in a new comment above
+  it — because the summarizer reads its own prior history back to avoid re-describing a pattern it has
+  already named; a decayed-but-real pattern is still something this business's editors did, and excluding
+  it there would just cause re-description as if it were new. Only the generation-time reader needed
+  enforcement, since that is the one place a stale pattern could shape a NEW post.
+  **Mutation-redenned, confirmed then reverted**: temporarily commented out the `.or(...)` call — both the
+  new Tier-1 test (below) and a new Tier-2 mock-call-assertion test failed — restored the line; both green
+  afterward.
+  Test: `lib/db/memory-performance.test.ts` — new Tier-2 test asserting `builder.or` is called with the
+  exact filter string. `supabase/__tests__/performance-memory-candidates-expiry.test.ts` (new, Tier-1, live
+  Postgres) — the outcome-level proof the instruction asked for: seeds an expired active row, a
+  NULL-expires_at row, and a future-expires_at row, and asserts only the expired one is excluded from
+  `listPerformanceMemoryCandidates`'s real return value.
+- **MINOR-8** — `fixed`, **the real fix, not the ADR-amendment fallback**: `demote_performance_pattern`
+  (new forward migration `20260728220000_demote_recomputes_contradictions.sql` — the applied
+  `20260726030000…sql` migration is unedited) now recomputes the contradiction count ITSELF via a
+  correlated subquery over `post_edit_signals`, keyed on a new `p_contradicting_pattern_key` parameter
+  (replacing the old caller-trusted `p_net numeric`), matching the exact rigor `promote_performance_pattern`
+  already has for its campaign-count gate. `net = observation_count` (the row's own stored, freshly
+  recomputed column) `- (SELECT count(*) FROM post_edit_signals WHERE pattern_key = p_contradicting_pattern_key
+  AND status='processed' AND class='preference')`. `DROP FUNCTION IF EXISTS ...(uuid,text,text,text,numeric)`
+  precedes the `CREATE FUNCTION` for the new `(...,text)` signature — required, since `CREATE OR REPLACE`
+  cannot change a function's argument types, only its body; the `DROP` also removes the old signature's
+  `REVOKE`/`GRANT` as a unit, so the new signature's `REVOKE ALL`/`GRANT EXECUTE TO service_role` needed no
+  separate cleanup. `lib/db/memory-performance.ts`'s `demotePerformancePattern` and
+  `lib/learning/promote.ts`'s call site were updated to pass `contradictingPatternKey` (from
+  `computeContradictingPatternKey`) instead of a pre-computed `net`; the client-side `net` value is still
+  computed and used only for `meetsDemotionThreshold`'s call-avoidance pre-check, never trusted by the RPC.
+  **Mutation-redenned, confirmed then reverted**: temporarily widened the live function's threshold from
+  `< 3` to `< 30` (would always demote) directly against Postgres — the new "no-op when the recomputed net
+  >= LEARN_DEMOTION_NET" Tier-1 test failed (`expected 1 to be 0`) — restored the correct `< 3` threshold by
+  reapplying the migration's function body; green afterward.
+  Test: `lib/learning/promote.test.ts` — the demote call-args assertion now checks `contradictingPatternKey`
+  is passed, not a number. `lib/db/memory-performance.test.ts` — new test for the `null`-key case (a signal
+  kind with no natural opposite). `supabase/__tests__/performance-memory-promotion.test.ts` (Tier-1,
+  rewritten) — both existing concurrency/no-op tests now seed REAL `post_edit_signals` contradiction rows
+  via the existing `createProcessedSignal` fixture and pass the key, proving the recompute against live
+  Postgres rather than trusting a hardcoded `p_net`.
+
+**Advisory pass** (`database-reviewer`, invoked on the full D5 diff):
+- **MINOR-5**: confirmed by grep that no other code path in the repo targets
+  `post_edit_signals.status = 'failed'` anymore — every remaining `'failed'` literal belongs to an
+  unrelated status enum (`PostStatus`, `EmailOutboxStatus`, `GenerationSessionStatus`) or an unrelated
+  table. Confirmed leaving `'failed'` as a legal-but-unreachable `CHECK` value is the right call, not a new
+  problem: a stray direct-SQL write into `'failed'` would strand a row no worse than before, now honestly
+  documented rather than silently trap-laid.
+- **MINOR-6**: confirmed the `.or()` syntax is correct PostgREST, producing exactly
+  `WHERE business_id = $1 AND status = 'active' AND deleted_at IS NULL AND (expires_at IS NULL OR
+  expires_at > now())`. Confirmed `listDistilledPatternsForSummary` staying unfiltered is safe: worst case
+  is the summarizer re-observing a decayed-but-real pattern in its own read-back loop — wasted tokens, not
+  a generation-time leak, since only `listPerformanceMemoryCandidates` feeds prompts.
+- **MINOR-8**: confirmed `DROP FUNCTION` + `CREATE FUNCTION` is required (not optional style) given the
+  parameter-type change; confirmed the correlated subquery correctly yields `0` when
+  `p_contradicting_pattern_key IS NULL` (SQL's three-valued logic — `pattern_key = NULL` is never `TRUE`);
+  confirmed unqualified `observation_count` inside the `UPDATE ... WHERE` clause reads each candidate row's
+  current pre-update value, identical to how `promote_performance_pattern` already reads
+  `observation_count`/`confidence`; confirmed demotion is exactly as atomic as promotion under concurrency
+  (same MVCC-snapshot-plus-row-lock reasoning, not merely test-proven); confirmed the `REVOKE`/`GRANT`
+  reapplication against the new five-arg signature is correct and complete. No issues found in any of the
+  three changes.
+
+**Verification run:**
+- `npx tsc --noEmit --skipLibCheck` — clean, throughout.
+- `npm run db:migrate` — the one new migration (`20260728220000_demote_recomputes_contradictions.sql`)
+  applied cleanly against the local live Postgres.
+- `npx vitest run lib/db/post-edit-signals.test.ts lib/db/memory-performance.test.ts
+  lib/learning/promote.test.ts` — all green (repurposed and new tests included).
+- `npm run test:app` (full scope) — 2343/2343 green across 167 files.
+- `test:db` full suite (live Postgres, `--no-file-parallelism --retry=2`): same two pre-existing, unrelated
+  failures seen since D1 (`rls-policy-lockdown.test.ts`, `get-user-business-ids-matrix.test.ts`), plus
+  195/197 passing — includes all of D5's new/modified Tier-1 tests
+  (`performance-memory-candidates-expiry.test.ts`, the rewritten `performance-memory-promotion.test.ts`
+  demote cases) green. No new failures introduced by D5's changes.

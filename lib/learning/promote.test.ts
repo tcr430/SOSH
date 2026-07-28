@@ -230,7 +230,11 @@ describe('recomputeAndUpsertPattern', () => {
     expect(demotePerformancePattern).not.toHaveBeenCalled()
   })
 
-  it('calls demote with the computed net when net < LEARN_DEMOTION_NET', async () => {
+  // [Session 25-D correction, MINOR-8] Was "calls demote with the computed
+  // net" — now asserts the contradictingPatternKey is passed through
+  // instead, since the RPC recomputes net itself rather than trusting a
+  // TS-computed number.
+  it('calls demote with the contradictingPatternKey when net < LEARN_DEMOTION_NET', async () => {
     vi.mocked(countProcessedSignalsForPattern).mockResolvedValueOnce(3).mockResolvedValueOnce(1)
     await recomputeAndUpsertPattern(mockClient, {
       businessId: 'biz-1',
@@ -249,7 +253,7 @@ describe('recomputeAndUpsertPattern', () => {
       'length_delta:shorter:linkedin',
       'format',
       'linkedin',
-      2,
+      'length_delta:longer:linkedin',
     )
   })
 })
