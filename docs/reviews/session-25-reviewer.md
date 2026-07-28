@@ -907,3 +907,81 @@ correction pass rather than passed through verbatim):
   identical assertions, with none of this pass's changes present. Stash restored afterward; `git status`
   confirmed all six changes intact. These two failures are local-environment/pre-existing and out of D1's
   scope (MAJOR-1/MAJOR-2 only); not investigated further here.
+
+### D2 — MAJOR-3 and MINOR-7
+
+- **MAJOR-3** — `fixed`, via fix (c) only (the Reviewer's recommended minimum). `scripts/learning-report.ts`
+  now exports `findSnapshotOrphans(client, businessId)`: posts with `deleted_at IS NULL` and no matching
+  `post_ai_originals` row (detected via a PostgREST embedded left-join, `post_ai_originals(id)` returning an
+  empty/null array for a childless post), ordered by `created_at DESC` and bounded to `ORPHAN_SCAN_LIMIT =
+  500` — matching `posts_business_id_created_at_idx (business_id, created_at DESC)`. `reportForBusiness`
+  prints the orphan count plus a bounded sample of ids (`ORPHAN_SAMPLE_LIMIT = 20`), with a note that any
+  pre-Track-C post will also appear here (no backfill was built, by decision) so an operator doesn't treat
+  every historical post as a fresh incident.
+  - **(a) one transaction** and **(b) `Promise.allSettled` + mark/soft-delete** were both **considered and
+    deferred**, per instruction — recorded in `scripts/learning-report.ts`'s own comment above
+    `findSnapshotOrphans`, not left implicit: (a) is a transaction-boundary change to `createPosts`'s
+    generation path itself — a behaviour change to already-shipped code, out of scope for a pass whose
+    brief is fixing what the Reviewer found wrong, not restructuring it; (b) changes `createPosts`'s
+    failure semantics (what it returns, what a caller sees on partial failure) — exactly the class of
+    change this correction pass is scoped to avoid. Neither is implemented here.
+  - **BLOCKER (silent-failure-hunter) vs MAJOR (Reviewer) — the severity split, argued, not erased.**
+    silent-failure-hunter's original BLOCKER reasoning (cited above, in the Reviewer's MAJOR-3 section) is
+    about production impact: posts silently and permanently escape the learning loop, with no rollback and
+    no id-level rejection reporting. That underlying defect is **still true after this pass** — `createPosts`
+    and the snapshot writes are still two round trips, still not transactional, still no `allSettled`
+    reporting; fix (c) adds **detection**, not **correction**. Re-invoked in this correction pass,
+    silent-failure-hunter accepted the Reviewer's MAJAR grading as adequate **conditional on this pass's
+    record being explicit that (c) is manual-only** — `findSnapshotOrphans` is invoked by a human running
+    `tsx scripts/learning-report.ts`, not by a scheduled job or an alert, so "operator-visible" here means
+    "visible to an operator who runs the report," not "surfaced automatically." That condition is satisfied
+    by this very appendix and by the in-file comment. The Reviewer's original bounded-blast-radius
+    reasoning (no data corruption, no cross-tenant leak, session-level Sentry/log visibility already
+    existed pre-pass) is unchanged and still the basis for MAJOR over BLOCKER.
+  - **Real gap found and fixed within this pass** (silent-failure-hunter, D2 re-invocation): `main()`'s
+    no-argument sweep originally derived its business list **only** from `post_edit_signals.business_id` —
+    which would silently skip exactly the business MAJOR-3 describes: one whose only symptom is a
+    snapshot-write failure, with zero signals yet (no post approved or edited). Fixed in this same commit:
+    `main()` now unions `post_edit_signals.business_id` with `posts.business_id` (`deleted_at IS NULL`,
+    bounded to `BUSINESS_SCAN_LIMIT = 500`, ordered to match the same index), so the automatic sweep cannot
+    skip a business that has posts but no signals.
+  - **Residual, named not fixed**: `ORPHAN_SCAN_LIMIT = 500` truncates silently for a business with more
+    than 500 non-deleted posts — the `scanned` count is printed but there is no explicit "more posts exist
+    beyond this window" caveat when `scanned === ORPHAN_SCAN_LIMIT`. Recorded here as a follow-up, not
+    fixed in this pass (out of scope — MAJOR-3's brief is detection existing at all, not exhaustiveness at
+    arbitrary scale).
+  Test: `supabase/__tests__/learning-report-orphans.test.ts` — zero orphans on a healthy fixture (post +
+  snapshot), the seeded orphan's id returned when no `post_ai_originals` row exists, and a soft-deleted
+  snapshot-less post excluded. Manually confirmed to redden when the filter condition
+  (`!row.post_ai_originals || row.post_ai_originals.length === 0`) was inverted, then restored.
+- **MINOR-7** — `fixed`. All three list queries in `scripts/learning-report.ts` are now bounded with an
+  explicit `ORDER BY` matching an existing index: the per-business `post_edit_signals` scan
+  (`SIGNAL_SCAN_LIMIT = 5000`, ordered `created_at DESC` against `post_edit_signals_business_id_idx`); the
+  business-id discovery queries (`BUSINESS_SCAN_LIMIT = 500` each, ordered `business_id ASC` against the
+  same index's leading column); and the new orphan query (above). No `scripts/` carve-out was added to
+  CLAUDE.md — the rules were cheaper to obey than to weaken, per instruction.
+
+**Advisory passes** (each independently instructed to read the D2 diff):
+- `ecc:silent-failure-hunter`: confirmed fix (c) gives genuine, tested operator visibility where none
+  existed; accepted the Reviewer's MAJOR grading as adequate given the record above; found and this pass
+  fixed the `main()` business-selection gap described above.
+- `database-reviewer`: confirmed the PostgREST embedded left-join (`post_ai_originals(id)`) is correct,
+  unambiguous, standard behavior for a single-FK one-to-many relationship — no `!left`/`!inner` needed;
+  confirmed all three `ORDER BY` clauses genuinely match their claimed indexes' leading columns and
+  directions; confirmed the embed compiles to one SQL statement (not client-side N+1), index-backed via
+  `post_ai_originals`'s `UNIQUE (post_id, revision)`. No corrections needed.
+
+**Verification run:**
+- `npx tsc --noEmit --skipLibCheck` — clean.
+- `npx tsx --env-file=.env.local scripts/learning-report.ts <businessId>` — manually run against the live
+  local Postgres; orphan section renders correctly (`Snapshot-orphan posts (of the N most recent
+  non-deleted posts scanned): 0`).
+- `supabase/__tests__/learning-report-orphans.test.ts` — 3/3 pass; confirmed reddens when the orphan filter
+  is inverted (both the healthy-fixture and seeded-orphan assertions failed as expected), then restored to
+  green.
+- `npx vitest run lib/db lib/social lib/validation lib/learning` — same pre-existing `vault.test.ts` timeout
+  as D1 (12/12 green in isolation), everything else green.
+- `test:db` full suite (live Postgres, `--no-file-parallelism --retry=2`): same two pre-existing, unrelated
+  failures as D1 (`rls-policy-lockdown.test.ts`, `get-user-business-ids-matrix.test.ts` — confirmed
+  pre-existing there, not re-investigated here), plus the 3 new orphan tests green. No new failures
+  introduced by D2's changes.
