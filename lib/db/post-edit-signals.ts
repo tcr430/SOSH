@@ -54,6 +54,15 @@ export async function countProcessedSignalsSince(
 // (LEARN-SUMMARY-DATA-GUARDED); this function is a plain DB read and does
 // no sanitization itself, matching lib/db's convention that guarding is the
 // prompt layer's job, not the query layer's.
+//
+// [Session 25-D correction, MAJOR-1] class='preference' is REQUIRED here,
+// not optional filtering. Without it, correction- and inconclusive-classed
+// human copy (evidence/grounding fixes, not taste) feeds the same summarizer
+// whose output can land in a voice-directed dimension ('format'/'hook') —
+// exactly the L-6 conflation this track exists to prevent. This is the one
+// query-side lever that keeps that copy out; LEARN-VOICE-WRITE-TRIGGER
+// cannot see it, because a summarizer row's pattern_key never matches a
+// post_edit_signals row (ADR 0018 §5.3 amendment, §6.1 amendment).
 export async function listRecentHumanEditExcerpts(
   client: SupabaseClient,
   businessId: string,
@@ -65,6 +74,7 @@ export async function listRecentHumanEditExcerpts(
     .select('human_content')
     .eq('business_id', businessId)
     .eq('status', 'processed')
+    .eq('class', 'preference')
     .order('processed_at', { ascending: false })
     .limit(limit)
   if (since !== null) query = query.gt('processed_at', since)

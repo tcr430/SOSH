@@ -328,6 +328,31 @@ describe('performance_memory.pattern_key + LEARN-VOICE-WRITE-TRIGGER (ADR 0016 A
     expect(retireErr).toBeNull()
   })
 
+  // [Session 25-D correction, MAJOR-1] The reviewer's fix #3: proves the
+  // trigger fires when handed this exact shape directly (class='correction'
+  // AND non-NULL pattern_key, dimension='hook') — while ADR 0018 §5.3's
+  // amendment now records that the shipped Track-C pipeline cannot PRODUCE
+  // this shape (canonicalize() emits pattern_key only for preference rows;
+  // summarizer keys are namespaced `summarize:` and never collide with a
+  // Tier-0 key). Both facts on the record here, neither implied by the
+  // other: this test proves the guard is not dead code; the ADR amendment
+  // records that its live scope, for this pipeline, is nothing.
+  it('LEARN-VOICE-WRITE-TRIGGER: rejects a hook-dimension distilled write sourced from a correction-class signal', async () => {
+    const key = `voice-correction-hook-${Date.now()}`
+    await createSignal(key, 'correction')
+
+    const { error } = await admin.from('performance_memory').insert({
+      business_id: businessId,
+      source: 'distilled',
+      scope: 'brand',
+      dimension: 'hook',
+      pattern: 'Voice-directed hook pattern from a correction signal',
+      pattern_key: key,
+    })
+    expect(error).not.toBeNull()
+    expect(error.message).toContain('LEARN-VOICE-WRITE-TRIGGER')
+  })
+
   it('LEARN-VOICE-WRITE-TRIGGER: a topic-dimension write from a correction-class signal succeeds (only format/hook are voice-directed)', async () => {
     const key = `topic-correction-${Date.now()}`
     await createSignal(key, 'correction')

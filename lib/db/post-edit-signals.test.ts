@@ -70,6 +70,21 @@ describe('listRecentHumanEditExcerpts', () => {
     expect(result).toEqual(['a', 'b'])
   })
 
+  // [Session 25-D correction, MAJOR-1] Without this filter, correction- and
+  // inconclusive-classed human copy (grounding fixes, not taste) would reach
+  // the summarizer, whose output can land in a voice-directed dimension.
+  // Reddens if the .eq('class', 'preference') call is removed from the
+  // implementation — the mock would still resolve, but this assertion would
+  // no longer see the call.
+  it('filters by class=preference, so correction/inconclusive-classed rows never enter the summarizer input', async () => {
+    const { client, builder } = createMockClient([{ human_content: 'preference-only copy' }], null)
+    const result = await listRecentHumanEditExcerpts(client, 'biz-1', null, 200)
+
+    expect(client.from).toHaveBeenCalledWith('post_edit_signals')
+    expect(builder.eq).toHaveBeenCalledWith('class', 'preference')
+    expect(result).toEqual(['preference-only copy'])
+  })
+
   it('adds a gt(processed_at, since) filter when since is provided', async () => {
     const { client, builder } = createMockClient([], null)
     await listRecentHumanEditExcerpts(client, 'biz-1', '2026-07-01T00:00:00Z', 200)

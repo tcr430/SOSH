@@ -810,3 +810,100 @@ campaign is one editing session, and the gate rejects it. Retrieval reads only `
 re-observation can neither flip an active row back nor resurrect a retired one). Proven at Tier-1 by
 `performance-memory-promotion.test.ts`, which fires **10 concurrent promotion RPCs** and asserts exactly
 one succeeds, plus a real 1-campaign no-op case.
+
+---
+
+## CORRECTION PASS (Session 25-D)
+
+**Author:** Session 25-D (Claude Code, Sonnet 5). Everything above this section is the Reviewer's
+original text, unedited, per CLAUDE.md's REVIEWER-REPORT APPEND-ONLY rule. Everything below is this
+correction pass — findings are referenced by ID, never restated as resolved in place.
+
+### D0 (commit `052c48fc`)
+
+Committed `docs/decisions/0018-diff-based-learning-capture.md`, `docs/build-guide/session-25.md`, and
+this file (`docs/reviews/session-25-reviewer.md`) exactly as they stood — no edits. Resolves **MAJOR-5**:
+the governing ADR and build guide are now in git at the range the correction pass measures against.
+
+### D1 — MAJOR-1 and MAJOR-2
+
+Both findings are **fixed**, per the founder-adjudicated resolution recorded in
+`docs/build-guide/session-25.md` §4 and in ADR 0018 Amendment A: **option (a) — record + narrow.**
+Summarizer rows are **not** made promotable; MAJOR-2 was **resolved, not declined** — the two findings
+share one root cause (`pattern_key` doing triple duty as aggregation key, promotion join key, and
+voice-guard join key), and the fix is to state the true invariant rather than manufacture a
+summarizer-side campaign count ADR §6.1 never intended.
+
+- **MAJOR-1** — `fixed`. Two closures, both required:
+  1. **Real code fix**: `lib/db/post-edit-signals.ts`'s `listRecentHumanEditExcerpts` now filters
+     `.eq('class', 'preference')` — correction/inconclusive-classed human copy no longer enters the
+     summarizer's input at all. A new Tier-2 test (`lib/db/post-edit-signals.test.ts`, "filters by
+     class=preference…") was confirmed to redden when the `.eq` call was manually removed and re-run
+     (`class` assertion failed, `status` call reported in its place), then confirmed green again once
+     restored.
+  2. **Overclaim narrowed, not silently reworded**: the trigger's RAISE text and comments
+     (`supabase/migrations/20260726020000_performance_memory_pattern_key.sql`, unedited — applied
+     migrations are never edited) are superseded by a new forward migration,
+     `supabase/migrations/20260728190000_narrow_voice_write_trigger_message.sql`, changing **only** the
+     RAISE message and comments via `CREATE OR REPLACE FUNCTION` — the guard condition, retirement escape
+     hatch, and re-validation predicate are byte-identical (independently confirmed by `database-reviewer`).
+     The new message states the trigger's actual live scope (other write paths — manual backfill, future
+     jobs, ad-hoc queries — not this pipeline, which cannot construct a matching row). A new Tier-1 test,
+     `supabase/__tests__/performance-memory-pattern-key.test.ts` — "rejects a hook-dimension distilled
+     write sourced from a correction-class signal" — proves the trigger still fires when handed such a row
+     directly, per the Reviewer's fix #3: both facts (the guard works; the pipeline can't trigger it) are
+     on the record together.
+  Test: `lib/db/post-edit-signals.test.ts`, `supabase/__tests__/performance-memory-pattern-key.test.ts`.
+- **MAJOR-2** — `fixed` as a documentation/comment correction; no code-behaviour change was needed or
+  made — the campaign gate already made this true. `lib/learning/summarize.ts`'s upsert-site comment now
+  states plainly that a summarizer row can never promote, at any volume, because its
+  `summarize:`-namespaced `pattern_key` matches zero `post_edit_signals` rows by construction. ADR 0018
+  Amendment A narrows §6.1's "no shortcut into active" framing to "no path whatsoever," and adds the
+  property to §12's Tier-3 diff-verified list. Test: none added — Tier-3 by decision, mirroring §12's
+  existing Tier-3 entries; the property being recorded is a permanent absence, not a runtime-testable one.
+
+**Advisory passes** (each independently instructed to read the D1 diff, findings adjudicated by this
+correction pass rather than passed through verbatim):
+- `database-reviewer`: confirmed the new migration's guard condition, `TG_OP`/`IS DISTINCT FROM`
+  re-validation predicate, and `EXISTS` join are byte-identical to the superseded migration — only the
+  RAISE message and comments changed; confirmed `CREATE OR REPLACE FUNCTION` is safe/correct Postgres
+  semantics for a trigger that already references the function by name (no trigger recreation needed);
+  confirmed the new `.eq('class','preference')` filter does not defeat the existing partial covering index
+  on `post_edit_signals` and causes no seq scan. No issues found.
+- `security-reviewer`: confirmed the query filter is correct and sufficient — `listRecentHumanEditExcerpts`
+  has exactly one production caller (`summarize.ts`), and Tier-0's separate input path
+  (`listDistilledPatternsForSummary`) is already `preference`-derived via `canonicalize()`, so no other
+  path feeds non-preference human copy into a voice-directed write; confirmed the render-time
+  `neutralize()` guard (LEARN-SUMMARY-DATA-GUARDED) is untouched and remains an orthogonal, still-applying
+  control. No residual gap found.
+- `ecc:type-design-analyzer`: confirmed the ADR Amendment A and code comments now honestly narrow the
+  claim to match what the code proves. Flagged, as a residual **not** newly introduced by this pass and
+  consistent with ADR 0018 §5.3's own framing (the DB trigger, not TypeScript, is the real enforcement
+  layer): the "both writers structurally cannot produce a matching row" property is a **runtime/convention
+  guarantee** confined to `canonicalize()`'s four branches and `computeSummaryPatternKey()`'s `summarize:`
+  prefix, not a type-level invariant — nothing in the type system links `class` to `pattern_key`'s
+  nullness, and `transitionPostEditSignal`'s `next` parameter would accept an illegal pairing with no
+  compiler error if a caller ever constructed one outside `canonicalize()`. Recorded here as a known,
+  accepted limitation (the DB trigger is the actual backstop) rather than a new gap requiring a fix in this
+  pass.
+
+**Verification run:**
+- `npx tsc --noEmit --skipLibCheck` — clean.
+- Targeted `vitest run` on the touched files (`lib/db/post-edit-signals.test.ts`,
+  `lib/learning/summarize.test.ts`, `lib/learning/orchestrator.test.ts`) — all green (59/59).
+- `npx vitest run lib/db lib/social lib/validation lib/learning` (CLAUDE.md's scoped app-test invocation)
+  — one failure, `lib/social/__tests__/vault.test.ts` ("returns token and expiry when account is active"),
+  a 15s timeout. Re-run in isolation: 12/12 pass. Pre-existing flake, unrelated to this pass's files —
+  matches a previously-recorded flake (memory: "vault.test.ts passes all tests when run in isolation").
+- `npm run db:migrate` — applied the one new migration cleanly against the local live Postgres.
+- `test:db` (`supabase/__tests__`, live Postgres, `--no-file-parallelism --retry=2`): the new/modified
+  Tier-1 file (`performance-memory-pattern-key.test.ts`) — 11/11 pass, including the new hook-dimension
+  test. Full suite: 2 failures, both in files **untouched by this pass** and on **unrelated tables**
+  (`rls-policy-lockdown.test.ts` — `business_deletion_requests` SELECT-policy count; and
+  `get-user-business-ids-matrix.test.ts` — an active member's business/post visibility). Confirmed
+  pre-existing and not caused by D1: re-ran both files with all six D1 file changes `git stash`ed away
+  (`lib/db/post-edit-signals.ts`, its test, `lib/learning/summarize.ts`,
+  `performance-memory-pattern-key.test.ts`, the new migration, and the ADR amendment) — same two failures,
+  identical assertions, with none of this pass's changes present. Stash restored afterward; `git status`
+  confirmed all six changes intact. These two failures are local-environment/pre-existing and out of D1's
+  scope (MAJOR-1/MAJOR-2 only); not investigated further here.

@@ -781,3 +781,63 @@ Explicitly **NOT** built in Track C. A future session must not build these here 
 ---
 
 ADR 0018 written and accepted — 21 LEARN-* constraints, snapshot as **table** (`post_ai_originals`, append-only + revisioned), capture via **outbox** (trigger-enqueued at the `draft→approved` transition), promotion threshold **`observation_count ≥ 5` AND `confidence ≥ 0.70` AND `distinct campaigns ≥ 2`**, voice learning **option (a) — `performance_memory` `dimension ∈ {format, hook}`, no voice table**, surface **deferred** (Session 26-UI).
+
+---
+
+## Amendment A — MAJOR-1 / MAJOR-2 narrowing (Session 25-D correction pass, 2026-07-28)
+
+**Author:** Session 25-D (Claude Code, Sonnet 5), resolving two coupled findings from
+`docs/reviews/session-25-reviewer.md` (range `717263d2..d7cee4a5`). §5.3, §6.1, §12 and §13's original text
+above are **not edited** — this amendment is additive, per this ADR's own convention (ADR 0016 Amendments
+A/B follow the identical pattern). The founder-adjudicated resolution (recorded in
+`docs/build-guide/session-25.md` §4) was: **(a) record + narrow — do not make summarizer rows
+promotable.**
+
+**MAJOR-1 and MAJOR-2 are one problem, not two**, both consequences of `pattern_key` being simultaneously
+the Tier-0 aggregation key, the promotion join key, and the voice-guard join key:
+
+**§5.3 narrowed — `LEARN-VOICE-WRITE-TRIGGER`'s live scope.** The original RAISE text ("must be sourced
+entirely from preference-class signals") is false for the rows it was written to police: `canonicalize()`
+(`lib/learning/orchestrator.ts:107-123`) sets `pattern_key` **only** on `rowClass = 'preference'`, and
+`computeSummaryPatternKey()` (`lib/learning/summarize.ts`) namespaces its key `summarize:<dimension>:<hash>`
+so it never matches any `post_edit_signals.pattern_key` — both shipped Track-C writers construct rows the
+trigger's `EXISTS` join can never match. The trigger is **not** dead: it is enforcement for write paths this
+ADR did not build — a future promotion job, a manual backfill script, or an ad-hoc query that writes
+`performance_memory` directly with a hand-picked `pattern_key` colliding with a real, non-preference-classed
+`post_edit_signals` row. `supabase/migrations/20260728190000_narrow_voice_write_trigger_message.sql`
+replaces only the RAISE message and comments (via `CREATE OR REPLACE FUNCTION`, no logic change) to state
+this scope instead of the disproven one. Tier-1 proof both ways, on the record together:
+`performance-memory-pattern-key.test.ts`'s "rejects a hook-dimension distilled write sourced from a
+correction-class signal" test proves the trigger fires when **handed** such a row directly; this amendment
+records that the shipped pipeline cannot **produce** one.
+
+**Query-layer half closed as a real code fix, not just documentation.** `listRecentHumanEditExcerpts`
+(`lib/db/post-edit-signals.ts`) now filters `.eq('class', 'preference')` — correction- and
+inconclusive-classed human copy (grounding fixes, not taste) no longer enters the summarizer's input at all,
+regardless of what the trigger can or cannot see downstream. This is the one genuine behavioural change in
+this amendment; everything else here is documentation catching up to what the code already does.
+
+**§6.1 narrowed — summarizer output is permanently candidate-only, by construction, not "no shortcut."**
+§6.1's original framing — the summarizer "gets no shortcut into `active`" — understates the property.
+`promote_performance_pattern`'s third gate (`20260726030000_performance_memory_promotion.sql:118-127`)
+counts `post_edit_signals` rows matching `p_pattern_key`; a `summarize:`-namespaced key matches **zero**
+such rows by construction (the same property that keeps it from colliding with a Tier-0 key), so that gate
+is `0 >= 2`, always false. **A summarizer row cannot reach `status='active'` at any volume, for any
+duration.** This is now stated explicitly in `lib/learning/summarize.ts`'s upsert-site comment (Session
+25-D) and here: it is **intended**, not a residual gap, and summarizer rows are read back only by
+`listDistilledPatternsForSummary` — never by `listPerformanceMemoryCandidates` (which filters
+`status='active'`), so no summarizer statement can influence a generation prompt.
+
+**§12 Tier-3 addition** — one property, diff-verified rather than runtime-tested, added to the existing
+Tier-3 list: **summarizer rows are structurally unpromotable.** No test asserts promotion of a
+`summarize:`-keyed row succeeds (there is no such test, by decision, because the property being tested is
+its permanent absence) — confirmed instead by inspection of `promote_performance_pattern`'s campaign-gate
+subquery against `computeSummaryPatternKey`'s namespace, per the reasoning above. A future session that adds
+a summarizer-side campaign count (option (b), explicitly **declined** here) would need to remove this
+Tier-3 entry and add a Tier-1/Tier-2 test in its place.
+
+**Evidence:** `lib/db/post-edit-signals.ts` (MAJOR-1 code fix); `lib/db/post-edit-signals.test.ts` (Tier-2
+test, reddens with the `.eq` removed — verified); `lib/learning/summarize.ts:144-159` (MAJOR-2 comment);
+`supabase/migrations/20260728190000_narrow_voice_write_trigger_message.sql` (RAISE text/comment only);
+`supabase/__tests__/performance-memory-pattern-key.test.ts` (new hook-dimension/correction-class Tier-1
+test); `docs/reviews/session-25-reviewer.md` MAJOR-1, MAJOR-2.
