@@ -131,7 +131,7 @@ All environment variables accessed through `/lib/config.ts` which exports a type
 - **Zod for all input validation.** Every Server Action and API route validates input with Zod before processing.
 - **Tailwind only for styling.** No CSS modules, no styled-components, no inline `style` attributes except when truly dynamic.
 - **shadcn/ui for primitives.** Don't build a button from scratch when shadcn has one.
-- **No console.log in committed code.** Use a proper logger (we'll add this later) or remove before committing.
+- **No console.log in committed code.** Use a proper logger (we'll add this later) or remove before committing. **Carve-out (Session 25-D, NIT-6):** a worker or route may emit exactly ONE canonical structured-JSON `console.log` per invocation (e.g. `lib/email/orchestrator.ts`, `lib/learning/orchestrator.ts`, `api/cron/publish/route.ts`) as its sole operator-observability line, until a logger lands — this is the established house pattern, not a new exception per file.
 - **Date handling via date-fns.** Never `new Date().toISOString()` directly when comparing or formatting — use `formatISO()` from date-fns.
 - **i18n from day one.** Every user-facing string goes through the i18n system, never hardcoded English. Add keys to all three locale files simultaneously (en, pt, es).
 - **List queries always have a `limit` parameter** with a sensible default. Unbounded queries are a self-DoS vector.

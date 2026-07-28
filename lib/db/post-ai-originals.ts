@@ -20,6 +20,13 @@ export async function createPostAiOriginal(
 // Bounded, explicit ORDER BY matching UNIQUE (post_id, revision). Returns 0
 // when no snapshot exists yet ([db-MAJOR-1] — a manual-origin or otherwise
 // snapshot-less post), so callers can uniformly compute next = latest + 1.
+//
+// [Session 25-D correction, NIT-7] No business_id filter here — tenancy is
+// enforced by the CALLER'S CLIENT, not by this function. Safe today because
+// the only production caller (regeneratePostAction) passes an RLS-scoped
+// `ctx.client` with an already-validated `postId`. A FUTURE caller using a
+// service-role client with an attacker-influenced `postId` would NOT be
+// tenant-isolated by this function — do not assume it self-enforces.
 export async function getLatestRevision(client: SupabaseClient, postId: string): Promise<number> {
   const { data, error } = await client
     .from('post_ai_originals')
@@ -37,6 +44,14 @@ export async function getLatestRevision(client: SupabaseClient, postId: string):
 // content itself. Returns null (not an error) when the row is missing —
 // §9.4 lists "a missing snapshot row" as a PERMANENT failure the caller
 // abandons; this function does not decide that, it just reports absence.
+//
+// [Session 25-D correction, NIT-7] No business_id filter here — tenancy is
+// enforced by the CALLER'S CLIENT, not by this function. Safe today because
+// the only production caller is the service-role orchestrator, and the `id`
+// it passes is always sourced from a claimed, trusted `post_edit_signals`
+// row's `ai_original_id` — never attacker input. A FUTURE caller passing an
+// externally-influenced `id` under a service-role client would NOT be
+// tenant-isolated by this function — do not assume it self-enforces.
 export async function getPostAiOriginalById(
   client: SupabaseClient,
   id: string,

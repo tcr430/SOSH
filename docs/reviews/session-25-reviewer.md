@@ -1250,3 +1250,102 @@ Each of these was a guarantee living in caller behaviour rather than in the data
   195/197 passing — includes all of D5's new/modified Tier-1 tests
   (`performance-memory-candidates-expiry.test.ts`, the rewritten `performance-memory-promotion.test.ts`
   demote cases) green. No new failures introduced by D5's changes.
+
+### D6 — MINOR-1, MINOR-9, MINOR-11, NIT-1, NIT-2, NIT-3, NIT-5, NIT-6, NIT-7
+
+Nine findings, all "a document, comment, or count says something the code does not." No behaviour change
+in this step — comments and docs only. All nine are `fixed`.
+
+- **MINOR-1** — `fixed`, documentation-only, per instruction (no production caller invented, no type
+  signature changed). ADR 0018 §12 gained a new Tier-3 bullet recording that `rehydrateSignals()`
+  (`lib/learning/rehydrate.ts`) has no production reader today (`git grep` matches only the file and its
+  test), that `PostEditSignalRow.signals: Record<string, unknown> | null` lets a future direct cast bypass
+  it with zero compiler complaint, and that `rehydrateSignals()` is the MANDATORY entry point the day a
+  reader is added.
+- **MINOR-9** — `fixed`. ADR §3.4's caller table: all six `file:line` citations re-derived at the current
+  commit (not `d7cee4a5`). Four were wrong as originally written: `actions.ts:94` → `:89`,
+  `actions.ts:218` → `:207`, `generate.ts:362` → `:380`, and `calendar/actions.ts:280` → `:270` (this
+  fifth drift found during re-derivation, beyond the three the instruction named — flagged as expected
+  line-number drift, not a new defect). The false test citation is removed:
+  `actions.context-equivalence.test.ts` no longer listed as covering `bulkApprovePostsAction` — confirmed
+  by `git grep` that file's only `describe` is `regeneratePostAction caller — …` with zero references to
+  `bulkApprovePostsAction`. Coverage is unaffected (`actions.test.ts` alone fully covers it); this is a
+  citation correction, not a new gap.
+- **MINOR-11** — `fixed`, recorded as a triggered follow-up, not implemented (per instruction — both live
+  writers are bounded today). New ADR §15 bullet and `docs/backlog.md` row (`25D-MINOR-11`): neither
+  `post-generation.ts:179` nor `post-regeneration.ts:147` truncates `topContent` after `neutralize()`;
+  safe today because Tier-0's `renderPatternStatement` is a fixed template and the summarizer's output is
+  capped at 200 chars by Zod. Un-defer trigger stated explicitly: the first writer that puts a synthesized,
+  unbounded value into `performance_memory.pattern` must enforce its own length bound at write time.
+- **NIT-1** — `fixed` in all five named places plus one the instruction didn't name but which
+  `comment-analyzer` caught: ADR §0/Q4, §4.2 (line 278 — missed on the first pass, found by
+  `comment-analyzer` and fixed in this same commit), §4.3, §12, §13 all now say "twelve" (9 preference +
+  1 correction + 2 inconclusive); `orchestrator.ts:88`'s comment no longer conflates the total with
+  `PreferenceKind`'s count — it now says "9 preference kinds (of 12 total)."
+- **NIT-2** — `fixed`. ADR §10.4's citation of a phantom third render site
+  (`formats/native-generation-prompt.ts`) is removed; the table and prose now cite only the two real sites
+  (`post-generation.ts`, `post-regeneration.ts`). Three sibling references to "three §10.4 render sites"
+  that the original instruction didn't separately name — §12's Tier-2 bullet (line 717), the
+  `LEARN-PATTERN-RENDER-GUARDED` constraint-table row (§13, line 754), and §15's deferred-scope bullet
+  (line 817) — were found stale by `comment-analyzer` (they weren't updated when §10.4 itself was
+  corrected) and fixed in this same commit; §14's HIGH-2 disposition row (the quoted original
+  security-reviewer finding) is left as originally worded per append-only convention for quoted findings,
+  with a bracketed correction noting one of the two "unguarded" sites it names does not exist at this
+  ADR's implementation range. `be5779e1`'s commit message ("all three render sites") is **not** rewritten
+  — history stands — with a note in §10.4 that the message inherited the ADR's own stale citation and the
+  guard work itself (both real sites, no opportunistic sweep) was correct and complete.
+- **NIT-3** — `fixed`. `summarize.ts`'s `computeSummaryPatternKey` gained a comment recording the 32-bit
+  hash bound was considered: at 5 statements × 8 calls/month/business = 40 keys/month/business against a
+  2³² (~4.29 billion) space, the birthday-bound collision probability is `40² / (2 × 2³²) ≈ 1.9 × 10⁻⁷`
+  per business per month — and a collision merges two statements onto one row rather than corrupting
+  anything, never a false promotion (a summarizer row is permanently candidate-only regardless, MAJOR-2).
+- **NIT-5** — `fixed`, and NOT the prose that was wrong. Re-derivation found `[db-Q1]` (§3.1: "a `FOR EACH
+  ROW` trigger fires once per row of a set-based `UPDATE`... the trigger sidesteps this entirely") cited
+  inline but with **no corresponding row** in §14's disposition table — a genuinely missing 28th finding,
+  not a miscount in `docs/build-guide/session-25.md`'s "28 advisory findings" prose (which was actually
+  correct all along). Added the missing row; §14's table now has 28 rows, matching the build guide's
+  count exactly. Per instruction, checked against the source review before assuming the prose was the
+  error — it was the table that was short one row.
+- **NIT-6** — `fixed`. CLAUDE.md's "No console.log in committed code" bullet gained one sentence
+  legitimising a single canonical structured-JSON `console.log` per invocation on a worker/route path
+  (citing `lib/email/orchestrator.ts`, `lib/learning/orchestrator.ts`, `api/cron/publish/route.ts` as the
+  established pattern) until a logger lands. No logger introduced — out of scope, per instruction.
+- **NIT-7** — `fixed`. `lib/db/post-ai-originals.ts`'s `getLatestRevision` and `getPostAiOriginalById` each
+  gained a comment stating explicitly that tenancy is enforced by the CALLER'S CLIENT, not by the
+  function, naming today's actual caller and client/id-sourcing for each and warning a future caller not
+  to assume self-enforcement. No parameter added — an unmotivated signature change on a path with no
+  defect, per instruction.
+
+**Advisory passes** (each independently instructed to read the D6 diff):
+- `ecc:comment-analyzer`: confirmed NIT-1's `orchestrator.ts` and NIT-3's `summarize.ts` comments are
+  arithmetically and factually accurate (independently recounted `PreferenceKind`/`CorrectionKind`/
+  `InconclusiveKind` = 9+1+2=12; independently recomputed the birthday-bound collision probability);
+  confirmed NIT-7's two `post-ai-originals.ts` comments accurately describe today's actual call graph
+  (traced `getLatestRevision` to `regeneratePostAction`'s RLS-scoped `ctx.client`, `getPostAiOriginalById`
+  to the orchestrator's service-role client with a trusted `post_edit_signals`-sourced id); confirmed
+  MINOR-9's four re-derived citations and the test-citation removal are correct against current source;
+  confirmed §14's row count now matches the build guide's "28" claim; confirmed CLAUDE.md's carve-out
+  sentence is clear and consistent. **Found two real gaps** (both fixed in this same commit, before this
+  appendix was written): line 278's "Eleven signal kinds" was missed on the first NIT-1 pass despite the
+  table immediately below it and §4.3 two paragraphs later already saying twelve; and three sibling
+  references to "three §10.4 render sites" (§12 line 717, §13's constraint-table row line 754, §15 line
+  817) were not propagated when §10.4 itself was corrected under NIT-2. Both gap classes are exactly what
+  this agent was invoked to catch — comment/doc accuracy at scale, where a single-site fix leaves
+  sibling references stale.
+- `ecc:typescript-reviewer` (MINOR-1's cast hole): confirmed the documentation-only resolution is the
+  right size given the explicit no-caller/no-signature-change constraint — a branded/opaque type on
+  `PostEditSignalRow.signals` was considered as speculative alternative but rejected as itself a
+  signature change on a track that deliberately ships no reader yet, better deferred to the same PR that
+  adds the first caller. Confirmed the ADR's three factual claims (no caller exists; `signals`'s type;
+  the zero-compiler-complaint cast) are all accurate. No issues found with `rehydrate.ts`'s own design —
+  its `Assert<Equals<...>>` compile-time ties and `ClassifyResultSchema.parse` already force
+  schema/type-shape drift to fail `tsc`, independent of this session's fix.
+
+**Verification run:**
+- `npx tsc --noEmit --skipLibCheck` — clean, throughout, including after the two `comment-analyzer` gaps
+  were closed.
+- `npm run test:app` (full scope) — 2343/2343 green across 167 files (no behavioural changes in this
+  step; run to confirm the comment-only edits introduced no syntax/type regression).
+- Every changed line number in MINOR-9's fix re-derived and confirmed against the current commit:
+  `approvePostAction:89`, `bulkApprovePostsAction:207`, `approvePostFromCalendarAction:270`,
+  `createPosts(...)` call site in `generatePostsForCampaign:380`.

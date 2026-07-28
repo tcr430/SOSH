@@ -19,7 +19,7 @@ Each answer names its loser, its agency tier (L-10), and its test tier (ADR 0015
 | **Q1** `ai_original` | New **table** `post_ai_originals`, append-only, `UNIQUE (post_id, revision)`; snapshot carries **both** the structured `payload` and the `rendered_content`; write-once via a **`BEFORE UPDATE`-only** trigger; no backfill (ships empty, snapshot-less posts skipped) | an `ai_original jsonb` column on `posts` — cannot represent the regeneration lineage, so the human is credited with the AI's own rewrite | Tier 0 / Tier 1 (DB) + Tier 2 |
 | **Q2** capture hook | **Outbox**, enqueued by an `AFTER UPDATE` trigger on `posts` at `draft → approved`, copying the human-final content into the row; **approval only** | inline in the transition (couples approve latency + failure; `bulkApproveDraftPosts` returns only a count); worker re-scan (needs a cursor, risks double-counting); approval **+ publish** (re-observes the same edit) | Tier 0 / Tier 1 (DB) + Tier 2 |
 | **Q3** diff algorithm | **In-repo deterministic deltas**, no diff library; sentence-level set difference for claim removal | pinning `diff` / `diff-match-patch` now — the heuristics need deltas, not a rendered patch; the library earns its keep in Mode 1 Studio (Phase C), where the visual diff *is* the product | Tier 0 / Tier 2 |
-| **Q4** taxonomy + split | 11 Tier-0 signal kinds; **partitioned classifier return** (no flat `Signal[]` exists) + **`LEARN-VOICE-WRITE-TRIGGER`** at the DB + a `@ts-expect-error` compile-time test | one undifferentiated "edit" signal (D-5); a flat tagged array filtered by a runtime `if` | Tier 0 / Tier 1 (DB) + Tier 2 |
+| **Q4** taxonomy + split | 12 Tier-0 signal kinds (9 preference + 1 correction + 2 inconclusive — [Session 25-D correction, NIT-1] corrected from a miscounted "11"); **partitioned classifier return** (no flat `Signal[]` exists) + **`LEARN-VOICE-WRITE-TRIGGER`** at the DB + a `@ts-expect-error` compile-time test | one undifferentiated "edit" signal (D-5); a flat tagged array filtered by a runtime `if` | Tier 0 / Tier 1 (DB) + Tier 2 |
 | **Q5** memory write + threshold | `performance_memory`, `source='distilled'`, `status='candidate'`; promotion needs **`observation_count ≥ 5` AND `confidence ≥ 0.70` AND `distinct campaigns ≥ 2`**; contradiction *reduces* confidence; decay via `expires_at` | writing an `active` row from a single diff (D-4 — the exact failure ADR 0016 L-5 exists to prevent); hard-deleting stale patterns | Tier 0 / Tier 1 (DB) + Tier 2 |
 | **Q6** voice learning | **Option (a)** — `performance_memory` rows with `dimension ∈ {'format','hook'}`. No voice table. `brand_voices` never touched | (b) a human-reviewable `avoid_words` suggestion surface (needs UI — deferred); (c) amending ADR 0016 with a voice store (premature); **auto-mutating `brand_voices` — a STOP, not proposed** | Tier 0 / Tier 2 + Tier 3 |
 | **Q7** worker | Copies **`runEmailDrainTick`**; hourly QStash POST route; claim via `FOR UPDATE SKIP LOCKED`; summarization gated by a **two-gate floor**, Haiku 4.5, Tier 1; idempotency by **recompute, never increment** | a bespoke queue, a trigger doing the classification inline, or a Vercel-Cron-only path (D-6; the repo migrated off it) | Tier 0 + Tier 1 / Tier 1 (DB) + Tier 2 |
@@ -215,13 +215,27 @@ Both Session 22 blockers were the same root cause on **this exact function pair*
 
 | Transition fn | Caller | `file:line` | Kind | Test file that covers it |
 |---|---|---|---|---|
-| `approvePost` (`lib/db/posts.ts:320`) | `approvePostAction` | `app/[locale]/(dashboard)/campaigns/[id]/posts/actions.ts:94` | Server Action | `app/[locale]/(dashboard)/campaigns/[id]/posts/actions.test.ts` |
-| `approvePost` | `approvePostFromCalendarAction` | `app/[locale]/(dashboard)/calendar/actions.ts:280` | Server Action | `app/[locale]/(dashboard)/calendar/actions.test.ts` |
-| `bulkApproveDraftPosts` (`lib/db/posts.ts:526`) | `bulkApprovePostsAction` | `app/[locale]/(dashboard)/campaigns/[id]/posts/actions.ts:218` | Server Action | `actions.test.ts`, `actions.context-equivalence.test.ts` |
+| `approvePost` (`lib/db/posts.ts:320`) | `approvePostAction` | `app/[locale]/(dashboard)/campaigns/[id]/posts/actions.ts:89` | Server Action | `app/[locale]/(dashboard)/campaigns/[id]/posts/actions.test.ts` |
+| `approvePost` | `approvePostFromCalendarAction` | `app/[locale]/(dashboard)/calendar/actions.ts:270` | Server Action | `app/[locale]/(dashboard)/calendar/actions.test.ts` |
+| `bulkApproveDraftPosts` (`lib/db/posts.ts:526`) | `bulkApprovePostsAction` | `app/[locale]/(dashboard)/campaigns/[id]/posts/actions.ts:207` | Server Action | `actions.test.ts` |
 | ↳ UI caller of that action | `PostsClient` | `app/[locale]/(dashboard)/campaigns/[id]/posts/PostsClient.tsx:133` | Client Component | `PostsClient.test.tsx` |
 | ↳ UI caller of that action | `ApprovalsInbox` | `app/[locale]/(dashboard)/approvals/ApprovalsInbox.tsx:123` | Client Component | `approvals/ApprovalsInbox.test.tsx` |
-| `createPosts` (`lib/db/posts.ts:288`) | `generatePostsForCampaign` | `lib/campaigns/generate.ts:362` | internal lib (service-role) | `lib/campaigns/generate.test.ts` |
+| `createPosts` (`lib/db/posts.ts:288`) | `generatePostsForCampaign` | `lib/campaigns/generate.ts:380` | internal lib (service-role) | `lib/campaigns/generate.test.ts` |
 | **any future caller** | — | — | — | **covered by construction** — see below |
+
+> **[Session 25-D correction, MINOR-9]** All six `file:line` citations above were re-derived at the
+> current commit (not `d7cee4a5`, the range the original Reviewer read). Four were wrong as originally
+> written and are corrected here: `actions.ts:94` → `:89`, `actions.ts:218` → `:207`,
+> `calendar/actions.ts:280` → `:270` (this fifth drift was found during this re-derivation, beyond the
+> three the Reviewer's MINOR-9 named — line numbers drift as a file is edited by unrelated later commits;
+> that is expected and is exactly why this table must be periodically re-checked, not trusted forever),
+> and `generate.ts:362` → `:380`. The test-coverage cell for `bulkApproveDraftPosts` is also corrected:
+> `actions.context-equivalence.test.ts` is **removed** from it — that file's only `describe` block is
+> `regeneratePostAction caller — …`, and `git grep bulkApprovePostsAction` returns zero matches in it at
+> the current commit (not even a mock declaration). `bulkApprovePostsAction` is fully covered by
+> `actions.test.ts` alone (`describe('bulkApprovePostsAction', ...)`, asserting real invocation and args),
+> so this is a **citation correction, not a new coverage gap** — but it is exactly the class of thing
+> SHARED-FUNCTION CALLERS exists to stop being taken at face value.
 
 **The structural point.** Because capture attaches to the **transition** and not to a **function**, every caller — present, future, and hypothetical — is covered by the schema itself. The Session 22 failure mode is *eliminated*, not merely enumerated. The proof of that claim is a **Tier-1 test that issues a raw `UPDATE posts SET status='approved'` from no application code at all** and asserts a signal row appears (§12). The table above is still written and still tested per caller, because the ADR-level claim "all callers covered" must be checkable at both layers.
 
@@ -261,7 +275,7 @@ A character-level patch earns its keep in **Mode 1 Studio (Phase C)**, where the
 
 ### 4.2 The taxonomy (`LEARN-HEURISTIC-FIRST` — no LLM on this path)
 
-Eleven signal kinds, each with a fixed rule. **Nothing on this path calls an LLM.** An LLM call per approved post is the wrong architecture at any scale and is an L-1 STOP.
+Twelve signal kinds ([Session 25-D correction, NIT-1] corrected from a miscounted "eleven" — 9 preference + 1 correction + 2 inconclusive), each with a fixed rule. **Nothing on this path calls an LLM.** An LLM call per approved post is the wrong architecture at any scale and is an L-1 STOP.
 
 | Kind | Class | Exact rule |
 |---|---|---|
@@ -282,7 +296,7 @@ Eleven signal kinds, each with a fixed rule. **Nothing on this path calls an LLM
 
 `classify(aiOriginal, humanFinal, voiceRules, pinnedEvidence)` is a **pure function**: no clock, no randomness, no network, no LLM, no dependence on row order. The same input pair must always produce the same classification, **because its output increments a confidence counter** — a nondeterministic classifier would make `observation_count` a random variable and every promotion decision unreproducible.
 
-Proven at Tier 2 by a golden fixture pair evaluated twice yielding byte-identical output, plus a case table exercising each of the eleven kinds.
+Proven at Tier 2 by a golden fixture pair evaluated twice yielding byte-identical output, plus a case table exercising each of the twelve kinds.
 
 ---
 
@@ -631,17 +645,30 @@ This is the same two-belt posture ADR 0016 §4 documents: RLS protects the futur
 
 ### 10.4 `LEARN-PATTERN-RENDER-GUARDED` — an L-1 scope expansion, adopted on a HIGH finding
 
-> **`[sec-HIGH-2]`.** `retrieveRelevant` returns `record.pattern` verbatim as `topContent` (`lib/memory/performance.ts:56-59`) — correctly, since ADR 0017 §9 requires guarding at *render* time. But the render sites do not guard it: **`lib/ai/prompts/post-generation.ts:158` and `lib/ai/prompts/formats/native-generation-prompt.ts:158-163` place `p.topContent` inside a `[DATA]` fence with no sanitization at all**, while applying `sanitizeDataField` to *neighbouring* fields in the same templates (`post-generation.ts:169`). Only `post-regeneration.ts:139` guards it, and only with the weak local copy. The hole is live today and already reachable via a `source='manual'` insert under `performance_memory_insert_own`.
+> **`[sec-HIGH-2]`.** `retrieveRelevant` returns `record.pattern` verbatim as `topContent` (`lib/memory/performance.ts:56-59`) — correctly, since ADR 0017 §9 requires guarding at *render* time. But the render sites do not guard it: **`lib/ai/prompts/post-generation.ts:158` places `p.topContent` inside a `[DATA]` fence with no sanitization at all**, while applying `sanitizeDataField` to *neighbouring* fields in the same template (`post-generation.ts:169`). Only `post-regeneration.ts:139` guards it, and only with the weak local copy. The hole is live today and already reachable via a `source='manual'` insert under `performance_memory_insert_own`.
+>
+> **[Session 25-D correction, NIT-2]** This section originally cited a THIRD site,
+> `lib/ai/prompts/formats/native-generation-prompt.ts:158-163`, as also unguarded. It does not exist: that
+> file renders no `topContent` or `recentPostPerformance` field at all at the range this ADR's
+> implementation shipped (`git grep -n "topContent\|recentPostPerformance" -- lib/ai/prompts/formats/` →
+> no match, independently re-derived by the Session 25 Reviewer and confirmed again here). There are only
+> **two** real render sites. The citation below is corrected to them.
 
 ADR 0018 does not create this hole — **it makes it load-bearing**, turning `performance_memory.pattern` from a rarely-used manual field into the automated, periodically-refreshed backbone of `recentPostPerformance`, written with no human reading the string before it enters a live generation prompt. Under CLAUDE.md's SHARED-FUNCTION CALLERS rule and ADR 0017 §9's enumerated-caller precedent, closing it is therefore **this ADR's obligation**:
 
 | Prompt-builder rendering `recentPostPerformance.topContent` | Today | Required |
 |---|---|---|
 | `lib/ai/prompts/post-generation.ts:158` | **unguarded** | shared `neutralize()` at render |
-| `lib/ai/prompts/formats/native-generation-prompt.ts:158-163` | **unguarded** | shared `neutralize()` at render |
 | `lib/ai/prompts/post-regeneration.ts:139` | weak local `sanitizeDataField` | shared `neutralize()` at render |
 
-> **Recorded as an L-1 scope expansion, adopted rather than assumed.** L-1 scopes Track C to the capture pipeline, and these three files are not in it. The expansion is small (three render sites, one shared helper that already exists at `lib/ai/wrap-evidence.ts:83-111`) and is justified by Track C being the thing that makes the gap dangerous. **If the founder prefers, this descopes cleanly to a separate hardening session** — in which case the residual is recorded as accepted and `LEARN-PATTERN-RENDER-GUARDED` moves with it. The ADR states the choice rather than making it silently. Note this changes **no output** for input that was already safe — it is a guard, not a behaviour change, so L-1's "no change to generation behaviour" is not violated.
+> **Recorded as an L-1 scope expansion, adopted rather than assumed.** L-1 scopes Track C to the capture pipeline, and these two files are not in it. The expansion is small (two render sites, one shared helper that already exists at `lib/ai/wrap-evidence.ts:83-111`) and is justified by Track C being the thing that makes the gap dangerous. **If the founder prefers, this descopes cleanly to a separate hardening session** — in which case the residual is recorded as accepted and `LEARN-PATTERN-RENDER-GUARDED` moves with it. The ADR states the choice rather than making it silently. Note this changes **no output** for input that was already safe — it is a guard, not a behaviour change, so L-1's "no change to generation behaviour" is not violated.
+>
+> **[Session 25-D correction, NIT-2]** C2.1's commit message (`be5779e1`) said "all three render sites" —
+> it inherited this section's stale citation at the time it was written. The commit message is history and
+> is not rewritten. The work itself was correct and complete: it guarded both real sites
+> (`post-generation.ts`, `post-regeneration.ts`) and touched no other file — see §I2 in the Session 25
+> Reviewer's report ("exemplary scope discipline... no opportunistic sweep"). Only the ADR's own citation,
+> corrected above, and the commit message's count were wrong; the guard coverage was never incomplete.
 >
 > **Consolidating the five duplicated `sanitizeDataField` copies is explicitly NOT in scope** (`[sec-LOW-3]`) — those fields already carry *some* guard; the urgency is specific to the newly-unguarded `topContent` path. Named as a fast-follow (§15).
 
@@ -681,13 +708,13 @@ The plan doc's Phase B lists no UI; §8's decision (a) needs none; and an approv
 
 **Tier 2 — app-layer (`lib/**`, `app/**` `*.test.ts(x)`, `app-tests.yml`, every push/PR):**
 
-- The classifier: a case table across all eleven signal kinds; **determinism** — the same fixture pair twice yields byte-identical output (`LEARN-CLASSIFY-DETERMINISTIC`); **no LLM client is constructed on this path** (`LEARN-HEURISTIC-FIRST`).
+- The classifier: a case table across all twelve signal kinds; **determinism** — the same fixture pair twice yields byte-identical output (`LEARN-CLASSIFY-DETERMINISTIC`); **no LLM client is constructed on this path** (`LEARN-HEURISTIC-FIRST`).
 - The correction rule: `unsourced_claim_removed` fires only against a frozen brief with a non-empty pinned set; a post with no brief yields `inconclusive`, never `correction` (`LEARN-CORRECTION-REQUIRES-BRIEF`).
 - The split: the partitioned return; the rehydration choke point's runtime `.literal()` guard; **a `@ts-expect-error` compile-time assertion that passing `corrections` to the voice writer does not compile** (`LEARN-CORRECTION-PREFERENCE-ENFORCED`).
 - Threshold arithmetic: 4 observations does not promote; 5 across 1 campaign does not promote; 5 across 2 campaigns does; a contradiction lowers confidence; `net < 3` demotes an `active` row (`LEARN-NO-SINGLE-DIFF-PROMOTION`, `LEARN-PROMOTION-THRESHOLD`).
 - Tick outcomes: claimed / classified / skipped / failed / abandoned counters; the transient-vs-permanent branch; unknown `schema_version` → permanent abandon; **a replayed tick — run twice over one fixture, assert every second-run counter is zero and every `performance_memory` row byte-identical** (`LEARN-TICK-IDEMPOTENT`).
 - The summarizer: each gate independently suppresses the call; input is `neutralize()`-wrapped and truncated at the cap; the bounded output schema rejects an over-long or over-count response (`LEARN-SUMMARY-DATA-GUARDED`); the monthly ceiling blocks the call.
-- The three §10.4 render sites guard `topContent` — a `[/DATA]`-bearing, fence-bearing pattern is neutralised at each (`LEARN-PATTERN-RENDER-GUARDED`).
+- The two §10.4 render sites ([Session 25-D correction, NIT-2] corrected from a miscounted "three" — the ADR's own former citation of a third site that renders no `topContent` at all) guard `topContent` — a `[/DATA]`-bearing, fence-bearing pattern is neutralised at each (`LEARN-PATTERN-RENDER-GUARDED`).
 - Business scoping: one business's signals cannot produce another business's memory row (§10.3).
 - The memory write goes through `lib/db/memory-performance.ts` and **omits** `likes` / `impressions`.
 - **The enumerated approval callers** (§3.4): each of the six caller rows exercised in its named test file, asserting a signal row results. **SHARED-FUNCTION CALLERS** applies to `approvePost`, `bulkApproveDraftPosts` and `createPosts`; the Builder `git grep`s all three and lists, per caller, the covering test **before** marking any constraint tested. A caller with no listed test is `AUTHORED-NOT-EXECUTED` for that caller even if another is fully covered.
@@ -701,6 +728,7 @@ The plan doc's Phase B lists no UI; §8's decision (a) needs none; and an approv
 - Track C ships **no route** under `app/[locale]/(dashboard)` and **no new i18n keys** — the recorded form of §11's pipeline-only decision.
 - `LEARN-BRIEF-DIFF-DEFERRED`: no `campaign_brief_revisions` table exists.
 - `LEARN-MEMORY-THROUGH-BOUNDARY` (grep half): the two new tables and `performance_memory` are queried only inside `lib/db/` + `lib/memory/`.
+- **[Session 25-D correction, MINOR-1]** `rehydrateSignals()` (`lib/learning/rehydrate.ts`, `[type-5]`'s named choke point) has **no production reader today** — `git grep rehydrateSignals` matches only its own file and its own test. `PostEditSignalRow.signals` is typed `Record<string, unknown> | null` (`lib/db/types.ts:839`), which means nothing in the type system stops a future reader from writing `row.signals as unknown as ClassifyResult` directly, bypassing the choke point entirely with zero compiler complaint — "MUST route through `rehydrateSignals()`" is, today, a comment, not an enforced constraint. This is recorded here **by decision, not oversight**: this track deliberately does not ship a production reader of persisted `signals` (no reader was in scope for Track C), so inventing one now would be scope creep. **`rehydrateSignals()` is the MANDATORY entry point the day a production reader is added** — the next session that reads `post_edit_signals.signals` back into a `ClassifyResult` MUST route through it, and a reviewer of that session should treat any direct cast as a regression, not rediscover this by grep.
 
 ---
 
@@ -713,7 +741,7 @@ The plan doc's Phase B lists no UI; §8's decision (a) needs none; and an approv
 | **LEARN-CAPTURE-AT-TRANSITION** | 0 | 1 | trigger fires on `draft→approved` only; skips snapshot-less posts without failing the UPDATE |
 | **LEARN-CAPTURE-ALL-CALLERS** | 0 | 1 + 2 | Tier-1: raw `UPDATE` from no app code enqueues. Tier-2: all six §3.4 caller rows, one test file each |
 | **LEARN-MODE-AGNOSTIC** | 0 | 1 | capture keys off the transition, never `campaigns.origin`; proven by the raw-UPDATE test |
-| **LEARN-HEURISTIC-FIRST** | 0 | 2 | no LLM client constructed on the per-post classify path; eleven-kind case table |
+| **LEARN-HEURISTIC-FIRST** | 0 | 2 | no LLM client constructed on the per-post classify path; twelve-kind case table |
 | **LEARN-CLASSIFY-DETERMINISTIC** | 0 | 2 | the same fixture pair twice → byte-identical output |
 | **LEARN-CORRECTION-REQUIRES-BRIEF** | 0 | 2 | no frozen brief / empty pinned set → `inconclusive`, never `correction` |
 | **LEARN-CORRECTION-PREFERENCE-ENFORCED** | 0 | 1 + 2 | Tier-2: partitioned return + `@ts-expect-error` compile assertion + rehydration guard. **Tier-1: the trigger below** |
@@ -723,7 +751,7 @@ The plan doc's Phase B lists no UI; §8's decision (a) needs none; and an approv
 | **LEARN-TICK-IDEMPOTENT** | 0 | 1 + 2 | Tier-1: UNIQUE rejects duplicates; claim RPC disjoint under concurrency. Tier-2: a replayed tick changes nothing |
 | **LEARN-MEMORY-THROUGH-BOUNDARY** | 0 | 2 + 3 | Tier-2 (Session 25-D, MINOR-2): `lib/learning/memory-table-boundary.test.ts` — source scan over `lib/learning/**` + `app/api/cron/capture-learning/**` asserts no `.from('performance_memory'\|'post_ai_originals'\|'post_edit_signals')`, executed in `app-tests.yml`. Tier-3: the two new tables and `performance_memory` are queried only inside `lib/db/` + `lib/memory/` |
 | **LEARN-SUMMARY-DATA-GUARDED** | 1 | 2 | input `neutralize()`-wrapped + truncated at the cap; bounded output schema rejects over-long/over-count |
-| **LEARN-PATTERN-RENDER-GUARDED** | 0 | 2 | all three §10.4 render sites route `topContent` through `neutralize()` |
+| **LEARN-PATTERN-RENDER-GUARDED** | 0 | 2 | both §10.4 render sites route `topContent` through `neutralize()` |
 | **LEARN-VOICE-NOT-AUTO-MUTATED** | 0 | 2 + 3 | Tier-2 (Session 25-D, MINOR-2): the SAME `lib/learning/memory-table-boundary.test.ts` scan also asserts no `.from('brand_voice…')` in that same file set, executed in `app-tests.yml`. Tier-3: no voice-memory migration |
 | **LEARN-RLS-ISOLATED** | 0 | 1 | cross-tenant CRUD denied on both new tables, live Postgres, `USING` + `WITH CHECK` |
 | **LEARN-CASCADE-COMPLETE** | 0 | 1 + 3 | Tier-1: business delete **succeeds** and purges both tables. Tier-3: two §D2.5 rows present |
@@ -739,9 +767,10 @@ The plan doc's Phase B lists no UI; §8's decision (a) needs none; and an approv
 | Finding | Source | Disposition |
 |---|---|---|
 | **BLOCKER-1** `BEFORE UPDATE OR DELETE` trigger blocks the FK cascade and breaks `purge_business` / GDPR erasure | db + sec (independently) | **Adopted** — trigger scoped to `BEFORE UPDATE` only; app-layer immutability via RLS with no authenticated DELETE policy (§2.5, §10.2) |
+| **[Session 25-D correction, NIT-5] Q1** a `FOR EACH ROW` trigger fires once per row of a set-based `UPDATE` regardless of what the client sees — confirms the outbox trigger design sidesteps `bulkApproveDraftPosts`'s count-only return shape, ruling out a Loser (inline-in-the-transition capture) | db | **Adopted implicitly** — this finding is what confirmed the outbox/trigger mechanism (§3.1) is correct against a bulk approve, rather than a separate implementation obligation; cited at `[db-Q1]` (§3.1) but never given its own row until this correction |
 | **MAJOR-1** enqueue trigger undefined for snapshot-less posts (hard-fails approve, or dissolves dedup) | db | **Adopted** — `ai_original_id NOT NULL` + an explicit skip-and-count branch (§3.2) |
 | **MAJOR-2** `pattern_key` needs `CHECK (source <> 'distilled' OR pattern_key IS NOT NULL)` | db | **Adopted** (§7.2) |
-| **HIGH-2** `recentPostPerformance.topContent` rendered unguarded at two call sites, weakly at a third | sec | **Adopted** → `LEARN-PATTERN-RENDER-GUARDED`, recorded as an L-1 scope expansion with a clean descope path (§10.4) |
+| **HIGH-2** `recentPostPerformance.topContent` rendered unguarded at two call sites, weakly at a third — the original finding as raised, quoted verbatim; [Session 25-D correction, NIT-2] one of the "two" sites named in the original finding does not exist at this ADR's implementation range, so only two real sites were ever guarded (§10.4) | sec | **Adopted** → `LEARN-PATTERN-RENDER-GUARDED`, recorded as an L-1 scope expansion with a clean descope path (§10.4) |
 | **MEDIUM-1** §D2.5 rows must be annotated as holding customer/third-party content | sec | **Adopted** (§10.1) |
 | **MEDIUM-2** same-tenant "content laundering" — a team member shapes drafts a different approver reviews | sec | **Documented as an accepted residual** (§6.3), same posture as ADR 0017 §9 `[sec-LOW-1]` |
 | **MEDIUM-3** bounded output schema ≠ render-time neutralisation; must not be conflated | sec | **Adopted** — stated explicitly (§6.4) |
@@ -785,7 +814,8 @@ Explicitly **NOT** built in Track C. A future session must not build these here 
 - **A retention / archival policy for `post_edit_signals`** (§9.6) — a named gap for a follow-on ADR.
 - **Full `sanitizeDataField` consolidation** across the five duplicate definitions (§10.4) — a fast-follow, not this track.
 - **The numbered-vs-unnumbered thread preference as a *generation* rule** — ADR 0017 §15 assigns it to Track C's diff loop, and Track C captures it as a `numbering_stripped` signal (§4.2). It changes generation only through the ordinary promotion path — **no bespoke rule is added to any template.**
-- **Any other change to generation behaviour** — L-1. The only files this track touches in `lib/ai/` are §10.4's three render sites, and only to add a guard that changes no output for input that was already safe.
+- **Any other change to generation behaviour** — L-1. The only files this track touches in `lib/ai/` are §10.4's two render sites, and only to add a guard that changes no output for input that was already safe.
+- **[Session 25-D correction, MINOR-11] A length cap on `topContent` at the §10.4 render sites** (`lib/ai/prompts/post-generation.ts`, `post-regeneration.ts`) — both route `topContent` through `neutralize()` (correct — `[sec-HIGH-2]`), but neither truncates, unlike `wrapEvidenceForPrompt`'s `EVIDENCE_MAX_CHARS` and the summarizer's token budget. **Not needed today**: both live writers are bounded by construction — Tier-0's `renderPatternStatement` is a fixed template over an enum-constrained platform (no unbounded input reaches it), and the summarizer's output is capped at 200 characters by its Zod schema (§6.4). **Un-defer trigger:** the FIRST writer that puts a synthesized, unbounded value into `performance_memory.pattern` must enforce its own length bound at write time before that value can reach these render sites. Filed to `docs/backlog.md` (`25D-MINOR-11`) so this is a tracked follow-up rather than re-litigated each review.
 
 ---
 

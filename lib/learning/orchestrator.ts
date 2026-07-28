@@ -85,9 +85,11 @@ export function computeBackoff(attempts: number): number {
 }
 
 // Tier-0 templated pattern statements (§6.1: "arithmetic, not generation").
-// Every PreferenceKind maps to dimension='format' — none of the eleven kinds
-// represent an opening "hook" rewrite, so 'hook' is left for a future signal
-// kind rather than guessed at here.
+// [Session 25-D correction, NIT-1] Every PreferenceKind maps to
+// dimension='format' — none of the 9 preference kinds (of 12 total Tier-0
+// signal kinds: 9 preference + 1 correction + 2 inconclusive) represent an
+// opening "hook" rewrite, so 'hook' is left for a future signal kind rather
+// than guessed at here.
 const KIND_LABEL: Record<PreferenceKind, string> = {
   avoid_word_removed: 'Human editors remove flagged avoid-list words',
   length_delta: 'Human editors adjust the length of AI-generated posts',
