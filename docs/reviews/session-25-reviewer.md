@@ -1366,6 +1366,7 @@ correction pass's own commits, in order:**
 | D5 | `de4cd69e` | MINOR-5, MINOR-6, MINOR-8 |
 | D6 | `aabe6152` | MINOR-1, MINOR-9, MINOR-11, NIT-1, NIT-2, NIT-3, NIT-5, NIT-6, NIT-7 |
 | D7 | *(this commit)* | Documentation finalisation only — no findings closed, none reopened |
+| D8 | *(this commit)* | CI verification only — no findings closed, none reopened |
 
 **Additions-only, proven, not merely asserted.** `git diff 052c48fc..HEAD -- docs/reviews/session-25-reviewer.md`
 (D0's own commit as the base, since D0 is the first commit in this correction pass and touched this file
@@ -1509,3 +1510,44 @@ the current ADR should expect this exact discrepancy and know why it exists.
 - `git diff 052c48fc..HEAD -- docs/reviews/session-25-reviewer.md` re-confirmed additions-only immediately
   before this commit (539 insertions before this append; this append itself is further pure addition at
   end-of-file, so the property holds transitively).
+
+### D8 — CI execution of the corrected range
+
+**Author:** Session 25-D (Claude Code, Sonnet 5). **Date:** 2026-07-29. **Range executed:** D0–D7
+(`052c48fc..05deb29d`), pushed to `origin/session-22-d` and opened as PR
+[#4](https://github.com/tcr430/SOSH/pull/4). No code changed in this step — CI execution only, per the
+D0–D8 ordering rationale above (CI runs last so it greens the range as this correction pass leaves it, not
+as it stood before D0).
+
+**CI results, both required checks green on the PR's head sha (`05deb29d`):**
+- `app-tests` (tsc + eslint + vitest): [run 30432771541](https://github.com/tcr430/SOSH/actions/runs/30432771541)
+  — `conclusion: success`. Lint output shows only pre-existing unused-var/hook-dependency warnings (no
+  errors); none touch a file this correction pass modified.
+- `db-tests` (Tier-1 live-Postgres): [run 30432771534](https://github.com/tcr430/SOSH/actions/runs/30432771534)
+  — `conclusion: success`. The skip-guard step's own log line, read directly rather than inferred from the
+  green checkmark: `skip-guard: 22 file(s) under [supabase/__tests__] all visible, zero failures — green.`
+  Per `scripts/ci/assert-no-empty-suite.mjs`'s own logic (read in full before writing this entry): the
+  script fails the job individually, by name, on any file with zero `assertionResults` or whose assertions
+  are all `skipped`/`pending` (`::error::skip-guard: <file> ran zero tests`). A green run with 22 counted
+  therefore proves all 22 files — including every file D1–D6 touched or added
+  (`performance-memory-pattern-key.test.ts`, `learning-report-orphans.test.ts`,
+  `performance-memory-candidates-expiry.test.ts`, `performance-memory-promotion.test.ts`) — executed at
+  least one non-skipped assertion. **No per-file test-count integer is extractable from this log** —
+  `test:db` runs with `--reporter=json --outputFile`, which suppresses vitest's console summary, and the
+  skip-guard only ever prints the aggregate **file** count (22), matching the correction to the C2.9 report
+  already recorded above (D7, "the six things easy to lose," item 4): any test-count figure quoted anywhere
+  in this programme's docs is a locally-derived figure, never a CI-sourced one, unless this entry says
+  otherwise. This entry makes no such claim.
+
+**Promotion tally: unchanged at 0 of 3.** This is a `pull_request`-event run against `session-22-d`
+(PR #4), not a run on `master` — ADR 0015 §5's `CI-DB-SUITE-STABLE` rule counts only full-green `db-tests`
+runs **on `master`**. Stating this explicitly, as the D0–D8 ordering rationale requires, rather than
+incrementing: `db-tests` remains **advisory-but-must-be-read** until three consecutive full-green `master`
+runs land; this pass's green run is a pre-merge signal, not a promotion event. `docs/current-phase.md`'s
+tally section carries the same entry, dated to match.
+
+**Verification run (D8):** both run URLs opened and read directly (not inferred from the PR's green
+checkmark alone); the skip-guard log line quoted above was read from the `db-tests` job's own log, not
+copied from a summary; `git log --oneline origin/session-22-d..HEAD` before pushing confirmed the pushed
+range was exactly D0–D7 (`052c48fc..05deb29d`), no extra commits. No db-tests failure occurred, so the
+"classify before doing anything else" branch of the D8 instruction does not apply.

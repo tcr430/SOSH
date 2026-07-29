@@ -10,7 +10,10 @@ summarizer (Haiku, two-gate floor, hard ceilings), atomic promotion/demotion, an
 through C2.1–C2.9, then a full Session 25-D correction pass (D0–D7) closing every finding (6 MAJOR, 11
 MINOR, 7 NIT — zero BLOCKER) from the independent Reviewer's report. All three tracks of the 0016–0018
 programme (governed memory, Mode 2 upgrade, diff-based learning) are now closed. `db-tests`/`app-tests`
-CI run URLs for the corrected range are **pending D8** — see the promotion tally below. **Session 22
+ran green on the corrected range (D0–D7, `05deb29d`) via PR #4 — `app-tests`
+[run 30432771541](https://github.com/tcr430/SOSH/actions/runs/30432771541), `db-tests`
+[run 30432771534](https://github.com/tcr430/SOSH/actions/runs/30432771534) — see the promotion tally
+below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). **Session 22
 (test-execution integrity + approvals hardening) CLOSED.** W1 (ADR 0015) gave the app-layer suite its own required CI gate (`app-tests.yml`) and made `db-tests.yml` tuned/skip-guarded/flag-free; W2 (ADR 0014 Amendment A) hardened bulk approve to filter-scoped+atomic, added a server-side filter-scoped overflow-honest total, verified WCAG-AA contrast in both themes, and regression-guarded `ROLE-TEAM-ECHO`. B6 closed the session: re-verified three 21B/21C findings already resolved at HEAD (no code needed), and wrote PROC-REVIEW-AT-COMMIT + the merge-gate table into `CLAUDE.md`. **Session 21 (21A + 21B + 21C) CLOSED.** Seats & Permissions is fully shipped: the DB-enforced model (ADR 0013 Rev B, 21A → 21A-D correction), the resolver/invite/team-settings/capability-retrofit/overage surface (ADR 0014, 21B → 21B D1–D4 correction), and the approver quick-approve inbox (ADR 0014 §9, 21C → 21C E1–E3 correction). Session 20 — Content Calendar (ADR 0012 Rev B) shipped, through the 20D-5 correction pass. Voice model (ADR 0011 Rev B) remains code-complete bar the open 19D-5 decision (§7 BP9 read path — needs ADR 0011 amendment). Next phase: pre-launch hardening (Postiz removal, legal gates, perf/CWV — see "Next up" below). tsc clean (one pre-existing error in refine-from-posts-action.test.ts, unrelated to Session 20/21/22), ESLint clean.
 
 ## What's done
@@ -56,8 +59,11 @@ CI run URLs for the corrected range are **pending D8** — see the promotion tal
     describes.
   Every fix in D1–D6 that touched a mutable code path was manually mutated, confirmed to redden, and
   reverted before landing — not merely asserted to be tested. `tsc` clean and `npm run test:app` green
-  (2343/2343, 167 files) after every step. **`db-tests`/`app-tests` CI run URLs for the corrected range are
-  pending D8** — see the promotion tally below, which is not yet updated for this range.
+  (2343/2343, 167 files) after every step. **`db-tests`/`app-tests` CI run URLs for the corrected range**
+  (D0–D7, `05deb29d`, via PR [#4](https://github.com/tcr430/SOSH/pull/4)): `app-tests`
+  [run 30432771541](https://github.com/tcr430/SOSH/actions/runs/30432771541), `db-tests`
+  [run 30432771534](https://github.com/tcr430/SOSH/actions/runs/30432771534), both green — see the
+  promotion tally below for the full D8 entry.
 - **Session 22 CLOSED — Test-execution integrity + approvals hardening (ADR 0015 + ADR 0014 Amendment A):**
   Two workstreams, one session, shared Reviewer, independently committable (W1 landed first — W2's
   regression tests are worthless until something executes them).
@@ -132,16 +138,29 @@ CI run URLs for the corrected range are **pending D8** — see the promotion tal
       not yet count toward promotion and does not yet block a bad merge on its own. See
       `docs/reviews/session-24-reviewer.md`'s CORRECTION PASS section (BLOCKER-1 row) for the full
       resolution record.
-    - **2026-07-29 (Session 25-D · D7):** documentation finalisation only — **no CI run yet for this
-      range.** Session 25-D's D0–D7 correction pass closed all 24 findings (6 MAJOR, 11 MINOR, 7 NIT —
+    - **2026-07-29 (Session 25-D · D7):** documentation finalisation only — no CI run for this step.
+      Session 25-D's D0–D7 correction pass closed all 24 findings (6 MAJOR, 11 MINOR, 7 NIT —
       zero BLOCKER) from `docs/reviews/session-25-reviewer.md`, verified locally at each step (`tsc`
       clean; `npm run test:app` 2343/2343 green; `npm run db:migrate` applying the one new migration
       cleanly; the full `test:db` suite showing only the same two pre-existing, unrelated failures seen
-      since D1 — `rls-policy-lockdown.test.ts`, `get-user-business-ids-matrix.test.ts`). **D8 (pending)**
-      will push this range through CI and record the run URLs and results here, per the D0–D8 ordering
-      rationale (CI runs last because it must green the range as the correction pass leaves it, not as
-      it stood before). **Tally still 0 of 3** until D8's CI run lands on `master` — this line is a
-      placeholder for that entry, not a substitute for it.
+      since D1 — `rls-policy-lockdown.test.ts`, `get-user-business-ids-matrix.test.ts`).
+    - **2026-07-29 (Session 25-D · D8):** both required checks ran **green** on PR
+      [#4](https://github.com/tcr430/SOSH/pull/4) (branch `session-22-d`, head `05deb29d` — the full
+      Session 25-D correction pass, D0–D7) — `app-tests`:
+      [run 30432771541](https://github.com/tcr430/SOSH/actions/runs/30432771541); `db-tests`:
+      [run 30432771534](https://github.com/tcr430/SOSH/actions/runs/30432771534). Skip-guard log,
+      read directly: `skip-guard: 22 file(s) under [supabase/__tests__] all visible, zero failures —
+      green.` — 22 matches every `supabase/__tests__` file on disk, including all four files D1–D6
+      added or touched (`performance-memory-pattern-key.test.ts`, `learning-report-orphans.test.ts`,
+      `performance-memory-candidates-expiry.test.ts`, `performance-memory-promotion.test.ts`); per
+      `scripts/ci/assert-no-empty-suite.mjs`'s own logic (read before writing this entry), any of those
+      files running zero non-skipped assertions would have hard-failed the job by name — it did not. No
+      per-file test-count integer is extractable from this log (`--reporter=json --outputFile` suppresses
+      vitest's console summary); only the aggregate file count (22) is CI-sourced. **Tally still 0 of
+      3** — same rule as the two entries above: this is a `pull_request`-event run on `session-22-d`, not
+      a `master` run, so it does not move the promotion tally and does not yet block a bad merge on its
+      own. See `docs/reviews/session-25-reviewer.md`'s CORRECTION PASS §D8 for the full resolution
+      record.
   - **Merge-gate enforcement (Session 22-D):** GitHub ruleset `master-app-tests` (id `19038239`) is live on
     `refs/heads/master`, requiring `app-tests` with no bypass actors. `db-tests` is intentionally **not**
     in any ruleset yet — it stays advisory until the tally above reaches 3/3, at which point the ruleset is
