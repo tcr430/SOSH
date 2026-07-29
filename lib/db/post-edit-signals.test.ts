@@ -70,6 +70,21 @@ describe('listRecentHumanEditExcerpts', () => {
     expect(result).toEqual(['a', 'b'])
   })
 
+  // [Session 25-D correction, MAJOR-1] Without this filter, correction- and
+  // inconclusive-classed human copy (grounding fixes, not taste) would reach
+  // the summarizer, whose output can land in a voice-directed dimension.
+  // Reddens if the .eq('class', 'preference') call is removed from the
+  // implementation — the mock would still resolve, but this assertion would
+  // no longer see the call.
+  it('filters by class=preference, so correction/inconclusive-classed rows never enter the summarizer input', async () => {
+    const { client, builder } = createMockClient([{ human_content: 'preference-only copy' }], null)
+    const result = await listRecentHumanEditExcerpts(client, 'biz-1', null, 200)
+
+    expect(client.from).toHaveBeenCalledWith('post_edit_signals')
+    expect(builder.eq).toHaveBeenCalledWith('class', 'preference')
+    expect(result).toEqual(['preference-only copy'])
+  })
+
   it('adds a gt(processed_at, since) filter when since is provided', async () => {
     const { client, builder } = createMockClient([], null)
     await listRecentHumanEditExcerpts(client, 'biz-1', '2026-07-01T00:00:00Z', 200)
@@ -148,13 +163,18 @@ describe('transitionPostEditSignal', () => {
     expect(result).toEqual(processedRow)
   })
 
+  // [Session 25-D correction, MINOR-5] Was 'failed' as the target status —
+  // now 'pending', the transient-retry target LEGAL_TRANSITIONS actually
+  // allows post-correction. The mechanism under test (the atomic WHERE
+  // guard) is unchanged; only the transition exercised needed to become a
+  // legal one.
   it('guards the UPDATE with WHERE status = <source status> (atomic transition)', async () => {
     const processingRow = { status: 'processing' }
-    const failedRow = { ...baseRow, status: 'failed' as const }
+    const pendingRow = { ...baseRow, status: 'pending' as const }
     const eqSpy = vi.fn().mockReturnThis()
     const singleSpy = vi.fn()
       .mockResolvedValueOnce({ data: processingRow, error: null })
-      .mockResolvedValueOnce({ data: failedRow, error: null })
+      .mockResolvedValueOnce({ data: pendingRow, error: null })
     const client = { from: vi.fn(), rpc: vi.fn() } as unknown as Parameters<typeof transitionPostEditSignal>[0]
     ;(client.from as ReturnType<typeof vi.fn>).mockReturnValue({
       select: vi.fn().mockReturnThis(),
@@ -163,12 +183,30 @@ describe('transitionPostEditSignal', () => {
       single: singleSpy,
     })
     await transitionPostEditSignal(client, baseRow.id, {
-      status: 'failed',
+      status: 'pending',
       attempts: 1,
       next_attempt_at: '2026-07-27T10:05:00Z',
       last_error: 'transient error',
     })
     expect(eqSpy).toHaveBeenCalledWith('status', 'processing')
+  })
+
+  // [Session 25-D correction, MINOR-5] 'failed' is no longer a reachable
+  // transition target — a future writer attempting to park a row there
+  // (the exact trap this finding named: claim_post_edit_signals never
+  // reclaims 'failed', so such a row would be stranded forever) fails
+  // loudly here instead of silently succeeding.
+  it('throws on illegal transition: processing → failed (MINOR-5 — failed is no longer reachable)', async () => {
+    const client = { from: vi.fn(), rpc: vi.fn() } as unknown as Parameters<typeof transitionPostEditSignal>[0]
+    ;(client.from as ReturnType<typeof vi.fn>).mockReturnValue({
+      select: vi.fn().mockReturnThis(),
+      update: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: { status: 'processing' }, error: null }),
+    })
+    await expect(
+      transitionPostEditSignal(client, baseRow.id, { status: 'failed' }),
+    ).rejects.toThrow('Illegal post_edit_signals transition: processing → failed')
   })
 
   it('throws on illegal transition: processed → processing', async () => {

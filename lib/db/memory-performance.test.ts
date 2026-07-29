@@ -72,6 +72,19 @@ describe('listPerformanceMemoryCandidates', () => {
     expect(builder.limit).toHaveBeenCalledWith(3)
   })
 
+  // [Session 25-D correction, MINOR-6] Without this filter, a 90-day-stale
+  // 'active' pattern (expires_at in the past) would still reach generation —
+  // the decay column upsert_distilled_performance_pattern writes on every
+  // upsert would be write-only, doing nothing. NULL is included via `.or()`
+  // so manual/import rows (which never get an expires_at) aren't wrongly
+  // treated as expired. Reddens if the `.or(...)` call is removed from the
+  // implementation — verified by temporarily removing it and re-running.
+  it('filters out expired rows via expires_at.is.null OR expires_at.gt.now() (MINOR-6)', async () => {
+    const { client, builder } = createMockClient([makeRow()], null)
+    await listPerformanceMemoryCandidates(client, 'biz-1')
+    expect(builder.or).toHaveBeenCalledWith('expires_at.is.null,expires_at.gt.now()')
+  })
+
   it('a fresh, never-confirmed row (last_confirmed_at NULL) still lands in the candidate window', async () => {
     // ADR 0016 §5.3: a freshly-distilled row with no last_confirmed_at must
     // not be silently excluded by this layer's query — it is present in the
@@ -249,28 +262,52 @@ describe('promotePerformancePattern', () => {
 })
 
 describe('demotePerformancePattern', () => {
-  it('calls the demote RPC with business_id/pattern_key/dimension/platform/net', async () => {
+  // [Session 25-D correction, MINOR-8] `net` (a plain number the caller
+  // computed) is replaced by `contradictingPatternKey` — the RPC now
+  // recomputes the contradiction count itself from this key, via a live
+  // correlated subquery, rather than trusting caller arithmetic.
+  it('calls the demote RPC with business_id/pattern_key/dimension/platform/contradictingPatternKey', async () => {
     const { client } = createMockClient([makeRow({ status: 'candidate' })], null)
-    await demotePerformancePattern(client, 'biz-1', 'length_delta:shorter:linkedin', 'format', 'linkedin', 2)
+    await demotePerformancePattern(
+      client,
+      'biz-1',
+      'length_delta:shorter:linkedin',
+      'format',
+      'linkedin',
+      'length_delta:longer:linkedin',
+    )
 
     expect(client.rpc).toHaveBeenCalledWith('demote_performance_pattern', {
       p_business_id: 'biz-1',
       p_pattern_key: 'length_delta:shorter:linkedin',
       p_dimension: 'format',
       p_platform: 'linkedin',
-      p_net: 2,
+      p_contradicting_pattern_key: 'length_delta:longer:linkedin',
+    })
+  })
+
+  it('passes null through for a signal kind with no natural opposite', async () => {
+    const { client } = createMockClient([makeRow({ status: 'candidate' })], null)
+    await demotePerformancePattern(client, 'biz-1', 'avoid_word_removed:fixed:linkedin', 'format', 'linkedin', null)
+
+    expect(client.rpc).toHaveBeenCalledWith('demote_performance_pattern', {
+      p_business_id: 'biz-1',
+      p_pattern_key: 'avoid_word_removed:fixed:linkedin',
+      p_dimension: 'format',
+      p_platform: 'linkedin',
+      p_contradicting_pattern_key: null,
     })
   })
 
   it('returns null (not an error) when the guard did not hold — no row demoted', async () => {
     const { client } = createMockClient([], null)
-    const result = await demotePerformancePattern(client, 'biz-1', 'k', 'format', 'linkedin', 5)
+    const result = await demotePerformancePattern(client, 'biz-1', 'k', 'format', 'linkedin', 'k-opposite')
     expect(result).toBeNull()
   })
 
   it('throws when the RPC returns an error', async () => {
     const { client } = createMockClient(null, { message: 'permission denied' })
-    await expect(demotePerformancePattern(client, 'biz-1', 'k', 'format', 'linkedin', 1)).rejects.toThrow(
+    await expect(demotePerformancePattern(client, 'biz-1', 'k', 'format', 'linkedin', 'k-opposite')).rejects.toThrow(
       'permission denied',
     )
   })

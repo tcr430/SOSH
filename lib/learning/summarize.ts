@@ -59,6 +59,17 @@ export function renderTierZeroSummary(pattern: string, observationCount: number)
 // recorded simplification given the ADR does not specify a summarizer-side
 // recompute mechanism (there is nothing in post_edit_signals to recompute
 // FROM for LLM-synthesized, cross-signal clustering output).
+// [Session 25-D correction, NIT-3] The 32-bit hash space was considered and
+// accepted, not overlooked. At LEARNING_SUMMARY_MAX_STATEMENTS=5 statements
+// per call and LEARNING_SUMMARY_MAX_MONTHLY_CALLS_PER_BUSINESS=8, that is at
+// most 40 keys/month/business — against a 2^32 (~4.29 billion) hash space,
+// the birthday-bound collision probability is on the order of
+// 40^2 / (2 × 2^32) ≈ 1.9 × 10⁻⁷ per business per month (roughly 1 in
+// 5 million). A collision is also not silently corrupting: it merges two
+// DIFFERENT statements onto the SAME candidate row (the partial UNIQUE index
+// dedupes on this key), which is a lossy-but-visible degradation — never a
+// promotion-eligible false positive on its own, since a summarizer row is
+// permanently candidate-only regardless (see MAJOR-2 / ADR §6.1 Amendment A).
 export function computeSummaryPatternKey(dimension: string, statement: string): string {
   const normalized = statement.trim().toLowerCase().replace(/\s+/g, ' ')
   let hash = 0
@@ -141,14 +152,24 @@ export async function summarizeBusinessLearning(
       platform: null,
       scope: 'brand',
       scope_ref: null,
-      // A single summarizer statement is exactly one observation — never a
-      // shortcut into 'active' (§6.1: "gets no shortcut into active"; the
-      // upsert itself never sets status, C2.6). computeConfidence(1, 0) =
-      // 1/(1+2) ≈ 0.333, structurally below LEARN_PROMOTION_MIN_CONFIDENCE
-      // (0.70) AND observation_count=1 is structurally below
-      // LEARN_PROMOTION_MIN_OBSERVATIONS (5) — a fresh statement can never
-      // promote on its own on EITHER gate, the same LEARN-NO-SINGLE-DIFF-
-      // PROMOTION property Tier-0 signals get.
+      // [Session 25-D correction, MAJOR-2] A summarizer row is not merely
+      // unable to promote on its FIRST observation — it can never promote AT
+      // ALL, on any volume, for any duration. computeConfidence(1, 0) ≈
+      // 0.333 < 0.70 and observation_count=1 < 5 are both gates a REPEAT
+      // observation would eventually clear (same LEARN-NO-SINGLE-DIFF-
+      // PROMOTION shape Tier-0 signals get) — but promote_performance_
+      // pattern's third gate, the distinct-campaign count, is a correlated
+      // subquery over post_edit_signals filtered on `pes.pattern_key =
+      // p_pattern_key`. This row's pattern_key is namespaced
+      // `summarize:<dimension>:<hash>` (computeSummaryPatternKey, above),
+      // which by construction never matches ANY post_edit_signals row (that
+      // is the same property that keeps it from colliding with a Tier-0
+      // key) — so the subquery is always `COUNT(DISTINCT campaign_id) = 0`,
+      // and `0 >= 2` is always false, permanently. This is INTENDED and
+      // recorded, not a bug: summarizer rows are candidate-only forever,
+      // read back only by listDistilledPatternsForSummary (never by
+      // listPerformanceMemoryCandidates, which filters status='active'). See
+      // ADR 0018 §6.1 amendment and §12 Tier-3.
       confidence: computeConfidence(1, 0),
       observation_count: 1,
     })

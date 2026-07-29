@@ -2,10 +2,68 @@
 
 **Phase:** 1 — MVP
 **Goal:** First paying customer
-**Status:** **Session 22 (test-execution integrity + approvals hardening) CLOSED.** W1 (ADR 0015) gave the app-layer suite its own required CI gate (`app-tests.yml`) and made `db-tests.yml` tuned/skip-guarded/flag-free; W2 (ADR 0014 Amendment A) hardened bulk approve to filter-scoped+atomic, added a server-side filter-scoped overflow-honest total, verified WCAG-AA contrast in both themes, and regression-guarded `ROLE-TEAM-ECHO`. B6 closed the session: re-verified three 21B/21C findings already resolved at HEAD (no code needed), and wrote PROC-REVIEW-AT-COMMIT + the merge-gate table into `CLAUDE.md`. **Session 21 (21A + 21B + 21C) CLOSED.** Seats & Permissions is fully shipped: the DB-enforced model (ADR 0013 Rev B, 21A → 21A-D correction), the resolver/invite/team-settings/capability-retrofit/overage surface (ADR 0014, 21B → 21B D1–D4 correction), and the approver quick-approve inbox (ADR 0014 §9, 21C → 21C E1–E3 correction). Session 20 — Content Calendar (ADR 0012 Rev B) shipped, through the 20D-5 correction pass. Voice model (ADR 0011 Rev B) remains code-complete bar the open 19D-5 decision (§7 BP9 read path — needs ADR 0011 amendment). Next phase: pre-launch hardening (Postiz removal, legal gates, perf/CWV — see "Next up" below). tsc clean (one pre-existing error in refine-from-posts-action.test.ts, unrelated to Session 20/21/22), ESLint clean.
+**Status:** **Session 25 (diff-based learning capture, ADR 0018) CLOSED.** Track C of the ADR 0016→0017→0018
+intelligence-layer programme shipped: the AI-original snapshot (`post_ai_originals`, write-once), the
+capture outbox (`post_edit_signals`, trigger-enqueued on `draft→approved`), the Tier-0 heuristic classifier
+(no LLM, 12 signal kinds), the correction/preference split enforced by a DB trigger, the Tier-1 LLM
+summarizer (Haiku, two-gate floor, hard ceilings), atomic promotion/demotion, and the hourly worker —
+through C2.1–C2.9, then a full Session 25-D correction pass (D0–D7) closing every finding (6 MAJOR, 11
+MINOR, 7 NIT — zero BLOCKER) from the independent Reviewer's report. All three tracks of the 0016–0018
+programme (governed memory, Mode 2 upgrade, diff-based learning) are now closed. `db-tests`/`app-tests`
+ran green on the corrected range (D0–D7, `05deb29d`) via PR #4 — `app-tests`
+[run 30432771541](https://github.com/tcr430/SOSH/actions/runs/30432771541), `db-tests`
+[run 30432771534](https://github.com/tcr430/SOSH/actions/runs/30432771534) — see the promotion tally
+below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). **Session 22
+(test-execution integrity + approvals hardening) CLOSED.** W1 (ADR 0015) gave the app-layer suite its own required CI gate (`app-tests.yml`) and made `db-tests.yml` tuned/skip-guarded/flag-free; W2 (ADR 0014 Amendment A) hardened bulk approve to filter-scoped+atomic, added a server-side filter-scoped overflow-honest total, verified WCAG-AA contrast in both themes, and regression-guarded `ROLE-TEAM-ECHO`. B6 closed the session: re-verified three 21B/21C findings already resolved at HEAD (no code needed), and wrote PROC-REVIEW-AT-COMMIT + the merge-gate table into `CLAUDE.md`. **Session 21 (21A + 21B + 21C) CLOSED.** Seats & Permissions is fully shipped: the DB-enforced model (ADR 0013 Rev B, 21A → 21A-D correction), the resolver/invite/team-settings/capability-retrofit/overage surface (ADR 0014, 21B → 21B D1–D4 correction), and the approver quick-approve inbox (ADR 0014 §9, 21C → 21C E1–E3 correction). Session 20 — Content Calendar (ADR 0012 Rev B) shipped, through the 20D-5 correction pass. Voice model (ADR 0011 Rev B) remains code-complete bar the open 19D-5 decision (§7 BP9 read path — needs ADR 0011 amendment). Next phase: pre-launch hardening (Postiz removal, legal gates, perf/CWV — see "Next up" below). tsc clean (one pre-existing error in refine-from-posts-action.test.ts, unrelated to Session 20/21/22), ESLint clean.
 
 ## What's done
 
+- **Session 25 CLOSED — Diff-based learning capture, ADR 0018 (Track C of the 0016→0017→0018 programme):**
+  Builder phase C2.1–C2.9 shipped the snapshot table (`post_ai_originals`, write-once, `BEFORE UPDATE`-only
+  guard — never `OR DELETE`, since a `BEFORE DELETE` guard would abort GDPR erasure for every business
+  that ever generated a post), the capture outbox (`post_edit_signals`, trigger-enqueued on
+  `draft→approved`, mode-agnostic and caller-agnostic by construction), a Tier-0 heuristic classifier
+  (deterministic, no LLM, 12 signal kinds — 9 preference + 1 correction + 2 inconclusive), the
+  correction/preference split enforced by a real DB trigger (`LEARN-VOICE-WRITE-TRIGGER`, not a
+  service-role `if`), a Tier-1 LLM summarizer (Haiku 4.5, two-gate floor, hard token/monthly-call
+  ceilings, `neutralize()`-guarded at render time), atomic promotion/demotion RPCs, and an hourly QStash
+  worker with one canonical tick log line. An independent Reviewer session then audited the full range
+  (`717263d2..d7cee4a5`) and found **zero BLOCKER**, 6 MAJOR, 11 MINOR, 7 NIT — the two most dangerous
+  possible defects (a `BEFORE DELETE` guard breaking erasure; an LLM call on the per-post classify path)
+  were explicitly NOT present. A full correction pass (Session 25-D, D0–D7) closed every finding:
+  - **D0** committed the governing ADR/build-guide/reviewer-report trio (MAJOR-5 — they were untracked at
+    the range they governed).
+  - **D1** closed the MAJOR-1/MAJOR-2 pair (a query-layer leak letting correction-classed copy reach the
+    summarizer, and the summarizer's promotability being overstated) — founder-adjudicated option (a):
+    record + narrow, not make summarizer rows promotable.
+  - **D2** gave `[db-MAJOR-1]`'s deliberate silent snapshot-skip its operator-visible counterpart
+    (`scripts/learning-report.ts`'s orphan report, MAJOR-3 fix (c)) and bounded three previously-unbounded
+    list queries (MINOR-7).
+  - **D3** made the idempotency test a real replay (MAJOR-4), closed the one non-RLS tenancy boundary's
+    outstanding test obligation (MAJOR-6), mapped ADR §13's last two unmapped Tier-2 constraint halves —
+    **19 of 21 → 21 of 21** (MINOR-2) — and isolated the confidence-gate boundary (MINOR-10).
+  - **D4** stopped a lost race from double-counting as an abandonment (MINOR-3), tagged summarizer
+    failures with their underlying error code (MINOR-4), and renamed a misleadingly-named counter
+    (NIT-4).
+  - **D5** closed three DB-level guarantees that had lived in caller behaviour: removed `'failed'` as an
+    unreachable transition target (MINOR-5), enforced the 90-day `expires_at` decay column at the
+    generation-time read (MINOR-6), and made demotion recompute its own contradiction count instead of
+    trusting caller arithmetic (MINOR-8) — a new forward migration,
+    `20260728220000_demote_recomputes_contradictions.sql`.
+  - **D6** corrected nine documentation/comment-accuracy defects (MINOR-1, MINOR-9, MINOR-11, NIT-1,
+    NIT-2, NIT-3, NIT-5, NIT-6, NIT-7) — including a genuinely missing 28th disposition-table row
+    (`[db-Q1]`, cited inline but never tabled) found only by checking the source rather than assuming the
+    build guide's "28" prose was wrong.
+  - **D7** finalised the reviewer report's correction-pass appendix (24-of-24 resolution table, additions-
+    only diff proven) and consolidated the ADR/backlog/OpenWolf close-out documentation this entry
+    describes.
+  Every fix in D1–D6 that touched a mutable code path was manually mutated, confirmed to redden, and
+  reverted before landing — not merely asserted to be tested. `tsc` clean and `npm run test:app` green
+  (2343/2343, 167 files) after every step. **`db-tests`/`app-tests` CI run URLs for the corrected range**
+  (D0–D7, `05deb29d`, via PR [#4](https://github.com/tcr430/SOSH/pull/4)): `app-tests`
+  [run 30432771541](https://github.com/tcr430/SOSH/actions/runs/30432771541), `db-tests`
+  [run 30432771534](https://github.com/tcr430/SOSH/actions/runs/30432771534), both green — see the
+  promotion tally below for the full D8 entry.
 - **Session 22 CLOSED — Test-execution integrity + approvals hardening (ADR 0015 + ADR 0014 Amendment A):**
   Two workstreams, one session, shared Reviewer, independently committable (W1 landed first — W2's
   regression tests are worthless until something executes them).
@@ -80,6 +138,29 @@
       not yet count toward promotion and does not yet block a bad merge on its own. See
       `docs/reviews/session-24-reviewer.md`'s CORRECTION PASS section (BLOCKER-1 row) for the full
       resolution record.
+    - **2026-07-29 (Session 25-D · D7):** documentation finalisation only — no CI run for this step.
+      Session 25-D's D0–D7 correction pass closed all 24 findings (6 MAJOR, 11 MINOR, 7 NIT —
+      zero BLOCKER) from `docs/reviews/session-25-reviewer.md`, verified locally at each step (`tsc`
+      clean; `npm run test:app` 2343/2343 green; `npm run db:migrate` applying the one new migration
+      cleanly; the full `test:db` suite showing only the same two pre-existing, unrelated failures seen
+      since D1 — `rls-policy-lockdown.test.ts`, `get-user-business-ids-matrix.test.ts`).
+    - **2026-07-29 (Session 25-D · D8):** both required checks ran **green** on PR
+      [#4](https://github.com/tcr430/SOSH/pull/4) (branch `session-22-d`, head `05deb29d` — the full
+      Session 25-D correction pass, D0–D7) — `app-tests`:
+      [run 30432771541](https://github.com/tcr430/SOSH/actions/runs/30432771541); `db-tests`:
+      [run 30432771534](https://github.com/tcr430/SOSH/actions/runs/30432771534). Skip-guard log,
+      read directly: `skip-guard: 22 file(s) under [supabase/__tests__] all visible, zero failures —
+      green.` — 22 matches every `supabase/__tests__` file on disk, including all four files D1–D6
+      added or touched (`performance-memory-pattern-key.test.ts`, `learning-report-orphans.test.ts`,
+      `performance-memory-candidates-expiry.test.ts`, `performance-memory-promotion.test.ts`); per
+      `scripts/ci/assert-no-empty-suite.mjs`'s own logic (read before writing this entry), any of those
+      files running zero non-skipped assertions would have hard-failed the job by name — it did not. No
+      per-file test-count integer is extractable from this log (`--reporter=json --outputFile` suppresses
+      vitest's console summary); only the aggregate file count (22) is CI-sourced. **Tally still 0 of
+      3** — same rule as the two entries above: this is a `pull_request`-event run on `session-22-d`, not
+      a `master` run, so it does not move the promotion tally and does not yet block a bad merge on its
+      own. See `docs/reviews/session-25-reviewer.md`'s CORRECTION PASS §D8 for the full resolution
+      record.
   - **Merge-gate enforcement (Session 22-D):** GitHub ruleset `master-app-tests` (id `19038239`) is live on
     `refs/heads/master`, requiring `app-tests` with no bypass actors. `db-tests` is intentionally **not**
     in any ruleset yet — it stays advisory until the tally above reaches 3/3, at which point the ruleset is

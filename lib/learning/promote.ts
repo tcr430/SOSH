@@ -137,8 +137,22 @@ export async function recomputeAndUpsertPattern(
     input.dimension,
     input.platform,
   )
+  // [Session 25-D correction, MINOR-8] `net` is still computed here and
+  // used for the client-side call-avoidance pre-check (meetsDemotionThreshold)
+  // — a genuine optimization, not the read-then-update shape CLAUDE.md
+  // forbids, since the RPC re-evaluates its own guard atomically regardless.
+  // The RPC itself no longer trusts this `net` value: it recomputes the
+  // contradiction count from `contradictingPatternKey` via a live correlated
+  // subquery, so the KEY is what's passed, not the pre-computed number.
   const demoted = meetsDemotionThreshold(net)
-    ? await demotePerformancePattern(client, input.businessId, input.patternKey, input.dimension, input.platform, net)
+    ? await demotePerformancePattern(
+        client,
+        input.businessId,
+        input.patternKey,
+        input.dimension,
+        input.platform,
+        input.contradictingPatternKey,
+      )
     : null
 
   return { row, observations, contradictions, confidence, promoted, demoted }

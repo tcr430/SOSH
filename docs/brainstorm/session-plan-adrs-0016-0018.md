@@ -129,3 +129,22 @@ PR [#2](https://github.com/tcr430/SOSH/pull/2) ran both `app-tests` and `db-test
 (`docs/current-phase.md`, 2026-07-25 entry). Track B's range SHA (D7, the correction-pass close-out commit) is `93454d94`.
 Track C (ADR 0018, diff-based learning capture) is the remaining queued work from this plan — not yet
 started.
+
+**Update (Session 25-D, 2026-07-29):** Track C (ADR 0018, diff-based learning capture) landed — C2.1–C2.9
+built the snapshot table, capture outbox, Tier-0 classifier, correction/preference split, Tier-1
+summarizer, promotion/demotion, and the hourly worker; an independent Reviewer audited the full range and
+found zero BLOCKER, 6 MAJOR, 11 MINOR, 7 NIT; Session 25-D's correction pass (D0–D7) closed all 24
+findings. **Track C's range SHA (D7, the correction-pass close-out commit) is `05deb29d`.** D8 (CI
+verification) ran on PR [#4](https://github.com/tcr430/SOSH/pull/4): `app-tests`
+[run 30432771541](https://github.com/tcr430/SOSH/actions/runs/30432771541) and `db-tests`
+[run 30432771534](https://github.com/tcr430/SOSH/actions/runs/30432771534) both green, skip-guard
+confirming all 22 `supabase/__tests__` files visible with zero failures — see
+`docs/current-phase.md`'s Session 25 entry and `docs/reviews/session-25-reviewer.md`'s D8 record for the
+full detail, including the promotion-tally note (this is a `pull_request`-event run on `session-22-d`, not
+`master`, so the tally stays at 0 of 3). **All three tracks of the 0016–0018 intelligence-layer programme (ADR
+0016 governed memory, ADR 0017 Mode 2 upgrade, ADR 0018 diff-based learning capture) are now closed.**
+§4's deferral of **Mode 1 (Studio)** and **Mode 3 (signal-driven campaigns)** — both explicitly reusing
+mechanisms Tracks A–C were still building when this plan was written, with instruction to "resume ADR work
+for these once Tracks A–C have landed and been reviewed" — has its condition met as of this update. Mode 1
+and Mode 3 ADR work may now begin from the actual shipped shape of the rubric, the brief pipeline, and the
+diff-capture pipeline, rather than their designed-but-unbuilt shape.

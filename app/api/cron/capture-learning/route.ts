@@ -56,7 +56,7 @@ async function captureLearningTick(request: NextRequest): Promise<NextResponse> 
     learning = {
       claimed: 0, classified: 0, signalsEmitted: 0, skippedNoSnapshot: 0,
       patternsUpserted: 0, promoted: 0, demoted: 0, summarized: 0, summarizeFailed: 0,
-      failed: 0, abandoned: 0, raceLost: 0,
+      summarizeFailedCode: null, retrying: 0, abandoned: 0, raceLost: 0,
       error: err instanceof Error ? err.message : 'unknown',
     }
   }
