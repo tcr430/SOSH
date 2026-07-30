@@ -268,9 +268,9 @@ describe('provenance discriminant (ADR 0019 §8.2, [type-§6])', () => {
 })
 
 describe('retrieveStudioPerformancePatterns — governed-only, no fallback (ADR 0019 §8.2)', () => {
-  it('mints only governed rows and passes a real (non-empty) queryContext through to ranking', async () => {
+  it('mints rows carrying rowId/confidence/observationCount and passes a real (non-empty) queryContext through to ranking', async () => {
     vi.mocked(memoryPerformanceDb.listPerformanceMemoryCandidates).mockResolvedValue([
-      makeGovernedRow({ platform: 'linkedin', scope: 'platform', scope_ref: 'linkedin' }),
+      makeGovernedRow({ id: 'pf-linkedin', platform: 'linkedin', scope: 'platform', scope_ref: 'linkedin' }),
       makeGovernedRow({ id: 'pf-2', platform: 'twitter', scope: 'platform', scope_ref: 'twitter', confidence: 0.2 }),
     ])
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -278,7 +278,13 @@ describe('retrieveStudioPerformancePatterns — governed-only, no fallback (ADR 
 
     const result = await retrieveStudioPerformancePatterns(client, 'biz-1', { platform: 'linkedin' })
 
-    expect(result.every((p) => p.provenance === 'governed')).toBe(true)
+    expect(result[0]).toEqual({
+      rowId: 'pf-linkedin',
+      platform: 'linkedin',
+      pattern: 'technical-comparison posts perform well for CTO audiences',
+      confidence: 0.7,
+      observationCount: 3,
+    })
     // The platform-matching row (scopeMatch=1) outranks the non-matching one
     // (scopeMatch=0) even though it has lower raw confidence — proves the
     // REAL queryContext (carrying platform) is actually threaded through to
@@ -297,14 +303,14 @@ describe('retrieveStudioPerformancePatterns — governed-only, no fallback (ADR 
     expect(postMetricsDb.listTopPostMetrics).not.toHaveBeenCalled()
   })
 
-  it("never mints 'derived_from_metrics' even with mixed governed/empty data across calls", async () => {
-    vi.mocked(memoryPerformanceDb.listPerformanceMemoryCandidates).mockResolvedValue([makeGovernedRow()])
+  it('every returned row carries a rowId (uuid), never a synthetic/derived identifier', async () => {
+    vi.mocked(memoryPerformanceDb.listPerformanceMemoryCandidates).mockResolvedValue([makeGovernedRow({ id: 'pf-abc' })])
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const client = {} as any
 
     const result = await retrieveStudioPerformancePatterns(client, 'biz-1', {})
 
-    expect(result.map((p) => p.provenance)).toEqual(['governed'])
+    expect(result.map((p) => p.rowId)).toEqual(['pf-abc'])
   })
 
   it('routes ONLY through listPerformanceMemoryCandidates (the active-filtered reader), never listDistilledPatternsForSummary (the unfiltered summarizer reader)', async () => {

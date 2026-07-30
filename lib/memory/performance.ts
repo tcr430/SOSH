@@ -114,17 +114,36 @@ export async function retrieveRelevant(
 // Studio through that one would evaporate the "active" half of L-11 with no
 // type-level signal to catch it; this function's implementation is the
 // enforcement.
+// D2.7 [type-§6] — Studio's citation verifier needs the DB row `id`
+// (uuid), `confidence`, and `observation_count` to check "rowId ∈ the sent
+// governed set" and to render verified pattern/confidence/observationCount
+// (lib/studio/verify.ts). PerformancePattern deliberately CANNOT carry these
+// — it is MEM-CONTEXT-EQUIVALENT to CustomerContext.recentPostPerformance
+// (ADR 0016 §6), which has no id/confidence/observationCount fields and must
+// not gain any. retrieveStudioPerformancePatterns has no consumer yet
+// (unwired since D2.6), so widening its OWN return shape here — instead of
+// PerformancePattern's — is a scoping correction, not a breaking change.
+export type GovernedPerformancePattern = {
+  readonly rowId: string
+  readonly platform: Platform | null
+  readonly pattern: string
+  readonly confidence: number
+  readonly observationCount: number
+}
+
 export async function retrieveStudioPerformancePatterns(
   client: SupabaseClient,
   businessId: string,
   queryContext: MemoryQueryContext,
   limit: number = MEMORY_CANDIDATE_LIMIT,
-): Promise<PerformancePattern[]> {
+): Promise<GovernedPerformancePattern[]> {
   const governedCandidates = await listPerformanceMemoryCandidates(client, businessId, limit)
   const ranked = rankAndCap(governedCandidates, queryContext, PERFORMANCE_CAP)
   return ranked.map(record => ({
+    rowId: record.id,
     platform: record.platform,
-    topContent: record.pattern,
-    provenance: 'governed' as const,
+    pattern: record.pattern,
+    confidence: record.confidence,
+    observationCount: record.observation_count,
   }))
 }

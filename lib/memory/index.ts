@@ -19,6 +19,7 @@ export {
   retrieveRelevant as retrievePerformancePatterns,
   retrieveStudioPerformancePatterns,
   type PerformancePattern,
+  type GovernedPerformancePattern,
 } from './performance'
 export { retrieveVoice, type CoreVoiceRules } from './voice'
 

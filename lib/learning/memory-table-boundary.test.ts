@@ -17,6 +17,12 @@ import { describe, it, expect } from 'vitest'
 const SCAN_ROOTS = [
   path.join(__dirname), // lib/learning/**
   path.join(__dirname, '..', '..', 'app', 'api', 'cron', 'capture-learning'), // the one route this track added
+  // ADR 0019 §8.5 [type-§7] (D2.7) — lib/studio/** depends on
+  // MEM-NO-DIRECT-TABLE-ACCESS more than any other feature in the repo
+  // (its whole citation-trust story rests on going through the memory
+  // barrel, never a direct table read); without this root, that guarantee
+  // was unenforced for exactly the feature that needs it most.
+  path.join(__dirname, '..', 'studio'),
 ]
 
 const FORBIDDEN_TABLE_PATTERN =
