@@ -320,6 +320,43 @@ export type PostInsert = {
 export type PostUpdate = Partial<Omit<PostRow, 'id' | 'created_at' | 'business_id' | 'campaign_id' | 'published_at' | 'platform_post_id' | 'platform_url' | 'deleted_at' | 'role'>>
 
 // ---------------------------------------------------------------------------
+// 5b. studio_drafts — Mode 1 Studio pre-campaign scratch content (ADR 0019 §2.2)
+// ---------------------------------------------------------------------------
+
+export type StudioDraftRow = {
+  id: string
+  business_id: string
+  content: string
+  // Nullable, unlike PostRow['platform'] — a draft has no target platform
+  // until the author picks one ([db-MINOR-1]).
+  platform: Platform | null
+  // Generated column (encode(sha256(content::bytea),'hex')) — read-only from
+  // the app's perspective; never present on an Insert/Update payload.
+  content_hash: string
+  suggestions: Record<string, unknown> | null
+  suggestions_for_hash: string | null
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type StudioDraftInsert = {
+  id?: string
+  business_id: string
+  content?: string
+  platform?: Platform | null
+  suggestions?: Record<string, unknown> | null
+  suggestions_for_hash?: string | null
+  deleted_at?: string | null
+  created_at?: string
+  updated_at?: string
+}
+
+// business_id excluded (tenancy-critical); content_hash excluded (generated,
+// read-only on every write type — the DB computes it from content).
+export type StudioDraftUpdate = Partial<Omit<StudioDraftRow, 'id' | 'created_at' | 'business_id' | 'content_hash'>>
+
+// ---------------------------------------------------------------------------
 // 6. post_metrics — upsert-in-place; nullable metrics mean "not exposed by platform"
 // ---------------------------------------------------------------------------
 

@@ -1076,8 +1076,18 @@ GRANT EXECUTE ON FUNCTION public.purge_business(uuid) TO service_role;
 | email_webhook_events | no | — | n/a | RETAIN (not business-scoped) |
 | auth_rate_limits | no (keyed by bucket_key) | — | n/a | RETAIN (separate TTL purge — A1.4 / launch-checklist §16) |
 | cron_health | no | — | n/a | RETAIN (ops) |
+| studio_drafts | yes (business_id) | CASCADE | yes | none — cascade = erasure (may hold third-party quote PII, same wording as evidence_memory above: a Studio draft is customer content and SOSH is the processor, matching posts) |
 
 Only `business_deletion_requests` (NO ACTION) would have blocked the root delete; D2.1 resolves it. Every other business-scoped table either cascades or is deliberately retained.
+
+**Session 26-D2.1 note (2026-07-30):** `studio_drafts` (ADR 0019 §2.2/§12) added above. Two traps
+recorded as decisions, not omissions (ADR 0019 §12.4): (1) retention/expiry of stale drafts is a
+**deferred** follow-on (A-2, no reaper in this track — drafts persist until explicitly deleted or the
+business is erased); (2) no provenance field is captured on the row (drafts are customer content and SOSH
+is a processor here, exactly matching `posts`'s existing posture — no separate justification needed).
+No `BEFORE DELETE` trigger exists on this table (§12.2) — `purge_business`'s root `DELETE FROM
+public.businesses` (`20260702120700_purge_business_member_delete.sql:62`) is unedited and its cascade
+purges `studio_drafts` the same way it purges every other CASCADE row in this table.
 
 **Session 24-D confirmation (2026-07-24):** the `campaign_briefs` row above (added when ADR 0017's B2.0
 migration shipped, per the §D2.5/A3 note in `docs/reviews/session-24-reviewer.md`) is present and correct
