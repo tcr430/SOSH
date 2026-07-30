@@ -128,7 +128,11 @@ export async function runPrompt<TInput, TOutput>(
 
   const sdkParams: Anthropic.MessageCreateParamsNonStreaming & { _sosh?: { promptId: string; input: unknown } } = {
     model: MODELS[prompt.modelKey].id,
-    max_tokens: DEFAULT_MAX_TOKENS,
+    // ADR 0019 §4.5, founder ruling A-5 — the WHOLE change: one optional
+    // field, one ??. Every existing prompt leaves maxTokens unset, so this
+    // resolves to exactly DEFAULT_MAX_TOKENS for all of them, unchanged
+    // (STUDIO-RUNNER-DEFAULT-PRESERVED, lib/ai/runner.test.ts).
+    max_tokens: prompt.maxTokens ?? DEFAULT_MAX_TOKENS,
     system: systemContent,
     messages,
     // _sosh is stripped by the real Anthropic SDK (unknown fields ignored).
@@ -157,7 +161,19 @@ export async function runPrompt<TInput, TOutput>(
       throw err
     }
 
-    // Step 5: Parse output
+    // Step 5: Parse output. ADR 0019 §5.4 [sec-HIGH-7] — check stop_reason
+    // BEFORE attempting to parse: a response cut off by max_tokens is not
+    // malformed content, it's an availability failure, and treating it as
+    // invalid_response makes truncation indistinguishable from a genuine
+    // parse failure (callWithRetry only retries 429/5xx, never either of
+    // these) — a long draft would fail 100% of the time with a misleading
+    // error and no actionable message.
+    if (response.stop_reason === 'max_tokens') {
+      const err = new AiError('response_truncated', 'Response truncated at max_tokens')
+      usageErrorCode = err.code
+      throw err
+    }
+
     const textBlock = response.content.find(b => b.type === 'text')
     const rawText = textBlock?.type === 'text' ? textBlock.text : ''
     let parsed: TOutput

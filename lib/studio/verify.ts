@@ -1,8 +1,9 @@
-import { z } from 'zod'
 import * as Sentry from '@sentry/nextjs'
-import { RubricOutputSchema } from '@/lib/ai/prompts/rubric'
 import { containsWord } from '@/lib/learning/diff'
 import type { GovernedPerformancePattern } from '@/lib/memory'
+import { StudioSpanCategorySchema, type StudioSpanCategory } from './categories'
+
+export { StudioSpanCategorySchema, type StudioSpanCategory }
 
 // ADR 0019 §7/§8 — the type-design core of Track D. §8.4's honest concession
 // governs this file: `ecc:type-design-analyzer` recommended a #private-field
@@ -14,19 +15,6 @@ import type { GovernedPerformancePattern } from '@/lib/memory'
 // new OOP pattern, still closes the object-literal forgery path a
 // string-literal brand leaves wide open, and leaves no grep trace. Do not
 // re-propose the class.
-
-// ── §7 — the suggestion category, DERIVED from RubricOutputSchema's keys,
-// not duplicated as a literal list (§7.1's designed invariant, rubric.ts:23:
-// "adding, renaming, or removing a dimension changes the contract both
-// callers depend on" — under that invariant, this becomes the THIRD caller
-// made visible to whoever changes the set). `redundancy` and
-// `platformNativeness` are properties of a whole draft, not a span (§7.2) —
-// excluded here, not discarded: each may surface as at most one draft-level
-// observation elsewhere, never as a span category.
-export const StudioSpanCategorySchema = RubricOutputSchema.shape.dimensions
-  .keyof()
-  .exclude(['redundancy', 'platformNativeness'])
-export type StudioSpanCategory = z.infer<typeof StudioSpanCategorySchema>
 
 // ── the wire: what the model is PERMITTED TO SAY. An unverified claim, and
 // its name says so (§8.4(iii)).

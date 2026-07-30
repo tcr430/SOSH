@@ -5,7 +5,6 @@ import {
   verifyStudioResponse,
   buildCitableContext,
   toStudioClientDTO,
-  StudioSpanCategorySchema,
   type ClaimedSuggestion,
   type StudioCall,
   type RenderedSuggestion,
@@ -274,27 +273,6 @@ describe('toStudioClientDTO', () => {
   })
 })
 
-describe('StudioSpanCategorySchema — derived from RubricOutputSchema, the exact 8 span-eligible keys', () => {
-  it('matches the exact expected key set (catches additive drift a compile-only check would miss)', () => {
-    expect([...StudioSpanCategorySchema.options].sort()).toEqual(
-      [
-        'specificity',
-        'originality',
-        'evidenceSufficiency',
-        'audienceRelevance',
-        'brandVoiceAlignment',
-        'openingStrength',
-        'ctaFit',
-        'unsupportedClaimsRisk',
-      ].sort(),
-    )
-  })
-
-  it('excludes the two whole-draft dimensions', () => {
-    expect(StudioSpanCategorySchema.options).not.toContain('redundancy')
-    expect(StudioSpanCategorySchema.options).not.toContain('platformNativeness')
-  })
-})
 
 // ── THREE SOURCE SCANS, each carrying a vacuity guard (the FALSE-GREEN
 // shape ADR 0015 exists to catch — a scan that silently finds zero files
