@@ -333,7 +333,9 @@ export type StudioDraftRow = {
   // Generated column (encode(sha256(content::bytea),'hex')) — read-only from
   // the app's perspective; never present on an Insert/Update payload.
   content_hash: string
-  suggestions: Record<string, unknown> | null
+  // A "suggestion set" (ADR 0019 §10/§11.1) — a JSON array, not a single
+  // object; shape is owned by lib/studio's suggestion types, not this layer.
+  suggestions: unknown[] | null
   suggestions_for_hash: string | null
   deleted_at: string | null
   created_at: string
@@ -345,7 +347,7 @@ export type StudioDraftInsert = {
   business_id: string
   content?: string
   platform?: Platform | null
-  suggestions?: Record<string, unknown> | null
+  suggestions?: unknown[] | null
   suggestions_for_hash?: string | null
   deleted_at?: string | null
   created_at?: string

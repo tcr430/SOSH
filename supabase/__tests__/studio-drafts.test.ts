@@ -1,5 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { createClient } from '@supabase/supabase-js'
+import {
+  createStudioDraft,
+  persistSuggestions,
+  acceptSuggestion,
+  listStudioDrafts,
+  softDeleteStudioDraft,
+} from '@/lib/db/studio-drafts'
 
 // ADR 0019 §2.2 / §12 — STUDIO-RLS-ISOLATED, STUDIO-CASCADE-COMPLETE (Tier-1,
 // live Postgres). Cross-tenant SELECT/INSERT/UPDATE/DELETE must be denied
@@ -274,5 +281,216 @@ describe('studio_drafts (ADR 0019 §2.2, §12)', () => {
     expect(draftsAfter ?? []).toHaveLength(0)
 
     await admin.auth.admin.deleteUser(owner.id)
+  })
+})
+
+// ADR 0019 §10.2 / §2.6 — D2.2. STUDIO-STALE-SUGGESTION-GUARDED (both races,
+// exercised through the real lib/db/studio-drafts.ts functions, not raw
+// table calls — the correctness property is the atomic UPDATE's WHERE
+// clause, so the test must go through the same statement the app uses) and
+// STUDIO-LEARNING-REUSED (the negative form: drafting/accepting in Studio
+// creates no posts row and no post_edit_signals row).
+describe('studio_drafts — accept/suggest guards and learning-reuse boundary (ADR 0019 §10.2, §2.6)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let admin: any
+  let ownerId: string
+  let ownerEmail: string
+  let businessId: string
+
+  async function createUser(label: string) {
+    const email = `studio-guard-${label}-${Date.now()}-${Math.random().toString(36).slice(2)}@integration.test`
+    const { data, error } = await admin.auth.admin.createUser({
+      email,
+      password: 'TestPass123!',
+      email_confirm: true,
+    })
+    if (error) throw error
+    return { id: data.user.id as string, email }
+  }
+
+  async function signIn(email: string) {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    if (!url || !anonKey) {
+      throw new Error('NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY are required')
+    }
+    const client = createClient(url, anonKey)
+    const { error } = await client.auth.signInWithPassword({ email, password: 'TestPass123!' })
+    if (error) throw error
+    return client
+  }
+
+  beforeAll(async () => {
+    const { createServiceRoleClient } = await import('@/lib/supabase/service')
+    admin = createServiceRoleClient()
+
+    const owner = await createUser('owner')
+    ownerId = owner.id
+    ownerEmail = owner.email
+
+    const { data: biz, error: bizErr } = await admin
+      .from('businesses')
+      .insert({ name: 'Studio Guard Business', owner_id: ownerId, plan: 'plus' })
+      .select('id')
+      .single()
+    if (bizErr) throw bizErr
+    businessId = biz.id
+  })
+
+  afterAll(async () => {
+    if (!admin) return
+    await admin.from('studio_drafts').delete().eq('business_id', businessId)
+    if (businessId) await admin.from('businesses').delete().eq('id', businessId)
+    if (ownerId) await admin.auth.admin.deleteUser(ownerId)
+  })
+
+  it('STUDIO-STALE-SUGGESTION-GUARDED (a): accept fails when content changed since generation', async () => {
+    const client = await signIn(ownerEmail)
+
+    const draft = await createStudioDraft(client, { business_id: businessId, content: 'v1' })
+    const afterSuggest = await persistSuggestions(client, draft.id, businessId, 'v1', [
+      { kind: 'model_judgment', text: 'tighten the opener' },
+    ])
+    const expectedContentHash = afterSuggest.content_hash
+    const expectedSuggestionsHash = afterSuggest.suggestions_for_hash as string
+
+    // The user edits the draft after suggestions were generated.
+    const { error: editErr } = await client
+      .from('studio_drafts')
+      .update({ content: 'v2 — edited after suggest' })
+      .eq('id', draft.id)
+    expect(editErr).toBeNull()
+
+    const result = await acceptSuggestion(
+      client,
+      draft.id,
+      businessId,
+      'accepted text that should NOT be applied',
+      expectedContentHash,
+      expectedSuggestionsHash,
+    )
+    expect(result.outcome).toBe('stale')
+
+    const { data: unchanged } = await admin
+      .from('studio_drafts')
+      .select('content')
+      .eq('id', draft.id)
+      .single()
+    expect(unchanged.content).toBe('v2 — edited after suggest')
+  })
+
+  it('STUDIO-STALE-SUGGESTION-GUARDED (b): accept fails when the suggestion set was superseded by a regenerate, content unchanged', async () => {
+    const client = await signIn(ownerEmail)
+
+    const draft = await createStudioDraft(client, { business_id: businessId, content: 'same content throughout' })
+    const firstSuggest = await persistSuggestions(client, draft.id, businessId, 'same content throughout', [
+      { kind: 'model_judgment', text: 'first pass suggestion' },
+    ])
+    // Regenerate — content is identical, but the returned set differs, so
+    // content_hash stays the same while suggestions_for_hash must change.
+    const secondSuggest = await persistSuggestions(client, draft.id, businessId, 'same content throughout', [
+      { kind: 'model_judgment', text: 'second pass, different suggestion' },
+    ])
+    expect(secondSuggest.content_hash).toBe(firstSuggest.content_hash)
+    expect(secondSuggest.suggestions_for_hash).not.toBe(firstSuggest.suggestions_for_hash)
+
+    // Client is holding the FIRST (now-superseded) suggestions_for_hash.
+    const result = await acceptSuggestion(
+      client,
+      draft.id,
+      businessId,
+      'accepted text that should NOT be applied',
+      firstSuggest.content_hash,
+      firstSuggest.suggestions_for_hash as string,
+    )
+    expect(result.outcome).toBe('stale')
+
+    const { data: unchanged } = await admin
+      .from('studio_drafts')
+      .select('content, suggestions_for_hash')
+      .eq('id', draft.id)
+      .single()
+    expect(unchanged.content).toBe('same content throughout')
+    expect(unchanged.suggestions_for_hash).toBe(secondSuggest.suggestions_for_hash)
+  })
+
+  it('clean case: accept matches exactly one row and clears both suggestion columns in the same statement', async () => {
+    const client = await signIn(ownerEmail)
+
+    const draft = await createStudioDraft(client, { business_id: businessId, content: 'clean case content' })
+    const suggested = await persistSuggestions(client, draft.id, businessId, 'clean case content', [
+      { kind: 'model_judgment', text: 'a real suggestion' },
+    ])
+
+    const result = await acceptSuggestion(
+      client,
+      draft.id,
+      businessId,
+      'clean case content, revised',
+      suggested.content_hash,
+      suggested.suggestions_for_hash as string,
+    )
+    expect(result.outcome).toBe('accepted')
+    if (result.outcome === 'accepted') {
+      expect(result.draft.content).toBe('clean case content, revised')
+      expect(result.draft.suggestions).toBeNull()
+      expect(result.draft.suggestions_for_hash).toBeNull()
+    }
+  })
+
+  it('soft-delete: a deleted draft is absent from the list and not acceptable', async () => {
+    const client = await signIn(ownerEmail)
+
+    const draft = await createStudioDraft(client, { business_id: businessId, content: 'to be soft-deleted' })
+    const suggested = await persistSuggestions(client, draft.id, businessId, 'to be soft-deleted', [
+      { kind: 'model_judgment', text: 'irrelevant, draft will be deleted' },
+    ])
+
+    await softDeleteStudioDraft(client, draft.id, businessId)
+
+    const list = await listStudioDrafts(client, businessId)
+    expect(list.map((d) => d.id)).not.toContain(draft.id)
+
+    const result = await acceptSuggestion(
+      client,
+      draft.id,
+      businessId,
+      'should not apply',
+      suggested.content_hash,
+      suggested.suggestions_for_hash as string,
+    )
+    expect(result.outcome).toBe('stale')
+  })
+
+  it('STUDIO-LEARNING-REUSED: drafting and accepting in Studio creates no posts row and no post_edit_signals row', async () => {
+    const client = await signIn(ownerEmail)
+
+    const draft = await createStudioDraft(client, { business_id: businessId, content: 'learning boundary content' })
+    const suggested = await persistSuggestions(client, draft.id, businessId, 'learning boundary content', [
+      { kind: 'model_judgment', text: 'a suggestion' },
+    ])
+    const result = await acceptSuggestion(
+      client,
+      draft.id,
+      businessId,
+      'learning boundary content, accepted',
+      suggested.content_hash,
+      suggested.suggestions_for_hash as string,
+    )
+    expect(result.outcome).toBe('accepted')
+
+    const { data: posts, error: postsErr } = await admin
+      .from('posts')
+      .select('id')
+      .eq('business_id', businessId)
+    expect(postsErr).toBeNull()
+    expect(posts ?? []).toHaveLength(0)
+
+    const { data: signals, error: signalsErr } = await admin
+      .from('post_edit_signals')
+      .select('id')
+      .eq('business_id', businessId)
+    expect(signalsErr).toBeNull()
+    expect(signals ?? []).toHaveLength(0)
   })
 })
