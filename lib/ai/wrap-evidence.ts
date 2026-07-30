@@ -91,6 +91,45 @@ export function neutralize(rawText: string): string {
   return out
 }
 
+// ADR 0019 §5.5 [sec-HIGH-1] — a NEW sibling, not a reordering of neutralize()
+// by composition at the call site. neutralize() has a FIXED internal order
+// (normalize+strip-Cf, THEN the [/DATA]/fence/brace passes) — that order is
+// exactly right for evidence/brief text but wrong for Studio's draft guard,
+// which needs a WIDER strip class (category Cf/Co/Cs plus variation
+// selectors — Mn, not Cf, and therefore invisible to neutralize() today) and
+// needs normalize and strip to be independently callable steps, because
+// lib/studio/guard.ts's post-truncation re-run must re-strip WITHOUT
+// re-normalizing ("never normalize after stripping" — normalization can
+// produce a character an earlier strip pass already ran past). neutralize()
+// itself is UNCHANGED by this addition; every existing caller (guard(),
+// wrapEvidenceForPrompt()) keeps calling it exactly as before.
+//
+// Strips, as one pass: \p{Cf} (format, as neutralize() does today), \p{Co}
+// (private-use — covers the plane-15 marker sentinels U+F0000/U+F0001 as a
+// character class, per ADR §5.1), \p{Cs} (lone/unpaired surrogates —
+// malformed input), and variation selectors U+FE00–FE0F and the
+// supplement-plane block U+E0100–E01EF (Unicode category Mn, NOT Cf — the
+// exact gap [sec-HIGH-1] names: an invisible variation selector inside a
+// marker token defeats an exact-match regex, and neutralize()'s \p{Cf}-only
+// strip misses it entirely).
+const STUDIO_STRIP_PATTERN = /[\p{Cf}\p{Co}\p{Cs}\u{FE00}-\u{FE0F}\u{E0100}-\u{E01EF}]/gu
+
+export function neutralizeWithSentinels(rawText: string, options?: { skipNormalize?: boolean }): string {
+  // NFKC normalize is a SEPARATE, skippable step — lib/studio/guard.ts's
+  // post-truncation re-run (ADR §5.5 step 7) must re-strip without
+  // re-normalizing, since normalizing already-stripped text can produce a
+  // character an earlier strip pass already ran past.
+  let out = options?.skipNormalize ? rawText : rawText.normalize('NFKC')
+  out = out.replace(STUDIO_STRIP_PATTERN, '')
+  out = out.replace(/\[\/DATA\]/gi, '[/data-blocked]')
+  out = out.replace(/```/g, '`' + ZWSP + '`' + ZWSP + '`')
+  const firstNonWhitespace = out.search(/\S/)
+  if (firstNonWhitespace !== -1 && (out[firstNonWhitespace] === '{' || out[firstNonWhitespace] === '[')) {
+    out = out.slice(0, firstNonWhitespace) + ZWSP + out.slice(firstNonWhitespace)
+  }
+  return out
+}
+
 function truncate(text: string): string {
   if (text.length <= EVIDENCE_MAX_CHARS) return text
   return text.slice(0, EVIDENCE_MAX_CHARS - TRUNCATION_SUFFIX.length) + TRUNCATION_SUFFIX
