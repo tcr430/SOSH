@@ -16,6 +16,7 @@ import {
   LogOut,
   User,
   X,
+  Plus,
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -32,6 +33,10 @@ import { logoutAction } from '@/app/[locale]/(dashboard)/actions'
 // ADR 0014 §6/§9.5 — capability-gated nav entries. `capability: null` means
 // visible to every member (echo only — the DB is the real boundary, L-3).
 export const ACTIVE_NAV = [
+  // ADR 0019 §3.1 — the pre-chamber's nav entry point. Additive: 'campaigns'
+  // below is UNCHANGED and still browses existing campaigns; this is a new,
+  // separate entry, not a repoint (founder-directed, Session 26 D2.9).
+  { key: 'create',    href: 'create',              icon: Plus,         capability: null },
   { key: 'campaigns', href: 'campaigns',         icon: Megaphone,    capability: null },
   { key: 'calendar',  href: 'calendar',           icon: CalendarDays, capability: null },
   { key: 'billing',   href: 'billing',            icon: CreditCard,   capability: CAPABILITIES.MANAGE_BILLING },

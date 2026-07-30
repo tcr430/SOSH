@@ -1,0 +1,20 @@
+{
+  "picker": {
+    "heading": "¿Cómo quieres crear esta publicación?",
+    "subheading": "Elige el flujo de trabajo que se ajusta a tu punto de partida.",
+    "mode1": {
+      "title": "Studio",
+      "description": "Pega un borrador y recibe sugerencias específicas y citadas para mejorarlo."
+    },
+    "mode2": {
+      "title": "Orientado por objetivo",
+      "description": "Cuéntanos tu objetivo y planificaremos y generaremos una campaña completa."
+    },
+    "mode3": {
+      "title": "Orientado por señales",
+      "description": "Convierte un tema de tendencia o una mención en una publicación automáticamente.",
+      "unavailableLabel": "La creación orientada por señales aún no está disponible — próximamente",
+      "badge": "Próximamente"
+    }
+  }
+}

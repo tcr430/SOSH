@@ -1,0 +1,20 @@
+{
+  "picker": {
+    "heading": "Como queres criar esta publicação?",
+    "subheading": "Escolhe o fluxo de trabalho que se adequa ao teu ponto de partida.",
+    "mode1": {
+      "title": "Studio",
+      "description": "Cola um rascunho e recebe sugestões específicas e citadas para o melhorar."
+    },
+    "mode2": {
+      "title": "Orientado por objetivo",
+      "description": "Diz-nos o teu objetivo e planeamos e geramos uma campanha completa."
+    },
+    "mode3": {
+      "title": "Orientado por sinais",
+      "description": "Transforma um tema em alta ou uma menção numa publicação automaticamente.",
+      "unavailableLabel": "A criação orientada por sinais ainda não está disponível — brevemente",
+      "badge": "Brevemente"
+    }
+  }
+}

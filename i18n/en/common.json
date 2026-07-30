@@ -4,6 +4,7 @@
     "tagline": "Marketing-leading AI social media management"
   },
   "nav": {
+    "create": "Create",
     "campaigns": "Campaigns",
     "calendar": "Calendar",
     "analytics": "Analytics",
