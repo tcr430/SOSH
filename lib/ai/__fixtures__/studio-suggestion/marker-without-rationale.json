@@ -1,0 +1,8 @@
+{
+  "description": "A well-formed marker span with no corresponding rationale array entry.",
+  "nonce": "deadbeef",
+  "originalDraft": "Ship the feature by Friday.",
+  "rawRevision": "Ship the feature 󰀀deadbeef:s1󰀁by Monday󰀀/deadbeef:s1󰀁.",
+  "rationale": [],
+  "expectedOutcome": "rejected"
+}

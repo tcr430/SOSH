@@ -1,0 +1,8 @@
+{
+  "description": "Sentinel-shaped sequence using the wrong nonce — not a well-formed token for this request; its sentinels remain as residue and must be rejected.",
+  "nonce": "deadbeef",
+  "originalDraft": "Our onboarding is fast.",
+  "rawRevision": "Our onboarding is fast󰀀baadf00d:s1󰀁󰀀/baadf00d:s1󰀁.",
+  "rationale": [],
+  "expectedOutcome": "rejected"
+}

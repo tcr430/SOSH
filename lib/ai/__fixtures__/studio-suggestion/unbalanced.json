@@ -1,0 +1,14 @@
+{
+  "description": "Open token with no matching close token.",
+  "nonce": "deadbeef",
+  "originalDraft": "Ship the feature by Friday.",
+  "rawRevision": "Ship the feature 󰀀deadbeef:s1󰀁by Monday.",
+  "rationale": [
+    {
+      "id": "s1",
+      "category": "specificity",
+      "rationale": "Monday is more specific."
+    }
+  ],
+  "expectedOutcome": "rejected"
+}
