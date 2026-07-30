@@ -100,7 +100,22 @@ export async function buildCustomerContext(
       objective: c.objective,
       status: c.status,
     })),
-    recentPostPerformance,
+    // ADR 0019 §8.2 — PerformancePattern (lib/memory/performance.ts) gained a
+    // `provenance` discriminant. MEM-CONTEXT-EQUIVALENT requires this
+    // shape's RUNTIME fields, not just its declared type, to stay
+    // byte-identical: TypeScript's structural typing would silently allow
+    // passing PerformancePattern[] straight through (extra fields on an
+    // assigned variable aren't excess-property-checked), but every
+    // downstream consumer that renders/stringifies this array would then
+    // leak `provenance` into a Mode 2 prompt. Explicitly re-mapped to strip
+    // it — this is the fix, not a workaround; lib/ai/context.test.ts's
+    // literal-shape assertions are what caught the gap.
+    recentPostPerformance: recentPostPerformance.map(p => ({
+      platform: p.platform,
+      topContent: p.topContent,
+      ...(p.likes !== undefined ? { likes: p.likes } : {}),
+      ...(p.impressions !== undefined ? { impressions: p.impressions } : {}),
+    })),
     trialState,
   }
 }

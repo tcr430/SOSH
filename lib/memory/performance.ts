@@ -20,6 +20,17 @@ export type PerformancePattern = {
   // populates them with real counts.
   likes?: number
   impressions?: number
+  // ADR 0019 §8.2 [type-§6a/§6c] — EXPLICIT discriminant, added because the
+  // ACCIDENTAL one ('likes' in p) is unsound: likes/impressions are
+  // omitted-not-zeroed for governed rows today, so `'likes' in p` currently
+  // happens to work as a provenance test, but it is an undeclared invariant
+  // — the next person who "fixes" the optionals by defaulting them to 0
+  // would silently invert it, making every fallback row look citable. Only
+  // 'governed' rows may be offered as a citation (§8.1/§8.2): a
+  // derived_from_metrics row means "one of your posts got a lot of likes,"
+  // and citing it as "your governed memory says X" is a category lie, not a
+  // hallucination.
+  provenance: 'governed' | 'derived_from_metrics'
 }
 
 // ADR 0016 §3.4 SPECIAL CASE — performance_memory ships EMPTY in Track A;
@@ -56,6 +67,7 @@ export async function retrieveRelevant(
     return ranked.map(record => ({
       platform: record.platform,
       topContent: record.pattern,
+      provenance: 'governed' as const,
     }))
   }
 
@@ -76,9 +88,43 @@ export async function retrieveRelevant(
       topContent: postsById[m.post_id].content,
       likes: m.likes ?? 0,
       impressions: m.impressions ?? 0,
+      provenance: 'derived_from_metrics' as const,
     }))
     // Defense-in-depth (L-4): don't rely solely on listTopPostMetrics's
     // limit param honouring PERFORMANCE_CAP — this layer enforces its own
     // output cap regardless of what the DB layer returns.
     .slice(0, PERFORMANCE_CAP)
+}
+
+// ADR 0019 §8.2 — Studio's OWN governed-only retrieval, through the barrel.
+// buildCustomerContext retrieves with an EMPTY MemoryQueryContext
+// (lib/ai/context.ts:58/:40-46) since it is business-scoped, not per-post;
+// Studio wants platform-relevant patterns AND, unlike buildCustomerContext,
+// must NEVER admit a derived_from_metrics row as a citation — offering a
+// fallback row as "your governed memory" would be a category lie, not a
+// hallucination (§8.2). So this function has NO fallback branch at all: if
+// performance_memory ships empty (Track A, ADR 0016 §3.4), it returns [],
+// exactly as §8.2 states the launch reality plainly rather than papering
+// over it with a fallback that would be uncitable anyway.
+//
+// Reads ONLY through listPerformanceMemoryCandidates — the ACTIVE-FILTERED
+// reader (.eq('status','active') at lib/db/memory-performance.ts:20,
+// unexpired at :29) — never through listDistilledPatternsForSummary
+// (:66-83), the deliberately UNFILTERED reader the summarizer uses. Routing
+// Studio through that one would evaporate the "active" half of L-11 with no
+// type-level signal to catch it; this function's implementation is the
+// enforcement.
+export async function retrieveStudioPerformancePatterns(
+  client: SupabaseClient,
+  businessId: string,
+  queryContext: MemoryQueryContext,
+  limit: number = MEMORY_CANDIDATE_LIMIT,
+): Promise<PerformancePattern[]> {
+  const governedCandidates = await listPerformanceMemoryCandidates(client, businessId, limit)
+  const ranked = rankAndCap(governedCandidates, queryContext, PERFORMANCE_CAP)
+  return ranked.map(record => ({
+    platform: record.platform,
+    topContent: record.pattern,
+    provenance: 'governed' as const,
+  }))
 }

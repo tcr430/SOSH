@@ -1,5 +1,7 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest'
-import { retrieveRelevant } from './performance'
+import fs from 'node:fs'
+import path from 'node:path'
+import { retrieveRelevant, retrieveStudioPerformancePatterns } from './performance'
 import * as memoryPerformanceDb from '@/lib/db/memory-performance'
 import * as postMetricsDb from '@/lib/db/post-metrics'
 import * as postsDb from '@/lib/db/posts'
@@ -8,6 +10,7 @@ import { PERFORMANCE_CAP } from './constants'
 
 vi.mock('@/lib/db/memory-performance', () => ({
   listPerformanceMemoryCandidates: vi.fn(),
+  listDistilledPatternsForSummary: vi.fn(),
 }))
 vi.mock('@/lib/db/post-metrics', () => ({
   listTopPostMetrics: vi.fn(),
@@ -102,9 +105,13 @@ describe('retrieveRelevant (performance) — governed rows preferred', () => {
 
     // A governed pattern is a distilled insight, not a specific post — it has
     // no per-post likes/impressions, so those keys are OMITTED, not invented
-    // as 0 (MINOR-2). Only platform + topContent are carried.
+    // as 0 (MINOR-2). Only platform + topContent + provenance are carried.
     expect(result).toEqual([
-      { platform: 'linkedin', topContent: 'technical-comparison posts perform well for CTO audiences' },
+      {
+        platform: 'linkedin',
+        topContent: 'technical-comparison posts perform well for CTO audiences',
+        provenance: 'governed',
+      },
     ])
     expect(result[0]).not.toHaveProperty('likes')
     expect(result[0]).not.toHaveProperty('impressions')
@@ -125,8 +132,8 @@ describe('retrieveRelevant (performance) — governed rows preferred', () => {
     // carries platform: null (the prompt renders it "Across platforms"), never
     // a guessed platform. The higher-confidence null-platform row ranks first.
     expect(result).toEqual([
-      { platform: null, topContent: 'cross-platform pattern' },
-      { platform: 'linkedin', topContent: 'linkedin pattern' },
+      { platform: null, topContent: 'cross-platform pattern', provenance: 'governed' },
+      { platform: 'linkedin', topContent: 'linkedin pattern', provenance: 'governed' },
     ])
   })
 
@@ -155,7 +162,13 @@ describe('retrieveRelevant (performance) — post_metrics fallback (Track A empt
     const result = await retrieveRelevant(client, 'biz-1', {})
 
     expect(result).toEqual([
-      { platform: 'linkedin', topContent: 'Why technical comparisons win CTO trust', likes: 42, impressions: 1200 },
+      {
+        platform: 'linkedin',
+        topContent: 'Why technical comparisons win CTO trust',
+        likes: 42,
+        impressions: 1200,
+        provenance: 'derived_from_metrics',
+      },
     ])
   })
 
@@ -227,5 +240,93 @@ describe('retrieveRelevant (performance) — post_metrics fallback (Track A empt
 
     expect(result).toEqual([])
     expect(postsDb.listPostsByIds).not.toHaveBeenCalled()
+  })
+})
+
+describe('provenance discriminant (ADR 0019 §8.2, [type-§6])', () => {
+  it("the governed branch mints provenance: 'governed'", async () => {
+    vi.mocked(memoryPerformanceDb.listPerformanceMemoryCandidates).mockResolvedValue([makeGovernedRow()])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const client = {} as any
+
+    const result = await retrieveRelevant(client, 'biz-1', {})
+
+    expect(result[0].provenance).toBe('governed')
+  })
+
+  it("the post_metrics fallback branch mints provenance: 'derived_from_metrics'", async () => {
+    vi.mocked(memoryPerformanceDb.listPerformanceMemoryCandidates).mockResolvedValue([])
+    vi.mocked(postMetricsDb.listTopPostMetrics).mockResolvedValue([makeMetricsRow()])
+    vi.mocked(postsDb.listPostsByIds).mockResolvedValue([makePostRow()])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const client = {} as any
+
+    const result = await retrieveRelevant(client, 'biz-1', {})
+
+    expect(result[0].provenance).toBe('derived_from_metrics')
+  })
+})
+
+describe('retrieveStudioPerformancePatterns — governed-only, no fallback (ADR 0019 §8.2)', () => {
+  it('mints only governed rows and passes a real (non-empty) queryContext through to ranking', async () => {
+    vi.mocked(memoryPerformanceDb.listPerformanceMemoryCandidates).mockResolvedValue([
+      makeGovernedRow({ platform: 'linkedin', scope: 'platform', scope_ref: 'linkedin' }),
+      makeGovernedRow({ id: 'pf-2', platform: 'twitter', scope: 'platform', scope_ref: 'twitter', confidence: 0.2 }),
+    ])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const client = {} as any
+
+    const result = await retrieveStudioPerformancePatterns(client, 'biz-1', { platform: 'linkedin' })
+
+    expect(result.every((p) => p.provenance === 'governed')).toBe(true)
+    // The platform-matching row (scopeMatch=1) outranks the non-matching one
+    // (scopeMatch=0) even though it has lower raw confidence — proves the
+    // REAL queryContext (carrying platform) is actually threaded through to
+    // scoring, not discarded.
+    expect(result[0].platform).toBe('linkedin')
+  })
+
+  it('NEVER falls back to post_metrics — performance_memory empty means an empty result, not derived_from_metrics rows', async () => {
+    vi.mocked(memoryPerformanceDb.listPerformanceMemoryCandidates).mockResolvedValue([])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const client = {} as any
+
+    const result = await retrieveStudioPerformancePatterns(client, 'biz-1', { platform: 'linkedin' })
+
+    expect(result).toEqual([])
+    expect(postMetricsDb.listTopPostMetrics).not.toHaveBeenCalled()
+  })
+
+  it("never mints 'derived_from_metrics' even with mixed governed/empty data across calls", async () => {
+    vi.mocked(memoryPerformanceDb.listPerformanceMemoryCandidates).mockResolvedValue([makeGovernedRow()])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const client = {} as any
+
+    const result = await retrieveStudioPerformancePatterns(client, 'biz-1', {})
+
+    expect(result.map((p) => p.provenance)).toEqual(['governed'])
+  })
+
+  it('routes ONLY through listPerformanceMemoryCandidates (the active-filtered reader), never listDistilledPatternsForSummary (the unfiltered summarizer reader)', async () => {
+    vi.mocked(memoryPerformanceDb.listPerformanceMemoryCandidates).mockResolvedValue([makeGovernedRow()])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const client = {} as any
+
+    await retrieveStudioPerformancePatterns(client, 'biz-1', {})
+
+    expect(memoryPerformanceDb.listPerformanceMemoryCandidates).toHaveBeenCalled()
+    expect(memoryPerformanceDb.listDistilledPatternsForSummary).not.toHaveBeenCalled()
+  })
+
+  it('source scan: lib/memory/performance.ts never imports or calls listDistilledPatternsForSummary', () => {
+    // Static, stronger guarantee than the mock-call assertion above — a
+    // future edit that imports/calls the unfiltered reader anywhere in this
+    // file reddens here even if no test happens to exercise that code path.
+    // Matches an import specifier or a call `listDistilledPatternsForSummary(`
+    // — NOT a prose mention in a comment (this file's own comments discuss
+    // it by name as the thing NOT to use, which must not false-positive).
+    const source = fs.readFileSync(path.join(__dirname, 'performance.ts'), 'utf8')
+    expect(source).not.toMatch(/\{\s*[^}]*\blistDistilledPatternsForSummary\b[^}]*\}\s*from/)
+    expect(source).not.toMatch(/listDistilledPatternsForSummary\(/)
   })
 })
