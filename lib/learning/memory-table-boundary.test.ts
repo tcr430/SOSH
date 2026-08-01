@@ -44,6 +44,17 @@ function collectNonTestTsFiles(dir: string): string[] {
 
 describe('LEARN-MEMORY-THROUGH-BOUNDARY / LEARN-VOICE-NOT-AUTO-MUTATED (Tier-2 source scan)', () => {
   it('no file under lib/learning/** or app/api/cron/capture-learning/** queries performance_memory, post_ai_originals, post_edit_signals, or any brand_voice* table directly', () => {
+    // D2.11 [pr-test-analyzer] — the combined length guard below proves the
+    // SCAN as a whole isn't vacuous, but lib/learning/** alone is always
+    // non-empty, so it could never independently prove the lib/studio root
+    // (added for STUDIO-MEMORY-THROUGH-BOUNDARY) actually contributed any
+    // files — a mistyped or moved studio path would silently stop being
+    // scanned while this guard kept passing. Each root is checked on its
+    // own first.
+    for (const root of SCAN_ROOTS) {
+      expect(collectNonTestTsFiles(root).length, `${root} contributed zero files to the scan`).toBeGreaterThan(0)
+    }
+
     const files = SCAN_ROOTS.flatMap((root) => collectNonTestTsFiles(root))
     // Guards the scan itself: if this ever finds zero files, the test would
     // pass vacuously — a false green exactly like the FALSE-GREEN shape

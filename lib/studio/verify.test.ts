@@ -303,14 +303,24 @@ function collectSourceFiles(dir: string, excludeTestFiles: boolean): string[] {
 const VERIFY_TS_PATH = path.join(__dirname, 'verify.ts')
 const VERIFY_TEST_TS_PATH = path.join(__dirname, 'verify.test.ts')
 
-describe('source scan 1 — no cast onto the citation types outside verify.ts', () => {
-  it('no file other than lib/studio/verify.ts contains `as VerifiedMemorySource`, `as RenderedSuggestion`, or `as unknown as` on the citation types', () => {
+describe('source scan 1 — no cast onto the citation/governed types outside verify.ts', () => {
+  it('no file other than lib/studio/verify.ts contains `as VerifiedMemorySource`, `as RenderedSuggestion`, `as GovernedPerformancePattern`, or `as unknown as` on any of the three', () => {
     const files = SOURCE_ROOTS.flatMap((root) => collectSourceFiles(root, false)).filter(
       (f) => f !== VERIFY_TS_PATH && f !== VERIFY_TEST_TS_PATH, // verify.test.ts's @ts-expect-error blocks above deliberately attempt this
     )
     expect(files.length).toBeGreaterThan(0)
 
-    const CAST_PATTERN = /as\s+VerifiedMemorySource|as\s+RenderedSuggestion|as\s+unknown\s+as\s+(VerifiedMemorySource|RenderedSuggestion)/
+    // D2.11 [pr-test-analyzer] — GovernedPerformancePattern added alongside
+    // the two citation-brand types: it's the type whose structural
+    // inadmissibility STUDIO-CITATION-GOVERNED-ONLY rests on (a
+    // derived_from_metrics row cannot be SHAPED as it, §8.2), and a cast
+    // bypassing that compile-time proof deserves the same scan the other
+    // two get, even though retrieveStudioPerformancePatterns's OWN
+    // no-fallback behaviour is independently proved at runtime
+    // (lib/memory/performance.test.ts's "NEVER falls back to post_metrics"
+    // case) — this is defense-in-depth, not the sole guarantee.
+    const CAST_PATTERN =
+      /as\s+VerifiedMemorySource|as\s+RenderedSuggestion|as\s+GovernedPerformancePattern|as\s+unknown\s+as\s+(VerifiedMemorySource|RenderedSuggestion|GovernedPerformancePattern)/
 
     const offenders: string[] = []
     for (const file of files) {
