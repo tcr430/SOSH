@@ -32,6 +32,74 @@ export type Hunk = {
   revisedEnd: number
 }
 
+export type SpanEdit = {
+  originalStart: number
+  originalEnd: number
+  replacement: string
+}
+
+// ADR 0019 §11.1 — the one-accept-per-set mechanism's coordinate mapping. A
+// suggestion's marker span lives in STRIPPED-REVISION coordinates
+// (lib/studio/markers.ts's MarkerSpan); accepting ONE suggestion needs the
+// equivalent ORIGINAL-coordinate range to replace, plus the exact
+// replacement text, derived from the SAME Hunk[] the diff view already
+// renders — no second diff pass, no model-reported offset
+// (STUDIO-NO-MODEL-OFFSETS). Multi-suggestion composition (N accepted spans
+// in one write) is explicitly deferred (§11.1/§15) because accepted spans
+// shift each other's offsets; this function only ever resolves ONE span
+// against the untouched original, which is why Track D never needs that
+// composition rule.
+//
+// Returns null if no hunk touches the span at all (should not happen for a
+// span that has already passed the three-way join's overlap check, but this
+// function makes no assumption about its caller).
+export function resolveSpanEdit(hunks: readonly Hunk[], span: { start: number; end: number }): SpanEdit | null {
+  let originalStart = Infinity
+  let originalEnd = -Infinity
+  let replacement = ''
+  let touched = false
+
+  for (const hunk of hunks) {
+    if (hunk.kind === 'delete') {
+      // Zero-width in revised coordinates — only relevant when it sits
+      // exactly at one of the span's edges (the "replace" shape: a delete
+      // immediately followed or preceded by the insert the marker wraps). A
+      // delete elsewhere in the document never lands exactly on
+      // span.start/span.end and is correctly ignored.
+      if (hunk.revisedStart === span.start || hunk.revisedStart === span.end) {
+        originalStart = Math.min(originalStart, hunk.originalStart)
+        originalEnd = Math.max(originalEnd, hunk.originalEnd)
+        touched = true
+      }
+      continue
+    }
+
+    const overlapStart = Math.max(hunk.revisedStart, span.start)
+    const overlapEnd = Math.min(hunk.revisedEnd, span.end)
+    if (overlapStart >= overlapEnd) continue // no real overlap with this 'equal'/'insert' hunk
+
+    touched = true
+    const withinHunkStart = overlapStart - hunk.revisedStart
+    const withinHunkEnd = overlapEnd - hunk.revisedStart
+    replacement += hunk.value.slice(withinHunkStart, withinHunkEnd)
+
+    if (hunk.kind === 'equal') {
+      // 1:1 correspondence within an equal run — map the overlapping
+      // portion's original offsets directly.
+      originalStart = Math.min(originalStart, hunk.originalStart + withinHunkStart)
+      originalEnd = Math.max(originalEnd, hunk.originalStart + withinHunkEnd)
+    } else {
+      // insert — the whole hunk maps to a single zero-width point in the
+      // original, regardless of how much of it the span covers.
+      originalStart = Math.min(originalStart, hunk.originalStart)
+      originalEnd = Math.max(originalEnd, hunk.originalEnd)
+    }
+  }
+
+  if (!touched) return null
+  return { originalStart, originalEnd, replacement }
+}
+
 export function diffDraft(original: string, revised: string): Hunk[] {
   const changes = diffWordsWithSpace(original, revised)
 

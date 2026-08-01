@@ -16,5 +16,70 @@
       "unavailableLabel": "La creación orientada por señales aún no está disponible — próximamente",
       "badge": "Próximamente"
     }
+  },
+  "editor": {
+    "heading": "Studio",
+    "platformLabel": "Plataforma",
+    "platformPlaceholder": "Elige una plataforma",
+    "contentLabel": "Contenido del borrador",
+    "contentPlaceholder": "Pega o escribe tu borrador aquí…",
+    "suggestButton": "Sugerir mejoras",
+    "regenerateButton": "Generar nuevas sugerencias",
+    "saveButton": "Guardar",
+    "saved": "Guardado",
+    "generating": "Generando sugerencias…",
+    "zeroSuggestions": "Nada que sugerir — este borrador está sólido.",
+    "staleBanner": "Tu borrador cambió desde que se generaron estas sugerencias. Genera nuevas sugerencias para el texto actual.",
+    "acceptedBanner": "Aplicado a tu borrador. Genera nuevas sugerencias para revisar el resto.",
+    "staleAcceptError": "Tu borrador cambió — genera nuevas sugerencias e inténtalo de nuevo.",
+    "suggestDisabled": {
+      "emptyDraft": "Añade contenido antes de pedir sugerencias.",
+      "noPlatform": "Elige una plataforma antes de pedir sugerencias."
+    },
+    "error": {
+      "generic": "Algo salió mal. Tu borrador no ha cambiado.",
+      "invalid_response": "El servicio de sugerencias devolvió algo que no pudimos usar. Tu borrador no ha cambiado.",
+      "response_truncated": "La respuesta era demasiado larga para completarse. Tu borrador no ha cambiado — prueba con un borrador más corto.",
+      "fabricated_citation": "No pudimos verificar suficientes citas en esta respuesta. Tu borrador no ha cambiado.",
+      "missing_platform": "Elige una plataforma antes de pedir sugerencias.",
+      "not_eligible": "Este borrador ya no está disponible.",
+      "invalid_input": "Algo salió mal. Tu borrador no ha cambiado.",
+      "quota_exceeded": "Has alcanzado el límite de sugerencias de IA de tu prueba. Tu borrador no ha cambiado.",
+      "rate_limited": "Demasiadas solicitudes. Espera un momento e inténtalo de nuevo.",
+      "provider_error": "El proveedor de IA devolvió un error. Inténtalo de nuevo. Tu borrador no ha cambiado.",
+      "rate_limit": "Demasiadas solicitudes. Espera un momento e inténtalo de nuevo.",
+      "timeout": "La solicitud de sugerencias caducó. Tu borrador no ha cambiado.",
+      "policy_violation": "El servicio de sugerencias devolvió algo que no pudimos usar. Tu borrador no ha cambiado."
+    },
+    "diff": {
+      "originalLabel": "Actual",
+      "revisedLabel": "Propuesto"
+    },
+    "suggestion": {
+      "accept": "Aceptar",
+      "attributionMemory": "citado por memoria",
+      "attributionModelJudgment": "juicio del modelo",
+      "modelJudgmentBadge": "Juicio del modelo"
+    },
+    "observations": {
+      "heading": "Notas a nivel de borrador",
+      "redundancy": "Repetición",
+      "platformNativeness": "Adecuación a la plataforma"
+    },
+    "category": {
+      "specificity": "Especificidad",
+      "originality": "Originalidad",
+      "evidenceSufficiency": "Evidencia",
+      "audienceRelevance": "Relevancia para la audiencia",
+      "brandVoiceAlignment": "Voz de marca",
+      "openingStrength": "Fuerza de apertura",
+      "ctaFit": "Llamada a la acción",
+      "unsupportedClaimsRisk": "Riesgo de afirmación no sustentada"
+    },
+    "citation": {
+      "avoidWord": "Coincide con tu lista de palabras a evitar: \"{word}\"",
+      "performancePattern": "Coincide con un patrón de rendimiento gobernado (confianza del {confidence}%, observado {count}x)",
+      "evidence": "Respaldado por evidencia fijada"
+    }
   }
 }

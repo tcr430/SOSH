@@ -16,5 +16,70 @@
       "unavailableLabel": "A criação orientada por sinais ainda não está disponível — brevemente",
       "badge": "Brevemente"
     }
+  },
+  "editor": {
+    "heading": "Studio",
+    "platformLabel": "Plataforma",
+    "platformPlaceholder": "Escolhe uma plataforma",
+    "contentLabel": "Conteúdo do rascunho",
+    "contentPlaceholder": "Cola ou escreve o teu rascunho aqui…",
+    "suggestButton": "Sugerir melhorias",
+    "regenerateButton": "Gerar novas sugestões",
+    "saveButton": "Guardar",
+    "saved": "Guardado",
+    "generating": "A gerar sugestões…",
+    "zeroSuggestions": "Nada a sugerir — este rascunho está sólido.",
+    "staleBanner": "O teu rascunho mudou desde que estas sugestões foram geradas. Gera novas sugestões para o texto atual.",
+    "acceptedBanner": "Aplicado ao teu rascunho. Gera novas sugestões para rever as restantes.",
+    "staleAcceptError": "O teu rascunho mudou — gera novas sugestões e tenta novamente.",
+    "suggestDisabled": {
+      "emptyDraft": "Adiciona conteúdo antes de pedir sugestões.",
+      "noPlatform": "Escolhe uma plataforma antes de pedir sugestões."
+    },
+    "error": {
+      "generic": "Algo correu mal. O teu rascunho não foi alterado.",
+      "invalid_response": "O serviço de sugestões devolveu algo que não conseguimos usar. O teu rascunho não foi alterado.",
+      "response_truncated": "A resposta era demasiado longa para ser concluída. O teu rascunho não foi alterado — tenta um rascunho mais curto.",
+      "fabricated_citation": "Não conseguimos verificar citações suficientes nesta resposta. O teu rascunho não foi alterado.",
+      "missing_platform": "Escolhe uma plataforma antes de pedir sugestões.",
+      "not_eligible": "Este rascunho já não está disponível.",
+      "invalid_input": "Algo correu mal. O teu rascunho não foi alterado.",
+      "quota_exceeded": "Atingiste o limite de sugestões de IA do teu período experimental. O teu rascunho não foi alterado.",
+      "rate_limited": "Demasiados pedidos. Aguarda um momento e tenta novamente.",
+      "provider_error": "O fornecedor de IA devolveu um erro. Tenta novamente. O teu rascunho não foi alterado.",
+      "rate_limit": "Demasiados pedidos. Aguarda um momento e tenta novamente.",
+      "timeout": "O pedido de sugestões expirou. O teu rascunho não foi alterado.",
+      "policy_violation": "O serviço de sugestões devolveu algo que não conseguimos usar. O teu rascunho não foi alterado."
+    },
+    "diff": {
+      "originalLabel": "Atual",
+      "revisedLabel": "Proposto"
+    },
+    "suggestion": {
+      "accept": "Aceitar",
+      "attributionMemory": "citado pela memória",
+      "attributionModelJudgment": "avaliação do modelo",
+      "modelJudgmentBadge": "Avaliação do modelo"
+    },
+    "observations": {
+      "heading": "Notas ao nível do rascunho",
+      "redundancy": "Repetição",
+      "platformNativeness": "Adequação à plataforma"
+    },
+    "category": {
+      "specificity": "Especificidade",
+      "originality": "Originalidade",
+      "evidenceSufficiency": "Evidência",
+      "audienceRelevance": "Relevância para o público",
+      "brandVoiceAlignment": "Voz de marca",
+      "openingStrength": "Força de abertura",
+      "ctaFit": "Chamada para ação",
+      "unsupportedClaimsRisk": "Risco de alegação não sustentada"
+    },
+    "citation": {
+      "avoidWord": "Corresponde à tua lista de palavras a evitar: \"{word}\"",
+      "performancePattern": "Corresponde a um padrão de desempenho governado (confiança de {confidence}%, observado {count}x)",
+      "evidence": "Sustentado por evidência fixada"
+    }
   }
 }

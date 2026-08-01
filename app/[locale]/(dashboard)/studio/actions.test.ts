@@ -6,6 +6,8 @@ vi.mock('@/lib/db/studio-drafts', () => ({
   getStudioDraft: vi.fn(),
   persistSuggestions: vi.fn(),
   acceptSuggestion: vi.fn(),
+  createStudioDraft: vi.fn(),
+  saveStudioDraft: vi.fn(),
 }))
 vi.mock('@/lib/ai/context', () => ({ buildCustomerContext: vi.fn() }))
 vi.mock('@/lib/ai/runner', () => ({ runPrompt: vi.fn() }))
@@ -15,16 +17,25 @@ vi.mock('@/lib/memory', () => ({
 }))
 vi.mock('@/lib/ai/wrap-evidence', () => ({ wrapEvidenceForPrompt: vi.fn() }))
 vi.mock('@sentry/nextjs', () => ({ captureException: vi.fn(), captureMessage: vi.fn() }))
+// Partial mock: joinStudioMarkers runs FOR REAL (it's the code under test's
+// dependency we want exercised end-to-end for the hunks/edits assertions
+// below) — only generateNonce is pinned so the test can construct a
+// matching marker-wrapped fixture ahead of time.
+vi.mock('@/lib/studio/markers', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/studio/markers')>()
+  return { ...actual, generateNonce: () => 'aaaaaaaa' }
+})
 
-import { suggestStudioSuggestions, acceptStudioSuggestion } from './actions'
+import { suggestStudioSuggestions, acceptStudioSuggestion, createStudioDraftAction, saveStudioDraftAction } from './actions'
 import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
-import { getStudioDraft, persistSuggestions, acceptSuggestion } from '@/lib/db/studio-drafts'
+import { getStudioDraft, persistSuggestions, acceptSuggestion, createStudioDraft, saveStudioDraft } from '@/lib/db/studio-drafts'
 import { buildCustomerContext } from '@/lib/ai/context'
 import { runPrompt } from '@/lib/ai/runner'
 import { retrieveStudioPerformancePatterns, retrieveEvidenceMemory } from '@/lib/memory'
 import { wrapEvidenceForPrompt } from '@/lib/ai/wrap-evidence'
 import { AiError } from '@/lib/ai/errors'
+import { buildOpenToken, buildCloseToken } from '@/lib/studio/markers'
 
 const BUSINESS_ID = 'biz-1'
 const DRAFT_ID = '11111111-1111-4111-8111-111111111111'
@@ -105,7 +116,62 @@ describe('suggestStudioSuggestions', () => {
     vi.mocked(runPrompt).mockResolvedValue({ revision: draftRow.content, suggestions: [], draftObservations: [] } as never)
     const result = await suggestStudioSuggestions(DRAFT_ID)
     expect(result.success).toBe(true)
-    if (result.success) expect(result.suggestions).toEqual([])
+    if (result.success) {
+      expect(result.suggestions).toEqual([])
+      expect(result.hunks).toEqual([{ kind: 'equal', value: draftRow.content, originalStart: 0, originalEnd: draftRow.content.length, revisedStart: 0, revisedEnd: draftRow.content.length }])
+      expect(result.edits).toEqual({})
+    }
+  })
+
+  it('ADR §11.1: a rendered suggestion gets a resolvable original-coordinate edit reconstructing the revised text', async () => {
+    const open = buildOpenToken('aaaaaaaa', 's1')
+    const close = buildCloseToken('aaaaaaaa', 's1')
+    const revision = `Our onboarding is ${open}instant${close}.`
+    vi.mocked(runPrompt).mockResolvedValue({
+      revision,
+      suggestions: [{ id: 's1', category: 'specificity', rationale: 'more concrete' }],
+      draftObservations: [],
+    } as never)
+
+    const result = await suggestStudioSuggestions(DRAFT_ID)
+    expect(result.success).toBe(true)
+    if (!result.success) return
+
+    expect(result.suggestions).toEqual([{ id: 's1', category: 'specificity', rationale: 'more concrete', attribution: 'model_judgment' }])
+    const edit = result.edits['s1']
+    expect(edit).toBeDefined()
+    const reconstructed = draftRow.content.slice(0, edit.originalStart) + edit.replacement + draftRow.content.slice(edit.originalEnd)
+    expect(reconstructed).toBe('Our onboarding is instant.')
+  })
+})
+
+describe('createStudioDraftAction', () => {
+  it('rejects invalid input before any auth/DB call', async () => {
+    const result = await createStudioDraftAction('hello', 'not-a-platform' as never)
+    expect(result).toEqual({ success: false, error: 'invalid_input' })
+    expect(getBusinessForUser).not.toHaveBeenCalled()
+  })
+
+  it('creates a draft scoped to the caller\'s business and returns its id', async () => {
+    vi.mocked(createStudioDraft).mockResolvedValue({ ...draftRow, id: 'new-draft-id', content: 'hello', platform: null } as never)
+    const result = await createStudioDraftAction('hello', null)
+    expect(result).toEqual({ success: true, draftId: 'new-draft-id' })
+    expect(createStudioDraft).toHaveBeenCalledWith(FAKE_CLIENT, { business_id: BUSINESS_ID, content: 'hello', platform: null })
+  })
+})
+
+describe('saveStudioDraftAction', () => {
+  it('rejects invalid input (bad uuid) before any auth/DB call', async () => {
+    const result = await saveStudioDraftAction('not-a-uuid', 'hello', null)
+    expect(result).toEqual({ success: false, error: 'invalid_input' })
+    expect(saveStudioDraft).not.toHaveBeenCalled()
+  })
+
+  it('saves content and platform, returning the fresh content_hash', async () => {
+    vi.mocked(saveStudioDraft).mockResolvedValue({ ...draftRow, content: 'edited', content_hash: 'hash3' } as never)
+    const result = await saveStudioDraftAction(DRAFT_ID, 'edited', 'linkedin')
+    expect(result).toEqual({ success: true, contentHash: 'hash3' })
+    expect(saveStudioDraft).toHaveBeenCalledWith(FAKE_CLIENT, DRAFT_ID, BUSINESS_ID, 'edited', 'linkedin')
   })
 })
 

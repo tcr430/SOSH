@@ -4,7 +4,7 @@ import { z } from 'zod'
 import * as Sentry from '@sentry/nextjs'
 import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
-import { getStudioDraft, persistSuggestions, acceptSuggestion } from '@/lib/db/studio-drafts'
+import { getStudioDraft, persistSuggestions, acceptSuggestion, createStudioDraft, saveStudioDraft } from '@/lib/db/studio-drafts'
 import { buildCustomerContext } from '@/lib/ai/context'
 import { runPrompt } from '@/lib/ai/runner'
 import { AiError, type AiErrorCode } from '@/lib/ai/errors'
@@ -13,7 +13,11 @@ import { retrieveStudioPerformancePatterns, retrieveEvidenceMemory } from '@/lib
 import { wrapEvidenceForPrompt } from '@/lib/ai/wrap-evidence'
 import { generateNonce, joinStudioMarkers } from '@/lib/studio/markers'
 import { verifyStudioResponse, buildCitableContext, toStudioClientDTO, type StudioSuggestionDTO } from '@/lib/studio/verify'
-import type { Platform } from '@/lib/db/types'
+import { diffDraft, resolveSpanEdit, type Hunk, type SpanEdit } from '@/lib/studio/diff'
+import type { DraftObservation } from '@/lib/ai/prompts/studio-suggestion'
+import type { Platform, StudioDraftRow } from '@/lib/db/types'
+
+const PLATFORM_VALUES = ['linkedin', 'twitter', 'instagram', 'facebook', 'threads'] as const
 
 // ADR 0019 §4/§9/§10 — the two Studio Server Actions. All Anthropic access
 // stays in lib/ai/: this file calls runPrompt, never the SDK. L-13: no
@@ -42,7 +46,26 @@ export type StudioActionErrorCode =
   | AiErrorCode
 
 export type SuggestStudioSuggestionsState =
-  | { success: true; suggestions: readonly StudioSuggestionDTO[]; contentHash: string; suggestionsForHash: string }
+  | {
+      success: true
+      suggestions: readonly StudioSuggestionDTO[]
+      // ADR §7.2/§11.2(9) — redundancy/platformNativeness, whole-draft
+      // properties, never span-tied, never acceptable. Rendered visually
+      // distinct from the suggestion set, not folded into it.
+      draftObservations: readonly DraftObservation[]
+      // ADR §6.1 — the serialized hunk array, computed server-side, zero
+      // bundle cost. Renders as DiffView's left/right panes.
+      hunks: readonly Hunk[]
+      // ADR §11.1 — per-suggestion id -> the ORIGINAL-coordinate edit
+      // (lib/studio/diff.ts's resolveSpanEdit), so the client can compute
+      // "accept THIS ONE suggestion" as a plain string splice against the
+      // current editor content, with no second server round-trip and no
+      // model-reported offset. Only ids that resolved to a real edit are
+      // present — absence means the client must not offer accept for that id.
+      edits: Readonly<Record<string, SpanEdit>>
+      contentHash: string
+      suggestionsForHash: string
+    }
   | { success: false; error: StudioActionErrorCode }
 
 const suggestSchema = z.object({ draftId: z.string().uuid() })
@@ -127,9 +150,28 @@ export async function suggestStudioSuggestions(draftId: string): Promise<Suggest
   const dtoSet = verification.set.map((s) => toStudioClientDTO(s))
   const saved = await persistSuggestions(client, draftId, business.id, draft.content, dtoSet)
 
+  // ADR §11.1 — resolve each rendered suggestion's marker span back to an
+  // original-coordinate edit, from the SAME hunk array the diff view
+  // renders (no second diff pass, no model-reported offset). Built from
+  // joined.suggestions (pre-verification span data), keyed by id, so a
+  // suggestion that got demoted to model_judgment during verification still
+  // gets its edit — attribution and "can this be accepted" are independent.
+  const hunks = diffDraft(draft.content, joined.strippedRevision)
+  const spanById = new Map(joined.suggestions.map((s) => [s.rationale.id, s.span]))
+  const edits: Record<string, SpanEdit> = {}
+  for (const suggestion of dtoSet) {
+    const span = spanById.get(suggestion.id)
+    if (span === undefined) continue
+    const edit = resolveSpanEdit(hunks, span)
+    if (edit !== null) edits[suggestion.id] = edit
+  }
+
   return {
     success: true,
     suggestions: dtoSet,
+    draftObservations: output.draftObservations,
+    hunks,
+    edits,
     contentHash: saved.content_hash,
     suggestionsForHash: saved.suggestions_for_hash as string,
   }
@@ -163,4 +205,66 @@ export async function acceptStudioSuggestion(
   const result = await acceptSuggestion(client, draftId, business.id, acceptedContent, expectedContentHash, expectedSuggestionsHash)
   if (result.outcome === 'stale') return { outcome: 'stale' }
   return { outcome: 'accepted', content: result.draft.content }
+}
+
+// ── ADR §3.5/§10.1 — the two writes that bring a studio_draft row into
+// existence or persist an explicit edit. Neither is the "suggest" implicit
+// save (persistSuggestions, above): these are the user-controlled paths
+// the editor calls directly, never on a keystroke timer (L-8).
+
+export type CreateStudioDraftState =
+  | { success: true; draftId: string }
+  | { success: false; error: StudioActionErrorCode }
+
+const createDraftSchema = z.object({
+  content: z.string(),
+  platform: z.enum(PLATFORM_VALUES).nullable(),
+})
+
+export async function createStudioDraftAction(content: string, platform: Platform | null): Promise<CreateStudioDraftState> {
+  const parsedInput = createDraftSchema.safeParse({ content, platform })
+  if (!parsedInput.success) return { success: false, error: 'invalid_input' }
+
+  const ctx = await getAuthContext()
+  if (!ctx) return { success: false, error: 'generic' }
+  const { client, business } = ctx
+
+  let draft: StudioDraftRow
+  try {
+    draft = await createStudioDraft(client, { business_id: business.id, content: parsedInput.data.content, platform: parsedInput.data.platform })
+  } catch (e) {
+    Sentry.captureException(e, { tags: { studio_action: 'createStudioDraftAction' } })
+    return { success: false, error: 'generic' }
+  }
+
+  return { success: true, draftId: draft.id }
+}
+
+export type SaveStudioDraftState =
+  | { success: true; contentHash: string }
+  | { success: false; error: StudioActionErrorCode }
+
+const saveDraftSchema = z.object({
+  draftId: z.string().uuid(),
+  content: z.string(),
+  platform: z.enum(PLATFORM_VALUES).nullable(),
+})
+
+export async function saveStudioDraftAction(draftId: string, content: string, platform: Platform | null): Promise<SaveStudioDraftState> {
+  const parsedInput = saveDraftSchema.safeParse({ draftId, content, platform })
+  if (!parsedInput.success) return { success: false, error: 'invalid_input' }
+
+  const ctx = await getAuthContext()
+  if (!ctx) return { success: false, error: 'generic' }
+  const { client, business } = ctx
+
+  let draft: StudioDraftRow
+  try {
+    draft = await saveStudioDraft(client, parsedInput.data.draftId, business.id, parsedInput.data.content, parsedInput.data.platform)
+  } catch (e) {
+    Sentry.captureException(e, { tags: { studio_action: 'saveStudioDraftAction' } })
+    return { success: false, error: 'generic' }
+  }
+
+  return { success: true, contentHash: draft.content_hash }
 }

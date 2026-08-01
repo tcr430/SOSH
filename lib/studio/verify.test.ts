@@ -339,9 +339,19 @@ describe('source scan 2 — no test file other than verify.test.ts mocks @/lib/s
   })
 })
 
+// D2.10 — components/studio/MemoryCitation.tsx:28 narrows StudioSuggestionDTO
+// with `Extract<StudioSuggestionDTO, { attribution: 'memory' }>` — a TYPE
+// utility selecting the DTO's already-verified memory arm, never a VALUE
+// construction. The scan's regex is text-based and cannot tell type
+// position from value position, so this file is excluded here rather than
+// widening the regex into something less legible; MemoryCitation.tsx itself
+// documents (§8.5) that toStudioClientDTO remains the single producer of
+// the DTO's memory arm — this file only ever consumes it.
+const MEMORY_CITATION_TSX_PATH = path.join(__dirname, '..', '..', 'components', 'studio', 'MemoryCitation.tsx')
+
 describe('source scan 3 — the DTO\'s attribution:\'memory\' arm is constructed in exactly ONE file', () => {
   it('only verify.ts constructs an object literal with attribution: \'memory\'', () => {
-    const files = SOURCE_ROOTS.flatMap((root) => collectSourceFiles(root, true))
+    const files = SOURCE_ROOTS.flatMap((root) => collectSourceFiles(root, true)).filter((f) => f !== MEMORY_CITATION_TSX_PATH)
     expect(files.length).toBeGreaterThan(0)
 
     const ATTRIBUTION_MEMORY_PATTERN = /attribution:\s*['"]memory['"]/

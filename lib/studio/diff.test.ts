@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { diffDraft, type Hunk } from './diff'
+import { diffDraft, resolveSpanEdit, type Hunk } from './diff'
 
 // ADR 0019 §6.3 — STUDIO-DIFF-DETERMINISTIC: for any (original, revised)
 // pair, diffDraft returns a structurally identical hunk array on every
@@ -110,5 +110,57 @@ describe('diffDraft (ADR 0019 §6, STUDIO-DIFF-DETERMINISTIC)', () => {
       expect(typeof hunk.value).toBe('string')
       expect(hunk).not.toHaveProperty('html')
     }
+  })
+})
+
+// ADR 0019 §11.1 — resolveSpanEdit maps ONE marker span (in stripped-
+// revision coordinates) back to the original-coordinate range to replace,
+// so the client can apply exactly one accepted suggestion without touching
+// any other pending edit in the same response.
+describe('resolveSpanEdit (ADR 0019 §11.1, one-accept-per-set)', () => {
+  function apply(original: string, edit: { originalStart: number; originalEnd: number; replacement: string }): string {
+    return original.slice(0, edit.originalStart) + edit.replacement + original.slice(edit.originalEnd)
+  }
+
+  it('a pure insert (word replaced by a longer phrase): resolves to the insert-only edit', () => {
+    const original = 'Hello world'
+    const revised = 'Hello brave new world'
+    const hunks = diffDraft(original, revised)
+    // The insert hunk alone: revised[6,16) = 'brave new '
+    const edit = resolveSpanEdit(hunks, { start: 6, end: 16 })
+    expect(edit).toEqual({ originalStart: 6, originalEnd: 6, replacement: 'brave new ' })
+    expect(apply(original, edit!)).toBe(revised)
+  })
+
+  it('a replace (delete+insert at the same point): the boundary-adjacent delete is folded in', () => {
+    const original = 'The quick fox jumps'
+    const revised = 'The quick fox leaps'
+    const hunks = diffDraft(original, revised)
+    // Marker wraps only the inserted word 'leaps' at revised[14,19).
+    const edit = resolveSpanEdit(hunks, { start: 14, end: 19 })
+    expect(edit).toEqual({ originalStart: 14, originalEnd: 19, replacement: 'leaps' })
+    expect(apply(original, edit!)).toBe(revised)
+  })
+
+  it('two independent edits in one response: resolving span A never pulls in span B\'s hunks', () => {
+    const original = 'completely different'
+    const revised = 'nothing alike whatsoever'
+    const hunks = diffDraft(original, revised)
+
+    // Span A: the first insert, revised[0,7) = 'nothing'.
+    const editA = resolveSpanEdit(hunks, { start: 0, end: 7 })
+    expect(editA).toEqual({ originalStart: 0, originalEnd: 10, replacement: 'nothing' })
+    expect(apply(original, editA!)).toBe('nothing different')
+
+    // Span B: the second insert, revised[8,24) = 'alike whatsoever'. Its
+    // left-boundary delete sits at revised[8,8), distinct from span A's.
+    const editB = resolveSpanEdit(hunks, { start: 8, end: 24 })
+    expect(editB).toEqual({ originalStart: 11, originalEnd: 20, replacement: 'alike whatsoever' })
+    expect(apply(original, editB!)).toBe('completely alike whatsoever')
+  })
+
+  it('a span outside every hunk\'s range returns null', () => {
+    const hunks = diffDraft('identical text here', 'identical text here')
+    expect(resolveSpanEdit(hunks, { start: 50, end: 55 })).toBeNull()
   })
 })

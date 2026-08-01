@@ -67,6 +67,7 @@ export const StudioSuggestionOutputSchema = z.strictObject({
 
 export type ClaimedMemorySourceWire = z.infer<typeof ClaimedMemorySourceSchema>
 export type StudioSuggestionOutput = z.infer<typeof StudioSuggestionOutputSchema>
+export type DraftObservation = z.infer<typeof DraftObservationSchema>
 
 const CATEGORY_DESCRIPTIONS = `- specificity: concrete detail vs. generic filler
 - originality: a genuine angle vs. a template-shaped take
