@@ -150,5 +150,15 @@ also structurally forbids the adjacent memory-table shortcut this same disciplin
 
 ## 7. CI execution
 
-Pending push — see the D2.11 commit message for the recorded `app-tests`/`db-tests` run URLs and the
-`db-tests` executed count (skip-guard).
+Range pushed to `origin/session-22-d`, PR #5 (`session-22-d` → `master`): https://github.com/tcr430/SOSH/pull/5
+
+- **app-tests**: https://github.com/tcr430/SOSH/actions/runs/30703167528 — `success`.
+- **db-tests**: https://github.com/tcr430/SOSH/actions/runs/30703167529 — `success`. Skip-guard log:
+  `skip-guard: 23 file(s) under [supabase/__tests__] all visible, zero failures — green.` — a non-zero
+  executed count, per ADR 0015's own precedent phrasing (D8's commit message used the same file-count
+  form). This is a `pull_request`-event run, so per ADR 0015 §5 it does **not** count toward the
+  three-consecutive-full-green-on-`master` promotion tally (unchanged at 0 of 3 as of Session 25-D's D8).
+
+Both jobs green on the exact range this document describes (`de425283..a4b632a1` plus this doc's own
+commit). `test:db` is therefore confirmed executed and green in CI, closing the gap noted in §1 (Docker
+was unreachable for a local run in this sandboxed session).
