@@ -42,6 +42,7 @@
       "response_truncated": "The response was too long to complete. Your draft is unchanged — try a shorter draft.",
       "fabricated_citation": "We couldn't verify enough of the citations in this response. Your draft is unchanged.",
       "draft_too_long": "This draft is too long for Studio suggestions. Shorten it and try again.",
+      "draft_superseded": "Your draft changed while these suggestions were being generated. They've been discarded — your latest edits are kept.",
       "missing_platform": "Choose a platform before requesting suggestions.",
       "not_eligible": "This draft is no longer available.",
       "invalid_input": "Something went wrong. Your draft is unchanged.",

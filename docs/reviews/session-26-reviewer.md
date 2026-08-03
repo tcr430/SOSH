@@ -685,3 +685,83 @@ lib/i18n "app/[locale]/(dashboard)/studio"` — 18/18 test files, 262/262 tests 
 rejected both losing options — a silent slice with corrected coordinates, and a bare refusal without
 raising the budget — and required both halves together. Both halves shipped in this single D1 commit;
 neither was shipped alone at any point in this pass.
+
+### D2 — MAJOR-1 (persistSuggestions content_hash guard) + NIT-4 (handleSave early-return)
+
+**Finding → fix → proof → files.**
+
+**MAJOR-1** (`lib/db/studio-drafts.ts:139-156`'s `persistSuggestions` issued a blind conditional UPDATE —
+`id`/`business_id`/`deleted_at IS NULL` only, no `content_hash` precondition — on the very column
+`acceptSuggestion` guards with TWO `.eq()`s) is fixed by adding a required `expectedContentHash` parameter
+to `persistSuggestions` and applying `.eq('content_hash', expectedContentHash)` on the SAME atomic
+conditional UPDATE statement, mirroring `acceptSuggestion`'s pattern exactly. The return type changed from
+`Promise<StudioDraftRow>` to a new discriminated union, `PersistSuggestionsResult = { outcome: 'saved';
+draft: StudioDraftRow } | { outcome: 'superseded' }` — mirroring `AcceptSuggestionResult`'s `'stale'` arm —
+so a zero-row match is a typed result, never a throw, never a silent no-op, and no caller can accidentally
+treat `superseded` as success (TypeScript forbids reaching `.draft` without first narrowing on
+`outcome === 'saved'`).
+
+**Reachability, carried forward exactly as the Reviewer corrected it (not the agent's original,
+single-tab framing):** this is NOT a same-tab race — `StudioEditor.tsx` disables the Textarea and Save
+button for the duration of any `pendingAction`, so one tab cannot type or save during an in-flight
+suggest. It IS reachable across **two tabs or two devices** on the same draft: Server Actions are plain
+HTTP endpoints, and a second session's `pendingAction` state is entirely independent of the first's. Tab A
+clicks suggest (reads `draft.content` and `draft.content_hash` at time T); tab B saves a newer version
+while A's model round-trip is still in flight; A's response lands and, pre-fix, would write the STALE
+content it read at T back over tab B's edit, stamping a fresh `content_hash` over it — tab B's edit gone
+with no signal in either tab, and a subsequent accept in tab A would then succeed against the stale value.
+Post-fix, A's `persistSuggestions` call is guarded by the `content_hash` read at T; tab B's intervening
+save changes the row's `content_hash`, so A's write matches zero rows and returns `superseded` instead of
+overwriting anything.
+
+`app/[locale]/(dashboard)/studio/actions.ts`'s `suggestStudioSuggestions` reads `draft.content_hash` once,
+at the same moment it reads `draft.content` (before `guardStudioField`, before the model round trip), and
+passes that single hash to BOTH `persistSuggestions` call sites — the fabricated-citation rejection arm
+and the success arm — since both are two possible outcomes of the same generation attempt against the
+same starting snapshot (`database-reviewer` confirmed this is correct, not an oversight requiring two
+different hashes). A `superseded` outcome at either call site maps to a new `draft_superseded` action
+error code, i18n'd in `editor.error.draft_superseded` (en/pt/es simultaneously, added to
+`lib/i18n/studio.test.ts`'s `REQUIRED_KEYS`), stating that the draft changed and the generated suggestions
+were discarded in favor of the user's newer text — no internal detail leaked.
+
+**NIT-4** (`StudioEditor.tsx`'s `handleSave` lacked the `if (pendingAction !== null) return` early-return
+that `handleSuggest`/`handleAccept` already had — client-side-only `disabled` attribute was the sole
+guard) is fixed with the identical one-line early-return, shipped in the same commit as MAJOR-1.
+
+**Tier-1 proof (non-vacuous, per `database-reviewer`'s independent check):** a new test in
+`supabase/__tests__/studio-drafts.test.ts` creates a draft (`v1`), captures its `content_hash`, calls
+`saveStudioDraft` to move the row to `v2` (simulating tab B's concurrent save), then calls
+`persistSuggestions(..., staleHash)` and asserts `outcome === 'superseded'` AND that the DB row's content
+is still `v2`. If the `.eq('content_hash', ...)` guard were removed, the UPDATE would match unconditionally
+on `id`/`business_id`/`deleted_at` alone, return `'saved'`, and the `outcome` assertion would fail — the
+test reddens on regression rather than passing vacuously. The six pre-existing `persistSuggestions` call
+sites in the same file were updated to the new signature/return shape via a new `unwrapSaved()` helper,
+and the two pre-existing `STUDIO-STALE-SUGGESTION-GUARDED` races ((a) content-changed, (b)
+regenerate-superseded) were confirmed unperturbed — this step only added a guard to `persistSuggestions`
+and never touched `acceptSuggestion`'s own guard.
+
+**Docker/local Postgres unreachable in this sandboxed session** (`npx supabase status` fails to reach the
+Docker daemon; `npm run test:db` fails all 23 files at config/env-var load with no local Supabase instance
+to source connection details from) — identical gap to Session 26's D2.11
+(`docs/build-guide/session-26-d2.11-verification.md §1`). The new Tier-1 test is therefore
+`AUTHORED-NOT-EXECUTED` in this session per ADR 0015 §2's own definition; `database-reviewer` reviewed its
+query shapes and non-vacuity by inspection and confirmed it would redden correctly, but authoritative
+execution is deferred to the `db-tests` CI job, consistent with this codebase's established posture for
+this exact gap.
+
+**`database-reviewer` pass (invoked once, per the D2 plan):** confirmed the guard composition is a single
+atomic conditional UPDATE (no read-then-update), confirmed the discriminated union cannot be
+misused by either caller, confirmed the single pre-round-trip hash is correct for both call sites,
+confirmed the new Tier-1 test is non-vacuous, and confirmed no RLS/index/tenancy-column interaction — the
+guard tightens the existing WHERE clause on an already primary-key-scoped statement and does not touch the
+`(business_id, updated_at DESC, id) WHERE deleted_at IS NULL` partial index `listStudioDrafts` uses. No new
+issues raised.
+
+**Verification:** `npx tsc --noEmit --skipLibCheck` clean. `npx vitest run lib/studio lib/db lib/i18n
+"app/[locale]/(dashboard)/studio" components/studio` — 37/37 test files, 573/573 tests green. `npm run
+test:db` attempted and confirmed unreachable (Docker), noted above rather than silently skipped.
+
+**Files touched:** `lib/db/studio-drafts.ts`, `supabase/__tests__/studio-drafts.test.ts`,
+`app/[locale]/(dashboard)/studio/actions.ts`, `app/[locale]/(dashboard)/studio/actions.test.ts`,
+`components/studio/StudioEditor.tsx`, `i18n/en/studio.json`, `i18n/pt/studio.json`,
+`i18n/es/studio.json`, `lib/i18n/studio.test.ts`.

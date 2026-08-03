@@ -48,6 +48,7 @@ const REQUIRED_KEYS = [
   'editor.error.response_truncated',
   'editor.error.fabricated_citation',
   'editor.error.draft_too_long',
+  'editor.error.draft_superseded',
   'editor.error.missing_platform',
   'editor.error.not_eligible',
   'editor.error.invalid_input',

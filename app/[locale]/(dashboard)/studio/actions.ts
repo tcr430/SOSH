@@ -50,6 +50,13 @@ export type StudioActionErrorCode =
   // destruction). Distinct from response_truncated, which is the
   // OUTPUT-side truncation code.
   | 'draft_too_long'
+  // MAJOR-1 (Session 26-D correction) — persistSuggestions's content_hash
+  // guard (mirroring acceptSuggestion's) returned 'superseded': another
+  // write landed on this draft (a different tab/device) between the initial
+  // content read and this call. The generated suggestions describe text
+  // that is no longer current and are discarded; the user's newer text is
+  // kept untouched.
+  | 'draft_superseded'
   | AiErrorCode
 
 export type SuggestStudioSuggestionsState =
@@ -166,13 +173,18 @@ export async function suggestStudioSuggestions(draftId: string): Promise<Suggest
     // §10.1's implicit save still applies — the draft the model actually
     // saw is persisted even though nothing renders from this call. Persist
     // guardedDraft, not raw draft.content: content_hash must describe the
-    // exact bytes the hunks/edits coordinates below correspond to.
-    await persistSuggestions(client, draftId, business.id, guardedDraft, [])
+    // exact bytes the hunks/edits coordinates below correspond to. Guarded
+    // by draft.content_hash (MAJOR-1) — the hash read alongside
+    // draft.content above, before the model round trip.
+    const persistedRejected = await persistSuggestions(client, draftId, business.id, guardedDraft, [], draft.content_hash)
+    if (persistedRejected.outcome === 'superseded') return { success: false, error: 'draft_superseded' }
     return { success: false, error: 'fabricated_citation' }
   }
 
   const dtoSet = verification.set.map((s) => toStudioClientDTO(s))
-  const saved = await persistSuggestions(client, draftId, business.id, guardedDraft, dtoSet)
+  const persisted = await persistSuggestions(client, draftId, business.id, guardedDraft, dtoSet, draft.content_hash)
+  if (persisted.outcome === 'superseded') return { success: false, error: 'draft_superseded' }
+  const saved = persisted.draft
 
   // ADR §11.1 — resolve each rendered suggestion's marker span back to an
   // original-coordinate edit, from the SAME hunk array the diff view

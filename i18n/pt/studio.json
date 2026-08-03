@@ -42,6 +42,7 @@
       "response_truncated": "A resposta era demasiado longa para ser concluída. O teu rascunho não foi alterado — tenta um rascunho mais curto.",
       "fabricated_citation": "Não conseguimos verificar citações suficientes nesta resposta. O teu rascunho não foi alterado.",
       "draft_too_long": "Este rascunho é demasiado longo para sugestões do Studio. Torna-o mais curto e tenta novamente.",
+      "draft_superseded": "O teu rascunho mudou enquanto estas sugestões estavam a ser geradas. Foram descartadas — as tuas edições mais recentes foram mantidas.",
       "missing_platform": "Escolhe uma plataforma antes de pedir sugestões.",
       "not_eligible": "Este rascunho já não está disponível.",
       "invalid_input": "Algo correu mal. O teu rascunho não foi alterado.",

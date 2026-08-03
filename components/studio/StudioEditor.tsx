@@ -84,6 +84,10 @@ export function StudioEditor({ locale, draftId: initialDraftId, initialContent, 
   }
 
   function handleSave() {
+    // NIT-4 (Session 26-D correction) — defence-in-depth: the disabled
+    // attribute (below) is client-side only. Mirrors handleSuggest/
+    // handleAccept's existing guard.
+    if (pendingAction !== null) return
     setErrorCode(null)
     setPendingAction('save')
     startTransition(async () => {

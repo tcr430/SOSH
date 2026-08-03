@@ -6,7 +6,19 @@ import {
   acceptSuggestion,
   listStudioDrafts,
   softDeleteStudioDraft,
+  saveStudioDraft,
+  type PersistSuggestionsResult,
 } from '@/lib/db/studio-drafts'
+import type { StudioDraftRow } from '@/lib/db/types'
+
+// MAJOR-1 (Session 26-D correction) — persistSuggestions now returns a
+// discriminated union (mirroring acceptSuggestion's). Test call sites that
+// use the returned row unwrap through this helper rather than each
+// re-deriving the same "expected saved, got X" check.
+function unwrapSaved(result: PersistSuggestionsResult): StudioDraftRow {
+  if (result.outcome !== 'saved') throw new Error(`expected persistSuggestions to save, got outcome: ${result.outcome}`)
+  return result.draft
+}
 
 // ADR 0019 §2.2 / §12 — STUDIO-RLS-ISOLATED, STUDIO-CASCADE-COMPLETE (Tier-1,
 // live Postgres). Cross-tenant SELECT/INSERT/UPDATE/DELETE must be denied
@@ -348,9 +360,16 @@ describe('studio_drafts — accept/suggest guards and learning-reuse boundary (A
     const client = await signIn(ownerEmail)
 
     const draft = await createStudioDraft(client, { business_id: businessId, content: 'v1' })
-    const afterSuggest = await persistSuggestions(client, draft.id, businessId, 'v1', [
-      { kind: 'model_judgment', text: 'tighten the opener' },
-    ])
+    const afterSuggest = unwrapSaved(
+      await persistSuggestions(
+        client,
+        draft.id,
+        businessId,
+        'v1',
+        [{ kind: 'model_judgment', text: 'tighten the opener' }],
+        draft.content_hash,
+      ),
+    )
     const expectedContentHash = afterSuggest.content_hash
     const expectedSuggestionsHash = afterSuggest.suggestions_for_hash as string
 
@@ -379,18 +398,62 @@ describe('studio_drafts — accept/suggest guards and learning-reuse boundary (A
     expect(unchanged.content).toBe('v2 — edited after suggest')
   })
 
+  it('MAJOR-1 (Session 26-D correction): persistSuggestions is guarded by content_hash — a concurrent save between the suggest call\'s content read and its write is NOT silently reverted', async () => {
+    const client = await signIn(ownerEmail)
+
+    const draft = await createStudioDraft(client, { business_id: businessId, content: 'v1' })
+    const staleHash = draft.content_hash // what a suggest call would have read before its model round trip
+
+    // Simulates a second tab/device saving a newer version WHILE the first
+    // tab's suggest call is still in flight (model round trip already spent).
+    await saveStudioDraft(client, draft.id, businessId, 'v2 — saved by another tab', undefined)
+
+    const result = await persistSuggestions(
+      client,
+      draft.id,
+      businessId,
+      'v1 — STALE, must not overwrite v2',
+      [{ kind: 'model_judgment', text: 'generated against the stale v1 read' }],
+      staleHash,
+    )
+    expect(result.outcome).toBe('superseded')
+
+    const { data: unchanged } = await admin
+      .from('studio_drafts')
+      .select('content')
+      .eq('id', draft.id)
+      .single()
+    expect(unchanged.content).toBe('v2 — saved by another tab')
+  })
+
   it('STUDIO-STALE-SUGGESTION-GUARDED (b): accept fails when the suggestion set was superseded by a regenerate, content unchanged', async () => {
     const client = await signIn(ownerEmail)
 
     const draft = await createStudioDraft(client, { business_id: businessId, content: 'same content throughout' })
-    const firstSuggest = await persistSuggestions(client, draft.id, businessId, 'same content throughout', [
-      { kind: 'model_judgment', text: 'first pass suggestion' },
-    ])
+    const firstSuggest = unwrapSaved(
+      await persistSuggestions(
+        client,
+        draft.id,
+        businessId,
+        'same content throughout',
+        [{ kind: 'model_judgment', text: 'first pass suggestion' }],
+        draft.content_hash,
+      ),
+    )
     // Regenerate — content is identical, but the returned set differs, so
     // content_hash stays the same while suggestions_for_hash must change.
-    const secondSuggest = await persistSuggestions(client, draft.id, businessId, 'same content throughout', [
-      { kind: 'model_judgment', text: 'second pass, different suggestion' },
-    ])
+    // Guarded on the SAME draft.content_hash as the first call: content
+    // never moved between the two persistSuggestions calls.
+    const secondSuggest = unwrapSaved(
+      await persistSuggestions(
+        client,
+        draft.id,
+        businessId,
+        'same content throughout',
+        [{ kind: 'model_judgment', text: 'second pass, different suggestion' }],
+        draft.content_hash,
+      ),
+    )
     expect(secondSuggest.content_hash).toBe(firstSuggest.content_hash)
     expect(secondSuggest.suggestions_for_hash).not.toBe(firstSuggest.suggestions_for_hash)
 
@@ -418,9 +481,16 @@ describe('studio_drafts — accept/suggest guards and learning-reuse boundary (A
     const client = await signIn(ownerEmail)
 
     const draft = await createStudioDraft(client, { business_id: businessId, content: 'clean case content' })
-    const suggested = await persistSuggestions(client, draft.id, businessId, 'clean case content', [
-      { kind: 'model_judgment', text: 'a real suggestion' },
-    ])
+    const suggested = unwrapSaved(
+      await persistSuggestions(
+        client,
+        draft.id,
+        businessId,
+        'clean case content',
+        [{ kind: 'model_judgment', text: 'a real suggestion' }],
+        draft.content_hash,
+      ),
+    )
 
     const result = await acceptSuggestion(
       client,
@@ -442,9 +512,16 @@ describe('studio_drafts — accept/suggest guards and learning-reuse boundary (A
     const client = await signIn(ownerEmail)
 
     const draft = await createStudioDraft(client, { business_id: businessId, content: 'to be soft-deleted' })
-    const suggested = await persistSuggestions(client, draft.id, businessId, 'to be soft-deleted', [
-      { kind: 'model_judgment', text: 'irrelevant, draft will be deleted' },
-    ])
+    const suggested = unwrapSaved(
+      await persistSuggestions(
+        client,
+        draft.id,
+        businessId,
+        'to be soft-deleted',
+        [{ kind: 'model_judgment', text: 'irrelevant, draft will be deleted' }],
+        draft.content_hash,
+      ),
+    )
 
     await softDeleteStudioDraft(client, draft.id, businessId)
 
@@ -466,9 +543,16 @@ describe('studio_drafts — accept/suggest guards and learning-reuse boundary (A
     const client = await signIn(ownerEmail)
 
     const draft = await createStudioDraft(client, { business_id: businessId, content: 'learning boundary content' })
-    const suggested = await persistSuggestions(client, draft.id, businessId, 'learning boundary content', [
-      { kind: 'model_judgment', text: 'a suggestion' },
-    ])
+    const suggested = unwrapSaved(
+      await persistSuggestions(
+        client,
+        draft.id,
+        businessId,
+        'learning boundary content',
+        [{ kind: 'model_judgment', text: 'a suggestion' }],
+        draft.content_hash,
+      ),
+    )
     const result = await acceptSuggestion(
       client,
       draft.id,

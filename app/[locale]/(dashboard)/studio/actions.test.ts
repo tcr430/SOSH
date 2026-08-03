@@ -81,7 +81,12 @@ beforeEach(() => {
   vi.mocked(retrieveStudioPerformancePatterns).mockResolvedValue([])
   vi.mocked(retrieveEvidenceMemory).mockResolvedValue([])
   vi.mocked(wrapEvidenceForPrompt).mockResolvedValue('' as never)
-  vi.mocked(persistSuggestions).mockResolvedValue({ ...draftRow, content_hash: 'hash2', suggestions_for_hash: 'sighash1' } as never)
+  // MAJOR-1 (Session 26-D correction) — persistSuggestions now returns a
+  // discriminated union; default mock resolves the 'saved' arm.
+  vi.mocked(persistSuggestions).mockResolvedValue({
+    outcome: 'saved',
+    draft: { ...draftRow, content_hash: 'hash2', suggestions_for_hash: 'sighash1' },
+  } as never)
 })
 
 describe('suggestStudioSuggestions', () => {
@@ -112,10 +117,17 @@ describe('suggestStudioSuggestions', () => {
     expect(runPrompt).toHaveBeenCalledTimes(1)
   })
 
-  it('persists the exact text sent (§10.1 implicit save), even when zero suggestions render', async () => {
+  it('persists the exact text sent (§10.1 implicit save), even when zero suggestions render, guarded by the pre-call content_hash (MAJOR-1)', async () => {
     vi.mocked(runPrompt).mockResolvedValue({ revision: draftRow.content, suggestions: [], draftObservations: [] } as never)
     await suggestStudioSuggestions(DRAFT_ID)
-    expect(persistSuggestions).toHaveBeenCalledWith(FAKE_CLIENT, DRAFT_ID, BUSINESS_ID, draftRow.content, [])
+    expect(persistSuggestions).toHaveBeenCalledWith(FAKE_CLIENT, DRAFT_ID, BUSINESS_ID, draftRow.content, [], draftRow.content_hash)
+  })
+
+  it('MAJOR-1: a superseded persist (concurrent save from another tab/device) is mapped to draft_superseded, not silently accepted as success', async () => {
+    vi.mocked(runPrompt).mockResolvedValue({ revision: draftRow.content, suggestions: [], draftObservations: [] } as never)
+    vi.mocked(persistSuggestions).mockResolvedValue({ outcome: 'superseded' } as never)
+    const result = await suggestStudioSuggestions(DRAFT_ID)
+    expect(result).toEqual({ success: false, error: 'draft_superseded' })
   })
 
   it('AiError.message is NEVER returned to the client — only .code', async () => {

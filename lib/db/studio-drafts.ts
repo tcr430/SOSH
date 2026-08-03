@@ -120,17 +120,34 @@ function hashSuggestions(suggestions: readonly unknown[]): string {
   return createHash('sha256').update(JSON.stringify(suggestions)).digest('hex')
 }
 
+export type PersistSuggestionsResult =
+  | { outcome: 'saved'; draft: StudioDraftRow }
+  // MAJOR-1 (Session 26-D correction) — mirrors AcceptSuggestionResult's
+  // 'stale' arm: zero matched rows means another write landed between the
+  // caller's content read and this call (reachable across two tabs/devices
+  // on the same draft — a full model round-trip runs in between). A typed
+  // result, never a throw, never a silent no-op.
+  | { outcome: 'superseded' }
+
 // ADR §10.1's implicit save at suggest time: persists the EXACT content that
 // was sent to the model (so content_hash reflects precisely what the
 // suggestions were generated against) together with the suggestion set and
 // its version fingerprint, in one statement.
+//
+// MAJOR-1 — ONE atomic conditional UPDATE, guarded by content_hash, mirroring
+// acceptSuggestion's guard below. Without it this was a blind last-write-wins
+// on the very column acceptSuggestion guards with two .eq()s: a concurrent
+// save from another tab/device between the caller's content read and this
+// call would be silently overwritten with the stale content this call was
+// about to persist.
 export async function persistSuggestions(
   client: SupabaseClient,
   id: string,
   businessId: string,
   content: string,
   suggestions: readonly unknown[],
-): Promise<StudioDraftRow> {
+  expectedContentHash: string,
+): Promise<PersistSuggestionsResult> {
   const suggestionsForHash = hashSuggestions(suggestions)
   const { data, error } = await client
     .from('studio_drafts')
@@ -138,10 +155,12 @@ export async function persistSuggestions(
     .eq('id', id)
     .eq('business_id', businessId)
     .is('deleted_at', null)
+    .eq('content_hash', expectedContentHash)
     .select()
-    .single()
   if (error) throw new Error(getErrorMessage(error))
-  return data as StudioDraftRow
+  const rows = (data as StudioDraftRow[] | null) ?? []
+  if (rows.length === 0) return { outcome: 'superseded' }
+  return { outcome: 'saved', draft: rows[0] }
 }
 
 // ADR §10.2 — ONE atomic conditional UPDATE, never read-then-update. BOTH
