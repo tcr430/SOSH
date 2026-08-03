@@ -911,3 +911,74 @@ appended amendment (§15 item 14, §16.2) — no original section text was rewri
 
 **Files touched:** `app/[locale]/(dashboard)/studio/actions.ts`, `lib/studio/verify.ts`,
 `docs/decisions/0019-mode-1-studio.md` (§15 item 14, §16.2 appended).
+
+### D5 — NIT-3 (deferred) + H3 (skip-guard test-count observability)
+
+**H3 — fixed.** `scripts/ci/assert-no-empty-suite.mjs`'s final `console.log` printed only a **file** count
+(`"skip-guard: N file(s) under [...] all visible, zero failures — green."`), forcing every reviewer who
+wanted an executed-*test* count to independently read this script and cross-check `git ls-tree` — the
+Reviewer had to do exactly that to establish the D2.11 range's Tier-1 coverage. **Fixed:** the script now
+also reads `numTotalTests`/`numPassedTests` from the same vitest JSON reporter output already being parsed
+(falling back to summing `assertionResults` across the matched `suiteFiles` if those top-level fields are
+absent) and appends `(P/T tests passed)` to the existing green-line output. **What did NOT change:** both
+enforced invariants — (i) invisibility (zero/all-skipped assertions per file, or a whole target directory
+matching zero files) and (ii) failure (`numFailedTests > 0` or any `status: 'failed'` assertion) — are
+computed by the exact same code as before this step; the new lines only add a `console.log` field, no new
+`process.exit` path and no threshold relaxed.
+
+**Redden proof (required verification, done without touching the script a second time):** rather than
+temporarily breaking the script and reverting, the guard's existing behavior was exercised against two
+synthetic `vitest --reporter=json`-shaped fixtures fed directly to `node
+scripts/ci/assert-no-empty-suite.mjs <fixture>`:
+- An all-skipped single-file fixture (`numTotalTests: 3`, all three `assertionResults` status `'skipped'`)
+  → `::error::skip-guard: ...fake-empty.test.ts — every test is skipped (invisible — not covered)`,
+  **exit 1**. The guard still reddens on an empty/skipped suite exactly as before this step.
+- An all-passing single-file fixture (`numTotalTests: 5`, `numPassedTests: 5`) →
+  `skip-guard: 1 file(s) under [supabase/__tests__] all visible, zero failures — green. (5/5 tests
+  passed)`, **exit 0** — confirms the new count renders correctly on the green path. Both temporary JSON
+  fixtures were deleted after the check; no fixture or EXPLAIN-assertion was added to the Tier-1 suite
+  itself, per the D5 instruction not to.
+
+**One correction to the D2.11 commit record**, in the same form as Session 25-D's correction to the C2.9
+report (`docs/reviews/session-25-reviewer.md`, "One correction to the C2.9 report"): commit `71464442`'s
+subject reads *"D2.11 CI results — test:db green in CI with **N=23 executed** (skip-guard), closing the
+local-Docker gap"*. `docs/build-guide/session-26-d2.11-verification.md:157` shows the actual skip-guard
+line it was quoting: `` `skip-guard: 23 file(s) under [supabase/__tests__] all visible, zero failures —
+green.` `` — **23 is a FILE count**, not a test count; `test:db` runs with `--reporter=json --outputFile`,
+which suppresses vitest's human test-count summary, and the pre-H3 skip-guard never printed one either.
+History is not rewritten: the commit subject stands as written. This note is the correction, recorded here
+per REVIEWER-REPORT APPEND-ONLY's convention for correcting a prior claim without erasing it. Per-file
+non-zero coverage (the property the skip-guard actually proves) is unaffected by this correction — only
+the specific integer's meaning is.
+
+**NIT-3 — deferred, not fabricated.** Docker/local Postgres remains unreachable in this sandboxed session
+(re-confirmed via `npx supabase start`: *"Docker Desktop is a prerequisite for local development"* — the
+same gap as D2.11/D2/D3/D4, now confirmed a fifth time). The founder was asked directly whether to wait for
+Docker to become available or defer; the founder chose to defer rather than continue polling an environment
+limitation neither party could resolve from this shell. **NIT-3 is therefore not executed in this
+session — no EXPLAIN plan is recorded, and none is fabricated.** Exact repro steps for a future session
+with real Docker access:
+
+1. `npx supabase start` (must succeed — confirms Docker is reachable).
+2. Seed a few hundred `studio_drafts` rows across ≥2 `business_id`s, with a meaningful fraction
+   `deleted_at IS NOT NULL`, via the service-role admin client (mirroring
+   `supabase/__tests__/studio-drafts.test.ts`'s existing seeding pattern) — enough rows that the planner
+   prefers an index scan over a sequential scan on a fresh local instance.
+3. Run `EXPLAIN (ANALYZE, BUFFERS)` on the **exact** statement `listStudioDrafts` emits
+   (`lib/db/studio-drafts.ts:28-42`): `SELECT * FROM studio_drafts WHERE business_id = $1 AND deleted_at IS
+   NULL ORDER BY updated_at DESC, id ASC LIMIT $2` (Supabase's PostgREST layer or a raw `psql` session
+   against the local DB URL from `supabase status -o env`).
+4. Record the plan node verbatim (not paraphrased) in a future correction pass's appendix. If the planner
+   does **not** choose `studio_drafts_business_id_updated_at_idx`, report that as a finding rather than
+   tuning the seed data to force it.
+5. Do not add this seeding or an EXPLAIN assertion to the Tier-1 suite — this remains a manual,
+   one-time check, per the original instruction (a plan-shape assertion is brittle across Postgres
+   versions).
+
+**Verification:** `npx tsc --noEmit --skipLibCheck` clean (the skip-guard script is a standalone `.mjs`,
+not part of the TypeScript build, but the repo-wide check was re-run for completeness). `npm run test:db`
+re-attempted and confirmed still Docker-unreachable — unchanged from D2/D3/D4's identical finding, not
+re-litigated here beyond confirming it a fifth time. No app-layer files were touched in this step, so
+`npm run test:app`/the scoped Tier-2 suite were not re-run (nothing in their dependency graph changed).
+
+**Files touched:** `scripts/ci/assert-no-empty-suite.mjs`.

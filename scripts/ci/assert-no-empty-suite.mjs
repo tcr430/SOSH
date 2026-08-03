@@ -109,4 +109,18 @@ if (failed) {
   process.exit(1)
 }
 
-console.log(`skip-guard: ${suiteFiles.length} file(s) under [${SUITE_DIRS.join(', ')}] all visible, zero failures — green.`)
+// H3 (Session 26-D correction) — the skip-guard's file count alone forced
+// every reviewer to independently read this script plus cross-check
+// `git ls-tree` to establish an executed-assertion count (the D2.11 report
+// did exactly this, then still wrote "N=23 executed" — a FILE count, not a
+// test count — in its own commit subject, see the D5 appendix). Echoing the
+// JSON reporter's own numTotalTests/numPassedTests alongside the existing
+// file count lets a reviewer cite a number directly instead of
+// reconstructing the argument. This does NOT change what the guard
+// ENFORCES: the invariants above (invisibility, failure) are computed
+// exactly as before; this line only adds visibility into what already
+// passed.
+const numTotalTests = typeof report.numTotalTests === 'number' ? report.numTotalTests : suiteFiles.reduce((n, f) => n + (Array.isArray(f.assertionResults) ? f.assertionResults.length : 0), 0)
+const numPassedTests = typeof report.numPassedTests === 'number' ? report.numPassedTests : suiteFiles.reduce((n, f) => n + (Array.isArray(f.assertionResults) ? f.assertionResults.filter((a) => a.status === 'passed').length : 0), 0)
+
+console.log(`skip-guard: ${suiteFiles.length} file(s) under [${SUITE_DIRS.join(', ')}] all visible, zero failures — green. (${numPassedTests}/${numTotalTests} tests passed)`)
