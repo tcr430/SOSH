@@ -15,7 +15,15 @@ vi.mock('@/lib/memory', () => ({
   retrieveStudioPerformancePatterns: vi.fn(),
   retrieveEvidenceMemory: vi.fn(),
 }))
-vi.mock('@/lib/ai/wrap-evidence', () => ({ wrapEvidenceForPrompt: vi.fn() }))
+// Partial mock: neutralizeWithSentinels runs FOR REAL — guardStudioField
+// (BLOCKER-1 fix, Session 26-D) now calls it directly in actions.ts, and a
+// full stub here would make every real guardStudioField call throw
+// "no export defined." Only wrapEvidenceForPrompt (the evidence-rendering
+// side effect, irrelevant to these tests) is mocked.
+vi.mock('@/lib/ai/wrap-evidence', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/ai/wrap-evidence')>()
+  return { ...actual, wrapEvidenceForPrompt: vi.fn() }
+})
 vi.mock('@sentry/nextjs', () => ({ captureException: vi.fn(), captureMessage: vi.fn() }))
 // Partial mock: joinStudioMarkers runs FOR REAL (it's the code under test's
 // dependency we want exercised end-to-end for the hunks/edits assertions
@@ -36,6 +44,7 @@ import { retrieveStudioPerformancePatterns, retrieveEvidenceMemory } from '@/lib
 import { wrapEvidenceForPrompt } from '@/lib/ai/wrap-evidence'
 import { AiError } from '@/lib/ai/errors'
 import { buildOpenToken, buildCloseToken } from '@/lib/studio/markers'
+import { STUDIO_FIELD_MAX_CHARS } from '@/lib/studio/guard'
 
 const BUSINESS_ID = 'biz-1'
 const DRAFT_ID = '11111111-1111-4111-8111-111111111111'
@@ -87,6 +96,13 @@ describe('suggestStudioSuggestions', () => {
     vi.mocked(getStudioDraft).mockResolvedValue({ ...draftRow, platform: null } as never)
     const result = await suggestStudioSuggestions(DRAFT_ID)
     expect(result).toEqual({ success: false, error: 'missing_platform' })
+    expect(runPrompt).not.toHaveBeenCalled()
+  })
+
+  it('BLOCKER-1/A-6: an over-cap draft is refused as draft_too_long BEFORE runPrompt is called (STUDIO-ONE-CALL-PER-CLICK sibling property)', async () => {
+    vi.mocked(getStudioDraft).mockResolvedValue({ ...draftRow, content: 'x'.repeat(STUDIO_FIELD_MAX_CHARS + 1) } as never)
+    const result = await suggestStudioSuggestions(DRAFT_ID)
+    expect(result).toEqual({ success: false, error: 'draft_too_long' })
     expect(runPrompt).not.toHaveBeenCalled()
   })
 

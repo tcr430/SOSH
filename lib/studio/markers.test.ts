@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { describe, it, expect } from 'vitest'
 import { AiError } from '@/lib/ai/errors'
+import { guardStudioField } from './guard'
 import { joinStudioMarkers, generateNonce, buildOpenToken, buildCloseToken } from './markers'
 
 // ADR 0019 §5.1-§5.3 — STUDIO-MARKER-FORGERY-SAFE. THE PURE-ASCII
@@ -99,6 +100,46 @@ describe('THE PURE-ASCII CONFUSED-DEPUTY CASE (proves [sec-CRITICAL-1] closed)',
     ]
     const result = joinStudioMarkers(rawRevision, rationale, originalDraft, nonce)
     expect(result.suggestions).toEqual([])
+  })
+})
+
+describe('THE NORMALIZABLE-CHARACTER CONFUSED-DEPUTY CASE (BLOCKER-1, Session 26-D)', () => {
+  it('a span the model echoes verbatim from the GUARDED draft renders nothing — but WOULD render if joined against the raw, unguarded draft (the exact bug BLOCKER-1 closed)', () => {
+    const nonce = generateNonce()
+    // U+FB01 LATIN SMALL LIGATURE FI — NFKC-normalizes to "fi", which
+    // guardStudioField applies (guard.ts's neutralizeWithSentinels), but a
+    // raw draft.content read straight from the DB never gets this
+    // transform.
+    const rawOriginalDraft = 'Our onboarding is \u{FB01}nished fast.'
+    const guardedDraft = guardStudioField(rawOriginalDraft)
+    const verbatimSpan = 'finished'
+    expect(guardedDraft).toContain(verbatimSpan)
+    expect(rawOriginalDraft).not.toContain(verbatimSpan)
+
+    // The model only ever sees guardedDraft (buildUserMessage guards the
+    // draft) and echoes the span VERBATIM — i.e. already-normalized text,
+    // wrapped in a well-formed marker with a matching rationale entry.
+    const rawRevision = guardedDraft.replace(
+      verbatimSpan,
+      buildOpenToken(nonce, 's1') + verbatimSpan + buildCloseToken(nonce, 's1'),
+    )
+    const rationale = [{ id: 's1', category: 'specificity', rationale: 'more precise' }]
+
+    // POST-D1 (correct, BLOCKER-1's fix): actions.ts joins against the SAME
+    // guarded string the model saw — no real diff exists for the span
+    // (guardedDraft already reads "finished"), so clause (3) excludes it.
+    const fixedResult = joinStudioMarkers(rawRevision, rationale, guardedDraft, nonce)
+    expect(fixedResult.suggestions).toEqual([])
+
+    // PRE-D1 (the exact defect BLOCKER-1 named): actions.ts previously
+    // joined against the RAW, unguarded draft.content. The ligature vs.
+    // "finished" is then a genuine textual difference — one the GUARD's own
+    // transform manufactured, not one the model made — so this
+    // confused-deputy span satisfies clause (3) and WOULD have rendered.
+    // This assertion is what reddens if actions.ts ever regresses to
+    // passing draft.content here instead of the guarded string.
+    const buggyResult = joinStudioMarkers(rawRevision, rationale, rawOriginalDraft, nonce)
+    expect(buggyResult.suggestions.map((s) => s.rationale.id)).toEqual(['s1'])
   })
 })
 

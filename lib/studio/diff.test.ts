@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { diffDraft, resolveSpanEdit, type Hunk } from './diff'
+import { guardStudioField, StudioGuardError, STUDIO_FIELD_MAX_CHARS } from './guard'
 
 // ADR 0019 §6.3 — STUDIO-DIFF-DETERMINISTIC: for any (original, revised)
 // pair, diffDraft returns a structurally identical hunk array on every
@@ -110,6 +111,38 @@ describe('diffDraft (ADR 0019 §6, STUDIO-DIFF-DETERMINISTIC)', () => {
       expect(typeof hunk.value).toBe('string')
       expect(hunk).not.toHaveProperty('html')
     }
+  })
+})
+
+// A-6 / BLOCKER-1 (Session 26-D) — silent tail destruction can no longer
+// occur because an over-cap draft never reaches diffDraft at all. Before
+// this fix, guardStudioField's now-deleted truncateToCap silently sliced an
+// over-cap draft for the MODEL's view only; actions.ts still called
+// diffDraft(fullRawDraft, strippedShortRevision), which emitted the
+// untouched tail as one giant delete hunk that resolveSpanEdit could fold
+// into a boundary-adjacent accept, replacing everything from the last
+// suggestion's span to the end of the document. guardStudioField now throws
+// on that same input instead of truncating it, so the tail-delete hunk this
+// test documents is never produced in the real pipeline.
+describe('over-cap drafts are refused before a diff is ever computed (ADR §5.4 A-6)', () => {
+  it('guardStudioField throws on an over-cap draft — actions.ts never reaches diffDraft for it', () => {
+    const overCapDraft = 'x'.repeat(STUDIO_FIELD_MAX_CHARS + 1)
+    expect(() => guardStudioField(overCapDraft)).toThrow(StudioGuardError)
+  })
+
+  it('sanity check: the tail-delete shape this refusal prevents — IF an over-cap draft were still diffed against a short revision (the old, pre-A-6 shape), it WOULD emit exactly the giant delete hunk that made silent tail destruction possible', () => {
+    // Word-tokenized filler (diffWordsWithSpace granularity — real prose, not
+    // one giant homogeneous token) sized so the cap boundary lands exactly
+    // on a word/space boundary: STUDIO_FIELD_MAX_CHARS (3429) is evenly
+    // divisible by 'xy '.length (3), so the prefix below is EXACTLY the cap.
+    const prefix = 'xy '.repeat(STUDIO_FIELD_MAX_CHARS / 3) // exactly STUDIO_FIELD_MAX_CHARS chars
+    const tail = 'z '.repeat(250) // exactly 500 chars — the untouched remainder
+    const fullOriginal = prefix + tail
+    const truncatedRevision = prefix // what the old truncateToCap would have shown the model
+    const hunks = diffDraft(fullOriginal, truncatedRevision)
+    const tailDelete = hunks.find((h) => h.kind === 'delete' && h.originalEnd === fullOriginal.length)
+    expect(tailDelete).toBeDefined()
+    expect(tailDelete!.value.length).toBe(500)
   })
 })
 

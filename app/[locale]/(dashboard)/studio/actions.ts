@@ -11,6 +11,7 @@ import { AiError, type AiErrorCode } from '@/lib/ai/errors'
 import { studioSuggestionPrompt } from '@/lib/ai/prompts/studio-suggestion'
 import { retrieveStudioPerformancePatterns, retrieveEvidenceMemory } from '@/lib/memory'
 import { wrapEvidenceForPrompt } from '@/lib/ai/wrap-evidence'
+import { guardStudioField, StudioGuardError } from '@/lib/studio/guard'
 import { generateNonce, joinStudioMarkers } from '@/lib/studio/markers'
 import { verifyStudioResponse, buildCitableContext, toStudioClientDTO, type StudioSuggestionDTO } from '@/lib/studio/verify'
 import { diffDraft, resolveSpanEdit, type Hunk, type SpanEdit } from '@/lib/studio/diff'
@@ -43,6 +44,12 @@ export type StudioActionErrorCode =
   | 'not_eligible'
   | 'missing_platform'
   | 'fabricated_citation'
+  // A-6 (Session 26-D founder ruling) — guardStudioField refuses a draft
+  // over the derived character cap outright rather than silently slicing
+  // it (the old truncateToCap() caused BLOCKER-1's silent tail
+  // destruction). Distinct from response_truncated, which is the
+  // OUTPUT-side truncation code.
+  | 'draft_too_long'
   | AiErrorCode
 
 export type SuggestStudioSuggestionsState =
@@ -86,6 +93,21 @@ export async function suggestStudioSuggestions(draftId: string): Promise<Suggest
   if (draft.platform === null) return { success: false, error: 'missing_platform' }
   const platform: Platform = draft.platform
 
+  // BLOCKER-1 fix (Session 26-D) — guard the draft ONCE, here, and thread
+  // this SAME guarded string through the model, joinStudioMarkers's clause
+  // (3), buildCitableContext, diffDraft, and persistence. Previously only
+  // buildUserMessage guarded the draft (the model's view); every other
+  // consumer used raw draft.content, so wherever the guard was not the
+  // identity function, the guard's OWN transform manufactured or hid diff
+  // hunks that clause (3) exists to require independently.
+  let guardedDraft: string
+  try {
+    guardedDraft = guardStudioField(draft.content)
+  } catch (e) {
+    if (e instanceof StudioGuardError) return { success: false, error: 'draft_too_long' }
+    throw e
+  }
+
   const aiCtx = await buildCustomerContext(business.id)
 
   const [governedPatterns, evidenceRows] = await Promise.all([
@@ -103,7 +125,7 @@ export async function suggestStudioSuggestions(draftId: string): Promise<Suggest
     // no retry-on-parse: the user's retry button IS the retry (§5.4,
     // [sec-MEDIUM-3]).
     output = await runPrompt(studioSuggestionPrompt, aiCtx, {
-      draft: draft.content,
+      draft: guardedDraft,
       platform,
       nonce,
       governedPatterns,
@@ -119,7 +141,7 @@ export async function suggestStudioSuggestions(draftId: string): Promise<Suggest
 
   let joined
   try {
-    joined = joinStudioMarkers(output.revision, output.suggestions, draft.content, nonce)
+    joined = joinStudioMarkers(output.revision, output.suggestions, guardedDraft, nonce)
   } catch (e) {
     if (e instanceof AiError) return { success: false, error: e.code }
     Sentry.captureException(e, { tags: { studio_action: 'suggestStudioSuggestions' } })
@@ -128,7 +150,7 @@ export async function suggestStudioSuggestions(draftId: string): Promise<Suggest
 
   const avoidWords = new Set((aiCtx.brandVoice?.avoid_words ?? []).map((w) => w))
   const citable = buildCitableContext({
-    draft: draft.content,
+    draft: guardedDraft,
     avoidWords,
     governedPatterns,
     evidence: evidenceRows.map((row) => ({ id: row.id, snippet: row.content })),
@@ -142,13 +164,15 @@ export async function suggestStudioSuggestions(draftId: string): Promise<Suggest
       tags: { fabricated_count: verification.fabricated.length, business_id: business.id },
     })
     // §10.1's implicit save still applies — the draft the model actually
-    // saw is persisted even though nothing renders from this call.
-    await persistSuggestions(client, draftId, business.id, draft.content, [])
+    // saw is persisted even though nothing renders from this call. Persist
+    // guardedDraft, not raw draft.content: content_hash must describe the
+    // exact bytes the hunks/edits coordinates below correspond to.
+    await persistSuggestions(client, draftId, business.id, guardedDraft, [])
     return { success: false, error: 'fabricated_citation' }
   }
 
   const dtoSet = verification.set.map((s) => toStudioClientDTO(s))
-  const saved = await persistSuggestions(client, draftId, business.id, draft.content, dtoSet)
+  const saved = await persistSuggestions(client, draftId, business.id, guardedDraft, dtoSet)
 
   // ADR §11.1 — resolve each rendered suggestion's marker span back to an
   // original-coordinate edit, from the SAME hunk array the diff view
@@ -156,7 +180,7 @@ export async function suggestStudioSuggestions(draftId: string): Promise<Suggest
   // joined.suggestions (pre-verification span data), keyed by id, so a
   // suggestion that got demoted to model_judgment during verification still
   // gets its edit — attribution and "can this be accepted" are independent.
-  const hunks = diffDraft(draft.content, joined.strippedRevision)
+  const hunks = diffDraft(guardedDraft, joined.strippedRevision)
   const spanById = new Map(joined.suggestions.map((s) => [s.rationale.id, s.span]))
   const edits: Record<string, SpanEdit> = {}
   for (const suggestion of dtoSet) {

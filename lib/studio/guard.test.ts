@@ -12,9 +12,11 @@ import {
 
 // ADR 0019 §5.5 [sec-HIGH-1] — the draft guard's exact order of operations,
 // the NFKC-expansion raw pre-check, the variation-selector gap today's
-// neutralize() misses, the post-truncation re-strip, and the final
-// assert-and-throw. Existing lib/ai/wrap-evidence.test.ts is NOT touched by
-// this file or by D2.4's implementation — neutralize() itself is unchanged.
+// neutralize() misses, the re-strip pass, and the final assert-and-throw.
+// Existing lib/ai/wrap-evidence.test.ts is NOT touched by this file or by
+// D2.4's implementation — neutralize() itself is unchanged. A-6 (Session
+// 26-D) deleted step 6's truncateToCap — an over-cap field is now REFUSED
+// (StudioGuardError), never silently sliced.
 
 const SENTINEL_OPEN = '\u{F0000}'
 const SENTINEL_CLOSE = '\u{F0001}'
@@ -46,17 +48,20 @@ describe('guardStudioField — order of operations (ADR §5.5)', () => {
     expect(() => guardStudioField(smallRaw)).not.toThrow()
   })
 
-  it('step 2 (NFKC normalize) runs before step 6 (truncate): the cap applies to the EXPANDED length, and the result is valid normalized text, not a mid-expansion cut', () => {
+  it('step 2 (NFKC normalize) runs before step 6 (cap check): the cap applies to the EXPANDED length, so a raw string within the raw ceiling that normalizes past the cap is REFUSED (A-6 — never silently truncated)', () => {
     const smallRaw = '\u{FDFA}'.repeat(STUDIO_FIELD_MAX_CHARS) // raw length == cap, but normalizes far larger
-    const result = guardStudioField(smallRaw)
-    expect(result.length).toBeLessThanOrEqual(STUDIO_FIELD_MAX_CHARS)
-    // The normalized form of U+FDFA is Arabic text — confirm normalization
-    // actually ran (the result is the expanded Arabic phrase, not the
-    // original ligature codepoint repeated).
-    expect(result).not.toContain('\u{FDFA}')
+    expect(() => guardStudioField(smallRaw)).toThrow(StudioGuardError)
   })
 
-  it('steps 3-5 (strip) run before step 6 (truncate): invisible/private-use characters do not consume the visible-content budget', () => {
+  it('over-cap input throws; at-cap (post-normalization) input is accepted unmodified', () => {
+    const atCap = 'x'.repeat(STUDIO_FIELD_MAX_CHARS)
+    expect(guardStudioField(atCap)).toBe(atCap)
+
+    const overCap = 'x'.repeat(STUDIO_FIELD_MAX_CHARS + 1)
+    expect(() => guardStudioField(overCap)).toThrow(StudioGuardError)
+  })
+
+  it('steps 3-5 (strip) run before step 6 (cap check): invisible/private-use characters do not consume the visible-content budget', () => {
     // A draft padded with thousands of zero-width format characters (\p{Cf})
     // ahead of a short, entirely visible sentence. If strip ran AFTER
     // truncate, the invisible padding would eat the whole cap and the
@@ -98,25 +103,13 @@ describe('guardStudioField — the variation-selector class today\'s neutralize(
   })
 })
 
-describe('guardStudioField — post-truncation re-strip (ADR §5.5 step 7)', () => {
-  it('a legitimate astral character split by tail-truncation leaves no lone surrogate in the output', () => {
-    // String.prototype.slice operates on UTF-16 code units, not codepoints.
-    // An astral character (surrogate pair) sitting exactly at the cap
-    // boundary can be cut in half by truncate(), leaving a lone surrogate
-    // in the truncated string — which the post-truncation re-strip must
-    // clean up (lone surrogates are \p{Cs}), or a malformed code unit
-    // reaches the [DATA] block.
-    const filler = 'x'.repeat(STUDIO_FIELD_MAX_CHARS - 1)
-    const astral = '\u{1F389}' // 🎉, a surrogate pair — high half lands at
-    // index STUDIO_FIELD_MAX_CHARS - 1, low half at STUDIO_FIELD_MAX_CHARS,
-    // so truncating to STUDIO_FIELD_MAX_CHARS code units cuts the pair.
-    const trailingNoise = 'z'.repeat(500)
-    const result = guardStudioField(filler + astral + trailingNoise)
-
-    const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/
-    expect(LONE_SURROGATE.test(result)).toBe(false)
-  })
-
+describe('guardStudioField — the single re-strip pass (ADR §5.5 step 7)', () => {
+  // A-6 (Session 26-D) deleted truncateToCap — step 6 now throws on an
+  // over-cap field instead of slicing it, so the astral-surrogate-cut-by-
+  // truncation shape this describe block used to guard against can no
+  // longer occur (there is no truncation boundary left to cut a surrogate
+  // pair in half). Step 7's re-run is kept regardless — see guard.ts's step
+  // 7 comment — and its idempotency is still a real property worth pinning.
   it('re-running the strip+remaining-passes step is idempotent (running it twice equals running it once)', () => {
     const once = guardStudioField('a' + SENTINEL_OPEN + 'b')
     const runAgainOnOutput = guardStudioField(once)
@@ -131,7 +124,10 @@ describe('guardStudioField — assert zero sentinels, never loop-strip ([sec-HIG
       SENTINEL_OPEN + SENTINEL_OPEN + '/ab12cd34:s1' + SENTINEL_CLOSE,
       'text before ' + SENTINEL_CLOSE + 'ab12cd34:s1' + SENTINEL_OPEN + ' text after',
       SENTINEL_OPEN.repeat(50) + 'padding' + SENTINEL_CLOSE.repeat(50),
-      'x'.repeat(STUDIO_FIELD_MAX_CHARS - 2) + SENTINEL_OPEN + SENTINEL_CLOSE + 'y'.repeat(200),
+      // Stripped length (sentinels vanish, only the x/y padding remains)
+      // must stay within the cap — A-6 refuses over-cap input outright
+      // rather than truncating, so this fixture stays comfortably under it.
+      'x'.repeat(STUDIO_FIELD_MAX_CHARS - 202) + SENTINEL_OPEN + SENTINEL_CLOSE + 'y'.repeat(200),
     ]
     for (const fixture of fixtures) {
       const result = guardStudioField(fixture)

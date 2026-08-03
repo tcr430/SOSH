@@ -82,14 +82,14 @@ describe('studioSuggestionPrompt', () => {
     expect(result.success).toBe(false)
   })
 
-  it('guards the draft before it reaches the [DATA] block (a raw sentinel typed into the draft never survives into the [DATA]-wrapped section)', () => {
-    // The user message legitimately contains the sentinel elsewhere (the
-    // marker-syntax EXAMPLE shown to the model) — this test isolates the
-    // [DATA] block specifically, where the guarded DRAFT lives.
-    const withSentinel = 'text ' + '\u{F0000}' + 'more text'
-    const user = studioSuggestionPrompt.buildUserMessage(makeInput({ draft: withSentinel }), mockContext)
+  it('BLOCKER-1 fix (Session 26-D): passes input.draft into the [DATA] block UNCHANGED — buildUserMessage no longer re-guards it, because guarding is the CALLER\'s job (actions.ts\'s single guardStudioField call, threaded through the model, the join, the citation oracle, the diff and persistence alike)', () => {
+    // Simulates what actions.ts actually passes: the ALREADY-GUARDED draft
+    // (a raw sentinel would never survive guardStudioField, so it is not
+    // present here — that guarantee now lives in actions.ts/guard.ts, not
+    // in this function).
+    const alreadyGuardedDraft = 'text more text'
+    const user = studioSuggestionPrompt.buildUserMessage(makeInput({ draft: alreadyGuardedDraft }), mockContext)
     const dataBlock = user.match(/## The draft to revise\n\[DATA\]\n([\s\S]*?)\n\[\/DATA\]/)?.[1]
-    expect(dataBlock).toBeDefined()
-    expect(dataBlock).not.toContain('\u{F0000}')
+    expect(dataBlock).toBe(alreadyGuardedDraft)
   })
 })

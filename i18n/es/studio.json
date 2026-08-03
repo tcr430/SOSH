@@ -41,6 +41,7 @@
       "invalid_response": "El servicio de sugerencias devolvió algo que no pudimos usar. Tu borrador no ha cambiado.",
       "response_truncated": "La respuesta era demasiado larga para completarse. Tu borrador no ha cambiado — prueba con un borrador más corto.",
       "fabricated_citation": "No pudimos verificar suficientes citas en esta respuesta. Tu borrador no ha cambiado.",
+      "draft_too_long": "Este borrador es demasiado largo para las sugerencias de Studio. Acórtalo e inténtalo de nuevo.",
       "missing_platform": "Elige una plataforma antes de pedir sugerencias.",
       "not_eligible": "Este borrador ya no está disponible.",
       "invalid_input": "Algo salió mal. Tu borrador no ha cambiado.",

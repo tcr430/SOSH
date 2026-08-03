@@ -22,11 +22,16 @@ import { neutralizeWithSentinels } from '@/lib/ai/wrap-evidence'
 // recomputes the cap instead of silently drifting from it.
 
 // The maxTokens the D2.8 suggestion prompt sets via ADR §4.5's new
-// Prompt.maxTokens field. Double DEFAULT_MAX_TOKENS (4096,
+// Prompt.maxTokens field. Triple DEFAULT_MAX_TOKENS (4096,
 // lib/ai/runner.ts:26) — a Studio response must carry the ENTIRE revised
 // draft plus markers plus a rationale array inside escaped JSON, not just a
-// short structured answer.
-export const STUDIO_SUGGEST_MAX_TOKENS = 8192
+// short structured answer. Raised 8192 -> 12288 under A-6 (Session 26-D
+// founder ruling): the derived cap below must clear LinkedIn's 3,000-char
+// platform maximum, and a silent slice of an over-cap draft is prohibited
+// (see truncateToCap's removal, below) — so the cap has to be big enough
+// that legitimate LinkedIn-length drafts are refused only rarely, not as a
+// matter of course.
+export const STUDIO_SUGGEST_MAX_TOKENS = 12288
 
 // Headroom reserved for marker tokens, the rationale array, and
 // JSON-escaping/structure overhead within STUDIO_SUGGEST_MAX_TOKENS, leaving
@@ -71,11 +76,6 @@ export class StudioGuardError extends Error {
   }
 }
 
-function truncateToCap(text: string): string {
-  if (text.length <= STUDIO_FIELD_MAX_CHARS) return text
-  return text.slice(0, STUDIO_FIELD_MAX_CHARS)
-}
-
 // Guards one user-supplied field for rendering into a Studio prompt's
 // [DATA] block. Returns the neutralized, capped text — not yet
 // [DATA]-wrapped, since each caller owns its own field label (mirroring
@@ -93,19 +93,34 @@ export function guardStudioField(rawText: string): string {
   // ([/DATA] closer, fences, leading brace).
   const neutralized = neutralizeWithSentinels(rawText)
 
-  // Step 6 — truncate to the authoritative, derived cap.
-  const truncated = truncateToCap(neutralized)
+  // Step 6 — A-6 (Session 26-D founder ruling): REFUSE input over the
+  // authoritative, derived cap outright. The old truncateToCap() here
+  // silently sliced oversized input — the guarded string the model saw
+  // ended early, but every OTHER consumer of the draft (join, citation
+  // oracle, diff, persistence — see actions.ts's BLOCKER-1 fix) still saw
+  // the full original, so diffDraft(fullOriginal, strippedShortRevision)
+  // manufactured a giant tail-delete hunk that a boundary-adjacent accept
+  // could fold into an edit spanning the whole undiffed tail. Refusing
+  // instead of slicing removes that shape at the source: an over-cap draft
+  // never reaches diffDraft (or the model) at all.
+  if (neutralized.length > STUDIO_FIELD_MAX_CHARS) {
+    throw new StudioGuardError('Studio input exceeds the field character cap')
+  }
 
-  // Step 7 — re-run the strip + remaining passes ONCE post-truncation
-  // (truncation can cut a multi-codepoint sequence in half, or expose a new
-  // leading brace/fence at the new boundary) WITHOUT re-normalizing — never
-  // normalize after stripping, since normalization can produce a character
-  // an earlier strip pass already ran past. Then assert zero sentinels
-  // remain and throw; do NOT loop-strip — a second stripping pass is
-  // loop-until-clean, the exact bug class ADR §5.3 [sec-HIGH-4] names
-  // (a well-formed-token strip can reconstruct a syntactically valid token
-  // from the leftovers of two adjacent well-formed ones).
-  const reguarded = neutralizeWithSentinels(truncated, { skipNormalize: true })
+  // Step 7 — re-run the strip + remaining passes ONCE more WITHOUT
+  // re-normalizing — never normalize after stripping, since normalization
+  // can produce a character an earlier strip pass already ran past. No
+  // truncation happens now (step 6 throws instead), so this pass no longer
+  // has a truncation-created boundary to clean up, but the single re-run +
+  // assert-and-throw shape is kept as-is: it is still the last line of
+  // defense the ADR §5.5 order calls for, and removing it would leave step
+  // 7's assertion below checking a string that was never re-guarded. Then
+  // assert zero sentinels remain and throw; do NOT loop-strip — a second
+  // stripping pass is loop-until-clean, the exact bug class ADR §5.3
+  // [sec-HIGH-4] names (a well-formed-token strip can reconstruct a
+  // syntactically valid token from the leftovers of two adjacent
+  // well-formed ones).
+  const reguarded = neutralizeWithSentinels(neutralized, { skipNormalize: true })
   if (SENTINEL_PATTERN.test(reguarded)) {
     throw new StudioGuardError('Studio input still contains a sentinel codepoint after guarding')
   }

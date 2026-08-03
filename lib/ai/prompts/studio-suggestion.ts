@@ -15,7 +15,12 @@ import { PLATFORM_CONSTRAINTS, getPlatformConstraintsVersion } from './post-gene
 // blank page, unlike post-generation), ≈2¢/click.
 
 export interface StudioSuggestionInput {
-  draft: string // RAW — guarded inside buildUserMessage, the single choke point
+  draft: string // ALREADY GUARDED by the caller (actions.ts's guardStudioField call,
+  // BLOCKER-1 fix, Session 26-D) — the single choke point for this field.
+  // Do NOT re-guard here: actions.ts threads this SAME guarded string
+  // through joinStudioMarkers, buildCitableContext and diffDraft too, so
+  // guarding it a second time (with a different value) would reintroduce
+  // the guard/raw asymmetry BLOCKER-1 closed.
   platform: Platform
   nonce: string // per-request, from lib/studio/markers.ts's generateNonce()
   governedPatterns: readonly GovernedPerformancePattern[]
@@ -124,8 +129,7 @@ Respond in ${ctx.business.language}.`
       `## Marker syntax for THIS request only\nWrap changed text in a span like this (id s1, s2, ... one per suggestion): ${openExample}your changed text${closeExample}\nUse ONLY this exact nonce ("${input.nonce}"). Do not reuse a marker id. Do not nest markers.`,
     )
 
-    const guardedDraft = guardStudioField(input.draft)
-    sections.push(`## The draft to revise\n[DATA]\n${guardedDraft}\n[/DATA]`)
+    sections.push(`## The draft to revise\n[DATA]\n${input.draft}\n[/DATA]`)
 
     const constraintsText = PLATFORM_CONSTRAINTS[input.platform]
     const estimatedTweetsWorth = splitThreadSegments(input.draft).length
