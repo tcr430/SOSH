@@ -36,6 +36,7 @@ describe('studio_drafts (ADR 0019 §2.2, §12)', () => {
   let ownerAId: string
   let ownerBId: string
   let ownerAEmail: string
+  let ownerBEmail: string
   let businessAId: string
   let businessBId: string
 
@@ -71,6 +72,7 @@ describe('studio_drafts (ADR 0019 §2.2, §12)', () => {
     ownerAEmail = ownerA.email
     const ownerB = await createUser('owner-b')
     ownerBId = ownerB.id
+    ownerBEmail = ownerB.email
 
     const { data: bizA, error: bizAErr } = await admin
       .from('businesses')
@@ -114,6 +116,26 @@ describe('studio_drafts (ADR 0019 §2.2, §12)', () => {
     expect(data ?? []).toHaveLength(0)
   })
 
+  it('MINOR-2 (Session 26-D correction) — STUDIO-RLS-ISOLATED, mirrored B→A: cross-tenant SELECT returns zero rows with a REAL signed-in owner-B session against business A\'s row', async () => {
+    // Every other cross-tenant assertion in this file runs owner A against
+    // B's rows, with B's rows always seeded via the service-role admin
+    // client — never a real signed-in B session attacking A. The policies
+    // are textually symmetric, so this is not expected to find a live hole,
+    // but CLAUDE.md's SHARED-FUNCTION CALLERS postmortem is precisely about
+    // this directional blind spot going unverified for multiple sessions.
+    const { data: row, error: insertErr } = await admin
+      .from('studio_drafts')
+      .insert({ business_id: businessAId, content: 'A-only content' })
+      .select('id')
+      .single()
+    expect(insertErr).toBeNull()
+
+    const client = await signInAs(ownerBEmail)
+    const { data, error } = await client.from('studio_drafts').select('id').eq('id', row.id)
+    expect(error).toBeNull()
+    expect(data ?? []).toHaveLength(0)
+  })
+
   it('STUDIO-RLS-ISOLATED: cannot INSERT a draft for a business the caller does not belong to', async () => {
     const client = await signInAs(ownerAEmail)
     const { data, error } = await client
@@ -143,6 +165,27 @@ describe('studio_drafts (ADR 0019 §2.2, §12)', () => {
 
     const { data: stillThere } = await admin.from('studio_drafts').select('content').eq('id', row.id).single()
     expect(stillThere.content).toBe('original B content')
+  })
+
+  it('MINOR-2 (Session 26-D correction) — STUDIO-RLS-ISOLATED, mirrored B→A: cannot UPDATE a draft belonging to another business (USING), a REAL signed-in owner-B session against business A\'s row', async () => {
+    const { data: row, error: insertErr } = await admin
+      .from('studio_drafts')
+      .insert({ business_id: businessAId, content: 'original A content' })
+      .select('id')
+      .single()
+    expect(insertErr).toBeNull()
+
+    const client = await signInAs(ownerBEmail)
+    const { data } = await client
+      .from('studio_drafts')
+      .update({ content: 'tampered by B' })
+      .eq('id', row.id)
+      .select()
+    // RLS's USING clause makes the row invisible to the UPDATE match — zero rows affected.
+    expect(data ?? []).toHaveLength(0)
+
+    const { data: stillThere } = await admin.from('studio_drafts').select('content').eq('id', row.id).single()
+    expect(stillThere.content).toBe('original A content')
   })
 
   it('STUDIO-RLS-ISOLATED: cannot UPDATE own draft to tunnel it into another business (WITH CHECK)', async () => {

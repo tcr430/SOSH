@@ -765,3 +765,66 @@ test:db` attempted and confirmed unreachable (Docker), noted above rather than s
 `app/[locale]/(dashboard)/studio/actions.ts`, `app/[locale]/(dashboard)/studio/actions.test.ts`,
 `components/studio/StudioEditor.tsx`, `i18n/en/studio.json`, `i18n/pt/studio.json`,
 `i18n/es/studio.json`, `lib/i18n/studio.test.ts`.
+
+### D3 — MINOR-1 (per-root vacuity guard) + MINOR-2 (bidirectional RLS)
+
+Both findings are the same shape: a named property has a test that could pass without proving it — exactly
+what ADR 0015 exists to catch. No subagent was invoked for this step: both fixes were already written
+elsewhere in the repo and needed copying, not analysis.
+
+**MINOR-1.** `lib/studio/verify.test.ts`'s three source scans (:308-311 cast scan, :336-339 mock scan,
+:364-365 attribution-construction scan) each did `SOURCE_ROOTS.flatMap(...)` then ONE aggregate
+`expect(files.length).toBeGreaterThan(0)`. `lib/learning/memory-table-boundary.test.ts:54-56` fixed exactly
+this shape with a per-root loop and an explanatory comment during D2.11, but that fix was not carried the
+ten lines over to `verify.test.ts` — the file founder ruling A-4 made the load-bearing enforcement for the
+entire citation story. Fixed by lifting the per-root loop verbatim into all three scans, before each
+existing aggregate check (which is retained, not replaced):
+
+```ts
+for (const root of SOURCE_ROOTS) {
+  expect(collectSourceFiles(root, /* same args as that scan's aggregate call */).length,
+    `${root} contributed zero files to the scan`).toBeGreaterThan(0)
+}
+```
+
+**Tier disagreement recorded, not silently resolved:** the agent that first reported this defect (prior to
+the Reviewer's pass) framed it as MAJOR. **The Reviewer re-tiered it MINOR**, reasoning that
+`verify.test.ts`'s roots are `lib`, `app`, `components` (:281) — three top-level directories that cannot
+plausibly become empty — unlike `memory-table-boundary.test.ts`'s narrow `lib/studio` root, which was one
+rename away from vanishing entirely. The gap was real but **latent, not live**: no currently-plausible
+refactor would have silently emptied any of the three roots and produced a false green. The Reviewer's
+tiering is carried forward here as the operative one; the disagreement itself is part of the record per
+this codebase's convention (a re-tiering is argued, not erased).
+
+**Redden demonstration (the evidence the fix is real, per the D3 spec's explicit requirement):**
+`SOURCE_ROOTS` was temporarily changed to `['lib', 'app', 'components', 'DOES-NOT-EXIST-DEMO']` and
+`verify.test.ts` re-run. All three new per-root assertions failed exactly as expected —
+`AssertionError: ...\DOES-NOT-EXIST-DEMO contributed zero files to the scan: expected 0 to be greater than
+0` — while the pre-existing aggregate checks would NOT have caught this (the other three real roots still
+contribute hundreds of files combined, so the aggregate `files.length > 0` stays true regardless). The
+change was reverted immediately after capturing this output; `verify.test.ts` is back to 19/19 green.
+
+**MINOR-2.** `supabase/__tests__/studio-drafts.test.ts` proved all four verbs denied cross-tenant, but
+ALWAYS with owner A signed in attacking business B's rows, with B's rows always seeded via the
+service-role admin client — never a real signed-in B session attacking A. The policies are textually
+symmetric (no live hole), but this is exactly the directional blind spot CLAUDE.md's SHARED-FUNCTION
+CALLERS postmortem was written about (`APV-BULK-*` verified against only one of two callers across three
+consecutive sessions before the unaudited caller was found still exhibiting the bug). Fixed by adding two
+mirrored B→A cases — SELECT and UPDATE (USING) — using the file's existing `signInAs()` helper and a newly
+captured `ownerBEmail` (previously only `ownerAEmail` was captured in `beforeAll`; `ownerBId` existed but
+not the corresponding email needed to sign in as B). Each mirrored test seeds its row under `businessAId`
+via the admin client (mirroring the existing tests' seeding-under-B pattern, inverted) and asserts a real
+signed-in B session gets zero rows back / zero rows updated, with A's content confirmed unchanged in both
+cases.
+
+**Verification:** `npx tsc --noEmit --skipLibCheck` clean. Scoped `npx vitest run lib/studio lib/db
+lib/i18n "app/[locale]/(dashboard)/studio" components/studio` — 37/37 test files, 573/573 tests green
+(unchanged from D2, since D3 touches only `verify.test.ts`, which is in that scope and passed at 19/19, and
+`studio-drafts.test.ts`, which is Tier-1-only and not in this scope). `npm run test:db` attempted again:
+Docker/local Postgres remains unreachable in this sandboxed session (same gap as D2.11 and D2 — `npx
+supabase status` cannot reach the Docker daemon; all 23 Tier-1 files fail at config/env-var load). Skipped
+count rose from 210 to 212, confirming the two new B→A cases are present and counted, not filtered out by
+a describe-level guard — but they are `AUTHORED-NOT-EXECUTED` in this session per ADR 0015 §2, same as
+D2's new test, with authoritative execution deferred to the `db-tests` CI job.
+
+**Files touched:** `lib/studio/verify.test.ts`, `supabase/__tests__/studio-drafts.test.ts`.

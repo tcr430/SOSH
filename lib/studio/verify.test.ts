@@ -305,6 +305,19 @@ const VERIFY_TEST_TS_PATH = path.join(__dirname, 'verify.test.ts')
 
 describe('source scan 1 — no cast onto the citation/governed types outside verify.ts', () => {
   it('no file other than lib/studio/verify.ts contains `as VerifiedMemorySource`, `as RenderedSuggestion`, `as GovernedPerformancePattern`, or `as unknown as` on any of the three', () => {
+    // MINOR-1 (Session 26-D correction) — the per-root guard D2.11 shipped
+    // at lib/learning/memory-table-boundary.test.ts:54-56 and did not carry
+    // the ten lines over to here, the file A-4 made the load-bearing
+    // enforcement for the entire citation story. The combined length guard
+    // below proves the scan as a WHOLE isn't vacuous, but lib alone is
+    // always non-empty, so it could never independently prove app or
+    // components actually contributed any files — a mistyped or moved root
+    // would silently stop being scanned while this guard kept passing. Each
+    // root is checked on its own first.
+    for (const root of SOURCE_ROOTS) {
+      expect(collectSourceFiles(root, false).length, `${root} contributed zero files to the scan`).toBeGreaterThan(0)
+    }
+
     const files = SOURCE_ROOTS.flatMap((root) => collectSourceFiles(root, false)).filter(
       (f) => f !== VERIFY_TS_PATH && f !== VERIFY_TEST_TS_PATH, // verify.test.ts's @ts-expect-error blocks above deliberately attempt this
     )
@@ -333,6 +346,12 @@ describe('source scan 1 — no cast onto the citation/governed types outside ver
 
 describe('source scan 2 — no test file other than verify.test.ts mocks @/lib/studio/verify', () => {
   it('mocking the verifier elsewhere would let a boundary violation pass every OTHER test silently', () => {
+    // MINOR-1 (Session 26-D correction) — per-root guard, see scan 1's
+    // comment for the full reasoning.
+    for (const root of SOURCE_ROOTS) {
+      expect(collectSourceFiles(root, false).length, `${root} contributed zero files to the scan`).toBeGreaterThan(0)
+    }
+
     const files = SOURCE_ROOTS.flatMap((root) => collectSourceFiles(root, false)).filter(
       (f) => /\.test\.(ts|tsx)$/.test(f) && f !== VERIFY_TEST_TS_PATH,
     )
@@ -361,6 +380,12 @@ const MEMORY_CITATION_TSX_PATH = path.join(__dirname, '..', '..', 'components', 
 
 describe('source scan 3 — the DTO\'s attribution:\'memory\' arm is constructed in exactly ONE file', () => {
   it('only verify.ts constructs an object literal with attribution: \'memory\'', () => {
+    // MINOR-1 (Session 26-D correction) — per-root guard, see scan 1's
+    // comment for the full reasoning.
+    for (const root of SOURCE_ROOTS) {
+      expect(collectSourceFiles(root, true).length, `${root} contributed zero files to the scan`).toBeGreaterThan(0)
+    }
+
     const files = SOURCE_ROOTS.flatMap((root) => collectSourceFiles(root, true)).filter((f) => f !== MEMORY_CITATION_TSX_PATH)
     expect(files.length).toBeGreaterThan(0)
 
