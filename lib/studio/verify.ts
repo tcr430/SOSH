@@ -34,7 +34,22 @@ export type ClaimedMemorySource =
 export type ClaimedSuggestion = {
   id: string
   category: StudioSpanCategory
-  rationale: string // bounded, display-only (§5.7) — enforced at the schema layer, not here
+  // MINOR-3 (Session 26-D correction) — rationale is UNVERIFIED MODEL TEXT.
+  // It flows UNMODIFIED into RenderedSuggestion.rationale on all three
+  // verifyStudioResponse outcomes below, including the demote-to-
+  // model_judgment path — the structured `source` is unfabricable (the
+  // brand), but the sentence beside it is free text nothing here checks
+  // against CitableContext. Its only guarantees: (a) a Zod length bound
+  // (enforced at the schema layer, not here), (b) it renders as an escaped
+  // React text node, never dangerouslySetInnerHTML (SuggestionCard.tsx:45),
+  // and (c) attribution is carried in a visible marker AND the accessible
+  // name (SuggestionCard.tsx:27-33,38), so a reader can always tell
+  // "memory-cited" from "model judgment" even though the PROSE itself is
+  // unverified either way. Verifying rationale prose against the citable
+  // context (e.g. scanning it for avoid-words or row ids that FAILED
+  // verification) is DEFERRED — see ADR §15's named follow-on. Bounded,
+  // display-only (§5.7).
+  rationale: string
   memorySource?: ClaimedMemorySource // OPTIONAL here, and only here
 }
 
@@ -116,14 +131,32 @@ const verified: unique symbol = Symbol('studio-verified')
 // code that already legitimately HOLDS a VerifiedMemorySource can spread it
 // — `{ ...suggestion.source, word: 'attacker text' }` — and the result
 // still structurally satisfies this type, because object-spread carries
-// symbol-keyed own properties along with it. Cross-KIND forgery still fails
-// (the target arm's required fields aren't present on a different kind's
-// source), but same-kind FIELD substitution does not. This is a real cost
-// of A-4's refusal (a #private-field class instance would drop silently on
-// spread, since private fields aren't own-enumerable) — accepted, not
-// hidden: the render path must consume this value immediately after
-// verifyStudioResponse returns it, never round-trip it through
+// symbol-keyed own properties along with it. Cross-KIND forgery fails VIA
+// SPREAD (the target arm's required fields aren't present on a different
+// kind's source), but same-kind FIELD substitution does not. This is a real
+// cost of A-4's refusal (a #private-field class instance would drop
+// silently on spread, since private fields aren't own-enumerable) —
+// accepted, not hidden: the render path must consume this value immediately
+// after verifyStudioResponse returns it, never round-trip it through
 // intermediate code that could spread-and-mutate it first.
+//
+// MINOR-4 (Session 26-D correction) — the "cross-kind forgery still fails"
+// sentence above is scoped to the SPREAD vector specifically, not a general
+// claim. `unique symbol` is an ordinary runtime Symbol: any code holding a
+// VerifiedMemorySource can recover the brand key via
+// `Object.getOwnPropertySymbols(value)[0]` and attach it, via bracket
+// notation, to a brand-new object literal of ANY kind — no spread, no cast,
+// satisfying this type in full generality. NO non-class brand (this one
+// included) can prevent symbol reflection; a #private-field class instance
+// is no different — its private fields are unreachable via
+// getOwnPropertySymbols/getOwnPropertyNames either way, but the class
+// itself was refused for other reasons (A-4) and reflection against ITS
+// brand mechanism, were one adopted, would face the analogous question
+// under a different API surface. This is KNOWINGLY ACCEPTED under A-4: the
+// constraint's stated threat model is code that does not cast — well-
+// meaning code making a mistake — and reflection via
+// getOwnPropertySymbols is not something well-meaning code does by
+// accident. Do not "fix" this by proposing a class here; see A-4.
 export type VerifiedMemorySource = { readonly [verified]: true } & (
   | { kind: 'avoid_word'; word: string; matchOffset: number }
   | {

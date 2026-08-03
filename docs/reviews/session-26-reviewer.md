@@ -828,3 +828,86 @@ a describe-level guard — but they are `AUTHORED-NOT-EXECUTED` in this session 
 D2's new test, with authoritative execution deferred to the `db-tests` CI job.
 
 **Files touched:** `lib/studio/verify.test.ts`, `supabase/__tests__/studio-drafts.test.ts`.
+
+### D4 — documentation and comment accuracy (MINOR-3, MINOR-4, NIT-1, NIT-2, NIT-5)
+
+All five findings are the same shape: a statement in the repo more confident than the code supports —
+exactly what the ADR's non-overclaiming property exists to protect (Sessions 24 and 25 were both caught
+overclaiming; ADR 0017 Amendment A.2 is the precedent). No subagent was invoked for this step, and no
+behavioural code change was made anywhere in this pass — every edit is a comment or ADR-prose change, and
+verification (below) confirms nothing else moved.
+
+**MINOR-3.** `ClaimedSuggestion.rationale` flows UNMODIFIED into `RenderedSuggestion.rationale` on all
+three `verifyStudioResponse` paths (`verify.ts:37,262,272,281` at the time of the finding), including the
+demote-to-`model_judgment` path. The structured `source` is unfabricable, but the sentence beside it is
+free text nothing verifies against `CitableContext` — a model can narrate a citation ("your governed
+memory shows LEVERAGE is overused") in the rationale of a suggestion whose citation was REJECTED.
+Rendering is safe (`SuggestionCard.tsx:45`, no `dangerouslySetInnerHTML`) and §8.6's accessible-name
+attribution mitigation is real and shipped, but the ADR previously addressed rationale only as "bounded,
+display-only" and never named prose that narrates a citation. **Fixed:** `verify.ts:37`'s comment now
+states plainly that `rationale` is UNVERIFIED MODEL TEXT with exactly three guarantees (Zod length bound,
+escaped React-text rendering, visible+accessible attribution marker); ADR §5.7 amended (§16.2) with the
+same statement; ADR §15 gained item 14 naming prose-verification-against-citable-context as a deferred
+follow-on, with the stronger posture (scan rationale for avoid-words/failed-verification row ids) recorded
+as the option, not built.
+
+**MINOR-4.** `verify.ts:113-126`'s comment claimed "Cross-KIND forgery still fails ... but same-kind FIELD
+substitution does not" — true for the object-spread vector it discusses, false in general: `unique symbol`
+is an ordinary runtime `Symbol`, so `Object.getOwnPropertySymbols(anyVerifiedSource)[0]` recovers the brand
+key and bracket notation attaches it to a brand-new object of ANY kind, satisfying `VerifiedMemorySource`
+with no cast and no spread. **Fixed (comment only, brand implementation untouched):** the sentence is now
+scoped to "Cross-kind forgery fails VIA SPREAD," with an added clause naming symbol reflection as a
+generalization no non-class brand can prevent, knowingly accepted under A-4. The same corrected sentence is
+mirrored into ADR §8.4 (§16.2). **Confirmed by `git diff` (recorded above): the only lines changed in
+`verify.ts` are comments — `const verified: unique symbol = Symbol('studio-verified')` and every type/
+function definition are byte-identical to D3's.** A-4's refusal of the `#private`-field class is NOT
+reopened by this step.
+
+**Tier disagreement recorded for MINOR-4, same convention as MINOR-1's in D3:** the agent that first
+reported this defect framed it as MAJOR. **The Reviewer re-tiered it MINOR**, reasoning that the
+constraint's STATED threat model is "unconstructable by code that does not cast" — well-meaning code
+making a mistake — and `Object.getOwnPropertySymbols` reflection is not something well-meaning code does
+by accident. The Reviewer's tiering is carried forward as the operative one; the disagreement is part of
+the record, not erased.
+
+**NIT-1.** `actions.ts:23`'s comment claimed "no console.* anywhere in this path," but `lib/ai/runner.ts:
+212,237` each carry one `console.error`. The Reviewer checked provenance (the agent had not): both exist
+at the range base (`git show de425283:lib/ai/runner.ts | grep -c console.` → 2) — not a Session 26
+regression — and log only DB-helper failure messages (trial-counter increment failure, `ai_usage` insert
+failure), never model text, the nonce, or sentinels. **Fixed (comment only):** the claim is narrowed to
+`lib/studio/**` plus the Studio route/action files; `runner.ts`'s two are recorded as pre-existing under
+CLAUDE.md's one-canonical-structured-JSON-line carve-out. Not removed — that would be an out-of-scope
+change to shared AI infrastructure under L-1.
+
+**NIT-2.** `pg_column_size(suggestions) <= 20000` (`studio_drafts.sql:36`) bounds POST-TOAST-COMPRESSED
+on-disk size, not logical JSON size — already disclosed in the migration's own comment and consciously
+accepted; the real upstream bound is `STUDIO_SUGGEST_MAX_TOKENS`, which moved to 12288 under A-6 (§16.1).
+**Fixed:** one clause added to the ADR §16.2 amendment (scoped to §2.2) so the two numbers stay legible
+together for a future reader. No code change — recorded for completeness, as specified.
+
+**NIT-5.** `package-lock.json` carries a nested `shadcn/node_modules/diff` at `8.0.4` beside the top-level
+exact-pinned `9.0.0`. Transitive to the `shadcn` CLI dependency, NOT what `lib/studio/diff.ts` resolves.
+**Fixed:** one line added to the ADR §16.2 amendment (scoped to §6.2) so a future reader does not misread
+the lockfile as an unpinned second copy. **The lockfile itself was not touched.**
+
+**D0 carryover.** `docs/build-guide/session-26-d2.11-verification.md` cites "ADR 0019" without a
+git-resolvable reference, because ADR 0019 was untracked when that file was written (confirmed at D0's
+grounding check). ADR 0019 first became resolvable in git at commit `6d34d748` (D1's commit — no separate
+documentation-only "D0 commit" exists in this session's actual history to name instead). This could not be
+fixed by editing `session-26-d2.11-verification.md` (already-committed history from before this correction
+pass) or by amending this reviewer report's own scope line (REVIEWER-REPORT APPEND-ONLY) — so the resolved
+citation is recorded in the ADR's own §16.2 amendment instead, with the reasoning for why it lives there
+stated inline.
+
+**Redden/no-change verification (the D4-specific requirement — a "comment fix" that changes behaviour is
+not a comment fix):** `npx tsc --noEmit --skipLibCheck` clean. `npm run test:app` — 176/176 files,
+2482/2482 tests green (full run, not the scoped subset used in D1-D3, since D4 touches files across
+`lib/studio/**` and `app/**`). Scoped `npx vitest run lib/studio lib/db lib/i18n
+"app/[locale]/(dashboard)/studio" components/studio` — unchanged at 37/37 files, 573/573 tests, identical
+to D3's count, confirming zero behavioural drift. `npm run test:db` re-attempted: still unreachable
+(Docker), skip count unchanged at 212 (D4 added no new Tier-1 tests). `git diff -- lib/studio/verify.ts`
+inspected directly and confirmed comment-only, as quoted above. Every ADR change in this step is an
+appended amendment (§15 item 14, §16.2) — no original section text was rewritten in place.
+
+**Files touched:** `app/[locale]/(dashboard)/studio/actions.ts`, `lib/studio/verify.ts`,
+`docs/decisions/0019-mode-1-studio.md` (§15 item 14, §16.2 appended).

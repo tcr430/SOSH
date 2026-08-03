@@ -22,10 +22,21 @@ const PLATFORM_VALUES = ['linkedin', 'twitter', 'instagram', 'facebook', 'thread
 
 // ADR 0019 §4/§9/§10 — the two Studio Server Actions. All Anthropic access
 // stays in lib/ai/: this file calls runPrompt, never the SDK. L-13: no
-// console.* anywhere in this path — diagnostics go to Sentry, redacted and
-// bounded, and AiError.message never reaches the client (parsers.ts:26
-// embeds Zod's message, which can include received/attacker-influenced
-// values).
+// console.* anywhere in lib/studio/** or this route/action file — diagnostics
+// go to Sentry, redacted and bounded, and AiError.message never reaches the
+// client (parsers.ts:26 embeds Zod's message, which can include
+// received/attacker-influenced values).
+//
+// NIT-1 (Session 26-D correction) — the claim above is scoped to
+// lib/studio/** and the Studio route/action files, NOT lib/ai/runner.ts as a
+// whole: runner.ts:212,237 each carry one console.error (trial-counter and
+// ai_usage insert failures respectively). Confirmed pre-existing at this
+// range's base (`git show de425283:lib/ai/runner.ts` already had both) —
+// not a Session 26 regression — and confirmed to log only DB-helper failure
+// messages, never model text, the nonce, or sentinels. Left as-is: removing
+// them would be an out-of-scope change to shared AI infrastructure under
+// L-1, and CLAUDE.md's one-canonical-structured-JSON-line carve-out already
+// covers a worker/route's sole operator-observability line.
 
 async function getAuthContext() {
   const client = await createClient()
