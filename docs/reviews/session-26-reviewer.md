@@ -590,10 +590,12 @@ section at the end of this file, citing each finding by ID — with no in-place 
 
 ## CORRECTION PASS (Session 26-D)
 
-Author: Session 26-D (Claude Code, Sonnet 5). Date: 2026-08-03. Commit range fixed by this entry's D1
-row: working tree at the time of writing, to be committed as a single D1 commit on `session-22-d`
-immediately following this appendix. Findings referenced below are cited by ID from the reviewer's
-original, unmodified text above — nothing above this line is edited.
+Author: Session 26-D (Claude Code, Sonnet 5). Date: 2026-08-03. **SHA backfilled at D6** (this line
+originally read "working tree at the time of writing, to be committed as a single D1 commit," written
+before that commit existed — per D6's explicit instruction to backfill every row an earlier step marked
+pending): the full corrected range is `71464442..308ff92b` on `session-22-d`, one commit per step —
+D1 `6d34d748`, D2 `8b518350`, D3 `a7184422`, D4 `c5b1677b`, D5 `308ff92b`. Findings referenced below are
+cited by ID from the reviewer's original, unmodified text above — nothing above this line is edited.
 
 ### D1 — BLOCKER-1 (guard/raw asymmetry) + A-6 (refuse-not-truncate cap)
 
@@ -982,3 +984,100 @@ re-litigated here beyond confirming it a fifth time. No app-layer files were tou
 `npm run test:app`/the scoped Tier-2 suite were not re-run (nothing in their dependency graph changed).
 
 **Files touched:** `scripts/ci/assert-no-empty-suite.mjs`.
+
+### D6 — corrected-range CI proof (no code)
+
+This pass opened on an OPEN BLOCKER at the head of the reviewed range (BLOCKER-1, §5.2's guard/raw
+asymmetry) — unlike Session 25-D, this step's job was not to re-green a range that was already believed
+sound, but to prove the CORRECTED range green, including D1's two new regression tests, D2's new Tier-1
+interleaving test, and D3's mirrored B→A RLS cases.
+
+**Push and PR.** `session-22-d` was pushed (`71464442..308ff92b`, fast-forward, five new commits: D1
+`6d34d748`, D2 `8b518350`, D3 `a7184422`, D4 `c5b1677b`, D5 `308ff92b`) to the existing open PR
+[#5](https://github.com/tcr430/SOSH/pull/5) ("Session 26 Track D — Mode 1 Studio (ADR 0019)"). Both
+required checks re-ran automatically on the new head and both completed **success**, confirmed on the
+exact final SHA `308ff92b819ac1ed92fd48f4c6850d18397698c3` (`gh run view --json headSha` on both runs):
+
+- **App tests (tsc + eslint + vitest):** [run 30854331890](https://github.com/tcr430/SOSH/actions/runs/30854331890) — success, 1m59s.
+- **DB tests (ADR 0013 RLS/migration suite):** [run 30854331885](https://github.com/tcr430/SOSH/actions/runs/30854331885) — success, 2m45s.
+
+**The db-tests log was opened and read directly** (`gh run view 30854331885 --log`, not just the green
+checkmark), per this step's explicit instruction. The skip-guard's own line, verbatim from the log:
+
+> `skip-guard: 23 file(s) under [supabase/__tests__] all visible, zero failures — green. (215/215 tests passed)`
+
+**23 is a FILE count; 215 is a TEST count** — H3 (D5) is what makes the second number available at all;
+before D5, only the file count printed. **The file count did NOT move (23, same as D2.11's original run)
+— stated explicitly rather than letting an unchanged 23 read as "nothing ran":** D2 and D3 both added
+CASES to an existing file (`supabase/__tests__/studio-drafts.test.ts`), not new files, so the file-count
+invariant the skip-guard checks is unaffected by either step; the test count is where their additions
+show up. (The 215 figure is not directly comparable to this session's earlier LOCAL "212 skipped" counts
+noted in D2/D3/D4's verification sections — those were an artifact of every Tier-1 file failing at
+config/env-var load with no local Postgres reachable, which vitest reports under a `skipped` status
+distinct from an executed pass; 215 is the first REAL executed count this range has had.)
+
+**Per-file non-zero execution, confirmed by reading the guard's own enforcement logic (not by extracting
+a raw per-file breakdown — no JSON artifact exists for this run; `db-tests.yml`'s
+`upload-artifact` step is `if: failure()` only, and this run succeeded):** `scripts/ci/assert-no-empty-suite.mjs`'s
+invariant (i), read directly at `:73-85`, iterates every matched file individually and hard-fails the job
+by name (`::error::skip-guard: <file> ran zero tests` / `... every test is skipped`) if ANY file —
+including `studio-drafts.test.ts`, which D2 and D3 both extended — has zero or all-skipped assertions.
+D5 additionally proved this invariant still fires correctly, against a synthetic all-skipped fixture, with
+the exact code that ran in this CI job. A summary line reading "23 file(s) ... all visible, zero
+failures — green" is therefore constructively impossible to produce while `studio-drafts.test.ts` (or any
+of the other 22) executed zero real assertions — this is the same argument the original Reviewer had to
+construct by hand for D2.11; H3 made the number half of it citable directly, and D5's redden-proof makes
+the guard-logic half of it verified rather than merely read.
+
+**App-tests log, read the same way:** `skip-guard: 176 file(s) under [app, lib, components] all visible,
+zero failures — green. (2482/2482 tests passed)` — matches this session's own local `npm run test:app`
+result (176/176 files, 2482/2482 tests) exactly, confirming CI and local agree on the corrected range.
+
+**The four questions this track exists to settle, re-confirmed against the corrected range** (original
+answers at the top of this file, `## The four questions this track exists to settle`):
+
+1. **Can a suggestion that corresponds to NO real change render? — NOW NO** (was YES — BLOCKER-1).
+   `guardedDraft` is computed once in `suggestStudioSuggestions` and threaded through the model,
+   `joinStudioMarkers`'s clause (3), `buildCitableContext`, `diffDraft`, and persistence alike (D1). **The
+   executed test proving it, cited by name, not by the fix's prose:**
+   `lib/studio/markers.test.ts`'s `"THE NORMALIZABLE-CHARACTER CONFUSED-DEPUTY CASE (BLOCKER-1, Session
+   26-D)"` — specifically its assertion that joining the SAME marker+rationale pair against the guarded
+   baseline renders nothing (`fixedResult.suggestions` = `[]`) while joining the identical pair against
+   the raw, unguarded original WOULD render (`buggyResult.suggestions` = `['s1']`) — is part of the
+   2482 tests executed green in `app-tests` run 30854331890.
+2. **Can a FABRICATED `memorySource` reach the UI? — still NO**, unaffected by this correction pass's
+   code changes. D4 sharpened the two existing qualifications' precision without changing the answer:
+   MINOR-3 (rationale is unverified model text, not merely "display-only") and MINOR-4 (the cross-kind
+   comment corrected to scope its claim to the spread vector, with symbol reflection named as knowingly
+   accepted under A-4) are both documentation corrections, verified comment-only via `git diff` in D4's
+   own appendix entry.
+3. **Can a user accept a suggestion against text they have since changed? — NOW NO, for both the case the
+   constraint originally named AND the case it did not** (was: NO for the named case, YES for MAJOR-1's
+   uncovered case). `persistSuggestions` now carries the `content_hash` precondition `acceptSuggestion`
+   already had (D2). **The executed test:** `supabase/__tests__/studio-drafts.test.ts`'s `"MAJOR-1
+   (Session 26-D correction): persistSuggestions is guarded by content_hash — a concurrent save between
+   the suggest call's content read and its write is NOT silently reverted"` is part of the 215 db-tests
+   tests executed green in run 30854331885 (per-file non-zero confirmed above).
+4. **Can a Studio draft escape tenancy or GDPR erasure? — still NO**, and MINOR-2's qualification is now
+   closed rather than merely noted: cross-tenant denial was proven A→B only; D3 added the mirrored B→A
+   SELECT and UPDATE cases. **The executed tests:** `studio-drafts.test.ts`'s two `"MINOR-2 (Session 26-D
+   correction) — STUDIO-RLS-ISOLATED, mirrored B→A"` cases are part of the same 215 executed, green.
+
+**Promotion tally: UNCHANGED at 0 of 3.** Per ADR 0015 §5, the tally counts full-green `db-tests` runs
+**on `master`** only. Both runs above are `pull_request`-event runs on `session-22-d` (confirmed via
+`gh run list`'s `event` column: `pull_request` for both `30854331885` and `30854331890`) — a
+`pull_request` run, however green, does not advance the tally, exactly as the Reviewer confirmed D2.11's
+two original runs did not. `db-tests` therefore remains **ADVISORY-but-must-be-read**: this green run does
+not yet block a bad merge, and (per the standing rule, restated because it was not needed this pass) a RED
+`db-tests` run must be read by a human and classified — DB-behaviour regression vs. stack OOM — never
+assumed transient. Both runs in this step were green, so no classification was required. See
+`docs/current-phase.md`'s promotion tally section for the corresponding dated entry.
+
+**Verification:** both run URLs recorded above; per-file non-zero execution confirmed by reading
+`scripts/ci/assert-no-empty-suite.mjs`'s enforcement logic against the actual green summary line (not the
+checkmark alone); the CORRECTION PASS header above now carries every step's real commit SHA in place of
+D1's original "working tree at the time of writing" placeholder; `docs/current-phase.md` updated with the
+same run URLs, file/test counts, and the explicit master-only tally statement (see that file).
+
+**Files touched:** `docs/current-phase.md` (new promotion-tally entry). This appendix's own header
+(SHA backfill, above) and this section.

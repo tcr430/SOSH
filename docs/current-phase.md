@@ -161,6 +161,32 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
       a `master` run, so it does not move the promotion tally and does not yet block a bad merge on its
       own. See `docs/reviews/session-25-reviewer.md`'s CORRECTION PASS §D8 for the full resolution
       record.
+    - **2026-08-03 (Session 26-D · D6, corrected range):** Session 26-D's D1–D5 correction pass closed
+      the one BLOCKER (BLOCKER-1, guard/raw asymmetry) plus MAJOR-1, MINOR-1–4, and NIT-1/2/4/5 from
+      `docs/reviews/session-26-reviewer.md`, all recorded in that file's CORRECTION PASS section. Both
+      required checks ran **green** on PR [#5](https://github.com/tcr430/SOSH/pull/5) (branch
+      `session-22-d`, head `308ff92b` — D1 `6d34d748`, D2 `8b518350`, D3 `a7184422`, D4 `c5b1677b`, D5
+      `308ff92b`) — `app-tests`:
+      [run 30854331890](https://github.com/tcr430/SOSH/actions/runs/30854331890); `db-tests`:
+      [run 30854331885](https://github.com/tcr430/SOSH/actions/runs/30854331885). Skip-guard logs, read
+      directly (not the checkmark alone): db-tests — `skip-guard: 23 file(s) under [supabase/__tests__]
+      all visible, zero failures — green. (215/215 tests passed)`; app-tests — `skip-guard: 176 file(s)
+      under [app, lib, components] all visible, zero failures — green. (2482/2482 tests passed)`. **23 is
+      a FILE count, 215 is a TEST count** — D5's H3 fix is what makes the test count available at all;
+      the file count is unchanged from D2.11's original run because D2 and D3 both added CASES to the
+      existing `studio-drafts.test.ts`, not new files — stated explicitly rather than letting an
+      unchanged 23 read as "nothing ran." Per `scripts/ci/assert-no-empty-suite.mjs`'s own per-file
+      invariant (read directly, and proven to still fire in D5 against a synthetic all-skipped fixture),
+      a green "23 file(s) ... all visible" line is constructively impossible while any one file —
+      including `studio-drafts.test.ts` — executed zero real assertions. app-tests' counts match this
+      session's own local `npm run test:app` result (176/176, 2482/2482) exactly. **Tally still 0 of
+      3** — same rule as every entry above: both runs are `pull_request`-event runs on `session-22-d`,
+      not `master` runs, so neither moves the promotion tally or yet blocks a bad merge on its own; a RED
+      `db-tests` run would require a human classification (DB-behaviour regression vs. stack OOM), never
+      an assumed-transient retry — moot here since both runs were green. See
+      `docs/reviews/session-26-reviewer.md`'s CORRECTION PASS §D6 for the full resolution record,
+      including the four-questions re-confirmation (question 1 now answers NO, proved by
+      `markers.test.ts`'s guarded-baseline case from D1).
   - **Merge-gate enforcement (Session 22-D):** GitHub ruleset `master-app-tests` (id `19038239`) is live on
     `refs/heads/master`, requiring `app-tests` with no bypass actors. `db-tests` is intentionally **not**
     in any ruleset yet — it stays advisory until the tally above reaches 3/3, at which point the ruleset is
