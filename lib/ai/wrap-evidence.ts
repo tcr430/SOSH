@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getEvidenceMemoryByIds } from '@/lib/db/memory-evidence'
+import type { UntrustedText } from '@/lib/db/types'
 
 // B2.4 type-design-analyzer finding (MINOR) — a bare `string` didn't
 // distinguish "output of wrapEvidenceForPrompt (guarded/capped/sanitized)"
@@ -176,4 +177,77 @@ export async function wrapEvidenceForPrompt(
   if (evidenceIds.length === 0) return '' as RenderedEvidence
   const rows = await getEvidenceMemoryByIds(client, businessId, evidenceIds)
   return rows.map((row) => guard(row.content)).join('\n\n') as RenderedEvidence
+}
+
+// ─── Signal text (ADR 0020 §7.3/§7.4) ───────────────────────────────────────
+
+// A DISTINCT brand from RenderedEvidence, deliberately — NOT a reuse.
+// RenderedEvidence's guarantee is "re-fetched and tenant-rescoped at render
+// time": wrapEvidenceForPrompt above takes IDs and re-queries the rows
+// itself (:171-179), re-checking business_id at fetch time. Signal text is
+// text ALREADY IN HAND (passed in directly by the caller) — no re-fetch and
+// no tenant re-check happens or is possible here. Reusing RenderedEvidence's
+// name for this value would bake a FALSE PROVENANCE CLAIM into a type: a
+// reader seeing `RenderedEvidence` would reasonably assume the
+// re-fetch-and-rescope guarantee applies, and it would not. This is the same
+// class of error branding exists to prevent, one level up.
+//
+// Non-exported `unique symbol` brand key — same rationale as UntrustedText
+// (lib/db/types.ts): globally unique by construction, so no other module can
+// accidentally produce a structurally-identical type by reusing a string
+// literal.
+const renderedSignalTextBrand: unique symbol = Symbol('signals-rendered-signal-text')
+export type RenderedSignalText = string & { readonly [renderedSignalTextBrand]: true }
+
+// Mirrors EVIDENCE_MAX_CHARS's own value and rationale (a hard hard cap
+// exists; the exact number is tunable) — a SEPARATE named constant, not a
+// silent reuse of EVIDENCE_MAX_CHARS, since evidence and signal text are
+// different content categories governed by the same policy, not the same
+// value by coincidence.
+export const SIGNAL_MAX_CHARS = 2000
+
+function truncateSignalText(text: string): string {
+  if (text.length <= SIGNAL_MAX_CHARS) return text
+  return text.slice(0, SIGNAL_MAX_CHARS - TRUNCATION_SUFFIX.length) + TRUNCATION_SUFFIX
+}
+
+// ADR 0020 §7.4 — the ONE chokepoint for signal text, alongside
+// wrapEvidenceForPrompt in this same module ("one module owning
+// prompt-safety, two honest provenance types"). Reuses
+// neutralizeWithSentinels() (:117), NOT a sixth local sanitizeDataField —
+// five weak copies already exist (brief.ts:13, rubric.ts:9,
+// post-generation.ts:7, post-regeneration.ts:8,
+// formats/native-generation-prompt.ts:9), documented accepted debt
+// (ADR 0018 §15), not a pattern to extend; lib/studio/guard.ts:11 already
+// forbids a sixth, and this ADR does not write a seventh.
+//
+// SINK NARROWING is the load-bearing half (§7.3 Change 2): the parameter
+// type is UntrustedText, never `string` — branding the input makes raw text
+// loud, but what actually stops the injection path at a known call site is
+// every prompt-builder parameter accepting only the safe brand.
+//
+// THE HONEST LIMIT (stated here, not only in the ADR — reviewers caught
+// this exact overclaim TWICE in prior sessions, ADR 0019 §8.4 records
+// both): this is "discouraged", NOT "unrepresentable". `string & brand` is
+// assignable to any `string` parameter and — decisively — to any
+// template-literal hole: `` `Context:\n${signal.body}` `` compiles with NO
+// error, brand or no brand. A bare `as RenderedSignalText` cast likewise
+// remains compile-legal. That residual is closed by E2.10's executable
+// source scans (ADR §11.3 scan #4), not by a stronger type. Do not restate
+// this guarantee more strongly than §7.3 does.
+export function wrapSignalForPrompt(signal: {
+  title: UntrustedText
+  body: UntrustedText
+}): RenderedSignalText {
+  // Neutralize BEFORE truncating — same ordering rationale as guard() above:
+  // the cap must bound the actual rendered bytes, not the pre-neutralization
+  // length.
+  const neutralizedTitle = neutralizeWithSentinels(signal.title)
+  const neutralizedBody = neutralizeWithSentinels(signal.body)
+  const combined = `${neutralizedTitle}\n\n${neutralizedBody}`
+  const capped = truncateSignalText(combined)
+  // Re-run the [/DATA]-closer pass once more post-truncation, same defense
+  // in depth as guard()'s own re-run.
+  const reguarded = capped.replace(/\[\/DATA\]/gi, '[/data-blocked]')
+  return `[DATA]\n${reguarded}\n[/DATA]` as RenderedSignalText
 }

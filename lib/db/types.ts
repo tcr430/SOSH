@@ -22,6 +22,31 @@ export type { VoiceAxes }
 // a plain string where a vault UUID is required.
 export type VaultSecretId = string & { readonly _brand: 'VaultSecretId' }
 
+// ADR 0020 §7.3 — UntrustedText, on signals.title / signals.body. Minted
+// ONLY by E2.5's ingestion parser (on write) and by lib/db/signals.ts's
+// query functions (on read, where "the brand originates at the data-access
+// boundary" per §7.4 — Supabase returns plain JSON with no brand, so a read
+// function casts at the point it hands the row back to its caller).
+//
+// A non-exported `unique symbol` brand key, not a string-literal one
+// (`_brand: 'UntrustedText'`) — the ADR 0019 §8.4 precedent
+// (lib/studio/verify.ts:120's `verified` symbol). A `unique symbol` is
+// globally unique by construction: no other module can accidentally define
+// a structurally-identical brand by reusing the same string literal, which
+// is exactly the collision a string-literal brand does not prevent.
+//
+// THE HONEST LIMIT (stated here, not only in the ADR — reviewers caught
+// this exact overclaim TWICE in prior sessions, ADR 0019 §8.4 records both):
+// this is "discouraged", NOT "unrepresentable". `string & brand` is
+// assignable to any `string` parameter and — decisively — to any
+// template-literal hole: `` `Context:\n${signal.body}` `` compiles with NO
+// error, brand or no brand. A bare `as UntrustedText` cast likewise remains
+// compile-legal. Nothing below closes that; it is closed by E2.10's
+// executable source scans (ADR §11.3 scan #4), not by a stronger type. Do
+// not restate this guarantee more strongly than the ADR does.
+const untrustedTextBrand: unique symbol = Symbol('signals-untrusted-text')
+export type UntrustedText = string & { readonly [untrustedTextBrand]: true }
+
 // ---------------------------------------------------------------------------
 // Shared enum types
 // ---------------------------------------------------------------------------
@@ -448,8 +473,13 @@ export type SignalRow = {
   source: SignalSource
   kind: SignalKind
   external_id: string
-  title: string
-  body: string
+  // ADR 0020 §7.3/§7.4 — branded, not plain string. Third-party-authored
+  // GitHub release text, never sanitized at ingest (§7.2 — fidelity is the
+  // point; sanitizing at rest would corrupt what a human reviewer must read
+  // in Session 28's card). Reaches a prompt only through
+  // wrapSignalForPrompt(): RenderedSignalText (lib/ai/wrap-evidence.ts).
+  title: UntrustedText
+  body: UntrustedText
   body_truncated: boolean
   html_url: string | null
   occurred_at: string
@@ -474,8 +504,11 @@ export type SignalInsert = {
   source: SignalSource
   kind: SignalKind
   external_id: string
-  title: string
-  body?: string
+  // ADR 0020 §7.3 sink narrowing: the ingestion parser must already hold an
+  // UntrustedText value (via its own mint) before it can build this Insert
+  // — a plain string is rejected here without a cast.
+  title: UntrustedText
+  body?: UntrustedText
   body_truncated?: boolean
   html_url?: string | null
   occurred_at: string
@@ -504,6 +537,26 @@ export type SignalCandidateRow = {
   status: SignalCandidateStatus
   created_at: string
   updated_at: string
+}
+
+// type-design-analyzer (E2.4 pass) — lib/db/signal-candidates.ts's
+// listNewCandidates() joins `signals(title, body, html_url, occurred_at,
+// author_is_bot)` onto every row (ADR §13.1's join list, minus tag_name —
+// see that file's comment). SignalCandidateRow alone has no field for that
+// joined data, so casting a join result to SignalCandidateRow silently
+// erases it — and erases the UntrustedText brand along with it, leaving a
+// future caller to reach for an unbranded `{ title: string, ... }` shape by
+// hand. This type is the SECOND read boundary (after lib/db/signals.ts's
+// asSignalRow) that mints UntrustedText out of raw Postgres JSON, declared
+// explicitly rather than left to whoever writes Session 28's consumer.
+export type SignalCandidateWithSignal = SignalCandidateRow & {
+  signals: {
+    title: UntrustedText
+    body: UntrustedText
+    html_url: string | null
+    occurred_at: string
+    author_is_bot: boolean
+  }
 }
 
 export type SignalCandidateInsert = {

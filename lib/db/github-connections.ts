@@ -1,0 +1,137 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
+import { formatISO } from 'date-fns'
+import type { GithubConnectionRow, GithubConnectionInsert } from './types'
+import { getErrorMessage } from './utils'
+
+// ADR 0020 §10.1 — the ONLY module that touches github_connections. Every
+// caller (the poller, the install callback, the settings UI) goes through
+// here, never through a direct `.from('github_connections')` elsewhere.
+
+// §4.2 — the claim window: a connection not started, or started more than
+// 50 minutes ago (a crashed tick self-heals at the next hourly cadence
+// rather than staying claimed forever).
+const CLAIM_STALE_MINUTES = 50
+
+// §3.6 — matches github_connections_poll_claim_idx (is_active, last_poll_started_at).
+const POLL_CLAIM_LIST_LIMIT = 20
+
+function staleBefore(): string {
+  return formatISO(new Date(Date.now() - CLAIM_STALE_MINUTES * 60 * 1000))
+}
+
+// Settings/watch-list UI — authenticated client, RLS-scoped SELECT-only
+// policy. One row per business (UNIQUE(business_id)), so no ORDER BY/limit
+// is needed.
+export async function getGithubConnectionByBusinessId(
+  client: SupabaseClient,
+  businessId: string,
+): Promise<GithubConnectionRow | null> {
+  const { data, error } = await client
+    .from('github_connections')
+    .select('*')
+    .eq('business_id', businessId)
+    .maybeSingle()
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as GithubConnectionRow | null) ?? null
+}
+
+// §4.2/§4.6 — the poller's candidate list: bounded, ORDER BY
+// last_poll_started_at ASC NULLS FIRST + LIMIT, matching
+// github_connections_poll_claim_idx (is_active, last_poll_started_at)
+// EXACTLY (L-13 — a service-role caller gets no exception). Service-role:
+// acquires its own client via the lazy import pattern (CLAUDE.md); the
+// orchestrator calling this never holds an authenticated client for this
+// table.
+export async function listConnectionsReadyForPoll(
+  limit: number = POLL_CLAIM_LIST_LIMIT,
+): Promise<GithubConnectionRow[]> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client
+    .from('github_connections')
+    .select('*')
+    .eq('is_active', true)
+    .or(`last_poll_started_at.is.null,last_poll_started_at.lt.${staleBefore()}`)
+    .order('last_poll_started_at', { ascending: true, nullsFirst: true })
+    .limit(limit)
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as GithubConnectionRow[]) ?? []
+}
+
+// §4.2 — the ATOMIC conditional claim (L-11: never read-then-update). The
+// WHERE clause re-guards the exact same window listConnectionsReadyForPoll
+// selected against, so a connection claimed by a concurrent tick between the
+// list and this call updates zero rows (returns null) rather than being
+// claimed twice.
+export async function claimGithubConnectionForPoll(id: string): Promise<GithubConnectionRow | null> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client
+    .from('github_connections')
+    .update({ last_poll_started_at: formatISO(new Date()) })
+    .eq('id', id)
+    .eq('is_active', true)
+    .or(`last_poll_started_at.is.null,last_poll_started_at.lt.${staleBefore()}`)
+    .select()
+    .maybeSingle()
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as GithubConnectionRow | null) ?? null
+}
+
+// §4.6 — the poller's tick completion stamp. Explicit business_id predicate
+// (§3.5) even though `id` alone is unique, per the service-role scoping rule.
+export async function completeGithubConnectionPoll(
+  id: string,
+  businessId: string,
+  status: string,
+): Promise<void> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { error } = await client
+    .from('github_connections')
+    .update({ last_poll_completed_at: formatISO(new Date()), last_poll_status: status })
+    .eq('id', id)
+    .eq('business_id', businessId)
+  if (error) throw new Error(getErrorMessage(error))
+}
+
+// §4.5/§2.5 — revocation containment: a 401/404 while minting an
+// installation token, or an explicit disconnect, both land here. Atomic
+// conditional UPDATE guarded by is_active=true, so a second concurrent call
+// (or a call racing a reconnect) is a no-op rather than clobbering a fresh
+// is_active=true row.
+export async function deactivateGithubConnection(
+  businessId: string,
+  status: string,
+): Promise<GithubConnectionRow | null> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client
+    .from('github_connections')
+    .update({ is_active: false, last_poll_status: status })
+    .eq('business_id', businessId)
+    .eq('is_active', true)
+    .select()
+    .maybeSingle()
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as GithubConnectionRow | null) ?? null
+}
+
+// §8.3 — the install callback's write. Service-role (§8.5: "the write ...
+// runs service-role and bypasses RLS, so the app-layer user_can check is the
+// real boundary" — the callback gates BEFORE calling this). Upsert on
+// UNIQUE(business_id): a business connecting a second time replaces its one
+// row rather than violating the constraint.
+export async function upsertGithubConnection(
+  insert: GithubConnectionInsert,
+): Promise<GithubConnectionRow> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client
+    .from('github_connections')
+    .upsert(insert, { onConflict: 'business_id' })
+    .select()
+    .single()
+  if (error) throw new Error(getErrorMessage(error))
+  return data as GithubConnectionRow
+}
