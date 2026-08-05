@@ -1077,8 +1077,21 @@ GRANT EXECUTE ON FUNCTION public.purge_business(uuid) TO service_role;
 | auth_rate_limits | no (keyed by bucket_key) | — | n/a | RETAIN (separate TTL purge — A1.4 / launch-checklist §16) |
 | cron_health | no | — | n/a | RETAIN (ops) |
 | studio_drafts | yes (business_id) | CASCADE | yes | none — cascade = erasure (may hold third-party quote PII, same wording as evidence_memory above: a Studio draft is customer content and SOSH is the processor, matching posts) |
+| github_connections | yes (business_id) | CASCADE | yes | none — cascade = erasure (holds an installation id, not a credential; no Vault secret exists to delete, ADR 0020 §2.3) |
+| watched_repos | yes (business_id) | CASCADE | yes | none — cascade = erasure (holds repo owner/name chosen by the customer) |
+| signals | yes (business_id) | CASCADE | yes | none — cascade = erasure (holds third-party-authored release text; contributor identity fields are never stored, ADR 0020 §5.3) |
+| signal_candidates | yes (business_id + signal_id) | CASCADE (both) | yes | none — cascade = erasure |
 
 Only `business_deletion_requests` (NO ACTION) would have blocked the root delete; D2.1 resolves it. Every other business-scoped table either cascades or is deliberately retained.
+
+**Session 27-E2.1 note (2026-07-31):** the four ADR 0020 (Mode 3 signal ingestion) rows above —
+`github_connections`, `watched_repos`, `signals`, `signal_candidates` — added in the same PR as their
+migration (`20260731090000_signal_ingestion.sql`), per this file's own mandatory rule and CLAUDE.md's
+erasure-cascade rule. No `purge_business` edit is required for any of the four: confirmed against the
+function's current definition (`20260702120700_purge_business_member_delete.sql:14-72`), which carries
+explicit lines only for tables needing Vault cleanup, legal-hold redaction, or belt-and-braces identity
+deletion — none of the four has that shape, so the root `DELETE FROM public.businesses` at `:62` and its
+cascade suffice (ADR 0020 §3.7).
 
 **Session 26-D2.1 note (2026-07-30):** `studio_drafts` (ADR 0019 §2.2/§12) added above. Two traps
 recorded as decisions, not omissions (ADR 0019 §12.4): (1) retention/expiry of stale drafts is a

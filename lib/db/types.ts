@@ -359,6 +359,169 @@ export type StudioDraftInsert = {
 export type StudioDraftUpdate = Partial<Omit<StudioDraftRow, 'id' | 'created_at' | 'business_id' | 'content_hash'>>
 
 // ---------------------------------------------------------------------------
+// 5c. Signal ingestion — github_connections, watched_repos, signals,
+//     signal_candidates (ADR 0020 §3). Written almost exclusively by the
+//     poller's service-role client; connect/disconnect and watch-list edits
+//     are the only authenticated-path writes (ADR 0020 §8).
+// ---------------------------------------------------------------------------
+
+export type SignalSource = 'github'
+export type SignalKind = 'release'
+export type SignalIngestedVia = 'poll' | 'webhook'
+export type SignalCandidateStatus = 'new'
+
+export type GithubConnectionRow = {
+  id: string
+  business_id: string
+  installation_id: number
+  account_login: string
+  is_active: boolean
+  connected_by: string | null
+  connected_at: string
+  last_poll_started_at: string | null
+  last_poll_completed_at: string | null
+  last_poll_status: string | null
+  rate_limited_until: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type GithubConnectionInsert = {
+  id?: string
+  business_id: string
+  installation_id: number
+  account_login: string
+  is_active?: boolean
+  connected_by?: string | null
+  connected_at?: string
+  last_poll_started_at?: string | null
+  last_poll_completed_at?: string | null
+  last_poll_status?: string | null
+  rate_limited_until?: string | null
+  created_at?: string
+  updated_at?: string
+}
+
+// business_id excluded (tenancy-critical).
+export type GithubConnectionUpdate = Partial<Omit<GithubConnectionRow, 'id' | 'created_at' | 'business_id'>>
+
+export type WatchedRepoRow = {
+  id: string
+  business_id: string
+  connection_id: string
+  // GitHub's immutable numeric repo id — not owner/name, which can rename.
+  repo_id: number
+  owner: string
+  name: string
+  is_active: boolean
+  releases_etag: string | null
+  last_polled_at: string | null
+  weight: number
+  added_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type WatchedRepoInsert = {
+  id?: string
+  business_id: string
+  connection_id: string
+  repo_id: number
+  owner: string
+  name: string
+  is_active?: boolean
+  releases_etag?: string | null
+  last_polled_at?: string | null
+  weight?: number
+  added_by?: string | null
+  created_at?: string
+  updated_at?: string
+}
+
+// business_id excluded (tenancy-critical).
+export type WatchedRepoUpdate = Partial<Omit<WatchedRepoRow, 'id' | 'created_at' | 'business_id'>>
+
+export type SignalRow = {
+  id: string
+  business_id: string
+  watched_repo_id: string
+  source: SignalSource
+  kind: SignalKind
+  external_id: string
+  title: string
+  body: string
+  body_truncated: boolean
+  html_url: string | null
+  occurred_at: string
+  is_prerelease: boolean
+  author_is_bot: boolean
+  ingested_via: SignalIngestedVia
+  // Generated column — read-only, never present on an Insert/Update payload.
+  content_hash: string
+  created_at: string
+  updated_at: string
+}
+
+// ⚠️ STRUCTURAL, not a runtime filter (ADR 0020 §5.3): this type has no
+// author.login / author.id / author.avatar_url / author.html_url /
+// author_association / assets / reactions / mentions_count / tarball_url /
+// zipball_url fields at all. The parser cannot forget to drop them — they
+// have nowhere to go.
+export type SignalInsert = {
+  id?: string
+  business_id: string
+  watched_repo_id: string
+  source: SignalSource
+  kind: SignalKind
+  external_id: string
+  title: string
+  body?: string
+  body_truncated?: boolean
+  html_url?: string | null
+  occurred_at: string
+  is_prerelease?: boolean
+  author_is_bot?: boolean
+  ingested_via?: SignalIngestedVia
+  created_at?: string
+  updated_at?: string
+}
+
+// business_id, watched_repo_id, external_id, created_at excluded — the
+// BEFORE UPDATE trigger (guard_signals_identity_update) raises on any of
+// these regardless, so excluding them here is the app-layer echo of that DB
+// boundary. content_hash excluded (generated, read-only).
+export type SignalUpdate = Partial<Omit<SignalRow, 'id' | 'created_at' | 'business_id' | 'watched_repo_id' | 'external_id' | 'content_hash'>>
+
+export type SignalCandidateRow = {
+  id: string
+  business_id: string
+  signal_id: string
+  score: number
+  score_inputs: Record<string, unknown>
+  // Denormalised from signals.occurred_at ([db-MAJOR-C]) — Postgres cannot
+  // index across two tables and the feed's ORDER BY spans both.
+  occurred_at: string
+  status: SignalCandidateStatus
+  created_at: string
+  updated_at: string
+}
+
+export type SignalCandidateInsert = {
+  id?: string
+  business_id: string
+  signal_id: string
+  score: number
+  score_inputs?: Record<string, unknown>
+  occurred_at: string
+  status?: SignalCandidateStatus
+  created_at?: string
+  updated_at?: string
+}
+
+// business_id, signal_id excluded (tenancy-critical / the upsert arbiter).
+export type SignalCandidateUpdate = Partial<Omit<SignalCandidateRow, 'id' | 'created_at' | 'business_id' | 'signal_id'>>
+
+// ---------------------------------------------------------------------------
 // 6. post_metrics — upsert-in-place; nullable metrics mean "not exposed by platform"
 // ---------------------------------------------------------------------------
 
