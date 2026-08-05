@@ -82,12 +82,16 @@ export const serverSchema = z.object({
   QSTASH_CURRENT_SIGNING_KEY: z.string().min(1).optional(),
   QSTASH_NEXT_SIGNING_KEY: z.string().min(1).optional(),
   // ADR 0020 §2.2 — GitHub App credentials for Mode 3 signal ingestion.
-  // Scalar z.string() entries, default(''), matching every other third-party
-  // platform credential in this file (LINKEDIN_CLIENT_ID, X_CLIENT_ID,
-  // META_APP_ID above) — this session builds only the typed surface, no
-  // consumer yet, so these must stay optional or every environment without
-  // GitHub configured would fail to boot.
-  GITHUB_APP_ID: z.string().default(''),
+  // [E2.3 correction] REQUIRED, not default('') — the App id and both OAuth
+  // credentials are load-bearing for the install callback's ownership proof
+  // (§8.3 step 8, the A-1 OAuth leg) and easy to omit: a Builder who reads
+  // L-2's "not an OAuth App" as "no OAuth leg at all" would simply never add
+  // client_id/client_secret, and nothing would complain until review.
+  // REQUIRED means that drift fails at boot, which is where it should fail
+  // — the same reasoning STRIPE_SECRET_KEY etc. above already apply to a
+  // fully-wired integration. GITHUB_APP_SLUG remains optional (cosmetic —
+  // used only to build a human-facing install URL, not a security boundary).
+  GITHUB_APP_ID: z.string().min(1, "GITHUB_APP_ID is required"),
   GITHUB_APP_SLUG: z.string().default(''),
   // [sec-MEDIUM-5] — validated AT PARSE TIME, not first use. Without this, a
   // truncated or mis-pasted key fails at the FIRST POLLER TICK, up to an
@@ -105,11 +109,7 @@ export const serverSchema = z.object({
   //   - Deferring the decode/validation into lib/signals/ (validate at
   //     first poller use instead of here): breaks parseServerEnv()'s
   //     fail-fast contract — see [sec-MEDIUM-5] above.
-  // Skipped (returns true) when empty — this key is optional until GitHub
-  // is actually configured; the shape check only fires once a value is
-  // present, so an unconfigured environment still boots.
-  GITHUB_APP_PRIVATE_KEY: z.string().default('').refine((val) => {
-    if (val === '') return true
+  GITHUB_APP_PRIVATE_KEY: z.string().min(1, "GITHUB_APP_PRIVATE_KEY is required").refine((val) => {
     let decoded: string
     try {
       decoded = Buffer.from(val, 'base64').toString('utf8')
@@ -120,8 +120,8 @@ export const serverSchema = z.object({
   }, {
     message: 'GITHUB_APP_PRIVATE_KEY must be base64-encoded and decode to a PEM private key matching -----BEGIN (RSA )?PRIVATE KEY-----',
   }),
-  GITHUB_APP_CLIENT_ID: z.string().default(''),
-  GITHUB_APP_CLIENT_SECRET: z.string().default(''),
+  GITHUB_APP_CLIENT_ID: z.string().min(1, "GITHUB_APP_CLIENT_ID is required"),
+  GITHUB_APP_CLIENT_SECRET: z.string().min(1, "GITHUB_APP_CLIENT_SECRET is required"),
 }).superRefine((data, ctx) => {
   if (
     data.CRON_TRIGGER === 'qstash' &&

@@ -10,7 +10,12 @@ import { serverSchema, config } from '@/lib/config'
 // serverSchema.parse() succeeds independent of the GITHUB_APP_* fields under
 // test. Values are synthetic, shaped only to satisfy each field's own
 // zod constraints (STRIPE_*'s prefix/length checks, etc.) — never real
-// secrets.
+// secrets. [E2.3] GITHUB_APP_ID/CLIENT_ID/CLIENT_SECRET/PRIVATE_KEY are now
+// REQUIRED (§8.3's ownership proof) — included in the base so every test not
+// specifically about one of them still gets a passing default.
+const VALID_PEM = '-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEAtest\n-----END RSA PRIVATE KEY-----\n'
+const VALID_PEM_NO_RSA = '-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANtest\n-----END PRIVATE KEY-----\n'
+
 function validBaseEnv(overrides: Record<string, unknown> = {}) {
   return {
     ANTHROPIC_API_KEY: 'sk-ant-test-key',
@@ -21,12 +26,13 @@ function validBaseEnv(overrides: Record<string, unknown> = {}) {
     STRIPE_PRICE_ID_PRO: `price_${'x'.repeat(10)}`,
     OAUTH_STATE_SECRET: 'x'.repeat(32),
     INVITE_TOKEN_SECRET: 'x'.repeat(32),
+    GITHUB_APP_ID: '123456',
+    GITHUB_APP_CLIENT_ID: 'Iv1.test',
+    GITHUB_APP_CLIENT_SECRET: 'test-client-secret',
+    GITHUB_APP_PRIVATE_KEY: Buffer.from(VALID_PEM).toString('base64'),
     ...overrides,
   }
 }
-
-const VALID_PEM = '-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEAtest\n-----END RSA PRIVATE KEY-----\n'
-const VALID_PEM_NO_RSA = '-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANtest\n-----END PRIVATE KEY-----\n'
 
 describe('lib/config — GITHUB_APP_* (ADR 0020 §2.2)', () => {
   it('a valid base64-encoded PEM (RSA header) parses successfully', () => {
@@ -43,9 +49,24 @@ describe('lib/config — GITHUB_APP_* (ADR 0020 §2.2)', () => {
     expect(result.success).toBe(true)
   })
 
-  it('empty string (unconfigured) parses successfully — GitHub App is optional until connected', () => {
+  it('[E2.3] FAILS parse: empty string is rejected — GITHUB_APP_PRIVATE_KEY is now REQUIRED (§8.3 ownership proof), not optional', () => {
     const result = serverSchema.safeParse(validBaseEnv({ GITHUB_APP_PRIVATE_KEY: '' }))
-    expect(result.success).toBe(true)
+    expect(result.success).toBe(false)
+  })
+
+  it('[E2.3] FAILS parse: empty GITHUB_APP_ID is rejected — required', () => {
+    const result = serverSchema.safeParse(validBaseEnv({ GITHUB_APP_ID: '' }))
+    expect(result.success).toBe(false)
+  })
+
+  it('[E2.3] FAILS parse: empty GITHUB_APP_CLIENT_ID is rejected — required (§8.3 step 8, the A-1 OAuth leg)', () => {
+    const result = serverSchema.safeParse(validBaseEnv({ GITHUB_APP_CLIENT_ID: '' }))
+    expect(result.success).toBe(false)
+  })
+
+  it('[E2.3] FAILS parse: empty GITHUB_APP_CLIENT_SECRET is rejected — required (§8.3 step 8, the A-1 OAuth leg)', () => {
+    const result = serverSchema.safeParse(validBaseEnv({ GITHUB_APP_CLIENT_SECRET: '' }))
+    expect(result.success).toBe(false)
   })
 
   it('FAILS parse: a truncated base64 value (mid-PEM cut) does not decode to a full PEM header', () => {
@@ -78,14 +99,12 @@ describe('lib/config — GITHUB_APP_* (ADR 0020 §2.2)', () => {
     }
   })
 
-  it('GITHUB_APP_ID / GITHUB_APP_SLUG / GITHUB_APP_CLIENT_ID / GITHUB_APP_CLIENT_SECRET are plain optional scalars', () => {
-    const result = serverSchema.safeParse(validBaseEnv({
-      GITHUB_APP_ID: '123456',
-      GITHUB_APP_SLUG: 'sosh-signals',
-      GITHUB_APP_CLIENT_ID: 'Iv1.test',
-      GITHUB_APP_CLIENT_SECRET: 'secret-value',
-    }))
-    expect(result.success).toBe(true)
+  it('GITHUB_APP_SLUG is the one remaining plain OPTIONAL scalar (cosmetic install-URL use, not a security boundary)', () => {
+    const withoutSlug = serverSchema.safeParse(validBaseEnv())
+    expect(withoutSlug.success).toBe(true)
+
+    const withSlug = serverSchema.safeParse(validBaseEnv({ GITHUB_APP_SLUG: 'sosh-signals' }))
+    expect(withSlug.success).toBe(true)
   })
 
   describe('serverOnly() guard — every new getter throws in browser code', () => {
