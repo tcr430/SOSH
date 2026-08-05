@@ -81,6 +81,47 @@ export const serverSchema = z.object({
   CRON_TRIGGER: z.enum(['qstash', 'secret']).default('secret'),
   QSTASH_CURRENT_SIGNING_KEY: z.string().min(1).optional(),
   QSTASH_NEXT_SIGNING_KEY: z.string().min(1).optional(),
+  // ADR 0020 §2.2 — GitHub App credentials for Mode 3 signal ingestion.
+  // Scalar z.string() entries, default(''), matching every other third-party
+  // platform credential in this file (LINKEDIN_CLIENT_ID, X_CLIENT_ID,
+  // META_APP_ID above) — this session builds only the typed surface, no
+  // consumer yet, so these must stay optional or every environment without
+  // GitHub configured would fail to boot.
+  GITHUB_APP_ID: z.string().default(''),
+  GITHUB_APP_SLUG: z.string().default(''),
+  // [sec-MEDIUM-5] — validated AT PARSE TIME, not first use. Without this, a
+  // truncated or mis-pasted key fails at the FIRST POLLER TICK, up to an
+  // hour later, inside a background cron whose only output is one
+  // structured log line — exactly the silent failure L-11 forbids.
+  // Validating here preserves parseServerEnv()'s existing fail-fast
+  // contract instead of deferring the decode into lib/signals/.
+  //
+  // BASE64-ENCODED, not a raw multi-line PEM. Two losers, both recorded:
+  //   - Raw multi-line PEM as the env var value: no multi-line/PEM
+  //     precedent exists anywhere in this file (every entry above is a
+  //     single-line scalar), and PEM newlines surviving through .env files,
+  //     shell exports, and platform env-var UIs (which often collapse or
+  //     escape newlines) is a well-known operational trap.
+  //   - Deferring the decode/validation into lib/signals/ (validate at
+  //     first poller use instead of here): breaks parseServerEnv()'s
+  //     fail-fast contract — see [sec-MEDIUM-5] above.
+  // Skipped (returns true) when empty — this key is optional until GitHub
+  // is actually configured; the shape check only fires once a value is
+  // present, so an unconfigured environment still boots.
+  GITHUB_APP_PRIVATE_KEY: z.string().default('').refine((val) => {
+    if (val === '') return true
+    let decoded: string
+    try {
+      decoded = Buffer.from(val, 'base64').toString('utf8')
+    } catch {
+      return false
+    }
+    return /-----BEGIN (RSA )?PRIVATE KEY-----/.test(decoded)
+  }, {
+    message: 'GITHUB_APP_PRIVATE_KEY must be base64-encoded and decode to a PEM private key matching -----BEGIN (RSA )?PRIVATE KEY-----',
+  }),
+  GITHUB_APP_CLIENT_ID: z.string().default(''),
+  GITHUB_APP_CLIENT_SECRET: z.string().default(''),
 }).superRefine((data, ctx) => {
   if (
     data.CRON_TRIGGER === 'qstash' &&
@@ -204,6 +245,11 @@ function parseServerEnv() {
     CRON_TRIGGER: process.env.CRON_TRIGGER,
     QSTASH_CURRENT_SIGNING_KEY: process.env.QSTASH_CURRENT_SIGNING_KEY,
     QSTASH_NEXT_SIGNING_KEY: process.env.QSTASH_NEXT_SIGNING_KEY,
+    GITHUB_APP_ID: process.env.GITHUB_APP_ID,
+    GITHUB_APP_SLUG: process.env.GITHUB_APP_SLUG,
+    GITHUB_APP_PRIVATE_KEY: process.env.GITHUB_APP_PRIVATE_KEY,
+    GITHUB_APP_CLIENT_ID: process.env.GITHUB_APP_CLIENT_ID,
+    GITHUB_APP_CLIENT_SECRET: process.env.GITHUB_APP_CLIENT_SECRET,
   });
 }
 
@@ -430,6 +476,21 @@ export const config = {
     },
     get QSTASH_NEXT_SIGNING_KEY() {
       return serverOnly("QSTASH_NEXT_SIGNING_KEY", () => server().QSTASH_NEXT_SIGNING_KEY);
+    },
+    get GITHUB_APP_ID() {
+      return serverOnly("GITHUB_APP_ID", () => server().GITHUB_APP_ID);
+    },
+    get GITHUB_APP_SLUG() {
+      return serverOnly("GITHUB_APP_SLUG", () => server().GITHUB_APP_SLUG);
+    },
+    get GITHUB_APP_PRIVATE_KEY() {
+      return serverOnly("GITHUB_APP_PRIVATE_KEY", () => server().GITHUB_APP_PRIVATE_KEY);
+    },
+    get GITHUB_APP_CLIENT_ID() {
+      return serverOnly("GITHUB_APP_CLIENT_ID", () => server().GITHUB_APP_CLIENT_ID);
+    },
+    get GITHUB_APP_CLIENT_SECRET() {
+      return serverOnly("GITHUB_APP_CLIENT_SECRET", () => server().GITHUB_APP_CLIENT_SECRET);
     },
   },
 
