@@ -26,3 +26,6 @@ export type {
   GithubRepoSummary,
   GithubRepoOwner,
 } from './github-client'
+
+export { parseRelease, BODY_MAX_CHARS } from './parse-release'
+export type { ParsedSignal, ParseReleaseResult } from './parse-release'

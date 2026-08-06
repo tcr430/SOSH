@@ -1,0 +1,11 @@
+{
+  "id": 333333,
+  "tag_name": "v3.0.0-draft",
+  "name": "v3.0.0 — Work in progress",
+  "body": "Draft notes, not yet published.",
+  "html_url": "https://github.com/acme/widgets/releases/tag/v3.0.0-draft",
+  "published_at": null,
+  "prerelease": false,
+  "draft": true,
+  "author": { "type": "User" }
+}
