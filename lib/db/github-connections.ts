@@ -145,14 +145,33 @@ export async function recordGithubConnectionRateLimited(
   if (error) throw new Error(getErrorMessage(error))
 }
 
-// §8.3 — the install callback's write. Service-role (§8.5: "the write ...
-// runs service-role and bypasses RLS, so the app-layer user_can check is the
-// real boundary" — the callback gates BEFORE calling this). Upsert on
-// UNIQUE(business_id): a business connecting a second time replaces its one
-// row rather than violating the constraint.
+export type UpsertGithubConnectionResult =
+  | { status: 'claimed'; connection: GithubConnectionRow }
+  // ADR §8.2/§8.3 step 11 — installation_id already belongs to a DIFFERENT
+  // business. Never a silent rebind.
+  | { status: 'conflict' }
+
+// §8.3 step 11 — the install callback's write, reached only AFTER step 9's
+// ownership proof (GET /user/installations) has already established the
+// caller can administer this installation. Service-role (§8.5: "the write
+// ... runs service-role and bypasses RLS, so the app-layer user_can check
+// is the real boundary" — the callback gates BEFORE calling this).
+//
+// Upsert on UNIQUE(business_id): a business reconnecting (same business,
+// possibly a different installation_id — e.g. after uninstalling and
+// reinstalling the App) replaces its one row rather than violating that
+// constraint. But github_connections ALSO has UNIQUE(installation_id)
+// (§3.2's arbiter for "one workspace owns this installation"), and
+// Postgres enforces every constraint on the table regardless of which
+// column the upsert names as its conflict target — so a genuine collision
+// (this installation_id already belongs to a DIFFERENT business_id) still
+// raises 23505, not a silent cross-tenant rebind. That 23505 is the actual
+// race-safety net; the discriminated return type just makes the common,
+// non-race case ("you tried to connect an installation someone else already
+// claimed") a typed, user-facing outcome instead of an opaque throw.
 export async function upsertGithubConnection(
   insert: GithubConnectionInsert,
-): Promise<GithubConnectionRow> {
+): Promise<UpsertGithubConnectionResult> {
   const { createServiceRoleClient } = await import('@/lib/supabase/service')
   const client = createServiceRoleClient()
   const { data, error } = await client
@@ -160,6 +179,9 @@ export async function upsertGithubConnection(
     .upsert(insert, { onConflict: 'business_id' })
     .select()
     .single()
-  if (error) throw new Error(getErrorMessage(error))
-  return data as GithubConnectionRow
+  if (error) {
+    if (error.code === '23505') return { status: 'conflict' }
+    throw new Error(getErrorMessage(error))
+  }
+  return { status: 'claimed', connection: data as GithubConnectionRow }
 }

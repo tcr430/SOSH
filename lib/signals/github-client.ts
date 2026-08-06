@@ -165,6 +165,47 @@ export async function getReleases(
   }
 }
 
+// ─── OAuth code exchange (§8.3 step 8 — the A-1 user-authorization leg) ────
+
+export interface UserTokenExchangeResult {
+  accessToken: string
+}
+
+// §8.3 step 8. A distinct host (github.com, not api.github.com) and a
+// distinct credential pair (GITHUB_APP_CLIENT_ID/SECRET, the OAuth leg —
+// not the App's RS256 private key), so this is a plain fetch rather than
+// the @octokit/request instance used everywhere else in this file, which is
+// configured for the API host. The returned token is used exactly ONCE, by
+// the callback, for step 9's ownership proof (GET /user/installations) —
+// never persisted (§0.2 A-1, SIGNAL-USER-TOKEN-UNPERSISTED).
+export async function exchangeUserCode(code: string): Promise<UserTokenExchangeResult> {
+  let response: Response
+  try {
+    response = await fetch('https://github.com/login/oauth/access_token', {
+      method: 'POST',
+      headers: { accept: 'application/json', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        client_id: config.server.GITHUB_APP_CLIENT_ID,
+        client_secret: config.server.GITHUB_APP_CLIENT_SECRET,
+        code,
+      }),
+    })
+  } catch (err) {
+    throw mapError(err)
+  }
+  if (!response.ok) {
+    throw new GithubClientError('transient', `GitHub OAuth token exchange failed (${response.status})`)
+  }
+  const data = (await response.json()) as { access_token?: string; error?: string }
+  if (!data.access_token) {
+    // A well-formed 200 with an `error` field (e.g. bad_verification_code,
+    // an expired or already-redeemed `code`) — GitHub's OAuth token
+    // endpoint returns these as 200s, not error statuses.
+    throw new GithubClientError('transient', data.error ?? 'GitHub OAuth token exchange returned no access_token')
+  }
+  return { accessToken: data.access_token }
+}
+
 // ─── User installations (§8.3 ownership proof — used once, at callback time) ─
 
 export interface GithubInstallationAccount {

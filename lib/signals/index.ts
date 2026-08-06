@@ -12,6 +12,7 @@ export {
   getReleases,
   getUserInstallations,
   getInstallationRepositories,
+  exchangeUserCode,
   GithubClientError,
 } from './github-client'
 
@@ -25,6 +26,7 @@ export type {
   GithubInstallationAccount,
   GithubRepoSummary,
   GithubRepoOwner,
+  UserTokenExchangeResult,
 } from './github-client'
 
 export { parseRelease, BODY_MAX_CHARS } from './parse-release'
