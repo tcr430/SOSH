@@ -352,6 +352,58 @@ describe('signal ingestion schema (ADR 0020 §3)', () => {
     await admin.auth.admin.deleteUser(owner.id)
   })
 
+  // ─── SIGNAL-DISCONNECT-DEACTIVATES (§2.5) — real atomicity, live Postgres ──
+  // E2.11 close-out finding: §12 claimed Test tier 1 for this constraint, but
+  // only a Tier-2 mocked test existed (AUTHORED-NOT-EXECUTED at the claimed
+  // tier). This is the Tier-1 proof: two concurrent deactivateGithubConnection
+  // calls against the SAME active connection must succeed exactly once — the
+  // second finds is_active already false and updates zero rows (returns
+  // null), never both, proving the WHERE is_active = true guard is a real
+  // atomic conditional UPDATE and not a read-then-write race.
+
+  it('SIGNAL-DISCONNECT-DEACTIVATES: two concurrent disconnects on the same connection succeed exactly once', async () => {
+    const owner = await createUser('disconnect-race')
+    const { data: biz, error: bizErr } = await admin
+      .from('businesses')
+      .insert({ name: 'Disconnect Race Business', owner_id: owner.id, plan: 'plus' })
+      .select('id')
+      .single()
+    if (bizErr) throw bizErr
+    const connId = await insertConnection(biz.id, Math.floor(Date.now() / 1000) + 778000)
+    const repoId = await insertWatchedRepo(biz.id, connId, Math.floor(Date.now() / 1000) + 778100)
+    const signal = await insertSignal(biz.id, repoId, `disconnect-race-${Date.now()}`)
+
+    const { deactivateGithubConnection } = await import('@/lib/db/github-connections')
+    const [first, second] = await Promise.all([
+      deactivateGithubConnection(biz.id, 'disconnected'),
+      deactivateGithubConnection(biz.id, 'disconnected'),
+    ])
+
+    const deactivatedCount = [first, second].filter((r) => r !== null).length
+    expect(deactivatedCount).toBe(1)
+
+    const { data: connRow, error: connErr } = await admin
+      .from('github_connections')
+      .select('is_active')
+      .eq('id', connId)
+      .single()
+    if (connErr) throw connErr
+    expect(connRow.is_active).toBe(false)
+
+    // §2.5's retention half, on the same live row: disconnect never deletes
+    // already-ingested signals.
+    const { data: signalRow, error: signalErr } = await admin
+      .from('signals')
+      .select('id')
+      .eq('id', signal.id)
+      .maybeSingle()
+    if (signalErr) throw signalErr
+    expect(signalRow?.id).toBe(signal.id)
+
+    await admin.from('businesses').delete().eq('id', biz.id)
+    await admin.auth.admin.deleteUser(owner.id)
+  })
+
   // ─── SIGNAL-DEDUP-STABLE-ON-EDIT — the guarded upsert (§6.4) ─────────────
 
   it('upsert_signal_candidate RPC updates a candidate still status=new (positive control for the guard below)', async () => {

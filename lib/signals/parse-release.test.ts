@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
-import { parseRelease, BODY_MAX_CHARS } from './parse-release'
+import { describe, expect, it, expectTypeOf } from 'vitest'
+import { parseRelease, BODY_MAX_CHARS, type ParsedSignal } from './parse-release'
+import type { UntrustedText } from '@/lib/db/types'
 import releaseValidFixture from './__fixtures__/github/release-valid.json'
 import releaseBotFixture from './__fixtures__/github/release-bot.json'
 import releaseDraftFixture from './__fixtures__/github/release-draft.json'
@@ -106,5 +107,28 @@ describe('parseRelease', () => {
     expect(() => parseRelease({})).not.toThrow()
     expect(() => parseRelease(null)).not.toThrow()
     expect(() => parseRelease('not an object')).not.toThrow()
+  })
+
+  // ADR §7.3 SIGNAL-RAW-TEXT-UNTRUSTED — the brand-MINTING half, distinct
+  // from lib/ai/wrap-evidence.test.ts's sink-NARROWING half (which proves a
+  // different constraint: that the SINK only accepts RenderedSignalText).
+  // E2.11 close-out finding: §12 cited "brand minting" as part of this
+  // constraint's proof, but no test anywhere asserted parseRelease's output
+  // is actually typed UntrustedText rather than plain string — this closes
+  // that gap. Brands are compile-time-only (no runtime tag), so the proof is
+  // necessarily a type-level assertion, not a runtime one.
+  describe('SIGNAL-RAW-TEXT-UNTRUSTED — brand minting (type-level)', () => {
+    it('ParsedSignal.title and .body are typed UntrustedText, not string', () => {
+      expectTypeOf<ParsedSignal['title']>().toEqualTypeOf<UntrustedText>()
+      expectTypeOf<ParsedSignal['body']>().toEqualTypeOf<UntrustedText | undefined>()
+    })
+
+    it('a bare string does not satisfy UntrustedText without the mint — proving the brand is load-bearing, not decorative', () => {
+      // @ts-expect-error — a plain string is NOT assignable to the branded
+      // type; only parseRelease's own `as UntrustedText` cast (or another
+      // scan-permitted minting site) can produce one.
+      const notMinted: UntrustedText = 'plain string, unbranded'
+      expect(typeof notMinted).toBe('string')
+    })
   })
 })

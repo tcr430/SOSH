@@ -203,6 +203,57 @@ describe('SIGNAL-PROMPT-SINK-NARROWED (ADR §11.3 scan #4)', () => {
   })
 })
 
+describe('SIGNAL-NO-TOKEN-AT-REST (ADR §12 — E2.11 close-out finding)', () => {
+  // E2.11 found this constraint claimed "2 (source scan) + 3" in §12 but had
+  // neither: only a narrow Tier-2 unit test on mintInstallationToken existed,
+  // and no §11.4 Tier-3 bullet named it. This closes the missing scan half —
+  // the migration-level twin of SIGNAL-USER-TOKEN-UNPERSISTED's code-level
+  // scan (lib/signals/token-boundary.test.ts), which already proves no
+  // token-shaped field exists in lib/db/github-connections.ts or its types.
+  // Together the two prove both halves of "no token column in the migration;
+  // no persistence call."
+  const MIGRATION_FILE = path.join(ROOT, 'supabase', 'migrations', '20260731090000_signal_ingestion.sql')
+  const TOKEN_SHAPED_PATTERN = /access[_-]?token|user[_-]?token|refresh[_-]?token/i
+
+  it('the github_connections CREATE TABLE block in the migration defines no token-shaped column', () => {
+    const source = fs.readFileSync(MIGRATION_FILE, 'utf8')
+    const startMarker = 'CREATE TABLE public.github_connections'
+    const start = source.indexOf(startMarker)
+    expect(start, 'github_connections CREATE TABLE not found — migration file moved or renamed').toBeGreaterThanOrEqual(0)
+    const end = source.indexOf(');', start)
+    expect(end, 'closing ); not found for github_connections CREATE TABLE').toBeGreaterThan(start)
+
+    const block = source.slice(start, end)
+    expect(TOKEN_SHAPED_PATTERN.test(block)).toBe(false)
+  })
+})
+
+describe('SIGNAL-WEBHOOK-SEAM-CLEAN (ADR §12 — E2.11 close-out finding)', () => {
+  // E2.11 found §12's "Proven by" text ("No poller-specific column on
+  // signals") had no matching test or §11.4 Tier-3 bullet — the §11.4 "no
+  // webhook route" bullet is a DIFFERENT property (route absence, not a
+  // schema-column claim). This is the actual proof: signals.ingested_via
+  // (CHECK IN ('poll','webhook')) is the seam, and it is deliberately the
+  // ONLY writer-related column — no etag/cursor/webhook-secret/delivery-id
+  // column exists on signals itself (those live on watched_repos, a
+  // different table, for the poller's OWN bookkeeping).
+  const MIGRATION_FILE = path.join(ROOT, 'supabase', 'migrations', '20260731090000_signal_ingestion.sql')
+  const POLLER_SPECIFIC_PATTERN = /\betag\b|poll_cursor|webhook_secret|webhook_id|delivery_id|poller_/i
+
+  it('the signals CREATE TABLE block defines no poller-specific column beyond the writer-agnostic ingested_via seam', () => {
+    const source = fs.readFileSync(MIGRATION_FILE, 'utf8')
+    const startMarker = 'CREATE TABLE public.signals ('
+    const start = source.indexOf(startMarker)
+    expect(start, 'signals CREATE TABLE not found — migration file moved or renamed').toBeGreaterThanOrEqual(0)
+    const end = source.indexOf(');', start)
+    expect(end, 'closing ); not found for signals CREATE TABLE').toBeGreaterThan(start)
+
+    const block = source.slice(start, end)
+    expect(block).toContain('ingested_via')
+    expect(POLLER_SPECIFIC_PATTERN.test(block)).toBe(false)
+  })
+})
+
 // ADR 0020 §11.4 — the SIX Tier-3 diff-verified properties, enumerated AS
 // DECISIONS (ADR 0015 §2): each has no runtime test because the property is
 // one of ABSENCE, not behavior — a runtime test cannot observe "this thing

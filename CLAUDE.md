@@ -62,6 +62,10 @@ All Anthropic SDK calls go through `/lib/ai/`. No direct Anthropic SDK calls any
 
 **Rule:** When you find yourself wanting to call `anthropic.messages.create` outside `/lib/ai/`, stop and add a function to `/lib/ai/` instead.
 
+### The signal-source layer
+
+No code outside `/lib/signals/` ever imports a GitHub client package. All consumers import from `/lib/signals/index.ts`. Business logic talks to the signal-source interface, never to Octokit. Enforced by a source scan (`lib/signals/source-scans.test.ts`), not by convention.
+
 ### Database access
 
 All Supabase queries go through `/lib/db/`. Each table has its own file (e.g., `/lib/db/campaigns.ts`, `/lib/db/posts.ts`) exposing typed query functions. No direct Supabase calls in API routes, Server Actions, or components.
