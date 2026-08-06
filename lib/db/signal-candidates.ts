@@ -48,28 +48,35 @@ export async function listNewCandidates(
   return (data as SignalCandidateWithSignal[]) ?? []
 }
 
-// §6.4/§6.5 — Stage B's scorer write (built in a later step). UPSERT on
-// UNIQUE(signal_id), the arbiter §3.4 exists for: without it, ON CONFLICT
-// (signal_id) has no target and every re-score would insert a duplicate row.
-// Service-role — the scorer runs inside the same poller tick as the
-// ingestion write, never from an authenticated path. Explicit business_id
-// predicate is carried on the row itself (§3.5).
+// §6.4/§6.5 — Stage B's scorer write. UPSERT on UNIQUE(signal_id), the
+// arbiter §3.4 exists for: without it, ON CONFLICT (signal_id) has no
+// target and every re-score would insert a duplicate row. Service-role —
+// the scorer runs inside the same poller tick as the ingestion write,
+// never from an authenticated path. Explicit business_id predicate is
+// carried on the row itself (§3.5).
 //
-// NOT guarded here by `WHERE status = 'new'` on the conflict-update clause
-// (SIGNAL-DEDUP-STABLE-ON-EDIT's concurrency guard, ADR §6.5/§11.1) —
-// Supabase's `.upsert()` cannot express a conditional ON CONFLICT ... WHERE
-// clause, and building that guard is Stage B scorer work for the step that
-// actually re-scores an edited signal, not this step's DB-layer surface.
+// Routed through the upsert_signal_candidate RPC
+// (20260806090000_signal_candidates_guarded_upsert.sql), NOT a plain
+// `.upsert()`: PostgREST's upsert cannot express a conditional
+// `ON CONFLICT ... DO UPDATE ... WHERE` clause, and that WHERE
+// (status = 'new') is what makes SIGNAL-DEDUP-STABLE-ON-EDIT's guarantee —
+// a re-score can never resurrect a candidate a human has dismissed — true
+// rather than merely intended (ADR §6.4). A `null` return is that guard's
+// no-op signal (the row exists but is no longer 'new'), not an error; the
+// caller must treat it as "nothing written," never retry it as a failure.
 export async function upsertSignalCandidate(
   insert: SignalCandidateInsert,
-): Promise<SignalCandidateRow> {
+): Promise<SignalCandidateRow | null> {
   const { createServiceRoleClient } = await import('@/lib/supabase/service')
   const client = createServiceRoleClient()
-  const { data, error } = await client
-    .from('signal_candidates')
-    .upsert(insert, { onConflict: 'signal_id' })
-    .select()
-    .single()
+  const { data, error } = await client.rpc('upsert_signal_candidate', {
+    p_business_id: insert.business_id,
+    p_signal_id: insert.signal_id,
+    p_score: insert.score,
+    p_score_inputs: insert.score_inputs ?? {},
+    p_occurred_at: insert.occurred_at,
+  })
   if (error) throw new Error(getErrorMessage(error))
-  return data as SignalCandidateRow
+  const rows = (data as SignalCandidateRow[] | null) ?? []
+  return rows[0] ?? null
 }

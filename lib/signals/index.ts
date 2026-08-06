@@ -29,3 +29,6 @@ export type {
 
 export { parseRelease, BODY_MAX_CHARS } from './parse-release'
 export type { ParsedSignal, ParseReleaseResult } from './parse-release'
+
+export { scoreSignal, sortScoredSignals, scoreAndSortSignals, upsertScoredCandidate } from './score'
+export type { ScoreInputs, ScorableSignal, ScoredSignal } from './score'

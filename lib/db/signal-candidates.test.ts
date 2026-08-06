@@ -41,8 +41,32 @@ describe('lib/db/signal-candidates.ts (ADR 0020 §13.1)', () => {
     expect(builder.select).toHaveBeenCalledWith('*, signals(title, body, html_url, occurred_at, author_is_bot)')
   })
 
-  it('upsertSignalCandidate targets UNIQUE(signal_id) as the arbiter (§3.4 blocker, closed)', async () => {
-    const { client, builder } = createMockClient(null, null)
+  it('upsertSignalCandidate routes through the guarded upsert_signal_candidate RPC (ADR §6.4), not a plain .upsert()', async () => {
+    const candidateRow = { id: 'cand-1', business_id: 'biz-1', signal_id: 'sig-1', score: 42, score_inputs: {}, occurred_at: '2026-07-01T00:00:00Z', status: 'new' }
+    const { client } = createMockClient([candidateRow], null)
+    mockCreateServiceRoleClient.mockReturnValue(client)
+
+    const insert: SignalCandidateInsert = {
+      business_id: 'biz-1',
+      signal_id: 'sig-1',
+      score: 42,
+      score_inputs: { recency: 40 },
+      occurred_at: '2026-07-01T00:00:00Z',
+    }
+    const result = await upsertSignalCandidate(insert)
+
+    expect(client.rpc).toHaveBeenCalledWith('upsert_signal_candidate', {
+      p_business_id: 'biz-1',
+      p_signal_id: 'sig-1',
+      p_score: 42,
+      p_score_inputs: { recency: 40 },
+      p_occurred_at: '2026-07-01T00:00:00Z',
+    })
+    expect(result).toEqual(candidateRow)
+  })
+
+  it("upsertSignalCandidate returns null (not an error) when the RPC returns zero rows — the WHERE status='new' guard no-op", async () => {
+    const { client } = createMockClient([], null)
     mockCreateServiceRoleClient.mockReturnValue(client)
 
     const insert: SignalCandidateInsert = {
@@ -51,8 +75,8 @@ describe('lib/db/signal-candidates.ts (ADR 0020 §13.1)', () => {
       score: 42,
       occurred_at: '2026-07-01T00:00:00Z',
     }
-    await upsertSignalCandidate(insert)
+    const result = await upsertSignalCandidate(insert)
 
-    expect(builder.upsert).toHaveBeenCalledWith(insert, { onConflict: 'signal_id' })
+    expect(result).toBeNull()
   })
 })

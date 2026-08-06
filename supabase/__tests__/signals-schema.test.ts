@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { createClient } from '@supabase/supabase-js'
+import { Client } from 'pg'
+import { config } from '@/lib/config'
 
 // ADR 0020 §3 — Tier-1, live Postgres. SIGNAL-RLS-ISOLATED (mirrored both
 // directions, per table, per the Session 26-D MINOR-2 precedent),
@@ -317,6 +319,78 @@ describe('signal ingestion schema (ADR 0020 §3)', () => {
       .insert({ business_id: businessAId, signal_id: signalAId, score: 10, occurred_at: '2026-07-01T00:00:00Z' })
     expect(error).not.toBeNull()
     expect(error.code).toBe('23505')
+  })
+
+  // ─── SIGNAL-DEDUP-STABLE-ON-EDIT — the guarded upsert (§6.4) ─────────────
+
+  it('upsert_signal_candidate RPC updates a candidate still status=new (positive control for the guard below)', async () => {
+    const { data, error } = await admin.rpc('upsert_signal_candidate', {
+      p_business_id: businessBId,
+      p_signal_id: signalBId,
+      p_score: 77,
+      p_score_inputs: { recency: 40, substance: 30, kindWeight: 15, repoWeight: 10, humanAuthored: -18 },
+      p_occurred_at: '2026-07-03T00:00:00Z',
+    })
+    expect(error).toBeNull()
+    expect(data ?? []).toHaveLength(1)
+    expect(Number(data[0].score)).toBe(77)
+    expect(data[0].id).toBe(candidateBId)
+  })
+
+  it("SIGNAL-DEDUP-STABLE-ON-EDIT: a re-score against a candidate transitioned out of 'new' does NOT resurrect it", async () => {
+    // signal_candidates.status today has CHECK (status = 'new') — ADR 0020
+    // issues only 'new'; ADR 0021 (Session 28) adds real human-triage
+    // statuses like a dismissal. That CHECK makes it impossible to construct
+    // a non-'new' row through any normal INSERT/UPDATE right now, but the
+    // WHERE status='new' guard inside upsert_signal_candidate (§6.4) is
+    // generic SQL that doesn't know or care which future status value wins
+    // — it only cares that the row is no longer 'new'. This test proves
+    // that SQL mechanism directly: a raw admin connection (`pg`, the same
+    // package scripts/apply-migrations.ts already uses) temporarily drops
+    // the CHECK to construct a "transitioned out of new" row, runs the
+    // guarded RPC against it exactly as a concurrent re-score would, then
+    // restores the constraint — the schema's own status enum is unchanged
+    // by this test for every other test in this file.
+    const rawClient = new Client({ connectionString: config.server.DATABASE_URL })
+    await rawClient.connect()
+    try {
+      await rawClient.query('ALTER TABLE public.signal_candidates DROP CONSTRAINT signal_candidates_status_check')
+      await rawClient.query("UPDATE public.signal_candidates SET status = 'dismissed' WHERE id = $1", [candidateAId])
+
+      const { data, error } = await admin.rpc('upsert_signal_candidate', {
+        p_business_id: businessAId,
+        p_signal_id: signalAId,
+        p_score: 999,
+        p_score_inputs: { attempted: 'resurrection' },
+        p_occurred_at: '2099-01-01T00:00:00Z',
+      })
+      // Zero rows RETURNING, no error — the WHERE clause simply didn't
+      // match. This IS the "no-op" outcome the guard promises, not a
+      // driver-level failure.
+      expect(error).toBeNull()
+      expect(data ?? []).toHaveLength(0)
+
+      const { data: after, error: afterErr } = await admin
+        .from('signal_candidates')
+        .select('score, status, occurred_at')
+        .eq('id', candidateAId)
+        .single()
+      expect(afterErr).toBeNull()
+      // Untouched: still dismissed, still the original score (42, from
+      // insertCandidate's beforeAll seed) — the attempted re-score never
+      // committed.
+      expect(after.status).toBe('dismissed')
+      expect(Number(after.score)).toBe(42)
+    } finally {
+      // Restore order matters: the row must be back to a CHECK-legal value
+      // BEFORE the constraint is re-added, or ADD CONSTRAINT itself fails
+      // validation against the still-'dismissed' row.
+      await rawClient.query("UPDATE public.signal_candidates SET status = 'new' WHERE id = $1", [candidateAId])
+      await rawClient.query(
+        "ALTER TABLE public.signal_candidates ADD CONSTRAINT signal_candidates_status_check CHECK (status = 'new'::text)",
+      )
+      await rawClient.end()
+    }
   })
 
   // ─── SIGNAL-RAW-IMMUTABLE-IDENTITY ────────────────────────────────────────
