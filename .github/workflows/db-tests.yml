@@ -153,6 +153,19 @@ jobs:
           NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: 'pk_test_dummy0000000000000000'
           OAUTH_STATE_SECRET: 'ci-dummy-oauth-state-secret-32chars-min'
           INVITE_TOKEN_SECRET: 'ci-dummy-invite-token-secret-32chars-min'
+          # E2.11 fix — ADR 0020 §2.2 made these four REQUIRED in lib/config.ts's
+          # serverSchema at E2.3, but this workflow was never updated to match: every
+          # supabase/__tests__ file calls createServiceRoleClient() during setup, which
+          # triggers the FULL server() parse — so every suite failed at beforeAll with a
+          # ZodError the moment E2.3 landed, and nobody caught it because this branch
+          # hadn't been pushed to CI since before E2.3 (Session 26-D was the last green
+          # run). GITHUB_APP_PRIVATE_KEY must be base64-encoded PEM-shaped to satisfy its
+          # own .refine() — never a real key, decodes to a syntactically valid but
+          # cryptographically inert PEM body.
+          GITHUB_APP_ID: 'ci-dummy-app-id-123456'
+          GITHUB_APP_CLIENT_ID: 'Iv1.ci-dummy-client-id'
+          GITHUB_APP_CLIENT_SECRET: 'ci-dummy-client-secret-not-real'
+          GITHUB_APP_PRIVATE_KEY: 'LS0tLS1CRUdJTiBSU0EgUFJJVkFURSBLRVktLS0tLQpNSUlFb3dJQkFBS0NBUUVBdGVzdGR1bW15a2V5Y2lkb25vdHVzZWZvci1zaWduaW5nCi0tLS0tRU5EIFJTQSBQUklWQVRFIEtFWS0tLS0tCg=='
         # --no-file-parallelism: these tests all share one local Postgres/GoTrue
         # instance (single ephemeral CI container), so running test files
         # concurrently buys no isolation — only connection pressure. Vitest's
