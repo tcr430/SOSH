@@ -13,6 +13,12 @@ import serverErrorFixture from './__fixtures__/github/500.json'
 // @octokit/auth-app, exercised for real) succeeds structurally. Never a
 // persisted or reused key; test-only, thrown away at process exit.
 const { TEST_PRIVATE_KEY_PEM } = vi.hoisted(() => {
+  // vi.hoisted's callback runs before ESM imports are linked (confirmed by a
+  // `Cannot access '__vi_import_0__' before initialization` TDZ error when a
+  // static `import { generateKeyPairSync } from 'node:crypto'` was tried
+  // here, E2.11) — require() is the only way to reach a Node builtin at this
+  // point in the module's evaluation order, not an oversight.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { generateKeyPairSync } = require('node:crypto') as typeof import('node:crypto')
   const { privateKey } = generateKeyPairSync('rsa', {
     modulusLength: 2048,
