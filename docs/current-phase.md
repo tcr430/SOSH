@@ -18,6 +18,63 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
 
 ## What's done
 
+- **Session 27 — Mode 3 GitHub signal ingestion (ADR 0020), E2.1–E2.11:** GitHub App install/OAuth
+  connect flow (tenant-bound per §8.3's eleven-step callback, A-1's two-direction close — the OAuth leg
+  present, the user token never persisted), an hourly QStash poller (conditional ETag polling, idempotent
+  ingestion, one canonical tick log line), a deterministic zero-LLM scorer/dedup pass into
+  `signal_candidates`, the `settings/signals` UI (four honest states, truthful disconnect copy, i18n
+  en/pt/es), and E2.10/E2.11's enforcement layer: four executable source scans plus two A-1 scans, all with
+  per-root vacuity guards (`lib/signals/source-scans.test.ts`, `lib/signals/token-boundary.test.ts`).
+  **E2.11 (verify-only) found and closed four real gaps** between ADR §12's claimed test coverage and what
+  actually executed — `SIGNAL-DISCONNECT-DEACTIVATES` claimed Tier-1 with only a Tier-2 mock (added a live
+  concurrency test), `SIGNAL-NO-TOKEN-AT-REST` and `SIGNAL-WEBHOOK-SEAM-CLEAN` claimed proof tiers neither
+  a test nor a §11.4 enumeration backed (added migration-block scans), `SIGNAL-RAW-TEXT-UNTRUSTED`'s
+  "brand minting" proof didn't exist as a test distinct from sink-narrowing (added a compile-time
+  `expectTypeOf`/`@ts-expect-error` pair) — and corrected ADR §11.5's SHARED-FUNCTION CALLERS table, which
+  wrongly claimed reuse of `signOAuthState`/`verifyOAuthState`; a `git grep` re-run found Session 27
+  actually built separate, non-shared functions (`signGithubConnectState`/`verifyGithubConnectState` in
+  `lib/signals/state.ts`) that only mirror the existing mechanism's shape. All 33 `SIGNAL-*` constraints
+  independently reconfirmed via `ecc:pr-test-analyzer` to map to a test that executes in a named CI job and
+  reddens if broken.
+  - **E2.11 also found and fixed a CI infrastructure gap**, unrelated to code correctness: this branch had
+    not been pushed to CI since Session 26-D (2026-08-03), so E2.3's addition of four REQUIRED
+    `GITHUB_APP_*` fields to `lib/config.ts`'s `serverSchema` had never been exercised in either workflow.
+    Every `supabase/__tests__` suite calls `createServiceRoleClient()` during setup, triggering the full
+    server-schema parse — all 24 db-tests suites failed identically at `beforeAll` with a `ZodError`, read
+    by the skip-guard as "every test skipped." Two files in app-tests (`lib/config.test.ts`,
+    `lib/signals/orchestrator.test.ts`) hit the same gap via the unmocked `@/lib/config` import. Fixed by
+    adding the same dummy-value env vars `db-tests.yml` already used for `ANTHROPIC_API_KEY`/`STRIPE_*` to
+    both workflows. Root-caused by reproducing the exact CI env locally rather than guessing.
+  - **`db-tests` run (PR [#5](https://github.com/tcr430/SOSH/pull/5), head `08a4c1e2`):**
+    [run 31117351652](https://github.com/tcr430/SOSH/actions/runs/31117351652) — **green**. Skip-guard log,
+    read directly: `skip-guard: 24 file(s) under [supabase/__tests__] all visible, zero failures — green.
+    (240/240 tests passed)`. 24 matches the file count after E2.11 added no new `supabase/__tests__` files
+    beyond the pre-existing 23 plus this session's addition to `signals-schema.test.ts` (a case added to an
+    existing file, not a new one — consistent with the file-count-vs-test-count distinction D5 established).
+  - **`app-tests` run — PENDING, blocked by an external GitHub Actions outage, not by this repo's code.**
+    Three consecutive attempts (runs
+    [31116039392](https://github.com/tcr430/SOSH/actions/runs/31116039392) — genuine, since-fixed lint
+    error; then two reruns of
+    [31117351562](https://github.com/tcr430/SOSH/actions/runs/31117351562)) failed identically at the
+    "Set up job" step with `Failed to resolve action download info. Error: Service Unavailable` — GitHub's
+    own action-download service, before any repository code runs. Local evidence in its place: `npx tsc
+    --noEmit --skipLibCheck` clean, `npm run lint` 0 errors (98 pre-existing warnings), and `npm run
+    test:app` with the exact CI dummy env vars reproduced locally — 2609/2609 passing, including
+    `lib/config.test.ts` and `lib/signals/orchestrator.test.ts` (the two files the env-var fix targeted).
+    **Tally still 0 of 3** regardless — same rule as every entry below: a `pull_request`-event run never
+    moves it. Re-run `app-tests` on PR #5 once GitHub Actions recovers and update this entry with the run
+    URL and skip-guard line before treating Session 27 as CI-verified.
+  - **A-2's launch-blocking condition, recorded explicitly (ADR 0020 §0.2, §9.6):** third-party personal
+    data in `signals`/`signal_candidates` (release author names/handles where a title or body mentions
+    them) has an approved, tracked Evidence Pack follow-on — **not a blocker on the ADR itself**, but
+    **binding on launch**: **no launch until the Evidence Pack entry, the Art. 6(1)(f) legitimate-interest
+    balancing test, and the `/privacy` prose documenting this processing all land.** None of the three has
+    landed as of this entry. This is a standing pre-launch gate alongside A-3's retention-reaper condition
+    (§9.5) — `SIGNAL-RETENTION-UNCLAIMED` — which stays enforced by
+    `app/[locale]/(dashboard)/settings/signals/signals-i18n.test.ts`'s scan (no retention figure in any of
+    the three locale files) until a real reaper ships.
+  - Full detail: `docs/decisions/0020-mode-3-signal-ingestion.md`, `docs/build-guide/session-27.md`.
+
 - **Session 25 CLOSED — Diff-based learning capture, ADR 0018 (Track C of the 0016→0017→0018 programme):**
   Builder phase C2.1–C2.9 shipped the snapshot table (`post_ai_originals`, write-once, `BEFORE UPDATE`-only
   guard — never `OR DELETE`, since a `BEFORE DELETE` guard would abort GDPR erasure for every business
