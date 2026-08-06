@@ -20,6 +20,10 @@ vi.mock('@/lib/db/watched-repos', () => ({
   addWatchedRepo: vi.fn(),
   setWatchedRepoActive: vi.fn(),
 }))
+vi.mock('@/lib/signals', () => ({
+  mintInstallationToken: vi.fn(),
+  getInstallationRepositories: vi.fn(),
+}))
 
 const mockRedirect = vi.hoisted(() => vi.fn())
 vi.mock('next/navigation', () => ({ redirect: mockRedirect }))
@@ -37,6 +41,7 @@ import {
   addWatchedRepoAction,
   removeWatchedRepoAction,
   toggleWatchedRepoAction,
+  listInstallationRepositoriesAction,
 } from './actions'
 import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
@@ -44,6 +49,7 @@ import { canServer } from '@/lib/members/can-server'
 import { signGithubConnectState } from '@/lib/signals/state'
 import { getGithubConnectionByBusinessId, deactivateGithubConnection } from '@/lib/db/github-connections'
 import { countActiveWatchedReposForBusiness, addWatchedRepo, setWatchedRepoActive } from '@/lib/db/watched-repos'
+import { mintInstallationToken, getInstallationRepositories } from '@/lib/signals'
 
 const mockCreateClient = vi.mocked(createClient)
 const mockGetBusinessForUser = vi.mocked(getBusinessForUser)
@@ -54,6 +60,8 @@ const mockDeactivateGithubConnection = vi.mocked(deactivateGithubConnection)
 const mockCountActiveWatchedReposForBusiness = vi.mocked(countActiveWatchedReposForBusiness)
 const mockAddWatchedRepo = vi.mocked(addWatchedRepo)
 const mockSetWatchedRepoActive = vi.mocked(setWatchedRepoActive)
+const mockMintInstallationToken = vi.mocked(mintInstallationToken)
+const mockGetInstallationRepositories = vi.mocked(getInstallationRepositories)
 
 const BUSINESS_ID = 'biz-1'
 const USER = { id: 'user-1' }
@@ -193,5 +201,76 @@ describe('toggleWatchedRepoAction', () => {
     const result = await toggleWatchedRepoAction(validInput)
     expect(result).toEqual({ error: 'errors.forbidden' })
     expect(mockSetWatchedRepoActive).not.toHaveBeenCalled()
+  })
+})
+
+describe('listInstallationRepositoriesAction — the repo picker', () => {
+  const REPOS = [
+    { id: 1, owner: { login: 'acme' }, name: 'widgets' },
+    { id: 2, owner: { login: 'acme' }, name: 'gadgets' },
+  ]
+
+  it('mints an installation token for the caller\'s connection and returns the repo list, never the token itself', async () => {
+    mockGetGithubConnectionByBusinessId.mockResolvedValue({
+      id: 'conn-1',
+      business_id: BUSINESS_ID,
+      installation_id: 999,
+      is_active: true,
+    } as never)
+    mockMintInstallationToken.mockResolvedValue({ token: 'secret-token', expiresAt: '2026-01-01T00:00:00Z' })
+    mockGetInstallationRepositories.mockResolvedValue(REPOS as never)
+
+    const result = await listInstallationRepositoriesAction()
+
+    expect(result).toEqual({ success: true, repos: REPOS })
+    expect(mockMintInstallationToken).toHaveBeenCalledWith(999)
+    expect(mockGetInstallationRepositories).toHaveBeenCalledWith('secret-token')
+    expect(JSON.stringify(result)).not.toContain('secret-token')
+  })
+
+  it('returns a typed error when the business has no GitHub connection', async () => {
+    mockGetGithubConnectionByBusinessId.mockResolvedValue(null)
+
+    const result = await listInstallationRepositoriesAction()
+
+    expect(result).toEqual({ success: false, error: 'errors.no_github_connection' })
+    expect(mockMintInstallationToken).not.toHaveBeenCalled()
+  })
+
+  it('returns a typed error when the connection is inactive', async () => {
+    mockGetGithubConnectionByBusinessId.mockResolvedValue({
+      id: 'conn-1',
+      business_id: BUSINESS_ID,
+      installation_id: 999,
+      is_active: false,
+    } as never)
+
+    const result = await listInstallationRepositoriesAction()
+
+    expect(result).toEqual({ success: false, error: 'errors.no_github_connection' })
+    expect(mockMintInstallationToken).not.toHaveBeenCalled()
+  })
+
+  it('SIGNAL-CAPABILITY-GATED: a canServer(CONNECT_ACCOUNTS) denial returns the typed forbidden result before any GitHub call', async () => {
+    mockCanServer.mockResolvedValue(false)
+
+    const result = await listInstallationRepositoriesAction()
+
+    expect(result).toEqual({ success: false, error: 'errors.forbidden' })
+    expect(mockMintInstallationToken).not.toHaveBeenCalled()
+  })
+
+  it('maps a thrown GitHub-client error to a typed result, never leaking the raw error or token', async () => {
+    mockGetGithubConnectionByBusinessId.mockResolvedValue({
+      id: 'conn-1',
+      business_id: BUSINESS_ID,
+      installation_id: 999,
+      is_active: true,
+    } as never)
+    mockMintInstallationToken.mockRejectedValue(new Error('rate_limited'))
+
+    const result = await listInstallationRepositoriesAction()
+
+    expect(result).toEqual({ success: false, error: 'errors.repos_fetch_failed' })
   })
 })

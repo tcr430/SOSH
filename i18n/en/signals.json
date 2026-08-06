@@ -1,0 +1,70 @@
+{
+  "title": "GitHub signals",
+  "subtitle": "Turn your published release notes into content ideas.",
+  "not_connected": {
+    "what_we_read": "SOSH reads published release notes from the repositories you choose.",
+    "what_we_never_do": "SOSH will never write to your repositories — no commits, no issues, no pull requests, ever.",
+    "connect_cta": "Connect GitHub"
+  },
+  "awaiting_approval": {
+    "title": "Awaiting organization approval",
+    "body": "Your GitHub organization requires owner approval before this installation can proceed. Ask an organization owner to approve the SOSH GitHub App request, then return to this page."
+  },
+  "reconnect_required": {
+    "title": "Reconnect required",
+    "body": "GitHub reports this connection was revoked, so SOSH stopped receiving updates. Reconnect to resume ingestion.",
+    "cta": "Reconnect GitHub"
+  },
+  "rate_limited": {
+    "banner": "GitHub's rate limit was reached. Ingestion resumes automatically — there's nothing to do."
+  },
+  "repo_unavailable": {
+    "badge": "This repository was deleted, renamed, or removed from the installation."
+  },
+  "at_cap": {
+    "title": "Watch list full",
+    "body": "You're watching 20 repositories, the maximum. Remove one before adding another."
+  },
+  "picker": {
+    "heading": "Add a repository",
+    "add_cta": "Add",
+    "empty": "No additional repositories are available from this installation."
+  },
+  "watch_list": {
+    "heading": "Watched repositories",
+    "remove": "Remove",
+    "pause": "Pause",
+    "resume": "Resume",
+    "empty": "You're not watching any repositories yet."
+  },
+  "recent_signals": {
+    "heading": "Recent activity",
+    "empty": "No signals yet.",
+    "view_link": "View on GitHub"
+  },
+  "disconnect": {
+    "cta": "Disconnect",
+    "confirm_title": "Disconnect GitHub?",
+    "confirm_body_stops_ingestion": "Disconnecting stops SOSH from reading new release notes. It does not revoke GitHub's access.",
+    "confirm_body_full_revocation": "To fully revoke access, uninstall the SOSH app from your GitHub account or organization settings.",
+    "confirm_cta": "Disconnect",
+    "deep_link_cta": "Manage on GitHub"
+  },
+  "errors": {
+    "invalid_request": "That request wasn't valid. Please try connecting again.",
+    "invalid_state": "Your session expired during setup. Please try connecting again.",
+    "forbidden": "You don't have permission to manage this connection.",
+    "exchange_failed": "We couldn't complete the connection to GitHub. Please try again.",
+    "not_your_installation": "That GitHub installation doesn't belong to you.",
+    "already_connected": "This GitHub installation is already connected to another workspace.",
+    "repos_fetch_failed": "We couldn't load your repositories. Please try again.",
+    "no_github_connection": "Connect GitHub before adding repositories.",
+    "watchlist_cap_reached": "You're already watching 20 repositories, the maximum.",
+    "watchlist_add_failed": "We couldn't add that repository. Please try again.",
+    "invalid_repo": "That repository selection wasn't valid.",
+    "generic": "Something went wrong. Please try again."
+  },
+  "success": {
+    "connected": "GitHub connected successfully."
+  }
+}

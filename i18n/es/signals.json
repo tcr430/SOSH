@@ -1,0 +1,70 @@
+{
+  "title": "Señales de GitHub",
+  "subtitle": "Convierte tus notas de versión publicadas en ideas de contenido.",
+  "not_connected": {
+    "what_we_read": "SOSH lee las notas de versión publicadas de los repositorios que elijas.",
+    "what_we_never_do": "SOSH nunca escribirá en tus repositorios — sin commits, sin issues, sin pull requests, nunca.",
+    "connect_cta": "Conectar GitHub"
+  },
+  "awaiting_approval": {
+    "title": "Esperando la aprobación de la organización",
+    "body": "Tu organización de GitHub requiere la aprobación de un propietario antes de que esta instalación pueda continuar. Pide a un propietario de la organización que apruebe la solicitud de la app de SOSH en GitHub y luego vuelve a esta página."
+  },
+  "reconnect_required": {
+    "title": "Es necesario reconectar",
+    "body": "GitHub indica que esta conexión fue revocada, por lo que SOSH dejó de recibir actualizaciones. Reconecta para reanudar la captación.",
+    "cta": "Reconectar GitHub"
+  },
+  "rate_limited": {
+    "banner": "Se alcanzó el límite de solicitudes de GitHub. La captación se reanuda automáticamente — no hay nada que hacer."
+  },
+  "repo_unavailable": {
+    "badge": "Este repositorio fue eliminado, renombrado o quitado de la instalación."
+  },
+  "at_cap": {
+    "title": "Lista de seguimiento completa",
+    "body": "Estás siguiendo 20 repositorios, el máximo permitido. Elimina uno antes de añadir otro."
+  },
+  "picker": {
+    "heading": "Añadir un repositorio",
+    "add_cta": "Añadir",
+    "empty": "No hay más repositorios disponibles en esta instalación."
+  },
+  "watch_list": {
+    "heading": "Repositorios seguidos",
+    "remove": "Eliminar",
+    "pause": "Pausar",
+    "resume": "Reanudar",
+    "empty": "Todavía no estás siguiendo ningún repositorio."
+  },
+  "recent_signals": {
+    "heading": "Actividad reciente",
+    "empty": "Todavía no hay señales.",
+    "view_link": "Ver en GitHub"
+  },
+  "disconnect": {
+    "cta": "Desconectar",
+    "confirm_title": "¿Desconectar GitHub?",
+    "confirm_body_stops_ingestion": "Desconectar detiene la lectura de nuevas notas de versión por parte de SOSH. No revoca el acceso de GitHub.",
+    "confirm_body_full_revocation": "Para revocar completamente el acceso, desinstala la app de SOSH en la configuración de tu cuenta u organización de GitHub.",
+    "confirm_cta": "Desconectar",
+    "deep_link_cta": "Gestionar en GitHub"
+  },
+  "errors": {
+    "invalid_request": "Esa solicitud no era válida. Intenta conectar de nuevo.",
+    "invalid_state": "Tu sesión expiró durante la configuración. Intenta conectar de nuevo.",
+    "forbidden": "No tienes permiso para gestionar esta conexión.",
+    "exchange_failed": "No pudimos completar la conexión con GitHub. Intenta de nuevo.",
+    "not_your_installation": "Esa instalación de GitHub no te pertenece.",
+    "already_connected": "Esta instalación de GitHub ya está conectada a otro espacio de trabajo.",
+    "repos_fetch_failed": "No pudimos cargar tus repositorios. Intenta de nuevo.",
+    "no_github_connection": "Conecta GitHub antes de añadir repositorios.",
+    "watchlist_cap_reached": "Ya estás siguiendo 20 repositorios, el máximo permitido.",
+    "watchlist_add_failed": "No pudimos añadir ese repositorio. Intenta de nuevo.",
+    "invalid_repo": "Esa selección de repositorio no era válida.",
+    "generic": "Algo salió mal. Intenta de nuevo."
+  },
+  "success": {
+    "connected": "GitHub conectado correctamente."
+  }
+}

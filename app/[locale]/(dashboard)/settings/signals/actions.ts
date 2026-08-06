@@ -17,6 +17,7 @@ import {
 import { canServer } from '@/lib/members/can-server'
 import { CAPABILITIES } from '@/lib/members/capabilities'
 import { signGithubConnectState } from '@/lib/signals/state'
+import { mintInstallationToken, getInstallationRepositories, type GithubRepoSummary } from '@/lib/signals'
 import { config } from '@/lib/config'
 import { NONCE_COOKIE_NAME } from '@/app/api/signals/github/callback/route'
 import type { SupabaseClient, User } from '@supabase/supabase-js'
@@ -223,4 +224,39 @@ export async function toggleWatchedRepoAction(input: unknown): Promise<ActionSta
 
   await setWatchedRepoActive(client, parsed.data.watchedRepoId, business.id, parsed.data.isActive)
   return { success: true }
+}
+
+export type ListRepositoriesResult =
+  | { success: true; repos: GithubRepoSummary[] }
+  | { success: false; error: string }
+
+// The repo picker's data source. A token is minted PER CALL (never
+// persisted, per lib/signals/github-client.ts's SIGNAL-NO-TOKEN-AT-REST) and
+// used exactly once, in memory, for the GET /installation/repositories call
+// below — it never appears in the returned result or in any log statement.
+export async function listInstallationRepositoriesAction(): Promise<ListRepositoriesResult> {
+  const client = await createClient()
+  let user: User, business: BusinessRow
+  try {
+    ;({ user, business } = await requireBusiness(client))
+  } catch {
+    return { success: false, error: 'errors.forbidden' }
+  }
+
+  if (!(await canServer(client, business, user.id, CAPABILITIES.CONNECT_ACCOUNTS))) {
+    return { success: false, error: 'errors.forbidden' }
+  }
+
+  const connection = await getGithubConnectionByBusinessId(client, business.id)
+  if (!connection || !connection.is_active) {
+    return { success: false, error: 'errors.no_github_connection' }
+  }
+
+  try {
+    const { token } = await mintInstallationToken(connection.installation_id)
+    const repos = await getInstallationRepositories(token)
+    return { success: true, repos }
+  } catch {
+    return { success: false, error: 'errors.repos_fetch_failed' }
+  }
 }
