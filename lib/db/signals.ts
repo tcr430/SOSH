@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { SignalRow, SignalInsert } from './types'
+import type { SignalRow, SignalInsert, UntrustedText } from './types'
 import { getErrorMessage } from './utils'
 
 // ADR 0020 §10.1 — the ONLY module that touches signals. Every caller (the
@@ -75,6 +75,57 @@ export async function upsertSignal(insert: SignalInsert): Promise<SignalRow> {
   const { data, error } = await client
     .from('signals')
     .upsert(insert, { onConflict: 'business_id,source,external_id' })
+    .select()
+    .single()
+  if (error) throw new Error(getErrorMessage(error))
+  return asSignalRow(data)
+}
+
+export type InsertSignalResult =
+  | { status: 'inserted'; signal: SignalRow }
+  | { status: 'duplicate' }
+
+// §4.3 — the poller's INSERT-only ingest path for a signal the app-layer
+// diff (E2.7's orchestrator, against listSignalsForWatchedRepo's read)
+// believes is genuinely new. Deliberately NOT upsertSignal: an upsert
+// silently absorbs a conflicting write by updating it, which would make a
+// concurrent duplicate delivery indistinguishable from a real edit. A plain
+// INSERT lets the UNIQUE(business_id, source, external_id) index be the
+// actual arbiter (§4.3 — "the index and not an application check", since a
+// SELECT-then-INSERT is a TOCTOU race): a losing concurrent INSERT hits
+// Postgres error code 23505, which the caller counts as `duplicates`, never
+// as an error — CLAUDE.md's webhook-handler rule applied to a poller.
+export async function insertSignal(insert: SignalInsert): Promise<InsertSignalResult> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client.from('signals').insert(insert).select().single()
+  if (error) {
+    if (error.code === '23505') return { status: 'duplicate' }
+    throw new Error(getErrorMessage(error))
+  }
+  return { status: 'inserted', signal: asSignalRow(data) }
+}
+
+// §4.4/§6.4 — the poller's edit-in-place write: same external_id, a
+// different content_hash (detected app-side by the orchestrator BEFORE
+// calling this, so a byte-identical retry never reaches here at all — see
+// lib/signals/orchestrator.ts's local sha256 replication of the generated
+// column). A plain UPDATE by id, not an upsert: the row is known to already
+// exist, and E2.1's guard_signals_identity_update trigger permits exactly
+// these three columns (plus its own updated_at stamp) to change. Explicit
+// business_id predicate (§3.5) even though `id` alone is unique.
+export async function updateSignalContent(
+  id: string,
+  businessId: string,
+  update: { title: UntrustedText; body: UntrustedText; body_truncated: boolean },
+): Promise<SignalRow> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client
+    .from('signals')
+    .update(update)
+    .eq('id', id)
+    .eq('business_id', businessId)
     .select()
     .single()
   if (error) throw new Error(getErrorMessage(error))

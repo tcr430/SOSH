@@ -117,6 +117,34 @@ export async function deactivateGithubConnection(
   return (data as GithubConnectionRow | null) ?? null
 }
 
+// §4.5 — 403 rate-limit containment: records the informational
+// rate_limited_until stamp AND completes the claim (last_poll_completed_at
+// + last_poll_status = 'rate_limited'), a DISTINCT write from
+// completeGithubConnectionPoll only because this path needs the extra
+// rate_limited_until column in the same statement. Completing the claim
+// here (rather than leaving last_poll_started_at set) means the connection
+// is not stuck "claimed" until the 50-minute staleness window lapses —
+// next hour's tick can attempt it again immediately (harmless: a second
+// attempt inside a still-active rate limit just produces another 403,
+// counted again). NO deactivation (§4.5) — a rate limit is not a
+// revocation.
+export async function recordGithubConnectionRateLimited(
+  businessId: string,
+  rateLimitedUntil: string,
+): Promise<void> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { error } = await client
+    .from('github_connections')
+    .update({
+      rate_limited_until: rateLimitedUntil,
+      last_poll_completed_at: formatISO(new Date()),
+      last_poll_status: 'rate_limited',
+    })
+    .eq('business_id', businessId)
+  if (error) throw new Error(getErrorMessage(error))
+}
+
 // §8.3 — the install callback's write. Service-role (§8.5: "the write ...
 // runs service-role and bypasses RLS, so the app-layer user_can check is the
 // real boundary" — the callback gates BEFORE calling this). Upsert on

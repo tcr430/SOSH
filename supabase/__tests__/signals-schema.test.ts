@@ -321,6 +321,37 @@ describe('signal ingestion schema (ADR 0020 §3)', () => {
     expect(error.code).toBe('23505')
   })
 
+  // ─── ADR §4.2 — the poller's atomic claim, proved under real concurrency ──
+
+  it('claimGithubConnectionForPoll under concurrency: two simultaneous claims on the same connection succeed exactly once', async () => {
+    // A fresh, unclaimed connection (last_poll_started_at null) so this
+    // test's outcome cannot be polluted by connAId's claim state from any
+    // other test in this file.
+    const owner = await createUser('claim-race')
+    const { data: biz, error: bizErr } = await admin
+      .from('businesses')
+      .insert({ name: 'Claim Race Business', owner_id: owner.id, plan: 'plus' })
+      .select('id')
+      .single()
+    if (bizErr) throw bizErr
+    const connId = await insertConnection(biz.id, Math.floor(Date.now() / 1000) + 777000)
+
+    const { claimGithubConnectionForPoll } = await import('@/lib/db/github-connections')
+    const [first, second] = await Promise.all([
+      claimGithubConnectionForPoll(connId),
+      claimGithubConnectionForPoll(connId),
+    ])
+
+    // Exactly one of the two concurrent atomic UPDATEs matched the
+    // unclaimed-window WHERE clause; the other found last_poll_started_at
+    // already moved and updated zero rows (null), never both.
+    const claimedCount = [first, second].filter((r) => r !== null).length
+    expect(claimedCount).toBe(1)
+
+    await admin.from('businesses').delete().eq('id', biz.id)
+    await admin.auth.admin.deleteUser(owner.id)
+  })
+
   // ─── SIGNAL-DEDUP-STABLE-ON-EDIT — the guarded upsert (§6.4) ─────────────
 
   it('upsert_signal_candidate RPC updates a candidate still status=new (positive control for the guard below)', async () => {
