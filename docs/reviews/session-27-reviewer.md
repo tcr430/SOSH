@@ -712,3 +712,62 @@ the +1 test is exactly this step's new case; no new test *file*, since the case 
 `lib/db/signals.test.ts`).
 
 **Commit:** D3 lands as its own commit immediately following this appendix entry.
+
+### D4 — MINOR-3, MINOR-4, NIT-4, A-6
+
+**A-6 (item 1) — verification that made the deletion safe, done BEFORE deleting anything.** Confirmed
+`SIGNAL-INGEST-IDEMPOTENT` is proved independently of `upsertSignal`:
+- `supabase/__tests__/signals-schema.test.ts:251` — `"SIGNAL-INGEST-IDEMPOTENT: a second insert with the
+  same (business_id, source, external_id) hits 23505"` — a live-Postgres test that inserts a row, then
+  inserts a second row with the same `(business_id, source, external_id)` and asserts the DB itself rejects
+  it. This exercises `insertSignal`'s INSERT-only path, never `upsertSignal`.
+- `lib/signals/orchestrator.test.ts:358` — `"a retried delivery's INSERT hitting 23505 (via insertSignal's
+  duplicate result) counts as duplicates, not signalsIngested"` — asserts the orchestrator correctly counts
+  a duplicate result from `insertSignal` and never calls `mockUpsertScoredCandidate`.
+- By contrast, `lib/db/signals.test.ts:45` (formerly `:60-76`, the deleted case) was
+  `'upsertSignal targets UNIQUE(business_id, source, external_id) as the conflict arbiter'` — a **mocked**
+  shape assertion (`expect(builder.upsert).toHaveBeenCalledWith(...)`) against a fake client, not a proof
+  against real Postgres, and not a caller the orchestrator ever exercises.
+
+This confirms the check comes out the way A-6 assumed: deleting `upsertSignal` and its test removes zero
+executed proof of any named constraint. **A-6 applied — split, not one deletion:**
+
+**MINOR-3 — RESOLVED, split per A-6.**
+- `upsertSignal` (`lib/db/signals.ts`) **deleted**, along with its mocked-shape test case in
+  `lib/db/signals.test.ts`. No barrel export existed for it (`lib/db/index.ts` does not re-export
+  `lib/db/signals.ts`; confirmed by grep). The ingest path remains `insertSignal`; the edit path remains
+  `updateSignalContent`.
+- `scoreAndSortSignals` and `sortScoredSignals` (`lib/signals/score.ts`) **KEPT**, not deleted —
+  `score.test.ts:107-122`'s shuffled-copy cases run through `scoreAndSortSignals` (which calls
+  `sortScoredSignals` internally) and are `SIGNAL-SCORING-DETERMINISTIC`'s executed proof. Both annotated:
+  `scoreAndSortSignals` as the ADR 0021 / Session 28 entry point for any in-memory batch-scoring path
+  needing a deterministic order before persistence; `sortScoredSignals` as the total-order building block
+  that proof exercises directly.
+- The wrong citation: `score.ts`'s comment on `upsertScoredCandidate` (the edit-handling note) previously
+  said the caller re-writes signals' content columns via `lib/db/signals.ts`'s `upsertSignal` — the
+  orchestrator actually calls `updateSignalContent` (`orchestrator.ts:134`; the work order named `:120`,
+  which had drifted — corrected to the verified current line). Citation corrected.
+
+**MINOR-4 — RESOLVED.** `score.ts` now states, at `sortScoredSignals`, that it is a scoring-side utility
+whose order is **not** the feed order — §13.1's `ORDER BY score DESC, occurred_at DESC, id ASC`
+(`signal_candidates_feed_idx`) is authoritative for anything read from `signal_candidates`, and the two
+orders (`external_id ASC` vs `id ASC` tiebreaks) can diverge on an exact tie. `ADR 0020 §6.3` amended
+(appended) with the same clarification, so a future session cannot contradict §13.1's contract by importing
+`sortScoredSignals` for feed-facing output.
+
+**NIT-4 — RESOLVED.** `ADR 0020 §14` ("Explicitly deferred") gained a line naming the `tag_name` drift
+explicitly: §5.3 lists it as retained, no `signals.tag_name` column exists, `parseRelease` has the raw
+value in hand but nowhere to put it, and ADR 0021 must decide either the column or dropping the retention
+claim. No column added here — that would be a migration, out of D4's scope and L-1's boundary.
+
+**Verify:** `npx tsc --noEmit --skipLibCheck` clean — confirms `upsertSignal` has zero remaining importers.
+`npm run test:app` → **193 files / 2663 tests, all green** (down from D3's 2664 by exactly 1 — the deleted
+`upsertSignal` test case; no other count changed). `score.test.ts`'s three determinism cases
+(`lib/signals/score.test.ts:106-125`) pass **UNCHANGED** — confirmed by diff, no edits made to that file,
+consistent with item 3 being comment-only. `npm run test:db` could not be executed locally — `docker info`
+confirms Docker is unavailable in this environment, the same pre-existing local limitation noted earlier in
+this session's D1–D3 steps; D4 touches zero Tier-1 (live-Postgres) files (only `lib/db/signals.ts`'s
+mocked unit test, `lib/signals/score.ts`, and two ADR sections), so this is a formality for D7's CI run to
+confirm rather than a gap introduced by this step.
+
+**Commit:** D4 lands as its own commit immediately following this appendix entry.

@@ -6,8 +6,7 @@ vi.mock('@/lib/supabase/service', () => ({
 }))
 
 import { createServiceRoleClient } from '@/lib/supabase/service'
-import { listRecentSignalsForBusiness, listSignalsForWatchedRepo, upsertSignal } from './signals'
-import type { SignalInsert } from './types'
+import { listRecentSignalsForBusiness, listSignalsForWatchedRepo } from './signals'
 
 const mockCreateServiceRoleClient = vi.mocked(createServiceRoleClient)
 
@@ -55,23 +54,5 @@ describe('lib/db/signals.ts (ADR 0020 §10.1/§7.4)', () => {
     expect(builder.order).toHaveBeenCalledTimes(2)
     expect(builder.order).toHaveBeenNthCalledWith(1, 'occurred_at', { ascending: false })
     expect(builder.order).toHaveBeenNthCalledWith(2, 'id', { ascending: true })
-  })
-
-  it('upsertSignal targets UNIQUE(business_id, source, external_id) as the conflict arbiter (§4.3 idempotency)', async () => {
-    const { client, builder } = createMockClient(null, null)
-    mockCreateServiceRoleClient.mockReturnValue(client)
-
-    const insert: SignalInsert = {
-      business_id: 'biz-1',
-      watched_repo_id: 'repo-1',
-      source: 'github',
-      kind: 'release',
-      external_id: 'github:release:1',
-      title: 'v1' as SignalInsert['title'],
-      occurred_at: '2026-07-01T00:00:00Z',
-    }
-    await upsertSignal(insert)
-
-    expect(builder.upsert).toHaveBeenCalledWith(insert, { onConflict: 'business_id,source,external_id' })
   })
 })

@@ -82,6 +82,22 @@ export function scoreSignal(input: ScorableSignal, now: Date): ScoredSignal {
 // score DESC, occurred_at DESC, external_id ASC. external_id is unique per
 // business (the signals UNIQUE(business_id, source, external_id) arbiter),
 // so this ordering never needs a fourth tiebreaker.
+//
+// [Session 27-D · D4, MINOR-4] This is a SCORING-SIDE utility — its order is
+// NOT the feed order. §13.1's `ORDER BY score DESC, occurred_at DESC, id ASC`
+// (signal_candidates_feed_idx) is authoritative for anything read from
+// signal_candidates; that contract breaks ties on `id`, this one on
+// `external_id` — both deterministic, but they can order an exact tie
+// differently. Currently harmless only because no production caller reads
+// this function's output as a feed (see the "Session 28 entry point" note
+// below) — do not import this for anything that renders to a user as feed
+// order.
+//
+// [Session 27-D · D4, A-6] KEPT, not dead: no production caller today outside
+// scoreAndSortSignals (below), which is itself the ADR 0021 / Session 28
+// entry point named there. This function is the total-order building block
+// that SIGNAL-SCORING-DETERMINISTIC's shuffled-copy proof (score.test.ts:
+// 107-122) exercises directly.
 export function sortScoredSignals(signals: ScoredSignal[]): ScoredSignal[] {
   return [...signals].sort((a, b) => {
     if (a.score !== b.score) return b.score - a.score
@@ -93,9 +109,18 @@ export function sortScoredSignals(signals: ScoredSignal[]): ScoredSignal[] {
   })
 }
 
-// §6.3 — SIGNAL-SCORING-DETERMINISTIC's production entry point: score every
-// input against the SAME `now`, then apply the total order above. The same
-// input set, in any input order, always produces the same OUTPUT order.
+// §6.3 — SIGNAL-SCORING-DETERMINISTIC's shuffled-copy proof runs through
+// this function (score.test.ts:107-122): score every input against the SAME
+// `now`, then apply the total order above. The same input set, in any input
+// order, always produces the same OUTPUT order.
+//
+// [Session 27-D · D4, A-6] KEPT, not dead: this has no production caller
+// today — the orchestrator calls scoreSignal per-signal and never sorts in
+// memory (the DB does the ordering, per §13.1) — but it is the executed
+// proof of SIGNAL-SCORING-DETERMINISTIC and the entry point ADR 0021 /
+// Session 28 is expected to consume for any in-memory batch-scoring path
+// that needs a deterministic order before persistence. Deleting it would
+// delete that constraint's only proof.
 export function scoreAndSortSignals(inputs: ScorableSignal[], now: Date): ScoredSignal[] {
   return sortScoredSignals(inputs.map((input) => scoreSignal(input, now)))
 }
@@ -108,11 +133,14 @@ export function scoreAndSortSignals(inputs: ScorableSignal[], now: Date): Scored
 //
 // Edit handling (§6.4): when a poller tick re-ingests a release whose
 // content_hash changed, the caller re-writes signals' content columns
-// first (lib/db/signals.ts's upsertSignal, permitted by E2.1's identity
-// trigger) and calls this function again with the freshly-scored result —
-// same signal_id, so the SAME candidate row is updated in place, never a
-// second row (§6.4's chosen option; re-ingesting as a second row or
-// ignoring the edit are both named losers).
+// first (lib/db/signals.ts's updateSignalContent, permitted by E2.1's
+// identity trigger — [Session 27-D · D4, MINOR-3] this citation previously
+// named upsertSignal, a function the orchestrator never calls; see
+// orchestrator.ts:134 for the actual call site) and calls this function
+// again with the freshly-scored result — same signal_id, so the SAME
+// candidate row is updated in place, never a second row (§6.4's chosen
+// option; re-ingesting as a second row or ignoring the edit are both named
+// losers).
 export async function upsertScoredCandidate(
   businessId: string,
   signalId: string,

@@ -69,27 +69,6 @@ export async function listSignalsForWatchedRepo(
   return ((data as unknown[]) ?? []).map(asSignalRow)
 }
 
-// §4.3/§4.4 — the poller's ingestion write. UPSERT on
-// UNIQUE(business_id, source, external_id), the arbiter: a retried QStash
-// delivery or an overlapping tick's duplicate insert is absorbed here rather
-// than by an app-level SELECT-then-INSERT (a TOCTOU race, §4.3). On
-// conflict, only the columns signals.guard_signals_identity_update permits
-// (title, body, body_truncated, updated_at) are ever touched by the
-// conflict-update clause — business_id/watched_repo_id/external_id/
-// created_at are never in it, matching the BEFORE UPDATE trigger's own
-// guarantee at the app layer.
-export async function upsertSignal(insert: SignalInsert): Promise<SignalRow> {
-  const { createServiceRoleClient } = await import('@/lib/supabase/service')
-  const client = createServiceRoleClient()
-  const { data, error } = await client
-    .from('signals')
-    .upsert(insert, { onConflict: 'business_id,source,external_id' })
-    .select()
-    .single()
-  if (error) throw new Error(getErrorMessage(error))
-  return asSignalRow(data)
-}
-
 export type InsertSignalResult =
   | { status: 'inserted'; signal: SignalRow }
   | { status: 'duplicate' }

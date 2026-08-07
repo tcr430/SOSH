@@ -702,6 +702,16 @@ Ties are impossible by construction: the total order is `score DESC, occurred_at
 once more over a shuffled copy of it, asserting an identical ordered result all three times
 (`SIGNAL-SCORING-DETERMINISTIC`).
 
+> **Amendment (Session 27-D / D4, MINOR-4) — this total order is scoring-side, not the feed order.**
+> `sortScoredSignals`/`scoreAndSortSignals` (`lib/signals/score.ts`) break ties on `external_id ASC`. §13.1's
+> `ORDER BY score DESC, occurred_at DESC, id ASC` (`signal_candidates_feed_idx`) is the **authoritative**
+> order for anything read from `signal_candidates` — it breaks ties on `id`, not `external_id`. Both orders
+> are individually deterministic, but they can order an exact tie differently, so they are **not
+> interchangeable**: `sortScoredSignals` is a scoring-side utility for producing a deterministic order over
+> an in-memory batch before persistence (and the vehicle for `SIGNAL-SCORING-DETERMINISTIC`'s executed
+> proof), not a substitute for §13.1's contract on the read path. A future session must not import it for
+> anything that renders to a user as feed order.
+
 ### 6.4 The dedup key, and its stability across an edited release
 
 **Key:** `(business_id, 'github', external_id)`, `external_id = 'github:release:{release_id}'`.
@@ -1396,6 +1406,12 @@ and available); **no triage status beyond `'new'`** (the `CHECK` widens in ADR 0
 - **A `FOR UPDATE SKIP LOCKED` claim RPC** — §4.2, revived if an out-of-band "poll now" or backfill trigger
   is added.
 - **Per-repo `weight` tuning** — the column exists and is constant 10 in v1 (§6.1).
+- **`tag_name` retention (Session 27-D / D4, NIT-4)** — §5.3 lists `tag_name` as retained, but no
+  `signals.tag_name` column exists to receive it (`lib/signals/parse-release.ts:44-55` self-documents this
+  drift; `lib/db/signal-candidates.ts:19-28` already documents the matching gap against §13.1's join list).
+  `parseRelease` has the raw value in hand (`release.tag_name`) but nowhere on `SignalInsert` to put it.
+  ADR 0021 decides either the column (a migration) or dropping the retention claim from §5.3 — not decided
+  here, since either choice is out of this ADR's L-1 boundary.
 - **A significance floor — named explicitly so ADR 0021 inherits it as a decision, not an assumption.**
   Stage B is a **ranker, not a gate**: every ingested release becomes exactly one candidate (§6.5), bots are
   scored down rather than filtered (§6.2), and `listNewCandidates` applies no minimum score (§13.1). Nothing
