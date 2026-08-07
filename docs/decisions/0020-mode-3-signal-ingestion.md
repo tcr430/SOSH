@@ -1,7 +1,10 @@
 # ADR 0020 — Mode 3 Part 1: GitHub Signal Ingestion (Stages A + B)
 
-- **Status:** Accepted. Session 27 / Track E (E1 Architect phase). Builder (E2) transcribes; no code in this
-  document.
+- **Status:** Accepted and CLOSED. Session 27 / Track E — Architect (E1), Builder (E2.1–E2.11), Reviewer
+  (E3, `docs/reviews/session-27-reviewer.md`) and correction pass (Session 27-D, D0–D7) all complete. All
+  sixteen Reviewer findings (3 MAJOR, 7 MINOR, 6 NIT) and three founder adjudications (A-4, A-5, A-6) are
+  resolved, with the corrected range executed green in CI (`docs/current-phase.md`'s Session 27-D · D7
+  entry). No BLOCKER at any stage.
 - **Date:** 2026-08-04
 - **Supersedes / amends:** none. **Extends** ADR 0017 (Mode 2 brief pipeline — Stage F re-enters it) and
   ADR 0018 (the cron/worker pattern reused here). **Governed by** ADR 0015 (test-execution tiers) and

@@ -896,3 +896,65 @@ four delta files are enumerated by name in both `current-phase.md` and `ADR §11
 direct quotation with a line citation, not a paraphrase.
 
 **Commit:** D6 lands as its own commit immediately following this appendix entry.
+
+### D7 — CI and close-out
+
+**Push and re-run.** D0–D6 pushed to PR #5 (`https://github.com/tcr430/SOSH/pull/5`), head `93107cce`. Both
+workflows re-run against that head, LOGS read directly, not checkmarks:
+
+- `app-tests` — [run 31194555691](https://github.com/tcr430/SOSH/actions/runs/31194555691) — **green**,
+  1m49s. Skip-guard's own line, quoted verbatim: `skip-guard: 193 file(s) under [app, lib, components] all
+  visible, zero failures — green. (2665/2665 tests passed)`.
+- `db-tests` — [run 31194553890](https://github.com/tcr430/SOSH/actions/runs/31194553890) — **green**,
+  2m53s. Skip-guard's own line, quoted verbatim: `skip-guard: 24 file(s) under [supabase/__tests__] all
+  visible, zero failures — green. (241/241 tests passed)`.
+
+**MAJOR-1 now moot going forward.** D6 recorded the historical fact (the range head `5b5bbb9f` never ran
+green); this run is the executed proof for the CORRECTED range, at `93107cce`. Both jobs green, including
+D1's conditional config, D2's new route suite, D5's new Tier-1 claim case, and D5's two new orchestrator
+behaviour cases.
+
+**A-4 confirmed the hard way.** `grep -n GITHUB_APP .github/workflows/app-tests.yml
+.github/workflows/db-tests.yml` at this head returns only D1's explanatory comments — zero
+`GITHUB_APP_*: value` entries in either workflow — and `app-tests` is green anyway. Per the work order: if
+this were not the case, A-4 would have been implemented wrongly in D1 and this step would STOP and report.
+It is the case, so this closes A-4's CI half.
+
+**D5's honest gap is now closed with an executed proof.** D5's appendix flagged, explicitly, that
+`npm run test:db` could not run locally and that the exactly-once-under-concurrency test
+(`signals-schema.test.ts:326`) and the new A-5/MINOR-6 rate-limit-claim test were *argued*, not *executed*.
+This run's `db-tests` skip-guard count — 241 tests, +1 from the prior Session 27 green run's 240 — is that
+execution: both tests ran on live Postgres in this CI run and are counted in the 241/241 green total. The
+argument in D5's appendix (that `claimGithubConnectionForPoll`'s WHERE clause is untouched by the diff, so
+the concurrency proof is unaffected) is now corroborated by an actual green run, not merely asserted.
+
+**Promotion tally — unchanged at 0 of 3, not rounded up.** ADR 0015 §5 counts full-green runs on
+**`master`** toward the `db-tests` promotion threshold. Both runs above are `pull_request`-event runs on
+branch `session-22-d`. Per the same rule stated at every prior entry in `docs/current-phase.md`, this range
+contributes **nothing** to the tally.
+
+**§5 close-out list walked (`docs/build-guide/session-27.md`):**
+
+| Item | Status |
+|---|---|
+| `docs/current-phase.md` — Session 27 entry, run URLs, skip-guard counts, promotion tally | ✅ this step |
+| ADR 0010 §D2.5's four cascade rows | ✅ already landed pre-D-pass (`github_connections`, `watched_repos`, `signals`, `signal_candidates`, all `CASCADE`), re-verified unaffected — no new table in D0–D7 |
+| `CLAUDE.md`'s `lib/signals/` module-boundary rule | ✅ already landed pre-D-pass, re-verified unaffected — no module-boundary change in D0–D7 |
+| ADR 0020's status/close-out block | ✅ this step — the header `**Status:**` line updated from stale "E1 Architect phase" to "Accepted and CLOSED", naming all four phases (Architect/Builder/Reviewer/correction) and the zero-BLOCKER outcome |
+| `.wolf/anatomy.md`, `.wolf/memory.md`, `.wolf/cerebrum.md` | ✅ `cerebrum.md` updated at D6 (NIT-6); `anatomy.md` already carries an entry for D2's new `route.test.ts`; `memory.md` is hook-auto-logged per edit throughout D0–D7 |
+| `docs/build-guide/session-28.md`'s Reality block vs. what Session 27 shipped after correction | ✅ checked explicitly — D1 (config optionality) and D5 (claim-query predicate) are both internal Stage A details, orthogonal to §13.1's frozen feed contract (table/filter/order/bound/function) that Reality item 1 quotes verbatim; the `id ASC` tiebreak that quote states is exactly what D4's MINOR-4 amendment reaffirmed as authoritative — no drift, no edit needed |
+| `docs/reviews/session-27-reviewer.md` appendix, one row per finding + adjudication | ✅ this step — verified below |
+
+**Appendix completeness — the row count matches the finding count.** `grep`-verified against this file's
+own `## CORRECTION PASS` section: all sixteen finding IDs present (MAJOR-1, MAJOR-2, MAJOR-3, MINOR-1
+through MINOR-7, NIT-1 through NIT-6) and all three adjudication IDs present (A-4, A-5, A-6) — nineteen
+IDs total, nineteen resolution rows, zero gaps. Dispositions: 15 RESOLVED, 1 ARGUED-NOT-CHANGED (NIT-2), 1
+DECLINED-WITH-REASON (NIT-5), plus 3 adjudications applied as ruled (A-4, A-5, A-6) — none silently
+dropped, none restated as resolved without a citation back to its finding ID.
+
+**Verify:** both runs green at the D6/D7 head `93107cce`; both skip-guard lines quoted verbatim above; the
+promotion tally states 0 of 3 with the reason (not rounded up); the appendix's nineteen-ID count matches
+the sixteen-finding-plus-three-adjudication total the work order named.
+
+**Session 27-D correction pass CLOSED.** Eight steps (D0–D7), eight commits, zero BLOCKER at any stage,
+sixteen findings and three adjudications each resolved and traceable to their fix, test, and commit SHA.

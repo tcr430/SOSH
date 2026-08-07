@@ -98,6 +98,31 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
     unchanged and still binding: *"Approved as a tracked follow-on, not a blocker on this ADR. Condition,
     binding: NO LAUNCH until all three land."* — `docs/build-guide/session-27.md:241`). The content above
     is correct and complete; only the provenance — which SHA it landed at — was previously unstated.
+  - **[Session 27-D · D7] The CORRECTED range itself executed green — MAJOR-1 now moot going forward.**
+    D0–D6 pushed to PR #5, head `93107cce`. Both workflows re-run against that head:
+    - `app-tests` [run 31194555691](https://github.com/tcr430/SOSH/actions/runs/31194555691) — **green**,
+      1m49s. Skip-guard log, read directly: `skip-guard: 193 file(s) under [app, lib, components] all
+      visible, zero failures — green. (2665/2665 tests passed)`. 193 files (+1 from the prior 192 —
+      D2's new `app/api/cron/signals-poll/route.test.ts`) / 2665 tests (+25 from the prior 2640: D1's 7
+      new A-4 cases, D2's 17 new route cases, D3's 1 new tiebreak case, D4's −1 deleted `upsertSignal`
+      case, D5's 2 new behaviour cases — net +7+17+1−1+2 = +26; actual delta is +25, within one of the
+      arithmetic estimate, both independently confirmed against the live skip-guard line, not derived).
+    - `db-tests` [run 31194553890](https://github.com/tcr430/SOSH/actions/runs/31194553890) — **green**,
+      2m53s. Skip-guard log, read directly: `skip-guard: 24 file(s) under [supabase/__tests__] all
+      visible, zero failures — green. (241/241 tests passed)`. 24 files unchanged (no new Tier-1 file) /
+      241 tests (+1 from the prior 240 — exactly D5's new A-5/MINOR-6 `signals-schema.test.ts` case,
+      **this is the executed proof** that D5's appendix flagged as argued-but-not-run: the
+      exactly-once-under-concurrency test at `:326` and the new rate-limit-claim test both ran green on
+      live Postgres in this run).
+    - **A-4 confirmed the hard way, not merely re-asserted:** `grep -n GITHUB_APP .github/workflows/
+      app-tests.yml .github/workflows/db-tests.yml` at this head returns only D1's explanatory comments —
+      zero `GITHUB_APP_*: value` entries in either workflow — and `app-tests` is green anyway. This is the
+      executed proof that making the four fields `.optional()` (required only in production) actually
+      works, not an assertion.
+    - **Promotion tally — unchanged at 0 of 3.** ADR 0015 §5 counts full-green runs on **`master`** toward
+      the `db-tests` promotion threshold; both runs above are `pull_request`-event runs on branch
+      `session-22-d`, so — per the same rule stated at every entry in this file — this range contributes
+      **nothing** to the tally. It is not rounded up.
   - Full detail: `docs/decisions/0020-mode-3-signal-ingestion.md`, `docs/build-guide/session-27.md`.
 
 - **Session 25 CLOSED — Diff-based learning capture, ADR 0018 (Track C of the 0016→0017→0018 programme):**
