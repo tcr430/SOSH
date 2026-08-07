@@ -631,3 +631,45 @@ the error message itself never reaches a URL, log line, or user-facing surface i
 exact SHA — this row is written before that commit exists, consistent with the ordering hazard already
 documented in `docs/build-guide/session-27.md` §4: the resolution row for a step is written, then the step
 is committed, matching D0's own precedent of landing the work order before the work).
+
+### D2 — MAJOR-2, NIT-2
+
+**MAJOR-2 — RESOLVED.** `app/api/cron/signals-poll/route.test.ts` added, modelled directly on
+`app/api/cron/capture-learning/route.test.ts`'s `vi.hoisted` mock-control shape (no new harness invented).
+17 cases, covering: qstash mode unsigned/invalid request → 401 with `runSignalsTick` asserted **not
+called** (mock call count checked directly, not inferred from status); qstash mode valid signature → 200,
+tick called exactly once with `triggeredBy: 'qstash'`; secret mode wrong/missing/short bearer → 401, tick
+not called; secret mode correct bearer → 200; secret mode dev bypass (`x-cron-dev-trigger: true`) → 200 in
+development, and explicitly **401 in production** (the bypass is proven not consulted, not merely
+untested); `GET` → 405 in qstash mode and `POST` → 405 in secret mode, both asserting the tick is never
+called; the `cron-auth-failure` warn line asserted to carry exactly `{kind, route, reason, trigger}` — no
+more keys — and a synthetic "secret-shaped" signature value asserted **absent** from the serialized log
+line, closing the "carries no request body, header value or token" requirement directly rather than by
+inspection.
+
+`docs/decisions/0020-mode-3-signal-ingestion.md` §11.5 amended (appended) with the `verifyQStashRequest`
+caller table naming this test against `api/cron/signals-poll/route.ts:16`, so the table the Reviewer found
+false (`api/cron/signals-poll/route.ts:16 → NONE`) is now true. The pre-existing
+`api/cron/process-deletions/route.ts` gap is recorded in the same table as **unaddressed, out of scope** —
+it predates Session 27 and fixing it is a separate change, per the Reviewer's own note.
+
+**Redden proof (VERIFY):** the qstash-mode auth guard was temporarily inverted (the `catch` block's
+`return new NextResponse('Unauthorized', { status: 401 })` removed, so an unsigned/invalid request fell
+through to the tick instead of being rejected) — `git diff` confirmed this was the only change. Re-running
+the suite produced exactly 3 failures, all in the qstash-mode 401/never-called cases (invalid signature,
+missing signature, dev-bypass-not-consulted), 14/17 still green. The mutation was then reverted;
+`git diff app/api/cron/signals-poll/route.ts` confirmed byte-identical to pre-mutation. This is executed
+proof the new suite actually exercises the auth guard, not merely asserts a status code that would pass
+regardless.
+
+**NIT-2 — ARGUED-NOT-CHANGED.** The `try/catch` around `runSignalsTick` (`route.ts`, formerly `:63-67`) is
+kept, not deleted. It is near-dead — `runSignalsTick` wraps its own body and returns a summary rather than
+throwing — but it is byte-consistent with `capture-learning`'s identical shape, and house consistency
+across the cron routes is judged worth more than removing four lines. A one-line comment was added stating
+it is defence-in-depth for a throw the orchestrator does not currently produce, so a future reader does not
+mistake it for live, exercised error handling.
+
+**Verification:** `npx tsc --noEmit --skipLibCheck` clean. `npm run test:app` → **193 files / 2663 tests,
+all green** (up from D1's 192/2646 — the +1 file / +17 tests is exactly this step's new suite).
+
+**Commit:** D2 lands as its own commit immediately following this appendix entry.

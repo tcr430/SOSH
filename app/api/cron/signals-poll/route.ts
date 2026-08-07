@@ -53,6 +53,12 @@ async function signalsPollTick(request: NextRequest): Promise<NextResponse> {
 
   const triggeredBy = config.server.CRON_TRIGGER
   let signals
+  // [NIT-2, Session 27-D · D2, ARGUED-NOT-CHANGED] Near-dead: runSignalsTick
+  // wraps its own body in try/catch and returns a summary rather than
+  // throwing, so this catch has nothing to catch today. Kept anyway for
+  // house consistency with capture-learning's identical shape — this is
+  // defence-in-depth against a future throw the orchestrator does not
+  // currently produce, not live error handling to be relied on.
   try {
     signals = await runSignalsTick({ triggeredBy })
   } catch (err) {

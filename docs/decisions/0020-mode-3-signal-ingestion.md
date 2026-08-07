@@ -1284,6 +1284,25 @@ Additionally, §7.3's sink narrowing requires enumerating **every** prompt-assem
 receive signal text. In Session 27 that set is **empty** (no prompt exists yet) — recorded explicitly so
 ADR 0021 knows the table starts empty and must be filled by it, not inherited.
 
+**[Session 27-D · D2, MAJOR-2] `verifyQStashRequest` (`lib/cron/qstash-auth.ts`) caller table.** Session 27
+added a new caller — `app/api/cron/signals-poll/route.ts` — to a function every other cron route already
+called. The Session 27 Reviewer found this new caller had **zero** test coverage
+(`git ls-tree 5b5bbb9f -- app/api/cron/signals-poll` returned only `route.ts`), the exact
+SHARED-FUNCTION CALLERS shape (CLAUDE.md) that produced both Session 22 blockers. Closed at D2:
+
+| Caller | Test covering that caller |
+|---|---|
+| `api/cron/capture-learning/route.ts:13` | `capture-learning/route.test.ts` |
+| `api/cron/drain-email-outbox/route.ts:14` | `__tests__/route.test.ts` |
+| `api/cron/publish/route.ts:15` | `publish/route.test.ts` |
+| `api/cron/sync-metrics/route.ts:14` | `sync-metrics/route.test.ts` |
+| `api/cron/trial-warnings/route.ts:14` | `__tests__/route.test.ts` |
+| `api/cron/process-deletions/route.ts:14` | **none** — pre-existing gap, predates Session 27, out of this ADR's scope |
+| `api/cron/signals-poll/route.ts:16` | **`app/api/cron/signals-poll/route.test.ts`** (Session 27-D · D2) |
+
+`process-deletions`' gap is unaddressed here deliberately — it predates Session 27 and fixing it is a
+separate, unrelated change.
+
 ---
 
 ## §12 — Constraint table (the Reviewer's acceptance checklist)
