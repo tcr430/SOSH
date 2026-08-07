@@ -27,6 +27,31 @@ export class GithubClientError extends Error {
   }
 }
 
+// [Session 27-D / A-4] Since lib/config.ts's GITHUB_APP_* fields are now
+// `.optional()` (MAJOR-3's fix), the type system alone no longer stops
+// `undefined` from reaching createAppAuth or the OAuth exchange body. This
+// error is the runtime half of A-4's fail-fast contract: a missing
+// credential throws a NAMED error at the seam, loudly, rather than
+// silently sending `undefined` and producing a confusing GitHub-side 401
+// an hour later. Deliberately NOT a GithubClientError variant — this is a
+// deployment misconfiguration, not a GitHub-side failure class, so it is
+// not classified by §4.5 and instead propagates to the generic per-
+// connection catch in orchestrator.ts, which counts it as `failed` and
+// reports it to Sentry.
+export class GithubAppNotConfiguredError extends Error {
+  constructor(missingVar: string) {
+    super(`${missingVar} is not configured — GitHub App credentials are required for Mode 3 signal ingestion`)
+    this.name = 'GithubAppNotConfiguredError'
+  }
+}
+
+function requireGithubAppConfig(value: string | undefined, name: string): string {
+  if (value === undefined) {
+    throw new GithubAppNotConfiguredError(name)
+  }
+  return value
+}
+
 function parseRetryAfterSeconds(headers: Record<string, string> | undefined): number | undefined {
   const raw = headers?.['retry-after']
   if (!raw) return undefined
@@ -65,12 +90,13 @@ function mapError(err: unknown): GithubClientError {
 // access_tokens using the `request` instance we pass in — the exact
 // @octokit/request package pinned by package.json, not a second HTTP client.
 function getAppAuth() {
-  const privateKey = Buffer.from(config.server.GITHUB_APP_PRIVATE_KEY, 'base64').toString('utf8')
+  const privateKeyRaw = requireGithubAppConfig(config.server.GITHUB_APP_PRIVATE_KEY, 'GITHUB_APP_PRIVATE_KEY')
+  const privateKey = Buffer.from(privateKeyRaw, 'base64').toString('utf8')
   return createAppAuth({
-    appId: config.server.GITHUB_APP_ID,
+    appId: requireGithubAppConfig(config.server.GITHUB_APP_ID, 'GITHUB_APP_ID'),
     privateKey,
-    clientId: config.server.GITHUB_APP_CLIENT_ID,
-    clientSecret: config.server.GITHUB_APP_CLIENT_SECRET,
+    clientId: requireGithubAppConfig(config.server.GITHUB_APP_CLIENT_ID, 'GITHUB_APP_CLIENT_ID'),
+    clientSecret: requireGithubAppConfig(config.server.GITHUB_APP_CLIENT_SECRET, 'GITHUB_APP_CLIENT_SECRET'),
     request: octokitRequest,
   })
 }
@@ -179,14 +205,16 @@ export interface UserTokenExchangeResult {
 // the callback, for step 9's ownership proof (GET /user/installations) —
 // never persisted (§0.2 A-1, SIGNAL-USER-TOKEN-UNPERSISTED).
 export async function exchangeUserCode(code: string): Promise<UserTokenExchangeResult> {
+  const clientId = requireGithubAppConfig(config.server.GITHUB_APP_CLIENT_ID, 'GITHUB_APP_CLIENT_ID')
+  const clientSecret = requireGithubAppConfig(config.server.GITHUB_APP_CLIENT_SECRET, 'GITHUB_APP_CLIENT_SECRET')
   let response: Response
   try {
     response = await fetch('https://github.com/login/oauth/access_token', {
       method: 'POST',
       headers: { accept: 'application/json', 'content-type': 'application/json' },
       body: JSON.stringify({
-        client_id: config.server.GITHUB_APP_CLIENT_ID,
-        client_secret: config.server.GITHUB_APP_CLIENT_SECRET,
+        client_id: clientId,
+        client_secret: clientSecret,
         code,
       }),
     })

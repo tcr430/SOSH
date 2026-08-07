@@ -82,20 +82,32 @@ export const serverSchema = z.object({
   QSTASH_CURRENT_SIGNING_KEY: z.string().min(1).optional(),
   QSTASH_NEXT_SIGNING_KEY: z.string().min(1).optional(),
   // ADR 0020 §2.2 — GitHub App credentials for Mode 3 signal ingestion.
-  // [E2.3 correction] REQUIRED, not default('') — the App id and both OAuth
-  // credentials are load-bearing for the install callback's ownership proof
-  // (§8.3 step 8, the A-1 OAuth leg) and easy to omit: a Builder who reads
-  // L-2's "not an OAuth App" as "no OAuth leg at all" would simply never add
-  // client_id/client_secret, and nothing would complain until review.
-  // REQUIRED means that drift fails at boot, which is where it should fail
-  // — the same reasoning STRIPE_SECRET_KEY etc. above already apply to a
-  // fully-wired integration. GITHUB_APP_SLUG remains optional (cosmetic —
-  // used only to build a human-facing install URL, not a security boundary).
-  GITHUB_APP_ID: z.string().min(1, "GITHUB_APP_ID is required"),
+  // [Session 27-D / A-4 amendment, MAJOR-3] The four load-bearing fields
+  // below (GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY, GITHUB_APP_CLIENT_ID,
+  // GITHUB_APP_CLIENT_SECRET) are now `.optional()`, NOT unconditionally
+  // required. The prior E2.3 shape (bare `z.string().min(1)`, no
+  // superRefine) made every environment lacking all four boot-fail —
+  // exactly what reddened both Session 27 CI jobs at the range head, fixed
+  // only outside the audited range by pasting dummy values into two
+  // workflow YAMLs. That coupled every unrelated CI job, preview deploy and
+  // contributor checkout to an opt-in feature no tenant uses. The
+  // superRefine below restores fail-fast where it actually belongs:
+  // required TOGETHER in production, and an error in EVERY environment if
+  // only some of the four are set (a partial paste is never a supported
+  // mode). GITHUB_APP_SLUG is NOT part of this co-required set — it stays
+  // independently optional via its own default(''), unchanged: it is
+  // cosmetic (a human-facing install URL), never a security boundary, and
+  // requiring it alongside the other four would make a fully-configured
+  // deployment that simply never set a slug fail parse for no reason.
+  GITHUB_APP_ID: z.string().min(1, "GITHUB_APP_ID is required").optional(),
   GITHUB_APP_SLUG: z.string().default(''),
-  // [sec-MEDIUM-5] — validated AT PARSE TIME, not first use. Without this, a
-  // truncated or mis-pasted key fails at the FIRST POLLER TICK, up to an
-  // hour later, inside a background cron whose only output is one
+  // [sec-MEDIUM-5] — validated AT PARSE TIME, not first use, WHENEVER a
+  // value is present. This contract is unconditional and survives the
+  // optionality amendment above untouched: `.optional()` short-circuits
+  // Zod validation only for `undefined`, so a present-but-malformed key
+  // still fails parse in every environment, including development. Without
+  // it, a truncated or mis-pasted key fails at the FIRST POLLER TICK, up to
+  // an hour later, inside a background cron whose only output is one
   // structured log line — exactly the silent failure L-11 forbids.
   // Validating here preserves parseServerEnv()'s existing fail-fast
   // contract instead of deferring the decode into lib/signals/.
@@ -110,18 +122,17 @@ export const serverSchema = z.object({
   //     first poller use instead of here): breaks parseServerEnv()'s
   //     fail-fast contract — see [sec-MEDIUM-5] above.
   GITHUB_APP_PRIVATE_KEY: z.string().min(1, "GITHUB_APP_PRIVATE_KEY is required").refine((val) => {
-    let decoded: string
-    try {
-      decoded = Buffer.from(val, 'base64').toString('utf8')
-    } catch {
-      return false
-    }
+    // [NIT-1] Buffer.from(val, 'base64') never throws on malformed input —
+    // Node silently discards invalid characters instead of raising, so a
+    // try/catch here has nothing to catch. Rejection is carried entirely by
+    // the PEM regex below.
+    const decoded = Buffer.from(val, 'base64').toString('utf8')
     return /-----BEGIN (RSA )?PRIVATE KEY-----/.test(decoded)
   }, {
     message: 'GITHUB_APP_PRIVATE_KEY must be base64-encoded and decode to a PEM private key matching -----BEGIN (RSA )?PRIVATE KEY-----',
-  }),
-  GITHUB_APP_CLIENT_ID: z.string().min(1, "GITHUB_APP_CLIENT_ID is required"),
-  GITHUB_APP_CLIENT_SECRET: z.string().min(1, "GITHUB_APP_CLIENT_SECRET is required"),
+  }).optional(),
+  GITHUB_APP_CLIENT_ID: z.string().min(1, "GITHUB_APP_CLIENT_ID is required").optional(),
+  GITHUB_APP_CLIENT_SECRET: z.string().min(1, "GITHUB_APP_CLIENT_SECRET is required").optional(),
 }).superRefine((data, ctx) => {
   if (
     data.CRON_TRIGGER === 'qstash' &&
@@ -143,6 +154,30 @@ export const serverSchema = z.object({
       code: z.ZodIssueCode.custom,
       message:
         'RESEND_API_KEY and RESEND_WEBHOOK_SECRET are both required when EMAIL_PROVIDER=resend in production',
+    })
+  }
+  // ADR 0020 §2.2 amendment (Session 27-D / A-4, MAJOR-3) — the four
+  // load-bearing GITHUB_APP_* credentials. Required together in
+  // production; a partial set (some present, some absent) is an error in
+  // EVERY environment, since 1-of-4 present is always a mis-paste, never a
+  // supported mode.
+  const githubAppKeys = [
+    'GITHUB_APP_ID',
+    'GITHUB_APP_CLIENT_ID',
+    'GITHUB_APP_CLIENT_SECRET',
+    'GITHUB_APP_PRIVATE_KEY',
+  ] as const
+  const presentGithubAppKeys = githubAppKeys.filter((key) => data[key] !== undefined)
+  if (presentGithubAppKeys.length > 0 && presentGithubAppKeys.length < githubAppKeys.length) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `GITHUB_APP_ID, GITHUB_APP_CLIENT_ID, GITHUB_APP_CLIENT_SECRET and GITHUB_APP_PRIVATE_KEY must be set together — partial GitHub App configuration (${presentGithubAppKeys.length} of ${githubAppKeys.length} present) is not valid in any environment`,
+    })
+  } else if (presentGithubAppKeys.length === 0 && process.env.NODE_ENV === 'production') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        'GITHUB_APP_ID, GITHUB_APP_CLIENT_ID, GITHUB_APP_CLIENT_SECRET and GITHUB_APP_PRIVATE_KEY are all required when NODE_ENV=production',
     })
   }
 });

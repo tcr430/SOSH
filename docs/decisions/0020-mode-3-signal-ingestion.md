@@ -189,6 +189,38 @@ The full env set, all through `lib/config.ts`, all `serverOnly()`-guarded getter
 *Loser:* raw multi-line PEM (no precedent, newline trap); deferring decode/validation into `lib/signals/`
 (breaks fail-fast).
 
+> **Amendment (Session 27-D / A-4, MAJOR-3) — the four load-bearing credentials are conditionally
+> required, not unconditionally.** The original text above described `GITHUB_APP_ID`,
+> `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_CLIENT_ID` and `GITHUB_APP_CLIENT_SECRET` as bare
+> `z.string().min(1)` — unconditionally required at parse time, in every environment. That coupled every
+> unrelated CI job, preview deployment and contributor checkout to an opt-in feature no tenant uses, and it
+> is exactly what reddened both Session 27 CI jobs at the audited range head (`5b5bbb9f`); the fix landed
+> only outside that range (`08a4c1e2`), by pasting dummy values into two workflow YAMLs.
+>
+> The four are now `.optional()` in `lib/config.ts`'s `serverSchema`, with a `superRefine` (the same shape
+> `QSTASH_*`/`RESEND_*` already use) that: (1) requires all four together when `NODE_ENV=production`; (2)
+> rejects any **partial** set — some present, some absent — in **every** environment, including
+> development, since 1-of-4 is always a mis-paste, never a supported mode. `GITHUB_APP_SLUG` is **not**
+> part of this co-required set — it remains independently optional via its own `default('')`, unchanged,
+> because it is cosmetic (a human-facing install URL) and never a security boundary.
+>
+> The PEM `.refine()` on `GITHUB_APP_PRIVATE_KEY` stays attached to the value and fires unconditionally
+> whenever it is present, in every environment — `[sec-MEDIUM-5]`'s fail-fast contract is unchanged by this
+> amendment.
+>
+> **Runtime half.** Because the type system no longer guarantees these four are `string` (they are now
+> `string | undefined`), `lib/signals/github-client.ts`'s `getAppAuth()` and `exchangeUserCode()` call a
+> `requireGithubAppConfig()` guard that throws a named `GithubAppNotConfiguredError` if a value is absent,
+> rather than letting `undefined` flow into `createAppAuth` or the OAuth exchange body. This is deliberately
+> **not** a `GithubClientError` variant — it is a deployment misconfiguration, not a GitHub-side failure —
+> so it is unclassified by §4.5 and propagates to the orchestrator's generic per-connection catch, counted
+> as `failed` and reported to Sentry, which is "fail loudly at the seam" rather than a confusing GitHub-side
+> 401 an hour later.
+>
+> *Named loser, unconditionally required (the prior shape):* fails fast everywhere, correctly, for the
+> environments that need it — but couples every environment to an opt-in feature, which is a worse trade
+> than the conditional shape above.
+
 ### 2.3 The installation id — a plain column, not Vault
 
 `github_connections.installation_id bigint NOT NULL`. **Not Vault.**

@@ -563,3 +563,71 @@ five-column form, carrying both required clauses.
 callback + disconnect), `type-design-analyzer` (brands + wrapSignalForPrompt + db return types + scans).
 All three returned no BLOCKER and no MAJOR. Sections D, E, G and H were done in this reviewer's own
 context, and MAJOR-1, MAJOR-2, MAJOR-3 and MINOR-3 through MINOR-7 originate there.*
+
+---
+
+## CORRECTION PASS (Session 27-D)
+
+**Author:** Session 27-D correction pass (Claude Sonnet 5). **Date:** 2026-08-07. **Commit range fixed:**
+D0 = `601a49f9`; subsequent steps D1–D7 land as their own commits, one per row group below, each cited by
+SHA at the point it lands. Per CLAUDE.md's REVIEWER-REPORT APPEND-ONLY rule: nothing above this line is
+edited — every finding above is cited by ID, never restated as resolved, and a disputed/declined finding is
+argued here, not erased.
+
+### D1 — MAJOR-3, NIT-1, A-4
+
+**MAJOR-3 — RESOLVED.** `lib/config.ts`'s four load-bearing `GITHUB_APP_*` fields (`GITHUB_APP_ID`,
+`GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`) are now `.optional()`, with a
+`superRefine` requiring all four together when `NODE_ENV=production` and rejecting any partial set (some
+present, some absent) in every environment, matching the existing `QSTASH_*`/`RESEND_*` shape exactly
+(A-4's ruling — both halves shipped, not one). `GITHUB_APP_SLUG` stays independently optional via its
+existing `default('')`, unchanged — it is not part of the co-required set. The PEM `.refine()` on
+`GITHUB_APP_PRIVATE_KEY` stays attached to the value and fires unconditionally whenever present, in every
+environment — `[sec-MEDIUM-5]` verified intact by `security-reviewer` (see below) and by
+`lib/config.test.ts`'s "present-but-malformed key still FAILS in development" case.
+
+Runtime half: `lib/signals/github-client.ts`'s `getAppAuth()` and `exchangeUserCode()` now call a new
+`requireGithubAppConfig()` guard that throws a named `GithubAppNotConfiguredError` (message names the
+missing variable only, never a value) rather than letting `undefined` flow into `createAppAuth()` or the
+OAuth exchange body. `ADR 0020 §2.2` amended (appended, not rewritten) recording the new shape and naming
+"unconditionally required" as the loser.
+
+CI half — proved, not assumed: `GITHUB_APP_*` entries removed entirely from both
+`.github/workflows/app-tests.yml` and `.github/workflows/db-tests.yml` (both run `NODE_ENV: test`, never
+`production`). Full `npm run test:app` run locally with these entries absent: **192 files / 2646 tests,
+all green** — this is the executed proof that A-4's optional-in-non-production half works, not merely an
+assertion.
+
+**NIT-1 — RESOLVED.** The unreachable `try/catch` around `Buffer.from(val, 'base64')` (`lib/config.ts`,
+formerly `:114-118`) is deleted; a comment in its place states `Buffer.from` never throws on malformed
+input and that rejection is carried entirely by the PEM regex. Nothing "restores" it going forward.
+
+**A-4 — ADJUDICATION RECORDED.** Both halves shipped per the founder ruling: `.optional()` +
+production-required + partial-is-error-everywhere (not optional-everywhere, not required-everywhere), and
+the runtime seams throw a named error rather than passing `undefined` through. `security-reviewer` was
+invoked once (below) specifically because it raised `[sec-MEDIUM-5]` and A-4 changes when that fail-fast
+contract fires.
+
+**Tests added (`lib/config.test.ts`, new `describe('A-4 — ...')` block, 7 cases):** non-production parse
+succeeds with all four absent; production parse fails with all four absent and the message names all four;
+partial config (one of four present) fails in development; partial config fails in production; all four
+present succeeds in production; a present-but-malformed key still fails in development. All 21 cases in the
+file pass (`npx vitest run lib/config.test.ts` → 21/21 green). `npx tsc --noEmit --skipLibCheck` clean.
+Scoped suite `npx vitest run lib/signals lib/config.test.ts app/api/signals` → 9 files / 101 tests green,
+with **zero** `GITHUB_APP_*` env vars set for the run — direct evidence the module graph boots without
+them under a non-production `NODE_ENV`.
+
+**`security-reviewer` (invoked once, per D1's ECC budget):** reviewed `lib/config.ts`, `lib/signals/
+github-client.ts` and `lib/config.test.ts` against five specific questions (PEM fail-fast survival,
+superRefine gap analysis, `undefined`-reaches-`createAppAuth`/`fetch` analysis, value-leakage in
+`GithubAppNotConfiguredError`, and any other issue). **Zero CONFIRMED or PLAUSIBLE findings.** Full report:
+"`.optional()` is the outermost wrapper, so `ZodOptional` only short-circuits on `undefined`; any present
+value still runs the full `min(1)` + PEM-decode `.refine()` chain unconditionally, in every environment...
+That's an exhaustive case split over `{0,1,2,3,4} × {prod, non-prod}` — every partial state is rejected
+everywhere... `GithubAppNotConfiguredError`'s constructor takes only the variable *name*... never a value...
+the error message itself never reaches a URL, log line, or user-facing surface in this diff."
+
+**Commit:** D1 lands as its own commit immediately following this appendix entry (see `git log` for the
+exact SHA — this row is written before that commit exists, consistent with the ordering hazard already
+documented in `docs/build-guide/session-27.md` §4: the resolution row for a step is written, then the step
+is committed, matching D0's own precedent of landing the work order before the work).

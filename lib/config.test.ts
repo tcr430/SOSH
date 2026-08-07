@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, vi } from 'vitest'
 import { serverSchema, config } from '@/lib/config'
 
 // ADR 0020 §2.2 / [sec-MEDIUM-5] — Tier-2. GITHUB_APP_PRIVATE_KEY's .refine()
@@ -105,6 +105,93 @@ describe('lib/config — GITHUB_APP_* (ADR 0020 §2.2)', () => {
 
     const withSlug = serverSchema.safeParse(validBaseEnv({ GITHUB_APP_SLUG: 'sosh-signals' }))
     expect(withSlug.success).toBe(true)
+  })
+
+  // [Session 27-D / A-4, MAJOR-3] The four load-bearing GITHUB_APP_* fields
+  // are now .optional() with a superRefine requiring them together in
+  // production and rejecting any partial set in every environment. These
+  // cases were shown to REDDEN against the pre-D1 schema (bare
+  // z.string().min(1), no superRefine): all four absent failed parse
+  // unconditionally, so "non-production succeeds with all four absent" and
+  // "partial config fails in development" were both impossible to assert
+  // (development already failed for a different reason).
+  describe('A-4 — the four are optional, required together in production, never partial', () => {
+    afterEach(() => {
+      vi.unstubAllEnvs()
+    })
+
+    function setNodeEnv(value: string) {
+      vi.stubEnv('NODE_ENV', value)
+    }
+
+    function envWithoutGithubApp(overrides: Record<string, unknown> = {}) {
+      const base = validBaseEnv()
+      return {
+        ...base,
+        GITHUB_APP_ID: undefined,
+        GITHUB_APP_CLIENT_ID: undefined,
+        GITHUB_APP_CLIENT_SECRET: undefined,
+        GITHUB_APP_PRIVATE_KEY: undefined,
+        ...overrides,
+      }
+    }
+
+    it('non-production parse SUCCEEDS with all four GITHUB_APP_* fields absent', () => {
+      setNodeEnv('test')
+      const result = serverSchema.safeParse(envWithoutGithubApp())
+      expect(result.success).toBe(true)
+    })
+
+    it('production parse FAILS with all four absent, and the message names all four', () => {
+      setNodeEnv('production')
+      const result = serverSchema.safeParse(envWithoutGithubApp())
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        const message = result.error.issues.map((i) => i.message).join(' | ')
+        expect(message).toContain('GITHUB_APP_ID')
+        expect(message).toContain('GITHUB_APP_CLIENT_ID')
+        expect(message).toContain('GITHUB_APP_CLIENT_SECRET')
+        expect(message).toContain('GITHUB_APP_PRIVATE_KEY')
+      }
+    })
+
+    it('partial configuration (exactly one of four present) FAILS in development', () => {
+      setNodeEnv('development')
+      const result = serverSchema.safeParse(
+        envWithoutGithubApp({ GITHUB_APP_ID: '123456' }),
+      )
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.issues.some((i) => /must be set together/.test(i.message))).toBe(true)
+      }
+    })
+
+    it('partial configuration (exactly one of four present) FAILS in production', () => {
+      setNodeEnv('production')
+      const result = serverSchema.safeParse(
+        envWithoutGithubApp({ GITHUB_APP_ID: '123456' }),
+      )
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.issues.some((i) => /must be set together/.test(i.message))).toBe(true)
+      }
+    })
+
+    it('all four present and valid SUCCEEDS in production (the fully-configured case)', () => {
+      setNodeEnv('production')
+      const result = serverSchema.safeParse(validBaseEnv())
+      expect(result.success).toBe(true)
+    })
+
+    it('a present-but-malformed GITHUB_APP_PRIVATE_KEY still FAILS in development — [sec-MEDIUM-5] preserved', () => {
+      setNodeEnv('development')
+      const result = serverSchema.safeParse(validBaseEnv({ GITHUB_APP_PRIVATE_KEY: 'not-base64-!!!@@@###' }))
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        const issue = result.error.issues.find((i) => i.path.includes('GITHUB_APP_PRIVATE_KEY'))
+        expect(issue?.message).toMatch(/base64-encoded and decode to a PEM private key/)
+      }
+    })
   })
 
   describe('serverOnly() guard — every new getter throws in browser code', () => {
