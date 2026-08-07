@@ -91,6 +91,8 @@ const tickSummary = {
   notFound: 0,
   malformed: 0,
   failed: 0,
+  skippedDraft: 0,
+  skippedPreCutoff: 0,
 }
 
 beforeEach(() => {

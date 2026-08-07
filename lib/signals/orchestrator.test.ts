@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import type { GithubConnectionRow, WatchedRepoRow, SignalRow } from '@/lib/db/types'
 import releaseValidFixture from './__fixtures__/github/release-valid.json'
 import malformedReleaseFixture from './__fixtures__/github/malformed-release.json'
+import releaseDraftFixture from './__fixtures__/github/release-draft.json'
 
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 
@@ -147,10 +148,56 @@ describe('runSignalsTick — SIGNAL-TICK-OBSERVABLE (ADR §4.6)', () => {
       'kind', 'tick', 'triggeredBy', 'durationMs', 'connectionsClaimed', 'reposPolled',
       'notModified', 'signalsIngested', 'signalsUpdated', 'duplicates', 'candidatesUpserted',
       'revoked', 'rateLimited', 'notFound', 'malformed', 'failed',
+      // [Session 27-D · D5, MINOR-5] ADR §4.6 amended to add these two.
+      'skippedDraft', 'skippedPreCutoff',
     ]
     for (const field of expectedFields) expect(parsed).toHaveProperty(field)
     expect(parsed.kind).toBe('signals.tick')
     logSpy.mockRestore()
+  })
+})
+
+// [Session 27-D · D5, MINOR-5] Both cases below redden against the pre-D5
+// orchestrator: skippedDraft/skippedPreCutoff did not exist on
+// SignalsTickSummary, so these assertions would fail to compile, let alone
+// pass, before this step.
+describe('runSignalsTick — MINOR-5 content-filter counters (ADR §4.5/§4.6 amendment)', () => {
+  it('a repo publishing only drafts reports skippedDraft > 0 and signalsIngested === 0', async () => {
+    const conn = makeConnection()
+    const repo = makeRepo()
+    mockListConnectionsReadyForPoll.mockResolvedValue([conn])
+    mockClaimGithubConnectionForPoll.mockResolvedValue(conn)
+    mockMintInstallationToken.mockResolvedValue({ token: 'tok', expiresAt: '2026-08-06T11:00:00Z' })
+    mockListActiveWatchedReposForConnection.mockResolvedValue([repo])
+    mockGetReleases.mockResolvedValue({ status: 'ok', releases: [releaseDraftFixture], etag: 'e-draft' })
+    mockListSignalsForWatchedRepo.mockResolvedValue([])
+
+    const summary = await runSignalsTick({ triggeredBy: 'secret' })
+
+    expect(summary.skippedDraft).toBeGreaterThan(0)
+    expect(summary.signalsIngested).toBe(0)
+    expect(summary.failed).toBe(0)
+    expect(summary.malformed).toBe(0)
+  })
+
+  it('a first poll with releases older than the 90-day cutoff reports skippedPreCutoff > 0', async () => {
+    const conn = makeConnection()
+    // last_polled_at: null — this is the repo's first-ever poll (§4.4).
+    const repo = makeRepo({ last_polled_at: null })
+    mockListConnectionsReadyForPoll.mockResolvedValue([conn])
+    mockClaimGithubConnectionForPoll.mockResolvedValue(conn)
+    mockMintInstallationToken.mockResolvedValue({ token: 'tok', expiresAt: '2026-08-06T11:00:00Z' })
+    mockListActiveWatchedReposForConnection.mockResolvedValue([repo])
+    const ancientRelease = { ...(releaseValid as Record<string, unknown>), id: 999888, published_at: '2000-01-01T00:00:00Z' }
+    mockGetReleases.mockResolvedValue({ status: 'ok', releases: [ancientRelease], etag: 'e-old' })
+    mockListSignalsForWatchedRepo.mockResolvedValue([])
+
+    const summary = await runSignalsTick({ triggeredBy: 'secret' })
+
+    expect(summary.skippedPreCutoff).toBeGreaterThan(0)
+    expect(summary.signalsIngested).toBe(0)
+    expect(summary.failed).toBe(0)
+    expect(summary.malformed).toBe(0)
   })
 })
 

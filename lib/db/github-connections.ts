@@ -19,6 +19,13 @@ function staleBefore(): string {
   return formatISO(new Date(Date.now() - CLAIM_STALE_MINUTES * 60 * 1000))
 }
 
+// [Session 27-D · D5, A-5] Comparison value for the rate_limited_until
+// predicate below — date-fns formatISO, per CLAUDE.md's date-handling rule
+// (never new Date().toISOString()).
+function nowIso(): string {
+  return formatISO(new Date())
+}
+
 // Settings/watch-list UI — authenticated client, RLS-scoped SELECT-only
 // policy. One row per business (UNIQUE(business_id)), so no ORDER BY/limit
 // is needed.
@@ -52,6 +59,21 @@ export async function listConnectionsReadyForPoll(
     .select('*')
     .eq('is_active', true)
     .or(`last_poll_started_at.is.null,last_poll_started_at.lt.${staleBefore()}`)
+    // [Session 27-D · D5, A-5/MINOR-6] SECOND .or() call, deliberately —
+    // supabase-js/PostgREST ANDs separate filter calls together, so this
+    // combines with the .or() above as (is_active) AND (poll-stale-or-null)
+    // AND (rate-limit-expired-or-none). Excludes a connection whose
+    // rate_limited_until is still in the future, so it is not re-claimed
+    // and re-minted on the very next tick, guaranteed to 403 again — see
+    // recordGithubConnectionRateLimited's comment below for why this
+    // changed. Comment-accuracy note (MINOR-2's lesson applied here too):
+    // github_connections_poll_claim_idx is (is_active, last_poll_started_at)
+    // ONLY — it still serves the is_active filter and the
+    // last_poll_started_at ordering exactly as before; rate_limited_until is
+    // NOT part of that index, so this predicate is a filter over the
+    // (already narrow, ≤20-row) candidate set the index produces, not an
+    // index-served scan of its own.
+    .or(`rate_limited_until.is.null,rate_limited_until.lt.${nowIso()}`)
     .order('last_poll_started_at', { ascending: true, nullsFirst: true })
     .limit(limit)
   if (error) throw new Error(getErrorMessage(error))
@@ -117,17 +139,27 @@ export async function deactivateGithubConnection(
   return (data as GithubConnectionRow | null) ?? null
 }
 
-// §4.5 — 403 rate-limit containment: records the informational
-// rate_limited_until stamp AND completes the claim (last_poll_completed_at
-// + last_poll_status = 'rate_limited'), a DISTINCT write from
-// completeGithubConnectionPoll only because this path needs the extra
-// rate_limited_until column in the same statement. Completing the claim
-// here (rather than leaving last_poll_started_at set) means the connection
-// is not stuck "claimed" until the 50-minute staleness window lapses —
-// next hour's tick can attempt it again immediately (harmless: a second
-// attempt inside a still-active rate limit just produces another 403,
-// counted again). NO deactivation (§4.5) — a rate limit is not a
-// revocation.
+// §4.5 — 403 rate-limit containment: records the rate_limited_until stamp
+// AND completes the claim (last_poll_completed_at + last_poll_status =
+// 'rate_limited'), a DISTINCT write from completeGithubConnectionPoll only
+// because this path needs the extra rate_limited_until column in the same
+// statement. Completing the claim here (rather than leaving
+// last_poll_started_at set) means the connection is not stuck "claimed"
+// until the 50-minute staleness window lapses — next hour's tick can
+// attempt it again immediately (this was previously recorded as harmless: a
+// second attempt inside a still-active rate limit just produces another
+// 403, counted again).
+//
+// [Session 27-D · D5, A-5/MINOR-6] That "harmless" framing is the RECORD OF
+// THE PRIOR BEHAVIOUR, kept above for history — it changed here.
+// rate_limited_until is now a CLAIM PREDICATE, not merely an informational
+// stamp: listConnectionsReadyForPoll excludes any connection whose
+// rate_limited_until is still in the future. Why it changed: inside a known
+// rate limit, the retry is not "harmless" — it is a GUARANTEED 403 (GitHub
+// already told us when the window reopens), it burns one of this tick's
+// ≤20 claim slots on a call known to fail, and the column existed but did
+// nothing with that knowledge until now. NO deactivation (§4.5) — a rate
+// limit is still not a revocation; only the claim eligibility changed.
 export async function recordGithubConnectionRateLimited(
   businessId: string,
   rateLimitedUntil: string,

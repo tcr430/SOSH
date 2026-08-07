@@ -42,6 +42,15 @@ export interface SignalsTickSummary {
   notFound: number
   malformed: number
   failed: number
+  // [Session 27-D · D5, MINOR-5] CONTENT-FILTER counters, distinct from the
+  // §4.5 FAILURE counters above (revoked/rateLimited/notFound/malformed/
+  // failed): a draft release or a pre-cutoff release is not a failure of
+  // anything — it is the poller correctly declining to ingest content §5.1/
+  // §4.4 say should never become a signal. Kept out of `failed` and out of
+  // §4.5's failure table deliberately, so a drafts-only repo is never read
+  // as an error. ADR §4.6 amended to include both in the canonical tick line.
+  skippedDraft: number
+  skippedPreCutoff: number
 }
 
 // §7.3's sink-narrowed hash replica of the DB's generated column
@@ -231,8 +240,14 @@ async function pollConnection(connection: GithubConnectionRow, now: Date, summar
           })
           continue
         }
-        if (parsed.status === 'skipped_draft') continue
-        if (cutoff && new Date(parsed.signal.occurred_at) < cutoff) continue
+        if (parsed.status === 'skipped_draft') {
+          summary.skippedDraft++
+          continue
+        }
+        if (cutoff && new Date(parsed.signal.occurred_at) < cutoff) {
+          summary.skippedPreCutoff++
+          continue
+        }
 
         await ingestParsedSignal(connection.business_id, repo.id, repo.weight, parsed.signal, existingByExternalId, now, summary)
       }
@@ -300,6 +315,8 @@ export async function runSignalsTick(opts: { triggeredBy: 'qstash' | 'secret' })
     notFound: 0,
     malformed: 0,
     failed: 0,
+    skippedDraft: 0,
+    skippedPreCutoff: 0,
   }
 
   try {

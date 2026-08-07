@@ -574,6 +574,19 @@ ADR 0018's orphan report: a deliberate skip needs an operator-visible counterpar
 | Malformed payload | Zod `safeParse` failure; skip that item, continue the repo | `malformed` count + Sentry **with the repo id, never the body** — untrusted text into logs is its own vector (§7) |
 | `setup_action = 'request'` | Handled at the callback, never reaches the poller (§8.3) | A distinct "awaiting organization approval" screen |
 
+> **Amendment (Session 27-D / D5, A-5/MINOR-6) — `rate_limited_until` is now a claim predicate.** The row
+> above ("Set `rate_limited_until`") originally described it as an informational stamp only —
+> `listConnectionsReadyForPoll` did not read it, so a rate-limited connection was re-claimed and re-minted
+> on the very next tick, guaranteed to 403 again (GitHub had already told us when the window reopens).
+> `listConnectionsReadyForPoll` now excludes any connection whose `rate_limited_until` is in the future
+> (`lib/db/github-connections.ts`, a second `.or()` alongside the existing `last_poll_started_at` one,
+> ANDed with it). **Named loser:** documenting the column as UI-only and leaving the retry in place — cheaper,
+> but retrying inside a known-active rate limit burns a claim slot on a call known to fail, which is
+> precisely what backoff exists to prevent. Containment is still **no deactivation** — a rate limit remains
+> distinct from a revocation; only claim eligibility changed. Proved on live Postgres: a connection with
+> `rate_limited_until` in the future is not returned by the claim query; the same connection with it in the
+> past is (`supabase/__tests__/signals-schema.test.ts`).
+
 ### 4.6 The canonical tick log line
 
 Exactly **one** structured-JSON `console.log` per invocation, per CLAUDE.md's worker carve-out (Session 25-D
@@ -587,6 +600,20 @@ Fields: `kind`, `tick`, `triggeredBy`, `durationMs`, `connectionsClaimed`, `repo
 `signalsIngested`, `signalsUpdated`, `duplicates`, `candidatesUpserted`, `revoked`, `rateLimited`,
 `notFound`, `malformed`, `failed`. No `console.*` anywhere on the user-facing surface (L-13). All timestamps
 via `date-fns` `formatISO`, never `new Date().toISOString()`.
+
+> **Amendment (Session 27-D / D5, MINOR-5) — two content-filter fields added.** The field list above
+> omitted `skippedDraft` and `skippedPreCutoff`, so a repo publishing only drafts was indistinguishable in
+> the tick line from a repo publishing nothing at all, and a first poll that discarded releases older than
+> the 90-day cutoff (§4.4) reported no trace of having done so. Both are now fields on `SignalsTickSummary`
+> and appear in the canonical tick line: `kind`, `tick`, `triggeredBy`, `durationMs`, `connectionsClaimed`,
+> `reposPolled`, `notModified`, `signalsIngested`, `signalsUpdated`, `duplicates`, `candidatesUpserted`,
+> `revoked`, `rateLimited`, `notFound`, `malformed`, `failed`, **`skippedDraft`, `skippedPreCutoff`** — 18
+> fields total. **These two are CONTENT-FILTER counters, not §4.5 FAILURE counters** — they are
+> deliberately excluded from §4.5's failure table and from `failed`, because declining to ingest a draft or
+> a pre-cutoff release is the poller working correctly, not a failure of anything. This is what makes
+> `SIGNAL-TICK-OBSERVABLE`'s field-presence test actually redden if either counter regresses — before this
+> amendment the constraint's own test asserted the (incomplete) field list this ADR specified, so it could
+> not have caught the two counters' absence.
 
 ### 4.7 Constraints
 

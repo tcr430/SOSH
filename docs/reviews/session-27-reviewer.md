@@ -771,3 +771,75 @@ mocked unit test, `lib/signals/score.ts`, and two ADR sections), so this is a fo
 confirm rather than a gap introduced by this step.
 
 **Commit:** D4 lands as its own commit immediately following this appendix entry.
+
+### D5 — MINOR-5, MINOR-6, A-5
+
+**MINOR-5 — RESOLVED.** `SignalsTickSummary` (`orchestrator.ts`) gained two content-filter counters,
+`skippedDraft` and `skippedPreCutoff`, incremented at the `skipped_draft` and pre-cutoff `continue` sites
+respectively. Both are documented and enforced as **content filters, not §4.5 failures** — kept out of
+`failed` and out of the failure table, with a comment explaining why (declining to ingest a draft or
+pre-cutoff release is the poller working correctly). `ADR §4.6` amended (appended) with both field names
+added to the canonical 18-field tick line, and an explicit note that `SIGNAL-TICK-OBSERVABLE`'s
+field-presence test could not have caught their prior absence, because §4.6 itself omitted them — fixing
+the ADR is what gives the constraint teeth. `orchestrator.test.ts:138`'s field-presence assertion extended
+to the new 18-field list; two new behaviour cases added: a drafts-only repo reports `skippedDraft > 0` and
+`signalsIngested === 0`; a first poll with a release far older than the 90-day cutoff reports
+`skippedPreCutoff > 0`. Both demonstrated to REDDEN against the pre-D5 orchestrator (increments
+temporarily removed, both new cases failed with `expected 0 to be greater than 0`, all 16 other cases
+still green, mutation reverted — `git diff` confirmed no residual mutation).
+
+**MINOR-6 / A-5 — RESOLVED, load-bearing option shipped (the documentation-only option is the named
+loser, per adjudication).** `lib/db/github-connections.ts`'s `listConnectionsReadyForPoll` gained a
+SECOND `.or()` call — `rate_limited_until.is.null,rate_limited_until.lt.${nowIso()}` — alongside the
+existing `last_poll_started_at` one. `nowIso()` uses `date-fns` `formatISO`, matching house convention
+(never `new Date().toISOString()`). The comment states precisely which part of
+`github_connections_poll_claim_idx (is_active, last_poll_started_at)` this predicate is and isn't served
+by (the `is_active` filter and the ordering, still; `rate_limited_until` itself, not — it filters the
+already-narrow ≤20-row candidate window post-index), applying MINOR-2's lesson explicitly rather than
+overstating the match. The prior "harmless… counted again" comment on `recordGithubConnectionRateLimited`
+is KEPT, not deleted, as the record of the previous behaviour; a new paragraph states why it changed (the
+403 is now guaranteed and known in advance, it burns one of the tick's ≤20 claim slots, and the expiry was
+already on the row and simply unread). `ADR §4.5` amended (appended) recording `rate_limited_until` as now
+a claim predicate, not an informational stamp, naming the documentation-only option as the loser and why.
+
+**Deliberately NOT added to `claimGithubConnectionForPoll`'s WHERE clause** — only to the list query.
+`database-reviewer` confirmed this is correct, not a gap: `claimGithubConnectionForPoll` is only ever
+called with an id drawn from the SAME tick's already-filtered `listConnectionsReadyForPoll()` result
+(`orchestrator.ts`'s claim loop), and the pre-existing `last_poll_started_at` staleness guard already
+prevents any cross-tick double-processing scenario independent of `rate_limited_until`. Adding it to the
+claim's WHERE would be redundant, not more correct.
+
+**`database-reviewer` (invoked once, per D5's ECC budget):** reviewed `lib/db/github-connections.ts` (full
+file) and the new/pre-existing Tier-1 tests in `signals-schema.test.ts` against five specific questions.
+**Zero CONFIRMED or PLAUSIBLE findings.** Notably, the agent inspected the installed
+`@supabase/postgrest-js@2.105.1` source directly (`PostgrestFilterBuilder.ts:1976-1986`) rather than
+trusting documentation, confirming `.or()` calls use `searchParams.append` (not `.set`), so two `.or()`
+calls genuinely AND as two separate PostgREST query params — the comment's claimed semantics are correct
+at the installed version, not merely asserted. The agent also independently re-derived that the pre-existing
+concurrency test at `signals-schema.test.ts:326` is unaffected (`insertConnection` never sets
+`rate_limited_until`, defaults to `NULL`, and `claimGithubConnectionForPoll`'s WHERE is untouched by this
+diff), and confirmed the new Tier-1 test is genuine live-Postgres coverage (both the test's `admin` client
+and `listConnectionsReadyForPoll`'s internally-acquired client are service-role, so RLS is moot and the
+before/after single-connection design isolates the variable cleanly).
+
+**Tier-1 test added** (`supabase/__tests__/signals-schema.test.ts`, `"A-5/MINOR-6: rate_limited_until in
+the future excludes a connection from listConnectionsReadyForPoll; in the past, it is included"`): the
+same connection, `rate_limited_until` set one hour in the future then re-checked, asserted absent from a
+1000-row `listConnectionsReadyForPoll` result; then set one hour in the past, re-checked, asserted present.
+
+**Verify — HONEST STATEMENT, not asserted-green.** `npx tsc --noEmit --skipLibCheck` clean. `npm run
+test:app` → **193 files / 2665 tests, all green** (+2 from D4's 2663 — exactly the two new orchestrator
+behaviour cases; the new Tier-1 case does not run under `test:app`, per ADR 0015's Tier separation).
+`npm run test:db` **could NOT be executed in this environment** — `docker info` confirms Docker is
+unavailable locally, the same pre-existing limitation noted in D4's appendix. Per the work order's own
+instruction ("it must be RE-RUN, not assumed"), this is recorded here as an **honest gap, not a silent
+assumption**: the concurrency proof at `signals-schema.test.ts:326` and the new A-5 Tier-1 case have
+**NOT** been executed against live Postgres by this session. The re-derivation above (mirrored
+independently by `database-reviewer`) is an ARGUMENT that the concurrency proof is unaffected —
+`claimGithubConnectionForPoll`'s WHERE clause is byte-for-byte unchanged by this diff, and
+`insertConnection` never sets `rate_limited_until` — but an argument is not a substitute for the executed
+proof ADR 0015 §2 requires. **D7 must run `npm run test:db` in CI and confirm both this pre-existing test
+and the new A-5 test are green before this step's Tier-1 claim can be treated as closed**, not merely
+"argued."
+
+**Commit:** D5 lands as its own commit immediately following this appendix entry.

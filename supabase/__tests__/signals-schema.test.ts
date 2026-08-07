@@ -352,6 +352,49 @@ describe('signal ingestion schema (ADR 0020 §3)', () => {
     await admin.auth.admin.deleteUser(owner.id)
   })
 
+  // ─── A-5/MINOR-6 (Session 27-D · D5) — rate_limited_until is now a claim
+  // predicate, not merely an informational stamp. Proved on live Postgres,
+  // not a mocked client, per the work order.
+
+  it('A-5/MINOR-6: rate_limited_until in the future excludes a connection from listConnectionsReadyForPoll; in the past, it is included', async () => {
+    const owner = await createUser('rate-limit-claim')
+    const { data: biz, error: bizErr } = await admin
+      .from('businesses')
+      .insert({ name: 'Rate Limit Claim Business', owner_id: owner.id, plan: 'plus' })
+      .select('id')
+      .single()
+    if (bizErr) throw bizErr
+    const connId = await insertConnection(biz.id, Math.floor(Date.now() / 1000) + 779000)
+
+    const { listConnectionsReadyForPoll } = await import('@/lib/db/github-connections')
+
+    // rate_limited_until one hour in the FUTURE — NOT returned, even though
+    // is_active=true and last_poll_started_at is still null (otherwise
+    // eligible).
+    const future = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+    const { error: futureErr } = await admin
+      .from('github_connections')
+      .update({ rate_limited_until: future })
+      .eq('id', connId)
+    if (futureErr) throw futureErr
+    const candidatesWhileLimited = await listConnectionsReadyForPoll(1000)
+    expect(candidatesWhileLimited.some((c) => c.id === connId)).toBe(false)
+
+    // Same connection, rate_limited_until one hour in the PAST — now
+    // returned again.
+    const past = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+    const { error: pastErr } = await admin
+      .from('github_connections')
+      .update({ rate_limited_until: past })
+      .eq('id', connId)
+    if (pastErr) throw pastErr
+    const candidatesAfterExpiry = await listConnectionsReadyForPoll(1000)
+    expect(candidatesAfterExpiry.some((c) => c.id === connId)).toBe(true)
+
+    await admin.from('businesses').delete().eq('id', biz.id)
+    await admin.auth.admin.deleteUser(owner.id)
+  })
+
   // ─── SIGNAL-DISCONNECT-DEACTIVATES (§2.5) — real atomicity, live Postgres ──
   // E2.11 close-out finding: §12 claimed Test tier 1 for this constraint, but
   // only a Tier-2 mocked test existed (AUTHORED-NOT-EXECUTED at the claimed
