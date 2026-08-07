@@ -42,6 +42,21 @@ describe('lib/db/signals.ts (ADR 0020 §10.1/§7.4)', () => {
     expect(builder.limit).toHaveBeenCalledWith(50)
   })
 
+  // [Session 27-D · D3, MINOR-1] listSignalsForWatchedRepo previously ordered
+  // ONLY by occurred_at DESC, with no id tiebreak — non-deterministic under a
+  // LIMIT when rows share an occurred_at. This asserts BOTH order calls are
+  // issued, in order, so the poller's edit-detection window is deterministic.
+  it('listSignalsForWatchedRepo orders occurred_at DESC then id ASC as a tiebreak (MINOR-1)', async () => {
+    const { client, builder } = createMockClient([], null)
+    mockCreateServiceRoleClient.mockReturnValue(client)
+
+    await listSignalsForWatchedRepo('repo-1', 'biz-1', 50)
+
+    expect(builder.order).toHaveBeenCalledTimes(2)
+    expect(builder.order).toHaveBeenNthCalledWith(1, 'occurred_at', { ascending: false })
+    expect(builder.order).toHaveBeenNthCalledWith(2, 'id', { ascending: true })
+  })
+
   it('upsertSignal targets UNIQUE(business_id, source, external_id) as the conflict arbiter (§4.3 idempotency)', async () => {
     const { client, builder } = createMockClient(null, null)
     mockCreateServiceRoleClient.mockReturnValue(client)

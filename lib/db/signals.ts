@@ -40,8 +40,16 @@ export async function listRecentSignalsForBusiness(
 
 // §4.4 — the poller's edit-detection read: existing signals for a repo, to
 // diff a 200 response's releases against by (external_id, content_hash).
-// Service-role, bounded, matches signals_watched_repo_id_idx (watched_repo_id)
-// EXACTLY. Explicit business_id predicate (§3.5).
+// Service-role, bounded, explicit business_id predicate (§3.5).
+//
+// [Session 27-D · D3, MINOR-1] signals_watched_repo_id_idx (watched_repo_id)
+// serves the FILTER's leading column ONLY — it is single-column and cannot
+// serve the occurred_at sort. The trailing `.order('id', {ascending: true})`
+// is the tiebreak that makes this bounded window deterministic across rows
+// sharing an occurred_at: without it, two releases at the same timestamp
+// could be returned in different relative order run to run, which matters
+// here because this is a LIMITed read feeding the poller's diff, not an
+// unbounded scan.
 export async function listSignalsForWatchedRepo(
   watchedRepoId: string,
   businessId: string,
@@ -55,6 +63,7 @@ export async function listSignalsForWatchedRepo(
     .eq('watched_repo_id', watchedRepoId)
     .eq('business_id', businessId)
     .order('occurred_at', { ascending: false })
+    .order('id', { ascending: true })
     .limit(limit)
   if (error) throw new Error(getErrorMessage(error))
   return ((data as unknown[]) ?? []).map(asSignalRow)

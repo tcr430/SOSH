@@ -45,10 +45,20 @@ export async function countActiveWatchedReposForBusiness(
   return count ?? 0
 }
 
-// The poller's per-connection repo list. Bounded, matches
-// watched_repos_connection_id_idx (connection_id) — service-role, explicit
+// The poller's per-connection repo list. Bounded, service-role, explicit
 // business_id predicate (§3.5) even though connection_id already scopes to
 // one business, per the service-role scoping rule.
+//
+// [Session 27-D · D3, MINOR-2] watched_repos_connection_id_idx (connection_id)
+// serves the FILTER's leading column ONLY — it is single-column, so
+// `is_active` and the `id ASC` sort are NOT index-covered by it. Accepted as
+// a full scan of a bounded slice: this is a per-connection list behind a
+// 20-row cap (WATCHED_REPOS_LIST_LIMIT / SIGNAL-WATCHLIST-BOUNDED), not an
+// unbounded query. Deferred option, not shipped here (a new migration in a
+// correction pass needs its own defect, not a wrong comment): widen to
+// (connection_id, is_active, id) — record that under ADR 0020 §3.6 (the
+// named-index list) if a future session's workload makes the full scan
+// worth avoiding.
 export async function listActiveWatchedReposForConnection(
   connectionId: string,
   businessId: string,

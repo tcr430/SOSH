@@ -673,3 +673,42 @@ mistake it for live, exercised error handling.
 all green** (up from D1's 192/2646 — the +1 file / +17 tests is exactly this step's new suite).
 
 **Commit:** D2 lands as its own commit immediately following this appendix entry.
+
+### D3 — MINOR-1, MINOR-2
+
+**MINOR-1 — RESOLVED.** `lib/db/signals.ts`'s `listSignalsForWatchedRepo` now carries a trailing
+`.order('id', { ascending: true })` after `occurred_at DESC`, so the poller's edit-detection window is
+deterministic under a LIMIT when rows share an `occurred_at`. The comment no longer claims
+`signals_watched_repo_id_idx` (single-column, `watched_repo_id`) serves the sort — it now states plainly
+that the index serves only the filter's leading column, and that the trailing `id` order is the tiebreak.
+
+**MINOR-2 — RESOLVED, comment-only (no migration).** `lib/db/watched-repos.ts`'s
+`listActiveWatchedReposForConnection` comment corrected: `watched_repos_connection_id_idx` (`connection_id`
+only) serves the filter's leading column, `is_active` and the `id ASC` sort are **not** index-covered, and
+this is accepted as a full scan of a bounded (20-row) slice. Per the work order, a new migration was **not**
+shipped — widening to `(connection_id, is_active, id)` is named as the deferred option, to be recorded
+under ADR 0020 §3.6 if a future session's workload makes the full scan worth avoiding.
+
+**Item 3 — comment audit of the remaining ordered queries in both files.** Re-read every `.order(...)` call
+site in `lib/db/signals.ts` and `lib/db/watched-repos.ts`:
+- `listRecentSignalsForBusiness` (`signals.ts`) — ORDER BY `business_id` (eq) + `occurred_at DESC, id ASC`.
+  Verified against the migration (`20260731090000_signal_ingestion.sql:225-226`):
+  `signals_business_id_occurred_at_idx ON signals (business_id, occurred_at DESC, id)` — exact match.
+  Comment already accurate; **no change needed**.
+- `listWatchedReposForBusiness` (`watched-repos.ts`) — ORDER BY `business_id` (eq) + `repo_id ASC`.
+  Verified against the migration (`:70`): `UNIQUE (business_id, repo_id)` — exact match. Comment already
+  accurate; **no change needed**.
+- No other function in either file issues an `.order(...)` call (the remaining exports are single-row
+  lookups, counts, inserts, or conditional updates with no sort). The audit did not stop at the two the
+  Reviewer opened — it covered every ordered query in both files.
+
+**Verify:** new Tier-2 case in `lib/db/signals.test.ts` asserting `listSignalsForWatchedRepo` issues both
+order calls, in order (`toHaveBeenNthCalledWith(1, 'occurred_at', ...)`, `toHaveBeenNthCalledWith(2, 'id',
+...)`). Shown to REDDEN against the pre-D3 query builder: the `.order('id', ...)` call was temporarily
+removed, the new test failed exactly as expected (`expected "vi.fn()" to be called 2 times, but got 1
+times`), then reverted — `git diff lib/db/signals.ts` confirmed no residual mutation. `npx tsc --noEmit
+--skipLibCheck` clean. `npm run test:app` → **193 files / 2664 tests, all green** (up from D2's 193/2663 —
+the +1 test is exactly this step's new case; no new test *file*, since the case was added to the existing
+`lib/db/signals.test.ts`).
+
+**Commit:** D3 lands as its own commit immediately following this appendix entry.
