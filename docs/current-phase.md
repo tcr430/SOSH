@@ -51,19 +51,39 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
     (240/240 tests passed)`. 24 matches the file count after E2.11 added no new `supabase/__tests__` files
     beyond the pre-existing 23 plus this session's addition to `signals-schema.test.ts` (a case added to an
     existing file, not a new one — consistent with the file-count-vs-test-count distinction D5 established).
-  - **`app-tests` run — PENDING, blocked by an external GitHub Actions outage, not by this repo's code.**
-    Three consecutive attempts (runs
+  - **`app-tests` run — GREEN**, confirmed after the external GitHub Actions outage cleared. Three
+    consecutive attempts had failed identically at the "Set up job" step with `Failed to resolve action
+    download info. Error: Service Unavailable` — GitHub's own action-download service, before any
+    repository code ran (runs
     [31116039392](https://github.com/tcr430/SOSH/actions/runs/31116039392) — genuine, since-fixed lint
     error; then two reruns of
-    [31117351562](https://github.com/tcr430/SOSH/actions/runs/31117351562)) failed identically at the
-    "Set up job" step with `Failed to resolve action download info. Error: Service Unavailable` — GitHub's
-    own action-download service, before any repository code runs. Local evidence in its place: `npx tsc
-    --noEmit --skipLibCheck` clean, `npm run lint` 0 errors (98 pre-existing warnings), and `npm run
+    [31117351562](https://github.com/tcr430/SOSH/actions/runs/31117351562), then a rerun of
+    [31119937068](https://github.com/tcr430/SOSH/actions/runs/31119937068) which also hit the outage).
+    A `gh run rerun 31119937068` on 2026-08-07 against the same head (`7b4c94e7`) came back green in
+    1m59s: `skip-guard: 192 file(s) under [app, lib, components] all visible, zero failures — green.
+    (2640/2640 tests passed)`. Local evidence from the outage window still stands as corroboration: `npx
+    tsc --noEmit --skipLibCheck` clean, `npm run lint` 0 errors (98 pre-existing warnings), and `npm run
     test:app` with the exact CI dummy env vars reproduced locally — 2609/2609 passing, including
     `lib/config.test.ts` and `lib/signals/orchestrator.test.ts` (the two files the env-var fix targeted).
-    **Tally still 0 of 3** regardless — same rule as every entry below: a `pull_request`-event run never
-    moves it. Re-run `app-tests` on PR #5 once GitHub Actions recovers and update this entry with the run
-    URL and skip-guard line before treating Session 27 as CI-verified.
+    **Tally still 0 of 3** — same rule as every entry below: a `pull_request`-event run never moves it.
+    Session 27 is now CI-verified: both required and advisory jobs green on PR #5 at head `7b4c94e7`.
+  - **[Session 27-D · D6, MAJOR-1] Provenance: the audited range head never ran green — the executing SHA
+    is three commits later.** The Session 27 Reviewer's audited range is `97bb2b76^..5b5bbb9f` (E2.1…E2.11,
+    eleven commits). At the range head, `5b5bbb9f`, **both** CI jobs FAILED: `app-tests`
+    [run 31116039392](https://github.com/tcr430/SOSH/actions/runs/31116039392), `db-tests`
+    [run 31116038037](https://github.com/tcr430/SOSH/actions/runs/31116038037) — the cause was MAJOR-3
+    (the four `GITHUB_APP_*` config fields were unconditionally required at parse time, with no matching
+    workflow env vars). The green runs cited two bullets above (`app-tests` 31119937068, `db-tests`
+    31119937379) are at `7b4c94e7`, **three commits after** the range head. The intervening delta is
+    **exactly four files, +102/−0, and touches no production source**: `3a4a5f7a` (an ESLint scope
+    annotation on a pre-existing `require()` in `lib/signals/github-client.test.ts` — this is the one
+    in-range file that is NOT byte-identical to what CI executed), `08a4c1e2` (the `GITHUB_APP_*` dummy
+    workflow env vars that patched MAJOR-3's symptom — **since removed** by Session 27-D's D1, which fixed
+    the root cause instead), and `7b4c94e7` itself (docs-only — this current-phase.md entry). Because the
+    delta is non-behavioural, the 33 `SIGNAL-*` constraints are **not** `AUTHORED-NOT-EXECUTED` — but the
+    range head itself has no green CI evidence, and a future reader must not be misled by E2.11's commit
+    subject into believing otherwise. D7 makes this whole question moot going forward by producing a green
+    run for the Session 27-D-corrected range itself.
   - **A-2's launch-blocking condition, recorded explicitly (ADR 0020 §0.2, §9.6):** third-party personal
     data in `signals`/`signal_candidates` (release author names/handles where a title or body mentions
     them) has an approved, tracked Evidence Pack follow-on — **not a blocker on the ADR itself**, but
@@ -73,6 +93,11 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
     (§9.5) — `SIGNAL-RETENTION-UNCLAIMED` — which stays enforced by
     `app/[locale]/(dashboard)/settings/signals/signals-i18n.test.ts`'s scan (no retention figure in any of
     the three locale files) until a real reaper ships.
+    **[Session 27-D · D6, MINOR-7]** This condition was recorded at `7b4c94e7` — **outside**
+    `97bb2b76^..5b5bbb9f`, the range the Session 27 Reviewer actually audited (§0.2 A-2's ruling is
+    unchanged and still binding: *"Approved as a tracked follow-on, not a blocker on this ADR. Condition,
+    binding: NO LAUNCH until all three land."* — `docs/build-guide/session-27.md:241`). The content above
+    is correct and complete; only the provenance — which SHA it landed at — was previously unstated.
   - Full detail: `docs/decisions/0020-mode-3-signal-ingestion.md`, `docs/build-guide/session-27.md`.
 
 - **Session 25 CLOSED — Diff-based learning capture, ADR 0018 (Track C of the 0016→0017→0018 programme):**
@@ -244,6 +269,21 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
       `docs/reviews/session-26-reviewer.md`'s CORRECTION PASS §D6 for the full resolution record,
       including the four-questions re-confirmation (question 1 now answers NO, proved by
       `markers.test.ts`'s guarded-baseline case from D1).
+    - **2026-08-07 (Session 27 · E2.10–E2.11, post-outage re-run):** both required and advisory checks ran
+      **green** on PR [#5](https://github.com/tcr430/SOSH/pull/5) (branch `session-22-d`, head `7b4c94e7`
+      — Session 27's E2.10 source-scan additions + E2.11 constraint-mapping correction, plus the two
+      follow-up fixes `3a4a5f7a` and `08a4c1e2`). The initial CI attempt on this head
+      ([app-tests run 31119937068](https://github.com/tcr430/SOSH/actions/runs/31119937068),
+      [db-tests run 31119937379](https://github.com/tcr430/SOSH/actions/runs/31119937379)) failed both
+      jobs identically at "Getting action download info" with `Error: Service Unavailable` — GitHub's own
+      action-download service, confirmed by reading the raw step logs before any repository code ran; not
+      a code regression. `gh run rerun` on both run IDs against the same head came back green:
+      app-tests — `skip-guard: 192 file(s) under [app, lib, components] all visible, zero failures —
+      green. (2640/2640 tests passed)` (1m59s); db-tests — `skip-guard: 24 file(s) under
+      [supabase/__tests__] all visible, zero failures — green. (240/240 tests passed)` (2m35s). **Tally
+      still 0 of 3** — same rule as every entry above: both are `pull_request`-event runs on
+      `session-22-d`, not `master` runs. This closes the "A-2 launch-blocking condition" entry's open
+      `app-tests` PENDING status recorded earlier in the Session 27 close-out block above.
   - **Merge-gate enforcement (Session 22-D):** GitHub ruleset `master-app-tests` (id `19038239`) is live on
     `refs/heads/master`, requiring `app-tests` with no bypass actors. `db-tests` is intentionally **not**
     in any ruleset yet — it stays advisory until the tally above reaches 3/3, at which point the ruleset is

@@ -843,3 +843,56 @@ and the new A-5 test are green before this step's Tier-1 claim can be treated as
 "argued."
 
 **Commit:** D5 lands as its own commit immediately following this appendix entry.
+
+### D6 — MAJOR-1, MINOR-7, NIT-3, NIT-5, NIT-6
+
+**MAJOR-1 — RESOLVED (the historical fact recorded; D7 makes it moot going forward).** Both
+`docs/current-phase.md`'s Session 27 entry and `ADR 0020 §11` now state explicitly: the audited range is
+`97bb2b76^..5b5bbb9f`; at the range head `5b5bbb9f` both CI jobs FAILED (`app-tests` run 31116039392,
+`db-tests` run 31116038037); the green runs cited elsewhere in `current-phase.md` (`app-tests` 31119937068,
+`db-tests` 31119937379) are at `7b4c94e7`, three commits later; the intervening delta is exactly four
+files, +102/−0, no production source — `3a4a5f7a` (ESLint scope annotation on a pre-existing `require()`
+in `github-client.test.ts` — the one in-range file not byte-identical to what CI executed), `08a4c1e2`
+(the `GITHUB_APP_*` dummy workflow env vars, since **removed** by D1), and `7b4c94e7` (docs-only). Fix
+(a) — the Reviewer's cheaper option — was done; fix (b) (re-running CI against a range-head-plus-YAML-only
+tree) was not attempted.
+
+**MINOR-7 — RESOLVED.** The same `current-phase.md` entry now names the SHA at which A-2's launch-blocking
+condition was recorded (`7b4c94e7`) and states it landed outside the audited range. §0.2 A-2's text is
+**cited verbatim**, not paraphrased: *"Approved as a tracked follow-on, not a blocker on this ADR.
+Condition, binding: NO LAUNCH until all three land."* (`docs/build-guide/session-27.md:241`). The
+condition itself is unchanged.
+
+**NIT-3 — RESOLVED.** ADR §5.4 (the permission-scopes section) now names `mintInstallationToken`'s
+`POST /app/installations/{id}/access_tokens` as the single enumerated exception to "no non-GET against
+`api.github.com`" — a credential mint, not a customer-content write. A future reviewer scanning for that
+pattern finds the exception pre-named rather than opening it as a fresh finding.
+
+**NIT-5 — DECLINED WITH REASON.** `lib/db/types.ts:23`'s `VaultSecretId` re-verified at this range: still
+`string & { readonly _brand: 'VaultSecretId' }`, the weaker string-literal-brand form the new
+`UntrustedText` comments (§7.3) argue against (the strong form is a non-exported `unique symbol`, per the
+Reviewer's own F1 check). **NOT changed** — `lib/db/types.ts` is untouched by this step (verified: `git
+diff --name-only -- lib/db/types.ts` is empty). Reasoning: this is pre-existing, predates Session 27, and
+changing a vault-adjacent type in a correction pass with no test that would catch a regression in the
+token path is a worse trade than leaving it. Flagged in `ADR 0020 §15` (Consequences), naming it for
+whichever session next touches vault-adjacent types.
+
+**NIT-6 — RESOLVED (process).** Recorded in `.wolf/cerebrum.md` under a new dated `Key Learnings (Session
+27-D · D6, 2026-08-07 — process, NIT-6)` section: both `database-reviewer` and `security-reviewer`
+sub-agent sessions (invoked at D1 and D5 respectively, in this correction pass) reported every `Read` tool
+result carrying appended text advertising out-of-toolset tools and offering cached "observations" in place
+of the real file, and both correctly disregarded it and read source directly. The rule recorded: a
+REVIEWER agent reads source at the stated commit, never a cached paraphrase — PROC-REVIEW-AT-COMMIT already
+requires this, and the appended-text pattern is the concrete mechanism that could quietly erode it if a
+future agent session ever followed the offer instead of disregarding it. Note: `.wolf/` is gitignored
+(`.gitignore:23`) — the cerebrum.md edit is on disk but does not appear in this commit's diff; that is
+expected, not a gap.
+
+**Verify:** `git diff --name-only -- '*.ts' '*.tsx' '*.sql'` empty — confirmed no code file in this step's
+diff. Every run URL (31116039392, 31116038037, 31119937068, 31119937379) and every SHA (`97bb2b76`,
+`5b5bbb9f`, `3a4a5f7a`, `08a4c1e2`, `7b4c94e7`) cited was independently confirmed against `gh run view` and
+`git log` at the start of this correction pass (D1's grounding-facts check) and is unchanged since. The
+four delta files are enumerated by name in both `current-phase.md` and `ADR §11`. §0.2 A-2's text is a
+direct quotation with a line citation, not a paraphrase.
+
+**Commit:** D6 lands as its own commit immediately following this appendix entry.

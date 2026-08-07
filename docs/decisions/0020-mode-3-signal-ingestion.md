@@ -686,6 +686,15 @@ resource, ever**. A permission we do not use is a permission we do not request. 
 the user-authorization leg (A-1) for identity at install time only (§8.3) — that is an OAuth identity scope,
 not a repository permission, and it grants no repository access of its own.
 
+> **[Session 27-D · D6, NIT-3] The single enumerated exception to "no non-GET against `api.github.com`."**
+> `mintInstallationToken` (`lib/signals/github-client.ts`) issues
+> `POST /app/installations/{id}/access_tokens`, a non-GET verb against `api.github.com`. This mints a
+> **credential** — an installation access token, held in process memory and used exactly once per tick
+> (§2.4) — it is not a write against customer content or repository state, and does not contradict L-5's
+> read-only guarantee. This is the ONE such exception in the codebase; a future reviewer or source scan
+> looking for "any non-GET against `api.github.com`" as a proxy for L-5 violations must treat this call as
+> already named and accounted for, not rediscover it as a finding.
+
 ### 5.5 Constraints
 
 `SIGNAL-READ-ONLY-GITHUB`, `SIGNAL-NO-CONTRIBUTOR-IDENTITY`, `SIGNAL-BODY-CAPPED`.
@@ -1225,6 +1234,19 @@ existed to differ from). `package.json:31-32`.
 
 "Covered" = **executed green in CI**, never "authored" (ADR 0015 §1).
 
+> **Provenance (Session 27-D / D6, MAJOR-1) — which SHA actually executed this tier plan green.** The
+> Session 27 Reviewer's audited range is `97bb2b76^..5b5bbb9f` (E2.1…E2.11). At the range head, `5b5bbb9f`,
+> **both** CI jobs FAILED (`app-tests` run 31116039392, `db-tests` run 31116038037) — MAJOR-3's
+> unconditionally-required `GITHUB_APP_*` config fields, with no matching workflow env vars. The green
+> runs (`app-tests` 31119937068, `db-tests` 31119937379) are at `7b4c94e7`, three commits later. That
+> delta is **exactly four files, +102/−0, no production source**: `3a4a5f7a` (an ESLint scope annotation
+> on a pre-existing `require()` in `lib/signals/github-client.test.ts` — the one in-range file NOT
+> byte-identical to what CI executed), `08a4c1e2` (the `GITHUB_APP_*` dummy workflow env vars — since
+> **removed** by Session 27-D's D1, which fixed the root cause), and `7b4c94e7` itself (docs). The 33
+> constraints below are therefore **not** `AUTHORED-NOT-EXECUTED`, but the range head carries no green CI
+> evidence of its own — the SHA that actually proved this table is `7b4c94e7`, not `5b5bbb9f`. Full detail:
+> `docs/current-phase.md`'s Session 27 entry.
+
 ### 11.1 Tier 1 — live Postgres (`supabase/__tests__/signals-*.test.ts`, `db-tests.yml`)
 
 Per ADR 0015 §2, a mocked client or a `pg_policies` read is **not** coverage for this tier.
@@ -1471,6 +1493,15 @@ availability and rate limits. A credential model that is *deliberately different
 the codebase, which is a thing every future reader must be told rather than left to infer — hence §2.1's
 table. And an accepted asymmetry: `is_active` is not as strong a revocation boundary as deleting a Vault
 secret (§2.5).
+
+**[Session 27-D · D6, NIT-5] Flagged, not fixed here: `VaultSecretId`'s weaker brand form.**
+`lib/db/types.ts:23` — `export type VaultSecretId = string & { readonly _brand: 'VaultSecretId' }` — uses a
+string-literal brand, which this session's `UntrustedText` comments (§7.3) argue is the weaker form (the
+brand name itself is a public string, not a module-private `unique symbol`). This is **pre-existing**, from
+before Session 27, and out of the audited range. A correction pass changing a vault-adjacent type with no
+test that would catch a regression in the token path is a worse trade than leaving it — DECLINED, not
+changed, in this pass. Whichever session next touches vault-adjacent types (`VaultSecretId` or its
+callers) should migrate it to the non-exported `unique symbol` form `UntrustedText` established.
 
 **Risks, each with its mitigation.** *Tenant confusion at the install callback* — the sharpest risk in the
 session; mitigated by A-1's ownership proof (§8.3), and the ADR is explicit that the pre-A-1 design was
