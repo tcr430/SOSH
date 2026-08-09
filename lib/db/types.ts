@@ -393,7 +393,11 @@ export type StudioDraftUpdate = Partial<Omit<StudioDraftRow, 'id' | 'created_at'
 export type SignalSource = 'github'
 export type SignalKind = 'release'
 export type SignalIngestedVia = 'poll' | 'webhook'
-export type SignalCandidateStatus = 'new'
+// ADR 0021 §2.11 (Session 28 E5.2) widened the DB CHECK to all five values —
+// this type was missed at E5.2 and only carried 'new' until E5.6 caught it.
+// terminal: carded, no_card, triage_failed. non-terminal (upsert_signal_
+// candidate restarts these): new, triaging.
+export type SignalCandidateStatus = 'new' | 'triaging' | 'carded' | 'no_card' | 'triage_failed'
 
 export type GithubConnectionRow = {
   id: string
@@ -535,6 +539,10 @@ export type SignalCandidateRow = {
   // index across two tables and the feed's ORDER BY spans both.
   occurred_at: string
   status: SignalCandidateStatus
+  // ADR 0021 §2.9 (Session 28 E5.2) — also missed at E5.2, caught alongside
+  // SignalCandidateStatus's widening at E5.6. NULL except while status is
+  // 'triaging'.
+  triage_claimed_at: string | null
   created_at: string
   updated_at: string
 }

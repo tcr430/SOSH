@@ -1,7 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { createClient } from '@supabase/supabase-js'
-import { Client } from 'pg'
-import { config } from '@/lib/config'
 
 // ADR 0020 §3 — Tier-1, live Postgres. SIGNAL-RLS-ISOLATED (mirrored both
 // directions, per table, per the Session 26-D MINOR-2 precedent),
@@ -464,25 +462,24 @@ describe('signal ingestion schema (ADR 0020 §3)', () => {
   })
 
   it("SIGNAL-DEDUP-STABLE-ON-EDIT: a re-score against a candidate transitioned out of 'new' does NOT resurrect it", async () => {
-    // signal_candidates.status today has CHECK (status = 'new') — ADR 0020
-    // issues only 'new'; ADR 0021 (Session 28) adds real human-triage
-    // statuses like a dismissal. That CHECK makes it impossible to construct
-    // a non-'new' row through any normal INSERT/UPDATE right now, but the
-    // WHERE status='new' guard inside upsert_signal_candidate (§6.4) is
-    // generic SQL that doesn't know or care which future status value wins
-    // — it only cares that the row is no longer 'new'. This test proves
-    // that SQL mechanism directly: a raw admin connection (`pg`, the same
-    // package scripts/apply-migrations.ts already uses) temporarily drops
-    // the CHECK to construct a "transitioned out of new" row, runs the
-    // guarded RPC against it exactly as a concurrent re-score would, then
-    // restores the constraint — the schema's own status enum is unchanged
-    // by this test for every other test in this file.
-    const rawClient = new Client({ connectionString: config.server.DATABASE_URL })
-    await rawClient.connect()
-    try {
-      await rawClient.query('ALTER TABLE public.signal_candidates DROP CONSTRAINT signal_candidates_status_check')
-      await rawClient.query("UPDATE public.signal_candidates SET status = 'dismissed' WHERE id = $1", [candidateAId])
+    // ADR 0021 §2.11 (Session 28 E5.2) widened signal_candidates.status to
+    // five real values, three of them terminal. 'no_card' is used here as a
+    // real terminal value — no constraint surgery needed.
+    //
+    // [Session 28 E5.6 correction] This test originally used a placeholder
+    // value ('dismissed') that was OUTSIDE the CHECK's vocabulary even
+    // after E5.2's widening, which forced a temporary DROP/ADD CONSTRAINT
+    // dance around it. That dance's restore step hardcoded the PRE-E5.2
+    // narrow definition (`CHECK (status = 'new')`) — so running this test
+    // after E5.2 shipped silently reverted the live database's widened
+    // constraint for every other test sharing it, a corruption discovered
+    // when five E5.2 tests in signals3-triage-state.test.ts started failing
+    // with no code changes of their own. Using a real post-widening
+    // terminal value removes the need for constraint surgery entirely.
+    const { error: toNoCardErr } = await admin.from('signal_candidates').update({ status: 'no_card' }).eq('id', candidateAId)
+    expect(toNoCardErr).toBeNull()
 
+    try {
       const { data, error } = await admin.rpc('upsert_signal_candidate', {
         p_business_id: businessAId,
         p_signal_id: signalAId,
@@ -502,20 +499,14 @@ describe('signal ingestion schema (ADR 0020 §3)', () => {
         .eq('id', candidateAId)
         .single()
       expect(afterErr).toBeNull()
-      // Untouched: still dismissed, still the original score (42, from
+      // Untouched: still no_card, still the original score (42, from
       // insertCandidate's beforeAll seed) — the attempted re-score never
       // committed.
-      expect(after.status).toBe('dismissed')
+      expect(after.status).toBe('no_card')
       expect(Number(after.score)).toBe(42)
     } finally {
-      // Restore order matters: the row must be back to a CHECK-legal value
-      // BEFORE the constraint is re-added, or ADD CONSTRAINT itself fails
-      // validation against the still-'dismissed' row.
-      await rawClient.query("UPDATE public.signal_candidates SET status = 'new' WHERE id = $1", [candidateAId])
-      await rawClient.query(
-        "ALTER TABLE public.signal_candidates ADD CONSTRAINT signal_candidates_status_check CHECK (status = 'new'::text)",
-      )
-      await rawClient.end()
+      // Restore for other tests in this file that assume candidateAId is 'new'.
+      await admin.from('signal_candidates').update({ status: 'new' }).eq('id', candidateAId)
     }
   })
 

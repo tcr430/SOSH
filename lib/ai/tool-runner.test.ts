@@ -108,6 +108,7 @@ describe('runToolLoop (ADR 0021 §2, Session 28 E5.4)', () => {
         citableBrandIds: [],
         audienceNote: 'Enterprise IT buyers.',
       },
+      costCents: expect.any(Number),
     })
   })
 
@@ -127,7 +128,7 @@ describe('runToolLoop (ADR 0021 §2, Session 28 E5.4)', () => {
   it('fails closed with quota_exceeded when the trial cap is spent — no SDK call made', async () => {
     const result = await runToolLoop(baseInput({ context: trialExhausted }))
 
-    expect(result).toEqual({ outcome: 'failed', reason: 'quota_exceeded' })
+    expect(result).toEqual({ outcome: 'failed', reason: 'quota_exceeded', costCents: expect.any(Number) })
     expect(mockCreate).not.toHaveBeenCalled()
   })
 
@@ -136,7 +137,7 @@ describe('runToolLoop (ADR 0021 §2, Session 28 E5.4)', () => {
 
     const result = await runToolLoop(baseInput())
 
-    expect(result).toEqual({ outcome: 'failed', reason: 'rate_limited' })
+    expect(result).toEqual({ outcome: 'failed', reason: 'rate_limited', costCents: expect.any(Number) })
     expect(mockCreate).not.toHaveBeenCalled()
   })
 
@@ -150,7 +151,7 @@ describe('runToolLoop (ADR 0021 §2, Session 28 E5.4)', () => {
 
     const result = await runToolLoop(baseInput())
 
-    expect(result).toEqual({ outcome: 'failed', reason: 'input_token_cap_exceeded' })
+    expect(result).toEqual({ outcome: 'failed', reason: 'input_token_cap_exceeded', costCents: expect.any(Number) })
   })
 
   it('TRIAGE_MAX_OUTPUT_TOKENS_PER_TURN: fails closed with output_token_per_turn_exceeded', async () => {
@@ -158,7 +159,7 @@ describe('runToolLoop (ADR 0021 §2, Session 28 E5.4)', () => {
 
     const result = await runToolLoop(baseInput())
 
-    expect(result).toEqual({ outcome: 'failed', reason: 'output_token_per_turn_exceeded' })
+    expect(result).toEqual({ outcome: 'failed', reason: 'output_token_per_turn_exceeded', costCents: expect.any(Number) })
   })
 
   it('TRIAGE_MAX_CUMULATIVE_OUTPUT_TOKENS: fails closed with output_token_cap_exceeded once turns sum past it', async () => {
@@ -168,7 +169,7 @@ describe('runToolLoop (ADR 0021 §2, Session 28 E5.4)', () => {
 
     const result = await runToolLoop(baseInput())
 
-    expect(result).toEqual({ outcome: 'failed', reason: 'output_token_cap_exceeded' })
+    expect(result).toEqual({ outcome: 'failed', reason: 'output_token_cap_exceeded', costCents: expect.any(Number) })
   })
 
   it('response_truncated: fails closed when stop_reason is max_tokens', async () => {
@@ -176,7 +177,7 @@ describe('runToolLoop (ADR 0021 §2, Session 28 E5.4)', () => {
 
     const result = await runToolLoop(baseInput())
 
-    expect(result).toEqual({ outcome: 'failed', reason: 'response_truncated' })
+    expect(result).toEqual({ outcome: 'failed', reason: 'response_truncated', costCents: expect.any(Number) })
   })
 
   it('invalid_response: fails closed when the decision text is not valid JSON', async () => {
@@ -184,7 +185,7 @@ describe('runToolLoop (ADR 0021 §2, Session 28 E5.4)', () => {
 
     const result = await runToolLoop(baseInput())
 
-    expect(result).toEqual({ outcome: 'failed', reason: 'invalid_response' })
+    expect(result).toEqual({ outcome: 'failed', reason: 'invalid_response', costCents: expect.any(Number) })
   })
 
   it('TRIAGE_MAX_TURNS: fails closed with max_turns_exceeded when every turn is spent on tool calls with no decision', async () => {
@@ -192,7 +193,7 @@ describe('runToolLoop (ADR 0021 §2, Session 28 E5.4)', () => {
 
     const result = await runToolLoop(baseInput())
 
-    expect(result).toEqual({ outcome: 'failed', reason: 'max_turns_exceeded' })
+    expect(result).toEqual({ outcome: 'failed', reason: 'max_turns_exceeded', costCents: expect.any(Number) })
     expect(mockCreate).toHaveBeenCalledTimes(6)
   })
 
@@ -222,7 +223,7 @@ describe('runToolLoop (ADR 0021 §2, Session 28 E5.4)', () => {
 
     const result = await runToolLoop(baseInput())
 
-    expect(result).toEqual({ outcome: 'failed', reason: 'wall_clock_exceeded' })
+    expect(result).toEqual({ outcome: 'failed', reason: 'wall_clock_exceeded', costCents: expect.any(Number) })
     expect(mockCreate).not.toHaveBeenCalled()
 
     vi.spyOn(Date, 'now').mockRestore()
@@ -235,7 +236,7 @@ describe('runToolLoop (ADR 0021 §2, Session 28 E5.4)', () => {
 
     const result = await runToolLoop(baseInput())
 
-    expect(result).toEqual({ outcome: 'failed', reason: 'retry_budget_exhausted' })
+    expect(result).toEqual({ outcome: 'failed', reason: 'retry_budget_exhausted', costCents: expect.any(Number) })
     // 1 initial attempt + TRIAGE_RETRY_BUDGET retries, all against the same turn.
     expect(mockCreate).toHaveBeenCalledTimes(1 + TRIAGE_RETRY_BUDGET)
   }, 15000)

@@ -80,3 +80,91 @@ export async function upsertSignalCandidate(
   const rows = (data as SignalCandidateRow[] | null) ?? []
   return rows[0] ?? null
 }
+
+// ─── Stage C triage state (ADR 0021 §2.5/§2.9/§2.10, Session 28 E5.6) ───────
+
+// §2.9 — the atomic claim, mirroring claimGithubConnectionForPoll's shape
+// (lib/db/github-connections.ts:88-101, ADR 0020 §4.2): the WHERE clause
+// re-guards the exact window the caller's shortlist read selected against,
+// so a candidate claimed by a concurrent tick updates zero rows (returns
+// null) rather than being claimed twice.
+export async function claimCandidateForTriage(
+  client: SupabaseClient,
+  id: string,
+  claimedAtIso: string,
+): Promise<SignalCandidateRow | null> {
+  const { data, error } = await client
+    .from('signal_candidates')
+    .update({ status: 'triaging', triage_claimed_at: claimedAtIso })
+    .eq('id', id)
+    .eq('status', 'new')
+    .select()
+    .maybeSingle()
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as SignalCandidateRow | null) ?? null
+}
+
+// §2.9 — a crashed tick's claim self-heals rather than stranding the row at
+// 'triaging' forever (the bug class ADR 0017 already hit once, "BLOCKER-1
+// activate-guard stuck rows"). Returns the count reclaimed, index-served by
+// signal_candidates_triage_claim_idx (E5.2).
+export async function reclaimStaleTriagingCandidates(
+  client: SupabaseClient,
+  staleBeforeIso: string,
+): Promise<number> {
+  const { data, error } = await client
+    .from('signal_candidates')
+    .update({ status: 'new', triage_claimed_at: null })
+    .eq('status', 'triaging')
+    .lt('triage_claimed_at', staleBeforeIso)
+    .select('id')
+  if (error) throw new Error(getErrorMessage(error))
+  return (data ?? []).length
+}
+
+// §2.5/§0.2 A-4′ — the terminal transition out of 'triaging', conditional on
+// the EXACT claim this caller is holding (triage_claimed_at), not merely on
+// status='triaging'. Mirrors the "conditional on the claim it is consuming"
+// posture Stage D's card insert will also need (§4.1): if a re-score landed
+// mid-flight, upsert_signal_candidate has already reset the row to 'new' and
+// cleared triage_claimed_at (A-4′), so this WHERE fails to match and the
+// caller's own (now-stale) triage verdict is correctly discarded — the
+// candidate is re-triaged fresh on a later tick rather than this call
+// silently overwriting a newer claim's state.
+export async function setCandidateTriageOutcome(
+  client: SupabaseClient,
+  id: string,
+  claimedAtIso: string,
+  status: 'no_card' | 'triage_failed',
+): Promise<SignalCandidateRow | null> {
+  const { data, error } = await client
+    .from('signal_candidates')
+    .update({ status, triage_claimed_at: null })
+    .eq('id', id)
+    .eq('status', 'triaging')
+    .eq('triage_claimed_at', claimedAtIso)
+    .select()
+    .maybeSingle()
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as SignalCandidateRow | null) ?? null
+}
+
+// §2.10 — the Tier-0 age gate. Direct new -> no_card, deterministic, ZERO
+// claim and ZERO LLM call: a candidate this old is never worth even
+// attempting to triage, so it never enters 'triaging' at all. This is what
+// drains ADR 0020 §4.4's 90-day backfill; without it a 20-repo watch list
+// takes months to clear at TRIAGE_SHORTLIST_PER_TICK=5/business/day.
+export async function ageGateCandidate(
+  client: SupabaseClient,
+  id: string,
+): Promise<SignalCandidateRow | null> {
+  const { data, error } = await client
+    .from('signal_candidates')
+    .update({ status: 'no_card' })
+    .eq('id', id)
+    .eq('status', 'new')
+    .select()
+    .maybeSingle()
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as SignalCandidateRow | null) ?? null
+}

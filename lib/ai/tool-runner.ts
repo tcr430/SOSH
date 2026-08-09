@@ -95,12 +95,18 @@ export type TriageLoopFailureReason =
   | 'provider_error'
 
 export type TriageLoopResult =
-  | { outcome: 'decision'; decision: TriageDecision }
+  | { outcome: 'decision'; decision: TriageDecision; costCents: number }
   // §2.5 — on ANY bound breach the loop FAILS CLOSED: it produces no card.
   // The loop itself never writes to insight_cards or signal_candidates; the
-  // caller (Stage C orchestration, E5.5+) is responsible for moving the
+  // caller (Stage C orchestration, E5.6+) is responsible for moving the
   // candidate to 'triage_failed' and incrementing the tick counter.
-  | { outcome: 'failed'; reason: TriageLoopFailureReason }
+  //
+  // costCents (Session 28 E5.6) — every outcome carries the loop's actual
+  // cumulative cost, mirroring the exact figure the finally-block ai_usage
+  // write records. §3.3's reservation is a worst-case placeholder (22¢);
+  // the orchestrator reconciles it against THIS number after the call, on
+  // every outcome including failure (a failed loop still burns tokens).
+  | { outcome: 'failed'; reason: TriageLoopFailureReason; costCents: number }
 
 // A tool the loop can dispatch. `lib/signals/triage/` supplies the closed
 // four-tool inventory (E5.5) — this module has no opinion on what a tool
@@ -174,7 +180,7 @@ export async function runToolLoop(input: RunToolLoopInput): Promise<TriageLoopRe
   // a business that has exhausted its trial does not get unlimited AI spend
   // through a different feature.
   if (context.trialState !== null && context.trialState.postsRemaining <= 0) {
-    return { outcome: 'failed', reason: 'quota_exceeded' }
+    return { outcome: 'failed', reason: 'quota_exceeded', costCents: 0 }
   }
 
   // STEP 2: Rate limit (runner.ts:88-99). Tagged with its own promptId
@@ -185,7 +191,7 @@ export async function runToolLoop(input: RunToolLoopInput): Promise<TriageLoopRe
   const serviceClient = createServiceRoleClient()
   const recentCount = await countRecentCalls(serviceClient, context.business.id, 60, TRIAGE_PROMPT_ID)
   if (recentCount >= config.server.AI_RATE_LIMIT_POST_GENERATION_PER_MIN) {
-    return { outcome: 'failed', reason: 'rate_limited' }
+    return { outcome: 'failed', reason: 'rate_limited', costCents: 0 }
   }
 
   // STEP 3: cache_control policy (runner.ts:25, :101-110).
@@ -222,7 +228,14 @@ export async function runToolLoop(input: RunToolLoopInput): Promise<TriageLoopRe
   // normal paths).
   let usageSuccess = false
   let usageErrorCode: string | null = null
-  let result: TriageLoopResult | null = null
+  // costCents is attached once, after the finally block computes it — every
+  // branch below builds the outcome WITHOUT it, never a partially wrong
+  // number. (Omit<TriageLoopResult, 'costCents'> does not distribute over
+  // the union the way a hand-written one does — Omit forces both arms down
+  // to their shared keys only.)
+  let result: { outcome: 'decision'; decision: TriageDecision } | { outcome: 'failed'; reason: TriageLoopFailureReason } | null =
+    null
+  let costCents = 0
 
   try {
     while (turnsUsed < TRIAGE_MAX_TURNS) {
@@ -378,12 +391,11 @@ export async function runToolLoop(input: RunToolLoopInput): Promise<TriageLoopRe
       usageErrorCode = 'max_turns_exceeded'
       result = { outcome: 'failed', reason: 'max_turns_exceeded' }
     }
-    return result
   } finally {
     // The finally-block ai_usage write (runner.ts:218-239) — ONE record for
     // the whole loop, cumulative across every turn including retries.
     const latencyMs = Date.now() - startTime
-    const costCents = calculateCostCents('SONNET_4_6', cumulativeInputTokens, cumulativeOutputTokens, 0)
+    costCents = calculateCostCents('SONNET_4_6', cumulativeInputTokens, cumulativeOutputTokens, 0)
     try {
       await recordAiUsage({
         business_id: context.business.id,
@@ -401,4 +413,9 @@ export async function runToolLoop(input: RunToolLoopInput): Promise<TriageLoopRe
       console.error('tool-runner: failed to record ai_usage', usageErr)
     }
   }
+
+  // result is always set by this point — either inside the try block (a
+  // decision, a bound breach, or the max_turns_exceeded fallback) — the
+  // function never falls through the try/finally without assigning it.
+  return { ...result!, costCents } as TriageLoopResult
 }

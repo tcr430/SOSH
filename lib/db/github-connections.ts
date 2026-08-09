@@ -177,6 +177,25 @@ export async function recordGithubConnectionRateLimited(
   if (error) throw new Error(getErrorMessage(error))
 }
 
+// ADR 0021 §3.1 (Session 28 E5.6) — the triage tick's business iteration
+// source. UNIQUE(business_id) means one row per business, so a plain
+// is_active filter already yields a distinct set — no DISTINCT clause
+// needed. Only businesses with an active connection can ever have
+// signal_candidates rows, so this is the correct (and cheapest) universe to
+// iterate, not a full businesses table scan.
+export async function listActiveConnectionBusinessIds(
+  client: SupabaseClient,
+  limit = 500,
+): Promise<string[]> {
+  const { data, error } = await client
+    .from('github_connections')
+    .select('business_id')
+    .eq('is_active', true)
+    .limit(limit)
+  if (error) throw new Error(getErrorMessage(error))
+  return (data ?? []).map((row) => (row as { business_id: string }).business_id)
+}
+
 export type UpsertGithubConnectionResult =
   | { status: 'claimed'; connection: GithubConnectionRow }
   // ADR §8.2/§8.3 step 11 — installation_id already belongs to a DIFFERENT
