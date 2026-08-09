@@ -1,0 +1,17 @@
+{
+  "id": "msg_tool_use_unknown",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-sonnet-4-6",
+  "content": [
+    {
+      "type": "tool_use",
+      "id": "toolu_unknown_1",
+      "name": "delete_everything",
+      "input": {}
+    }
+  ],
+  "stop_reason": "tool_use",
+  "stop_sequence": null,
+  "usage": { "input_tokens": 3400, "output_tokens": 120, "cache_read_input_tokens": 0 }
+}

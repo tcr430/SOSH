@@ -1,0 +1,17 @@
+{
+  "id": "msg_tool_use_heavy_output",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-sonnet-4-6",
+  "content": [
+    {
+      "type": "tool_use",
+      "id": "toolu_heavy_1",
+      "name": "list_evidence",
+      "input": { "query": "SSO" }
+    }
+  ],
+  "stop_reason": "tool_use",
+  "stop_sequence": null,
+  "usage": { "input_tokens": 3400, "output_tokens": 1000, "cache_read_input_tokens": 0 }
+}
