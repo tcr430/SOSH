@@ -1081,6 +1081,8 @@ GRANT EXECUTE ON FUNCTION public.purge_business(uuid) TO service_role;
 | watched_repos | yes (business_id) | CASCADE | yes | none — cascade = erasure (holds repo owner/name chosen by the customer) |
 | signals | yes (business_id) | CASCADE | yes | none — cascade = erasure (holds third-party-authored release text; contributor identity fields are never stored, ADR 0020 §5.3) |
 | signal_candidates | yes (business_id + signal_id) | CASCADE (both) | yes | none — cascade = erasure |
+| insight_cards | yes (business_id) | CASCADE | yes | none — cascade = erasure (quotes third-party-authored release text; contributor identity is never stored, ADR 0020 §5.3) |
+| signal_triage_budget | yes (business_id) | CASCADE | yes | none — cascade = erasure (holds only a per-day cent counter) |
 
 Only `business_deletion_requests` (NO ACTION) would have blocked the root delete; D2.1 resolves it. Every other business-scoped table either cascades or is deliberately retained.
 

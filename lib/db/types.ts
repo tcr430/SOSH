@@ -575,6 +575,108 @@ export type SignalCandidateInsert = {
 export type SignalCandidateUpdate = Partial<Omit<SignalCandidateRow, 'id' | 'created_at' | 'business_id' | 'signal_id'>>
 
 // ---------------------------------------------------------------------------
+// insight_cards / signal_triage_budget — ADR 0021 §4.1, §8 (Session 28 E5.1)
+// ---------------------------------------------------------------------------
+
+// §5.3's state machine: pending -> approved | dismissed | saved;
+// saved -> approved | dismissed. Enforced in the DB by
+// enforce_insight_card_legal_transition (BEFORE UPDATE trigger), not by this
+// type alone — this is the app-layer echo of that DB boundary.
+export type InsightCardStatus = 'pending' | 'approved' | 'dismissed' | 'saved'
+
+// The closed five of §5.4.
+export type InsightCardDismissReason =
+  | 'not_relevant'
+  | 'already_covered'
+  | 'too_sensitive'
+  | 'wrong_timing'
+  | 'weak_evidence'
+
+export type InsightCardAngleOption = {
+  angle: string
+  rationale: string
+}
+
+export type InsightCardRow = {
+  id: string
+  business_id: string
+  signal_candidate_id: string
+  observation: string
+  why_it_matters: string
+  audience: string
+  angle_options: InsightCardAngleOption[]
+  // The verified evidence-memory id set (§4.6) — a jsonb id array, no FK.
+  evidence: string[]
+  suggested_objective: string | null
+  novelty: number
+  freshness: number
+  sensitivity: number
+  confidence: number
+  rubric_scores: Record<string, unknown>
+  // Denormalised from signal_candidates.score/occurred_at ([db-MAJOR-C]
+  // precedent) — Postgres cannot index across two tables and the feed's
+  // ORDER BY (§5.7) spans both.
+  score: number
+  occurred_at: string
+  status: InsightCardStatus
+  dismiss_reason: InsightCardDismissReason | null
+  expires_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type InsightCardInsert = {
+  id?: string
+  business_id: string
+  signal_candidate_id: string
+  observation: string
+  why_it_matters: string
+  audience: string
+  angle_options: InsightCardAngleOption[]
+  evidence: string[]
+  suggested_objective?: string | null
+  novelty: number
+  freshness: number
+  sensitivity: number
+  confidence: number
+  rubric_scores: Record<string, unknown>
+  score: number
+  occurred_at: string
+  status?: InsightCardStatus
+  dismiss_reason?: InsightCardDismissReason | null
+  expires_at?: string | null
+  created_at?: string
+  updated_at?: string
+}
+
+// business_id, signal_candidate_id excluded (tenancy-critical / the upsert
+// arbiter). score, occurred_at excluded — denormalised at insert only, never
+// touched by a triage transition. Every other Stage-D-authored field
+// excluded too: a triage UPDATE (the only authenticated write path, §5.3)
+// only ever changes status/dismiss_reason/expires_at.
+export type InsightCardUpdate = Partial<
+  Pick<InsightCardRow, 'status' | 'dismiss_reason' | 'expires_at'>
+>
+
+export type SignalTriageBudgetRow = {
+  id: string
+  business_id: string
+  day: string
+  reserved_cents: number
+  created_at: string
+  updated_at: string
+}
+
+export type SignalTriageBudgetInsert = {
+  id?: string
+  business_id: string
+  day: string
+  reserved_cents?: number
+  created_at?: string
+  updated_at?: string
+}
+
+// ---------------------------------------------------------------------------
 // 6. post_metrics — upsert-in-place; nullable metrics mean "not exposed by platform"
 // ---------------------------------------------------------------------------
 
