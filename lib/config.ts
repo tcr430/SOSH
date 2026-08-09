@@ -72,6 +72,10 @@ export const serverSchema = z.object({
   LEARNING_SUMMARY_MIN_INTERVAL_DAYS: z.coerce.number().int().positive().default(7),
   LEARNING_SUMMARY_MAX_INPUT_TOKENS: z.coerce.number().int().positive().default(12000),
   LEARNING_SUMMARY_MAX_MONTHLY_CALLS_PER_BUSINESS: z.coerce.number().int().positive().default(8),
+  // ADR 0021 §3.1 (Session 28 E5.3) — Mode 3 triage's daily cost ceiling.
+  // 5 x 22c worst case = 110c, so the full TRIAGE_SHORTLIST_PER_TICK shortlist
+  // fits with headroom and the cap binds only on pathology (§3.1).
+  TRIAGE_DAILY_CAP_CENTS: z.coerce.number().int().positive().default(125),
   LINKEDIN_CLIENT_ID: z.string().default(''),
   LINKEDIN_CLIENT_SECRET: z.string().default(''),
   X_CLIENT_ID: z.string().default(''),
@@ -264,6 +268,7 @@ function parseServerEnv() {
     LEARNING_SUMMARY_MIN_INTERVAL_DAYS: process.env.LEARNING_SUMMARY_MIN_INTERVAL_DAYS,
     LEARNING_SUMMARY_MAX_INPUT_TOKENS: process.env.LEARNING_SUMMARY_MAX_INPUT_TOKENS,
     LEARNING_SUMMARY_MAX_MONTHLY_CALLS_PER_BUSINESS: process.env.LEARNING_SUMMARY_MAX_MONTHLY_CALLS_PER_BUSINESS,
+    TRIAGE_DAILY_CAP_CENTS: process.env.TRIAGE_DAILY_CAP_CENTS,
     LINKEDIN_CLIENT_ID: process.env.LINKEDIN_CLIENT_ID,
     LINKEDIN_CLIENT_SECRET: process.env.LINKEDIN_CLIENT_SECRET,
     X_CLIENT_ID: process.env.X_CLIENT_ID,
@@ -463,6 +468,9 @@ export const config = {
     },
     get LEARNING_SUMMARY_MAX_MONTHLY_CALLS_PER_BUSINESS() {
       return serverOnly("LEARNING_SUMMARY_MAX_MONTHLY_CALLS_PER_BUSINESS", () => server().LEARNING_SUMMARY_MAX_MONTHLY_CALLS_PER_BUSINESS);
+    },
+    get TRIAGE_DAILY_CAP_CENTS() {
+      return serverOnly("TRIAGE_DAILY_CAP_CENTS", () => server().TRIAGE_DAILY_CAP_CENTS);
     },
     get LINKEDIN_CLIENT_ID() {
       return serverOnly("LINKEDIN_CLIENT_ID", () => server().LINKEDIN_CLIENT_ID);
