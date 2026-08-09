@@ -211,6 +211,46 @@ function truncateSignalText(text: string): string {
   return text.slice(0, SIGNAL_MAX_CHARS - TRUNCATION_SUFFIX.length) + TRUNCATION_SUFFIX
 }
 
+// ─── Tool results (ADR 0021 §7.3, Session 28 E5.5) ──────────────────────────
+
+// Mirrors EVIDENCE_MAX_CHARS/SIGNAL_MAX_CHARS's own cap policy — a hard cap
+// exists; the value is a separate named constant, not a coincidental reuse.
+export const TOOL_RESULT_MAX_CHARS = 2000
+
+function truncateToolResultField(text: string): string {
+  if (text.length <= TOOL_RESULT_MAX_CHARS) return text
+  return text.slice(0, TOOL_RESULT_MAX_CHARS - TRUNCATION_SUFFIX.length) + TRUNCATION_SUFFIX
+}
+
+// ADR 0021 §7.3 — "every other string field of every tool result" (evidence
+// keeps going through the EXISTING wrapEvidenceForPrompt above, for its
+// citation-by-id + business-scoped-re-fetch guarantee — this is not a
+// replacement for that). A SIBLING, not a sixth local sanitizeDataField and
+// not a new module: reuses neutralizeWithSentinels(), the same
+// Unicode-hardened guard lib/studio/guard.ts and wrapSignalForPrompt() rely
+// on. Applied PER FIELD, not per-row-joined — a tool result is a set of
+// individually-addressable fields (an audience note's statement, a
+// campaign's name/objective), each of which the model may read and quote
+// independently, so each is guarded and capped on its own rather than
+// concatenated into one block the way wrapEvidenceForPrompt renders a
+// citation set.
+//
+// security-reviewer (E5.4+E5.5+E5.7 pass, HIGH-2): the property this
+// function exists to guarantee is "every string field a tool's execute()
+// returns has already passed through a guard before it leaves the tool" —
+// a fixture-based test (tools.test.ts), not a JSON.stringify grep (the
+// dispatcher in lib/ai/tool-runner.ts unconditionally JSON.stringifies
+// whatever a tool returns, by design — that call site cannot itself
+// distinguish guarded from raw content).
+export function wrapToolResultForPrompt(rawText: string): string {
+  const neutralized = neutralizeWithSentinels(rawText)
+  const capped = truncateToolResultField(neutralized)
+  // Re-run the [/DATA]-closer pass once more post-truncation — same
+  // defense-in-depth as guard() and wrapSignalForPrompt() above.
+  const reguarded = capped.replace(/\[\/DATA\]/gi, '[/data-blocked]')
+  return `[DATA]\n${reguarded}\n[/DATA]`
+}
+
 // ADR 0020 §7.4 — the ONE chokepoint for signal text, alongside
 // wrapEvidenceForPrompt in this same module ("one module owning
 // prompt-safety, two honest provenance types"). Reuses

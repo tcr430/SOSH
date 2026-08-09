@@ -59,7 +59,29 @@ const APP_DIR = path.join(ROOT, 'app')
 describe('SIGNAL-NO-LLM-IN-STAGE-AB (L-1, ADR §11.3 scan #1)', () => {
   const SCAN_ROOTS = [LIB_SIGNALS_DIR, POLLER_ROUTE_DIR]
 
-  it('no file under lib/signals/** or the poller route imports @/lib/ai/* or @anthropic-ai/sdk', () => {
+  // ADR 0021 §2.1 (Session 28 E5.4/E5.5) narrows this Session-27 rule by
+  // exactly two names. §2.1's own resolution is "the loop lives in
+  // lib/ai/, not lib/signals/" — Stage C's tool DEFINITIONS
+  // (lib/signals/triage/tools.ts) are sanctioned to import the loop's type
+  // (`TriageTool` from lib/ai/tool-runner) and the prompt-safety guards
+  // (`wrapEvidenceForPrompt`/`wrapToolResultForPrompt` from
+  // lib/ai/wrap-evidence) — that is the ADR's whole point: Stage C calls
+  // INTO lib/ai/, it does not reimplement lib/ai/ locally. Nothing else
+  // under lib/ai/ is exempted — lib/ai/runner.ts, lib/ai/client.ts,
+  // lib/ai/prompts/**, and @anthropic-ai/sdk itself remain forbidden here
+  // exactly as Session 27 wrote it (SIGNAL3-AI-LAYER-ROUTED,
+  // lib/signals/ai-layer-routed.test.ts, covers the @anthropic-ai/sdk half
+  // directly and is the authoritative test for that property).
+  const SANCTIONED_LIB_AI_IMPORTS = [/from\s+['"]@\/lib\/ai\/tool-runner['"]/, /from\s+['"]@\/lib\/ai\/wrap-evidence['"]/]
+
+  function stripSanctionedImportLines(source: string): string {
+    return source
+      .split('\n')
+      .filter((line) => !SANCTIONED_LIB_AI_IMPORTS.some((p) => p.test(line)))
+      .join('\n')
+  }
+
+  it('no file under lib/signals/** or the poller route imports @/lib/ai/* (beyond the two ADR-0021-sanctioned names above) or @anthropic-ai/sdk', () => {
     for (const root of SCAN_ROOTS) {
       expect(collectTsFiles(root).length, `${root} contributed zero files to the scan`).toBeGreaterThan(0)
     }
@@ -69,12 +91,19 @@ describe('SIGNAL-NO-LLM-IN-STAGE-AB (L-1, ADR §11.3 scan #1)', () => {
 
     const offenders: string[] = []
     for (const file of files) {
-      const source = stripLineComments(fs.readFileSync(file, 'utf8'))
+      const source = stripSanctionedImportLines(stripLineComments(fs.readFileSync(file, 'utf8')))
       if (/from\s+['"]@\/lib\/ai\//.test(source) || /from\s+['"]@anthropic-ai\/sdk['"]/.test(source)) {
         offenders.push(path.relative(ROOT, file))
       }
     }
     expect(offenders).toEqual([])
+  })
+
+  it('the sanctioned exception is exactly two names, still exercised — lib/signals/triage/tools.ts actually imports one of them (guards against the allowlist going stale or silently widening)', () => {
+    const toolsPath = path.join(ROOT, 'lib', 'signals', 'triage', 'tools.ts')
+    expect(fs.existsSync(toolsPath), 'lib/signals/triage/tools.ts no longer exists — update this exception').toBe(true)
+    const source = fs.readFileSync(toolsPath, 'utf8')
+    expect(SANCTIONED_LIB_AI_IMPORTS.some((p) => p.test(source))).toBe(true)
   })
 
   it('exception stated so the scan is written correctly: wrapSignalForPrompt (Session 28\'s entry point) is referenced by nothing in Session 27\'s scope', () => {
