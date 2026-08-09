@@ -564,6 +564,9 @@ export type SignalCandidateWithSignal = SignalCandidateRow & {
     html_url: string | null
     occurred_at: string
     author_is_bot: boolean
+    // Session 28 E5.7 — added alongside the join widening in
+    // lib/db/signal-candidates.ts (ADR §4.4's sensitivity rule needs it).
+    is_prerelease: boolean
   }
 }
 

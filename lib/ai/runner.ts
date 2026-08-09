@@ -21,6 +21,10 @@ const POST_GENERATION_PROMPT_ID = 'post-generation'
 // it was not resolved when generate.ts first landed, and is fixed here.
 const NATIVE_GENERATION_PROMPT_IDS = new Set(['native-generation-single', 'native-generation-thread'])
 const RUBRIC_PROMPT_ID = 'rubric'
+// Must match lib/signals/triage/card.ts's own CARD_GENERATION_PROMPT_ID
+// exactly — duplicated as a literal (not imported) because lib/ai/ must not
+// depend on lib/signals/ (the dependency runs the other way, ADR 0021 §2.1).
+const CARD_GENERATION_PROMPT_ID = 'signal-card-generation'
 const RETRY_DELAY_MS = 2000
 const CACHE_CONTROL_CHAR_THRESHOLD = 4096 // chars / 4 ≈ tokens; 4096 chars ≈ 1024 tokens
 const DEFAULT_MAX_TOKENS = 4096
@@ -38,8 +42,12 @@ function isPostGeneration(promptId: string): boolean {
 
 // A scoring call (the rubric, ADR §6/§7) never generates a post and never
 // consumes brand-voice quota — it must increment NEITHER trial counter.
+// ADR 0021 §4.2 (Session 28 E5.7) — CARD_GENERATION_PROMPT_ID joins this set
+// for the same reason: a triage card is not a post the user requested
+// generated, and incrementing posts_generated_count for it would silently
+// eat into the trial post cap for a feature the user never asked to run.
 function isScoringOnly(promptId: string): boolean {
-  return promptId === RUBRIC_PROMPT_ID
+  return promptId === RUBRIC_PROMPT_ID || promptId === CARD_GENERATION_PROMPT_ID
 }
 
 async function sleep(ms: number): Promise<void> {

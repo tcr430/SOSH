@@ -4,6 +4,7 @@ import type { TriageTool } from '@/lib/ai/tool-runner'
 import { retrieveEvidenceMemory, retrieveAudienceMemory, retrieveBrandMemory, type MemoryQueryContext } from '@/lib/memory'
 import { listCampaigns } from '@/lib/db/campaigns'
 import { wrapEvidenceForPrompt, wrapToolResultForPrompt } from '@/lib/ai/wrap-evidence'
+import type { CardCitableContext } from './verify'
 
 // ADR 0021 §2.2/§2.3 (Session 28 E5.5) — the closed four-tool inventory for
 // Stage C's triage loop. Renamed from a draft's "search_*": the underlying
@@ -60,7 +61,15 @@ function parseQueryContext(input: unknown): MemoryQueryContext {
 // closed set, and hard-failing — absorbing as a malformed block — on
 // anything else) lives in lib/ai/tool-runner.ts (built at E5.4); this
 // function's job is only to return the closed four.
-export function buildTriageTools(client: SupabaseClient, businessId: string): TriageTool[] {
+//
+// `citable` (Session 28 E5.7, optional — backward compatible with E5.5's
+// 2-arg call sites) — a CardCitableContext (lib/signals/triage/verify.ts)
+// each tool populates as a side effect of its own execute(). This is what
+// makes §4.6's render-time verification possible at all: Stage D verifies
+// a citation against "the exact set THIS call's tools returned," which
+// only exists if something captured it while the loop was running —
+// lib/ai/tool-runner.ts has no domain knowledge and cannot do this itself.
+export function buildTriageTools(client: SupabaseClient, businessId: string, citable?: CardCitableContext): TriageTool[] {
   const listEvidence: TriageTool = {
     name: 'list_evidence',
     description:
@@ -78,6 +87,9 @@ export function buildTriageTools(client: SupabaseClient, businessId: string): Tr
       // list.
       const ids = rows.map((row) => row.id)
       const evidence = await wrapEvidenceForPrompt(client, businessId, ids)
+      if (citable) {
+        for (const row of rows) citable.evidence.set(row.id, { id: row.id, snippet: wrapToolResultForPrompt(row.content) })
+      }
       return { ids, evidence }
     },
   }
@@ -100,6 +112,9 @@ export function buildTriageTools(client: SupabaseClient, businessId: string): Tr
     execute: async (input) => {
       const queryContext = parseQueryContext(input)
       const rows = await retrieveBrandMemory(client, businessId, queryContext)
+      if (citable) {
+        for (const row of rows) citable.brandClaims.set(row.id, { id: row.id, statement: wrapToolResultForPrompt(row.statement) })
+      }
       return rows.map((row) => ({ id: row.id, statement: wrapToolResultForPrompt(row.statement) }))
     },
   }

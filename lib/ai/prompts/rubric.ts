@@ -56,6 +56,23 @@ export type RubricInput =
       // score for a generated post without one.
       platform: Platform
     }
+  | {
+      // ADR 0021 §4.3 (Session 28 E5.7) — ADDITIVE third mode. No eleventh
+      // dimension, no rename, no output-schema change: RubricOutputSchema
+      // is untouched, so lib/studio/categories.ts's derivation from it is
+      // unaffected. Four of the ten dimensions are meaningless for a card
+      // (platformNativeness, brandVoiceAlignment, openingStrength, ctaFit —
+      // a card carries no copy, no platform, no CTA); the system prompt
+      // instructs the model to score those four 0 with an explicit "n/a"
+      // note, and the CALLER (lib/signals/triage/card.ts) excludes them
+      // from the aggregate and recomputes confidence over the remaining
+      // six in code — the model's own `overall`/`verdict` are discarded
+      // here exactly as `verdict` already is for briefs (§6.3's real gate
+      // is a code-side comparison, never a model self-report).
+      mode: 'card'
+      contentLabel: string
+      content: string
+    }
 
 const dimensionSchema = z.object({
   score: z.number().min(0).max(100),
@@ -174,6 +191,18 @@ Target audience: ${bv.target_audience}
 Keywords to use: ${bv.keywords.join(', ')}
 Words to avoid: ${bv.avoid_words.join(', ')}
 [/DATA]`)
+    }
+
+    // ADR 0021 §4.3 — card mode's four inapplicable dimensions, by
+    // instruction here (buildSystemPrompt has no `input` parameter per the
+    // Prompt<TInput,TOutput> interface, so the mode-aware guidance must live
+    // in the per-call user message, not the per-context system prompt).
+    // card.ts's caller-side aggregate exclusion is the actual enforcement —
+    // this is guidance to the model, not the guarantee.
+    if (input.mode === 'card') {
+      sections.push(
+        'This content is a TRIAGE CARD DRAFT, not a published post: it has no target platform, no brand-voice copy, no opening line, and no call-to-action. Score platformNativeness, brandVoiceAlignment, openingStrength, and ctaFit as 0 with the note "n/a — a card carries no copy" for each. Score the remaining six dimensions normally.',
+      )
     }
 
     sections.push('Score the content above across all ten dimensions. Return ONLY the JSON object.')

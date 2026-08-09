@@ -35,10 +35,10 @@ describe('lib/db/signal-candidates.ts (ADR 0020 §13.1)', () => {
     expect(builder.limit).toHaveBeenCalledWith(50)
   })
 
-  it('listNewCandidates joins signals(title, body, html_url, occurred_at, author_is_bot) — §13.1 minus tag_name (no backing column, recorded in-code)', async () => {
+  it('listNewCandidates joins signals(title, body, html_url, occurred_at, author_is_bot, is_prerelease) — §13.1 minus tag_name (no backing column, recorded in-code); is_prerelease added at Session 28 E5.7 for the card sensitivity rule', async () => {
     const { client, builder } = createMockClient([], null)
     await listNewCandidates(client, 'biz-1')
-    expect(builder.select).toHaveBeenCalledWith('*, signals(title, body, html_url, occurred_at, author_is_bot)')
+    expect(builder.select).toHaveBeenCalledWith('*, signals(title, body, html_url, occurred_at, author_is_bot, is_prerelease)')
   })
 
   it('upsertSignalCandidate routes through the guarded upsert_signal_candidate RPC (ADR §6.4), not a plain .upsert()', async () => {

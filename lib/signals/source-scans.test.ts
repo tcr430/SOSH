@@ -59,22 +59,26 @@ const APP_DIR = path.join(ROOT, 'app')
 describe('SIGNAL-NO-LLM-IN-STAGE-AB (L-1, ADR §11.3 scan #1)', () => {
   const SCAN_ROOTS = [LIB_SIGNALS_DIR, POLLER_ROUTE_DIR]
 
-  // ADR 0021 §2.1 (Session 28 E5.4/E5.5/E5.6) narrows this Session-27 rule
-  // by exactly three names. §2.1's own resolution is "the loop lives in
-  // lib/ai/, not lib/signals/" — Stage C's tool DEFINITIONS
+  // ADR 0021 §2.1 (Session 28 E5.4-E5.7) narrows this Session-27 rule by a
+  // named, closed set of module paths. §2.1's own resolution is "the loop
+  // lives in lib/ai/, not lib/signals/" — Stage C's tool DEFINITIONS
   // (lib/signals/triage/tools.ts) are sanctioned to import the loop's type
   // (`TriageTool` from lib/ai/tool-runner) and the prompt-safety guards
   // (`wrapEvidenceForPrompt`/`wrapToolResultForPrompt` from
-  // lib/ai/wrap-evidence); the ORCHESTRATOR (lib/signals/triage/orchestrator.ts,
-  // E5.6) additionally needs `runToolLoop`/`TRIAGE_MAX_WALL_CLOCK_MS` from
-  // lib/ai/tool-runner (already covered), `wrapSignalForPrompt` from
-  // lib/ai/wrap-evidence (already covered — same module path), and
-  // `buildCustomerContext` from lib/ai/context — the established function
-  // every other AI-layer caller in this repo uses to assemble a
-  // CustomerContext, not a Stage-C-local reimplementation of it. That is
-  // the ADR's whole point: Stage C calls INTO lib/ai/, it does not
-  // reimplement lib/ai/ locally. Nothing else under lib/ai/ is exempted —
-  // lib/ai/runner.ts, lib/ai/client.ts, lib/ai/prompts/**, and
+  // lib/ai/wrap-evidence); the ORCHESTRATOR (orchestrator.ts, E5.6)
+  // additionally needs `runToolLoop`/`TRIAGE_MAX_WALL_CLOCK_MS` (already
+  // covered), `wrapSignalForPrompt` (already covered — same module path),
+  // and `buildCustomerContext` from lib/ai/context; STAGE D (card.ts, E5.7)
+  // additionally needs `runPrompt` from lib/ai/runner (§4.2's own mandate:
+  // "ONE runPrompt call"), `rubricPrompt`/`RubricOutput` from
+  // lib/ai/prompts/rubric (§4.3's `mode:'card'`, additive), and the bare
+  // `Prompt<TInput,TOutput>` TYPE from lib/ai/prompts/types (needed to type
+  // card.ts's own cardGenerationPrompt object — a type-only import, still
+  // matched by this scan since the scan is textual, not type-vs-value
+  // aware). That is the ADR's whole point throughout: Stage C and Stage D
+  // call INTO lib/ai/, they do not reimplement lib/ai/ locally. Nothing
+  // else under lib/ai/ is exempted — lib/ai/client.ts,
+  // lib/ai/prompts/post-generation.ts and every other prompt template, and
   // @anthropic-ai/sdk itself remain forbidden here exactly as Session 27
   // wrote it (SIGNAL3-AI-LAYER-ROUTED, lib/signals/ai-layer-routed.test.ts,
   // covers the @anthropic-ai/sdk half directly and is the authoritative
@@ -83,6 +87,9 @@ describe('SIGNAL-NO-LLM-IN-STAGE-AB (L-1, ADR §11.3 scan #1)', () => {
     /from\s+['"]@\/lib\/ai\/tool-runner['"]/,
     /from\s+['"]@\/lib\/ai\/wrap-evidence['"]/,
     /from\s+['"]@\/lib\/ai\/context['"]/,
+    /from\s+['"]@\/lib\/ai\/runner['"]/,
+    /from\s+['"]@\/lib\/ai\/prompts\/rubric['"]/,
+    /from\s+['"]@\/lib\/ai\/prompts\/types['"]/,
   ]
 
   function stripSanctionedImportLines(source: string): string {
@@ -110,29 +117,34 @@ describe('SIGNAL-NO-LLM-IN-STAGE-AB (L-1, ADR §11.3 scan #1)', () => {
     expect(offenders).toEqual([])
   })
 
-  it('the sanctioned exception is exactly three names, each still exercised (guards against the allowlist going stale or silently widening)', () => {
-    const toolsPath = path.join(ROOT, 'lib', 'signals', 'triage', 'tools.ts')
-    const orchestratorPath = path.join(ROOT, 'lib', 'signals', 'triage', 'orchestrator.ts')
-    expect(fs.existsSync(toolsPath), 'lib/signals/triage/tools.ts no longer exists — update this exception').toBe(true)
-    expect(fs.existsSync(orchestratorPath), 'lib/signals/triage/orchestrator.ts no longer exists — update this exception').toBe(true)
-
-    const toolsSource = fs.readFileSync(toolsPath, 'utf8')
-    const orchestratorSource = fs.readFileSync(orchestratorPath, 'utf8')
-    const combined = toolsSource + '\n' + orchestratorSource
+  it('the sanctioned exception is exactly six patterns, each still exercised (guards against the allowlist going stale or silently widening)', () => {
+    const paths = [
+      path.join(ROOT, 'lib', 'signals', 'triage', 'tools.ts'),
+      path.join(ROOT, 'lib', 'signals', 'triage', 'orchestrator.ts'),
+      path.join(ROOT, 'lib', 'signals', 'triage', 'card.ts'),
+    ]
+    for (const p of paths) {
+      expect(fs.existsSync(p), `${path.relative(ROOT, p)} no longer exists — update this exception`).toBe(true)
+    }
+    const combined = paths.map((p) => fs.readFileSync(p, 'utf8')).join('\n')
 
     for (const pattern of SANCTIONED_LIB_AI_IMPORTS) {
-      expect(pattern.test(combined), `${pattern} is no longer imported by tools.ts or orchestrator.ts — narrow the exception`).toBe(true)
+      expect(pattern.test(combined), `${pattern} is no longer imported by tools.ts, orchestrator.ts, or card.ts — narrow the exception`).toBe(
+        true,
+      )
     }
   })
 
   // Superseded at E5.6: this test originally asserted wrapSignalForPrompt
   // was referenced by NOTHING in Session 27's scope — true only until
-  // Session 28's sanctioned entry point (lib/signals/triage/orchestrator.ts)
-  // actually started calling it, which is exactly what §2.1 always intended.
-  // The assertion is flipped rather than deleted, so a reader still finds
-  // the fact recorded here: wrapSignalForPrompt now has exactly one caller
-  // under lib/signals/**, and it is the sanctioned one.
-  it('wrapSignalForPrompt is referenced by exactly the sanctioned orchestrator, nowhere else under lib/signals/**', () => {
+  // Session 28's sanctioned entry points (lib/signals/triage/orchestrator.ts,
+  // E5.6, then lib/signals/triage/card.ts, E5.7 — §4.2: "Signal text reaches
+  // the prompt ONLY via wrapSignalForPrompt") actually started calling it,
+  // which is exactly what §2.1 always intended. The assertion is flipped
+  // rather than deleted, so a reader still finds the fact recorded here:
+  // wrapSignalForPrompt has exactly these two callers under lib/signals/**,
+  // both sanctioned.
+  it('wrapSignalForPrompt is referenced by exactly the sanctioned Stage C/D entry points, nowhere else under lib/signals/**', () => {
     const files = SCAN_ROOTS.flatMap((root) => collectTsFiles(root))
     expect(files.length).toBeGreaterThan(0)
 
@@ -141,7 +153,7 @@ describe('SIGNAL-NO-LLM-IN-STAGE-AB (L-1, ADR §11.3 scan #1)', () => {
       const source = stripLineComments(fs.readFileSync(file, 'utf8'))
       if (/wrapSignalForPrompt/.test(source)) referencing.push(path.relative(ROOT, file).replace(/\\/g, '/'))
     }
-    expect(referencing).toEqual(['lib/signals/triage/orchestrator.ts'])
+    expect(referencing.sort()).toEqual(['lib/signals/triage/card.ts', 'lib/signals/triage/orchestrator.ts'])
   })
 
   // SIGNAL-NO-SIXTH-SANITIZER's full-standing form (the fifth assertion the

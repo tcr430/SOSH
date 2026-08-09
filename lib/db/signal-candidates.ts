@@ -26,6 +26,11 @@ const NEW_CANDIDATES_DEFAULT_LIMIT = 50
 // itself, when it first needs a distinct release-tag label) should add
 // `signals.tag_name text` and extend the select below; until then, the
 // join is short exactly that one field.
+// Session 28 E5.7 — is_prerelease added to the join. It was ALSO missing
+// from §13.1's original list (like tag_name above), just unnoticed until
+// Stage D's sensitivity rule (ADR §4.4: "Rule inputs, all deterministic:
+// is_prerelease, author_is_bot, and a keyword scan") needed it — the same
+// drift-correction shape as the tag_name note, applied to a second field.
 export async function listNewCandidates(
   client: SupabaseClient,
   businessId: string,
@@ -33,7 +38,7 @@ export async function listNewCandidates(
 ): Promise<SignalCandidateWithSignal[]> {
   const { data, error } = await client
     .from('signal_candidates')
-    .select('*, signals(title, body, html_url, occurred_at, author_is_bot)')
+    .select('*, signals(title, body, html_url, occurred_at, author_is_bot, is_prerelease)')
     .eq('business_id', businessId)
     .eq('status', 'new')
     .order('score', { ascending: false })
@@ -135,7 +140,7 @@ export async function setCandidateTriageOutcome(
   client: SupabaseClient,
   id: string,
   claimedAtIso: string,
-  status: 'no_card' | 'triage_failed',
+  status: 'no_card' | 'triage_failed' | 'carded',
 ): Promise<SignalCandidateRow | null> {
   const { data, error } = await client
     .from('signal_candidates')

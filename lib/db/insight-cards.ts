@@ -85,6 +85,22 @@ export async function insertCard(insert: InsightCardInsert): Promise<InsightCard
   return data as InsightCardRow
 }
 
+// Session 28 E5.7 — the rollback half of card.ts's "insert, then atomically
+// consume the claim, then roll back if the claim was already gone" pattern
+// (§4.1's "conditional on the claim it is consuming," implemented without a
+// second read: insertCard already derived business_id from the SAME
+// candidate row generateCard is claiming against, so the insert itself is
+// never the racy step — only "was this claim still valid" is, and that is
+// signal_candidates' own atomic UPDATE, not a read here). Called only when
+// that atomic transition matched zero rows — the candidate moved (a
+// concurrent re-score, A-4′) between the card being written and the claim
+// being consumed, so the just-inserted card is orphaned against stale
+// content and must not survive.
+export async function deleteCardById(client: SupabaseClient, id: string): Promise<void> {
+  const { error } = await client.from('insight_cards').delete().eq('id', id)
+  if (error) throw new Error(getErrorMessage(error))
+}
+
 export type TransitionCardStatusResult =
   | { outcome: 'ok'; currentStatus: InsightCardStatus }
   // §5.3's two-admins problem: the second UPDATE of a concurrent pair (or
