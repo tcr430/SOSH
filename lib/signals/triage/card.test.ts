@@ -10,11 +10,7 @@ const mockGetEvidenceMemoryByIds = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/db/memory-evidence', () => ({ getEvidenceMemoryByIds: mockGetEvidenceMemoryByIds }))
 
 const mockInsertCard = vi.hoisted(() => vi.fn())
-const mockDeleteCardById = vi.hoisted(() => vi.fn())
-vi.mock('@/lib/db/insight-cards', () => ({ insertCard: mockInsertCard, deleteCardById: mockDeleteCardById }))
-
-const mockSetCandidateTriageOutcome = vi.hoisted(() => vi.fn())
-vi.mock('@/lib/db/signal-candidates', () => ({ setCandidateTriageOutcome: mockSetCandidateTriageOutcome }))
+vi.mock('@/lib/db/insight-cards', () => ({ insertCard: mockInsertCard }))
 
 import {
   cardGenerationPrompt,
@@ -206,8 +202,7 @@ beforeEach(() => {
     return Promise.resolve(validGeneration)
   })
   mockGetEvidenceMemoryByIds.mockResolvedValue([{ id: 'ev-1' }])
-  mockInsertCard.mockResolvedValue({ id: 'card-1', signal_candidate_id: 'cand-1' })
-  mockSetCandidateTriageOutcome.mockResolvedValue({ id: 'cand-1', status: 'carded' })
+  mockInsertCard.mockResolvedValue({ outcome: 'inserted', card: { id: 'card-1', signal_candidate_id: 'cand-1' } })
 })
 
 describe('generateCard (ADR 0021 §4, Session 28 E5.7)', () => {
@@ -226,7 +221,7 @@ describe('generateCard (ADR 0021 §4, Session 28 E5.7)', () => {
 
     expect(result.outcome).toBe('inserted')
     expect(mockInsertCard).toHaveBeenCalledTimes(1)
-    expect(mockSetCandidateTriageOutcome).toHaveBeenCalledWith(expect.anything(), 'cand-1', '2026-08-09T00:00:00Z', 'carded')
+    expect(mockInsertCard).toHaveBeenCalledWith(expect.objectContaining({ signal_candidate_id: 'cand-1' }), '2026-08-09T00:00:00Z')
   })
 
   it('skips (citations_rejected) when a majority of citations are fabricated — no card written', async () => {
@@ -283,8 +278,8 @@ describe('generateCard (ADR 0021 §4, Session 28 E5.7)', () => {
     expect(mockInsertCard).not.toHaveBeenCalled()
   })
 
-  it('skips (claim_lost) and rolls back the card when the claim was consumed by a concurrent re-score (A-4′)', async () => {
-    mockSetCandidateTriageOutcome.mockResolvedValue(null) // the atomic transition matched zero rows
+  it('skips (claim_lost) — no rollback needed — when insert_insight_card_if_claimed matches zero rows (A-4′/A-5)', async () => {
+    mockInsertCard.mockResolvedValue({ outcome: 'claim_lost' }) // the single guarded statement matched zero rows
     const citable = createCardCitableContext()
 
     const result = await generateCard({
@@ -297,7 +292,6 @@ describe('generateCard (ADR 0021 §4, Session 28 E5.7)', () => {
     })
 
     expect(result).toEqual({ outcome: 'skipped', reason: 'claim_lost' })
-    expect(mockDeleteCardById).toHaveBeenCalledWith(expect.anything(), 'card-1')
   })
 
   it("status is never set by any code path here — insertCard's payload carries no status field", async () => {

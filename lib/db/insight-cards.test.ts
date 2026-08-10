@@ -15,8 +15,7 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-const baseInsert: InsightCardInsert = {
-  business_id: 'biz-1',
+const baseInsert: Omit<InsightCardInsert, 'business_id'> = {
   signal_candidate_id: 'cand-1',
   observation: 'obs',
   why_it_matters: 'why',
@@ -63,25 +62,32 @@ describe('lib/db/insight-cards.ts (ADR 0021 §10.1)', () => {
     expect(builder.eq).toHaveBeenCalledWith('business_id', 'biz-1')
   })
 
-  it('insertCard derives business_id from the parent candidate row and writes it', async () => {
-    const { client, builders } = createSequentialMockClient([
-      { data: { business_id: 'biz-1' }, error: null },
-      { data: { id: 'card-1', business_id: 'biz-1' }, error: null },
-    ])
+  it('insertCard routes through the insert_insight_card_if_claimed RPC (A-5), not a plain .insert(), and returns "inserted" on a matched row', async () => {
+    const { client } = createMockClient([{ id: 'card-1', business_id: 'biz-1' }], null)
     mockCreateServiceRoleClient.mockReturnValue(client)
 
-    const result = await insertCard(baseInsert)
+    const result = await insertCard(baseInsert, '2026-08-09T00:00:00Z')
 
-    expect(result).toEqual({ id: 'card-1', business_id: 'biz-1' })
-    expect(builders[0].eq).toHaveBeenCalledWith('id', 'cand-1')
-    expect(builders[1].insert).toHaveBeenCalledWith(expect.objectContaining({ business_id: 'biz-1' }))
+    expect(result).toEqual({ outcome: 'inserted', card: { id: 'card-1', business_id: 'biz-1' } })
+    expect(client.rpc).toHaveBeenCalledWith(
+      'insert_insight_card_if_claimed',
+      expect.objectContaining({
+        p_signal_candidate_id: 'cand-1',
+        p_claimed_at: '2026-08-09T00:00:00Z',
+      }),
+    )
+    // business_id is never a caller input — the RPC derives it from
+    // signal_candidates itself, inside the same statement (A-5).
+    expect(client.rpc).not.toHaveBeenCalledWith('insert_insight_card_if_claimed', expect.objectContaining({ business_id: expect.anything() }))
   })
 
-  it('insertCard REJECTS a business_id that disagrees with the parent candidate', async () => {
-    const { client } = createSequentialMockClient([{ data: { business_id: 'biz-DIFFERENT' }, error: null }])
+  it('insertCard returns "claim_lost" (fail-closed, not an error) when the RPC matches zero rows', async () => {
+    const { client } = createMockClient([], null)
     mockCreateServiceRoleClient.mockReturnValue(client)
 
-    await expect(insertCard(baseInsert)).rejects.toThrow(/business_id/i)
+    const result = await insertCard(baseInsert, '2026-08-09T00:00:00Z')
+
+    expect(result).toEqual({ outcome: 'claim_lost' })
   })
 
   it("transitionCardStatus's zero-row arm returns already_triaged rather than throwing", async () => {

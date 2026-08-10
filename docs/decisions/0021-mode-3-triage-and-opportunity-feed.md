@@ -606,6 +606,39 @@ derives `business_id` from the parent candidate row rather than accepting it as 
 with a Tier-1 test asserting they match. This is the third instance of the pattern (`posts`↔`campaigns`,
 `campaign_briefs`↔`campaigns` at ADR 0017 `:112-115`) — recorded, not newly introduced.
 
+#### Amendment (Session 28-D, D2) — A-5: the card insert is ONE statement, not two with a compensating delete
+
+**What shipped at E5.7 inverted this section's own contract.** The paragraph above already states the
+insert is "conditional on the claim it is consuming" — but the Builder's `card.ts` ran an *unconditional*
+`insertCard`, then a *separate* atomic `setCandidateTriageOutcome('carded')` call, and rolled the just-
+written card back with a compensating `deleteCardById` if that second call matched zero rows. Two round-
+trips with a crash window between them: a lost connection, a crash, or a failing delete in that window left
+a `status='pending'` card in the feed describing release text a re-score had already superseded — the
+precise outcome this section's "conditional insert" language exists to prevent (Session 28 Reviewer,
+MAJOR-1). It also opened a service-role `DELETE` into a table §4.1's own migration deliberately gave no
+`DELETE` policy, on the stated ground that cards are the eval corpus's history.
+
+**The ruling (A-5, founder-adjudicated):** `insertCard` now routes through a single Postgres function,
+`insert_insight_card_if_claimed` (`20260807120000_insight_card_claimed_insert.sql`), that folds BOTH facts
+— "was the claim still live" and "does the card now exist" — into one SQL statement: a data-modifying CTE
+(the claim-consuming `UPDATE … SET status = 'carded' … WHERE status = 'triaging' AND triage_claimed_at =
+$claim RETURNING …`) feeding the `INSERT INTO insight_cards … SELECT … FROM claimed ON CONFLICT
+(signal_candidate_id) DO NOTHING RETURNING *`. A card can only ever exist where the claim was live *in that
+one statement* — the orphan case `UNIQUE (signal_candidate_id)` depended on is **unreachable**, not merely
+compensated for, because there is nothing to roll back. Zero rows back is the fail-closed path (a
+concurrent re-score's A-4′ reset already moved the candidate off `'triaging'`/this claim), never an error;
+`lib/db/insight-cards.ts`'s `insertCard` turns it into a typed `{ outcome: 'claim_lost' }`, not a thrown
+exception. `status` stays absent from the function's INSERT column list, preserving §7.4 kill point 3 — it
+is set by the table's own `DEFAULT 'pending'`, never by code.
+
+**The loser, named:** the compensating-delete flow, and `deleteCardById` with it — removed entirely, along
+with the service-role `DELETE` path it opened. A transaction-wrapped version of the *original* two-step
+flow was considered and rejected: it restores atomicity but still leaves the card's existence decided by
+application logic reading two round-trip results, rather than by the database evaluating one `WHERE` clause
+— which is what let `SIGNAL3-RESCORE-INVALIDATES-TRIAGE`'s card arm be provable only by hand-building a
+duplicate query in the test file rather than by deleting a guard from the production function it was meant
+to protect (Session 28 Reviewer, MAJOR-2).
+
 ### 4.2 Stage D is Tier 1, single-shot, outside the loop (L-5, D-3)
 
 Stage C decides *whether* and gathers *what*; Stage D writes the card in **one** `runPrompt` call from what

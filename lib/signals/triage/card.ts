@@ -6,8 +6,7 @@ import { rubricPrompt, type RubricOutput } from '@/lib/ai/prompts/rubric'
 import type { CustomerContext } from '@/lib/ai/context'
 import { wrapSignalForPrompt, neutralizeWithSentinels } from '@/lib/ai/wrap-evidence'
 import { getEvidenceMemoryByIds } from '@/lib/db/memory-evidence'
-import { insertCard, deleteCardById } from '@/lib/db/insight-cards'
-import { setCandidateTriageOutcome } from '@/lib/db/signal-candidates'
+import { insertCard } from '@/lib/db/insight-cards'
 import { validateCardDraft } from './validate'
 import { verifyCardCitations, type CardCitableContext } from './verify'
 import type { TriageDecision } from '@/lib/ai/tool-runner'
@@ -235,39 +234,54 @@ export async function generateCard(input: GenerateCardInput): Promise<GenerateCa
 
   const finalSensitivity = computeFinalSensitivity(ruleFloor, generation.sensitivity)
 
-  // status is 'pending' by DB DEFAULT (§7.4's SIXTH step) — no field for it
-  // is set anywhere in this insert.
-  const card = await insertCard({
-    business_id: context.business.id,
-    signal_candidate_id: candidate.id,
-    observation: draft.observation,
-    why_it_matters: draft.whyItMatters,
-    audience: draft.audience,
-    angle_options: toInsertAngleOptions(draft.angleOptions),
-    evidence: verifiedEvidenceIds,
-    suggested_objective: draft.suggestedObjective,
-    novelty: generation.novelty,
-    freshness: generation.freshness,
-    sensitivity: finalSensitivity,
-    confidence,
-    rubric_scores: rubricScores,
-    score: candidate.score,
-    occurred_at: candidate.occurred_at,
-  })
+  // §4.1/A-5 (Session 28-D, D2) — status is 'pending' by DB DEFAULT (§7.4's
+  // SIXTH step); no field for it is set anywhere in this insert.
+  //
+  // WHAT THE UNIQUE(signal_candidate_id) TENSION WAS: A-4′ requires this
+  // insert to be conditional on the candidate still being 'triaging' under
+  // the EXACT claim this call is consuming — but UNIQUE(signal_candidate_id)
+  // means an orphaned card (written, then its claim invalidated a moment
+  // later) would permanently bar re-triage, since a future attempt's insert
+  // would collide with the orphan already sitting there. The ORIGINAL shape
+  // here inserted unconditionally, then ran a SEPARATE atomic
+  // setCandidateTriageOutcome('carded') call, and rolled the card back with
+  // a compensating deleteCardById if that second call matched zero rows —
+  // two round-trips with a crash window between them where a
+  // status='pending' card could survive describing content a re-score had
+  // already superseded (the reviewer's MAJOR-1).
+  //
+  // WHY ONE STATEMENT DISSOLVES IT: insertCard now calls
+  // insert_insight_card_if_claimed (20260807120000_insight_card_claimed_insert.sql),
+  // which folds "was the claim still live" and "does the card now exist"
+  // into a single SQL statement — a data-modifying CTE (the claim-consuming
+  // UPDATE) feeding the INSERT, ON CONFLICT (signal_candidate_id) DO
+  // NOTHING as the idempotent arbiter. A card can only ever exist where the
+  // claim was live in THAT statement, so the orphan case the UNIQUE
+  // constraint depended on is UNREACHABLE rather than compensated for —
+  // there is no rollback here because there is nothing left to roll back.
+  const insertResult = await insertCard(
+    {
+      signal_candidate_id: candidate.id,
+      observation: draft.observation,
+      why_it_matters: draft.whyItMatters,
+      audience: draft.audience,
+      angle_options: toInsertAngleOptions(draft.angleOptions),
+      evidence: verifiedEvidenceIds,
+      suggested_objective: draft.suggestedObjective,
+      novelty: generation.novelty,
+      freshness: generation.freshness,
+      sensitivity: finalSensitivity,
+      confidence,
+      rubric_scores: rubricScores,
+      score: candidate.score,
+      occurred_at: candidate.occurred_at,
+    },
+    claimedAtIso,
+  )
 
-  // §4.1 — the INSERT is conditional on the candidate still being
-  // 'triaging' under the EXACT claim this call is consuming (A-4′). The
-  // insert above is unconditional (guarded only by UNIQUE(signal_candidate_id)),
-  // so the claim is consumed HERE, atomically, immediately after — if a
-  // re-score invalidated it in between, this matches zero rows and the
-  // orphaned card is rolled back rather than left to silently duplicate on
-  // a future re-triage attempt (UNIQUE(signal_candidate_id) would otherwise
-  // permanently block it).
-  const transitioned = await setCandidateTriageOutcome(client, candidate.id, claimedAtIso, 'carded')
-  if (transitioned === null) {
-    await deleteCardById(client, card.id)
+  if (insertResult.outcome === 'claim_lost') {
     return { outcome: 'skipped', reason: 'claim_lost' }
   }
 
-  return { outcome: 'inserted', card }
+  return { outcome: 'inserted', card: insertResult.card }
 }

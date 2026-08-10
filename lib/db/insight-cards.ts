@@ -73,56 +73,63 @@ export async function getCardForBusiness(
   return (data as InsightCardRow | null) ?? null
 }
 
-// §4.1 tenant consistency — the third instance of the established pattern
-// (posts↔campaigns; campaign_briefs↔campaigns, lib/db/campaign-briefs.ts:23-26).
-// business_id is DERIVED from the parent signal_candidates row, never
-// trusted from the caller: the insert always writes the freshly-fetched
-// value, and a caller-supplied business_id that disagrees with it is
-// rejected outright rather than silently corrected — a mismatch here is a
-// bug (or an attack), not a value worth quietly overriding. SERVICE-ROLE:
-// insight_cards has no authenticated INSERT policy (§8.1 — Stage D writes
-// service-role), so this acquires its own client via the lazy-import
-// pattern (CLAUDE.md) and takes no client parameter.
-export async function insertCard(insert: InsightCardInsert): Promise<InsightCardRow> {
+export type InsertCardResult =
+  | { outcome: 'inserted'; card: InsightCardRow }
+  // §4.1/A-5 (Session 28-D, D2) — the fail-closed path, NOT a DB failure: a
+  // concurrent re-score's A-4′ reset already moved the candidate off
+  // 'triaging'/this exact claim before insert_insight_card_if_claimed ran.
+  | { outcome: 'claim_lost' }
+
+// §4.1/A-5 (Session 28-D, D2) — routed through the insert_insight_card_if_claimed
+// RPC (20260807120000_insight_card_claimed_insert.sql), NOT a plain
+// `.insert()`: PostgREST's insert cannot express "insert only if the parent
+// candidate is still 'triaging' under this exact claim," and that
+// conditionality is A-4′'s entire point. business_id is no longer a caller
+// input at all — the RPC derives it from signal_candidates itself, inside
+// the same statement that consumes the claim, so it can never diverge from
+// the parent row the way an app-level check could only catch after the
+// fact. A card can only ever exist where the claim was live in that one
+// statement — the orphan case the old unconditional-insert-then-
+// compensating-delete flow depended on is UNREACHABLE, not merely
+// compensated for; there is no rollback path here because there is nothing
+// to roll back. SERVICE-ROLE: insight_cards has no authenticated INSERT
+// policy (§8.1 — Stage D writes service-role), so this acquires its own
+// client via the lazy-import pattern (CLAUDE.md) and takes no client
+// parameter.
+export async function insertCard(
+  insert: Omit<InsightCardInsert, 'business_id'>,
+  claimedAtIso: string,
+): Promise<InsertCardResult> {
   const { createServiceRoleClient } = await import('@/lib/supabase/service')
   const client = createServiceRoleClient()
 
-  const { data: candidate, error: candidateError } = await client
-    .from('signal_candidates')
-    .select('business_id')
-    .eq('id', insert.signal_candidate_id)
-    .single()
-  if (candidateError) throw new Error(getErrorMessage(candidateError))
-
-  if (candidate.business_id !== insert.business_id) {
-    throw new Error(
-      `insertCard: business_id "${insert.business_id}" does not match parent candidate "${insert.signal_candidate_id}"'s business_id "${candidate.business_id}"`,
-    )
-  }
-
-  const { data, error } = await client
-    .from('insight_cards')
-    .insert({ ...insert, business_id: candidate.business_id })
-    .select()
-    .single()
+  const { data, error } = await client.rpc('insert_insight_card_if_claimed', {
+    p_signal_candidate_id: insert.signal_candidate_id,
+    p_claimed_at: claimedAtIso,
+    p_observation: insert.observation,
+    p_why_it_matters: insert.why_it_matters,
+    p_audience: insert.audience,
+    p_angle_options: insert.angle_options,
+    p_evidence: insert.evidence,
+    p_suggested_objective: insert.suggested_objective ?? null,
+    p_novelty: insert.novelty,
+    p_freshness: insert.freshness,
+    p_sensitivity: insert.sensitivity,
+    p_confidence: insert.confidence,
+    p_rubric_scores: insert.rubric_scores,
+    p_score: insert.score,
+    p_occurred_at: insert.occurred_at,
+  })
   if (error) throw new Error(getErrorMessage(error))
-  return data as InsightCardRow
-}
-
-// Session 28 E5.7 — the rollback half of card.ts's "insert, then atomically
-// consume the claim, then roll back if the claim was already gone" pattern
-// (§4.1's "conditional on the claim it is consuming," implemented without a
-// second read: insertCard already derived business_id from the SAME
-// candidate row generateCard is claiming against, so the insert itself is
-// never the racy step — only "was this claim still valid" is, and that is
-// signal_candidates' own atomic UPDATE, not a read here). Called only when
-// that atomic transition matched zero rows — the candidate moved (a
-// concurrent re-score, A-4′) between the card being written and the claim
-// being consumed, so the just-inserted card is orphaned against stale
-// content and must not survive.
-export async function deleteCardById(client: SupabaseClient, id: string): Promise<void> {
-  const { error } = await client.from('insight_cards').delete().eq('id', id)
-  if (error) throw new Error(getErrorMessage(error))
+  const rows = (data as InsightCardRow[] | null) ?? []
+  // database-reviewer (Session 28-D, D2): a connection drop AFTER this RPC
+  // commits but BEFORE the response reaches us is indistinguishable from a
+  // real claim loss — both read back as zero rows. No data-integrity impact
+  // (no duplicate, no orphan; the RPC's own claim guard already prevents a
+  // retry from re-inserting), purely an operator-legibility caveat on this
+  // outcome.
+  if (rows.length === 0) return { outcome: 'claim_lost' }
+  return { outcome: 'inserted', card: rows[0] }
 }
 
 // §6.1 (Session 28 E5.10) — seedCampaignFromCard(cardId) has no business_id

@@ -747,4 +747,82 @@ shell's env, confirmed identical at the D0 commit before any D1 change via `git 
 could not execute in this shell for the same reason (no Supabase/Postgres env configured locally) — D1
 touches no SQL/migration and modifies no Tier-1 test file, so this is a pre-existing environment gap, not
 a D1 regression; flagged here rather than silently skipped.
-**Commit:** pending (D1, not yet committed as of this appendix row)
+**Commit:** `95226fa9`
+
+### D2 — MAJOR-1 / A-5 (ADJUDICATION REQUEST) + MAJOR-2
+
+**A-5 ruling (recorded here for the record — already binding before this step ran):** the single-statement
+conditional insert. `INSERT … SELECT … FROM signal_candidates c WHERE c.id = $1 AND c.status = 'triaging'
+AND c.triage_claimed_at = $2 ON CONFLICT (signal_candidate_id) DO NOTHING RETURNING id` — zero rows, no
+card, if the claim is gone. The compensating delete (and `deleteCardById` with it) is the named loser: it
+is non-atomic, and a crash, a lost connection or a failing `deleteCardById` between the insert and the
+claim consumption leaves a `pending` card in the feed describing release text that no longer exists — the
+exact outcome A-4′ was chosen to make impossible.
+
+**Fix (MAJOR-1):** the literal SQL sketch in the ADJUDICATION REQUEST reads the claim (`SELECT … FROM
+signal_candidates c WHERE …`) without itself *consuming* it — but A-4′'s contract ("carded, set by Stage D,
+on a successful card insert") requires the candidate to actually transition, and a read-only guard alone
+would leave `signal_candidates.status` stuck at `'triaging'` forever even after a successful card insert.
+The implementation therefore folds BOTH facts — "was the claim still live" and "does the card now exist" —
+into ONE SQL statement via a writable CTE: `supabase/migrations/20260807120000_insight_card_claimed_insert.sql`
+defines `insert_insight_card_if_claimed`, whose body is `WITH claimed AS (UPDATE signal_candidates SET
+status = 'carded', triage_claimed_at = NULL WHERE id = $1 AND status = 'triaging' AND triage_claimed_at =
+$2 RETURNING business_id, id) INSERT INTO insight_cards (…) SELECT … FROM claimed ON CONFLICT
+(signal_candidate_id) DO NOTHING RETURNING *` — one statement, one implicit transaction, so the claim
+consumption and the card insert either both happen or neither does. `lib/db/insight-cards.ts`'s `insertCard`
+now calls this RPC and returns a typed `InsertCardResult` (`{ outcome: 'inserted'; card }` or `{ outcome:
+'claim_lost' }`) instead of throwing on the fail-closed path. `business_id` is no longer a caller-supplied
+field on the insert at all — the RPC derives it from `signal_candidates` itself, inside the same statement,
+so it structurally cannot diverge from the parent row (stronger than the old app-level equality check).
+`deleteCardById` is deleted from `lib/db/insight-cards.ts` entirely; `git grep -n "deleteCardById"` after
+the change returns zero code references (only historical prose in docs). `card.ts:258-265`'s comment is
+rewritten to record what the `UNIQUE(signal_candidate_id)` tension WAS and why the single statement
+dissolves it, per the instruction, rather than being deleted. ADR 0021 §4.1 amended with a new
+`#### Amendment (Session 28-D, D2) — A-5` subsection (appended, original text untouched) recording the
+ruling, the statement shape, and the named loser.
+**Fix (MAJOR-2):** `supabase/__tests__/signals3-triage-state.test.ts`'s hand-built `INSERT … SELECT …
+WHERE` (the anti-pattern — it asserted Postgres honours a `WHERE` clause the test itself just wrote,
+without ever calling a production function) is replaced with three tests that drive the REAL `generateCard`
+(mocking only `runPrompt`, matching `signals3-seed.test.ts`'s established Tier-1 precedent for AI-touching
+production paths): (1) the invalidated-claim case — seeds a candidate, claims it, invalidates the claim via
+a REAL `upsert_signal_candidate` re-score (A-4′'s actual mechanism, not a duplicate query), calls
+`generateCard`, asserts `{ outcome: 'skipped', reason: 'claim_lost' }` and zero `insight_cards` rows; (2)
+the happy path — a live claim produces EXACTLY ONE card, and the candidate transitions to `'carded'`
+(treated as the more important case per the instruction, since a `WHERE` that never matches looks identical
+to fail-closed working correctly without it); (3) the re-triage case — after (1) invalidates the claim, the
+candidate is re-claimed and successfully carded on the second attempt, proving `UNIQUE
+(signal_candidate_id)` no longer bars it because no orphan card was ever written. The RPC arm at the
+original `:213-235` (now shifted, same content) is untouched.
+**Test:** `lib/db/insight-cards.test.ts` — the two `insertCard`-specific cases rewritten for the new
+`(insert, claimedAtIso) => InsertCardResult` contract, asserting the RPC name/args and both the
+`'inserted'`/`'claim_lost'` outcomes (mocked `client.rpc`, Tier 2). `lib/signals/triage/card.test.ts` —
+mocks/assertions updated for the new `insertCard` shape; the `claim_lost` case now mocks `insertCard`
+returning `{ outcome: 'claim_lost' }` directly rather than mocking a separate `setCandidateTriageOutcome`
+call, and the `mockDeleteCardById` assertion is removed (the function no longer exists). `supabase/__tests__/signals3-triage-state.test.ts`
+— see MAJOR-2 fix above; three new Tier-1 cases against live Postgres.
+**Verification actually performed:** `npx tsc --noEmit --skipLibCheck` clean; `npx vitest run
+lib/signals/triage/card.test.ts lib/db/insight-cards.test.ts lib/signals/triage/orchestrator.test.ts` —
+31/31 green; broader sweep (`lib/signals lib/ai lib/db lib/social lib/validation`) — 1184/1184 green with
+the same pre-existing, unrelated `lib/signals/orchestrator.test.ts` env failure noted in D1's row (confirmed
+identical before any D2 change). `database-reviewer` invoked once (per D2's mandate) against the migration
+and its TypeScript caller: verdict **"Sound. This closes MAJOR-1 correctly"** — confirmed the writable-CTE
+is genuinely one atomic statement (no interleaving window), confirmed `ON CONFLICT` is unreachable in the
+normal flow but safe/correct to keep as defense-in-depth (traced concretely against `claimCandidateForTriage`'s
+claim exclusivity and `'carded'`'s terminal status), confirmed a mid-INSERT failure rolls back the CTE's
+UPDATE too (ordinary Postgres statement atomicity), confirmed `SECURITY DEFINER`/`search_path` hardening and
+the `REVOKE`/`GRANT` signature match are correct, and confirmed no SQL-injection surface (all values bound
+RPC parameters, never interpolated). One non-blocking MINOR raised and addressed: a connection drop after
+the RPC commits but before the response returns reads back identically to a real `claim_lost` — no
+data-integrity impact, addressed with a one-line comment on `insertCard`'s zero-rows branch documenting the
+distinction rather than a design change.
+**Verification NOT performed (flagged, not silently skipped):** `npm run test:db` — this shell has no local
+`supabase`/`docker` available (confirmed: `which supabase` → not found, `docker --version` → not found), so
+the three new Tier-1 tests in `signals3-triage-state.test.ts` could not be executed against live Postgres
+here, and the "prove it reddens" mutation proof against the RPC's `WHERE`/claim-equality predicate
+(specified in D2's VERIFY section) could not be performed for the same reason. This is the identical
+environment gap D1 hit and flagged, not a new one. The tests are written to the same idiom as the
+already-passing `signals3-seed.test.ts` and `signals3-card-evidence-tenant.test.ts` Tier-1 suites and were
+verified by `tsc` and by the database-reviewer's independent trace of the same logic; they have not been
+**executed** green in this session and should be treated as `AUTHORED-NOT-EXECUTED` until `db-tests.yml`
+(or a local Supabase stack) runs them.
+**Commit:** pending (D2, not yet committed as of this appendix row)

@@ -1,12 +1,56 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { Client } from 'pg'
-import { config } from '@/lib/config'
+import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest'
 
 // ADR 0021 §2.9, §2.11, §3.3, §0.2 A-4′ — Tier-1, live Postgres, REAL
 // concurrency. Session 28 E5.2 scope: signal_candidates' widened status +
 // triage_claimed_at, the amended upsert_signal_candidate guard, and the two
 // cost-ceiling RPCs. SIGNAL3-COST-CEILING-ATOMIC, -CLAIM-RECLAIMABLE,
 // -RESCORE-INVALIDATES-TRIAGE.
+
+// Session 28-D, D2 (MAJOR-2 closed) — the card arm of
+// SIGNAL3-RESCORE-INVALIDATES-TRIAGE below drives the REAL generateCard
+// (lib/signals/triage/card.ts) against a REAL re-score (upsert_signal_candidate),
+// not a hand-built duplicate query asserting Postgres honours a WHERE clause
+// the test itself just wrote (ADR 0015 §1(c)'s named anti-pattern — the
+// original defect here). Only the AI call is mocked
+// (signals3-seed.test.ts's own precedent) — the property under test is DB
+// correctness (A-4′/A-5's single-statement conditional insert), not
+// generation quality.
+vi.mock('@/lib/ai/runner', () => ({
+  runPrompt: vi.fn().mockImplementation((prompt: { id: string }) => {
+    if (prompt.id === 'rubric') {
+      return Promise.resolve({
+        dimensions: {
+          specificity: { score: 80, note: 'n' },
+          originality: { score: 70, note: 'n' },
+          evidenceSufficiency: { score: 90, note: 'n' },
+          audienceRelevance: { score: 85, note: 'n' },
+          platformNativeness: { score: 0, note: 'n/a' },
+          brandVoiceAlignment: { score: 0, note: 'n/a' },
+          openingStrength: { score: 0, note: 'n/a' },
+          ctaFit: { score: 0, note: 'n/a' },
+          unsupportedClaimsRisk: { score: 60, note: 'n' },
+          redundancy: { score: 75, note: 'n' },
+        },
+        overall: 999, // deliberately absurd — must never be read (card.ts's own contract)
+        critique: [],
+        verdict: 'pass',
+      })
+    }
+    return Promise.resolve({
+      observation: 'v2.4 shipped SSO.',
+      whyItMatters: 'Removes an enterprise blocker.',
+      audience: 'Enterprise IT buyers.',
+      angleOptions: [{ angle: 'SSO is here', rationale: 'Removes a blocker.' }],
+      suggestedObjective: null,
+      novelty: 60,
+      freshness: 90,
+      sensitivity: 10,
+    })
+  }),
+}))
+
+import { generateCard } from '@/lib/signals/triage/card'
+import { createCardCitableContext } from '@/lib/signals/triage/verify'
 
 describe('triage state + cost ceiling (ADR 0021 §2.9, §2.11, §3.3)', () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -85,6 +129,48 @@ describe('triage state + cost ceiling (ADR 0021 §2.9, §2.11, §3.3)', () => {
     const repo = await insertWatchedRepo(businessId, conn, seed + 1)
     const signal = await insertSignal(businessId, repo, `${label}-${seed}`)
     return insertCandidate(businessId, signal)
+  }
+
+  // Session 28-D, D2 — a minimal CustomerContext, matching card.test.ts's
+  // own fixture shape. generateCard reads only .business.id/.language from
+  // it for this test's purposes (runPrompt is mocked above).
+  function customerContextFor(businessId: string) {
+    return {
+      business: { id: businessId, name: 'Card Insert Test Co', industry: 'SaaS', description: null, language: 'en', website: null, timezone: 'UTC' },
+      brandVoice: null,
+      recentCampaigns: [],
+      recentPostPerformance: [],
+      trialState: null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any
+  }
+
+  // A SignalCandidateWithSignal-shaped object — generateCard trusts the
+  // joined signal fields it is handed (the same shape listNewCandidates'
+  // join produces for the orchestrator), so this test constructs it
+  // directly rather than re-querying.
+  function candidateWithSignal(candidateId: string, businessId: string, score: number, occurredAt: string) {
+    return {
+      id: candidateId,
+      business_id: businessId,
+      signal_id: 'unused-in-this-test',
+      score,
+      score_inputs: {},
+      occurred_at: occurredAt,
+      status: 'triaging',
+      triage_claimed_at: null,
+      created_at: occurredAt,
+      updated_at: occurredAt,
+      signals: {
+        title: 'v2.4.0',
+        body: 'Adds SSO.',
+        html_url: null,
+        occurred_at: occurredAt,
+        author_is_bot: false,
+        is_prerelease: false,
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any
   }
 
   beforeAll(async () => {
@@ -235,56 +321,119 @@ describe('triage state + cost ceiling (ADR 0021 §2.9, §2.11, §3.3)', () => {
     expect(Number(data[0].score)).toBe(91)
   })
 
-  it('A-4′: a card insert conditioned on the consumed claim writes zero rows after a re-score invalidates it', async () => {
+  it('A-4′/A-5: generateCard writes ZERO insight_cards rows after a re-score invalidates the claim (MAJOR-2 closed — the REAL Stage D path, not a hand-built query)', async () => {
     const biz = await insertBusiness('Rescore Card Insert Business')
-    const seed = Math.floor(Date.now() / 1000) + Math.floor(Math.random() * 500000)
-    const conn = await insertConnection(biz, seed)
-    const repo = await insertWatchedRepo(biz, conn, seed + 1)
-    const signalId = await insertSignal(biz, repo, `rescore-card-${seed}`)
-    const candidateId = await insertCandidate(biz, signalId)
+    const candidateId = await candidateChainFor(biz, 'rescore-card')
 
     const claimedAt = new Date().toISOString()
     await admin.from('signal_candidates').update({ status: 'triaging', triage_claimed_at: claimedAt }).eq('id', candidateId)
 
-    // A GitHub edit re-scores the candidate mid-flight — the re-score resets
-    // status/triage_claimed_at (proven above), invalidating the claim Stage D
-    // read before starting its loop.
+    // A GitHub edit re-scores the candidate mid-flight — the REAL A-4′
+    // mechanism (upsert_signal_candidate), not a hand-built query: this
+    // resets status to 'new' and clears triage_claimed_at, invalidating the
+    // exact claim Stage D read before starting its loop.
+    const { data: candBefore } = await admin.from('signal_candidates').select('signal_id').eq('id', candidateId).single()
+    const { error: rescoreErr } = await admin.rpc('upsert_signal_candidate', {
+      p_business_id: biz,
+      p_signal_id: candBefore.signal_id,
+      p_score: 91,
+      p_score_inputs: { edited: true },
+      p_occurred_at: '2026-07-05T00:00:00Z',
+    })
+    expect(rescoreErr).toBeNull()
+
+    const citable = createCardCitableContext()
+    const result = await generateCard({
+      client: admin,
+      context: customerContextFor(biz),
+      candidate: candidateWithSignal(candidateId, biz, 42, '2026-07-01T00:00:00Z'),
+      claimedAtIso: claimedAt, // the STALE claim — no longer live
+      decision: { verdict: 'card', reason: 'notable', citableEvidenceIds: [], citableBrandIds: [], audienceNote: 'IT buyers' },
+      citable,
+    })
+
+    expect(result).toEqual({ outcome: 'skipped', reason: 'claim_lost' })
+
+    const { data: cards } = await admin.from('insight_cards').select('id').eq('signal_candidate_id', candidateId)
+    expect(cards ?? []).toHaveLength(0)
+  })
+
+  it('A-5: a live claim produces EXACTLY ONE card — the happy path, and the more important of the two (a WHERE clause that never matches looks identical to fail-closed working correctly without this)', async () => {
+    const biz = await insertBusiness('Live Claim Card Insert Business')
+    const candidateId = await candidateChainFor(biz, 'live-claim-card')
+
+    const claimedAt = new Date().toISOString()
+    await admin.from('signal_candidates').update({ status: 'triaging', triage_claimed_at: claimedAt }).eq('id', candidateId)
+
+    const citable = createCardCitableContext()
+    const result = await generateCard({
+      client: admin,
+      context: customerContextFor(biz),
+      candidate: candidateWithSignal(candidateId, biz, 42, '2026-07-01T00:00:00Z'),
+      claimedAtIso: claimedAt, // STILL live — matches the row exactly
+      decision: { verdict: 'card', reason: 'notable', citableEvidenceIds: [], citableBrandIds: [], audienceNote: 'IT buyers' },
+      citable,
+    })
+
+    expect(result.outcome).toBe('inserted')
+
+    const { data: cards } = await admin.from('insight_cards').select('id').eq('signal_candidate_id', candidateId)
+    expect(cards ?? []).toHaveLength(1)
+
+    // insert_insight_card_if_claimed's claim-consuming CTE transitions the
+    // candidate atomically with the insert — §4.1's contract ("carded, set
+    // by Stage D, on a successful card insert").
+    const { data: candAfter } = await admin.from('signal_candidates').select('status, triage_claimed_at').eq('id', candidateId).single()
+    expect(candAfter.status).toBe('carded')
+    expect(candAfter.triage_claimed_at).toBeNull()
+  })
+
+  it('A-5: after an invalidated claim, the candidate CAN be re-triaged and carded — UNIQUE (signal_candidate_id) no longer bars it, because no orphan card was ever written', async () => {
+    const biz = await insertBusiness('Re-triage After Invalidated Claim Business')
+    const candidateId = await candidateChainFor(biz, 're-triage-invalidated')
+
+    const firstClaim = new Date().toISOString()
+    await admin.from('signal_candidates').update({ status: 'triaging', triage_claimed_at: firstClaim }).eq('id', candidateId)
+
+    const { data: candBefore } = await admin.from('signal_candidates').select('signal_id').eq('id', candidateId).single()
     await admin.rpc('upsert_signal_candidate', {
       p_business_id: biz,
-      p_signal_id: signalId,
+      p_signal_id: candBefore.signal_id,
       p_score: 91,
       p_score_inputs: { edited: true },
       p_occurred_at: '2026-07-05T00:00:00Z',
     })
 
-    // Stage D's eventual card insert (E5.6+) is conditional on the exact
-    // claim it read — INSERT ... SELECT ... WHERE the candidate is still
-    // 'triaging' with THIS claimed_at. Proven directly against live Postgres
-    // via the raw shape Stage D will use, since no lib/db/insight-cards.ts
-    // helper exists yet at this step.
-    const rawClient = new Client({ connectionString: config.server.DATABASE_URL })
-    await rawClient.connect()
-    try {
-      const result = await rawClient.query(
-        `INSERT INTO public.insight_cards (
-           business_id, signal_candidate_id, observation, why_it_matters, audience,
-           angle_options, evidence, novelty, freshness, sensitivity, confidence,
-           rubric_scores, score, occurred_at
-         )
-         SELECT c.business_id, c.id, 'obs', 'why', 'aud',
-                '[]'::jsonb, '[]'::jsonb, 0, 0, 0, 0, '{}'::jsonb, c.score, c.occurred_at
-           FROM public.signal_candidates c
-          WHERE c.id = $1 AND c.status = 'triaging' AND c.triage_claimed_at = $2
-         RETURNING id`,
-        [candidateId, claimedAt],
-      )
-      expect(result.rowCount).toBe(0)
-    } finally {
-      await rawClient.end()
-    }
+    // The first attempt, against the now-stale claim, writes nothing — no
+    // orphan card exists to collide with a second, legitimate attempt via
+    // UNIQUE (signal_candidate_id).
+    const firstAttempt = await generateCard({
+      client: admin,
+      context: customerContextFor(biz),
+      candidate: candidateWithSignal(candidateId, biz, 91, '2026-07-05T00:00:00Z'),
+      claimedAtIso: firstClaim,
+      decision: { verdict: 'card', reason: 'notable', citableEvidenceIds: [], citableBrandIds: [], audienceNote: 'IT buyers' },
+      citable: createCardCitableContext(),
+    })
+    expect(firstAttempt).toEqual({ outcome: 'skipped', reason: 'claim_lost' })
+
+    // upsert_signal_candidate's A-4′ reset already returned the candidate to
+    // 'new' — claim it again, exactly as a fresh triage tick would.
+    const secondClaim = new Date().toISOString()
+    await admin.from('signal_candidates').update({ status: 'triaging', triage_claimed_at: secondClaim }).eq('id', candidateId)
+
+    const secondAttempt = await generateCard({
+      client: admin,
+      context: customerContextFor(biz),
+      candidate: candidateWithSignal(candidateId, biz, 91, '2026-07-05T00:00:00Z'),
+      claimedAtIso: secondClaim,
+      decision: { verdict: 'card', reason: 'notable', citableEvidenceIds: [], citableBrandIds: [], audienceNote: 'IT buyers' },
+      citable: createCardCitableContext(),
+    })
+    expect(secondAttempt.outcome).toBe('inserted')
 
     const { data: cards } = await admin.from('insight_cards').select('id').eq('signal_candidate_id', candidateId)
-    expect(cards ?? []).toHaveLength(0)
+    expect(cards ?? []).toHaveLength(1)
   })
 
   // ─── SIGNAL-DEDUP-STABLE-ON-EDIT — terminal statuses still refused ────────
