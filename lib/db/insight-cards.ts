@@ -125,6 +125,17 @@ export async function deleteCardById(client: SupabaseClient, id: string): Promis
   if (error) throw new Error(getErrorMessage(error))
 }
 
+// §6.1 (Session 28 E5.10) — seedCampaignFromCard(cardId) has no business_id
+// and no authenticated session, only a card id. SERVICE-ROLE, own client
+// (CLAUDE.md lazy-import pattern), takes no client parameter.
+export async function getCardById(id: string): Promise<InsightCardRow | null> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client.from('insight_cards').select('*').eq('id', id).maybeSingle()
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as InsightCardRow | null) ?? null
+}
+
 export type TransitionCardStatusResult =
   | { outcome: 'ok'; currentStatus: InsightCardStatus }
   // §5.3's two-admins problem: the second UPDATE of a concurrent pair (or
