@@ -12,6 +12,7 @@ import { getCardById } from '@/lib/db/insight-cards'
 import { createCampaign } from '@/lib/db/campaigns'
 import { listActiveSocialAccounts } from '@/lib/db/social-accounts'
 import { assembleBrief } from '@/lib/campaigns/brief'
+import { toUtcIso } from '@/lib/utils'
 import type { InsightCardRow, Platform } from '@/lib/db/types'
 
 // §6.1 composes the card into `objective` — costing ZERO change to ADR
@@ -63,7 +64,9 @@ export async function seedCampaignFromCard(cardId: string): Promise<SeedCampaign
     platforms,
     frequency: SEED_FREQUENCY,
     posts_per_week: SEED_POSTS_PER_WEEK,
-    start_date: new Date().toISOString().slice(0, 10),
+    // CLAUDE.md date rule — never raw .toISOString(); toUtcIso() is the
+    // one sanctioned call (lib/utils.ts:8-11).
+    start_date: toUtcIso(new Date()).slice(0, 10),
     origin: 'signal_generated',
   })
 
