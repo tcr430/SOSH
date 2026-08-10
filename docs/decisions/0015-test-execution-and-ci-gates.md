@@ -499,6 +499,7 @@ not an intermediate one.
 | **`app-tests`** (tsc + eslint + vitest) | **Required — now** | The app-layer suite, types, or lint is broken. A real regression in Tier-2 behaviour or type safety. | Repo admin only, with a written reason in the PR. Never routine. |
 | **`db-tests`** (Tier-1 live-Postgres) | **Required after 3 consecutive full green runs on `master`** (the promotion rule below). Advisory-**but-must-be-read** until then. | Either a DB-behaviour regression **or** a stack OOM. Until promoted, the reviewer must open the run and distinguish the two (the §3.3 evidence exists precisely for this). | Until promoted: tech lead reads the evidence and decides. After promotion: repo admin only, as `app-tests`. |
 | **Skip-guard** (part of `db-tests`) | Required whenever `db-tests` runs | A `supabase/__tests__` file executed zero tests — a false-green (§4). | No override — a fix is mandatory (this is the whole point). |
+| **Tier-E eval** (judgment quality) *(added by Amendment B)* | **Split.** (i) **`eval-reported`: REQUIRED after 3 consecutive green `master` runs** (the same promotion rule as `db-tests`; advisory-but-must-be-read until then), deterministic — the workflow always runs; the check fails only when its in-job applicability step said *applicable* and no artefact with the metrics + run URL was produced. (ii) **`eval-threshold`: ADVISORY** — the metrics never block a merge. | (i) The numbers were never put in front of a human — a process failure, always actionable. (ii) Judgment quality moved; it does **not** mean the change is wrong. The reviewer disposes of it as regression-vs-noise against the ADR's stated detectable effect size, as `db-tests` red is dispositioned as regression-vs-OOM. | (i) **No override** — a fix is mandatory, as with the skip-guard. (ii) Tech lead, with both numbers and the run URL recorded in the PR. |
 
 **Promotion rule for `db-tests` (CI-DB-SUITE-STABLE).** `db-tests` flips from advisory to **required** the
 moment it records **three consecutive full green runs on `master`** — where "full green" means the job (or
@@ -625,6 +626,266 @@ regardless:
 - **No new runner spend.** Rationale: D-1 rejected a paid larger runner (it hides the bug). The remedy is
   tune-then-shard on the free `ubuntu-latest` 2-core; if that genuinely cannot hold the suite, the escape
   hatch is to **amend this ADR** (session-22 §4), not to buy a green light.
+
+---
+
+_End ADR 0015 (original body)._
+
+---
+
+# Amendment B — Session 28 (Judgment-quality evaluation)
+
+- **Status:** Accepted (design). Session 28 / Track E, Architect phase. **Appends to — does not rewrite —
+  the body above.** Not one character of §1–§9 changes.
+- **Date:** 2026-08-07
+- **Occasioned by:** ADR 0021 (`docs/decisions/0021-mode-3-triage-and-opportunity-feed.md`), which ships
+  the product's only Tier-3 agentic loop **and** the statistical eval harness that makes it reviewable.
+  ADR 0021 §10.4 is the harness's specification; this amendment is its *category*.
+- **Binding input:** `docs/build-guide/session-28.md` §0 L-10 and D-8, adjudicated with the founder on
+  2026-08-04. `ecc:pr-test-analyzer` was consulted once, read-only, on this amendment specifically; its
+  findings are folded in and attributed inline as `[test-*]`.
+- **Hard constraint, restated so it cannot be lost:** this amendment **adds a category; it re-tiers
+  nothing**. See B5.
+
+---
+
+## B0 — Why this amendment exists
+
+§2 defines **exactly three** tiers, and each is defined by a *home* and by what "executed" means there:
+Tier 1 is DB behaviour on live Postgres, Tier 2 is app-layer `vitest` on every push, Tier 3 is a property
+of *absence* verified by reading the diff.
+
+**A statistical eval — pass rates over a labelled corpus, not exact-match assertions — is none of the
+three.** It has no live-Postgres behaviour to assert, it cannot run deterministically on every push, and
+it is emphatically not a property of absence. Session 28 ships one anyway, because the brainstorm made it
+a hard precondition on shipping the loop at all: the triage step is *"the most expensive and least
+testable part of the whole architecture"* and *"needs… an eval-harness style test approach (statistical
+pass rates, not exact-match) **before it ships**."*
+
+**Shipping it undeclared would be a `FALSE-GREEN` by this ADR's own definition (§1(b)).** A suite that
+reports a number nobody can locate in the taxonomy is indistinguishable, in the Actions UI, from a suite
+that proved something — and a Reviewer holding §2 as written would be right to call its presence a
+BLOCKER. Worse, an undeclared statistical result invites the specific abuse this amendment exists to
+forbid: a constraint that *could* have been exact-match tested quietly parked in a bucket where nothing
+can ever turn red.
+
+*D-8's losers, recorded.* **Shipping the harness undeclared** — the `FALSE-GREEN` above. **Forcing it into
+Tier 2** — a non-deterministic test inside a *required* per-PR gate makes that gate untrustworthy, and a
+gate people learn to ignore is worse than no gate at all.
+
+---
+
+## B1 — The new category
+
+> ### Tier E — Judgment-quality evaluation
+>
+> **Home:** a dedicated eval harness with a versioned, in-repo labelled corpus, executed by its own
+> workflow — **never** by `app-tests` or `db-tests`. **Hard rule:** Tier E measures the *quality of a
+> model's judgment* over a corpus, expressed as a **rate**. It is the only tier whose result is a
+> distribution rather than a boolean, and therefore the only tier that can be green and still be wrong,
+> or red and still be right. Example: `SIGNAL3-TRIAGE-QUALITY` (ADR 0021 §10.4) — does the bounded triage
+> loop card the candidates a human would have carded?
+
+**Lettered, not numbered, deliberately.** The existing tiers are *homes*, not a severity ladder; a
+"Tier 4" would read as an escalation of Tier 3, which it is not. Tier E sits beside the three, not above
+them.
+
+### B1.1 What belongs in Tier E
+
+A property that is **irreducibly a matter of judgment**: there is no single correct output, only a
+distribution of better and worse ones, and the honest question is *"how often does this agree with a human
+expert?"* rather than *"is this the right answer?"*
+
+### B1.2 What does NOT belong in Tier E — the load-bearing half
+
+> **A constraint that CAN be exact-match tested MUST be.** Tier E is for judgment quality, **never** for a
+> correctness property a Tier-1 or Tier-2 test could assert. **A constraint parked in the statistical
+> category to avoid writing an exact test is a finding**, and a Reviewer must raise it as one.
+
+Concretely, and named because `[test-6]` warned that omission is how the abuse creeps in: **structural and
+behavioural properties of a model-using pipeline stay at Tier 1/2 even though the pipeline is
+non-deterministic.** In ADR 0021 that means `SIGNAL3-CARD-NO-POST-COPY`, `SIGNAL3-CARD-EVIDENCE-TRACEABLE`,
+**`SIGNAL3-TOOL-INVOCATION-EXPECTED`** (did the loop call the expected tool at all — an exact-match
+assertion, not a rate) and the **dismiss-reason enum** (as distinct from the dismiss-reason *match rate*,
+which is Tier E) are all Tier-2. Every bound, tenancy, RLS, cascade and atomicity property likewise.
+
+The test of whether something belongs in Tier E is not "is the system under test non-deterministic" — it is
+**"is the property under test a judgment"**. Most properties of a non-deterministic system are not.
+
+---
+
+## B2 — Corpus, versioning, and the requirement to cite a number
+
+### B2.1 Corpus rules
+
+1. **In-repo and versioned in git.** A generated or externally-hosted corpus is not admissible: a reviewer
+   must be able to `git diff` the corpus and see exactly which examples changed. Each example carries a
+   `corpusVersion`.
+2. **Human-curated entry only.** Examples enter by deliberate human labelling. A corpus auto-grown from
+   production output measures the system against itself, which measures nothing.
+3. **A declared minimum, checked before the run starts.** The owning ADR states the minimum example count
+   and the class split; the harness hard-fails if the corpus is below it.
+4. **The owning ADR states the corpus's honest statistical power** — see B2.2. A threshold without a
+   detectable-effect-size claim is a number pretending to be a measurement.
+
+### B2.2 Statistical honesty is part of the contract `[test-2]`
+
+An ADR declaring a Tier-E constraint **must** state, in its own text:
+
+- **the denominator of each metric**, which is frequently *not* the corpus size — a recall figure's
+  denominator is the count of positively-labelled examples, and a precision figure's denominator is
+  run-dependent (whatever the model predicted positive), so it can shrink without warning;
+- **the detectable effect size**, and **which comparison it is honest for**. A threshold-crossing claim
+  ("does this run clear 0.75?") and a run-versus-run claim ("did this PR regress?") have different noise:
+  the latter draws two independent samples and its detectable effect grows by roughly √2. An ADR quoting
+  one figure for both is making a claim it cannot support;
+- **the meaningfulness bar** — the corpus size below which the gate catches only gross breakage, stated as
+  such rather than implied by a threshold that looks precise.
+
+ADR 0021 §10.4 discharges all three, including the correction of its own first draft's blended figure.
+
+### B2.3 A result must cite a NUMBER a reviewer can read
+
+Following the Session 26-D H3 precedent — **a reviewer must be able to cite a count, never reconstruct an
+argument**:
+
+- Every Tier-E run emits a **machine-generated artefact** containing each metric, its denominator, the
+  `corpusVersion`, and the run URL.
+- **The first result is recorded in `docs/current-phase.md`** at the owning session's close-out, and every
+  subsequent gate-relevant result is recorded in the PR that produced it.
+- A Reviewer auditing a Tier-E constraint **quotes the numbers and the run URL**. "The harness passed" is
+  not a review finding; "precision 0.78 / recall 0.72 over corpus v3, run <URL>" is.
+
+### B2.4 The harness's own false-green guard `[test-5]`
+
+A statistical harness has a `FALSE-GREEN` shape the §4 skip-guard does not cover: it can compute a
+plausible-looking rate while measuring nothing. Every Tier-E harness therefore ships a guard on the
+`scripts/ci/assert-no-empty-suite.mjs` model, which **hard-fails and never defaults** on:
+
+- **executed-example count < declared corpus count** (partial execution silently shrinking the denominator);
+- **any example whose status is `error`.** An errored example is a **third, job-failing state** — it is
+  **never** coerced into a verdict. Collapsing errors into the majority class is how an all-erroring run
+  reports passing numbers;
+- **corpus file count below the declared minimum**, checked *before* the run begins (the
+  whole-directory-disappeared shape B2 already found once in this repo).
+
+---
+
+## B3 — The §5 merge-gate row
+
+**The §5 table gains one row.** It is reproduced here in full, and §5 is updated to carry it:
+
+| Check | Required? | What a RED means | Who can override |
+|---|---|---|---|
+| **Tier-E eval** (judgment quality) | **Split — and the split is the point.** (i) **`eval-reported`: REQUIRED after three consecutive green runs on `master`** (§5's promotion rule; advisory-but-must-be-read until then), deterministic — the workflow always runs, and the check fails **only** when its in-job applicability step said *applicable* and no artefact with the metrics + run URL was produced. (ii) **`eval-threshold`: ADVISORY** — the metrics themselves never block a merge. | (i) RED means **the numbers were never put in front of a human** — a process failure, always actionable, never a judgment call. (ii) RED means **triage quality moved**; it does *not* mean the change is wrong. The reviewer reads the numbers against B2.2's detectable effect size and disposes of it as regression-vs-noise, exactly as `db-tests` red is dispositioned as regression-vs-OOM. | (i) **No override** — a fix is mandatory, as with the skip-guard. (ii) Tech lead, with both numbers and the run URL recorded in the PR. |
+
+**Trigger — revised 2026-08-08, and the revision is load-bearing.** The first form of this row said
+`workflow_dispatch` **plus a workflow-level `paths:` filter**, while making `eval-reported` **required**.
+Those two cannot both hold: a path-filtered workflow does not report on a PR that misses the filter, so a
+required check stays pending and blocks every unrelated PR. The filter was deciding two different things —
+whether the **harness executes** and whether the **check reports**.
+
+> **The workflow always runs; the harness is what is conditional.** A Tier-E workflow triggers on every
+> `pull_request` (plus `workflow_dispatch`) with **no workflow-level `paths:` filter**. Its first step
+> decides applicability in-job against the owning ADR's declared paths: not applicable → emit a
+> `not-applicable` artefact and exit 0; applicable → run the deterministic replay and **fail unless the
+> metrics artefact with its run URL was produced**.
+
+This preserves B3.1's whole argument — `eval-reported` remains a deterministic, binary fact about
+*execution*, never about passing — while making it a check that can actually be required. **The harness
+still does not run its corpus on every PR** (L-10); only the applicability step does, and it is seconds.
+
+**Promotion, not day-one enforcement.** `eval-reported` ships **advisory-but-must-be-read** and becomes
+**required after three consecutive green runs on `master`** — §5's existing promotion rule, applied
+unchanged rather than a new posture invented for this row. The tally lives beside `db-tests`' in
+`docs/current-phase.md`. This repo has already paid once for making a new job load-bearing before it had a
+run history; the end state (required, no override) is unchanged, only its start date is.
+
+**Also unchanged:** the harness is **absent from `vitest.config.ts`'s `include`** — absent, not
+present-but-skipped, per §4's Session 22-D correction — so it can never report a green skip inside
+`app-tests`.
+
+### B3.1 Why the gate is split — folding in `[test-6]`
+
+The first draft of this amendment made the whole thing advisory, enforced by a rule that a PR "must cite
+the numbers". `ecc:pr-test-analyzer` rejected that as an honour system with no mechanical backstop, and
+cited this repo's own history against it: `db-tests` was advisory-but-must-be-read and needed an explicit,
+tracked graduation path (§5's three-green promotion rule) before it became load-bearing. Nothing else in
+ADR 0015 relies on convention for anything it calls a gate.
+
+**The fix separates two different questions that the draft had fused:**
+
+- ***Did it run and report?*** — a **binary, deterministic fact**, exactly analogous to
+  `CI-NO-SKIPPED-SUITE`, which requires *execution*, never *passing*. This is **required**, because
+  nothing about it is a judgment.
+- ***Did it clear the threshold?*** — a **statistical result**, which stays advisory and
+  human-adjudicated, because D-8 is right that a non-deterministic check in a required gate corrodes every
+  gate around it.
+
+This closes the enforcement gap without putting a single non-deterministic assertion into a blocking
+check. `CI-EVAL-REPORTED` is the constraint name.
+
+---
+
+## B4 — How this squares with "covered = executed green in CI"
+
+It does not sidestep the rule; it **restricts** it. §1's rule stands unamended: *covered = executed green
+on every push, and the green outcome is caused by the guard under test.* Tier E cannot satisfy that — it
+does not run on every push, and its outcome is caused by a distribution rather than by a guard.
+
+**Therefore: a Tier-E result is never a coverage claim.**
+
+> **The vocabulary a Reviewer uses, and it is not interchangeable.** A Tier-1/2/3 constraint is
+> **COVERED** — executed green in CI, attached to the claim, red if the guard is removed. A Tier-E
+> constraint is **MEASURED** — a rate over a versioned corpus, at a stated run, with a stated denominator.
+>
+> *"`SIGNAL3-TRIAGE-QUALITY` is measured at precision 0.78 / recall 0.72 over corpus v3 (run <URL>)"* is
+> correct. *"`SIGNAL3-TRIAGE-QUALITY` is covered"* is **wrong**, and a Reviewer writing it has made a
+> finding-grade error, because the two words carry different guarantees.
+
+Two consequences follow, and both are binding:
+
+1. **Every named constraint still maps to exactly one category**, and `CONS-TIERED` (§2) is extended to
+   four rather than replaced. A Reviewer's coverage table states, per constraint, its category and the CI
+   job that executes it — Tier E included, where "the job" is the eval workflow and the run URL.
+2. **A constraint whose only proof is Tier E is a weaker claim than one with a Tier-1 test, and the ADR
+   declaring it must say so out loud** — alongside an explicit statement of what the harness does *not*
+   cover, so a green harness is never read as blanket coverage (ADR 0021 §10.5 is the worked example).
+
+---
+
+## B5 — The existing three tiers are UNCHANGED
+
+Stated as the required backward-looking confirmation, not inferred from B1.2's forward-looking prohibition
+`[test-6]`:
+
+- **§2's Tier 1, Tier 2 and Tier 3 definitions are unchanged**, word for word. Their homes, their hard
+  rules, and their examples all stand.
+- **`CONS-TIERED` is extended from three categories to four. Its rule is otherwise unchanged**, including
+  the `EXECUTED-AND-PROVING-NOTHING` obligation (§1(c)) that a Reviewer confirm, for Tier-1 and Tier-2
+  constraints, that removing the production guard would turn the test red.
+- **No existing constraint is re-tiered by this amendment.** Every `CI-*` constraint in §7, and every
+  constraint in every ADR that ADR 0015 governs — 0012, 0013, 0014 (incl. Amendment A), 0016, 0017, 0018,
+  0019 and **0020's 33 constraints** — keeps the tier it already carries. Tier E is populated **only** by
+  constraints newly declared as such by an ADR, and at this amendment's authorship that set has exactly
+  one member: `SIGNAL3-TRIAGE-QUALITY`.
+- **§3 (CI topology), §4 (flag abolition + skip-guard), §6 (PROC-REVIEW-AT-COMMIT), §8 and §9 are
+  untouched.** The only edit to the original body is the added row in §5's table (B3), which is an
+  addition, not a revision.
+
+---
+
+## B6 — Named constraints added by this amendment
+
+| Constraint | Category | Proven by |
+|---|---|---|
+| **CI-EVAL-REPORTED** | process (deterministic; required on promotion — B3) | The `eval-reported` check fails when its in-job applicability step said *applicable* and no metrics artefact + run URL was produced, and passes trivially on a `not-applicable` PR. Demonstrated once against a run with the artefact suppressed, then reverted — the §4 discipline that a guard must be demonstrated, not asserted. |
+| **CI-EVAL-NOT-VACUOUS** | process (meta) | `scripts/ci/assert-eval-executed.mjs` (B2.4) fails on a short corpus, on a partially-executed run, and on **any** errored example. Demonstrated once against a corpus with one example forced to error, confirming the job fails rather than counting it as a verdict, then reverted. |
+| **CI-EVAL-NUMBER-CITED** | process | `docs/current-phase.md` carries the first Tier-E result as a number with its `corpusVersion` and run URL; each gate-relevant PR thereafter carries its own. A Reviewer quoting "the harness passed" without numbers fails this. |
+
+---
+
+_End Amendment B._
 
 ---
 
