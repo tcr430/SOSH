@@ -159,6 +159,24 @@ export async function setCandidateTriageOutcome(
 // attempting to triage, so it never enters 'triaging' at all. This is what
 // drains ADR 0020 §4.4's 90-day backfill; without it a 20-repo watch list
 // takes months to clear at TRIAGE_SHORTLIST_PER_TICK=5/business/day.
+// ADR 0021 §9.2 — the opportunities feed's "triage failed" state needs a
+// boolean, never the full row set: a bounded existence check
+// (limit 1), not a list. Fail-closed must be VISIBLE (L-3) — a candidate
+// stuck at 'triage_failed' must never read as "nothing happened".
+export async function hasTriageFailedCandidates(
+  client: SupabaseClient,
+  businessId: string,
+): Promise<boolean> {
+  const { data, error } = await client
+    .from('signal_candidates')
+    .select('id')
+    .eq('business_id', businessId)
+    .eq('status', 'triage_failed')
+    .limit(1)
+  if (error) throw new Error(getErrorMessage(error))
+  return (data ?? []).length > 0
+}
+
 export async function ageGateCandidate(
   client: SupabaseClient,
   id: string,

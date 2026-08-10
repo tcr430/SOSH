@@ -34,6 +34,30 @@ export async function listPendingCardsForBusiness(
   return (data as InsightCardRow[]) ?? []
 }
 
+// §9.2 "Expired" state — not in the default feed (listPendingCardsForBusiness
+// excludes it), reachable only via an explicit filter. "Expired" is the
+// derived predicate status='pending' AND expires_at < now() (§5.5) — never a
+// stored status, so this is the SAME table with the inverse time predicate,
+// not a new concept.
+export async function listExpiredCardsForBusiness(
+  client: SupabaseClient,
+  businessId: string,
+  limit: number = PENDING_CARDS_DEFAULT_LIMIT,
+): Promise<InsightCardRow[]> {
+  const { data, error } = await client
+    .from('insight_cards')
+    .select('*')
+    .eq('business_id', businessId)
+    .eq('status', 'pending')
+    .lt('expires_at', formatISO(new Date()))
+    .order('score', { ascending: false })
+    .order('occurred_at', { ascending: false })
+    .order('id', { ascending: true })
+    .limit(limit)
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as InsightCardRow[]) ?? []
+}
+
 export async function getCardForBusiness(
   client: SupabaseClient,
   businessId: string,
