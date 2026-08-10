@@ -275,6 +275,14 @@ maps to exactly one of three tiers (full definitions: `docs/decisions/0015-test-
   decision — must be enumerated as such in its owning ADR, so "no test" is a recorded decision, not an
   oversight.
 
+A fourth category exists for judgment-quality properties no deterministic assertion can prove (e.g. an AI
+triage decision's precision/recall against a human-labelled corpus): **Tier E — MEASURED, never COVERED**
+(Amendment B4). It is deliberately rare — a constraint belongs here only when Tier 1/2/3 genuinely cannot
+express it, never as a shortcut around writing a real test (Amendment B(b)). Full definition, the scoring
+mechanism, and its CI wiring: `docs/decisions/0015-test-execution-and-ci-gates.md` §2/Amendment B; first
+production instance: `docs/decisions/0021-mode-3-triage-and-opportunity-feed.md` §10.4
+(`SIGNAL3-TRIAGE-QUALITY`).
+
 **PROC-REVIEW-AT-COMMIT.** A Reviewer reads every file **at the stated commit range**
 (`git diff <base>..<head>`, `git show <sha>:<path>`, `git log --oneline <base>..<head>`) — **never at
 HEAD**. Reading at HEAD produced a false-positive MAJOR finding in Session 21B (a Reviewer read

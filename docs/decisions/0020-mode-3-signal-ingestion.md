@@ -652,6 +652,15 @@ surfaces what the customer has already chosen to make public.
 **Retained:** `external_id`, `repo_id`, `tag_name`, `title`, `body`, `body_truncated`, `html_url`,
 `occurred_at` (from `published_at`), `is_prerelease`, `author_is_bot`.
 
+> **Amendment (Session 28 / ADR 0021 §0.2 A-3) — `tag_name`'s retention claim above is corrected, not
+> exercised.** §14's drift note (below) left this open for ADR 0021 to decide. **Decided: the retention
+> claim is DROPPED, not implemented.** No `signals.tag_name` column exists, `parseRelease` has nowhere to
+> put the raw value, and no migration is added to create one. ADR 0021 §7.2 records the practical
+> consequence: `tag_name` **structurally never reaches Stage C's prompt** — `lib/db/signal-candidates.ts`'s
+> join for `listNewCandidates` omits it — so the field is absent from the attack surface by omission, not
+> by a guard. This line's "Retained" list is stale prose left uncorrected here (rather than silently edited)
+> so the amendment itself, not just its conclusion, is visible to a future reader.
+
 `author_is_bot` is a **boolean derived** from `author.type === 'Bot'` at ingest. It is a property of the
 release, not an identity.
 
@@ -773,6 +782,17 @@ evaluated against the row under the lock the UPDATE itself acquires, so a concur
 and a concurrent re-score cannot both win — the second to commit either updates a row still `'new'` or
 no-ops. This mirrors CLAUDE.md's atomic-transition pattern. **A re-score can never resurrect a candidate a
 human has already dismissed** (`SIGNAL-DEDUP-STABLE-ON-EDIT`).
+
+> **Amendment (Session 28 / ADR 0021 §0.2 A-4′) — the guard's window widened to cover Stage C's claim,
+> not narrowed.** This ADR's guard (`WHERE status = 'new'`) protects against a re-score resurrecting a
+> `dismissed`/`carded`/etc. candidate. ADR 0020 alone left one window open: a re-score arriving **while**
+> Stage C holds the row at `'triaging'` (a state this ADR does not define — it belongs to ADR 0021 §2.11's
+> widened enum). §0.2 A-4′ closes it rather than narrowing the claim: `upsert_signal_candidate` was extended
+> so a re-score during `'triaging'` also matches and returns the row to `'new'`, and Stage D's card insert —
+> conditional on the SAME claim it is consuming — then writes zero rows against the now-stale claim
+> (`SIGNAL3-RESCORE-INVALIDATES-TRIAGE`, ADR 0021 §4.1/§10.1, Tier 1). The RPC this section describes
+> (`upsert_signal_candidate`) is the same function; its `WHERE` clause is widened in ADR 0021's migration
+> (`supabase/migrations/20260807110000_mode3_triage_state.sql`), not replaced.
 
 ### 6.5 Clustering, and no embeddings (D-5)
 
@@ -1463,7 +1483,8 @@ and available); **no triage status beyond `'new'`** (the `CHECK` widens in ADR 0
   drift; `lib/db/signal-candidates.ts:19-28` already documents the matching gap against §13.1's join list).
   `parseRelease` has the raw value in hand (`release.tag_name`) but nowhere on `SignalInsert` to put it.
   ADR 0021 decides either the column (a migration) or dropping the retention claim from §5.3 — not decided
-  here, since either choice is out of this ADR's L-1 boundary.
+  here, since either choice is out of this ADR's L-1 boundary. **Resolved (Session 28 / ADR 0021 §0.2
+  A-3): the retention claim is dropped, no column added — see §5.3's amendment note above.**
 - **A significance floor — named explicitly so ADR 0021 inherits it as a decision, not an assumption.**
   Stage B is a **ranker, not a gate**: every ingested release becomes exactly one candidate (§6.5), bots are
   scored down rather than filtered (§6.2), and `listNewCandidates` applies no minimum score (§13.1). Nothing

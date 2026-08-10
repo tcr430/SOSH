@@ -1,7 +1,7 @@
 # ADR 0021 — Mode 3 Part 2: Triage, Insight Cards, and the Opportunity Feed (Stages C–F)
 
-- **Status:** Accepted (design). Session 28 / Track E — Architect (E4). Builder (E5), Reviewer (E6) and the
-  correction pass (Session 28-D) follow. No code in this document.
+- **Status:** Accepted (design). Session 28 / Track E — Architect (E4) and Builder (E5.0–E5.12) complete;
+  see §15 for the close-out block. Reviewer (E6) and any correction pass follow. No code in this document.
 - **Date:** 2026-08-07
 - **Supersedes / amends:** none. **Extends** ADR 0020 (Mode 3 Stages A+B — this ADR consumes its §13.1
   contract), ADR 0017 (Mode 2 brief pipeline — Stage F re-enters it), ADR 0016 (governed memory — the
@@ -1385,6 +1385,46 @@ coverage* — §10.5 and Amendment B (b), which make that misreading a finding.
   **✅ written 2026-08-08**; §2/§3/§4 still to author from this ADR's constraint table.
 - **This document** — the status / close-out block, per `session-28.md` §5.
 - `.wolf/anatomy.md`, `.wolf/memory.md`, `.wolf/cerebrum.md` — per the OpenWolf protocol.
+
+---
+
+## §15 — Status / close-out (E5.12, 2026-08-10)
+
+**Status: Builder complete.** E5.0 through E5.12 executed (grounding pass; E5.1–E5.2 schema+RPCs;
+E5.3 data-access layer; E5.4 the bounded loop, security-reviewed; E5.5 the closed tool set; E5.6 the
+worker/orchestrator; E5.7 Stage D card generation; E5.8 the Tier E eval harness; E5.9 the `/opportunities`
+feed; E5.10 Stage F seeding; E5.11 the executable scans + Tier-3 record; E5.12 this verification pass).
+Reviewer (E6) and any correction pass have not yet run — this ADR remains **Accepted (design)** until that
+independent audit closes it.
+
+**All 29 §11 constraints executed green in CI** on PR [#5](https://github.com/tcr430/SOSH/pull/5), head
+`0ffe6acf`: 28 carry a Tier 1/2/3 proof (COVERED); `SIGNAL3-TRIAGE-QUALITY` is Tier E (MEASURED) —
+`app-tests` [run 31405593195](https://github.com/tcr430/SOSH/actions/runs/31405593195) (2802/2802 tests,
+211 files), `db-tests` [run 31405592573](https://github.com/tcr430/SOSH/actions/runs/31405592573) (278/278
+tests, 29 files), `eval` [run 31405593644](https://github.com/tcr430/SOSH/actions/runs/31405593644) —
+`corpusVersion=1 precision=1.000 (24/24) recall=1.000 (24/24) dismissMatch=1.000 (16/16) executed=40/40`.
+Full per-constraint mapping (tier, CI job, redden-if-removed check): E5.12's verification pass, recorded in
+`docs/current-phase.md`'s Session 28 entry rather than duplicated here.
+
+**Close-out docs, all landed in this same commit range** (per §14's list above): ADR 0015 Amendment B
+(prior session), ADR 0010 §D2.5's two rows (confirmed present, E5.1), `CLAUDE.md`'s Tier E pointer, ADR
+0020's A-3/A-4′ amendment notes, `docs/current-phase.md`'s Session 28 entry + tallies + first eval result,
+this block, and the OpenWolf files.
+
+**Known open items, carried forward rather than silently dropped:**
+- The E5.9 UX-contract gaps recorded in-session and resolved with the founder as interim Builder judgment
+  calls, both flagged for the dedicated design pass §9's own preamble anticipates: the "approved-and-in-
+  flight" card has no working link to its seeded brief (`insight_cards` carries no `campaign_id`; Stage F
+  doesn't write one back either — a schema gap, not an oversight, since adding one was out of both E5.9's
+  and E5.10's stated scope); and §9.1's "source link to the release" is omitted from the card render
+  entirely, for the same reason (no `html_url` on `insight_cards`).
+- `seedCampaignFromCard`'s `name`/`platforms`/`frequency`/`posts_per_week`/`start_date` defaults (§6.1 only
+  specifies the `objective` composition) are a Builder decision made with the founder mid-session, not an
+  ADR-specified contract — worth confirming during the design pass.
+- The eval corpus's 1.000/1.000/1.000 first result is a **bootstrap ceiling** (hand-authored cassettes
+  scored against their own hand-assigned labels), not evidence of real triage quality — §10.4/§10.5 already
+  name this; repeated here so the number above is never read as a quality claim on its own.
+- Reviewer (E6) has not run. This ADR's constraints are CI-verified but not yet independently audited.
 
 ---
 

@@ -1,7 +1,7 @@
 {
   "corpusVersion": 1,
   "runUrl": "local (no GITHUB_RUN_ID in env)",
-  "generatedAt": "2026-08-10T00:47:54.155Z",
+  "generatedAt": "2026-08-10T15:17:37.489Z",
   "declaredCorpusCount": 40,
   "executedCount": 40,
   "errorCount": 0,

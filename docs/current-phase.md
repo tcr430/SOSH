@@ -2,7 +2,12 @@
 
 **Phase:** 1 — MVP
 **Goal:** First paying customer
-**Status:** **Session 25 (diff-based learning capture, ADR 0018) CLOSED.** Track C of the ADR 0016→0017→0018
+**Status:** **Session 28 (Mode 3 Part 2: Triage, Insight Cards, Opportunity Feed, ADR 0021) CLOSED.**
+E5.1–E5.12 shipped Stage C (bounded tool-using triage loop), Stage D (card generation + verification), the
+`/opportunities` feed (ten states), Stage F (seeding into the existing brief pipeline), and Tier E — a new
+MEASURED-never-COVERED eval category. All 29 constraints executed green in CI (28 Tier 1/2/3, 1 Tier E);
+see "What's done" below for run URLs and the first real eval result. **Session 25 (diff-based learning
+capture, ADR 0018) CLOSED.** Track C of the ADR 0016→0017→0018
 intelligence-layer programme shipped: the AI-original snapshot (`post_ai_originals`, write-once), the
 capture outbox (`post_edit_signals`, trigger-enqueued on `draft→approved`), the Tier-0 heuristic classifier
 (no LLM, 12 signal kinds), the correction/preference split enforced by a DB trigger, the Tier-1 LLM
@@ -17,6 +22,45 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
 (test-execution integrity + approvals hardening) CLOSED.** W1 (ADR 0015) gave the app-layer suite its own required CI gate (`app-tests.yml`) and made `db-tests.yml` tuned/skip-guarded/flag-free; W2 (ADR 0014 Amendment A) hardened bulk approve to filter-scoped+atomic, added a server-side filter-scoped overflow-honest total, verified WCAG-AA contrast in both themes, and regression-guarded `ROLE-TEAM-ECHO`. B6 closed the session: re-verified three 21B/21C findings already resolved at HEAD (no code needed), and wrote PROC-REVIEW-AT-COMMIT + the merge-gate table into `CLAUDE.md`. **Session 21 (21A + 21B + 21C) CLOSED.** Seats & Permissions is fully shipped: the DB-enforced model (ADR 0013 Rev B, 21A → 21A-D correction), the resolver/invite/team-settings/capability-retrofit/overage surface (ADR 0014, 21B → 21B D1–D4 correction), and the approver quick-approve inbox (ADR 0014 §9, 21C → 21C E1–E3 correction). Session 20 — Content Calendar (ADR 0012 Rev B) shipped, through the 20D-5 correction pass. Voice model (ADR 0011 Rev B) remains code-complete bar the open 19D-5 decision (§7 BP9 read path — needs ADR 0011 amendment). Next phase: pre-launch hardening (Postiz removal, legal gates, perf/CWV — see "Next up" below). tsc clean (one pre-existing error in refine-from-posts-action.test.ts, unrelated to Session 20/21/22), ESLint clean.
 
 ## What's done
+
+- **Session 28 — Mode 3 Part 2: Triage, Insight Cards, Opportunity Feed (ADR 0021), E5.1–E5.12 CLOSED:**
+  Builds on Session 27's ingestion pipeline. Stage C (a bounded, tool-using triage loop —
+  `lib/ai/tool-runner.ts#runToolLoop`, security-reviewed, four read-only tools, hard token/turn/cost bounds,
+  fail-closed) decides `card`/`no_card` per candidate; Stage D (`lib/signals/triage/card.ts`) generates the
+  insight card in one Tier-1 `runPrompt` call outside the loop, with a verify-then-cite evidence guard and a
+  deterministic no-post-copy validator; the `/opportunities` feed (E5.9) implements all ten §9.2 states
+  (empty×2, pending, high-sensitivity, expired, saved, approved-in-flight, triage-failed, paused,
+  lost-the-race) with atomic conditional-UPDATE transitions and the typed `already_triaged` race outcome;
+  Stage F (`lib/signals/seed.ts#seedCampaignFromCard`, E5.10) composes an approved card into a new campaign
+  and drives the **existing** `assembleBrief` unchanged — its first production caller, exercised end-to-end
+  against live Postgres per §0.2 A-2's binding condition; E5.11 closed the four executable source scans
+  (all per-root vacuity guarded) and recorded the six Tier-3 diff-verified items as decisions; E5.8 shipped
+  a new test category, **Tier E — MEASURED, never COVERED** (ADR 0015 Amendment B4), a deterministic-replay
+  eval harness scoring precision/recall/dismiss-reason-match against a 40-example human-labelled corpus.
+  - **29 constraints total** (ADR 0021 §11): 28 carry a Tier-1/2/3 proof and are **COVERED**; exactly one,
+    `SIGNAL3-TRIAGE-QUALITY`, is Tier E and is **MEASURED** — a deliberately weaker claim, never
+    "COVERED," everywhere it appears (§10.4).
+  - **First real eval result** (not a hand-authored bootstrap number — the corpus's ceiling-by-construction
+    caveat from E5.8 still applies; see ADR 0021 §10.4/§10.5's own limits section): **corpusVersion=1,
+    precision=1.000 (24/24), recall=1.000 (24/24), dismissMatch=1.000 (16/16), executed=40/40** —
+    [run 31405593644](https://github.com/tcr430/SOSH/actions/runs/31405593644) (2026-08-10).
+  - **Eval-reported tally (new, ADR 0021 §10.4) — 1 run recorded.** Unlike the `db-tests` promotion tally,
+    this is not gated on `master` — `eval-triage.yml` runs on every PR by design (Tier E measures judgment
+    quality on the current diff, not a merge-readiness gate). **2026-08-10:** first-ever execution inside
+    real GitHub Actions (never run in CI before this session — E5.8's own session notes flagged this as
+    unverified) — green, non-vacuous (`assert-eval-executed.mjs`: `executed=40/40`, `metricsPass=true`).
+  - **CI run URLs (PR [#5](https://github.com/tcr430/SOSH/pull/5), head `0ffe6acf`):** `app-tests`
+    [run 31405593195](https://github.com/tcr430/SOSH/actions/runs/31405593195) — green, `skip-guard: 211
+    file(s) under [app, lib, components] all visible, zero failures — green. (2802/2802 tests passed)`;
+    `db-tests` [run 31405592573](https://github.com/tcr430/SOSH/actions/runs/31405592573) — green,
+    `skip-guard: 29 file(s) under [supabase/__tests__] all visible, zero failures — green. (278/278 tests
+    passed)`; `eval` [run 31405593644](https://github.com/tcr430/SOSH/actions/runs/31405593644) — green
+    (above). **A genuine bug was caught by CI, not by local review:** the first push (head `4cf1f290`)
+    failed `app-tests`' lint step — `lib/signals/seed.ts` used raw `.toISOString()`, banned by CLAUDE.md's
+    date rule (`no-restricted-properties`) — fixed at `0ffe6acf` (`toUtcIso()`), re-pushed, green. **db-tests
+    promotion tally still 0 of 3** — same rule as every entry below: this is a `pull_request`-event run on
+    `session-22-d`, not a `master` run.
+  - Full detail: `docs/decisions/0021-mode-3-triage-and-opportunity-feed.md`, `docs/build-guide/session-28.md`.
 
 - **Session 27 — Mode 3 GitHub signal ingestion (ADR 0020), E2.1–E2.11:** GitHub App install/OAuth
   connect flow (tenant-bound per §8.3's eleven-step callback, A-1's two-direction close — the OAuth leg
@@ -309,6 +353,19 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
       still 0 of 3** — same rule as every entry above: both are `pull_request`-event runs on
       `session-22-d`, not `master` runs. This closes the "A-2 launch-blocking condition" entry's open
       `app-tests` PENDING status recorded earlier in the Session 27 close-out block above.
+    - **2026-08-10 (Session 28 · E5.12 close-out):** both required checks ran **green** on PR
+      [#5](https://github.com/tcr430/SOSH/pull/5) (branch `session-22-d`, head `0ffe6acf` — ADR 0021's
+      E5.1–E5.11, the Mode 3 Part 2 triage/card/feed/seeding build) — `app-tests`
+      [run 31405593195](https://github.com/tcr430/SOSH/actions/runs/31405593195): `skip-guard: 211 file(s)
+      under [app, lib, components] all visible, zero failures — green. (2802/2802 tests passed)`;
+      `db-tests` [run 31405592573](https://github.com/tcr430/SOSH/actions/runs/31405592573): `skip-guard:
+      29 file(s) under [supabase/__tests__] all visible, zero failures — green. (278/278 tests passed)`.
+      This branch had not been pushed since Session 27-D — the first push of this range (head `4cf1f290`)
+      failed `app-tests` on a genuine lint error in `lib/signals/seed.ts` (raw `.toISOString()`, CLAUDE.md's
+      date rule); fixed and re-pushed to `0ffe6acf`, green. **Tally still 0 of 3** — same rule as every
+      entry above: both are `pull_request`-event runs on `session-22-d`, not `master` runs. See the Session
+      28 "What's done" entry above for the eval-tally and first eval-result numbers, a fourth CI job this
+      session added (`eval-triage.yml`, Tier E) that this promotion tally does not track.
   - **Merge-gate enforcement (Session 22-D):** GitHub ruleset `master-app-tests` (id `19038239`) is live on
     `refs/heads/master`, requiring `app-tests` with no bypass actors. `db-tests` is intentionally **not**
     in any ruleset yet — it stays advisory until the tally above reaches 3/3, at which point the ruleset is
