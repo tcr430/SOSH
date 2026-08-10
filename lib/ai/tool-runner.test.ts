@@ -299,3 +299,53 @@ describe('runToolLoop (ADR 0021 §2, Session 28 E5.4)', () => {
     expect(recordAiUsage).not.toHaveBeenCalled()
   })
 })
+
+// ─── SIGNAL3-TOOL-INVOCATION-EXPECTED (ADR 0021 §11, Amendment B1.2) ───────
+// Session 28-D, D3 (MAJOR-3 closed) — this constraint never existed before
+// this test: `git grep -rn "TOOL-INVOCATION-EXPECTED"` hit only
+// docs/decisions/, and Amendment B1.2 names it explicitly as a property
+// that must stay Tier 2, never be absorbed into the statistical Tier-E gate
+// (SIGNAL3-TRIAGE-QUALITY speaks only to "was some tool called, in
+// aggregate, at some rate" — this speaks to "did THIS fixture's expected
+// tool get called with THIS fixture's exact input," deterministically, not
+// as a rate that could silently drift below 100% forever without failing a
+// single test).
+describe('SIGNAL3-TOOL-INVOCATION-EXPECTED (ADR 0021 §11, Amendment B1.2) — exact-match, per fixture, never an aggregate rate', () => {
+  function mockTool(name: string): TriageTool {
+    return {
+      name,
+      description: `mock ${name}`,
+      inputSchema: { type: 'object', properties: {} },
+      execute: vi.fn().mockResolvedValue([]),
+    }
+  }
+
+  it.each([
+    ['tool-use-list-evidence', 'list_evidence', { query: 'SSO' }],
+    ['tool-use-list-audience-notes', 'list_audience_notes', { audience: 'enterprise IT buyers' }],
+    ['tool-use-list-brand-claims', 'list_brand_claims', { objective: 'check for conflicting prior claims' }],
+  ] as const)(
+    "%s: the loop calls %s's execute with the fixture's exact input at least once (exact-match, not a rate)",
+    async (fixtureName, toolName, expectedInput) => {
+      const tools = [
+        mockTool('list_evidence'),
+        mockTool('list_audience_notes'),
+        mockTool('list_brand_claims'),
+        mockTool('list_recent_campaigns'),
+      ]
+      mockCreate.mockResolvedValueOnce(loadFixture(fixtureName))
+      mockCreate.mockResolvedValueOnce(loadFixture('decision-card'))
+
+      const result = await runToolLoop(baseInput({ tools }))
+
+      expect(result.outcome).toBe('decision')
+      const expectedTool = tools.find((t) => t.name === toolName)!
+      expect(expectedTool.execute).toHaveBeenCalledWith(expectedInput)
+      // Exact-match, not aggregate: this fixture named exactly one tool —
+      // every OTHER tool in the closed four must NOT have been called.
+      for (const other of tools) {
+        if (other.name !== toolName) expect(other.execute).not.toHaveBeenCalled()
+      }
+    },
+  )
+})

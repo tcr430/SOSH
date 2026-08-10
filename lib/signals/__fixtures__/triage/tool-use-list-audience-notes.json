@@ -1,0 +1,17 @@
+{
+  "id": "msg_tool_use_list_audience_notes",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-sonnet-4-6",
+  "content": [
+    {
+      "type": "tool_use",
+      "id": "toolu_list_audience_notes_1",
+      "name": "list_audience_notes",
+      "input": { "audience": "enterprise IT buyers" }
+    }
+  ],
+  "stop_reason": "tool_use",
+  "stop_sequence": null,
+  "usage": { "input_tokens": 3200, "output_tokens": 110, "cache_read_input_tokens": 0 }
+}

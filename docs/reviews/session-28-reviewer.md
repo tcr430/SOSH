@@ -825,4 +825,51 @@ already-passing `signals3-seed.test.ts` and `signals3-card-evidence-tenant.test.
 verified by `tsc` and by the database-reviewer's independent trace of the same logic; they have not been
 **executed** green in this session and should be treated as `AUTHORED-NOT-EXECUTED` until `db-tests.yml`
 (or a local Supabase stack) runs them.
-**Commit:** pending (D2, not yet committed as of this appendix row)
+**Commit:** `2824b017`
+
+### D3 — MAJOR-3, MAJOR-5, NIT-6
+
+**Fix (MAJOR-3):** `SIGNAL3-TOOL-INVOCATION-EXPECTED` never existed — `git grep -rn "TOOL-INVOCATION-EXPECTED"`
+hit only `docs/decisions/`. Added a new `describe('SIGNAL3-TOOL-INVOCATION-EXPECTED …')` block in
+`lib/ai/tool-runner.test.ts`, using the seam the instruction pointed to (`tool-runner.test.ts:122`'s
+`expect(tool.execute).toHaveBeenCalledWith(...)` pattern). Two new fixtures added —
+`tool-use-list-audience-notes.json`, `tool-use-list-brand-claims.json` — so the exact-match assertion spans
+three of the four real tools (the third pre-existing fixture, `tool-use-list-evidence.json`, already
+covered `list_evidence`), not just one, per Amendment B1.2's "never an aggregate pass rate": each case
+drives a full four-tool `runToolLoop` and asserts the ONE fixture-named tool's `execute` was called with
+the fixture's exact input, AND every other tool in the closed four was NOT called.
+**Fix (MAJOR-5):** disposition **(a)**, as directed. `lib/signals/triage/source-scans.test.ts`'s
+`expect(true).toBe(true)` tautology is deleted. The scan is extended with a new
+`describe('SIGNAL3-TOOL-RESULTS-GUARDED — the dispatcher's serialisation boundary …')` block reading
+`lib/ai/tool-runner.ts` (the file ADR §7.3 actually names) and asserting exactly one
+`JSON.stringify(toolResult)` call site with no bypass pattern (`${...toolResult`, `toolResult +`, `+
+toolResult`) present. ADR 0021 §7.3 amended (appended, original untouched) — the original line ("the
+dispatcher must never `JSON.stringify(toolOutput)`") is stated as wrong-as-written, and the guarantee is
+restated to match the shipped design: **"guarded at the tool boundary, serialised by the dispatcher."** The
+Reviewer's fairness note is preserved verbatim in the amendment: the substantive property largely holds
+(every untrusted field is already neutralised inside `tools.ts` before the dispatcher sees it); what was
+missing was enforcement reaching the dispatcher file, not an exploitable hole.
+**Fix (NIT-6):** `lib/signals/triage/tools.test.ts` — a new case asserts `list_recent_campaigns`'
+`objective` AND `special_instructions` wraps (previously only `name` was asserted; either unasserted wrap
+could have been removed and shipped green). A new `list_evidence` case asserts the **composition**: since
+`list_evidence`'s content path is `wrapEvidenceForPrompt` (a distinct, separately-guarded and
+separately-tested function, ADR §4.6), the case drives an injection payload through the REAL
+(unmocked) `wrapEvidenceForPrompt` against a mocked Supabase client and asserts the returned `evidence`
+field is neutralised — proving `list_evidence` really composes that function rather than passing evidence
+through raw, not re-proving `wrapEvidenceForPrompt`'s own guarantee a second time.
+**Test / redden proofs, all performed and reverted:**
+- MAJOR-3: reverted `tool-use-list-evidence.json`'s tool name from `list_evidence` to `list_audience_notes`
+  (simulating the loop calling the wrong/no tool) — the new case, plus two pre-existing cases sharing the
+  same fixture, failed; reverted, 21/21 green again.
+- MAJOR-5: added `+ toolResult` after the sanctioned `JSON.stringify(toolResult)` call in
+  `lib/ai/tool-runner.ts` (a bypass pattern) — the extended scan failed exactly as designed; reverted.
+- NIT-6: removed the `objective` wrap in `tools.ts`'s `list_recent_campaigns` (`objective: row.objective`
+  instead of `wrapToolResultForPrompt(row.objective)`) — the new case failed with the raw injected string
+  visible in the assertion output; reverted.
+**Verification:** `npx tsc --noEmit --skipLibCheck` clean; `npx vitest run lib/signals/triage/tools.test.ts
+lib/signals/triage/source-scans.test.ts lib/ai/tool-runner.test.ts` — 38/38 green; broader sweep
+(`lib/signals lib/ai lib/db lib/social lib/validation`) — 1189/1189 green (5 new since D2), same
+pre-existing unrelated `lib/signals/orchestrator.test.ts` env failure noted in D1/D2's rows. No specialist
+invoked, per the instruction — every finding here is closed by a test proven to redden, which was the
+mandated evidence.
+**Commit:** pending (D3, not yet committed as of this appendix row)

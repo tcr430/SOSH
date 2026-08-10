@@ -62,17 +62,40 @@ describe('SIGNAL3-TOOL-RESULTS-GUARDED — no-JSON.stringify half (ADR 0021 §7.
     const source = stripLineComments(fs.readFileSync(TOOLS_FILE, 'utf8'))
     expect(/JSON\.stringify/.test(source)).toBe(false)
   })
+})
 
-  it("every tool in tools.ts returns already-guarded fields — the semantic half this scan alone cannot prove (see tools.test.ts's neutralisation cases)", () => {
-    // Documentation-only assertion: security-reviewer (E5.4+E5.5+E5.7 pass,
-    // HIGH-2) found that a JSON.stringify grep alone cannot catch an
-    // unguarded tool result, since lib/ai/tool-runner.ts (not this module)
-    // performs the stringify. The real property — every string field a
-    // tool's execute() returns has already passed through
-    // wrapToolResultForPrompt/wrapEvidenceForPrompt — is proven by
-    // tools.test.ts's fixture-based injection-neutralisation cases, not by
-    // this scan. This assertion exists so a reader of THIS file sees that
-    // pointer rather than assuming the scan above is the whole proof.
-    expect(true).toBe(true)
+// Session 28-D, D3 (MAJOR-5 closed) — ADR §7.3's rule, as written, is about
+// THE DISPATCHER (lib/ai/tool-runner.ts:346's `content: JSON.stringify(toolResult)`),
+// not about tools.ts — but the scan above never read that file, so it was
+// structurally incapable of failing for the file the rule actually names.
+// Disposition (a), per the Reviewer's own preference: extend the scan to
+// lib/ai/tool-runner.ts and amend the ADR to state the guarantee the code
+// actually implements, rather than re-architecting a working boundary.
+// AMENDMENT (ADR 0021 §7.3): the guarantee is "guarded at the tool
+// boundary, serialised by the dispatcher" — every string field a tool
+// returns is wrapped (wrapToolResultForPrompt/wrapEvidenceForPrompt)
+// BEFORE it leaves tools.ts (proven by tools.test.ts's fixture-based
+// neutralisation cases — a semantic property no source scan can prove); the
+// dispatcher's job is only to serialise an ALREADY-GUARDED value via
+// JSON.stringify, and it must do so through exactly ONE call site, never a
+// raw template/concatenation that would bypass JSON's escaping.
+describe('SIGNAL3-TOOL-RESULTS-GUARDED — the dispatcher\'s serialisation boundary (ADR 0021 §7.3, amended)', () => {
+  const TOOL_RUNNER_FILE = path.join(ROOT, 'lib', 'ai', 'tool-runner.ts')
+
+  it("lib/ai/tool-runner.ts serialises a tool result via JSON.stringify(toolResult) exactly once — the ONE sanctioned call site the ADR names, never a raw template or concatenation that would bypass it", () => {
+    expect(fs.existsSync(TOOL_RUNNER_FILE), `${TOOL_RUNNER_FILE} no longer exists — update this scan`).toBe(true)
+    const source = stripLineComments(fs.readFileSync(TOOL_RUNNER_FILE, 'utf8'))
+
+    const stringifyCallSites = source.match(/JSON\.stringify\(toolResult\)/g) ?? []
+    expect(stringifyCallSites).toHaveLength(1)
+
+    // A raw template interpolation or string concatenation of toolResult
+    // would bypass JSON.stringify's escaping and reopen the guard gap this
+    // scan exists to catch — even though every field tools.ts returns is
+    // already wrapped, an unescaped embed could still let sentinel/control
+    // characters through unescaped into the prompt.
+    expect(/\$\{[^}]*toolResult/.test(source)).toBe(false)
+    expect(/toolResult\s*\+/.test(source)).toBe(false)
+    expect(/\+\s*toolResult/.test(source)).toBe(false)
   })
 })
