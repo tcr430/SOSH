@@ -53,14 +53,23 @@ describe('SIGNAL3-NEVER-AUTONOMOUS render posture (ADR 0021 §7.6) — no danger
   })
 })
 
-describe('SIGNAL3-NEVER-AUTONOMOUS diff posture (ADR 0021 §5.6) — no publishing-path import on the Mode 3 surface', () => {
+describe('SIGNAL3-NEVER-AUTONOMOUS diff posture (ADR 0021 §5.6, Session 28 E5.11) — no publishing-path import anywhere on the Mode 3 surface', () => {
   // "The feed proposes. It never posts." — no Mode 3 code path imports the
-  // publishing path (lib/social/**, or any posts-write helper).
+  // publishing path (lib/social/**, or any posts-write helper). TWO roots,
+  // EACH per-root vacuity guarded (Session 26-D MINOR-1: a combined-length
+  // guard alone can't prove a second root actually contributed files) —
+  // the UI surface (this directory) AND lib/signals/** (Stage B/C/D/the
+  // orchestrator), since "the feed" is not the whole of "Mode 3."
+  const SCAN_ROOTS = [OPPORTUNITIES_DIR, path.join(ROOT, 'lib', 'signals')]
   const PUBLISHING_IMPORT_PATTERN = /from ['"]@\/lib\/social/
 
-  it('no file under the opportunities surface imports lib/social/**', () => {
-    const files = collectSourceFiles(OPPORTUNITIES_DIR)
-    expect(files.length, `${OPPORTUNITIES_DIR} contributed zero files to the scan`).toBeGreaterThan(0)
+  it('no file under the opportunities surface or lib/signals/** imports lib/social/**', () => {
+    for (const root of SCAN_ROOTS) {
+      expect(collectSourceFiles(root).length, `${root} contributed zero files to the scan`).toBeGreaterThan(0)
+    }
+
+    const files = SCAN_ROOTS.flatMap(root => collectSourceFiles(root))
+    expect(files.length).toBeGreaterThan(0)
 
     const offenders: string[] = []
     for (const file of files) {

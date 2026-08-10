@@ -1168,6 +1168,21 @@ Recorded so "no test" is a decision, not an oversight:
 - **`SIGNAL3-NEVER-AUTONOMOUS` (diff arm)** — no Mode 3 write to `posts`.
 - **No webhook route** — ADR 0020 L-3 still holds.
 
+**E5.11 confirmation (Session 28) — each item verified against the actual diff, not re-asserted from
+memory.** Scope: `git diff f64308f4..HEAD` (D4, the commit immediately before E5.1, through E5.10) at
+commit `1e9333b8`. This is a DECISION record, not a test — each claim below is Tier-3 by ADR 0015 §2's own
+definition (a property of *absence*), so it is verified once at the phase's close rather than carrying a
+redundant runtime check:
+
+| Item | Verification run | Result |
+|---|---|---|
+| No new generation prompt/call | `git diff --name-status f64308f4..HEAD -- lib/ai/prompts` shows only `rubric.ts`/`rubric.test.ts` modified (the mode:'card' addition, E5.7, already disposed of by `SIGNAL3-RUBRIC-UNCHANGED`) — no new prompt file. `git diff ... -- lib/signals app/opportunities \| grep runPrompt(` finds only the two `runPrompt` call sites already in `lib/signals/triage/card.ts` (Stage D, E5.7's sanctioned additive third mode) — nothing new from E5.9/E5.10/E5.11. | Confirmed |
+| No `campaigns.origin` migration | `grep -rl origin supabase/migrations/` limited to the Session 28 diff hits one file, `20260807110000_mode3_triage_state.sql`, and the sole match is the word "**origin**al" inside a comment — not a schema change. | Confirmed |
+| No `lib/social/**` change | `git diff --name-only f64308f4..HEAD -- lib/social` — empty. | Confirmed |
+| No new dependency | `git diff f64308f4..HEAD -- package.json`'s `dependencies`/`devDependencies` blocks are unchanged; the only diff is an added `scripts.test:eval` line (E5.8). | Confirmed |
+| No Mode 3 write to `posts` | `git diff f64308f4..HEAD -- lib/signals app/opportunities lib/ai lib/campaigns/brief.ts \| grep "from('posts')"` — empty. | Confirmed |
+| No webhook route | `git diff --name-only f64308f4..HEAD -- app/api \| grep -i webhook` — empty. | Confirmed |
+
 ### 10.4 Tier E — judgment-quality evaluation (the new category; L-10, D-8)
 
 **Covers exactly one constraint: `SIGNAL3-TRIAGE-QUALITY`.** Everything else keeps a Tier-1/2/3 proof.
