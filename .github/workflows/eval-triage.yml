@@ -1,0 +1,92 @@
+name: Eval — signal triage quality
+
+# ADR 0021 §10.4/§10.5 (Session 28 E5.8). SIGNAL3-TRIAGE-QUALITY is MEASURED,
+# never COVERED (Amendment B4) — this workflow is the CI wiring for that
+# measurement, not a test suite.
+#
+# Deliberately NO workflow-level `paths:` filter (E-1). A path-filtered
+# REQUIRED check sits pending forever and blocks every unrelated PR — a
+# GitHub branch-protection required check only ever reports its OWN runs,
+# and a path filter means it has zero runs on a PR that didn't touch those
+# paths. So this workflow always runs, on every PR and workflow_dispatch;
+# STEP 1 below decides applicability IN-JOB instead, and only the replay
+# itself is conditional on that decision.
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  eval-triage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need the merge-base to diff against for STEP 1
+
+      - name: STEP 1 — decide applicability
+        id: applicability
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "applicable=true" >> "$GITHUB_OUTPUT"
+            echo "reason=workflow_dispatch (manual run, always applicable)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          CHANGED_FILES=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+
+          if echo "$CHANGED_FILES" | grep -qE '^(lib/signals/triage/|lib/ai/prompts/triage|lib/signals/__fixtures__/eval/)'; then
+            echo "applicable=true" >> "$GITHUB_OUTPUT"
+            echo "reason=PR touches lib/signals/triage/**, lib/ai/prompts/triage*, or the eval corpus" >> "$GITHUB_OUTPUT"
+          else
+            echo "applicable=false" >> "$GITHUB_OUTPUT"
+            echo "reason=PR touches none of lib/signals/triage/**, lib/ai/prompts/triage*, or the eval corpus" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Emit not-applicable artefact
+        if: steps.applicability.outputs.applicable != 'true'
+        run: |
+          mkdir -p lib/signals/__fixtures__/eval
+          cat > lib/signals/__fixtures__/eval/latest-run.json <<EOF
+          {
+            "applicable": false,
+            "reason": "${{ steps.applicability.outputs.reason }}",
+            "generatedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+          echo "eval-triage: not applicable — ${{ steps.applicability.outputs.reason }}"
+
+      - uses: actions/setup-node@v4
+        if: steps.applicability.outputs.applicable == 'true'
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        if: steps.applicability.outputs.applicable == 'true'
+        run: |
+          npm install -g npm@11
+          npm ci
+
+      - name: Pre-run corpus size check (before the run starts)
+        if: steps.applicability.outputs.applicable == 'true'
+        run: node scripts/ci/assert-eval-executed.mjs --check-corpus-only
+
+      - name: Deterministic cassette replay (npm run test:eval)
+        if: steps.applicability.outputs.applicable == 'true'
+        run: npm run test:eval
+
+      - name: Assert the metrics artefact was produced and is green
+        if: steps.applicability.outputs.applicable == 'true'
+        run: node scripts/ci/assert-eval-executed.mjs
+
+      - name: Upload eval artefact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-triage-run
+          path: lib/signals/__fixtures__/eval/latest-run.json
+          if-no-files-found: warn

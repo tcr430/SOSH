@@ -24,16 +24,38 @@ export interface AiClientLike {
 
 // ─── Mock client ───────────────────────────────────────────────────────────
 
+// ADR 0021 §10.4 (Session 28 E5.8) — the eval harness's deterministic-replay
+// hook. Neither runPrompt nor runToolLoop accepts an injectable AiClientLike
+// (by design — see lib/ai/runner.ts's/tool-runner.ts's own headers), so
+// per-corpus-example cassette replay has to happen at THIS existing mock
+// boundary, not a new one. When the queue is set and non-empty, each call
+// consumes the next response in FIFO order — this is what lets a single
+// corpus example's cassette express a multi-turn tool-use conversation, not
+// just a fixed per-model response. The harness clears the queue after each
+// example; every other caller (production tests, `AI_PROVIDER=mock` in
+// app-tests.yml) never sets it, so their behaviour is byte-identical to
+// before this addition.
+declare global {
+  // eslint-disable-next-line no-var -- `var` is required for global augmentation
+  var __evalCassetteQueue: Anthropic.Message[] | undefined
+}
+
 // Replays fixture JSON. Routing:
-// 1. If _sosh.promptId === 'post-generation': load __fixtures__/post-generation/{platform}.json
+// 1. If globalThis.__evalCassetteQueue is set and non-empty: shift() the
+//    next recorded response (the eval harness's cassette replay).
+// 2. If _sosh.promptId === 'post-generation': load __fixtures__/post-generation/{platform}.json
 //    where platform comes from _sosh.input.targetPlatform.
-// 2. Otherwise: load __fixtures__/{model}.json (original behaviour).
+// 3. Otherwise: load __fixtures__/{model}.json (original behaviour).
 // Only active when AI_PROVIDER=mock (set in CI / tests).
 class MockAnthropicClient implements AiClientLike {
   messages = {
     create: async (
       params: Anthropic.MessageCreateParamsNonStreaming & { _sosh?: { promptId: string; input: unknown } },
     ): Promise<Anthropic.Message> => {
+      if (Array.isArray(globalThis.__evalCassetteQueue) && globalThis.__evalCassetteQueue.length > 0) {
+        return globalThis.__evalCassetteQueue.shift() as Anthropic.Message
+      }
+
       let fixturePath: string
 
       const sosh = params._sosh

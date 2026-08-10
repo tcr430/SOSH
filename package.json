@@ -17,7 +17,8 @@
     "typecheck": "tsc --noEmit --skipLibCheck",
     "test:app": "vitest run app/ lib/ components/",
     "test:db": "vitest run supabase/__tests__ --no-file-parallelism --retry=2",
-    "test:integration": "vitest run --config vitest.integration.config.ts"
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:eval": "tsx scripts/eval/run-triage-eval.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",
