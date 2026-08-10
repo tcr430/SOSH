@@ -7,12 +7,15 @@
 // always-200 posture — the orchestrator owns its own claim/retry state
 // machine, same posture as publish/learning).
 //
-// NO CARD GENERATION here (Stage D, E5.7+). On a 'card' verdict this tick
-// counts it and leaves the candidate claimed at 'triaging' — it is Stage
-// D's card insert that transitions it to 'carded' (§4.1's ADR-stated
-// contract: "carded, set by Stage D, on a successful card insert"). The
-// stale-claim reclaim sweep is the safety net if Stage D lags or crashes
-// before consuming the claim.
+// Stage D (card.ts's generateCard) runs HERE, on a 'card' verdict — single-
+// shot, Tier 1, OUTSIDE runToolLoop (L-5/D-3), consuming the CardCitableContext
+// captured from this call's own buildTriageTools (§4.6). generateCard owns the
+// terminal 'carded' transition itself, atomically with its own insert (A-4′/
+// A-5) — this file never calls setCandidateTriageOutcome for a card verdict.
+// A 'skipped' outcome (citations rejected, validation failed, tenant mismatch,
+// or the claim was lost — card.ts's GenerateCardResult) is NOT a card: the
+// candidate is left at 'triaging' and self-heals to 'new' via the stale-claim
+// reclaim sweep below, the same fail-closed shape as a bound breach (§2.5).
 
 import * as Sentry from '@sentry/nextjs'
 import { formatISO, subDays } from 'date-fns'
@@ -23,6 +26,8 @@ import { buildCustomerContext } from '@/lib/ai/context'
 import { runToolLoop, TRIAGE_MAX_WALL_CLOCK_MS } from '@/lib/ai/tool-runner'
 import { wrapSignalForPrompt } from '@/lib/ai/wrap-evidence'
 import { buildTriageTools } from './tools'
+import { generateCard } from './card'
+import { createCardCitableContext } from './verify'
 import type { SignalCandidateWithSignal } from '@/lib/db/types'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
@@ -49,6 +54,7 @@ export interface TriageTickSummary {
   staleReclaimed: number
   triaged: number
   carded: number
+  cardSkipped: number
   noCard: number
   ageGated: number
   triageFailed: number
@@ -80,7 +86,8 @@ async function triageOneCandidate(
 ): Promise<void> {
   try {
     const context = await buildCustomerContext(businessId)
-    const tools = buildTriageTools(client, businessId)
+    const citable = createCardCitableContext()
+    const tools = buildTriageTools(client, businessId, citable)
     const result = await runToolLoop({
       context,
       systemPrompt: buildTriageSystemPrompt(),
@@ -95,8 +102,22 @@ async function triageOneCandidate(
     if (result.outcome === 'decision') {
       summary.triaged++
       if (result.decision.verdict === 'card') {
-        summary.carded++
-        // Left at 'triaging' — see this file's header comment.
+        // Stage D — see this file's header comment. generateCard owns the
+        // terminal 'carded' transition; a 'skipped' outcome leaves the
+        // candidate at 'triaging' for the stale reclaim sweep to self-heal.
+        const cardResult = await generateCard({
+          client,
+          context,
+          candidate,
+          claimedAtIso,
+          decision: result.decision,
+          citable,
+        })
+        if (cardResult.outcome === 'inserted') {
+          summary.carded++
+        } else {
+          summary.cardSkipped++
+        }
       } else {
         const wrote = await setCandidateTriageOutcome(client, candidate.id, claimedAtIso, 'no_card')
         if (wrote) summary.noCard++
@@ -136,6 +157,7 @@ export async function runSignalsTriageTick(opts: { triggeredBy: 'qstash' | 'secr
     staleReclaimed: 0,
     triaged: 0,
     carded: 0,
+    cardSkipped: 0,
     noCard: 0,
     ageGated: 0,
     triageFailed: 0,

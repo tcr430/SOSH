@@ -689,3 +689,62 @@ rubric work in this range is strong and in several places exceeds its brief. The
 BLOCKER-1: the pipeline's terminal stage was built, tested in isolation, and never connected, so nothing
 this session ships can produce a card — and a passing test at `orchestrator.test.ts:195` records that
 absence as intended behaviour.
+
+## CORRECTION PASS (Session 28-D)
+
+Author: Claude (Session 28-D, D0–D9 correction pass). This appendix records resolutions against the
+findings above **by reference only** — nothing above this heading is edited, reworded, or reordered
+(CLAUDE.md REVIEWER-REPORT APPEND-ONLY). Findings declined or disputed are argued here, never erased. Each
+row: finding → fix → test → commit.
+
+### D0 — MINOR-1
+
+**Fix:** Committed `docs/decisions/0015-test-execution-and-ci-gates.md` (Amendment B), `docs/build-guide/session-28.md`
+(entering git with §0.2/§2/§3/§4 already authored — §4 is D0's own work order and could not land later),
+and this reviewer report itself, all three exactly as they stood in the working tree, in one commit, with
+no resolution row appended in that same commit (so the immutable text and this appendix are provably in
+different commits).
+**Test:** N/A — Tier 3, diff-verified. Proof is `git show <sha>:docs/decisions/0015-test-execution-and-ci-gates.md | grep -ci "amendment b"` returning non-zero at the new head (verified: **3**), and `git status` showing all three paths clean post-commit.
+**Commit:** `632a4b5e`
+
+### D1 — BLOCKER-1
+
+**Fix:** `lib/signals/triage/orchestrator.ts` — `triageOneCandidate` now constructs a `CardCitableContext`
+via `createCardCitableContext()` and passes it as `buildTriageTools`'s third argument (was the two-argument
+form, so `tools.ts`'s citation-capture side effect was dead code). On `result.decision.verdict === 'card'`,
+it calls `generateCard({ client, context, candidate, claimedAtIso, decision: result.decision, citable })`.
+`generateCard`'s typed outcome is now fully handled: `'inserted'` increments `summary.carded`; any
+`'skipped'` reason (`citations_rejected`, `evidence_tenant_mismatch`, `validation_failed`, `claim_lost`)
+increments a new field, `summary.cardSkipped`, added to `TriageTickSummary` and to the canonical tick log
+line — never miscounted as `carded`. The stale `:10-15` header comment ("NO CARD GENERATION here… Stage
+D's card insert transitions it to 'carded'") and the `:97-99` placeholder comment ("Left at 'triaging' —
+see this file's header comment") are both replaced with an accurate description of the wiring: Stage D
+(`generateCard`) owns the terminal `'carded'` transition itself, atomically with its own insert (A-4′/A-5);
+a `'skipped'` outcome leaves the candidate at `'triaging'` for the stale-claim reclaim sweep to self-heal,
+the same fail-closed shape as a bound breach (§2.5). Neither the fail-closed contract (a bound breach in
+`runToolLoop` still produces no card) nor L-5 (Stage D stays outside the loop, called after `runToolLoop`
+returns) were touched. **ai_usage write confirmed, not coded**: `generateCard` calls `runPrompt`
+(`cardGenerationPrompt` and `rubricPrompt`), which inherits `lib/ai/runner.ts`'s existing finally-block
+`ai_usage` write — no new write path was needed or added.
+**Test:** `lib/signals/triage/orchestrator.test.ts` — the old `:195` case
+(*"a 'card' verdict is counted but leaves the candidate claimed (no card generation this step)"*) asserted
+the defect as intended behaviour and was green on the bug; it is **deleted**, not weakened. Replaced with
+two cases: (1) *"a 'card' verdict calls generateCard with the captured CardCitableContext, and a real
+insert reaches 'carded'"* — asserts `buildTriageTools` was called with a third-argument `CardCitableContext`
+(`evidence`/`brandClaims` `Map`s), asserts `generateCard` was called with the candidate/claimedAtIso/decision/citable,
+and asserts `summary.carded === 1` on an `'inserted'` result; (2) *"a 'skipped' generateCard outcome is NOT
+a card…"* — asserts `summary.carded === 0`, `summary.cardSkipped === 1`, and no direct
+`setCandidateTriageOutcome` call from the orchestrator on either path (Stage D, mocked here, owns that).
+Both cases were manually mutated and observed to redden: removing the `generateCard` call (reverting to
+`summary.carded++` inline) failed both new tests; independently reverting the three-argument
+`buildTriageTools(client, businessId, citable)` back to the two-argument form failed the
+`CardCitableContext` assertion specifically. Both mutations were then reverted. `npx tsc --noEmit --skipLibCheck`
+clean; `npx vitest run lib/signals/triage/orchestrator.test.ts` — 8/8 green; the broader sweep
+(`lib/signals lib/ai lib/db lib/social lib/validation`) — 1184/1184 green, with one pre-existing,
+unrelated failure (`lib/signals/orchestrator.test.ts`, Stage C's poller test — missing
+`NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY`/`NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` in this
+shell's env, confirmed identical at the D0 commit before any D1 change via `git stash`). `npm run test:db`
+could not execute in this shell for the same reason (no Supabase/Postgres env configured locally) — D1
+touches no SQL/migration and modifies no Tier-1 test file, so this is a pre-existing environment gap, not
+a D1 regression; flagged here rather than silently skipped.
+**Commit:** pending (D1, not yet committed as of this appendix row)

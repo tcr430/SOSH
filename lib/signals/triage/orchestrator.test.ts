@@ -49,6 +49,11 @@ vi.mock('./tools', () => ({
   buildTriageTools: mockBuildTriageTools,
 }))
 
+const mockGenerateCard = vi.hoisted(() => vi.fn())
+vi.mock('./card', () => ({
+  generateCard: mockGenerateCard,
+}))
+
 vi.mock('@/lib/supabase/service', () => ({
   createServiceRoleClient: vi.fn(() => ({})),
 }))
@@ -105,6 +110,7 @@ beforeEach(() => {
     trialState: null,
   })
   mockBuildTriageTools.mockReturnValue([])
+  mockGenerateCard.mockResolvedValue({ outcome: 'inserted', card: { id: 'card-1' } })
   mockRunToolLoop.mockResolvedValue({
     outcome: 'decision',
     decision: { verdict: 'no_card', reason: 'x', citableEvidenceIds: [], citableBrandIds: [], audienceNote: '' },
@@ -184,7 +190,7 @@ describe('runSignalsTriageTick (ADR 0021 §3, Session 28 E5.6)', () => {
     expect(line.kind).toBe('signals-triage.tick')
     for (const field of [
       'tick', 'triggeredBy', 'durationMs', 'businessesConsidered', 'staleReclaimed',
-      'triaged', 'carded', 'noCard', 'ageGated', 'triageFailed', 'cappedBusinesses', 'deadlineDeferred',
+      'triaged', 'carded', 'cardSkipped', 'noCard', 'ageGated', 'triageFailed', 'cappedBusinesses', 'deadlineDeferred',
     ]) {
       expect(line).toHaveProperty(field)
     }
@@ -192,20 +198,54 @@ describe('runSignalsTriageTick (ADR 0021 §3, Session 28 E5.6)', () => {
     logSpy.mockRestore()
   })
 
-  it("a 'card' verdict is counted but leaves the candidate claimed (no card generation this step)", async () => {
+  it("a 'card' verdict calls generateCard with the captured CardCitableContext, and a real insert reaches 'carded'", async () => {
     const candidate = makeCandidate({ id: 'cand-card' })
+    mockListNewCandidates.mockResolvedValue([candidate])
+    const decision = { verdict: 'card' as const, reason: 'x', citableEvidenceIds: [], citableBrandIds: [], audienceNote: '' }
+    mockRunToolLoop.mockResolvedValue({ outcome: 'decision', decision, costCents: 6 })
+    mockGenerateCard.mockResolvedValue({ outcome: 'inserted', card: { id: 'card-1' } })
+
+    const summary = await runSignalsTriageTick({ triggeredBy: 'secret' })
+
+    // buildTriageTools' THIRD argument is the CardCitableContext each tool
+    // populates as a side effect — without it, generateCard's citation
+    // verification has nothing to verify against (§4.6).
+    expect(mockBuildTriageTools).toHaveBeenCalledWith(
+      expect.anything(),
+      'biz-1',
+      expect.objectContaining({ evidence: expect.any(Map), brandClaims: expect.any(Map) }),
+    )
+    expect(mockGenerateCard).toHaveBeenCalledWith(
+      expect.objectContaining({
+        candidate,
+        claimedAtIso: expect.any(String),
+        decision,
+        citable: expect.objectContaining({ evidence: expect.any(Map), brandClaims: expect.any(Map) }),
+      }),
+    )
+    expect(summary.carded).toBe(1)
+    expect(summary.cardSkipped).toBe(0)
+    expect(summary.triaged).toBe(1)
+    // generateCard (Stage D, mocked here) owns the terminal 'carded'
+    // transition itself — the orchestrator never calls it directly.
+    expect(mockSetCandidateTriageOutcome).not.toHaveBeenCalled()
+  })
+
+  it("a 'skipped' generateCard outcome is NOT a card: no 'carded' transition, the new counter moves instead", async () => {
+    const candidate = makeCandidate({ id: 'cand-card-skip' })
     mockListNewCandidates.mockResolvedValue([candidate])
     mockRunToolLoop.mockResolvedValue({
       outcome: 'decision',
       decision: { verdict: 'card', reason: 'x', citableEvidenceIds: [], citableBrandIds: [], audienceNote: '' },
       costCents: 6,
     })
+    mockGenerateCard.mockResolvedValue({ outcome: 'skipped', reason: 'citations_rejected' })
 
     const summary = await runSignalsTriageTick({ triggeredBy: 'secret' })
 
-    expect(summary.carded).toBe(1)
+    expect(summary.carded).toBe(0)
+    expect(summary.cardSkipped).toBe(1)
     expect(summary.triaged).toBe(1)
-    // No terminal transition on a card verdict — Stage D (E5.7+) owns that.
     expect(mockSetCandidateTriageOutcome).not.toHaveBeenCalled()
   })
 
