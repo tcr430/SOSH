@@ -13,6 +13,12 @@ vi.mock('@/lib/db/signal-candidates', () => ({ hasTriageFailedCandidates: vi.fn(
 vi.mock('@/lib/db/signal-triage-budget', () => ({ isTriageBudgetCapped: vi.fn().mockResolvedValue(false) }))
 vi.mock('@/lib/db/github-connections', () => ({ getGithubConnectionByBusinessId: vi.fn().mockResolvedValue(null) }))
 vi.mock('@/lib/config', () => ({ config: { server: { TRIAGE_DAILY_CAP_CENTS: 125 } } }))
+// Session 28-D, D5 (MAJOR-6 closed) — OpportunityFeed now has its own
+// dedicated render suite (OpportunityFeed.test.tsx, all ten §9.2 states).
+// This mock stays: it is a deliberate PAGE-LEVEL ISOLATION BOUNDARY — this
+// file tests only auth/redirect/capability-gate logic in page.tsx (a Server
+// Component), which has no reason to also exercise the client component's
+// render tree. Kept () => null rather than removed.
 vi.mock('./OpportunityFeed', () => ({ OpportunityFeed: () => null }))
 
 import OpportunitiesPage from './page'

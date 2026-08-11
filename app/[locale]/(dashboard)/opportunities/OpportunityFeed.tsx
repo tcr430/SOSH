@@ -135,9 +135,9 @@ export function OpportunityFeed({
 
       {/* Triage paused — dated "daily limit reached" */}
       {isTriagePaused && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-950/40">
-          <p className="text-sm font-medium text-amber-800 dark:text-amber-300">{t('status.pausedTitle')}</p>
-          <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">{t('status.pausedBody')}</p>
+        <div className="rounded-md border border-warning-border bg-warning px-4 py-3">
+          <p className="text-sm font-medium text-warning-foreground">{t('status.pausedTitle')}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">{t('status.pausedBody')}</p>
         </div>
       )}
 
@@ -234,29 +234,45 @@ function OpportunityCard({
       {/* §9.1 information hierarchy: observation -> why it matters ->
           audience -> verified evidence (distinct from assessment) -> angle
           options -> scores. */}
+      {/* §7.5/MINOR-5 (Session 28-D, D5) — the model's ASSESSMENT, visually
+          distinct from verified evidence below. The marker is VISIBLE TEXT
+          on every unverified field, not a `title` attribute (unreliable to
+          AT, not keyboard-reachable) and not styling (italics/colour) alone
+          — the same class of problem §9.3 names for sensitivity. */}
       <div>
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('card.observation')}</p>
         <p className="text-sm leading-relaxed">{card.observation}</p>
+        <p className="mt-0.5 text-[11px] font-medium italic text-muted-foreground">{t('card.modelAssessment')}</p>
       </div>
 
       <div>
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('card.whyItMatters')}</p>
         <p className="text-sm leading-relaxed">{card.why_it_matters}</p>
+        <p className="mt-0.5 text-[11px] font-medium italic text-muted-foreground">{t('card.modelAssessment')}</p>
       </div>
 
       <div>
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('card.audience')}</p>
-        {/* §7.5 — the model's ASSESSMENT, visually distinct from verified
-            evidence below. Plain text, never markdown. */}
-        <p className="text-sm leading-relaxed italic text-muted-foreground" title={t('card.modelAssessment')}>
-          {card.audience}
-        </p>
+        <p className="text-sm leading-relaxed">{card.audience}</p>
+        <p className="mt-0.5 text-[11px] font-medium italic text-muted-foreground">{t('card.modelAssessment')}</p>
       </div>
 
+      {/* Verified evidence — renders the evidence set's CONTENT (each
+          citable evidence-memory id), not merely its count (a bare number
+          carries no more visual weight than any other digit and ran opposite
+          the "verified" oracle it names). insight_cards.evidence carries only
+          an id array (§4.6) — no title/body join exists on this row — so the
+          id itself is the content available to show. */}
       {card.evidence.length > 0 && (
-        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-900 dark:bg-emerald-950/30">
-          <p className="text-xs font-medium text-emerald-800 dark:text-emerald-300">{t('card.verifiedEvidence')}</p>
-          <p className="text-xs text-emerald-700 dark:text-emerald-400">{card.evidence.length}</p>
+        <div className="rounded-md border border-success-border bg-success px-3 py-2">
+          <p className="text-xs font-medium text-success-foreground">{t('card.verifiedEvidence')}</p>
+          <ul className="mt-1 space-y-0.5">
+            {card.evidence.map(evidenceId => (
+              <li key={evidenceId} className="font-mono text-xs text-success-foreground">
+                {evidenceId}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -283,9 +299,9 @@ function OpportunityCard({
 
       {/* High-sensitivity warning band — TEXT, not colour alone */}
       {isHighSensitivity && (
-        <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 dark:border-amber-800 dark:bg-amber-950/40">
-          <p className="text-xs font-medium text-amber-800 dark:text-amber-300">{t('sensitivity.warning')}</p>
-          <p className="text-[11px] text-amber-700 dark:text-amber-400">{t('sensitivity.excludedFromDigest')}</p>
+        <div className="rounded-md border border-warning-border bg-warning px-3 py-2">
+          <p className="text-xs font-medium text-warning-foreground">{t('sensitivity.warning')}</p>
+          <p className="text-[11px] text-muted-foreground">{t('sensitivity.excludedFromDigest')}</p>
         </div>
       )}
 
@@ -294,7 +310,7 @@ function OpportunityCard({
 
       {/* Saved — distinct, no countdown */}
       {statusLabel === 'saved' && (
-        <p className="text-xs font-medium text-sky-700 dark:text-sky-400">{t('status.savedHint')}</p>
+        <p className="text-xs font-medium text-info-foreground">{t('status.savedHint')}</p>
       )}
 
       {/* Approved and in flight — gate count legible; link inert until
@@ -303,10 +319,7 @@ function OpportunityCard({
         <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
           <p className="text-xs font-medium text-foreground">{t('status.approved')}</p>
           <p className="text-xs text-muted-foreground">{t('status.approvedInFlightBody')}</p>
-          <span
-            className="mt-1 inline-block cursor-not-allowed text-xs text-muted-foreground underline underline-offset-2 opacity-60"
-            title={t('status.approvedLinkPendingHint')}
-          >
+          <span className="mt-1 inline-block cursor-not-allowed text-xs text-muted-foreground underline underline-offset-2 opacity-60">
             {t('status.approvedLinkPendingHint')}
           </span>
         </div>

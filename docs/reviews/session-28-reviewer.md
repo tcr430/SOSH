@@ -925,4 +925,80 @@ SUPABASE_URL` etc. absent locally, no relation to any D4 file); `npm run test:ev
 checkout --` so the committed artefact stays byte-identical to CI's last real run). No specialist invoked,
 per the instruction — this is a CI-guard split and a tally correction, settled by reading Amendment B3 and
 E-1, not a judgment call needing a specialist's independent read.
-**Commit:** pending (D4, not yet committed as of this appendix row)
+**Commit:** `391371cd`
+
+### D5 — MAJOR-6, MINOR-5, MINOR-6
+
+**Fix (MAJOR-6):** `OpportunityFeed.tsx` (387 lines, the entire Mode 3 user-facing surface) was
+`AUTHORED-NOT-EXECUTED` — mocked to `() => null` in `page.test.tsx`, no dedicated suite existed.
+`OpportunityFeed.test.tsx` (new, 25 cases) drives the REAL component through all ten §9.2 states, named in
+the test titles ("§9.2 state N/10: …") so a reviewer can count them: the two empty states (asserted
+DIFFERENT from each other, not merely each individually correct — `not.toBe` on the two renders'
+`textContent`), cards pending (full §9.1 hierarchy), high-sensitivity (warning band + the second-click
+confirmation gate, plus a companion case proving a LOW-sensitivity card does NOT get the gate), expired
+(both "not in the default feed" and "reachable via the filter, actions disabled"), saved, approved-and-
+in-flight, triage-failed, triage-paused, and lost-the-triage-race (`already_triaged` — asserts the card
+re-renders in its real patched status, `status.dismissed`, never the generic `actions.error`). A separate
+`describe` block asserts all four `aria-live` announcements (approve/dismiss/save/already_triaged) as
+`textContent`, not attribute presence, per the instruction.
+**Fix (MINOR-5):** `card.observation`, `card.why_it_matters` and `card.audience` each now render a visible
+`<p>` assessment marker (`t('card.modelAssessment')`) beneath the field — no new i18n key needed, the
+existing key is reused, now rendered as real text instead of only living on `card.audience`'s `title`
+attribute (deleted). The verified-evidence block now maps `card.evidence` (the id array — `insight_cards`
+carries no title/body join, confirmed against `lib/db/types.ts:611-621`) into a list of id items instead of
+rendering `card.evidence.length`. Tests assert: exactly three visible marker elements exist and zero
+`[title="card.modelAssessment"]` elements remain; the evidence ids appear as list-item content; no evidence
+block renders when the array is empty.
+**Fix (MINOR-6):** `app/globals.css` gained seven new tokens (`--warning`, `--warning-border`,
+`--warning-foreground`, `--success`, `--success-border`, `--success-foreground`, `--info-foreground`) in
+both `:root` and `.dark`, plus `@theme inline` mappings — additive only, no existing token touched. Values
+are Tailwind's own amber/emerald/sky hexes, pre-verified at ≥5.69:1 AA contrast (floor 4.5:1) in both
+themes via a scratch script before landing, independently re-verified by `ecc:react-reviewer` at ≥6.8:1.
+The status bands (triage-paused, high-sensitivity, verified-evidence, saved hint) now use these tokens
+instead of raw Tailwind palette classes. `OpportunityFeed.test.tsx` mirrors `ApprovalsInbox.test.tsx`'s
+contrast-testing mechanism exactly — reads `app/globals.css` at test time via `readFileSync`, not a
+hand-transcribed copy — with one adaptation: the new tokens are stored as literal hex (not `oklch(L C H)`),
+a disclosed choice to avoid a hand-computed oklch conversion introducing its own contrast error, so a
+`hexTokenLuminance()` helper sits alongside the existing `oklch`-based `tokenLuminance()` (still needed and
+used for `--card`, which the Saved hint's `info-foreground` text renders directly onto). A final case
+asserts the component's rendered HTML contains no `amber-\d|emerald-\d|sky-\d` classes and does contain the
+new token classes.
+**`ecc:react-reviewer` invoked once, per the instruction (no other specialist).** Verdict: **Approve**, no
+CRITICAL/HIGH findings. Two MEDIUM notes: (1) the evidence-id list is honest but low-value UX given the
+data model has no joinable content beyond the id — accepted as a bounded, disclosed limitation, not fixed
+this pass; (2) a leftover `title` attribute on the unrelated "approved, link pending" hint, inconsistent
+with the house rule MINOR-5 just established even though it duplicated visible text and carried no
+information loss — **fixed** (the `title` attribute removed, visible text is unchanged) per "address every
+finding before commit." The agent's report also flagged that injected-looking text appeared in its own
+tool-call transcript making false claims about the code state (that the confirmation gate and
+already_triaged handling had been removed, and that tests were failing) — it correctly verified against
+real `Read`/`Bash`/`vitest` output and disregarded the false claims; this is session-memory-hook noise in
+the subagent environment, not a vulnerability in the reviewed code, and is recorded here for the audit
+trail rather than acted on.
+**Test / redden proofs, all performed and reverted (the five named in the instruction: both empty states,
+triage-failed, high-sensitivity, already_triaged):**
+- Empty state 1 (no connection): gated the branch behind `false &&` — state 1's test failed on the missing
+  `empty.noConnectionTitle` text; reverted.
+- Empty state 2 (connected, nothing yet): same mutation on the other branch — state 2's test failed on the
+  missing `empty.connectedNothingYetTitle` text (and would also have failed the "must differ from state 1"
+  assertion had it reached that far); reverted.
+- Triage-failed: gated `hasTriageFailures` behind `false &&` — state 8's test failed on the missing
+  `status.triageFailedTitle`; reverted.
+- High-sensitivity: removed the `isHighSensitivity && !confirmingApprove` gate from `requestApprove()` —
+  the test's `expect(approveCardAction).not.toHaveBeenCalled()` failed (it WAS called on the first click);
+  reverted.
+- Already_triaged: removed the `already_triaged` branch from `handleApprove` — the test's
+  `status.dismissed` assertion failed, the card instead showed `actions.error`'s generic message (the exact
+  failure mode §5.3 exists to prevent); reverted.
+- `page.test.tsx`'s `() => null` mock was kept, not removed, and justified in a comment as a deliberate
+  page-level isolation boundary (that file tests only `page.tsx`'s auth/redirect/capability logic) now that
+  `OpportunityFeed` has its own suite.
+**Verification:** `npx tsc --noEmit --skipLibCheck` clean; `npx vitest run app/[locale]/(dashboard)/
+opportunities/` — 53/53 green (5 files, incl. the new suite's 25); `npm run test:app` in full — 2792/2794
+tests passed, 4 files reported failed but only 2 individual tests actually failed
+(`lib/social/__tests__/vault.test.ts` and `lib/ai/runner.test.ts`, both `Test timed out in 15000ms` under
+full-suite parallel load — re-run each in isolation immediately after: both green, 12/12 and 40/40, neither
+file touches `opportunities/` or `globals.css`, confirmed flaky-under-load rather than a regression); the
+other 2 "failed" files are the same pre-existing, unrelated missing-env-var collection failure already
+noted in D1-D4's rows (`lib/config.test.ts`, `lib/signals/orchestrator.test.ts`).
+**Commit:** pending (D5, not yet committed as of this appendix row)
