@@ -44,11 +44,18 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
     caveat from E5.8 still applies; see ADR 0021 §10.4/§10.5's own limits section): **corpusVersion=1,
     precision=1.000 (24/24), recall=1.000 (24/24), dismissMatch=1.000 (16/16), executed=40/40** —
     [run 31405593644](https://github.com/tcr430/SOSH/actions/runs/31405593644) (2026-08-10).
-  - **Eval-reported tally (new, ADR 0021 §10.4) — 1 run recorded.** Unlike the `db-tests` promotion tally,
-    this is not gated on `master` — `eval-triage.yml` runs on every PR by design (Tier E measures judgment
-    quality on the current diff, not a merge-readiness gate). **2026-08-10:** first-ever execution inside
-    real GitHub Actions (never run in CI before this session — E5.8's own session notes flagged this as
-    unverified) — green, non-vacuous (`assert-eval-executed.mjs`: `executed=40/40`, `metricsPass=true`).
+  - **Eval-reported tally (ADR 0021 §10.4, Amendment B3) — 0 of 3.** Session 28-D, D4 (MINOR-3) corrected
+    this paragraph — it previously claimed this tally was "not gated on `master`," which contradicted E-1
+    (session-28.md §0.2), ADR §10.4, and Amendment B3 twice over. **Master-gated exactly like `db-tests`**:
+    `eval-triage.yml` runs on every PR by design (E-1 — a path-filtered workflow would leave a required
+    check pending forever, so applicability is decided in-job instead), but the `eval-reported` check
+    promotes to required only after **three consecutive green `master` runs**, staying
+    advisory-but-must-be-read until then — "runs on every PR" and "promotes on three green `master` runs"
+    are not in tension, `db-tests` does both. **2026-08-10:** first-ever execution inside real GitHub
+    Actions (never run in CI before this session — E5.8's own session notes flagged this as unverified) —
+    green, non-vacuous (`assert-eval-executed.mjs`: `executed=40/40`, `metricsPass=true`). **Tally still 0
+    of 3** — same rule as `db-tests`: this was a `pull_request`-event run on `session-22-d`, not a
+    `master` run.
   - **CI run URLs (PR [#5](https://github.com/tcr430/SOSH/pull/5), head `0ffe6acf`):** `app-tests`
     [run 31405593195](https://github.com/tcr430/SOSH/actions/runs/31405593195) — green, `skip-guard: 211
     file(s) under [app, lib, components] all visible, zero failures — green. (2802/2802 tests passed)`;

@@ -1319,6 +1319,20 @@ corpus count; **any example whose status is `error`** (error is a **third, job-f
 coerced to `no_card` — otherwise an all-erroring run reports plausible numbers while measuring nothing);
 and corpus file count below the declared minimum, checked **before** the run starts.
 
+**AMENDMENT (Session 28-D, D4, MAJOR-4 closed) — `eval-reported`/`eval-threshold` are two check NAMES, not
+two script arguments.** `eval-triage.yml` is **two CI jobs** sharing one workflow file — `eval-reported`
+(the promotable job: applicability → replay → `assert-eval-executed.mjs`'s default mode, which asserts the
+artefact exists with its metrics and run URL and **never reads `metricsPass`**) and `eval-threshold`
+(`needs: eval-reported`, `if: always()`, downloads the uploaded artefact, runs
+`assert-eval-executed.mjs --check-threshold`, which reports `metricsPass` but never exits non-zero). Two
+distinct GitHub check names is what makes `eval-reported` independently requireable without dragging the
+statistical half along with it — a single job cannot report two check statuses to branch protection.
+`scripts/eval/run-triage-eval.ts`'s own `!metricsPass → process.exit(1)` (previously inside the
+`npm run test:eval` step that runs *before* this guard script) was removed for the same reason: left in
+place, it would have failed the `eval-reported` job on a metrics dip before the guard script ever ran,
+silently re-fusing the gate the split exists to separate. Its errored-example `process.exit(1)` is
+untouched — B2.4's guard stays job-failing on both scripts.
+
 ### 10.5 What Tier E does NOT cover — stated so a green harness is never read as blanket coverage
 
 **Not covered by the harness:** every other `SIGNAL3-*` constraint in §11. Specifically **not**:

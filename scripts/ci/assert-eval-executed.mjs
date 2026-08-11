@@ -13,19 +13,51 @@
 //         never coerced into a verdict (an all-erroring run must not report
 //         plausible-looking numbers while measuring nothing).
 // No `|| true` anywhere in this script or its caller.
+//
+// Session 28-D, D4 (MAJOR-4 closed, ADR 0021 §10.4 / Amendment B3, B3.1) —
+// the split is the point: this script now has THREE modes, one per CI check:
+//   --check-corpus-only  pre-run corpus-size guard (unchanged behaviour)
+//   (default)             the `eval-reported` check — (i)/(ii)/(iii) above,
+//                          JOB-FAILING. Deliberately does NOT read
+//                          metricsPass: a purely statistical threshold dip
+//                          must never fail the promotable check.
+//   --check-threshold      the `eval-threshold` check — reports metricsPass,
+//                          ADVISORY FOREVER, never exits non-zero.
+// (i)/(ii)/(iii) are B2.4's false-green guard and are unchanged by this
+// split — moving them to advisory alongside metricsPass would hand the
+// harness the exact failure ADR 0015 exists to prevent.
 
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 
 const MIN_CORPUS_EXAMPLES = 40
-const CORPUS_PATH = 'lib/signals/__fixtures__/eval/corpus.v1.json'
 const ARTEFACT_PATH = 'lib/signals/__fixtures__/eval/latest-run.json'
 
+// NIT-4 (D4) — previously hardcoded to 'corpus.v1.json' at this line, which
+// would leave the pre-run minimum reading a stale file once a v2 corpus
+// shipped. Resolved instead from the corpusVersion recorded in the LAST
+// artefact (checked into the repo from the prior run) — falling back to v1
+// only when no prior artefact exists (the first-ever run).
+function resolveCorpusPath() {
+  let version = 1
+  if (existsSync(ARTEFACT_PATH)) {
+    try {
+      const prior = JSON.parse(readFileSync(ARTEFACT_PATH, 'utf8'))
+      if (typeof prior.corpusVersion === 'number') version = prior.corpusVersion
+    } catch {
+      // Unreadable/malformed prior artefact — fall back to v1 rather than
+      // hard-failing a pre-run check on a file this script does not own.
+    }
+  }
+  return `lib/signals/__fixtures__/eval/corpus.v${version}.json`
+}
+
 function checkCorpusOnly() {
+  const corpusPath = resolveCorpusPath()
   let corpus
   try {
-    corpus = JSON.parse(readFileSync(CORPUS_PATH, 'utf8'))
+    corpus = JSON.parse(readFileSync(corpusPath, 'utf8'))
   } catch (err) {
-    console.error(`::error::assert-eval-executed: could not read/parse corpus at ${CORPUS_PATH}: ${err.message}`)
+    console.error(`::error::assert-eval-executed: could not read/parse corpus at ${corpusPath}: ${err.message}`)
     process.exit(1)
   }
   const count = Array.isArray(corpus.examples) ? corpus.examples.length : 0
@@ -38,13 +70,17 @@ function checkCorpusOnly() {
   console.log(`assert-eval-executed: corpus has ${count} example(s) (>= ${MIN_CORPUS_EXAMPLES}) — pre-run check green.`)
 }
 
-function checkArtefact() {
+// The `eval-reported` check (default mode) — a deterministic, binary fact
+// about EXECUTION, never about passing (Amendment B3.1). metricsPass is
+// deliberately absent from this function.
+function checkArtefactHard() {
+  const corpusPath = resolveCorpusPath()
   let corpus
   let artefact
   try {
-    corpus = JSON.parse(readFileSync(CORPUS_PATH, 'utf8'))
+    corpus = JSON.parse(readFileSync(corpusPath, 'utf8'))
   } catch (err) {
-    console.error(`::error::assert-eval-executed: could not read/parse corpus at ${CORPUS_PATH}: ${err.message}`)
+    console.error(`::error::assert-eval-executed: could not read/parse corpus at ${corpusPath}: ${err.message}`)
     process.exit(1)
   }
   try {
@@ -52,6 +88,11 @@ function checkArtefact() {
   } catch (err) {
     console.error(`::error::assert-eval-executed: could not read/parse run artefact at ${ARTEFACT_PATH}: ${err.message}`)
     process.exit(1)
+  }
+
+  if (artefact.applicable === false) {
+    console.log(`assert-eval-executed: not applicable — ${artefact.reason ?? '(no reason recorded)'}`)
+    return
   }
 
   const declaredCount = Array.isArray(corpus.examples) ? corpus.examples.length : 0
@@ -84,8 +125,8 @@ function checkArtefact() {
     failed = true
   }
 
-  if (artefact.metricsPass !== true) {
-    console.error('::error::assert-eval-executed: one or more metrics fell below its floor — see latest-run.json metrics')
+  if (!artefact.runUrl) {
+    console.error('::error::assert-eval-executed: artefact carries no runUrl — eval-reported requires the metrics + run URL to have been produced')
     failed = true
   }
 
@@ -93,20 +134,50 @@ function checkArtefact() {
     process.exit(1)
   }
 
-  const m = artefact.metrics ?? {}
   console.log(
-    `assert-eval-executed: green — corpusVersion=${artefact.corpusVersion} ` +
-      `executed=${executedCount}/${declaredCount} ` +
-      `precision=${m.cardPrecision?.value?.toFixed?.(3)} (${m.cardPrecision?.numerator}/${m.cardPrecision?.denominator}) ` +
-      `recall=${m.cardRecall?.value?.toFixed?.(3)} (${m.cardRecall?.numerator}/${m.cardRecall?.denominator}) ` +
-      `dismissMatch=${m.dismissReasonMatch?.value?.toFixed?.(3)} (${m.dismissReasonMatch?.numerator}/${m.dismissReasonMatch?.denominator}) ` +
-      `run=${artefact.runUrl}`,
+    `assert-eval-executed: eval-reported green — corpusVersion=${artefact.corpusVersion} ` +
+      `executed=${executedCount}/${declaredCount} run=${artefact.runUrl}`,
   )
+}
+
+// The `eval-threshold` check — ADVISORY FOREVER (Amendment B3). Reports
+// metricsPass and the metric numbers but NEVER exits non-zero: "the metrics
+// themselves never block a merge."
+function checkThreshold() {
+  let artefact
+  try {
+    artefact = JSON.parse(readFileSync(ARTEFACT_PATH, 'utf8'))
+  } catch (err) {
+    console.error(`::warning::assert-eval-executed (threshold): could not read/parse run artefact at ${ARTEFACT_PATH}: ${err.message}`)
+    return
+  }
+
+  if (artefact.applicable === false) {
+    console.log(`assert-eval-executed (threshold): not applicable — ${artefact.reason ?? '(no reason recorded)'}`)
+    return
+  }
+
+  const m = artefact.metrics ?? {}
+  const summary =
+    `corpusVersion=${artefact.corpusVersion} ` +
+    `precision=${m.cardPrecision?.value?.toFixed?.(3)} (${m.cardPrecision?.numerator}/${m.cardPrecision?.denominator}) ` +
+    `recall=${m.cardRecall?.value?.toFixed?.(3)} (${m.cardRecall?.numerator}/${m.cardRecall?.denominator}) ` +
+    `dismissMatch=${m.dismissReasonMatch?.value?.toFixed?.(3)} (${m.dismissReasonMatch?.numerator}/${m.dismissReasonMatch?.denominator}) ` +
+    `run=${artefact.runUrl}`
+
+  if (artefact.metricsPass !== true) {
+    console.warn(`::warning::assert-eval-executed (threshold): one or more metrics fell below its floor — ${summary}`)
+  } else {
+    console.log(`assert-eval-executed (threshold): green — ${summary}`)
+  }
+  // No process.exit(1) anywhere in this function — advisory, permanently.
 }
 
 const mode = process.argv[2]
 if (mode === '--check-corpus-only') {
   checkCorpusOnly()
+} else if (mode === '--check-threshold') {
+  checkThreshold()
 } else {
-  checkArtefact()
+  checkArtefactHard()
 }

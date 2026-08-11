@@ -872,4 +872,57 @@ lib/signals/triage/source-scans.test.ts lib/ai/tool-runner.test.ts` — 38/38 gr
 pre-existing unrelated `lib/signals/orchestrator.test.ts` env failure noted in D1/D2's rows. No specialist
 invoked, per the instruction — every finding here is closed by a test proven to redden, which was the
 mandated evidence.
-**Commit:** pending (D3, not yet committed as of this appendix row)
+**Commit:** `8765f3b6`
+
+### D4 — MAJOR-4, MINOR-3, NIT-4
+
+**Fix (MAJOR-4):** `scripts/ci/assert-eval-executed.mjs:87-90` set `failed = true` on `metricsPass !==
+true`, fusing a purely statistical threshold dip into the same exit path as the false-green guards —
+contradicting Amendment B3/B3.1's explicit split. Split into three script modes: `--check-corpus-only`
+(unchanged, pre-run), the default mode (`checkArtefactHard`, the `eval-reported` check — corpus minimum,
+executed-count, errored-example, and a `runUrl`-present check; job-failing; `metricsPass` deliberately
+absent), and a new `--check-threshold` mode (`checkThreshold`, the `eval-threshold` check — reports
+`metricsPass` and the metric numbers via `console.warn`, **never** `process.exit(1)`). `.github/workflows/
+eval-triage.yml` split from one job into two — `eval-reported` (applicability → install → pre-run corpus
+check → `npm run test:eval` → `assert-eval-executed.mjs` default mode → upload artefact) and
+`eval-threshold` (`needs: eval-reported`, `if: always()`, downloads the uploaded artefact, runs
+`assert-eval-executed.mjs --check-threshold`) — two GitHub check names sharing one workflow, per ADR 0021
+§10.4's new amendment note.
+**A second, un-named fusion point found while implementing the fix:** `scripts/eval/run-triage-eval.ts:
+170-173` also called `process.exit(1)` on `!metricsPass`, inside the `npm run test:eval` step that runs
+*before* `assert-eval-executed.mjs` in the workflow. Left alone, splitting only the guard script would not
+have split the actual gate — the `eval-reported` job would still fail on a metrics dip via this earlier
+call site. Removed that branch (replaced with a non-fatal `console.warn`); its errored-example
+`process.exit(1)` (lines 166-169) is untouched, preserving B2.4's guard unchanged, exactly as instructed.
+**Fix (MINOR-3):** `docs/current-phase.md`'s "Eval-reported tally" paragraph claimed the tally was "not
+gated on `master`," contradicting E-1 (session-28.md §0.2), ADR §10.4 and Amendment B3, each stated twice
+over. Rewritten to match `db-tests`' master-gated phrasing exactly, count reset to **0 of 3**, the false
+sentence deleted, with a pointer to E-1/§10.4/Amendment B3 for the promotion rule. The `db-tests` tally
+elsewhere in the file is untouched.
+**Fix (NIT-4):** `assert-eval-executed.mjs`'s hardcoded `CORPUS_PATH = 'lib/signals/__fixtures__/eval/
+corpus.v1.json'` replaced with `resolveCorpusPath()`, which reads the corpusVersion from the **previously
+committed** `latest-run.json` (the only version signal available before a new run exists) and builds
+`corpus.v${version}.json`, falling back to v1 only when no prior artefact exists. Used by all three script
+modes.
+**Test / redden proofs, all performed and reverted (VERIFY's three hand-made-artefact scenarios, run
+against the script directly since no test file exists for this CI script — consistent with its own
+Amendment B2.4 precedent of being verified by direct invocation, not a vitest suite):**
+- Scenario 1 — `metricsPass: false`, artefact otherwise present: `node assert-eval-executed.mjs` (default)
+  exited **0** (`eval-reported green`); `node assert-eval-executed.mjs --check-threshold` printed a
+  `::warning::` and exited **0** — the workflow does not fail on this account.
+- Scenario 2 — no artefact file present: `node assert-eval-executed.mjs` (default) exited **1** (ENOENT on
+  the artefact path).
+- Scenario 3 — one `outcomes[]` entry mutated to `status: 'error'`: `node assert-eval-executed.mjs`
+  (default) exited **1**, naming the errored example — B2.4 preserved, unchanged by the split.
+- All mutations made against a scratch copy of the real committed artefact and reverted via `git checkout
+  --` afterward; `git status --short lib/signals/__fixtures__/eval/` confirmed byte-identical to HEAD
+  before proceeding.
+**Verification:** `npx tsc --noEmit --skipLibCheck` clean; `npm run test:app` — 2769/2769 tests passed (209
+of 211 files; the 2 "failed" files, `lib/config.test.ts` and `lib/signals/orchestrator.test.ts`, are the
+same pre-existing, unrelated missing-env-var failure already noted in D1/D2/D3's rows — `NEXT_PUBLIC_
+SUPABASE_URL` etc. absent locally, no relation to any D4 file); `npm run test:eval` exited 0 locally
+(re-run only for verification; its timestamp-only side effect on `latest-run.json` was reverted via `git
+checkout --` so the committed artefact stays byte-identical to CI's last real run). No specialist invoked,
+per the instruction — this is a CI-guard split and a tally correction, settled by reading Amendment B3 and
+E-1, not a judgment call needing a specialist's independent read.
+**Commit:** pending (D4, not yet committed as of this appendix row)

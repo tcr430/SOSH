@@ -167,9 +167,15 @@ function main(): void {
     console.error('::error::eval harness: one or more examples errored — see latest-run.json outcomes[].status')
     process.exit(1)
   }
+  // Session 28-D, D4 (MAJOR-4 closed) — a `!metricsPass` exit(1) here used to
+  // fail this step (npm run test:eval) before assert-eval-executed.mjs ever
+  // ran, which would have re-fused the gate the CI-job split (ADR 0021 §10.4,
+  // Amendment B3/B3.1) exists to separate: eval-reported (this script's exit
+  // code) must stay a deterministic fact about EXECUTION, never about
+  // PASSING. metricsPass is still written into the artefact below for the
+  // advisory `eval-threshold` check to read.
   if (!metricsPass) {
-    console.error('::error::eval harness: one or more metrics fell below its floor — see latest-run.json metrics')
-    process.exit(1)
+    console.warn('::warning::eval harness: one or more metrics fell below its floor — see latest-run.json metrics (advisory, does not fail this step)')
   }
 }
 

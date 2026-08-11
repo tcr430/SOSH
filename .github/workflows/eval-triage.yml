@@ -11,12 +11,18 @@ name: Eval — signal triage quality
 # paths. So this workflow always runs, on every PR and workflow_dispatch;
 # STEP 1 below decides applicability IN-JOB instead, and only the replay
 # itself is conditional on that decision.
+# Session 28-D, D4 (MAJOR-4 closed, ADR 0021 §10.4 / ADR 0015 Amendment B3,
+# B3.1) — split into two JOBS so they report as two distinct, independently
+# requireable checks: `eval-reported` (promotable — a deterministic fact
+# about execution) and `eval-threshold` (advisory forever — the metrics
+# themselves never block a merge). Two check NAMES sharing one workflow, not
+# two arguments to one script invocation.
 on:
   pull_request:
   workflow_dispatch:
 
 jobs:
-  eval-triage:
+  eval-reported:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -79,7 +85,7 @@ jobs:
         if: steps.applicability.outputs.applicable == 'true'
         run: npm run test:eval
 
-      - name: Assert the metrics artefact was produced and is green
+      - name: Assert the metrics artefact was produced (execution fact only — no metricsPass)
         if: steps.applicability.outputs.applicable == 'true'
         run: node scripts/ci/assert-eval-executed.mjs
 
@@ -90,3 +96,19 @@ jobs:
           name: eval-triage-run
           path: lib/signals/__fixtures__/eval/latest-run.json
           if-no-files-found: warn
+
+  eval-threshold:
+    needs: eval-reported
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download eval artefact from eval-reported
+        uses: actions/download-artifact@v4
+        with:
+          name: eval-triage-run
+          path: lib/signals/__fixtures__/eval
+
+      - name: Report metricsPass (advisory — never fails this job)
+        run: node scripts/ci/assert-eval-executed.mjs --check-threshold
