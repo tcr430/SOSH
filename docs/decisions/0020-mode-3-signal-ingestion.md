@@ -1443,6 +1443,18 @@ Function: listNewCandidates(client, businessId, limit)   in lib/db/signal-candid
 Join:     signals (title, body, html_url, occurred_at, tag_name, author_is_bot)
 ```
 
+> **AMENDMENT (Session 28-D, D8, NIT-5 recorded) — the join list above is stale in two directions, mirroring
+> §5.3's A-3 amendment note rather than silently edited.** `lib/db/signal-candidates.ts#listNewCandidates`'s
+> actual `.select('*, signals(title, body, html_url, occurred_at, author_is_bot, is_prerelease)')` (1)
+> **omits `tag_name`**, consistent with §5.3's A-3 amendment (no `signals.tag_name` column exists, so it was
+> never joinable — this line's "Join" list is the same stale prose that amendment already names), and (2)
+> **includes `is_prerelease`**, added by Session 28 E5.7 for ADR 0021 §4.4's sensitivity rule ("Rule inputs,
+> all deterministic: `is_prerelease`, `author_is_bot`, and a keyword scan") — additive, read-only, and
+> disclosed at the point it was added (`lib/db/signal-candidates.ts:29-33`'s own comment), not a schema
+> change and not an L-1 breach. `is_prerelease` was already a retained, non-personal field per §5.3's
+> "Retained" list and §13's data-inventory table (line 1116, `is_prerelease` marked non-personal, stored) —
+> this amendment is only that the **join list specifically** had not caught up to reflect it.
+
 **Signal text reaches a prompt only through `wrapSignalForPrompt(): RenderedSignalText`** (§7.3). ADR 0021
 must type every prompt-assembly parameter to that brand, and must fill §11.5's currently-empty caller table.
 

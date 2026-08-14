@@ -2,11 +2,19 @@
 
 **Phase:** 1 — MVP
 **Goal:** First paying customer
-**Status:** **Session 28 (Mode 3 Part 2: Triage, Insight Cards, Opportunity Feed, ADR 0021) CLOSED.**
-E5.1–E5.12 shipped Stage C (bounded tool-using triage loop), Stage D (card generation + verification), the
-`/opportunities` feed (ten states), Stage F (seeding into the existing brief pipeline), and Tier E — a new
-MEASURED-never-COVERED eval category. All 29 constraints executed green in CI (28 Tier 1/2/3, 1 Tier E);
-see "What's done" below for run URLs and the first real eval result. **Session 25 (diff-based learning
+**Status:** **Session 28 (Mode 3 Part 2: Triage, Insight Cards, Opportunity Feed, ADR 0021) CLOSED, correction
+pass Session 28-D in progress.** E5.1–E5.12 shipped Stage C (bounded tool-using triage loop), Stage D (card
+generation + verification), the `/opportunities` feed (ten states), Stage F (seeding into the existing
+brief pipeline), and Tier E — a new MEASURED-never-COVERED eval category. **28 of 29 §11 constraints carry a
+Tier-1/2/3 proof (COVERED); 1 (`SIGNAL3-TRIAGE-QUALITY`) is Tier E (MEASURED)** — corrected here from an
+earlier "all 29 executed green in CI" claim that was FALSE at the E5.12 close-out head (`0ffe6acf`): three
+constraints did not hold there (`SIGNAL3-TOOL-INVOCATION-EXPECTED` never authored, the
+`SIGNAL3-RESCORE-INVALIDATES-TRIAGE` card arm proved nothing, `OpportunityFeed.tsx` had zero test
+coverage). **Session 28-D's D3, D2 and D5 steps closed each of these**, with tests demonstrated to redden
+against the pre-fix code before being reverted — the count is now true, dated to 28-D (2026-08-14), not
+silently backfilled onto the E5.12 date. See "What's done" below for run URLs (re-cited at the range head,
+Session 28-D · D8, MINOR-2) and the eval result (framed as a bootstrap ceiling, D8 · MINOR-8). **Session 25
+(diff-based learning
 capture, ADR 0018) CLOSED.** Track C of the ADR 0016→0017→0018
 intelligence-layer programme shipped: the AI-original snapshot (`post_ai_originals`, write-once), the
 capture outbox (`post_edit_signals`, trigger-enqueued on `draft→approved`), the Tier-0 heuristic classifier
@@ -40,8 +48,12 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
   - **29 constraints total** (ADR 0021 §11): 28 carry a Tier-1/2/3 proof and are **COVERED**; exactly one,
     `SIGNAL3-TRIAGE-QUALITY`, is Tier E and is **MEASURED** — a deliberately weaker claim, never
     "COVERED," everywhere it appears (§10.4).
-  - **First real eval result** (not a hand-authored bootstrap number — the corpus's ceiling-by-construction
-    caveat from E5.8 still applies; see ADR 0021 §10.4/§10.5's own limits section): **corpusVersion=1,
+  - **First eval result — a bootstrap ceiling, not evidence of real triage quality** (Session 28-D, D8,
+    MINOR-8 — this framing replaces an earlier "first REAL eval result (not a hand-authored bootstrap
+    number …)" phrasing that contradicted ADR 0021 §15's own framing of the same number in the same
+    commit; §15's wording is now the one used here too): hand-authored cassettes scored against their own
+    hand-assigned labels, so a perfect score is expected by construction, not earned — the
+    ceiling-by-construction caveat from E5.8 (ADR 0021 §10.4/§10.5) applies in full. **corpusVersion=1,
     precision=1.000 (24/24), recall=1.000 (24/24), dismissMatch=1.000 (16/16), executed=40/40** —
     [run 31405593644](https://github.com/tcr430/SOSH/actions/runs/31405593644) (2026-08-10).
   - **Eval-reported tally (ADR 0021 §10.4, Amendment B3) — 0 of 3.** Session 28-D, D4 (MINOR-3) corrected
@@ -56,13 +68,23 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
     green, non-vacuous (`assert-eval-executed.mjs`: `executed=40/40`, `metricsPass=true`). **Tally still 0
     of 3** — same rule as `db-tests`: this was a `pull_request`-event run on `session-22-d`, not a
     `master` run.
-  - **CI run URLs (PR [#5](https://github.com/tcr430/SOSH/pull/5), head `0ffe6acf`):** `app-tests`
-    [run 31405593195](https://github.com/tcr430/SOSH/actions/runs/31405593195) — green, `skip-guard: 211
-    file(s) under [app, lib, components] all visible, zero failures — green. (2802/2802 tests passed)`;
-    `db-tests` [run 31405592573](https://github.com/tcr430/SOSH/actions/runs/31405592573) — green,
-    `skip-guard: 29 file(s) under [supabase/__tests__] all visible, zero failures — green. (278/278 tests
-    passed)`; `eval` [run 31405593644](https://github.com/tcr430/SOSH/actions/runs/31405593644) — green
-    (above). **A genuine bug was caught by CI, not by local review:** the first push (head `4cf1f290`)
+  - **CI run URLs — re-cited at the range head (Session 28-D, D8, MINOR-2).** The evidence previously cited
+    here (PR [#5](https://github.com/tcr430/SOSH/pull/5), head `0ffe6acf`, `app-tests`
+    [run 31405593195](https://github.com/tcr430/SOSH/actions/runs/31405593195), `db-tests`
+    [run 31405592573](https://github.com/tcr430/SOSH/actions/runs/31405592573)) **provably did not execute
+    what it was cited for**: `git cat-file -e 0ffe6acf:supabase/__tests__/signals3-triage-atomic.test.ts`
+    fails — that file was added by `9ddfe5a9` (this same close-out commit) itself, so the `db-tests` run at
+    `0ffe6acf` cannot have proven `SIGNAL3-TRIAGE-ATOMIC`, whatever else it correctly proved. **Corrected
+    evidence, at the range head this correction pass runs against** (confirmed present via
+    `git cat-file -e HEAD:supabase/__tests__/signals3-triage-atomic.test.ts`): `app-tests`
+    [run 31410192007](https://github.com/tcr430/SOSH/actions/runs/31410192007); `db-tests`
+    [run 31410191972](https://github.com/tcr430/SOSH/actions/runs/31410191972) (279/279 tests, 30 files —
+    the added file is `signals3-triage-atomic.test.ts` itself); `eval`
+    [run 31410191914](https://github.com/tcr430/SOSH/actions/runs/31410191914). **D9 will supersede these**
+    with the fully-corrected range's own runs — D1–D7 change `.ts` behaviour that no CI run yet covers in
+    full, so treat the run IDs above as the best available evidence, not a closed loop, until then.
+    **A genuine bug was caught by CI, not by local review** (at the original, now-superseded `0ffe6acf`
+    push): the first push (head `4cf1f290`)
     failed `app-tests`' lint step — `lib/signals/seed.ts` used raw `.toISOString()`, banned by CLAUDE.md's
     date rule (`no-restricted-properties`) — fixed at `0ffe6acf` (`toUtcIso()`), re-pushed, green. **db-tests
     promotion tally still 0 of 3** — same rule as every entry below: this is a `pull_request`-event run on
@@ -373,6 +395,12 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
       entry above: both are `pull_request`-event runs on `session-22-d`, not `master` runs. See the Session
       28 "What's done" entry above for the eval-tally and first eval-result numbers, a fourth CI job this
       session added (`eval-triage.yml`, Tier E) that this promotion tally does not track.
+      **Caveat (Session 28-D, D8, MINOR-2):** this entry is a true historical record of the `0ffe6acf` push
+      and what it contained at that time, left as-is. It is **not**, and was never, sufficient evidence for
+      "all 29 §11 constraints executed green" — `supabase/__tests__/signals3-triage-atomic.test.ts` did not
+      exist at `0ffe6acf` (added by `9ddfe5a9` itself), so this run could not have proven
+      `SIGNAL3-TRIAGE-ATOMIC`. See the Session 28 "What's done" entry above for the corrected, range-head
+      citation.
   - **Merge-gate enforcement (Session 22-D):** GitHub ruleset `master-app-tests` (id `19038239`) is live on
     `refs/heads/master`, requiring `app-tests` with no bypass actors. `db-tests` is intentionally **not**
     in any ruleset yet — it stays advisory until the tally above reaches 3/3, at which point the ruleset is

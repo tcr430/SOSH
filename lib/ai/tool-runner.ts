@@ -51,6 +51,16 @@ export const TRIAGE_MAX_WALL_CLOCK_MS = 45_000
 // and, over many turns, the conversation-growth pressure §2.6 already
 // describes — not per-attempt token inflation. Do not "fix" this by trying
 // to exclude a turn's tokens from the cap because it needed a retry.
+//
+// Session 28-D, D8 (MINOR-4) — "= 2" is derived from WALL-CLOCK and ATTEMPT
+// COUNT, not token accounting (ADR §2.4/§2.7 previously justified it via a
+// token-cap "feature" the code above already disclaims — amended to match).
+// Post-D6 (MAJOR-7), callWithRetryBudget clamps every attempt's timeout to
+// the remaining loop budget and refuses a retry that cannot fit
+// RETRY_DELAY_MS, so 1 initial attempt + 2 retries is exactly the shape
+// TRIAGE_MAX_WALL_CLOCK_MS was chosen to bound (§2.4's own worst-case
+// arithmetic) — raising this value would not buy more resilience, only a
+// larger share of the 45s ceiling spent retrying instead of attempting.
 export const TRIAGE_RETRY_BUDGET = 2
 
 const RETRY_DELAY_MS = 2000

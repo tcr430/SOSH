@@ -46,6 +46,12 @@ function isPostGeneration(promptId: string): boolean {
 // for the same reason: a triage card is not a post the user requested
 // generated, and incrementing posts_generated_count for it would silently
 // eat into the trial post cap for a feature the user never asked to run.
+//
+// Session 28-D, D8 (NIT-1) — this line is the one place runPrompt IS
+// modified, against ADR 0021 §2.1's "runPrompt is NOT modified." The
+// modification's spirit is intact (no tool-dispatch branch; every existing
+// prompt id behaves identically) — see §2.1's amendment for the recorded
+// exception.
 function isScoringOnly(promptId: string): boolean {
   return promptId === RUBRIC_PROMPT_ID || promptId === CARD_GENERATION_PROMPT_ID
 }

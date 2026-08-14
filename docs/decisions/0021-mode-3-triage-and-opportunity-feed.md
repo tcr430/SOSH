@@ -230,6 +230,20 @@ holds **only** the tool definitions, the shortlist/claim orchestration, and the 
 Mode 2 call depends on is the loser here. Constraint: `SIGNAL3-AI-LAYER-ROUTED`, proven by a source scan
 that `@anthropic-ai/sdk` is imported nowhere under `lib/signals/**`.
 
+**AMENDMENT (Session 28-D, D8, NIT-1 recorded) — `runPrompt` IS modified, in one narrow place, and this
+is still not the tool-dispatch branch above.** `lib/ai/runner.ts`'s `isScoringOnly()` gained
+`CARD_GENERATION_PROMPT_ID` alongside the existing rubric check (E5.7, `lib/ai/runner.ts:42-50`) — a
+one-line addition to the set of prompt ids that increment **neither** trial counter, so that Stage D
+generating a triage card does not silently consume the trial's `posts_generated_count`: a card is not a
+post the user requested generated, and eating into that cap for a feature the user never asked to run
+would be its own defect. This is the change the paragraph above says did not happen — it did, and the
+distinction that matters is preserved: no `tools:`/`tool_use` plumbing was added, no tool-dispatch branch
+exists, and every prompt id that behaved a given way before E5.7 behaves identically after it
+(`SIGNAL3-MODE2-UNCHANGED`, §10.2). "`runPrompt` is not modified" should be read as "`runPrompt` gained no
+tool-dispatch branch," which is the actual architectural boundary `security-reviewer`'s HIGH was about —
+not as a literal zero-diff claim, which was never true after E5.7 and should not have been left standing
+unamended.
+
 ### 2.2 The closed tool inventory — four tools, all reads
 
 Renamed from my draft's `search_*` on `[sec-LOW-2]`: the underlying `MemoryQueryContext`
@@ -374,6 +388,32 @@ cumulative input. **The token cap counts *billed* tokens including retries**, so
 fail-closed rather than overspending — that is a feature, stated so nobody "fixes" it later. The cost is
 that a transient 429 can lose a card; bounded by `TRIAGE_RETRY_BUDGET = 2` per loop, and the candidate is
 re-triaged on a later tick because `triage_failed` is reclaimable (§2.9).
+
+**AMENDMENT (Session 28-D, D8, MINOR-4 closed) — the paragraph above describes a protection the shipped
+code does not have, and never had.** `lib/ai/tool-runner.ts:42-53` states the opposite, and explains why:
+**a FAILED attempt yields no response, so there is no `usage` to read** — only a turn's eventual RESOLVED
+response is counted toward the token cap, exactly once, the same as any turn. A retry storm does not
+inflate the token cap at all; it costs wall-clock (`RETRY_DELAY_MS` per attempt) and, over many turns, the
+conversation-growth pressure §2.6 already prices in — not per-attempt token double-counting. **The code is
+right; this section was wrong.** The Builder was instructed (§2's transcription list) to *"write the
+comment saying so"* — transcribe this section's claim into the code — and instead corrected the claim
+in the code itself, attributing the fix to `security-reviewer` (LOW-1): the right call, left unfinished,
+because this ADR was never amended to match, so §2.7's own justification for `TRIAGE_RETRY_BUDGET = 2`
+rested on a mechanism the code disclaims. It is corrected here, not there — REVIEWER-REPORT
+APPEND-ONLY governs `docs/reviews/session-28-reviewer.md`, not this ADR, but the same principle applies:
+the paragraph above stays exactly as written; this amendment is the correction, not a rewrite.
+
+**`TRIAGE_RETRY_BUDGET = 2`'s actual justification (re-derived, now that D6/MAJOR-7 makes it available):**
+wall-clock and attempt count, not token accounting. Post-D6, `callWithRetryBudget` clamps every attempt's
+timeout to `min(TRIAGE_REQUEST_TIMEOUT_MS, remaining loop budget)` and refuses a retry that cannot fit
+`RETRY_DELAY_MS` — so `TRIAGE_MAX_WALL_CLOCK_MS` (45 s) is the actual ceiling on how many attempts fit, not
+an independent knob. 1 initial attempt + `TRIAGE_RETRY_BUDGET` retries is the shape that ceiling was
+derived to bound (§2.4's own worst-case arithmetic, corrected 2026-08-08 from a prior value that would have
+consumed the whole worker budget). A larger `TRIAGE_RETRY_BUDGET` would not add resilience — the deadline
+already caps how many attempts can run — it would only spend a larger share of the 45 s ceiling retrying
+instead of attempting, which is worse for a transient-failure case, not better. See
+`lib/ai/tool-runner.ts`'s own comment at `TRIAGE_RETRY_BUDGET`'s declaration for the code-level statement
+of this same derivation.
 
 ### 2.8 What the loop returns
 
@@ -1392,6 +1432,21 @@ place, it would have failed the `eval-reported` job on a metrics dip before the 
 silently re-fusing the gate the split exists to separate. Its errored-example `process.exit(1)` is
 untouched — B2.4's guard stays job-failing on both scripts.
 
+**AMENDMENT (Session 28-D, D8, NIT-3 recorded) — the eval harness's replay hook is a named, accepted test
+seam in production source, not an undisclosed one.** `lib/ai/client.ts:27-40` declares a mutable
+`declare global { var __evalCassetteQueue: Anthropic.Message[] | undefined }`, and `:52-54`'s
+`MockAnthropicClient` shifts from it (with an `as Anthropic.Message` cast) when the queue is set and
+non-empty. Neither `runPrompt` nor `runToolLoop` accepts an injectable `AiClientLike` by design (each
+module's own header states why), so per-corpus-example cassette replay — the mechanism §10.4 above
+describes as *"a deterministic replay run against recorded responses"* — has nowhere else to hook in
+without adding a second seam. **Its inertness condition, stated explicitly:** the queue is `undefined`
+for every caller except the eval harness itself (which sets it per-example and clears it after), so
+production code and every other test (`AI_PROVIDER=mock` in `app-tests.yml` included) observe
+byte-identical behaviour to a codebase without this addition — the mock client's file-load routing
+(`lib/ai/client.ts`'s own comment, immediately below the `declare global`) is unchanged for every path
+that never touches `__evalCassetteQueue`. Recorded here as a named accepted seam so it is not rediscovered
+as an unexplained finding by a future review.
+
 ### 10.5 What Tier E does NOT cover — stated so a green harness is never read as blanket coverage
 
 **Not covered by the harness:** every other `SIGNAL3-*` constraint in §11. Specifically **not**:
@@ -1573,6 +1628,38 @@ this block, and the OpenWolf files.
   scored against their own hand-assigned labels), not evidence of real triage quality — §10.4/§10.5 already
   name this; repeated here so the number above is never read as a quality claim on its own.
 - Reviewer (E6) has not run. This ADR's constraints are CI-verified but not yet independently audited.
+
+**AMENDMENT (Session 28-D, D8, MINOR-2 closed) — the block above's "All 29 §11 constraints executed green
+in CI" was FALSE at the head it cites, and cited the wrong run as if it were current evidence.** Two
+separate defects, stated so neither reads as cosmetic:
+
+1. **The claim itself was false at `0ffe6acf`.** Three of the 29 constraints did not hold at that head:
+   `SIGNAL3-TOOL-INVOCATION-EXPECTED` (MAJOR-3) had never been authored as an exact-match case;
+   `SIGNAL3-RESCORE-INVALIDATES-TRIAGE`'s card arm (MAJOR-2) proved nothing (asserted against a mock, not
+   the real `generateCard`); `OpportunityFeed.tsx` (MAJOR-6) had zero dedicated test coverage — 387 lines
+   AUTHORED-NOT-EXECUTED, `page.test.tsx` mocked it to `() => null`. Session 28-D's D3, D2 and D5 steps
+   closed each of these respectively, with tests demonstrated to redden against the pre-fix code before
+   being reverted — **the claim is true now, dated to 28-D, not to E5.12.** A claim that becomes true is
+   still a claim that was false when made; this amendment records both facts rather than letting the later
+   truth silently backfill the earlier claim.
+2. **The cited run did not execute what it was cited for, independent of point 1.** `git cat-file -e
+   0ffe6acf:supabase/__tests__/signals3-triage-atomic.test.ts` fails — that file was added by `9ddfe5a9`
+   itself (this ADR's own close-out commit), so the `db-tests` run cited above
+   (`31405592573`) **provably did not execute** the test proving `SIGNAL3-TRIAGE-ATOMIC`, regardless of
+   whether the constraint it proves was itself sound. Citing a run from before a cited test existed is not
+   evidence for that test, however green the run was for what it did contain.
+
+**Corrected evidence, at the range head this correction pass runs against (`git cat-file -e
+HEAD:supabase/__tests__/signals3-triage-atomic.test.ts` confirmed present):** `db-tests`
+[run 31410191972](https://github.com/tcr430/SOSH/actions/runs/31410191972) (279/279 tests, 30 files —
+the one additional file being `signals3-triage-atomic.test.ts` itself), `app-tests`
+[run 31410192007](https://github.com/tcr430/SOSH/actions/runs/31410192007), `eval`
+[run 31410191914](https://github.com/tcr430/SOSH/actions/runs/31410191914). **D9 will supersede these**
+with the fully corrected range's own runs (D8 itself changes no `.ts` behaviour beyond two comments, but
+D1–D7 collectively do, and no CI run yet exists against a head that includes all of D1–D8) — this is what
+finally makes the citation both true and current, not merely true-at-a-different-head-than-the-one-being-
+described. Until D9's runs exist, treat the run IDs in this amendment as the best available evidence, not
+as a closed loop.
 
 ---
 

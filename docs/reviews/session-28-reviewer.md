@@ -1153,3 +1153,90 @@ shell**: same pre-existing missing `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPAB
 2809/2809 tests passed (the same 2 suites report failed with 0 individual tests failing inside them —
 `lib/config.test.ts`, `lib/signals/orchestrator.test.ts` — unrelated to this step).
 **Commit:** pending (D7, not yet committed as of this appendix row)
+
+### D8 — MINOR-2, MINOR-4, MINOR-8, NIT-1, NIT-3, NIT-5
+
+One failure class across all six: **documents asserting coverage the range does not have.** Under ADR
+0015 that is not cosmetic — it is the exact claim the document exists to prevent. No production code
+changes beyond two comments (below); every other change in this step is documentation.
+
+**Fix (MINOR-2):** §15 and `docs/current-phase.md` cited `app-tests 31405593195`, `db-tests 31405592573`
+(29 files / 278 tests) and `eval 31405593644`, all at head `0ffe6acf`. `git cat-file -e
+0ffe6acf:supabase/__tests__/signals3-triage-atomic.test.ts` fails — that file was added by `9ddfe5a9`
+itself (the same close-out commit citing the evidence), so the cited `db-tests` run **provably did not
+execute** the test proving `SIGNAL3-TRIAGE-ATOMIC`, independent of whether that constraint itself held.
+Re-cited at the range head (confirmed present: `git cat-file -e
+HEAD:supabase/__tests__/signals3-triage-atomic.test.ts`): `db-tests`
+[run 31410191972](https://github.com/tcr430/SOSH/actions/runs/31410191972) (279/279 tests, 30 files),
+`app-tests` [run 31410192007](https://github.com/tcr430/SOSH/actions/runs/31410192007), `eval`
+[run 31410191914](https://github.com/tcr430/SOSH/actions/runs/31410191914) — in both `docs/decisions/
+0021-mode-3-triage-and-opportunity-feed.md` §15 (appended amendment, original prose untouched) and
+`docs/current-phase.md` (edited in place, per that file's own established D4/MINOR-3 precedent of
+correcting stale citations directly rather than only appending). Both locations note **D9 will supersede
+these** with the fully-corrected range's own runs — D1–D7 changed `.ts` behaviour no single CI run yet
+covers in full, so this is the best available evidence now, not a closed loop.
+
+**Fix (MINOR-4):** ADR §2.4/§2.7 claimed *"the token cap counts BILLED tokens including retries, so a
+retry storm trips fail-closed rather than overspending — that is a feature."* `lib/ai/tool-runner.ts:42-53`
+states the opposite and explains why: a failed attempt yields no response, so there is no `usage` to
+read — only a turn's resolved response is counted, once. **The code was right; the ADR was wrong.** §2.7
+gained an appended amendment stating what the code states, and re-deriving `TRIAGE_RETRY_BUDGET = 2`'s
+justification from wall-clock and attempt count (now available post-D6/MAJOR-7: `callWithRetryBudget`
+clamps every attempt to the remaining loop budget and refuses a retry that can't fit `RETRY_DELAY_MS`, so
+1 initial + 2 retries is exactly the shape `TRIAGE_MAX_WALL_CLOCK_MS` bounds) rather than the disclaimed
+token-accounting mechanism. Recorded in the amendment: the Builder was instructed to *"write the comment
+saying so"* and instead corrected the claim in code, attributing it to `security-reviewer` LOW-1 — the
+right call, left unfinished because the ADR itself was never amended to match. `lib/ai/tool-runner.ts`'s
+own comment at `TRIAGE_RETRY_BUDGET`'s declaration gained the same wall-clock/attempt-count derivation
+(one of this step's two permitted code-comment edits).
+
+**Fix (MINOR-8):** `docs/current-phase.md` called the 1.000/1.000/1.000 eval result *"the first REAL eval
+result (not a hand-authored bootstrap number …)"* while ADR §15, written in the same commit about the same
+number, called it *"a bootstrap ceiling … not evidence of real triage quality."* The parenthetical is
+dropped; `current-phase.md` now uses §15's framing directly (hand-authored cassettes scored against their
+own hand-assigned labels — a perfect score is expected by construction, not earned) so a reviewer reading
+Amendment B2.3's designated location does not need the ADR to correct what they just read.
+
+**Fix (NIT-1):** `lib/ai/runner.ts` IS modified (`CARD_GENERATION_PROMPT_ID` added to `isScoringOnly`,
+`:42-50`) against §2.1's and §2's "runPrompt is NOT modified." The change is correct and its spirit is
+intact (no tool-dispatch branch; every existing prompt id behaves identically) — §2.1 gained an appended
+amendment stating what changed (a triage card must not consume trial post quota — it is not a post the
+user requested generated) and reframing "not modified" as "gained no tool-dispatch branch," the actual
+architectural boundary `security-reviewer`'s HIGH was about. The `isScoringOnly` site itself gained a
+one-line pointer to this amendment (this step's second permitted code-comment edit).
+
+**Fix (NIT-3):** `lib/ai/client.ts:27-40, :52-54` adds a `declare global` mutable `__evalCassetteQueue`
+plus an `as Anthropic.Message` cast — a test seam in production source, inert unless `AI_PROVIDER=mock`
+(and, more precisely, unless the eval harness itself has set the queue — every other `AI_PROVIDER=mock`
+caller, including `app-tests.yml`, leaves it `undefined` and is byte-identical to a codebase without this
+addition). Recorded as a named accepted seam in §10.4's appended amendment, with its inertness condition
+stated explicitly, so it is not rediscovered as an undisclosed finding by a future review.
+
+**Fix (NIT-5):** `is_prerelease` widened a Session 27 join (`lib/db/signal-candidates.ts`, Session 28 E5.7,
+for ADR 0021 §4.4's sensitivity rule) — additive, read-only, disclosed at the point it was added, not a
+schema change, not an L-1 breach. ADR 0020 §13.1's join list had not caught up to reflect it (and still
+listed `tag_name`, which §5.3's own A-3 amendment already says is structurally absent from the join).
+§13.1 gained an appended amendment mirroring A-3's exact format: both corrections — `is_prerelease` now
+present, `tag_name` still genuinely absent — stated together rather than only one of the two drifts closed.
+
+**AND THE CLAIM THAT TIES THEM TOGETHER:** ADR §15's "All 29 §11 constraints executed green in CI" and
+`current-phase.md`'s matching claim were FALSE at the range head — MAJOR-3 (one constraint never
+authored), MAJOR-2 (one arm proving nothing), MAJOR-6 (the feed unexecuted). D3, D2 and D5 have now made
+them true. Both documents are rewritten to state the count (28 Tier-1/2/3 COVERED + 1 Tier-E MEASURED),
+the CI jobs, and the fact that three of the 29 were closed in Session 28-D specifically — dated to 28-D
+(2026-08-14), never silently backfilled onto the E5.12 date (2026-08-10). A claim that becomes true is
+still a claim that was false when made; both documents now say so explicitly rather than letting the
+later truth erase the earlier record.
+
+**Test:** N/A — Tier 3, diff-verified, by ADR 0015 §2's own discipline: these are properties of *what a
+document asserts*, not runtime behaviour, and no deterministic test expresses "this citation is current."
+The verification is the `git cat-file -e` checks themselves (both shown above, both re-run against `HEAD`
+at commit time) and a diff review confirming every ADR amendment is APPENDED — `git diff` on
+`docs/decisions/0021-mode-3-triage-and-opportunity-feed.md` and `docs/decisions/
+0020-mode-3-signal-ingestion.md` shows only new blocks after existing prose, zero deletions, zero
+in-place rewrites. `npx tsc --noEmit --skipLibCheck` clean; `npm run test:app` — 2809/2809 tests passed
+(same 2 pre-existing, unrelated suite-collection failures as every prior step's row). No `.ts` diff beyond
+the two named comment edits (`lib/ai/tool-runner.ts`'s `TRIAGE_RETRY_BUDGET` comment, `lib/ai/runner.ts`'s
+`isScoringOnly` comment) — confirmed by `git diff --stat`, which shows zero lines changed in any other
+`.ts`/`.tsx` file in this step's commit.
+**Commit:** pending (D8, not yet committed as of this appendix row)
