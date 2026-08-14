@@ -2271,16 +2271,32 @@ closed." Then stop.
 
 ## §5 — Docs to update at close-out (Track E done)
 
-- `docs/current-phase.md` — Session 28 entry closing Track E; the `db-tests` promotion tally with run URLs
-  and the skip-guard's file/test counts read directly from the log; **and the first eval-harness result
-  recorded as a number**, per Amendment B (c).
-- `docs/decisions/0015-test-execution-and-ci-gates.md` — Amendment B in place, §5 merge-gate table
-  updated.
-- `docs/decisions/0010-legal-surface.md` Amendment 2 §D2.5 — the cascade row per new table (**mandatory**,
-  CLAUDE.md).
-- `CLAUDE.md` — the test-execution-integrity section gains the fourth category pointer (a pointer, not a
-  copy — 0015 stays authoritative).
-- `docs/decisions/0021-mode-3-triage-and-opportunity-feed.md` — status/close-out block.
-- `.wolf/anatomy.md`, `.wolf/memory.md`, `.wolf/cerebrum.md` — per the OpenWolf protocol.
+**Track E CLOSED (Session 28-D, D9, 2026-08-14).** All six items below confirmed present at the corrected
+range head (`87a4dfc8`), verified by direct read/grep rather than assumed:
+
+- [x] `docs/current-phase.md` — Session 28 entry closing Track E; the `db-tests` promotion tally with run
+  URLs and the skip-guard's file/test counts read directly from the log (D9: `app-tests`
+  [run 31846312604](https://github.com/tcr430/SOSH/actions/runs/31846312604), `db-tests`
+  [run 31846312570](https://github.com/tcr430/SOSH/actions/runs/31846312570), `212 file(s)` /
+  `2848/2848 tests` and `30 file(s)` / `282/282 tests` respectively, both quoted verbatim from the
+  `skip-guard` step's own log line); **and the first eval-harness result recorded as a number**, per
+  Amendment B (c) — corpusVersion=1, precision/recall/dismissMatch all 1.000, executed=40/40, framed as a
+  bootstrap ceiling per D8/MINOR-8, `eval-reported`/`eval-threshold`
+  [both jobs](https://github.com/tcr430/SOSH/actions/runs/31846312762) green.
+- [x] `docs/decisions/0015-test-execution-and-ci-gates.md` — Amendment B in place (confirmed:
+  `docs/decisions/0015-test-execution-and-ci-gates.md:636-888`), §5 merge-gate table updated with the
+  Tier-E `eval-reported`/`eval-threshold` split row (`:502`).
+  Landed in D0 (`632a4b5e`), unchanged by this pass.
+- [x] `docs/decisions/0010-legal-surface.md` Amendment 2 §D2.5 — the cascade rows for `insight_cards` and
+  `signal_triage_budget` present (`:1084-1085`, both `business_id` → CASCADE → erasure). Landed in D0/E5.1,
+  unchanged by this pass. D7's `insight_cards.campaign_id` addition needed **no new row** — a column on an
+  existing table already covered by its existing row (D7's own commit message, `161e566e`).
+- [x] `CLAUDE.md` — the test-execution-integrity section carries the fourth-category (Tier E) pointer
+  (`:279`), a pointer to ADR 0015 §2/Amendment B rather than a duplicated copy — 0015 stays authoritative.
+- [x] `docs/decisions/0021-mode-3-triage-and-opportunity-feed.md` — status/close-out block (§15) present and
+  amended by this pass's D8 (MINOR-2, the run-citation correction) and D9 (this step — no further §15
+  amendment needed; D8's citation is now backed by a real green run at `87a4dfc8`, not merely re-cited).
+- [x] `.wolf/anatomy.md`, `.wolf/memory.md`, `.wolf/cerebrum.md` — updated this step (D9), per the OpenWolf
+  protocol.
 - **Next:** the UI/design session over Mode 3's surface, then the external-signals track (social + news),
   which the brainstorm gates on this harness having proven itself.

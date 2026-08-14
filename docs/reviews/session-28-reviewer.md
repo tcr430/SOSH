@@ -1240,3 +1240,82 @@ the two named comment edits (`lib/ai/tool-runner.ts`'s `TRIAGE_RETRY_BUDGET` com
 `isScoringOnly` comment) — confirmed by `git diff --stat`, which shows zero lines changed in any other
 `.ts`/`.tsx` file in this step's commit.
 **Commit:** pending (D8, not yet committed as of this appendix row)
+
+## Appendix closing block (Session 28-D, D9 — Track E)
+
+Author: Claude (Session 28-D, D9). All D0–D8 findings below are closed and green at the corrected range
+head. This block is itself an append — nothing above it, including the Reviewer's original findings and
+coverage table, is edited, reworded, or reordered. Every ID from the Reviewer's report (`docs/reviews/
+session-28-reviewer.md` as it stood before this appendix existed) appears exactly once below.
+
+### All 22 findings — ID → disposition → proving test → commit
+
+| ID | Disposition | Test that now proves it | Commit |
+|---|---|---|---|
+| BLOCKER-1 | Closed | `lib/signals/triage/orchestrator.test.ts` — real `generateCard` call asserted, `'carded'` terminal state required | `95226fa9` (D1) |
+| MAJOR-1 | Closed | `supabase/__tests__/signals3-triage-atomic.test.ts` (new) — single-statement conditional insert, zero rows on lost claim | `2824b017` (D2) |
+| MAJOR-2 | Closed | `lib/signals/triage/orchestrator.test.ts` — card arm drives real `generateCard` against a real re-score | `2824b017` (D2) |
+| MAJOR-3 | Closed | `lib/ai/tool-runner.test.ts` — `SIGNAL3-TOOL-INVOCATION-EXPECTED`, exact-match tool-call assertion | `8765f3b6` (D3) |
+| MAJOR-4 | Closed | `scripts/ci/assert-eval-executed.mjs` + `eval-triage.yml` — `eval-reported`/`eval-threshold` split into two check names | `391371cd` (D4) |
+| MAJOR-5 | Closed | `lib/signals/ai-layer-routed.test.ts` (source-scans extended) — guarded-results scan now covers `lib/ai/tool-runner.ts` | `8765f3b6` (D3) |
+| MAJOR-6 | Closed | `OpportunityFeed.test.tsx` (new, ~410 lines) — all ten §9.2 states rendered and asserted | `2adfaa67` (D5) |
+| MAJOR-7 | Closed | `lib/ai/tool-runner.test.ts` — two new deadline cases (timeout-twice, retry-refused), fake-`Date.now()`-driven | `bee6b196` (D6) |
+| MINOR-1 | Closed | N/A — Tier 3, diff-verified (`git show <sha>:… | grep -ci "amendment b"` non-zero; `git status` clean post-commit) | `632a4b5e` (D0) |
+| MINOR-2 | Closed | `docs/current-phase.md` + ADR §15 re-cited at range head; **now backed by a real green run**: `db-tests` [31846312570](https://github.com/tcr430/SOSH/actions/runs/31846312570) (D9) | `87a4dfc8` (D8) / D9 (this commit) |
+| MINOR-3 | Closed | `docs/current-phase.md`'s eval-reported tally paragraph — master-gated, reset to 0 of 3 | `391371cd` (D4) |
+| MINOR-4 | Closed | ADR §2.4/§2.7 amendment + `lib/ai/tool-runner.ts`'s `TRIAGE_RETRY_BUDGET` comment — both state the code's actual behaviour | `87a4dfc8` (D8) |
+| MINOR-5 | Closed | `OpportunityFeed.test.tsx` — `observation`/`why_it_matters` assessment-affordance visible-text assertions | `2adfaa67` (D5) |
+| MINOR-6 | Closed | `OpportunityFeed.test.tsx` — both-themes contrast assertion reading shipped `app/globals.css` | `2adfaa67` (D5) |
+| MINOR-7 | Closed | `supabase/__tests__/signals3-seed.test.ts` + `OpportunityFeed.test.tsx` — `campaign_id` write-back and real-link render cases | `161e566e` (D7) |
+| MINOR-8 | Closed | `docs/current-phase.md` — eval-result framing now matches ADR §15's bootstrap-ceiling wording | `87a4dfc8` (D8) |
+| NIT-1 | Recorded | ADR §2.1 amendment + `lib/ai/runner.ts` comment — the `isScoringOnly`/`CARD_GENERATION_PROMPT_ID` change disclosed | `87a4dfc8` (D8) |
+| NIT-2 | Recorded | ADR §11 amendment + `lib/ai/tool-runner.ts` comment — the unreachable-in-production comparison named, fixture marked synthetic | `bee6b196` (D6) |
+| NIT-3 | Recorded | ADR §10.4 amendment — the `__evalCassetteQueue` seam named as accepted, with its inertness condition stated | `87a4dfc8` (D8) |
+| NIT-4 | Closed | `scripts/ci/assert-eval-executed.mjs` — `CORPUS_PATH` resolves from `corpusVersion`, no hardcoded `corpus.v1.json` | `391371cd` (D4) |
+| NIT-5 | Recorded | ADR 0020 §13.1 amendment — join list corrected to match `lib/db/signal-candidates.ts` (`is_prerelease` in, `tag_name` out) | `87a4dfc8` (D8) |
+| NIT-6 | Closed | `lib/signals/triage/tools.test.ts` — `objective`, `specialInstructions`, `list_evidence` neutralisation assertions added | `8765f3b6` (D3) |
+
+### The two adjudications
+
+| ID | Ruling | Where it landed | Commit |
+|---|---|---|---|
+| A-5 | ADJUDICATION REQUEST + MAJOR-1 — **the single-statement conditional insert** (`INSERT … SELECT … WHERE status='triaging' AND triage_claimed_at=$claim ON CONFLICT DO NOTHING`), not the two-statement insert-then-compensating-delete the Builder shipped. The compensating delete and `deleteCardById` (and the service-role DELETE path it opened into a table with no DELETE policy) are removed with it. | `lib/signals/triage/card.ts`, `lib/db/insight-cards.ts`; `supabase/__tests__/signals3-triage-atomic.test.ts`; ADR §4.1 amendment | `2824b017` (D2) |
+| A-6 | MINOR-7 — **fix the schema, not the contract**: additive nullable `insight_cards.campaign_id uuid REFERENCES campaigns(id) ON DELETE SET NULL`, written back by `seedCampaignFromCard` on the same path that flips the card to `'approved'`, and a real link in the feed. `ON DELETE SET NULL`, not `CASCADE` — a deleted campaign must not delete the card that is the eval corpus's history. No new §D2.5 row — a column on an existing table. | new migration `20260814220000_insight_card_campaign_id.sql`; `lib/signals/seed.ts`, `lib/db/insight-cards.ts`, `OpportunityFeed.tsx`; `supabase/__tests__/signals3-seed.test.ts`; ADR §6.4/§9.2 amendment | `161e566e` (D7) |
+
+### Which of the Reviewer's coverage-table verdicts have changed
+
+The coverage table above (`## Coverage table`, this file, unedited) is the Reviewer's own — its rows are
+not touched by this appendix. Stated here, without editing that table, which of its verdicts are stale as
+of the corrected range head:
+
+- **Row 5** (`SIGNAL3-TOOL-RESULTS-GUARDED`): was **EXECUTED-AND-PROVING-NOTHING** (MAJOR-5). Now
+  **COVERED** — the scan covers `lib/ai/tool-runner.ts`, the file the rule is actually about (D3).
+- **Row 9** (`SIGNAL3-RESCORE-INVALIDATES-TRIAGE`): was **PARTIAL** (MAJOR-2, card arm hollow). Now
+  **COVERED** — both arms (RPC and card) drive real production code (D2).
+- **Row 16** (`SIGNAL3-TRIAGE-ATOMIC`): was **"COVERED at `9ddfe5a9`" — not in the cited run** (MINOR-2).
+  Now **COVERED, and the citation is current** — `db-tests` [run 31846312570](https://github.com/tcr430/SOSH/actions/runs/31846312570)
+  (D9) actually contains and executes `signals3-triage-atomic.test.ts`, closing the gap between what was
+  true and what was cited, not merely correcting the citation in prose (D8) to point at a run that hadn't
+  happened yet.
+- **Row 28** (`SIGNAL3-TOOL-INVOCATION-EXPECTED`): was **NOT AUTHORED** (MAJOR-3). Now **COVERED** —
+  `lib/ai/tool-runner.test.ts`'s exact-match tool-call case exists and executes in `app-tests` (D3).
+- **Row 1**'s NIT-2 parenthetical, row 10's MAJOR-7 parenthetical, and row 29's framing are unchanged in
+  disposition (NIT-2 and NIT-3 are *recorded*, not code fixes; MAJOR-7 is closed — see the table above —
+  but row 10's own text, `SIGNAL3-TICK-DEADLINE-BOUNDED`, was never the constraint MAJOR-7 was about,
+  so its verdict does not change). All other rows (2, 3, 4, 6, 7, 8, 11–15, 17–27) were already
+  **COVERED** at the Reviewer's own audit and remain so — none of D1–D9's changes touched what those rows
+  test.
+
+### Corrected range, and this pass's full commit list
+
+`632a4b5e` (D0) → `95226fa9` (D1) → `2824b017` (D2) → `8765f3b6` (D3) → `391371cd` (D4) → `2adfaa67` (D5)
+→ `bee6b196` (D6) → `161e566e` (D7) → `87a4dfc8` (D8) → D9 (this commit). Pushed to `origin/session-22-d`
+(PR [#5](https://github.com/tcr430/SOSH/pull/5)) at D9; all three workflows green at `87a4dfc8`:
+`app-tests` [31846312604](https://github.com/tcr430/SOSH/actions/runs/31846312604), `db-tests`
+[31846312570](https://github.com/tcr430/SOSH/actions/runs/31846312570) (30 files / 282 tests,
+skip-guard clean), `eval-reported`/`eval-threshold`
+[both](https://github.com/tcr430/SOSH/actions/runs/31846312762) green.
+
+**Session 28 Track E is closed.** 1 BLOCKER + 7 MAJOR + 8 MINOR + 6 NIT = 22 findings, all disposed;
+2 adjudications (A-5, A-6), both ruled and implemented as ruled. `docs/build-guide/session-28.md` §5's
+close-out checklist and `docs/current-phase.md`'s Session 28 entry both reflect this close-out.
