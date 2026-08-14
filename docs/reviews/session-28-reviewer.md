@@ -1058,3 +1058,98 @@ test:app` — 2796/2796 tests passed (2 suites report failed but 0 individual te
 `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY`/`NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
 collection-time failure already noted in D1's and D5's rows, unrelated to `lib/ai/tool-runner.ts`).
 **Commit:** pending (D6, not yet committed as of this appendix row)
+
+### D7 — MINOR-7, A-6 (adjudication)
+
+**A-6 ruling (recorded here for the record — already binding before this step ran, `docs/build-guide/
+session-28.md`'s founder-adjudications section):** *"Fix the schema, not the contract."* An additive
+nullable `campaign_id uuid REFERENCES public.campaigns(id) ON DELETE SET NULL` on `insight_cards`, written
+back by `seedCampaignFromCard` on the same path that flips the card to `'approved'`, and a real link in the
+feed. **Amending §9.2 to record a reduced state is the named loser**: the three-gate count (§6.3) is the
+single property that makes a signal-originated campaign *more* gated than a typed one (L-11), and a state
+that cannot show the user where their approval went is the one place the feed's whole trust argument is
+legible. `ON DELETE SET NULL`, not `CASCADE` — a deleted campaign must not delete the card that is the eval
+corpus's history (the same ground `20260807100000_mode3_insight_cards.sql` gave for shipping this table
+with no DELETE policy). No new §D2.5 cascade row — no new table, and `insight_cards`' existing row already
+carries the erasure path.
+
+**Fix (MINOR-7):** `20260814220000_insight_card_campaign_id.sql` adds the column exactly as A-6 specifies,
+with the backfill stated explicitly (existing rows: `NULL`, correct rather than a gap — every such row was
+approved before Stage F's write-back existed) and no index (no query in `lib/db/insight-cards.ts` — the
+sole module permitted to touch this table — filters or joins on `campaign_id`, and the feed's own partial
+index is `WHERE status = 'pending'`, a predicate that never co-occurs with a non-NULL `campaign_id`). RLS:
+no policy change (both existing policies gate on `business_id` only); the authenticated column-scoped
+`GRANT UPDATE (status, dismiss_reason)` is explicitly NOT widened — the write-back always runs
+service-role, on the same server-side call that already flipped `status` via the authenticated, RLS-scoped
+`transitionCardStatus`, never a path an authenticated PostgREST call reaches directly.
+`lib/db/insight-cards.ts` gains `setCardCampaignId(cardId, campaignId)` (service-role, atomic conditional
+`UPDATE ... WHERE id = $1 AND campaign_id IS NULL` — not a read-then-update, the exact property §5's state
+machine depends on, applied to a different column). `lib/signals/seed.ts#seedCampaignFromCard` calls it
+immediately after `assembleBrief` succeeds (link only appears once there is a brief to point at).
+`app/[locale]/(dashboard)/opportunities/actions.ts#approveCardAction` — previously the ONLY production
+touchpoint that flipped a card to `'approved'`, and confirmed to have had ZERO callers of
+`seedCampaignFromCard` before this step (`grep -rn "seedCampaignFromCard("` across the tree) — now calls it
+in its own `try`/`catch` immediately after `attemptTransition` reports success; `attemptTransition`'s
+existing atomic conditional UPDATE already guarantees at most one concurrent `approveCardAction` call ever
+observes success for a given card (§5.3's two-admins race, closed there, unchanged), so `seedCampaignFromCard`
+fires at most once per real approval with no separate concurrency guard needed. A seeding failure is logged
+(`console.error`) but does not turn an already-successful approval into a returned error — the card stays
+`'approved'` and the feed shows the inert fallback until the write-back lands (or is retried by a future
+job — see NIT-1 below). `OpportunityFeed.tsx`'s `OpportunityCard` now takes a `locale` prop and renders
+`<Link href="/${locale}/campaigns/${card.campaign_id}/brief">{t('status.approvedLinkToBrief')}</Link>`
+(new i18n key, en/pt/es, same commit) when `campaign_id` is present, keeping the existing inert `<span>`
+(`status.approvedLinkPendingHint`, unchanged) as the fallback for exactly a NULL `campaign_id` — a
+pre-migration row or the brief window before the write-back lands, per a comment at that branch, never the
+general case.
+
+A `database-reviewer` pass on the migration + write-back (invoked ONCE, per this step's own scope
+restriction — no other agent) surfaced two findings, both addressed in the same commit, neither part of
+MINOR-7 itself but both load-bearing for it not regressing into a worse failure mode than the placeholder
+it replaces:
+- **MINOR-1** (a real link that goes dead): `ON DELETE SET NULL` fires only on a hard row `DELETE`;
+  campaigns are never hard-deleted by application code (`softDeleteCampaignGuarded`,
+  `lib/db/campaigns.ts`, is `UPDATE ... SET deleted_at`). Without a companion, an approved card would keep
+  linking to a soft-deleted, unreachable campaign — a dead link, strictly worse than the honest inert
+  placeholder MINOR-7 exists to replace. Fixed with `clearCampaignReferenceOnCards(campaignId)`
+  (`lib/db/insight-cards.ts`, service-role, `UPDATE ... SET campaign_id = NULL WHERE campaign_id = $1`,
+  idempotent by construction), called from `deleteCampaignAction`
+  (`app/[locale]/(dashboard)/campaigns/actions.ts`, its ONLY production caller — confirmed via
+  `grep -rn "softDeleteCampaignGuarded"`) in its own `try`/`catch` immediately after a successful soft
+  delete, same fail-open-on-cleanup posture as `approveCardAction`'s own seeding call.
+- **NIT-1** (non-idempotent `createCampaign` under a future retry): `seedCampaignFromCard` creates the
+  campaign unconditionally before the guarded write-back; today unreachable (no retry job exists, and
+  `attemptTransition`'s atomicity already bounds concurrency to at most one caller), but a future
+  reconciliation job that retries a stuck `approved`/`campaign_id IS NULL` card must check `campaign_id IS
+  NULL` BEFORE calling `seedCampaignFromCard` again, or every retry orphans a second campaign + brief.
+  Recorded as a comment at the function's definition, not fixed in code (no retry job exists to fix it
+  against).
+
+**Test:** `lib/signals/seed.test.ts` — a new case asserts `setCardCampaignId` is called with
+`(cardId, campaign.id)` AFTER `assembleBrief` (call-order asserted explicitly), shown to redden by
+temporarily removing the `await setCardCampaignId(...)` line: `npx vitest run lib/signals/seed.test.ts`
+failed exactly that one case (`expected "vi.fn()" to be called with arguments: [ 'card-1', 'campaign-1' ]
+Number of calls: 0`) with the other 6 cases in the file unaffected, then the line was restored and the
+file re-run green (7/7). `lib/db/insight-cards.test.ts` gained unit coverage for both new service-role
+functions (`setCardCampaignId`, `clearCampaignReferenceOnCards`) against the shared `createMockClient`
+utility, asserting the exact `.update(...).eq(...).is(...)` / `.update(...).eq(...)` chains and that a DB
+error propagates rather than being swallowed.
+`app/[locale]/(dashboard)/opportunities/actions.test.ts` gained three cases: `seedCampaignFromCard` called
+with the cardId exactly once on success; NOT called when the transition loses the race
+(`already_triaged`); and approval still reports `success: true` when `seedCampaignFromCard` rejects (the
+fail-open assertion). `app/[locale]/(dashboard)/campaigns/actions.test.ts` gained the mirror three cases
+for `clearCampaignReferenceOnCards` on the delete path.
+`app/[locale]/(dashboard)/opportunities/OpportunityFeed.test.tsx` gained the D5-style render pair: `
+campaign_id: null` renders the inert fallback and no `a[href*="/campaigns/"]`; a present `campaign_id`
+renders `<a href="/en/campaigns/{id}/brief">` containing `status.approvedLinkToBrief`, with
+`status.approvedLinkPendingHint` absent.
+`supabase/__tests__/signals3-seed.test.ts` (A-2's Tier-1 test) extended: the existing end-to-end case now
+also asserts `insight_cards.campaign_id` reads back as the seeded campaign's id; a new case resets
+`campaign_id` to `NULL` (admin, independent of execution order), seeds, deletes the resulting campaign row
+directly, and asserts the card row survives with `campaign_id IS NULL` and `status` still `'approved'` —
+the assertion that proves `SET NULL` was actually chosen over `CASCADE`. **Could not execute in this
+shell**: same pre-existing missing `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY`/
+`NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` collection-time failure noted in every prior step's row (D1, D5, D6)
+— will execute in `db-tests.yml`. `npx tsc --noEmit --skipLibCheck` clean; `npm run test:app` —
+2809/2809 tests passed (the same 2 suites report failed with 0 individual tests failing inside them —
+`lib/config.test.ts`, `lib/signals/orchestrator.test.ts` — unrelated to this step).
+**Commit:** pending (D7, not yet committed as of this appendix row)

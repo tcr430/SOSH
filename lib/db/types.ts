@@ -632,6 +632,13 @@ export type InsightCardRow = {
   status: InsightCardStatus
   dismiss_reason: InsightCardDismissReason | null
   expires_at: string | null
+  // §9.2/§6.4 (Session 28-D, D7, MINOR-7) — Stage F's write-back
+  // (seedCampaignFromCard, service-role only) links an approved card to the
+  // campaign it seeded. NULL for every pre-migration row and for the brief
+  // window between an approve transition and the write-back landing — both
+  // render the existing inert fallback (OpportunityFeed.tsx), never an
+  // error.
+  campaign_id: string | null
   created_at: string
   updated_at: string
 }

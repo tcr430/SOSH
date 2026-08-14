@@ -54,6 +54,7 @@
     "approved": "Aprovado",
     "approvedInFlightBody": "Este cartão iniciou uma campanha. O briefing ainda precisa de revisão — a triagem é o primeiro de três controlos (triagem → aprovação do briefing → aprovação da publicação).",
     "approvedLinkPendingHint": "O link do briefing ainda não está disponível.",
+    "approvedLinkToBrief": "Rever o briefing — ainda precisa de aprovação",
     "dismissed": "Descartado",
     "expired": "Expirado",
     "expiredHint": "Já não é acionável.",

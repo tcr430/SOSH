@@ -143,6 +143,53 @@ export async function getCardById(id: string): Promise<InsightCardRow | null> {
   return (data as InsightCardRow | null) ?? null
 }
 
+// §9.2/§6.4 (Session 28-D, D7, MINOR-7) — the atomic conditional write-back
+// seedCampaignFromCard uses to link a card to the campaign it just seeded.
+// SERVICE-ROLE, own client (CLAUDE.md lazy-import pattern): campaign_id is
+// NOT in the authenticated column-scoped GRANT UPDATE (status,
+// dismiss_reason only — 20260807100000_mode3_insight_cards.sql:178),
+// deliberately not widened (see the new migration's comment) — this write
+// always follows the SAME server-side call that already flipped status via
+// the authenticated, RLS-scoped transitionCardStatus above, never a path an
+// authenticated PostgREST call reaches directly.
+// `.is('campaign_id', null)` is the conditional guard, not a read-then-
+// update: idempotent against a retried call (a second attempt matches zero
+// rows and silently no-ops, exactly like transitionCardStatus's own
+// zero-row arm), and it can never overwrite a campaign_id another call
+// already set — the same atomicity property §5's state machine depends on,
+// applied here to a different column.
+export async function setCardCampaignId(cardId: string, campaignId: string): Promise<void> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { error } = await client
+    .from('insight_cards')
+    .update({ campaign_id: campaignId })
+    .eq('id', cardId)
+    .is('campaign_id', null)
+  if (error) throw new Error(getErrorMessage(error))
+}
+
+// §9.2/§6.4 (Session 28-D, D7 follow-up, database-reviewer MINOR-1) —
+// ON DELETE SET NULL only fires on a real row DELETE, and campaigns are
+// never hard-deleted by application code (softDeleteCampaignGuarded,
+// lib/db/campaigns.ts, is an UPDATE ... SET deleted_at). Without this, a
+// card's campaign_id keeps pointing at a soft-deleted, unreachable
+// campaign — OpportunityFeed.tsx would render a REAL LINK to a dead page,
+// which is worse than the inert fallback D7 replaced (that fallback was at
+// least honest about being non-functional). SERVICE-ROLE, own client, for
+// the same reason setCardCampaignId is: no authenticated GRANT touches
+// campaign_id. Idempotent by construction — nulling an already-NULL column
+// on zero or more matched rows is always a no-op, never an error.
+export async function clearCampaignReferenceOnCards(campaignId: string): Promise<void> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { error } = await client
+    .from('insight_cards')
+    .update({ campaign_id: null })
+    .eq('campaign_id', campaignId)
+  if (error) throw new Error(getErrorMessage(error))
+}
+
 export type TransitionCardStatusResult =
   | { outcome: 'ok'; currentStatus: InsightCardStatus }
   // §5.3's two-admins problem: the second UPDATE of a concurrent pair (or

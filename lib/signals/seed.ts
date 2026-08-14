@@ -8,7 +8,7 @@
 // still run on the resulting brief exactly as they do for every other
 // campaign (§6.3) — the human still reviews it.
 
-import { getCardById } from '@/lib/db/insight-cards'
+import { getCardById, setCardCampaignId } from '@/lib/db/insight-cards'
 import { createCampaign } from '@/lib/db/campaigns'
 import { listActiveSocialAccounts } from '@/lib/db/social-accounts'
 import { assembleBrief } from '@/lib/campaigns/brief'
@@ -49,6 +49,16 @@ async function serviceClient() {
 
 export type SeedCampaignResult = { campaignId: string; briefId: string }
 
+// database-reviewer (Session 28-D, D7 follow-up, NIT-1): this function is
+// NOT idempotent at the createCampaign step — only the final write-back is
+// guarded (setCardCampaignId's `.is('campaign_id', null)`). Today that's
+// unreachable: approveCardAction's atomic conditional transition guarantees
+// at most one caller ever reaches this function per real approval, and no
+// retry job exists. If a reconciliation job is ever added to recover a
+// card stuck 'approved' with campaign_id IS NULL (e.g. after a crash
+// between createCampaign and the write-back), it MUST check
+// `campaign_id IS NULL` on the card BEFORE calling this function again —
+// otherwise every retry creates a second, never-linked campaign + brief.
 export async function seedCampaignFromCard(cardId: string): Promise<SeedCampaignResult> {
   const card = await getCardById(cardId)
   if (!card) throw new Error(`seedCampaignFromCard: no card found at id ${cardId}`)
@@ -73,6 +83,14 @@ export async function seedCampaignFromCard(cardId: string): Promise<SeedCampaign
   // D-7 — the EXISTING pipeline, unchanged. No new generation code, no
   // second brief-assembly path.
   const brief = await assembleBrief(campaign.id)
+
+  // Session 28-D, D7 (MINOR-7) — the write-back that makes §9.2's "approved
+  // and in flight" state legible: link the card to the campaign it just
+  // seeded, only once there is a brief for that link to point at.
+  // setCardCampaignId's `.is('campaign_id', null)` guard (lib/db/
+  // insight-cards.ts) is the atomic-conditional property, not a
+  // read-then-update — see that function's own comment.
+  await setCardCampaignId(cardId, campaign.id)
 
   return { campaignId: campaign.id, briefId: brief.id }
 }

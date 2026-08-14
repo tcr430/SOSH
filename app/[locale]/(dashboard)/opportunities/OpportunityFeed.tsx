@@ -180,6 +180,7 @@ export function OpportunityFeed({
           <OpportunityCard
             key={card.id}
             card={card}
+            locale={locale}
             isPending={isPending}
             hasError={errorKey === card.id}
             readOnly={showExpired}
@@ -195,6 +196,7 @@ export function OpportunityFeed({
 
 function OpportunityCard({
   card,
+  locale,
   isPending,
   hasError,
   readOnly,
@@ -203,6 +205,7 @@ function OpportunityCard({
   onSave,
 }: {
   card: InsightCardRow
+  locale: string
   isPending: boolean
   hasError: boolean
   readOnly: boolean
@@ -313,15 +316,28 @@ function OpportunityCard({
         <p className="text-xs font-medium text-info-foreground">{t('status.savedHint')}</p>
       )}
 
-      {/* Approved and in flight — gate count legible; link inert until
-          Stage F (E5.10) wires a card->campaign reference. */}
+      {/* Approved and in flight — gate count legible: links to the real
+          brief once Stage F's write-back (D7, MINOR-7) has set
+          campaign_id. The inert <span> is kept ONLY as the fallback for a
+          NULL campaign_id — a pre-migration row, or the brief window
+          between the approve transition and the write-back landing — never
+          removed, per ADR 0021 §9.2. */}
       {statusLabel === 'approved' && (
         <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
           <p className="text-xs font-medium text-foreground">{t('status.approved')}</p>
           <p className="text-xs text-muted-foreground">{t('status.approvedInFlightBody')}</p>
-          <span className="mt-1 inline-block cursor-not-allowed text-xs text-muted-foreground underline underline-offset-2 opacity-60">
-            {t('status.approvedLinkPendingHint')}
-          </span>
+          {card.campaign_id ? (
+            <Link
+              href={`/${locale}/campaigns/${card.campaign_id}/brief`}
+              className="mt-1 inline-block text-xs text-info-foreground underline underline-offset-2"
+            >
+              {t('status.approvedLinkToBrief')}
+            </Link>
+          ) : (
+            <span className="mt-1 inline-block cursor-not-allowed text-xs text-muted-foreground underline underline-offset-2 opacity-60">
+              {t('status.approvedLinkPendingHint')}
+            </span>
+          )}
         </div>
       )}
 

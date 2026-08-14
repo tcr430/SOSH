@@ -6,7 +6,7 @@ vi.mock('@/lib/supabase/service', () => ({
 }))
 
 import { createServiceRoleClient } from '@/lib/supabase/service'
-import { listPendingCardsForBusiness, getCardForBusiness, insertCard, transitionCardStatus } from './insight-cards'
+import { listPendingCardsForBusiness, getCardForBusiness, insertCard, transitionCardStatus, setCardCampaignId, clearCampaignReferenceOnCards } from './insight-cards'
 import type { InsightCardInsert } from './types'
 
 const mockCreateServiceRoleClient = vi.mocked(createServiceRoleClient)
@@ -109,5 +109,42 @@ describe('lib/db/insight-cards.ts (ADR 0021 §10.1)', () => {
 
     expect(result).toEqual({ outcome: 'ok', currentStatus: 'saved' })
     expect(builder.update).toHaveBeenCalledWith({ status: 'saved' })
+  })
+
+  // §9.2/§6.4 (Session 28-D, D7, MINOR-7)
+  it('setCardCampaignId writes campaign_id via an atomic conditional UPDATE (id + campaign_id IS NULL), service-role', async () => {
+    const { client, builder } = createMockClient({ id: 'card-1' }, null)
+    mockCreateServiceRoleClient.mockReturnValue(client)
+
+    await setCardCampaignId('card-1', 'campaign-1')
+
+    expect(builder.update).toHaveBeenCalledWith({ campaign_id: 'campaign-1' })
+    expect(builder.eq).toHaveBeenCalledWith('id', 'card-1')
+    expect(builder.is).toHaveBeenCalledWith('campaign_id', null)
+  })
+
+  it('setCardCampaignId throws on a DB error rather than swallowing it', async () => {
+    const { client } = createMockClient(null, { message: 'boom' })
+    mockCreateServiceRoleClient.mockReturnValue(client)
+
+    await expect(setCardCampaignId('card-1', 'campaign-1')).rejects.toThrow()
+  })
+
+  // database-reviewer (Session 28-D, D7 follow-up, MINOR-1)
+  it('clearCampaignReferenceOnCards nulls campaign_id for every card pointing at the given campaign, service-role', async () => {
+    const { client, builder } = createMockClient([{ id: 'card-1' }], null)
+    mockCreateServiceRoleClient.mockReturnValue(client)
+
+    await clearCampaignReferenceOnCards('campaign-1')
+
+    expect(builder.update).toHaveBeenCalledWith({ campaign_id: null })
+    expect(builder.eq).toHaveBeenCalledWith('campaign_id', 'campaign-1')
+  })
+
+  it('clearCampaignReferenceOnCards throws on a DB error rather than swallowing it', async () => {
+    const { client } = createMockClient(null, { message: 'boom' })
+    mockCreateServiceRoleClient.mockReturnValue(client)
+
+    await expect(clearCampaignReferenceOnCards('campaign-1')).rejects.toThrow()
   })
 })

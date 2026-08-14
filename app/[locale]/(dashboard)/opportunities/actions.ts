@@ -16,6 +16,7 @@ import { getBusinessForUser } from '@/lib/db/businesses'
 import { getMemberForUser } from '@/lib/db/business-members'
 import { hasCapability, resolveMemberContext, CAPABILITIES } from '@/lib/members/capabilities'
 import { transitionCardStatus } from '@/lib/db/insight-cards'
+import { seedCampaignFromCard } from '@/lib/signals/seed'
 import type { InsightCardDismissReason, InsightCardStatus } from '@/lib/db/types'
 
 export type CardActionErrorCode = 'invalid_input' | 'generic' | 'forbidden'
@@ -115,7 +116,27 @@ export async function approveCardAction(cardId: string): Promise<CardActionState
       'pending',
       'saved',
     )
-    if (result.success) revalidateOpportunities()
+    if (result.success) {
+      // Session 28-D, D7 (MINOR-7) — the SAME path that flipped status to
+      // 'approved', now also seeding the campaign + brief and writing
+      // campaign_id back (lib/signals/seed.ts). attemptTransition's atomic
+      // conditional UPDATE above already guarantees at most one concurrent
+      // approveCardAction call reaches `result.success === true` for a
+      // given card (§5.3's two-admins race is closed there), so this call
+      // fires at most once per real approval — no separate concurrency
+      // guard is needed here. Own try/catch: a seeding failure (e.g. the
+      // AI call, or no connected social accounts) must not turn an
+      // already-successful approval into a false error toast — the card
+      // stays 'approved' and the feed shows the existing inert fallback
+      // (campaign_id null) rather than the failure being silently hidden
+      // as a rethrow into the outer catch.
+      try {
+        await seedCampaignFromCard(cardId)
+      } catch (seedErr: unknown) {
+        console.error('opportunities/actions: seedCampaignFromCard failed after approval', cardId, seedErr)
+      }
+      revalidateOpportunities()
+    }
     return result
   } catch {
     return { error: 'generic' }

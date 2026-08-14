@@ -941,6 +941,33 @@ appeared.**
 `SIGNAL3-SEED-ONLY-NO-GENERATION` (no new generation code in the diff, Tier 3) and
 `SIGNAL3-MODE2-UNCHANGED` (fixture equivalence, Tier 2).
 
+**AMENDMENT (Session 28-D, D7, MINOR-7 closed) — the seeding contract gains the write-back, and the table
+above gains its first real caller row.** §9.2's "approved and in flight" state required a link to the
+seeded campaign's brief; `insight_cards` carried no `campaign_id` and nothing wrote one back, so the
+render layer shipped an honest-but-inert placeholder instead (§15). `20260814220000_insight_card_campaign_id.sql`
+adds `insight_cards.campaign_id uuid REFERENCES campaigns(id) ON DELETE SET NULL` (A-6, adjudicated at §4:
+schema fixed, not the contract reduced). `seedCampaignFromCard` now calls the new
+`setCardCampaignId(cardId, campaign.id)` (`lib/db/insight-cards.ts`, service-role, atomic conditional
+`.is('campaign_id', null)`) immediately after `assembleBrief` succeeds — so the link only ever appears once
+there is a brief for it to point at. Updated SHARED-FUNCTION CALLERS row:
+
+| Function | Caller | Test covering that caller | Behaviour change? |
+|---|---|---|---|
+| `seedCampaignFromCard` | **`approveCardAction` (NEW — its first production caller)**, `app/[locale]/(dashboard)/opportunities/actions.ts` | `app/[locale]/(dashboard)/opportunities/actions.test.ts` (asserts the call fires only on `result.success`, exactly once, and that a seeding failure does not turn a real approval into a returned error) | **No signature change.** Prior to D7, `seedCampaignFromCard` had ONLY the Tier-1/Tier-2 test suites as callers — no production caller existed (confirmed via `grep -rn "seedCampaignFromCard("` across the tree before this step); the function itself is unchanged except for the added `setCardCampaignId` call at its end. |
+
+A `database-reviewer` pass on the migration + write-back (invoked once, per this step's scope) surfaced two
+findings addressed in the same commit, neither part of the original MINOR-7 defect but both load-bearing
+for it not regressing into a worse failure mode than the placeholder it replaces:
+- **MINOR-1** (a real link that goes dead): `ON DELETE SET NULL` fires only on a hard row `DELETE`, and
+  campaigns are never hard-deleted by application code (`softDeleteCampaignGuarded` is `UPDATE ... SET
+  deleted_at`). Fixed with a companion, `clearCampaignReferenceOnCards(campaignId)` (`lib/db/insight-cards.ts`,
+  service-role), called from `deleteCampaignAction` (`app/[locale]/(dashboard)/campaigns/actions.ts`) right
+  after a successful soft-delete — so an approved card never keeps linking to a now-unreachable campaign.
+- **NIT-1** (non-idempotent `createCampaign` under a future retry): recorded as a comment at
+  `seedCampaignFromCard`'s definition — today unreachable (no retry path exists; `approveCardAction`'s
+  atomic conditional transition already guarantees at most one caller reaches the function per real
+  approval), but binding on any future reconciliation job.
+
 ---
 
 ## §7 — Prompt injection, end to end (Q7, L-9)
@@ -1165,6 +1192,20 @@ styled as the default on a high-sensitivity card.
 | **Triage failed** | The candidate is not silently absent. An operator-visible state saying triage could not complete and will retry. Fail-closed must be **visible**, or it is indistinguishable from "nothing happened" (L-3's whole point). |
 | **Triage paused (cap)** | Dated "daily limit reached" (§3.4). |
 | **Lost the triage race** | The card re-renders in its real state, never a generic error (§5.3). |
+
+**AMENDMENT (Session 28-D, D7, MINOR-7 closed) — "Approved and in flight" now meets its own contract.**
+Prior to D7, `insight_cards` carried no `campaign_id` and Stage F wrote none back (§15's honest disclosure
+of the gap), so `OpportunityFeed.tsx` rendered a non-interactive, inert placeholder whose visible text and
+`title` were the same key — the link the row above requires did not exist. `20260814220000_insight_card_campaign_id.sql`
+(A-6) plus `seedCampaignFromCard`'s write-back (§6.4 amendment, above) closes that: `OpportunityCard` now
+renders `<Link href="/${locale}/campaigns/${card.campaign_id}/brief">` with the SAME "still needs review"
+wording the contract requires, whenever `campaign_id` is non-NULL. **The inert fallback is kept, not
+removed** — it is the correct render for exactly two cases, both narrower than "not wired up yet": (1) a
+row that predates the migration (`campaign_id` is `NULL` by construction, and there genuinely is no
+campaign to link to), and (2) the brief window between the approve transition committing and the
+write-back landing (`seedCampaignFromCard` running, or having failed after the transition — logged, not
+silently retried, per its own comment). Neither is the general case anymore; both render the pre-existing
+`<span>`, unchanged, per `OpportunityFeed.tsx`'s own comment at that branch.
 
 ### 9.3 Technical floor
 

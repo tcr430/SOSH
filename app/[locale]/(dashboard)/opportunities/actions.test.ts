@@ -16,6 +16,10 @@ vi.mock('@/lib/db/insight-cards', () => ({
   transitionCardStatus: vi.fn(),
 }))
 
+vi.mock('@/lib/signals/seed', () => ({
+  seedCampaignFromCard: vi.fn(),
+}))
+
 vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),
 }))
@@ -25,6 +29,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
 import { getMemberForUser } from '@/lib/db/business-members'
 import { transitionCardStatus } from '@/lib/db/insight-cards'
+import { seedCampaignFromCard } from '@/lib/signals/seed'
 import type { BusinessRow } from '@/lib/db/types'
 
 const VALID_CARD_ID = 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa'
@@ -60,6 +65,7 @@ describe('opportunities/actions.ts', () => {
   it('approveCardAction transitions pending -> approved atomically', async () => {
     mockAuthedAuthor()
     vi.mocked(transitionCardStatus).mockResolvedValue({ outcome: 'ok', currentStatus: 'approved' })
+    vi.mocked(seedCampaignFromCard).mockResolvedValue({ campaignId: 'campaign-1', briefId: 'brief-1' })
 
     const result = await approveCardAction(VALID_CARD_ID)
 
@@ -70,6 +76,38 @@ describe('opportunities/actions.ts', () => {
       'pending',
       { status: 'approved' },
     )
+    expect(result).toEqual({ success: true, outcome: 'ok', currentStatus: 'approved' })
+  })
+
+  // D7 (MINOR-7) — the same path that flips status to 'approved' also
+  // seeds the campaign + brief and writes campaign_id back.
+  it('approveCardAction calls seedCampaignFromCard with the cardId ONLY on a successful transition', async () => {
+    mockAuthedAuthor()
+    vi.mocked(transitionCardStatus).mockResolvedValue({ outcome: 'ok', currentStatus: 'approved' })
+    vi.mocked(seedCampaignFromCard).mockResolvedValue({ campaignId: 'campaign-1', briefId: 'brief-1' })
+
+    await approveCardAction(VALID_CARD_ID)
+
+    expect(seedCampaignFromCard).toHaveBeenCalledWith(VALID_CARD_ID)
+    expect(seedCampaignFromCard).toHaveBeenCalledTimes(1)
+  })
+
+  it('approveCardAction does NOT call seedCampaignFromCard when the transition loses the race (already_triaged)', async () => {
+    mockAuthedAuthor()
+    vi.mocked(transitionCardStatus).mockResolvedValue({ outcome: 'already_triaged', currentStatus: 'dismissed' })
+
+    await approveCardAction(VALID_CARD_ID)
+
+    expect(seedCampaignFromCard).not.toHaveBeenCalled()
+  })
+
+  it('approveCardAction still reports success when seedCampaignFromCard throws — a seeding failure must not mask a real approval as a generic error', async () => {
+    mockAuthedAuthor()
+    vi.mocked(transitionCardStatus).mockResolvedValue({ outcome: 'ok', currentStatus: 'approved' })
+    vi.mocked(seedCampaignFromCard).mockRejectedValue(new Error('AI call failed'))
+
+    const result = await approveCardAction(VALID_CARD_ID)
+
     expect(result).toEqual({ success: true, outcome: 'ok', currentStatus: 'approved' })
   })
 

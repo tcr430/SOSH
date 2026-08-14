@@ -65,6 +65,7 @@ function makeCard(overrides: Partial<InsightCardRow> = {}): InsightCardRow {
     status: 'pending',
     dismiss_reason: null,
     expires_at: '2026-08-15T00:00:00Z',
+    campaign_id: null,
     created_at: '2026-08-01T00:00:00Z',
     updated_at: '2026-08-01T00:00:00Z',
     ...overrides,
@@ -230,6 +231,36 @@ describe('OpportunityFeed — §9.2 state 7/10: approved and in flight', () => {
     expect(container.textContent).toContain('status.approvedInFlightBody')
     expect(buttonWithText(container, 'actions.approve')).toBeUndefined()
     expect(buttonWithText(container, 'actions.dismiss')).toBeUndefined()
+    cleanup()
+  })
+
+  // D7 (MINOR-7) — campaign_id null (pre-migration / write-back-not-landed-
+  // yet) still renders the inert fallback, never a broken link.
+  it('renders the inert fallback hint, not a link, when campaign_id is null', () => {
+    const card = makeCard({ status: 'approved', campaign_id: null })
+    const { container, cleanup } = renderFeed(baseProps({ cards: [card] }))
+
+    expect(container.textContent).toContain('status.approvedLinkPendingHint')
+    expect(container.querySelector('a[href*="/campaigns/"]')).toBeNull()
+    cleanup()
+  })
+
+  // D7 (MINOR-7) — campaign_id present renders a REAL link to the brief,
+  // keeping the "still needs review" wording (§9.2, §6.3's gate count).
+  it('renders a real link to the seeded campaign\'s brief when campaign_id is present', () => {
+    const card = makeCard({
+      status: 'approved',
+      campaign_id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+    })
+    const { container, cleanup } = renderFeed(baseProps({ locale: 'en', cards: [card] }))
+
+    const link = container.querySelector('a[href*="/campaigns/"]')
+    expect(link).not.toBeNull()
+    expect(link?.getAttribute('href')).toBe(
+      `/en/campaigns/${card.campaign_id}/brief`,
+    )
+    expect(link?.textContent).toContain('status.approvedLinkToBrief')
+    expect(container.textContent).not.toContain('status.approvedLinkPendingHint')
     cleanup()
   })
 })

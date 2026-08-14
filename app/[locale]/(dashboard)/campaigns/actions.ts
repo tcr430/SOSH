@@ -8,6 +8,7 @@ import {
   resumeCampaign,
   softDeleteCampaignGuarded,
 } from '@/lib/db/campaigns'
+import { clearCampaignReferenceOnCards } from '@/lib/db/insight-cards'
 
 export type CampaignActionState = {
   success?: boolean
@@ -77,6 +78,19 @@ export async function deleteCampaignAction(
 
     const deleted = await softDeleteCampaignGuarded(ctx.client, campaignId)
     if (!deleted) return { error: 'delete_active_error' }
+
+    // database-reviewer (Session 28-D, D7 follow-up, MINOR-1): a soft
+    // delete never fires insight_cards.campaign_id's ON DELETE SET NULL
+    // (that only triggers on a real row DELETE, e.g. the business-purge
+    // cascade) — without this, an "approved and in flight" card would keep
+    // linking to a now-unreachable, soft-deleted campaign. Own try/catch:
+    // a cleanup failure must not turn an already-successful delete into a
+    // returned error.
+    try {
+      await clearCampaignReferenceOnCards(campaignId)
+    } catch (cleanupErr: unknown) {
+      console.error('campaigns/actions: clearCampaignReferenceOnCards failed after delete', campaignId, cleanupErr)
+    }
 
     return { success: true }
   } catch {

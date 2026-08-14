@@ -54,6 +54,7 @@
     "approved": "Approved",
     "approvedInFlightBody": "This card started a campaign. The brief still needs review — triage is the first of three gates (triage → brief approval → post approval).",
     "approvedLinkPendingHint": "The brief link isn't wired up yet.",
+    "approvedLinkToBrief": "Review the brief — it still needs approval",
     "dismissed": "Dismissed",
     "expired": "Expired",
     "expiredHint": "No longer actionable.",

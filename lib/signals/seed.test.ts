@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 
 vi.mock('@/lib/db/insight-cards', () => ({
   getCardById: vi.fn(),
+  setCardCampaignId: vi.fn(),
 }))
 vi.mock('@/lib/db/campaigns', () => ({
   createCampaign: vi.fn(),
@@ -17,7 +18,7 @@ vi.mock('@/lib/supabase/service', () => ({
 }))
 
 import { seedCampaignFromCard, composeObjective } from './seed'
-import { getCardById } from '@/lib/db/insight-cards'
+import { getCardById, setCardCampaignId } from '@/lib/db/insight-cards'
 import { createCampaign } from '@/lib/db/campaigns'
 import { listActiveSocialAccounts } from '@/lib/db/social-accounts'
 import { assembleBrief } from '@/lib/campaigns/brief'
@@ -43,6 +44,7 @@ const CARD: InsightCardRow = {
   status: 'approved',
   dismiss_reason: null,
   expires_at: null,
+  campaign_id: null,
   created_at: '2026-07-01T00:00:00Z',
   updated_at: '2026-07-01T00:00:00Z',
 }
@@ -85,6 +87,28 @@ describe('lib/signals/seed.ts seedCampaignFromCard (ADR 0021 §6, D-7)', () => {
     expect(result).toEqual({ campaignId: 'campaign-1', briefId: 'brief-1' })
   })
 
+  // D7 (MINOR-7) — the write-back that makes §9.2's "approved and in
+  // flight" state legible.
+  it('writes campaign_id back onto the card, after the brief exists, via the atomic conditional setCardCampaignId', async () => {
+    vi.mocked(getCardById).mockResolvedValue(CARD)
+    vi.mocked(listActiveSocialAccounts).mockResolvedValue([])
+    vi.mocked(createCampaign).mockResolvedValue({ id: 'campaign-1', business_id: 'biz-1' } as never)
+    vi.mocked(assembleBrief).mockResolvedValue({ id: 'brief-1' } as never)
+    const callOrder: string[] = []
+    vi.mocked(assembleBrief).mockImplementation(async () => {
+      callOrder.push('assembleBrief')
+      return { id: 'brief-1' } as never
+    })
+    vi.mocked(setCardCampaignId).mockImplementation(async () => {
+      callOrder.push('setCardCampaignId')
+    })
+
+    await seedCampaignFromCard('card-1')
+
+    expect(setCardCampaignId).toHaveBeenCalledWith('card-1', 'campaign-1')
+    expect(callOrder).toEqual(['assembleBrief', 'setCardCampaignId'])
+  })
+
   it('sets platforms from the business currently-connected accounts', async () => {
     vi.mocked(getCardById).mockResolvedValue(CARD)
     vi.mocked(listActiveSocialAccounts).mockResolvedValue([
@@ -107,6 +131,7 @@ describe('lib/signals/seed.ts seedCampaignFromCard (ADR 0021 §6, D-7)', () => {
     vi.mocked(getCardById).mockResolvedValue(null)
     await expect(seedCampaignFromCard('missing')).rejects.toThrow()
     expect(createCampaign).not.toHaveBeenCalled()
+    expect(setCardCampaignId).not.toHaveBeenCalled()
   })
 
   it('introduces no new generation call — never calls runPrompt or a rubric prompt directly', async () => {

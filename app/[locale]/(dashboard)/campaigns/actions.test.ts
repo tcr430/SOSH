@@ -18,10 +18,15 @@ vi.mock('@/lib/db/campaigns', async (importOriginal) => {
   }
 })
 
+vi.mock('@/lib/db/insight-cards', () => ({
+  clearCampaignReferenceOnCards: vi.fn(),
+}))
+
 import { pauseCampaignAction, resumeCampaignAction, deleteCampaignAction } from './actions'
 import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
 import { pauseCampaign, resumeCampaign, softDeleteCampaignGuarded } from '@/lib/db/campaigns'
+import { clearCampaignReferenceOnCards } from '@/lib/db/insight-cards'
 import type { BusinessRow, CampaignRow } from '@/lib/db/types'
 
 const mockCreateClient = vi.mocked(createClient)
@@ -180,5 +185,35 @@ describe('deleteCampaignAction', () => {
     mockSoftDeleteCampaignGuarded.mockRejectedValue(new Error('DB down'))
     const result = await deleteCampaignAction(VALID_UUID)
     expect(result).toEqual({ error: 'generic' })
+  })
+
+  // database-reviewer (Session 28-D, D7 follow-up, MINOR-1)
+  it('nulls insight_cards.campaign_id for the deleted campaign on a successful delete', async () => {
+    makeAuthClient()
+    mockSoftDeleteCampaignGuarded.mockResolvedValue(true)
+    vi.mocked(clearCampaignReferenceOnCards).mockResolvedValue(undefined)
+
+    await deleteCampaignAction(VALID_UUID)
+
+    expect(clearCampaignReferenceOnCards).toHaveBeenCalledWith(VALID_UUID)
+  })
+
+  it('still returns success when clearCampaignReferenceOnCards throws — cleanup failure must not mask a real delete', async () => {
+    makeAuthClient()
+    mockSoftDeleteCampaignGuarded.mockResolvedValue(true)
+    vi.mocked(clearCampaignReferenceOnCards).mockRejectedValue(new Error('boom'))
+
+    const result = await deleteCampaignAction(VALID_UUID)
+
+    expect(result).toEqual({ success: true })
+  })
+
+  it('does NOT call clearCampaignReferenceOnCards when the delete guard fails', async () => {
+    makeAuthClient()
+    mockSoftDeleteCampaignGuarded.mockResolvedValue(false)
+
+    await deleteCampaignAction(VALID_UUID)
+
+    expect(clearCampaignReferenceOnCards).not.toHaveBeenCalled()
   })
 })

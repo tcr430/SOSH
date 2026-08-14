@@ -161,9 +161,48 @@ describe('seedCampaignFromCard end-to-end (ADR 0021 §6, §0.2 A-2)', () => {
       .single()
     if (briefErr) throw briefErr
     expect(brief.campaign_id).toBe(result.campaignId)
+
+    // D7 (MINOR-7) — the write-back that makes §9.2's "approved and in
+    // flight" state legible: the card now points at the campaign it seeded.
+    const { data: cardAfter, error: cardAfterErr } = await admin
+      .from('insight_cards')
+      .select('campaign_id')
+      .eq('id', cardId)
+      .single()
+    if (cardAfterErr) throw cardAfterErr
+    expect(cardAfter.campaign_id).toBe(result.campaignId)
   })
 
   it('throws for a card id that does not exist', async () => {
     await expect(seedCampaignFromCard('00000000-0000-0000-0000-000000000000')).rejects.toThrow()
+  })
+
+  // D7 (MINOR-7), A-6 (already adjudicated §4) — proves ON DELETE SET NULL
+  // was actually chosen, not CASCADE: deleting the campaign a card points at
+  // must leave the card row intact (it is the eval corpus's history) and
+  // merely null out the reference.
+  it('deleting the seeded campaign SETS NULL on insight_cards.campaign_id and leaves the card row intact', async () => {
+    // Reset campaign_id to NULL first (admin, bypassing setCardCampaignId's
+    // app-level `.is('campaign_id', null)` guard) so this test drives its
+    // own seed -> delete -> assert cycle independently of whether the
+    // earlier test in this file already linked cardId to a campaign.
+    const { error: resetErr } = await admin.from('insight_cards').update({ campaign_id: null }).eq('id', cardId)
+    if (resetErr) throw resetErr
+
+    const result = await seedCampaignFromCard(cardId)
+
+    const { error: deleteErr } = await admin.from('campaigns').delete().eq('id', result.campaignId)
+    if (deleteErr) throw deleteErr
+
+    const { data: cardAfterDelete, error: cardErr } = await admin
+      .from('insight_cards')
+      .select('id, campaign_id, status')
+      .eq('id', cardId)
+      .single()
+    if (cardErr) throw cardErr
+    expect(cardAfterDelete).not.toBeNull()
+    expect(cardAfterDelete.campaign_id).toBeNull()
+    // The card itself — the eval corpus's history — was NOT cascaded away.
+    expect(cardAfterDelete.status).toBe('approved')
   })
 })

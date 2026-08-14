@@ -54,6 +54,7 @@
     "approved": "Aprobado",
     "approvedInFlightBody": "Esta tarjeta inició una campaña. El brief todavía necesita revisión — el triaje es la primera de tres puertas (triaje → aprobación del brief → aprobación de la publicación).",
     "approvedLinkPendingHint": "El enlace al brief todavía no está disponible.",
+    "approvedLinkToBrief": "Revisar el brief — todavía necesita aprobación",
     "dismissed": "Descartado",
     "expired": "Expirado",
     "expiredHint": "Ya no es accionable.",
