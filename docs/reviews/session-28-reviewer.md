@@ -1002,3 +1002,59 @@ file touches `opportunities/` or `globals.css`, confirmed flaky-under-load rathe
 other 2 "failed" files are the same pre-existing, unrelated missing-env-var collection failure already
 noted in D1-D4's rows (`lib/config.test.ts`, `lib/signals/orchestrator.test.ts`).
 **Commit:** pending (D5, not yet committed as of this appendix row)
+
+### D6 — MAJOR-7, NIT-2
+
+**Fix (MAJOR-7):** `lib/ai/tool-runner.ts`'s `TRIAGE_MAX_WALL_CLOCK_MS` check ran only at the top of each
+turn; `callWithRetryBudget` applied `TRIAGE_REQUEST_TIMEOUT_MS` (30s) per attempt, uncoordinated with that
+deadline — a turn entered at 44.9s could still run `30 + 2 + 30 + 2 + 30` = 94s before giving up, ≈3.1× the
+declared 45s ceiling, while `orchestrator.ts:180` reserved exactly one `TRIAGE_MAX_WALL_CLOCK_MS` believing
+that could not happen. `callWithRetryBudget` now takes a fourth argument, `deadlineAt` (`startTime +
+TRIAGE_MAX_WALL_CLOCK_MS`, computed once in `runToolLoop` and threaded down on every recursive retry call):
+each attempt's own timeout is clamped to `min(TRIAGE_REQUEST_TIMEOUT_MS, deadlineAt - Date.now())`, and a
+retry is refused outright — no `sleep(RETRY_DELAY_MS)`, no further attempt — once the remaining budget can
+no longer fit `RETRY_DELAY_MS`. Both paths throw a new internal `LoopDeadlineExceededError`, caught in
+`runToolLoop` and mapped to the SAME `'wall_clock_exceeded'` reason the top-of-turn check already produces
+— one failure mode, one name, regardless of where in the turn it's detected. This is a fail-closed path,
+not an error: it produces `{ outcome: 'failed', reason: 'wall_clock_exceeded' }` with zero cards, and the
+`finally`-block `ai_usage` write still runs unconditionally (verified — the write is outside the
+`try`/`catch` that handles `LoopDeadlineExceededError`, in the existing `finally` all outcomes share).
+`orchestrator.ts:180`'s single reservation is now correct as written, not correct arithmetic resting on a
+false premise. ADR 0021 §2.4 amended with a note on where the ceiling is enforced (two places, both
+load-bearing: the top-of-turn check and inside `callWithRetryBudget`).
+
+The Reviewer's fallback option (widen the reservation to
+`TRIAGE_MAX_WALL_CLOCK_MS + TRIAGE_RETRY_BUDGET × (TRIAGE_REQUEST_TIMEOUT_MS + RETRY_DELAY_MS)`) was not
+taken — option 1 (enforce inside `callWithRetryBudget`) proved feasible against the SDK's timeout surface
+(`withTimeout` already accepted an arbitrary `ms`; clamping it to the remaining budget required no change
+to its signature), so the stronger option was implemented and the tick's claimed-candidate throughput is
+not reduced to protect against a case that is now structurally impossible.
+
+**Fix (NIT-2):** `TRIAGE_MAX_OUTPUT_TOKENS_PER_TURN`'s comparison (`response.usage.output_tokens >
+TRIAGE_MAX_OUTPUT_TOKENS_PER_TURN`) is structurally unreachable in production — the same request sets
+`max_tokens` to that identical value, so the provider contractually cannot return more. The guard is kept
+as defence-in-depth against a future provider contract change; a comment at the comparison site states
+this, and ADR 0021 §11 gained an amendment naming `SIGNAL3-TRIAGE-BOUNDED`'s `oversized-output-per-turn`
+fixture as the one synthetic row in that table — it manufactures a response the real API contract does not
+permit, to exercise a dead branch rather than leave it silently unexecuted.
+
+**Test:** `lib/ai/tool-runner.test.ts` gained two cases, both driven by a mocked `Date.now()` sequence
+(not real elapsed time) so the loop's own deadline math is asserted against the bound directly rather than
+sampled off the wall clock: (1) *"a retryable failure that consumes ~all remaining budget is retried once
+(clamped), then the deadline is exhausted before a third attempt"* — simulates attempt 1 consuming 30s of
+the 45s budget (retry proceeds, 15s remaining), attempt 2 clamped to the remaining 13s and consuming all of
+it (0ms remaining, under `RETRY_DELAY_MS`) — asserts `wall_clock_exceeded` and exactly 2 `mockCreate`
+calls, never a 3rd; (2) *"a retry that cannot fit the remaining loop budget is refused outright"* —
+attempt 1 alone consumes 44s of the 45s budget (1000ms remaining, under `RETRY_DELAY_MS`) — asserts
+`wall_clock_exceeded` and exactly 1 `mockCreate` call, with `TRIAGE_RETRY_BUDGET` (2) still unspent. Both
+cases were shown to redden against the pre-D6 code: `git show HEAD:lib/ai/tool-runner.ts` restored
+temporarily (the un-fixed four-argument-less `callWithRetryBudget`), `npx vitest run
+lib/ai/tool-runner.test.ts` run — the 2 new cases failed (a `TypeError` reading `response.usage` off the
+`undefined` the pre-D6 code returns when the rejected promise it never guards against a loop deadline
+propagates past where a response was expected), the 21 pre-existing cases stayed green unchanged — then
+the D6 fix was restored and the file re-run: 23/23 green. `npx tsc --noEmit --skipLibCheck` clean; `npm run
+test:app` — 2796/2796 tests passed (2 suites report failed but 0 individual tests failed inside them:
+`lib/config.test.ts` and `lib/signals/orchestrator.test.ts`, both the same pre-existing missing
+`NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY`/`NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`
+collection-time failure already noted in D1's and D5's rows, unrelated to `lib/ai/tool-runner.ts`).
+**Commit:** pending (D6, not yet committed as of this appendix row)

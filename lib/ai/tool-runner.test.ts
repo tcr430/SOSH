@@ -27,6 +27,7 @@ import {
   runToolLoop,
   TRIAGE_MAX_TOOL_CALLS,
   TRIAGE_RETRY_BUDGET,
+  TRIAGE_MAX_WALL_CLOCK_MS,
   type TriageTool,
 } from './tool-runner'
 import { getAnthropicClient } from '@/lib/ai/client'
@@ -225,6 +226,67 @@ describe('runToolLoop (ADR 0021 §2, Session 28 E5.4)', () => {
 
     expect(result).toEqual({ outcome: 'failed', reason: 'wall_clock_exceeded', costCents: expect.any(Number) })
     expect(mockCreate).not.toHaveBeenCalled()
+
+    vi.spyOn(Date, 'now').mockRestore()
+  })
+
+  // ─── D6 (MAJOR-7) — TRIAGE_MAX_WALL_CLOCK_MS enforced INSIDE
+  // callWithRetryBudget, not merely checked between turns ────────────────
+
+  it('D6: a retryable failure that consumes ~all remaining budget is retried once (clamped), then the deadline is exhausted before a third attempt — returns wall_clock_exceeded within the bound, never a 3rd call', async () => {
+    // Simulates a fixture that "times out twice": attempt 1 consumes 30s of
+    // the 45s budget (leaving 15s, enough to fit RETRY_DELAY_MS so the retry
+    // proceeds); attempt 2 is then clamped to the remaining 13s rather than
+    // the full TRIAGE_REQUEST_TIMEOUT_MS, and consumes all of it, leaving 0ms
+    // — not enough to fit another RETRY_DELAY_MS, so the loop fails closed
+    // instead of attempting a 3rd call. Pre-D6, callWithRetryBudget knew
+    // nothing about the loop deadline: it would have retried a 3rd time
+    // (still under TRIAGE_RETRY_BUDGET=2) and only reported
+    // retry_budget_exhausted after 3 real mockCreate calls.
+    const simulatedTimes = [
+      0,
+      0,
+      0,
+      TRIAGE_MAX_WALL_CLOCK_MS - 15_000,
+      TRIAGE_MAX_WALL_CLOCK_MS - 13_000,
+      TRIAGE_MAX_WALL_CLOCK_MS,
+    ]
+    let call = 0
+    vi.spyOn(Date, 'now').mockImplementation(() => {
+      const t = call < simulatedTimes.length ? simulatedTimes[call] : simulatedTimes[simulatedTimes.length - 1]
+      call += 1
+      return t
+    })
+    mockCreate.mockRejectedValueOnce({ status: 503, message: 'attempt 1 (simulated 30s)' })
+    mockCreate.mockRejectedValueOnce({ status: 503, message: 'attempt 2 (simulated 13s, clamped)' })
+
+    const result = await runToolLoop(baseInput())
+
+    expect(result).toEqual({ outcome: 'failed', reason: 'wall_clock_exceeded', costCents: expect.any(Number) })
+    // Exactly 2 attempts — the 3rd retry (still within TRIAGE_RETRY_BUDGET)
+    // was refused because it could not fit inside the remaining budget.
+    expect(mockCreate).toHaveBeenCalledTimes(2)
+
+    vi.spyOn(Date, 'now').mockRestore()
+  })
+
+  it('D6: a retry that cannot fit the remaining loop budget is refused outright — no sleep, no further attempt', async () => {
+    // Attempt 1 alone consumes 44s of the 45s budget, leaving only 1000ms —
+    // under RETRY_DELAY_MS (2000ms) — so the retry is refused before it is
+    // ever attempted, even though 2 retries remain in TRIAGE_RETRY_BUDGET.
+    const simulatedTimes = [0, 0, 0, TRIAGE_MAX_WALL_CLOCK_MS - 1_000]
+    let call = 0
+    vi.spyOn(Date, 'now').mockImplementation(() => {
+      const t = call < simulatedTimes.length ? simulatedTimes[call] : simulatedTimes[simulatedTimes.length - 1]
+      call += 1
+      return t
+    })
+    mockCreate.mockRejectedValueOnce({ status: 503, message: 'attempt 1 (simulated 44s)' })
+
+    const result = await runToolLoop(baseInput())
+
+    expect(result).toEqual({ outcome: 'failed', reason: 'wall_clock_exceeded', costCents: expect.any(Number) })
+    expect(mockCreate).toHaveBeenCalledTimes(1)
 
     vi.spyOn(Date, 'now').mockRestore()
   })

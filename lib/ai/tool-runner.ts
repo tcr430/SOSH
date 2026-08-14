@@ -150,22 +150,57 @@ async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   }
 }
 
+// Session 28-D, D6 (MAJOR-7 closed) — the per-request timeout was applied
+// PER ATTEMPT with no awareness of the loop's own wall-clock ceiling: a turn
+// entered at 44.9s could still run 30s + 2s + 30s + 2s + 30s = 94s before
+// this function gave up, and orchestrator.ts's single TRIAGE_MAX_WALL_CLOCK_MS
+// reservation assumed that could never happen. This marker distinguishes
+// "the loop's deadline was reached mid-retry" from a genuine provider error
+// or retry-budget exhaustion, so the caller can map it to the SAME
+// 'wall_clock_exceeded' reason the top-of-turn check already uses — one
+// failure mode, one name, regardless of where in the turn it is detected.
+class LoopDeadlineExceededError extends Error {}
+
 // §2.7 — the shared retry pool. Each retryable failure consumes one unit of
 // `retryState.remaining`; once exhausted, the failure propagates rather than
 // retrying again, and the caller maps that into 'retry_budget_exhausted'.
+//
+// `deadlineAt` (D6, MAJOR-7) — the loop's own wall-clock ceiling
+// (startTime + TRIAGE_MAX_WALL_CLOCK_MS), threaded down so this function can
+// enforce it directly rather than trusting TRIAGE_REQUEST_TIMEOUT_MS alone:
+//   1. Each attempt's own timeout is clamped to min(TRIAGE_REQUEST_TIMEOUT_MS,
+//      remaining loop budget) — a single request can never itself run past
+//      the deadline, regardless of how long the provider takes to answer.
+//   2. A retry is refused (no sleep, no further attempt) when the remaining
+//      budget can no longer fit RETRY_DELAY_MS — retrying anyway would
+//      guarantee blowing the deadline for a sleep that could never resolve
+//      in time to matter.
+// Together, TRIAGE_MAX_WALL_CLOCK_MS becomes a genuine ceiling on THIS
+// function's own elapsed time, not merely a value checked between turns.
 async function callWithRetryBudget(
   client: AiClientLike,
   params: Anthropic.MessageCreateParamsNonStreaming,
   retryState: { remaining: number },
+  deadlineAt: number,
 ): Promise<Anthropic.Message> {
+  const remainingBudgetMs = deadlineAt - Date.now()
+  if (remainingBudgetMs <= 0) {
+    throw new LoopDeadlineExceededError('Loop wall-clock budget exhausted before this attempt could run')
+  }
+  const attemptTimeoutMs = Math.min(TRIAGE_REQUEST_TIMEOUT_MS, remainingBudgetMs)
+
   try {
-    return await withTimeout(client.messages.create(params), TRIAGE_REQUEST_TIMEOUT_MS)
+    return await withTimeout(client.messages.create(params), attemptTimeoutMs)
   } catch (err: unknown) {
     const status = (err as { status?: number }).status
     if (isRetryableStatus(status) && retryState.remaining > 0) {
+      const remainingAfterAttemptMs = deadlineAt - Date.now()
+      if (remainingAfterAttemptMs <= RETRY_DELAY_MS) {
+        throw new LoopDeadlineExceededError('Loop wall-clock budget cannot fit another retry attempt')
+      }
       retryState.remaining -= 1
       await sleep(RETRY_DELAY_MS)
-      return callWithRetryBudget(client, params, retryState)
+      return callWithRetryBudget(client, params, retryState, deadlineAt)
     }
     throw err
   }
@@ -217,6 +252,10 @@ export async function runToolLoop(input: RunToolLoopInput): Promise<TriageLoopRe
   const aiClient = await getAnthropicClient()
   const startTime = Date.now()
   const retryState = { remaining: TRIAGE_RETRY_BUDGET }
+  // D6 (MAJOR-7) — the same ceiling the top-of-turn check compares against,
+  // now also enforced INSIDE callWithRetryBudget so a single turn's retries
+  // can never carry the loop past it.
+  const deadlineAt = startTime + TRIAGE_MAX_WALL_CLOCK_MS
 
   let cumulativeInputTokens = 0
   let cumulativeOutputTokens = 0
@@ -276,8 +315,17 @@ export async function runToolLoop(input: RunToolLoopInput): Promise<TriageLoopRe
 
       let response: Anthropic.Message
       try {
-        response = await callWithRetryBudget(aiClient, sdkParams, retryState)
+        response = await callWithRetryBudget(aiClient, sdkParams, retryState, deadlineAt)
       } catch (err: unknown) {
+        // D6 (MAJOR-7) — the deadline can now be exhausted INSIDE
+        // callWithRetryBudget (clamped-timeout cutoff or a refused retry);
+        // it maps to the SAME reason as the top-of-turn check, not to
+        // 'provider_error' or 'retry_budget_exhausted'.
+        if (err instanceof LoopDeadlineExceededError) {
+          usageErrorCode = 'wall_clock_exceeded'
+          result = { outcome: 'failed', reason: 'wall_clock_exceeded' }
+          break
+        }
         const status = (err as { status?: number }).status
         const reason: TriageLoopFailureReason =
           isRetryableStatus(status) && retryState.remaining <= 0 ? 'retry_budget_exhausted' : 'provider_error'
@@ -296,6 +344,17 @@ export async function runToolLoop(input: RunToolLoopInput): Promise<TriageLoopRe
         result = { outcome: 'failed', reason: 'input_token_cap_exceeded' }
         break
       }
+      // NIT-2 (D6, recorded) — this comparison is STRUCTURALLY UNREACHABLE
+      // in production: `max_tokens` above is set to this same
+      // TRIAGE_MAX_OUTPUT_TOKENS_PER_TURN value, so the API contractually
+      // cannot return more output tokens than that. Kept as defence-in-depth
+      // against a future provider contract change (e.g. `max_tokens` ever
+      // becoming advisory rather than a hard ceiling), not as a bound this
+      // code path can fire on today — the real production signal for a
+      // truncated turn is `stop_reason === 'max_tokens'`, below. ADR 0021
+      // §11's fixture for this row is therefore synthetic: it manufactures a
+      // response whose `usage.output_tokens` exceeds the cap directly,
+      // something the real API contract does not allow.
       if (response.usage.output_tokens > TRIAGE_MAX_OUTPUT_TOKENS_PER_TURN) {
         usageErrorCode = 'output_token_per_turn_exceeded'
         result = { outcome: 'failed', reason: 'output_token_per_turn_exceeded' }

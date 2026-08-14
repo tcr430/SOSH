@@ -295,6 +295,24 @@ and asserts each tool returns zero foreign rows. Tier 2 additionally proves the 
 **Retries do not consume `TRIAGE_MAX_TOOL_CALLS` or `TRIAGE_MAX_TURNS`** — a retry is the same turn. They
 *do* count toward the token cap, which is deliberate (§2.7).
 
+**AMENDMENT (Session 28-D, D6, MAJOR-7 closed) — where `TRIAGE_MAX_WALL_CLOCK_MS` is actually enforced.**
+The table above states the number; it did not say where the guarantee lives, and the gap between the two
+was the defect. The check at the top of each turn (`Date.now() - startTime > TRIAGE_MAX_WALL_CLOCK_MS`) is
+necessary but not sufficient on its own — `TRIAGE_REQUEST_TIMEOUT_MS` (30s) applied per attempt inside
+`callWithRetryBudget`, uncoordinated with the loop's own deadline, meant a single turn entered late could
+still run `TRIAGE_REQUEST_TIMEOUT_MS × (1 + TRIAGE_RETRY_BUDGET) + RETRY_DELAY_MS × TRIAGE_RETRY_BUDGET` =
+`30 + 2 + 30 + 2 + 30` = 94s past that check, up to ≈3.1× the declared 45s ceiling — the exact gap
+`lib/signals/triage/orchestrator.ts`'s single `TRIAGE_MAX_WALL_CLOCK_MS` reservation (§3.1.1) assumed could
+not exist. **`TRIAGE_MAX_WALL_CLOCK_MS` is now enforced in TWO places, and both are load-bearing:** the
+top-of-turn check above (catches a turn that should never have started), and, new in D6,
+`callWithRetryBudget` itself — every attempt's own timeout is clamped to
+`min(TRIAGE_REQUEST_TIMEOUT_MS, remaining loop budget)`, and a retry is refused outright (no sleep, no
+further attempt) once the remaining budget can no longer fit `RETRY_DELAY_MS`. Together these make
+`TRIAGE_MAX_WALL_CLOCK_MS` a genuine ceiling on `runToolLoop`'s own elapsed time — provably so: an attempt
+can never be allotted more time than `deadlineAt - Date.now()` at the moment it starts, so it can never
+itself finish later than `deadlineAt`. `orchestrator.ts`'s single reservation is correct as written only
+because of this second enforcement point; before D6 it was correct arithmetic resting on a false premise.
+
 ### 2.5 Termination and fail-closed (L-3, D-2)
 
 The loop terminates on: the model emitting a final decision block; `TRIAGE_MAX_TOOL_CALLS` reached (one
@@ -1388,6 +1406,19 @@ Agency tier per intelligence doc §5; test tier per ADR 0015 §2 **as amended by
 | `SIGNAL3-RUBRIC-UNCHANGED` | 0 | 2 | `mode:'brief'` output byte-identical; ten dimensions unchanged |
 | `SIGNAL3-TOOL-INVOCATION-EXPECTED` | 3 | 2 | Expected tool called ≥ once per fixture — **exact-match, not statistical** |
 | `SIGNAL3-TRIAGE-QUALITY` | 3 | **E** | **MEASURED, not proven (§10.4, Amendment B4):** precision ≥ 0.75, recall ≥ 0.70, dismiss-reason match ≥ 0.60 over the versioned corpus, cited with its run URL |
+
+**AMENDMENT (Session 28-D, D6, NIT-2 recorded) — `SIGNAL3-TRIAGE-BOUNDED`'s row above says "each bound
+breached in its own fixture case"; one of those bounds is structurally unreachable in production and its
+fixture is synthetic, stated here rather than silently.** `TRIAGE_MAX_OUTPUT_TOKENS_PER_TURN`'s comparison
+(`lib/ai/tool-runner.ts`, the `response.usage.output_tokens > TRIAGE_MAX_OUTPUT_TOKENS_PER_TURN` check)
+cannot fire against the real Anthropic API: the same request sets `max_tokens` to that identical value, so
+the provider contractually cannot return more output tokens than the cap allows — the real production
+signal for a truncated turn is `stop_reason === 'max_tokens'`, a separate check immediately below it. The
+guard is kept as defence-in-depth against a future provider contract change (`max_tokens` ever becoming
+advisory rather than a hard ceiling), and its fixture (`oversized-output-per-turn`) manufactures a response
+whose `usage.output_tokens` exceeds the cap directly — something the real API contract does not permit —
+to exercise the dead branch rather than leave it silently unexecuted. Every other row's fixture in this
+table is reachable in production; this is the one named exception.
 
 **29 constraints** (27 at E4's draft; `SIGNAL3-RESCORE-INVALIDATES-TRIAGE` and
 `SIGNAL3-TICK-DEADLINE-BOUNDED` were added by the 2026-08-08 adjudications). Twenty-eight carry a
