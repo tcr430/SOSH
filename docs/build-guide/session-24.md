@@ -905,47 +905,631 @@ must show a NON-ZERO executed count (skip-guard), read by a human, before it cou
 
 ---
 
-## §3 — Reviewer session (B3)  ·  *(PLACEHOLDER — author after ADR 0017 is Accepted)*
+## §3 — Reviewer session (B3)  ·  (paste into Claude Code · Opus)
 
-> **Do not fill this in yet.** Author it as Session 23 §3 was — an independent Opus review pass that
-> modifies nothing, opens by naming the exact commit range it read (**PROC-REVIEW-AT-COMMIT** — read at
-> the range, never at HEAD), and applies the **SHARED-FUNCTION CALLERS** rule to `buildCustomerContext`
-> *and* `generatePostsForCampaign`. It is the single review pass for the session.
->
-> **Anticipated ECC posture** (confirm against the accepted ADR): `database-reviewer` (origin/role
-> migration + backfill + any brief-table RLS/cascade); `security-reviewer` (the brief-pinning →
-> generation injection path, L-9 — this track's headline security concern, per plan doc B3);
-> `typescript-reviewer` (the discriminated format-family + frozen-brief contracts, no `any`);
-> `ecc:type-design-analyzer` (format-family + frozen-brief as designed invariants);
-> `ecc:pr-test-analyzer` (does each `MODE2-*` test actually *execute* and *redden* if the property
-> broke — the ADR 0015 "covered = executed" thesis); and — if Q6 shipped UI — `ecc:react-review` +
-> `impeccable` for the brief-review surface.
->
-> **Anticipated review sections** (rename to the ADR's `MODE2-*`): brief-before-copy + frozen-brief
-> coherence; format-family structural validation + the schema-mismatch retry; role-coverage +
-> link-placement + thread guardrails; the shared rubric + critique gate; the evidence-injection guard;
-> memory wired into the brief; the existing-path behaviour-equivalence gate (L-10); origin/role
-> migration + backfill + (if table) brief RLS + cascade; scope + process (L-1 out-of-scope items not
-> shipped); constraint coverage mapped to the executing CI job (Tier-1 → db-tests, Tier-2 → app-tests).
-> Output: `docs/reviews/session-24-reviewer.md`.
+Run only after B2.0–B2.7 are committed. **The Builder range is `6fcd1ad2^..3f67bcc9`** (B2.0
+`6fcd1ad2` → B2.7 `3f67bcc9`, eight commits, one per step). The Reviewer is independent and modifies
+nothing. It is the **single** review pass for this session — there is no separate re-review track; the
+correction pass (§4) records its own resolutions in the reviewer's own file (**REVIEWER-REPORT
+APPEND-ONLY**) and the founder adjudicates close-out.
+
+**Why this track's review is harder than Track A's.** Session 23 reviewed a foundation with no product
+surface; Track B ships a migration with four triggers, two enforcement layers for the same invariant
+(`role` write-once, brief freeze), a discriminated union whose whole value is *structural rejection*, a
+bounded re-prompt that must fire **exactly once**, a HARD gate that must hold at **two** layers
+(`brief.ts` and the Server Action), and a rewire of the single most caller-heavy function in the
+codebase. Every one of those is a place where an authored test passes while the property is broken —
+which is precisely the ADR 0015 failure mode this review exists to catch.
+
+**ECC in this phase.** Invoke, alongside the Reviewer's own reasoning, the specialists whose remit maps
+to this track's risk surface:
+- `database-reviewer` — `campaign_briefs` RLS/cascade/index, the `NOT VALID`/`VALIDATE` CHECK changes,
+  the `frozen_at` + `role`-write-once triggers, the `origin`/`role` backfill, the stuck-`draft` assert.
+- `security-reviewer` — **the headline concern (L-9)**: brief-pinned evidence → generation prompt. Every
+  render path through `wrapEvidenceForPrompt`, the render-time-not-authorship-time property, the length
+  cap, the `status='active'` re-fetch. Plus tenancy: no service-role in a user-facing read path.
+- `typescript-reviewer` — the `FrozenBrief` brand, the format-family union, `CampaignBriefContent` typed
+  (never `Record<string,unknown>`), no `any`, the `PostUpdate` Omit set.
+- `ecc:type-design-analyzer` — format-family discrimination and the frozen-brief contract as *designed
+  invariants*: can a plain brief reach a `FrozenBrief` parameter? can a thread parse as a single?
+- `ecc:silent-failure-hunter` — the re-prompt ceiling, the policy validator's distinguishable error
+  code, the role-coverage and link-placement passes (a Tier-0 check that silently no-ops is worse than
+  no check).
+- `ecc:pr-test-analyzer` — does each `MODE2-*` test genuinely *execute* in a CI job and *redden* if the
+  property broke (the ADR 0015 "covered = executed, never authored" thesis).
+- `ecc:react-review` — the B2.7 minimal surface (Server/Client split, `useActionState`, no `asChild` on
+  Base UI primitives). **Not** `impeccable`/`taste-skill` — the high-touch surface is Session 24-UI
+  (ADR §10), and reviewing B2.7 against that bar would be a scope error.
+
+### §3a — Reviewer primer  (paste first · wait for acknowledgement)
+
+```
+Session 24 — Mode 2 Upgrade (ADR 0017), REVIEWER phase. You are an INDEPENDENT reviewer: you did NOT
+write this code and you will not modify any file. Output is a review document only. This is the ONE
+review pass for the session — audit thoroughly; there is no re-review to catch what you miss.
+
+⚠️ PROC-REVIEW-AT-COMMIT (CLAUDE.md / ADR 0015 §6 — a HARD constraint): read EVERY file AT THE STATED
+COMMIT RANGE — git diff 6fcd1ad2^..3f67bcc9, git show <sha>:<path>, git log --oneline 6fcd1ad2^..3f67bcc9
+— NEVER at HEAD. Your report MUST OPEN by naming the exact commit range you read and stating that every
+citation comes from that range. A report that does not name its range is not a valid review. (The
+Session 21B false-positive MAJOR came from reading one file at HEAD.)
+
+⚠️ SHARED-FUNCTION CALLERS (CLAUDE.md — the root cause of BOTH Session 22 blockers): this range touches
+THREE shared surfaces. git grep every caller of each and state, PER CALLER, which test file exercises it
+after the change:
+  (a) generatePostsForCampaign — the rewire's blast radius,
+  (b) buildCustomerContext — the L-10 equivalence gate,
+  (c) the B2.1 atomic transition helpers — called from BOTH lib/campaigns/brief.ts AND the B2.7 Server
+      Actions; the HARD gate must hold on BOTH paths. One caller proven is NOT the function proven.
+
+Invoke database-reviewer AND security-reviewer AND typescript-reviewer AND ecc:type-design-analyzer AND
+ecc:silent-failure-hunter AND ecc:pr-test-analyzer AND ecc:react-review. Use pr-test-analyzer
+specifically to judge whether each MODE2-* test EXECUTES in a named CI job and would REDDEN if its
+property broke — an authored-but-inert test is this session's cardinal sin.
+
+Read now, at that range:
+- docs/decisions/0017-mode-2-upgrade.md — §13's eighteen MODE2-* constraints are your checklist; §12 is
+  the test plan (incl. the evidence-guard CALLER TABLE); §14 lists advisory findings already folded in.
+- docs/build-guide/session-24.md §0 (Locked L-1..L-11, esp. L-10's equivalence gate) + §0.1 (the eight
+  resolved questions — verify the ADR resolved them AND the Builder obeyed them) + §2 (the concrete
+  decisions list the Builder was told to transcribe, NOT re-derive).
+- docs/decisions/0015-test-execution-and-ci-gates.md §2 — the three tiers and "covered = executed".
+- The full Session 24 diff, COMMIT BY COMMIT (B2.0 6fcd1ad2, B2.1 19f63dbe, B2.2 f50228a9,
+  B2.3 f0512b99, B2.4 2c4c71a3, B2.5 bc3b2d4b, B2.6 07939de5, B2.7 3f67bcc9), and every test added.
+- supabase/migrations/<ts>_mode2_brief_and_roles.sql; supabase/__tests__/mode2-*.test.ts;
+  lib/db/campaign-briefs.ts + lib/db/types.ts; lib/ai/prompts/rubric.ts; lib/ai/wrap-evidence.ts;
+  lib/ai/prompts/formats/*; lib/ai/generate-native.ts; lib/ai/runner.ts (must be UNCHANGED);
+  lib/ai/context.ts (must be UNCHANGED); lib/campaigns/brief.ts; lib/campaigns/generate.ts;
+  app/[locale]/(dashboard)/campaigns/[id]/brief/*; i18n en/pt/es;
+  docs/decisions/0010-legal-surface.md Amd 2 §D2.5 (is campaign_briefs IN the cascade table?).
+
+Before reviewing anything, ESTABLISH FOUR REALITIES (a wrong answer here voids the review):
+(1) EXECUTION. Did this range run in CI? Name the app-tests run and the db-tests run for these SHAs, and
+    the db-tests EXECUTED TEST COUNT (non-zero — the skip-guard). If either job never ran on this range,
+    every constraint it owns is AUTHORED-NOT-EXECUTED and that is a BLOCKER, not a note.
+(2) DOUBLE ENFORCEMENT. Two invariants are deliberately enforced at BOTH the DB and the app layer —
+    role write-once (PostUpdate Omit + BEFORE UPDATE trigger) and brief freeze (FrozenBrief brand +
+    frozen_at trigger). Confirm BOTH halves exist and BOTH are tested at their own tier. One half only is
+    a MAJOR — the ADR chose two layers precisely because the service-role orchestrator bypasses the app
+    layer and a TS `readonly` is defeated by a JSON round-trip.
+(3) THE GATE AT TWO LAYERS. The HARD critique gate (overall >= BRIEF_QUALITY_THRESHOLD) must block
+    critiqued→approved from lib/campaigns/brief.ts AND from the B2.7 approveBrief Server Action. Point at
+    the test for EACH. A UI path that can approve a below-threshold brief is a BLOCKER.
+(4) CONTRACT STABILITY. Is CustomerContext (lib/ai/context.ts) byte-identical across the range? Was any
+    pre-existing context/generation test EDITED to pass? Diff both.
+Output the four findings + the three caller enumerations + "Ready to review 24
+(range: 6fcd1ad2^..3f67bcc9)." Then wait.
+```
+
+### §3b — Reviewer prompt  (paste after acknowledgement)
+
+```
+REVIEWER — Session 24. Audit the diff commit-by-commit against ADR 0017. RE-DERIVE the adversarial
+checks yourself (write the query, trace the call, reason about the outcome) rather than trust a test's
+name. Tier every finding BLOCKER / MAJOR / MINOR / NIT. All citations at the stated commit range.
+
+SECTION A — SCHEMA, RLS, CASCADE, TRIGGERS  (MODE2-BRIEF-RLS-ISOLATED, -BRIEF-CASCADE-COMPLETE,
+                                              -BRIEF-FROZEN-GUARD, -ROLE-WRITE-ONCE,
+                                              -ORIGIN-ROLE-BACKFILL · database-reviewer + security-reviewer)
+A1. campaign_briefs has RLS ENABLED and all FOUR policies in the live InitPlan form
+    `business_id = ANY (SELECT unnest(public.get_user_business_ids()))` — SELECT / INSERT WITH CHECK /
+    UPDATE with BOTH USING and WITH CHECK / DELETE. Prove an authenticated client for business X cannot
+    SELECT, INSERT, UPDATE or DELETE a row scoped to business Y, EXECUTED against live Postgres. A
+    missing WITH CHECK on UPDATE is tenant tunnelling — BLOCKER.
+A2. business_id cascades from businesses (not from campaign_id), UNIQUE(campaign_id) enforces 1:1, the
+    partial index (business_id,status) WHERE deleted_at IS NULL exists, and there is NO redundant
+    (campaign_id) index. Confirm business_id is sourced FROM the campaign row on insert, not caller-
+    supplied — and that a mismatched pair is rejected.
+A3. campaign_briefs has its ADR 0010 Amd 2 §D2.5 cascade row. Missing = silent GDPR-erasure leak =
+    BLOCKER (CLAUDE.md). Confirm a business delete actually purges briefs, executed.
+A4. The frozen_at trigger rejects a content UPDATE once frozen_at IS NOT NULL; the role trigger rejects
+    NEW.role IS DISTINCT FROM OLD.role when OLD.role IS NOT NULL. Both proven against live Postgres, not
+    asserted in a comment. Confirm the app-layer halves too (PostUpdate Omit gains 'role').
+A5. origin: full three-value CHECK, existing rows backfilled to objective_generated, the DEFAULT
+    DROPPED, and CampaignInsert.origin REQUIRED (no `?`) — enumerate every CampaignInsert construction
+    site in the range and confirm each supplies it. role: nullable, six values, existing rows NULL.
+A6. Every CHECK change uses ADD CONSTRAINT … NOT VALID then VALIDATE CONSTRAINT (low-lock), never a
+    naive in-place drop/add. campaigns.status gained 'awaiting_brief' this way.
+A7. MODE2-ACTIVATE-GUARD-MIGRATED: the migration PROVES zero live campaigns in 'draft' (or handles the
+    ones it finds) — it does not assume. A silently stranded draft campaign can never generate again.
+
+SECTION B — BRIEF-BEFORE-COPY + THE STATE MACHINE  (MODE2-BRIEF-BEFORE-COPY, -BRIEF-STATE-ATOMIC)
+B1. No posts row can exist before an approved brief. Trace the path: is there ANY route from objective →
+    posts that skips brief.ts? A surviving bypass is a BLOCKER (it is the whole thesis of the track).
+B2. Each of the four transitions (draft→critiqued, critiqued→approved, critiqued→draft, approved→
+    generated) is a CONDITIONAL UPDATE guarded on the expected current status — a read-then-update
+    anywhere is a MAJOR (CLAUDE.md atomic transitions). Prove each is a no-op from every other status.
+B3. Revise bumps version and leaves frozen_at NULL; approve sets frozen_at via formatISO (not
+    new Date().toISOString()).
+
+SECTION C — THE FROZEN BRIEF + THE REWIRE  (MODE2-BRIEF-FROZEN, -CONTEXT-EQUIVALENT · type-design-analyzer)
+C1. The SAME frozen object instance reaches EVERY per-platform call — N independent calls, not one joint
+    call. Prove it with the test, and prove the test would redden if a per-platform re-derivation crept
+    back in. Can a plain (non-frozen) brief be passed where FrozenBrief is required? If the brand is
+    defeatable by a cast or a JSON round-trip WITHOUT the DB trigger catching it, say so.
+C2. CustomerContext's shape is UNCHANGED (L-10 / ADR §5.1). Any field added/removed/retyped that reaches
+    postGenerationPrompt is a BLOCKER unless the ADR ratified it. Memory wires into the BRIEF only —
+    confirm no lib/memory/ call reaches the per-platform generation path.
+C3. No pre-existing context/generation test was EDITED to pass. Diff generate.context-equivalence.test.ts
+    and context.test.ts — a loosened assertion masking a behaviour change is a MAJOR.
+C4. The already_generated guard and the post_generation_sessions machinery survive unchanged; the final
+    guard flipped draft→awaiting_brief and nothing else. Trial-counter increments are not double-counted
+    by the added native/rubric/hook calls — trace every recordAiUsage / trial increment in the new path.
+
+SECTION D — STRUCTURAL NATIVENESS + THE RE-PROMPT  (MODE2-FORMAT-FAMILY-STRUCTURAL, -THREAD-GUARDRAILS,
+                                                     -NATIVE-RETRY · type-design-analyzer + silent-failure-hunter)
+D1. safeParse REJECTS prose where a thread is expected, and rejects a thread of <3 or >8. The union
+    discriminates on 'format' with both branches concretely typed — no z.ZodType<unknown>+cast anywhere.
+D2. The Tier-0 POLICY validator is SEPARATE from the schema and returns a DISTINGUISHABLE AiError code
+    from a shape failure (posts[0]='hook', last='close', ≥1 'pull_quote'). If a policy failure is
+    indistinguishable from a parse failure, the targeted re-prompt is a lie — MAJOR.
+D3. The re-prompt fires EXACTLY once (2 attempts total) then surfaces invalid_response unchanged. Prove
+    with a fixture that counts runPrompt invocations, and confirm the test REDDENS if the ceiling is
+    mutated to 0 or 2 (silent-failure-hunter). An unbounded or never-firing retry is a MAJOR.
+D4. lib/ai/runner.ts is UNCHANGED — no third prompt.id branch, no re-prompt logic in the generic runner
+    (ADR §4.4). Diff it. Any edit is a MAJOR.
+D5. The platform→family map is deterministic Tier-0 (not model-chosen); threads has its OWN
+    PLATFORM_CONSTRAINTS entry; posts[] has no `order` field (index-derived).
+
+SECTION E — RUBRIC + THE HARD GATE  (MODE2-RUBRIC-SHARED, -CRITIQUE-GATE, -HOOK-STANDALONE)
+E1. ONE rubric instance powers BOTH the brief critique gate AND the nativeness score. grep for any
+    second scorer / forked dimension list — a fork is a MAJOR (D-4).
+E2. BRIEF_QUALITY_THRESHOLD is an exported named constant, IMPORTED (never re-declared or inlined) by
+    every consumer. A magic number at a call site is a MINOR; a SECOND threshold value is a MAJOR.
+E3. The gate is HARD at BOTH layers (brief.ts and the approveBrief Server Action) — test each. Confirm
+    the test reddens if the comparison flips (>= vs >). The critique is RETURNED to the human on refusal,
+    not swallowed.
+E4. The hook loop regenerates AT MOST once, for single-post openers AND thread posts[0]. Bounded, Tier-2,
+    no Tier-3 anywhere in the range.
+
+SECTION F — EVIDENCE INJECTION GUARD  (MODE2-EVIDENCE-DATA-GUARDED · security-reviewer — the L-9 headline)
+F1. wrapEvidenceForPrompt is the SINGLE choke point and is applied at RENDER time at EVERY caller in ADR
+    §12's caller table: brief assembly, the N native calls, AND the rubric call. Walk the table caller by
+    caller and point at the code. A render path that skips it — including one that skips because a field
+    was AI-generated or "already sanitized" — is a BLOCKER.
+F2. Citation-by-id: the guard RE-FETCHES rows and includes only status='active' (closing the
+    freeze→generate staleness gap). A brief that pins evidence later retired must not render it.
+F3. The guard neutralizes [/DATA] closers (including unicode-obfuscated variants), triple-backtick
+    fences and leading {/[, and TRUNCATES at a hard cap (truncate, not warn). Each proven by a test that
+    injects the hostile string — not by reading the implementation.
+
+SECTION G — TIER-0 CONSISTENCY PASS + MEMORY  (MODE2-ROLE-COVERAGE, -LINK-PLACEMENT, -MEMORY-WIRED)
+G1. Role-coverage positionally cross-checks each generated post against the frozen brief's roleSequence
+    and REDDENS if a role is unfulfilled. A check that passes vacuously on an empty set is a MAJOR
+    (silent-failure-hunter).
+G2. Link-placement: CTA/outbound links never in tweet 1. Test reddens on a tweet-1 link.
+G3. retrieveEvidenceMemory / retrieveAudienceMemory / retrieveBrandMemory are genuinely wired into brief
+    assembly and their output demonstrably reaches the assembly prompt input (not retrieved-and-dropped).
+    ADR 0016 §10's "unwired by design" state is now closed — or say it is not.
+G4. MODE2-REDUNDANCY-UNDEFER: the cross-set redundancy LLM call is NOT built. If it was, that is an
+    out-of-scope MAJOR (Q8/ADR §8 deferred it behind a named trigger).
+
+SECTION H — THE APP SURFACE  (B2.7 · ecc:react-review)
+H1. Server Component page + Client form split; useActionState; no `asChild` on Base UI primitives; no
+    'use client' where it isn't needed (CLAUDE.md shadcn v4 notes).
+H2. Every Server Action validates input with Zod BEFORE processing and rejects malformed payloads
+    (incl. a non-UUID campaignId). Mutations are Server Actions, not POST routes.
+H3. i18n keys exist in en AND pt AND es — all three, no hardcoded user-facing string. Name any key
+    present in one locale and missing in another.
+H4. Authorisation: can a user open/approve a brief for a campaign in another business? Trace the page's
+    data fetch and each action's ownership check — RLS alone is not an answer if a service-role client is
+    in the path (security-reviewer).
+
+SECTION I — SCOPE + PROCESS  (L-1, L-11)
+I1. NOTHING out of scope shipped: no Mode 1 Studio, no Mode 3 / mining / insight cards, no Track C
+    diff-learning, no carousel/script family, no image generation, no skip-review fast path, no
+    numbered-vs-unnumbered preference, no high-touch brief-edit or per-post Studio diff (Session 24-UI).
+    Any of these is an out-of-scope BLOCKER.
+I2. No `any` (outside CLAUDE.md's two named carve-outs), no console.*; env via lib/config; DB via
+    lib/db/ (+ lib/memory/); service-role lazy-imported and never in a user-facing read path; date-fns
+    for every timestamp; every new list query bounded with an explicit ORDER BY matching an index.
+I3. The eight §0.1 questions are each resolved in ADR 0017 and OBEYED by the Builder — flag any place the
+    Builder re-derived or "improved" on a §2 concrete decision instead of transcribing it.
+I4. One step, one commit: the eight commits correspond to B2.0…B2.7 with no step's work bleeding into
+    another's commit.
+
+SECTION J — CONSTRAINT COVERAGE (the thesis · pr-test-analyzer)
+J1. EVERY one of ADR §13's eighteen MODE2-* constraints maps to a test AND to the CI JOB that executes it
+    (Tier-1 → db-tests, Tier-2 → app-tests, Tier-3 → enumerated as diff-verified by decision). A
+    constraint with a test but no executing job is a MAJOR; a constraint with neither is a BLOCKER.
+J2. For each, state whether pr-test-analyzer confirmed the test would FAIL if the property broke.
+J3. Report the db-tests EXECUTED TEST COUNT for this range (skip-guard: zero executed = FALSE-GREEN) and
+    whether this range counts toward the ADR 0015 three-green db-tests promotion tally.
+J4. Apply SHARED-FUNCTION CALLERS: publish the per-caller → test-file table for generatePostsForCampaign,
+    buildCustomerContext, and the atomic transition helpers. A caller with no listed test is
+    AUTHORED-NOT-EXECUTED for that caller, even if another caller is fully covered.
+
+OUTPUT: docs/reviews/session-24-reviewer.md —
+- OPEN by naming the commit range read (PROC-REVIEW-AT-COMMIT: 6fcd1ad2^..3f67bcc9) and stating every
+  citation is from that range, never HEAD. Then the three SHARED-FUNCTION CALLERS tables (J4).
+- A table: Section / Check / Status (✅/⚠️/❌) / File:Line / Note.
+- Then BLOCKER, MAJOR, MINOR, NIT — each with an exact, actionable fix instruction (the correction pass
+  is driven directly off these, one step per finding).
+- A coverage section: constraint → test → executing CI job → tier → "reddens if broken?".
+- A VERDICT: blockers before merge · deferrable debt · and a plain answer to the three questions this
+  track exists to settle: is the brief genuinely generated BEFORE any copy and human-gated; is
+  nativeness genuinely STRUCTURAL (not prompted-for); and is brief-pinned evidence genuinely DATA at
+  every render.
+Do NOT modify code. Do NOT write the correction prompts — those come after this report (§4).
+```
 
 ---
 
-## §4 — Correction pass (Session 24-D)  ·  *(PLACEHOLDER — fill from the reviewer report)*
+## §4 — Correction pass (Session 24-D)  ·  (paste into Claude Code · Opus)
 
-> **Do not fill this in yet.** Fill it from `docs/reviews/session-24-reviewer.md` exactly as Session 23
-> §4 was filled from its reviewer report — a step per finding (D0, D1, …), each its own commit, ordered
-> by the same deliberate logic (a "push + get CI green on the final range" BLOCKER runs **last**, not
-> first, so it greens the range D0–D(n-1) actually produce).
->
-> **Binding rules for the pass** (as in Session 23-D): resolutions go **into
-> `docs/reviews/session-24-reviewer.md`** under a single appended, attributed
-> `## CORRECTION PASS (Session 24-D)` section — **REVIEWER-REPORT APPEND-ONLY** (CLAUDE.md): the
-> reviewer's findings are immutable and never edited in place; the appendix references each finding by
-> ID and records *finding → fix → the test that now proves it → the commit SHA*; a disputed finding is
-> argued in the appendix, never erased. **Never weaken a test to reach green** — if a correction shows a
-> `MODE2-*` constraint is infeasible, **amend ADR 0017** and say so. Correction passes are normal, not
-> failures (constitution).
+**Filled in from `docs/reviews/session-24-reviewer.md` (Reviewer range `6fcd1ad2^..3f67bcc9`).** Eight
+steps: **D0–D7**. Correction passes are normal, not failures (constitution). **There is no independent
+re-review pass this session** (mirroring Session 23-D): the correction pass fixes the Reviewer's
+findings, records its own resolutions in the reviewer's own file, and the founder adjudicates close-out.
+
+**Founder direction — every finding is fixed, including MINORs and NITs.** The Reviewer classed
+MINOR-1..8 and NIT-1..4 as deferrable debt; per founder direction (as in Session 23-E) they are
+**resolved in this pass anyway**, each with its own resolution row — a finding that is declined or
+adjudicated the other way still gets a row, because an unexplained gap between findings and resolutions
+is what makes the trail unreadable later.
+
+**What the Reviewer found (summary — the full text in `session-24-reviewer.md` is authoritative):**
+
+| ID | Tier | One line | Fixed in |
+|---|---|---|---|
+| BLOCKER-1 | BLOCKER | The range is unpushed with zero CI runs — all eighteen MODE2-* constraints are `AUTHORED-NOT-EXECUTED` | **D7** (last, deliberately) |
+| MAJOR-1 | MAJOR (security-reviewer: BLOCKER) | `getEvidenceMemoryByIds` renders evidence with **no `business_id` scope** under a service-role client; the "citation-by-id is the trust boundary" claim is asserted, not enforced | **D1** |
+| MAJOR-2 | MAJOR | `BriefReviewForm` has no `key`; cross-campaign client-nav can persist one campaign's edited text onto another's brief | **D0** |
+| MINOR-1 | MINOR | Flagship `MODE2-CONTEXT-EQUIVALENT` named test has **zero `expect()`** — passes on an args regression | **D2** |
+| MINOR-2 | MINOR | The C4 double-count scenario (regeneration → increment 6 not 7) is not asserted end-to-end | **D2** |
+| MINOR-3 | MINOR | `generate-native.ts` comments still say the trial double-count "will happen / unresolved" after B2.6 fixed it | **D3** |
+| MINOR-4 | MINOR | `gate_refused` action state drops the `critique` field returned by `approveBriefIfQualified` | **D3** |
+| MINOR-5 | MINOR | `FrozenBrief` brand is convention-strength; `content` readonly is shallower than the runtime `Object.freeze` | **D4** |
+| MINOR-6 | MINOR | `checkRoleCoverage` passes vacuously on an empty set — unreachable today, latent trap | **D2** |
+| MINOR-7 | MINOR | Hook opener-rescoring uses the weaker local `sanitizeDataField`, not the exported `neutralize()` | **D3** |
+| MINOR-8 | MINOR | Superfluous `content as CampaignBriefContent` cast masks future schema/DB drift | **D3** |
+| NIT-1 | NIT | Unused i18n keys `approved_success`/`rejected_success`/`saved_success` (all three locales) | **D5** |
+| NIT-2 | NIT | `getCritiqueLines(brief.critique)` called twice per render | **D5** |
+| NIT-3 | NIT | `CampaignPostRole = PostRole` bare alias | **D5** |
+| NIT-4 | NIT | Brief Server Actions swallow throws with no logging (matches pre-existing convention) | **D5** |
+
+**Ordering rationale (a deliberate departure from "BLOCKERs first," as in Session 23-D).** BLOCKER-1 is
+*"push and get both CI jobs green on this exact range"* — which cannot be satisfied until the range is
+final. Running it first would green a range that D0–D6 then invalidate. **BLOCKER-1 therefore closes the
+pass, not opens it.** The two MAJORs lead (they must be fixed before merge and D1 changes a function
+signature threaded through three callers); the MINOR/NIT steps follow; then the docs + reviewer
+finalisation (D6); then CI (D7). State this reasoning in the resolution log so the ordering does not read
+as a downgrade of a BLOCKER.
+
+**Where resolutions go (CLAUDE.md — REVIEWER-REPORT APPEND-ONLY, revised Session 23-D).** Directly into
+`docs/reviews/session-24-reviewer.md`, under a **single appended, attributed**
+`## CORRECTION PASS (Session 24-D)` section at the **end** of the file — no separate corrections file.
+The reviewer's findings above it are **immutable**: not one character edited, no verdict flipped, no
+RESOLVED stamped onto a finding. The appendix references each finding **by ID** and records
+*finding → fix → the test that now proves it → the commit SHA*. A **disputed** finding is argued in the
+appendix, never erased — MAJOR-1's MAJOR-vs-BLOCKER severity split is exactly such a case: record that it
+was fixed to the stricter (tenant-scoped) standard so the disagreement is moot, but do not rewrite the
+Reviewer's or the security-reviewer's original claim. **Never weaken a test to reach green** — if a
+correction shows a `MODE2-*` constraint is infeasible, **amend ADR 0017** and say so.
+
+### §4.0 — Correction primer  (paste first · wait for acknowledgement)
+
+```
+Session 24-D — Mode 2 Upgrade (ADR 0017), CORRECTION pass. You are fixing the findings in
+docs/reviews/session-24-reviewer.md (range 6fcd1ad2^..3f67bcc9). Eight steps, D0…D7, each its own commit.
+
+Read now, before anything else:
+- docs/reviews/session-24-reviewer.md — IN FULL. It is your work order AND the file you record
+  resolutions in. Append a single `## CORRECTION PASS (Session 24-D)` section at the END; do NOT edit
+  any finding in place, do NOT create a separate corrections file (CLAUDE.md REVIEWER-REPORT APPEND-ONLY).
+- docs/build-guide/session-24.md §0 (Locked L-1..L-11, esp. L-9 evidence-guard, L-10 equivalence gate)
+  and §4 (this section — the step list and the ordering rationale).
+- docs/decisions/0017-mode-2-upgrade.md — the MODE2-* constraint table (§13) you are discharging; §12
+  caller table (evidence guard); §5.1 (CustomerContext frozen); §9 (evidence-guard render-time rule).
+- docs/decisions/0015-test-execution-and-ci-gates.md §2 — "covered = executed green in CI, never
+  authored." BLOCKER-1 exists because the range has never run in CI.
+
+Binding rules for this pass:
+- L-1 still holds. No Mode 1, no Mode 3, no diff-learning, no carousel/script, no image-gen, no
+  skip-review, no high-touch brief-edit / per-post Studio diff. A fix that seems to need one is a STOP.
+- L-10 still holds. CustomerContext's shape does not change. D1 adds a business_id PARAMETER to a
+  lib/db evidence fetch — that is a query-scoping fix, not a CustomerContext contract change; do not
+  conflate them.
+- NEVER weaken a test to reach green. If a correction shows an ADR 0017 constraint is infeasible, amend
+  the ADR and say so.
+- Each step: /ecc:plan → /ecc:tdd-workflow → /ecc:verification-loop, plus the step's named specialist.
+  tsc --noEmit --skipLibCheck; scoped vitest run (CLAUDE.md invocation notes); npm run test:db for Tier-1.
+
+Confirm these grounding facts (a wrong one is a STOP):
+(1) git status / git branch -r --contains 3f67bcc9 — confirm the range is still unpushed with 0 CI runs
+    (BLOCKER-1 is still open) and no working-tree code changes are staged.
+(2) lib/db/memory-evidence.ts:35–49 — quote getEvidenceMemoryByIds and confirm it has NO business_id
+    filter, while its sibling listEvidenceMemoryCandidates (same file :7–9) DOES and comments that
+    service-role generation-path reads MUST scope by business_id. This is MAJOR-1.
+(3) app/[locale]/(dashboard)/campaigns/[id]/brief/page.tsx:40 — confirm <BriefReviewForm> is rendered
+    with NO key, and BriefReviewForm.tsx:37–38 seeds edit state via useState(brief.content.*). MAJOR-2.
+(4) lib/campaigns/generate.context-equivalence.test.ts:274–279 — confirm the named "same args as before
+    B2.6" case has zero expect() calls. MINOR-1.
+(5) The three §12 evidence-guard callers of wrapEvidenceForPrompt (brief.ts:90,127; generate-native.ts:95)
+    and its business_id-less fetch path (wrap-evidence.ts:128–135) — the surface D1 threads through.
+Output the five findings + "Ready for D0." Then stop.
+```
+
+### §4.1 — Correction steps
+
+#### D0 — MAJOR-2: `key` on the brief review form  ·  smallest fix, first
+
+```
+CORRECTION — Session 24-D · D0. One-line correctness fix. Run /ecc:plan → /ecc:tdd-workflow →
+/ecc:verification-loop. Invoke ecc:react-review (this is a React reconciliation / stale-state finding).
+
+BUILD:
+- app/[locale]/(dashboard)/campaigns/[id]/brief/page.tsx — pass key={brief.id} (or key={id}) on
+  <BriefReviewForm …> so React remounts the client component and re-seeds its useState edit fields when
+  the campaign changes. Prefer key={brief.id} — it also remounts on a revise (version bump / new brief
+  row) so the textareas re-seed from the freshly-fetched content.
+- Do NOT convert the useState seeds to useEffect-sync — the key remount is the idiomatic fix and avoids a
+  render-then-reset flash (react-review will confirm).
+
+VERIFY: a Tier-2 test asserting that changing the brief prop identity re-seeds the edit textareas (or, if
+that is awkward to drive in RTL, an explicit test that the form receives a stable-per-brief key and the
+hidden campaignId matches the displayed brief). npm run test:app; tsc clean. react-review clean.
+Append the D0 row to the `## CORRECTION PASS (Session 24-D)` section of the reviewer report (create the
+section here): finding → fix → test → SHA.
+On commit: "D0 complete — key={brief.id} on BriefReviewForm; cross-campaign stale-edit overwrite closed
+(MAJOR-2); remount re-seeds edit state; react-review clean." Then stop.
+```
+
+#### D1 — MAJOR-1: tenant-scope `getEvidenceMemoryByIds`  ·  the security fix
+
+```
+CORRECTION — Session 24-D · D1. The tenancy-isolation fix. Run /ecc:plan → /ecc:tdd-workflow →
+/ecc:verification-loop. Invoke security-reviewer (it rated this BLOCKER; the Reviewer rated it MAJOR —
+fixing it to the stricter standard moots the split) AND database-reviewer (query-scoping correctness).
+
+The defect: getEvidenceMemoryByIds (lib/db/memory-evidence.ts:35–49) filters .in('id',ids)
+.eq('status','active').is('deleted_at',null) with NO business_id filter, and runs under a SERVICE-ROLE
+client (RLS bypassed) on the generation + critique paths. Its sibling listEvidenceMemoryCandidates
+scopes by business_id and its own comment (:7–9) says service-role generation-path reads MUST. The
+"pinned id set is the trust boundary" claim (wrap-evidence.ts:124–127) is asserted, not enforced.
+
+BUILD (both halves — enforce the boundary AND scope the query):
+- lib/db/memory-evidence.ts — add a businessId parameter to getEvidenceMemoryByIds and filter
+  .eq('business_id', businessId), mirroring listEvidenceMemoryCandidates. Update the comment.
+- Thread the campaign's business_id through wrapEvidenceForPrompt (wrap-evidence.ts) and its THREE
+  callers (brief.ts:90 assembly, brief.ts:127 rubric, generate-native.ts:95 native gen) — each already
+  has the campaign/business in scope. No CustomerContext change (L-10) — this is a lib/db query arg.
+- CLOSE THE ACCEPTANCE GAP TOO (the Reviewer's "optionally"): in assembleBrief / CampaignBriefContentSchema,
+  reject any pinnedEvidence.evidenceMemoryId not in the candidate set the model was shown
+  (brief.ts:87 retrieveEvidenceMemory result). This stops an out-of-set id at the point untrusted model
+  output is first accepted, so a bad id never reaches persistence — defence in depth over the render-time
+  filter alone.
+
+VERIFY: add a cross-tenant test to memory-evidence.test.ts AND wrap-evidence.test.ts — a foreign
+business's evidence id renders NOTHING (empty), proven against the scoped query; and an out-of-candidate-set
+id is rejected at brief assembly. Confirm the test REDDENS if the .eq('business_id',…) is removed.
+npm run test:app; tsc clean. Address every security-reviewer + database-reviewer finding before commit.
+Append the D1 row (note the MAJOR/BLOCKER severity split is now moot — fixed to the stricter standard —
+without editing either original finding).
+On commit: "D1 complete — getEvidenceMemoryByIds tenant-scoped by business_id + brief-assembly rejects
+out-of-candidate ids (MAJOR-1); cross-tenant render test reddens on scope removal; security-reviewer +
+database-reviewer clean." Then stop.
+```
+
+#### D2 — MINOR-1, MINOR-2, MINOR-6: make three inert/absent tests actually redden  ·  the test-integrity step
+
+```
+CORRECTION — Session 24-D · D2. Test integrity — this track is judged on "covered = executed", so a
+named test that cannot fail is the cardinal sin. Run /ecc:plan → /ecc:tdd-workflow →
+/ecc:verification-loop. Invoke ecc:pr-test-analyzer (each fix is precisely "does this test redden?") AND
+ecc:silent-failure-hunter (MINOR-6 is a vacuous-pass guard).
+
+BUILD:
+- MINOR-1 — lib/campaigns/generate.context-equivalence.test.ts:274–279: the "calls buildCustomerContext
+  with the exact same args as before B2.6" case has ZERO expect(). Replace it with a real assertion: spy
+  buildCustomerContext and assert its args === (BUSINESS_ID, VARIATION_ID) (the pre-B2.6 call shape).
+  It must redden on an args regression. Do NOT delete the flagship MODE2-CONTEXT-EQUIVALENT test — fix it.
+- MINOR-2 — lib/campaigns/generate.test.ts: in the REGENERATION scenario (7 native calls, :357–376), add
+  expect(incrementPostsGeneratedBy).toHaveBeenCalledWith(BUSINESS_ID, 6) so the exact double-count the
+  ADR worries about (increment by post count 6, not native-call count 7) is pinned end-to-end. Confirm it
+  reddens if generate.ts:376 is mutated to use the native-call count instead of inserted.length.
+- MINOR-6 — lib/campaigns/consistency.ts checkRoleCoverage passes vacuously on empty `expected`. Add an
+  ORCHESTRATOR-level test (generate.test.ts) that drives generated.length < roleSequence.length through
+  the real path and asserts consistency_check_failed, so a future "continue on per-post error" refactor
+  cannot silently lose the safety net. Do NOT change the pure function's empty-set return without checking
+  generate.ts:150–159 still fails first on empty roleSequence — if it does, note the empty-set branch is
+  defence-in-depth and leave it, but pin the reachable failure.
+
+VERIFY: for each, apply the named mutation locally, confirm RED, revert. npm run test:app; tsc clean.
+Append D2 rows (three findings, one commit).
+On commit: "D2 complete — MODE2-CONTEXT-EQUIVALENT flagship test now asserts call args (MINOR-1);
+regeneration increment pinned to 6 (MINOR-2); role-coverage orchestrator-level failure test added
+(MINOR-6); all three verified to redden on mutation." Then stop.
+```
+
+#### D3 — MINOR-3, MINOR-4, MINOR-7, MINOR-8: code + doc-rot touch-ups
+
+```
+CORRECTION — Session 24-D · D3. Four small correctness/hygiene fixes. Run /ecc:plan → /ecc:tdd-workflow →
+/ecc:verification-loop. Invoke ecc:silent-failure-hunter (MINOR-4 is a dropped-field-on-error path;
+MINOR-7 is guard-strength) AND typescript-reviewer (MINOR-8 cast).
+
+BUILD:
+- MINOR-3 (doc-rot) — lib/ai/generate-native.ts:82–88: the comment still says the trial double-count
+  "will" happen and is "Flagged for B2.6 to resolve; not addressed here," but B2.6 resolved it in
+  lib/ai/runner.ts:13–21. Rewrite the comment to point at the runner.ts fix so a future session doesn't
+  reintroduce the bug believing it's open.
+- MINOR-4 — thread `critique` through the ApproveBriefState.gate_refused variant (actions.ts:64,85) so
+  the critique returned by approveBriefIfQualified (brief.ts:179) survives a refusal in the action state.
+  Add a Tier-2 assertion that critique is present on gate_refused. (Even though BriefReviewForm renders
+  brief.critique unconditionally today, the drop means no test can currently assert it survives — close
+  that.)
+- MINOR-7 — lib/campaigns/generate.ts:253–258: wrap extractOpener(output) with the exported neutralize()
+  (NFKC + Cf-strip + fence/brace, wrap-evidence.ts:73–82) before passing it into rubricPrompt, instead of
+  relying on rubric.ts's weaker local sanitizeDataField. Aligns the hook-rescoring path with the stated
+  L-9 posture for reused AI-generated text.
+- MINOR-8 — lib/campaigns/brief.ts:105: remove the superfluous `content as CampaignBriefContent` cast —
+  `content` is already CampaignBriefContentOutput (structurally identical), so the cast only papers over a
+  future zod/DB-type divergence. Removing it makes drift a compile error.
+
+VERIFY: npm run test:app; tsc clean (the MINOR-8 removal must still compile — if it does NOT, that IS the
+drift the cast was hiding; STOP and report rather than re-adding the cast). Append D3 rows (four findings).
+On commit: "D3 complete — trial-counter comment points at the runner fix (MINOR-3); critique threaded
+through gate_refused + asserted (MINOR-4); hook opener neutralized before scoring (MINOR-7); superfluous
+brief cast removed (MINOR-8)." Then stop.
+```
+
+#### D4 — MINOR-5: `FrozenBrief` brand + deep-readonly precision
+
+```
+CORRECTION — Session 24-D · D4. Tighten the frozen-brief type so it states what the runtime actually
+guarantees. Run /ecc:plan → /ecc:tdd-workflow → /ecc:verification-loop. Invoke ecc:type-design-analyzer
+(the FrozenBrief contract is a designed invariant consumed by generate.ts).
+
+The Reviewer confirmed the runtime is STRICTER than the type (Object.freeze/deepFreezeContent throws on
+.push(); the DB frozen_at trigger guards persistence) — so nothing ships bad data. The fix is precision,
+not a behaviour change.
+
+BUILD:
+- lib/campaigns/brief.ts:23–29,43–49: type content as a deep-readonly of CampaignBriefContent
+  (ReadonlyArray<Readonly<…>> on pinnedEvidence/roleSequence, or a DeepReadonly<> mapped type) so TS
+  rejects the .push() the runtime already throws on. Keep the branded `_brand: 'FrozenBrief'` tag as-is.
+- Soften the "cannot be constructed without freezeBrief" comment to match what TS actually enforces (a
+  single-step `as FrozenBrief` is legal; the DB trigger is the real backstop, by ADR design). Do NOT
+  claim nominal strength the string-brand doesn't have.
+- Confirm (git grep) freezeBrief is still the ONLY producer and generate.ts:148 the only consumer — if
+  the deep-readonly retype forces a change at the consumer, that is a real mutation the old shallow type
+  was hiding; surface it, don't cast around it.
+
+VERIFY: tsc clean; a compile-time negative (a .push() on a FrozenBrief field must now fail to typecheck —
+prove it with a // @ts-expect-error case in the test). npm run test:app. Append the D4 row.
+On commit: "D4 complete — FrozenBrief.content is deep-readonly (@ts-expect-error pins the .push()
+rejection) + comment matches TS reality (MINOR-5); sole-producer/consumer unchanged." Then stop.
+```
+
+#### D5 — NIT-1..4: the nits
+
+```
+CORRECTION — Session 24-D · D5. The four NITs (fixed per founder direction, not deferred). Run /ecc:plan
+→ /ecc:tdd-workflow → /ecc:verification-loop. Invoke ecc:react-review (NIT-1/2/4 touch the form).
+
+BUILD:
+- NIT-1 — the unused i18n keys approved_success / rejected_success / saved_success exist in all three
+  locales but are never rendered (the form only router.refresh()es). Founder call, pick ONE and do it in
+  all three locales symmetrically: (a) wire a success toast/inline confirmation that consumes them, or
+  (b) remove all three keys from en/pt/es. Prefer (a) — a silent refresh gives no approve/reject
+  feedback, and the keys were clearly authored for it; if (a), add a Tier-2 assertion the confirmation
+  renders. Whichever, keep the three locales symmetric (H3).
+- NIT-2 — BriefReviewForm.tsx:87,89: hoist the double getCritiqueLines(brief.critique) call to a single
+  const.
+- NIT-3 — types.ts:690: CampaignPostRole = PostRole bare alias. Either inline PostRole at the two use
+  sites and drop the alias, or add a one-line comment justifying the indirection (that the two
+  vocabularies are deliberately named distinctly per L-5). Reviewer calls it harmless — a comment is
+  acceptable; state which you chose.
+- NIT-4 — the three brief Server Actions catch { return {status:'error', error:'generic'} } with no
+  logging (actions.ts:89–91,139–141,195–197). This matches the pre-existing generate-action.ts
+  convention (no logger yet, CLAUDE.md) — do NOT invent a logger here (out of scope). Add a `// TODO(logger):
+  …` marker at each site and one line to backlog.md so it is picked up when the logger lands. Same for the
+  key={i} on the critique <ul> (BriefReviewForm.tsx:90) — low-risk, note it.
+
+VERIFY: npm run test:app; tsc clean; i18n keys symmetric across en/pt/es. react-review clean. Append D5
+rows (four findings; NIT-4 recorded as convention-tracked, not code-changed beyond the marker).
+On commit: "D5 complete — success i18n keys <wired|removed> symmetrically (NIT-1); getCritiqueLines
+hoisted (NIT-2); CampaignPostRole alias <inlined|commented> (NIT-3); swallowed-catch logger TODO + backlog
+row (NIT-4)." Then stop.
+```
+
+#### D6 — Docs close-out + finalise the reviewer CORRECTION PASS section  ·  no code
+
+```
+CORRECTION — Session 24-D · D6. Docs + resolution log only. No .ts, no .sql, no .tsx. This is the "update
+docs and mark in the reviewer what/how each finding was fixed" step. Run it AFTER D0–D5 are committed and
+BEFORE D7 (D7 will add the CI run URLs on top of what you write here). Invoke no build specialist — this
+is documentation integrity.
+
+DO — finalise docs/reviews/session-24-reviewer.md:
+- Ensure the single appended `## CORRECTION PASS (Session 24-D)` section is complete and attributed
+  (opens with author, date 2026-07-24, and the range fixed: 6fcd1ad2^..3f67bcc9 + the D-commit shas).
+  Everything above it is the Reviewer's, untouched; everything below is this pass. A reader must be able
+  to tell, from any line, which of the two wrote it (CLAUDE.md condition 2).
+- Confirm a resolution ROW exists for EVERY finding — BLOCKER-1, MAJOR-1..2, MINOR-1..8, NIT-1..4 —
+  in a `| Finding | Step | Fix | Test that now proves it | SHA |` table. BLOCKER-1's SHA/URLs are filled
+  by D7; leave it marked "pending D7" here.
+- Record the three things easy to lose (mirroring Session 23-D's list):
+  1. The D0–D7 ordering rationale — why BLOCKER-1 runs LAST (it greens the final range).
+  2. The MAJOR-1 severity split (Reviewer=MAJOR, security-reviewer=BLOCKER) is MOOT — fixed to the
+     stricter tenant-scoped standard — argued in the appendix, with neither original finding edited.
+  3. That runner.ts was changed in B2.6 (the Reviewer's Reality-4 "deviation") and is accepted as a
+     trial-counter correctness fix — so a future reader doesn't re-flag it.
+
+DO — update the §5 close-out docs (the code-touching ones D7 does not need CI for):
+- docs/decisions/0017-mode-2-upgrade.md — record any amendment this pass forced. The likely one: MAJOR-1
+  hardened the evidence citation-by-id boundary (§9/§12) from "asserted" to "business_id-enforced" — note
+  it as a clarifying amendment (ADR 0014 Amendment A style). If D4 forced a consumer change, note it.
+- docs/decisions/0016-governed-memory.md — a note that §10's deferred evidence/audience/brand consumers
+  are now WIRED by ADR 0017 (brief assembly), closing the "unwired by design" state in lib/memory/index.ts.
+- docs/decisions/0010-legal-surface.md Amd 2 §D2.5 — confirm the campaign_briefs cascade row is present
+  (the migration added it in B2.0; A3 verified it — this is the doc-side confirmation).
+- docs/brainstorm/session-plan-adrs-0016-0018.md — a one-line "Track B landed at <D7 sha>; Track C (0018
+  diff-learning) is the remaining queued work" note (fill the sha after D7, or mark pending-D7).
+- OpenWolf: .wolf/anatomy.md (new brief/format-family/rubric/evidence-guard files + the migration);
+  append the session to .wolf/memory.md; add to .wolf/cerebrum.md Key Learnings — "native output is a
+  format-family schema, never a prompt request"; "brief-pinned evidence is always [DATA]-guarded AND
+  business_id-scoped at fetch".
+- backlog.md — the NIT-4 logger item (from D5) if not already there.
+
+VERIFY: git status shows no untracked docs; the reviewer report has exactly one appended, attributed
+correction section with a row per finding; no finding text above it was edited.
+On commit: "D6 complete — CORRECTION PASS (Session 24-D) section finalised in the reviewer report (row
+per finding, ordering + MAJOR-1 severity + runner.ts deviation recorded); ADR 0017/0016/0010 + brainstorm
++ OpenWolf close-out docs updated (BLOCKER-1 URLs pending D7)." Then stop.
+```
+
+#### D7 — BLOCKER-1: execute the range in CI  ·  LAST, by design
+
+```
+CORRECTION — Session 24-D · D7. No code. This step converts the whole session from AUTHORED to COVERED.
+It runs LAST because it must green the FINAL range, including D0–D6.
+
+DO:
+- Push the branch (the eight B2.0–B2.7 commits plus D0–D6) and open the PR.
+- Require BOTH app-tests AND db-tests green on this exact range before merge.
+- In the db-tests run, OPEN THE LOG and confirm mode2-brief-rls.test.ts and mode2-role-origin.test.ts
+  each report a NON-ZERO executed count (the skip-guard covers this, but read it yourself — a suite a
+  flag empties to zero tests is a FALSE-GREEN, not coverage). The Reviewer measured db-tests
+  executed-count = 0 for this range; that is the number this step must move off zero.
+- Paste BOTH run URLs and the db-tests executed count into the CORRECTION PASS section of
+  docs/reviews/session-24-reviewer.md (the BLOCKER-1 row D6 left "pending D7") and into
+  docs/current-phase.md. Backfill the D7 sha into the brainstorm + reviewer rows D6 marked pending.
+- Update the db-tests promotion tally in docs/current-phase.md with this run's outcome. NOTE EXPLICITLY:
+  until it reaches 3/3 consecutive green on master, db-tests remains ADVISORY-but-must-be-read — a green
+  run here does not yet block a bad merge, and a RED one must be READ BY A HUMAN and classified
+  (DB-behaviour regression vs stack OOM), never assumed transient.
+- If db-tests is red: classify it before doing anything else. Do not retry hoping for green.
+
+VERIFY: both run URLs recorded; non-zero db-tests executed count confirmed by reading the log; tally
+updated; every CORRECTION PASS row now has a SHA. Append the final D7 row.
+On commit: "D7 complete — range executed green in CI (BLOCKER-1); app-tests <url>, db-tests <url>;
+mode2-* Tier-1 suites confirmed non-zero executed; promotion tally now N of 3." Then stop.
+```
+
+### §4.2 — Resolution log
+
+Every correction commit appends a row to the `## CORRECTION PASS (Session 24-D)` section of
+`docs/reviews/session-24-reviewer.md`: **finding → step → fix → the test that now proves it → the commit
+sha**. A finding that was declined, deferred, or adjudicated the other way still gets a row. Four things
+the Reviewer specifically flagged, which are easy to lose and MUST be recorded (D6):
+
+1. **The D0–D7 ordering rationale** — why a BLOCKER ran last (it greens the final range).
+2. **The MAJOR-1 severity split** — Reviewer=MAJOR vs security-reviewer=BLOCKER, made moot by fixing to
+   the stricter tenant-scoped standard; argued in the appendix, neither original finding edited.
+3. **The runner.ts deviation** (Reality 4) — changed in B2.6 for a trial-counter fix, accepted as
+   correct, recorded so it is not re-flagged.
+4. **The per-caller → test-file tables** the Reviewer published (generatePostsForCampaign,
+   buildCustomerContext, the atomic transition helpers) stay valid after D1–D2 add caller-level tests —
+   note any caller whose coverage this pass changed.
+
+### §4.3 — Close-out
+
+After the corrections are green and the resolution log is complete, the founder reviews and the §5 docs
+are finalised (D6 wrote most of them; D7 backfilled the CI URLs). If any correction showed an ADR 0017
+constraint infeasible, the ADR was amended (never a test weakened to reach green). Correction passes are
+normal, not failures (constitution).
 
 ---
 
