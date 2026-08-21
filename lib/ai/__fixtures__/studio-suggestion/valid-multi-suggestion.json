@@ -1,0 +1,23 @@
+{
+  "description": "Two genuine edits (slow->fast, steadily->quickly), both spans overlap real diff hunks.",
+  "nonce": "deadbeef",
+  "originalDraft": "Our onboarding is slow but thorough. We help you grow steadily.",
+  "rawRevision": "Our onboarding is 󰀀deadbeef:s1󰀁fast󰀀/deadbeef:s1󰀁 but thorough. We help you grow 󰀀deadbeef:s2󰀁quickly󰀀/deadbeef:s2󰀁.",
+  "rationale": [
+    {
+      "id": "s1",
+      "category": "specificity",
+      "rationale": "Fast is more concrete than slow-but-thorough."
+    },
+    {
+      "id": "s2",
+      "category": "openingStrength",
+      "rationale": "Quickly reads more actively than steadily."
+    }
+  ],
+  "expectedOutcome": "clean",
+  "expectedSuggestionIds": [
+    "s1",
+    "s2"
+  ]
+}

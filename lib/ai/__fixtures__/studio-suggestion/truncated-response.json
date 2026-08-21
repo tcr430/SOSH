@@ -1,0 +1,14 @@
+{
+  "description": "Response cut off mid-marker (simulating stop_reason === 'max_tokens') — an incomplete token leaves a residual sentinel.",
+  "nonce": "deadbeef",
+  "originalDraft": "Ship the feature by Friday, carefully.",
+  "rawRevision": "Ship the feature 󰀀deadbeef:s1",
+  "rationale": [
+    {
+      "id": "s1",
+      "category": "specificity",
+      "rationale": "irrelevant, response was truncated"
+    }
+  ],
+  "expectedOutcome": "rejected"
+}

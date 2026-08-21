@@ -1,0 +1,70 @@
+{
+  "title": "Sinais do GitHub",
+  "subtitle": "Transforme as suas notas de lançamento publicadas em ideias de conteúdo.",
+  "not_connected": {
+    "what_we_read": "A SOSH lê as notas de lançamento publicadas dos repositórios que escolher.",
+    "what_we_never_do": "A SOSH nunca irá escrever nos seus repositórios — sem commits, sem issues, sem pull requests, nunca.",
+    "connect_cta": "Ligar ao GitHub"
+  },
+  "awaiting_approval": {
+    "title": "A aguardar aprovação da organização",
+    "body": "A sua organização do GitHub exige aprovação do proprietário antes desta instalação poder continuar. Peça a um proprietário da organização que aprove o pedido da app SOSH no GitHub e depois regresse a esta página."
+  },
+  "reconnect_required": {
+    "title": "É necessário voltar a ligar",
+    "body": "O GitHub reporta que esta ligação foi revogada, pelo que a SOSH deixou de receber atualizações. Volte a ligar para retomar a captação.",
+    "cta": "Voltar a ligar ao GitHub"
+  },
+  "rate_limited": {
+    "banner": "Foi atingido o limite de pedidos do GitHub. A captação retoma automaticamente — não há nada a fazer."
+  },
+  "repo_unavailable": {
+    "badge": "Este repositório foi eliminado, renomeado ou removido da instalação."
+  },
+  "at_cap": {
+    "title": "Lista de observação cheia",
+    "body": "Está a observar 20 repositórios, o máximo permitido. Remova um antes de adicionar outro."
+  },
+  "picker": {
+    "heading": "Adicionar um repositório",
+    "add_cta": "Adicionar",
+    "empty": "Não há mais repositórios disponíveis nesta instalação."
+  },
+  "watch_list": {
+    "heading": "Repositórios observados",
+    "remove": "Remover",
+    "pause": "Pausar",
+    "resume": "Retomar",
+    "empty": "Ainda não está a observar nenhum repositório."
+  },
+  "recent_signals": {
+    "heading": "Atividade recente",
+    "empty": "Ainda não há sinais.",
+    "view_link": "Ver no GitHub"
+  },
+  "disconnect": {
+    "cta": "Desligar",
+    "confirm_title": "Desligar o GitHub?",
+    "confirm_body_stops_ingestion": "Desligar interrompe a leitura de novas notas de lançamento pela SOSH. Não revoga o acesso do GitHub.",
+    "confirm_body_full_revocation": "Para revogar totalmente o acesso, desinstale a app SOSH nas definições da sua conta ou organização do GitHub.",
+    "confirm_cta": "Desligar",
+    "deep_link_cta": "Gerir no GitHub"
+  },
+  "errors": {
+    "invalid_request": "Esse pedido não era válido. Tente ligar novamente.",
+    "invalid_state": "A sua sessão expirou durante a configuração. Tente ligar novamente.",
+    "forbidden": "Não tem permissão para gerir esta ligação.",
+    "exchange_failed": "Não foi possível concluir a ligação ao GitHub. Tente novamente.",
+    "not_your_installation": "Essa instalação do GitHub não lhe pertence.",
+    "already_connected": "Esta instalação do GitHub já está ligada a outro espaço de trabalho.",
+    "repos_fetch_failed": "Não foi possível carregar os seus repositórios. Tente novamente.",
+    "no_github_connection": "Ligue o GitHub antes de adicionar repositórios.",
+    "watchlist_cap_reached": "Já está a observar 20 repositórios, o máximo permitido.",
+    "watchlist_add_failed": "Não foi possível adicionar esse repositório. Tente novamente.",
+    "invalid_repo": "Essa seleção de repositório não era válida.",
+    "generic": "Ocorreu um erro. Tente novamente."
+  },
+  "success": {
+    "connected": "GitHub ligado com sucesso."
+  }
+}

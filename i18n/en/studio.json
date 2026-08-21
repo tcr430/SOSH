@@ -1,0 +1,87 @@
+{
+  "picker": {
+    "heading": "How do you want to create this post?",
+    "subheading": "Pick the workflow that fits what you're starting with.",
+    "mode1": {
+      "title": "Studio",
+      "description": "Paste a draft and get targeted, cited suggestions to sharpen it."
+    },
+    "mode2": {
+      "title": "Objective-driven",
+      "description": "Tell us your goal and we'll plan and generate a full campaign."
+    },
+    "mode3": {
+      "title": "Signal-driven",
+      "description": "Turn a trending topic or mention into a post automatically.",
+      "unavailableLabel": "Signal-driven creation is not available yet — coming soon",
+      "badge": "Coming soon"
+    }
+  },
+  "editor": {
+    "heading": "Studio",
+    "platformLabel": "Platform",
+    "platformPlaceholder": "Choose a platform",
+    "contentLabel": "Draft content",
+    "contentPlaceholder": "Paste or write your draft here…",
+    "suggestButton": "Suggest improvements",
+    "regenerateButton": "Regenerate suggestions",
+    "saveButton": "Save",
+    "saved": "Saved",
+    "generating": "Generating suggestions…",
+    "zeroSuggestions": "Nothing to suggest — this draft looks solid.",
+    "staleBanner": "Your draft changed since these suggestions were generated. Regenerate to see suggestions for the current text.",
+    "acceptedBanner": "Applied to your draft. Regenerate suggestions to review the rest.",
+    "staleAcceptError": "Your draft changed — regenerate suggestions and try again.",
+    "suggestDisabled": {
+      "emptyDraft": "Add some content before requesting suggestions.",
+      "noPlatform": "Choose a platform before requesting suggestions."
+    },
+    "error": {
+      "generic": "Something went wrong. Your draft is unchanged.",
+      "invalid_response": "The suggestion service returned something we couldn't use. Your draft is unchanged.",
+      "response_truncated": "The response was too long to complete. Your draft is unchanged — try a shorter draft.",
+      "fabricated_citation": "We couldn't verify enough of the citations in this response. Your draft is unchanged.",
+      "draft_too_long": "This draft is too long for Studio suggestions. Shorten it and try again.",
+      "draft_superseded": "Your draft changed while these suggestions were being generated. They've been discarded — your latest edits are kept.",
+      "missing_platform": "Choose a platform before requesting suggestions.",
+      "not_eligible": "This draft is no longer available.",
+      "invalid_input": "Something went wrong. Your draft is unchanged.",
+      "quota_exceeded": "You've reached your trial limit for AI suggestions. Your draft is unchanged.",
+      "rate_limited": "Too many requests. Please wait a moment and try again.",
+      "provider_error": "The AI provider returned an error. Please try again. Your draft is unchanged.",
+      "rate_limit": "Too many requests. Please wait a moment and try again.",
+      "timeout": "The suggestion request timed out. Your draft is unchanged.",
+      "policy_violation": "The suggestion service returned something we couldn't use. Your draft is unchanged."
+    },
+    "diff": {
+      "originalLabel": "Current",
+      "revisedLabel": "Proposed"
+    },
+    "suggestion": {
+      "accept": "Accept",
+      "attributionMemory": "memory-cited",
+      "attributionModelJudgment": "model judgment",
+      "modelJudgmentBadge": "Model judgment"
+    },
+    "observations": {
+      "heading": "Draft-level notes",
+      "redundancy": "Repetition",
+      "platformNativeness": "Platform fit"
+    },
+    "category": {
+      "specificity": "Specificity",
+      "originality": "Originality",
+      "evidenceSufficiency": "Evidence",
+      "audienceRelevance": "Audience relevance",
+      "brandVoiceAlignment": "Brand voice",
+      "openingStrength": "Opening strength",
+      "ctaFit": "Call to action",
+      "unsupportedClaimsRisk": "Unsupported claim risk"
+    },
+    "citation": {
+      "avoidWord": "Matches your avoid-word list: \"{word}\"",
+      "performancePattern": "Matches a governed performance pattern ({confidence}% confidence, seen {count}x)",
+      "evidence": "Backed by pinned evidence"
+    }
+  }
+}

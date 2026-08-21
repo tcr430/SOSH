@@ -28,6 +28,33 @@ jobs:
       # — no `|| true`, vitest's own exit code propagates, and the skip-guard step below is the
       # single authority that can still fail the job on an invisible (empty/all-skipped) suite.
       - name: App-layer test suite (JSON-reportered)
+        # E2.11 fix — two files import the REAL lib/config.ts unmocked
+        # (lib/config.test.ts tests serverSchema directly; lib/signals/
+        # orchestrator.test.ts transitively imports lib/signals/github-client.ts).
+        # Every other file mocks '@/lib/config', so this job never needed real
+        # values before — but lib/config.ts's top-level publicSchema.parse() and
+        # any config.server.* getter both throw on a genuinely missing required
+        # field, regardless of whether this job talks to a live Supabase/GitHub
+        # API (it doesn't — these are inert dummies, same values db-tests.yml
+        # already uses for its own copy of this same requirement).
+        env:
+          NODE_ENV: test
+          ANTHROPIC_API_KEY: 'sk-ant-test-dummy-key-not-real'
+          STRIPE_SECRET_KEY: 'sk_test_dummy0000000000000000'
+          STRIPE_WEBHOOK_SECRET: 'whsec_dummy0000000000000000'
+          STRIPE_PRICE_ID_PLUS: 'price_dummy_plus'
+          STRIPE_PRICE_ID_PRO: 'price_dummy_pro'
+          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: 'pk_test_dummy0000000000000000'
+          OAUTH_STATE_SECRET: 'ci-dummy-oauth-state-secret-32chars-min'
+          INVITE_TOKEN_SECRET: 'ci-dummy-invite-token-secret-32chars-min'
+          NEXT_PUBLIC_SUPABASE_URL: 'http://127.0.0.1:54321'
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: 'ci-dummy-anon-key-not-real'
+          SUPABASE_SERVICE_ROLE_KEY: 'ci-dummy-service-role-key-not-real'
+          # [Session 27-D / A-4] GITHUB_APP_* deliberately NOT set — the
+          # four load-bearing fields are optional under NODE_ENV=test (only
+          # required together in production), so this workflow no longer
+          # needs dummy values for an opt-in feature it doesn't exercise. A
+          # green run here IS the proof A-4 works.
         run: npm run test:app -- --reporter=json --outputFile=/tmp/app-results.json
                                        # vitest run app/ lib/ components/ — never supabase/__tests__ (L-3)
 

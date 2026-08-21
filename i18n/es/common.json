@@ -4,6 +4,7 @@
     "tagline": "Gestión de redes sociales con IA líder en el mercado"
   },
   "nav": {
+    "create": "Crear",
     "campaigns": "Campañas",
     "calendar": "Calendario",
     "analytics": "Analítica",
@@ -13,7 +14,8 @@
     "logout": "Cerrar sesión",
     "billing": "Facturación",
     "coming_soon": "Próximamente",
-    "approvals": "Aprobaciones"
+    "approvals": "Aprobaciones",
+    "opportunities": "Oportunidades"
   },
   "dashboard": {
     "banner": {

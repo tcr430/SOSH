@@ -4,6 +4,7 @@
     "tagline": "Marketing-leading AI social media management"
   },
   "nav": {
+    "create": "Create",
     "campaigns": "Campaigns",
     "calendar": "Calendar",
     "analytics": "Analytics",
@@ -13,7 +14,8 @@
     "logout": "Log out",
     "billing": "Billing",
     "coming_soon": "Coming soon",
-    "approvals": "Approvals"
+    "approvals": "Approvals",
+    "opportunities": "Opportunities"
   },
   "dashboard": {
     "banner": {

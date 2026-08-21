@@ -1,0 +1,65 @@
+-- ADR 0021 §9.2/§6.4 amendment (Session 28-D, D7, MINOR-7) — insight_cards
+-- gains a nullable back-reference to the campaign Stage F seeds from it, so
+-- the "approved and in flight" state (§9.2) can link to the real brief
+-- instead of rendering an inert placeholder. A-6 (already adjudicated,
+-- §4): the schema is fixed rather than the contract reduced — the
+-- three-gate count (§6.3) is the one property that makes a
+-- signal-originated campaign MORE gated than a typed one, and a state that
+-- cannot show the user where their approval went is the one place that
+-- trust argument is illegible.
+--
+-- Backfill: NONE — existing rows get NULL, and that is correct, not a gap.
+-- Every row that predates this migration was approved before Stage F's
+-- write-back existed, so there genuinely is no campaign for it to point
+-- at. The render layer keeps its inert affordance, scoped explicitly to
+-- exactly these pre-migration (or write-back-failed) rows — never removed,
+-- only demoted to a fallback.
+--
+-- ON DELETE SET NULL, not CASCADE (A-6, already adjudicated at §4 — not
+-- re-litigated here). A deleted campaign must not delete the card:
+-- insight_cards is the eval corpus's history (SIGNAL3-TRIAGE-QUALITY, ADR
+-- 0021 §10.4), the exact ground 20260807100000_mode3_insight_cards.sql
+-- gave for shipping this table with no DELETE policy and no BEFORE DELETE
+-- trigger at all.
+--
+-- database-reviewer (Session 28-D, D7 follow-up, MINOR-1): SET NULL only
+-- fires on a real row DELETE. campaigns are never hard-deleted by
+-- application code — the only user-facing deletion path is
+-- softDeleteCampaignGuarded (lib/db/campaigns.ts), an UPDATE ... SET
+-- deleted_at, which this FK cannot see. The companion cleanup
+-- (lib/db/insight-cards.ts#clearCampaignReferenceOnCards, called from
+-- deleteCampaignAction) nulls campaign_id explicitly on that path, so an
+-- "approved and in flight" card never keeps linking to a now-unreachable,
+-- soft-deleted campaign. This FK's SET NULL still does its job on the ONE
+-- real-DELETE path that exists: the business-purge cascade.
+ALTER TABLE public.insight_cards
+  ADD COLUMN campaign_id uuid REFERENCES public.campaigns(id) ON DELETE SET NULL;
+
+-- No index. insight_cards_feed_idx (20260807100000) is a partial index
+-- WHERE status = 'pending'; campaign_id is only ever non-NULL once status
+-- has moved to 'approved' (Stage F's write-back runs strictly after the
+-- approve transition), so the two predicates never co-occur, and no query
+-- in this codebase (lib/db/insight-cards.ts) filters or joins on
+-- insight_cards.campaign_id. An index here would be unused weight, not
+-- defence-in-depth — recorded so the absence reads as a decision.
+
+-- RLS: no policy change. insight_cards_select_own and insight_cards_
+-- update_own (both above) gate on business_id only, unaffected by an
+-- added column. The authenticated column-scoped GRANT UPDATE (status,
+-- dismiss_reason) is DELIBERATELY NOT WIDENED to include campaign_id — the
+-- write-back (lib/db/insight-cards.ts#setCardCampaignId) always runs
+-- service-role, on the same server-side path that already flipped status
+-- via the authenticated, RLS-scoped transition (never a path an
+-- authenticated PostgREST call reaches directly), so widening the grant
+-- would only enlarge the authenticated write surface for no gain — the
+-- exact MAJOR-1 lesson (20260807100000_mode3_insight_cards.sql:168-175)
+-- applied here rather than repeated.
+
+-- GDPR: no new §D2.5 cascade row. This is a column on an EXISTING table,
+-- not a new table — insight_cards' own cascade row (business_id -> ON
+-- DELETE CASCADE from businesses) already covers this row's erasure path,
+-- and ON DELETE SET NULL here only ever fires when a CAMPAIGN is deleted,
+-- which cascades from businesses independently. CLAUDE.md's
+-- erasure-cascade rule is about tables gaining reachability from
+-- businesses, not about columns; recorded explicitly so the next reviewer
+-- reads this absence as a decision, not an omission.

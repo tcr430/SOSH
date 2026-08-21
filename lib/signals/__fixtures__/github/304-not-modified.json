@@ -1,0 +1,7 @@
+{
+  "status": 304,
+  "headers": {
+    "etag": "\"abc123etag\""
+  },
+  "body": null
+}

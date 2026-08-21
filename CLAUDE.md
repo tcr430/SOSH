@@ -62,6 +62,10 @@ All Anthropic SDK calls go through `/lib/ai/`. No direct Anthropic SDK calls any
 
 **Rule:** When you find yourself wanting to call `anthropic.messages.create` outside `/lib/ai/`, stop and add a function to `/lib/ai/` instead.
 
+### The signal-source layer
+
+No code outside `/lib/signals/` ever imports a GitHub client package. All consumers import from `/lib/signals/index.ts`. Business logic talks to the signal-source interface, never to Octokit. Enforced by a source scan (`lib/signals/source-scans.test.ts`), not by convention.
+
 ### Database access
 
 All Supabase queries go through `/lib/db/`. Each table has its own file (e.g., `/lib/db/campaigns.ts`, `/lib/db/posts.ts`) exposing typed query functions. No direct Supabase calls in API routes, Server Actions, or components.
@@ -270,6 +274,14 @@ maps to exactly one of three tiers (full definitions: `docs/decisions/0015-test-
 - **Tier 3 — Diff-verified** (properties of *absence*, e.g. "no new migration"): no runtime test by
   decision — must be enumerated as such in its owning ADR, so "no test" is a recorded decision, not an
   oversight.
+
+A fourth category exists for judgment-quality properties no deterministic assertion can prove (e.g. an AI
+triage decision's precision/recall against a human-labelled corpus): **Tier E — MEASURED, never COVERED**
+(Amendment B4). It is deliberately rare — a constraint belongs here only when Tier 1/2/3 genuinely cannot
+express it, never as a shortcut around writing a real test (Amendment B(b)). Full definition, the scoring
+mechanism, and its CI wiring: `docs/decisions/0015-test-execution-and-ci-gates.md` §2/Amendment B; first
+production instance: `docs/decisions/0021-mode-3-triage-and-opportunity-feed.md` §10.4
+(`SIGNAL3-TRIAGE-QUALITY`).
 
 **PROC-REVIEW-AT-COMMIT.** A Reviewer reads every file **at the stated commit range**
 (`git diff <base>..<head>`, `git show <sha>:<path>`, `git log --oneline <base>..<head>`) — **never at

@@ -1,0 +1,71 @@
+{
+  "title": "Opportunities",
+  "subtitle": "Product releases worth turning into content — you decide what's worth pursuing.",
+  "empty": {
+    "noConnectionTitle": "Connect GitHub to see opportunities here.",
+    "noConnectionBody": "Opportunities are built from your product's release activity.",
+    "noConnectionCta": "Connect a GitHub repository",
+    "connectedNothingYetTitle": "No opportunities yet.",
+    "connectedNothingYetBody": "Signal triage runs once a day — check back soon."
+  },
+  "card": {
+    "observation": "What happened",
+    "whyItMatters": "Why it matters",
+    "audience": "Audience",
+    "modelAssessment": "Model assessment — unverified",
+    "verifiedEvidence": "Verified evidence",
+    "angleOptions": "Angle options",
+    "angleOptionsHint": "Options, not copy — pick a direction, not a draft.",
+    "scores": "Scores",
+    "confidence": "Confidence",
+    "novelty": "Novelty",
+    "freshness": "Freshness",
+    "sourceLink": "View the release"
+  },
+  "sensitivity": {
+    "warning": "This release touches a sensitive topic (security, deprecation, or legal). Review carefully before approving.",
+    "confirmApprove": "This card is flagged sensitive. Approve anyway?",
+    "excludedFromDigest": "Excluded from digest and notification surfaces."
+  },
+  "actions": {
+    "approve": "Approve",
+    "approveConfirm": "Yes, approve",
+    "dismiss": "Dismiss",
+    "dismissReasonPrompt": "Why are you dismissing this? (optional)",
+    "save": "Save for later",
+    "cancel": "Cancel",
+    "error": "Something went wrong. Please try again.",
+    "announceApproved": "Card approved.",
+    "announceDismissed": "Card dismissed.",
+    "announceSaved": "Card saved.",
+    "announceAlreadyTriaged": "This card was already triaged by someone else — showing its current state."
+  },
+  "dismissReason": {
+    "not_relevant": "Not relevant",
+    "already_covered": "Already covered",
+    "too_sensitive": "Too sensitive",
+    "wrong_timing": "Wrong timing",
+    "weak_evidence": "Weak evidence"
+  },
+  "status": {
+    "pending": "Pending",
+    "saved": "Saved",
+    "savedHint": "Saved — no expiry.",
+    "approved": "Approved",
+    "approvedInFlightBody": "This card started a campaign. The brief still needs review — triage is the first of three gates (triage → brief approval → post approval).",
+    "approvedLinkPendingHint": "The brief link isn't wired up yet.",
+    "approvedLinkToBrief": "Review the brief — it still needs approval",
+    "dismissed": "Dismissed",
+    "expired": "Expired",
+    "expiredHint": "No longer actionable.",
+    "triageFailedTitle": "Some releases could not be triaged.",
+    "triageFailedBody": "Triage failed for one or more releases and will retry automatically. Nothing was silently dropped.",
+    "pausedTitle": "Triage paused — daily limit reached.",
+    "pausedBody": "The rest of today's releases will be triaged on the next run."
+  },
+  "filters": {
+    "showExpired": "Show expired",
+    "hideExpired": "Hide expired",
+    "noneVisible": "No opportunities match this filter."
+  }
+}

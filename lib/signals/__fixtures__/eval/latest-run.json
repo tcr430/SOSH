@@ -1,0 +1,303 @@
+{
+  "corpusVersion": 1,
+  "runUrl": "local (no GITHUB_RUN_ID in env)",
+  "generatedAt": "2026-08-10T15:17:37.489Z",
+  "declaredCorpusCount": 40,
+  "executedCount": 40,
+  "errorCount": 0,
+  "metrics": {
+    "cardPrecision": {
+      "value": 1,
+      "numerator": 24,
+      "denominator": 24,
+      "floor": 0.75
+    },
+    "cardRecall": {
+      "value": 1,
+      "numerator": 24,
+      "denominator": 24,
+      "floor": 0.7
+    },
+    "dismissReasonMatch": {
+      "value": 1,
+      "numerator": 16,
+      "denominator": 16,
+      "floor": 0.6
+    }
+  },
+  "metricsPass": true,
+  "outcomes": [
+    {
+      "id": "c01-sso-saml",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "card"
+    },
+    {
+      "id": "c02-slack-integration",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "card"
+    },
+    {
+      "id": "c03-public-api-v2",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "card"
+    },
+    {
+      "id": "c04-soc2",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "card"
+    },
+    {
+      "id": "c05-ai-analytics",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "card"
+    },
+    {
+      "id": "c06-eu-region",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "card"
+    },
+    {
+      "id": "c07-enterprise-tier",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "card"
+    },
+    {
+      "id": "c08-ios-app",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "card"
+    },
+    {
+      "id": "c09-zapier",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "card"
+    },
+    {
+      "id": "c10-realtime-collab",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "card"
+    },
+    {
+      "id": "c11-hipaa",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "card"
+    },
+    {
+      "id": "c12-salesforce-sync",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "card"
+    },
+    {
+      "id": "c13-rbac",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "card"
+    },
+    {
+      "id": "c14-audit-log",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "card"
+    },
+    {
+      "id": "c15-white-label",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "card"
+    },
+    {
+      "id": "c16-graphql",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "card"
+    },
+    {
+      "id": "c17-data-warehouse-sync",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "card"
+    },
+    {
+      "id": "c18-scim",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "card"
+    },
+    {
+      "id": "c19-workflow-builder",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "card"
+    },
+    {
+      "id": "c20-performance-overhaul",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "card"
+    },
+    {
+      "id": "c21-status-page",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "card"
+    },
+    {
+      "id": "c22-teams-integration",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "card"
+    },
+    {
+      "id": "c23-usage-billing",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "card"
+    },
+    {
+      "id": "c24-embedded-analytics",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "card"
+    },
+    {
+      "id": "n01-cve-patch",
+      "status": "ok",
+      "expectedVerdict": "no_card",
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "too_sensitive",
+      "actualDismissReason": "too_sensitive"
+    },
+    {
+      "id": "n02-data-exposure",
+      "status": "ok",
+      "expectedVerdict": "no_card",
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "too_sensitive",
+      "actualDismissReason": "too_sensitive"
+    },
+    {
+      "id": "n03-dependency-vuln",
+      "status": "ok",
+      "expectedVerdict": "no_card",
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "too_sensitive",
+      "actualDismissReason": "too_sensitive"
+    },
+    {
+      "id": "n04-incident-postmortem",
+      "status": "ok",
+      "expectedVerdict": "no_card",
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "too_sensitive",
+      "actualDismissReason": "too_sensitive"
+    },
+    {
+      "id": "n05-sso-bugfix",
+      "status": "ok",
+      "expectedVerdict": "no_card",
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "already_covered",
+      "actualDismissReason": "already_covered"
+    },
+    {
+      "id": "n06-ai-dashboard-iteration",
+      "status": "ok",
+      "expectedVerdict": "no_card",
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "already_covered",
+      "actualDismissReason": "already_covered"
+    },
+    {
+      "id": "n07-api-docs-update",
+      "status": "ok",
+      "expectedVerdict": "no_card",
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "already_covered",
+      "actualDismissReason": "already_covered"
+    },
+    {
+      "id": "n08-vague-changelog",
+      "status": "ok",
+      "expectedVerdict": "no_card",
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "weak_evidence",
+      "actualDismissReason": "weak_evidence"
+    },
+    {
+      "id": "n09-internal-refactor",
+      "status": "ok",
+      "expectedVerdict": "no_card",
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "weak_evidence",
+      "actualDismissReason": "weak_evidence"
+    },
+    {
+      "id": "n10-ui-polish",
+      "status": "ok",
+      "expectedVerdict": "no_card",
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "weak_evidence",
+      "actualDismissReason": "weak_evidence"
+    },
+    {
+      "id": "n11-dependency-bumps",
+      "status": "ok",
+      "expectedVerdict": "no_card",
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "weak_evidence",
+      "actualDismissReason": "weak_evidence"
+    },
+    {
+      "id": "n12-beta-opt-in",
+      "status": "ok",
+      "expectedVerdict": "no_card",
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "wrong_timing",
+      "actualDismissReason": "wrong_timing"
+    },
+    {
+      "id": "n13-alpha-announcement",
+      "status": "ok",
+      "expectedVerdict": "no_card",
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "wrong_timing",
+      "actualDismissReason": "wrong_timing"
+    },
+    {
+      "id": "n14-ci-tooling",
+      "status": "ok",
+      "expectedVerdict": "no_card",
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "n15-locale-update",
+      "status": "ok",
+      "expectedVerdict": "no_card",
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "n16-community-housekeeping",
+      "status": "ok",
+      "expectedVerdict": "no_card",
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "actualDismissReason": "not_relevant"
+    }
+  ]
+}

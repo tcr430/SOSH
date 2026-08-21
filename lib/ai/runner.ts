@@ -21,6 +21,10 @@ const POST_GENERATION_PROMPT_ID = 'post-generation'
 // it was not resolved when generate.ts first landed, and is fixed here.
 const NATIVE_GENERATION_PROMPT_IDS = new Set(['native-generation-single', 'native-generation-thread'])
 const RUBRIC_PROMPT_ID = 'rubric'
+// Must match lib/signals/triage/card.ts's own CARD_GENERATION_PROMPT_ID
+// exactly — duplicated as a literal (not imported) because lib/ai/ must not
+// depend on lib/signals/ (the dependency runs the other way, ADR 0021 §2.1).
+const CARD_GENERATION_PROMPT_ID = 'signal-card-generation'
 const RETRY_DELAY_MS = 2000
 const CACHE_CONTROL_CHAR_THRESHOLD = 4096 // chars / 4 ≈ tokens; 4096 chars ≈ 1024 tokens
 const DEFAULT_MAX_TOKENS = 4096
@@ -38,8 +42,18 @@ function isPostGeneration(promptId: string): boolean {
 
 // A scoring call (the rubric, ADR §6/§7) never generates a post and never
 // consumes brand-voice quota — it must increment NEITHER trial counter.
+// ADR 0021 §4.2 (Session 28 E5.7) — CARD_GENERATION_PROMPT_ID joins this set
+// for the same reason: a triage card is not a post the user requested
+// generated, and incrementing posts_generated_count for it would silently
+// eat into the trial post cap for a feature the user never asked to run.
+//
+// Session 28-D, D8 (NIT-1) — this line is the one place runPrompt IS
+// modified, against ADR 0021 §2.1's "runPrompt is NOT modified." The
+// modification's spirit is intact (no tool-dispatch branch; every existing
+// prompt id behaves identically) — see §2.1's amendment for the recorded
+// exception.
 function isScoringOnly(promptId: string): boolean {
-  return promptId === RUBRIC_PROMPT_ID
+  return promptId === RUBRIC_PROMPT_ID || promptId === CARD_GENERATION_PROMPT_ID
 }
 
 async function sleep(ms: number): Promise<void> {
@@ -128,7 +142,11 @@ export async function runPrompt<TInput, TOutput>(
 
   const sdkParams: Anthropic.MessageCreateParamsNonStreaming & { _sosh?: { promptId: string; input: unknown } } = {
     model: MODELS[prompt.modelKey].id,
-    max_tokens: DEFAULT_MAX_TOKENS,
+    // ADR 0019 §4.5, founder ruling A-5 — the WHOLE change: one optional
+    // field, one ??. Every existing prompt leaves maxTokens unset, so this
+    // resolves to exactly DEFAULT_MAX_TOKENS for all of them, unchanged
+    // (STUDIO-RUNNER-DEFAULT-PRESERVED, lib/ai/runner.test.ts).
+    max_tokens: prompt.maxTokens ?? DEFAULT_MAX_TOKENS,
     system: systemContent,
     messages,
     // _sosh is stripped by the real Anthropic SDK (unknown fields ignored).
@@ -157,7 +175,19 @@ export async function runPrompt<TInput, TOutput>(
       throw err
     }
 
-    // Step 5: Parse output
+    // Step 5: Parse output. ADR 0019 §5.4 [sec-HIGH-7] — check stop_reason
+    // BEFORE attempting to parse: a response cut off by max_tokens is not
+    // malformed content, it's an availability failure, and treating it as
+    // invalid_response makes truncation indistinguishable from a genuine
+    // parse failure (callWithRetry only retries 429/5xx, never either of
+    // these) — a long draft would fail 100% of the time with a misleading
+    // error and no actionable message.
+    if (response.stop_reason === 'max_tokens') {
+      const err = new AiError('response_truncated', 'Response truncated at max_tokens')
+      usageErrorCode = err.code
+      throw err
+    }
+
     const textBlock = response.content.find(b => b.type === 'text')
     const rawText = textBlock?.type === 'text' ? textBlock.text : ''
     let parsed: TOutput

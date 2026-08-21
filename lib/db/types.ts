@@ -22,6 +22,31 @@ export type { VoiceAxes }
 // a plain string where a vault UUID is required.
 export type VaultSecretId = string & { readonly _brand: 'VaultSecretId' }
 
+// ADR 0020 §7.3 — UntrustedText, on signals.title / signals.body. Minted
+// ONLY by E2.5's ingestion parser (on write) and by lib/db/signals.ts's
+// query functions (on read, where "the brand originates at the data-access
+// boundary" per §7.4 — Supabase returns plain JSON with no brand, so a read
+// function casts at the point it hands the row back to its caller).
+//
+// A non-exported `unique symbol` brand key, not a string-literal one
+// (`_brand: 'UntrustedText'`) — the ADR 0019 §8.4 precedent
+// (lib/studio/verify.ts:120's `verified` symbol). A `unique symbol` is
+// globally unique by construction: no other module can accidentally define
+// a structurally-identical brand by reusing the same string literal, which
+// is exactly the collision a string-literal brand does not prevent.
+//
+// THE HONEST LIMIT (stated here, not only in the ADR — reviewers caught
+// this exact overclaim TWICE in prior sessions, ADR 0019 §8.4 records both):
+// this is "discouraged", NOT "unrepresentable". `string & brand` is
+// assignable to any `string` parameter and — decisively — to any
+// template-literal hole: `` `Context:\n${signal.body}` `` compiles with NO
+// error, brand or no brand. A bare `as UntrustedText` cast likewise remains
+// compile-legal. Nothing below closes that; it is closed by E2.10's
+// executable source scans (ADR §11.3 scan #4), not by a stronger type. Do
+// not restate this guarantee more strongly than the ADR does.
+const untrustedTextBrand: unique symbol = Symbol('signals-untrusted-text')
+export type UntrustedText = string & { readonly [untrustedTextBrand]: true }
+
 // ---------------------------------------------------------------------------
 // Shared enum types
 // ---------------------------------------------------------------------------
@@ -318,6 +343,356 @@ export type PostInsert = {
 }
 
 export type PostUpdate = Partial<Omit<PostRow, 'id' | 'created_at' | 'business_id' | 'campaign_id' | 'published_at' | 'platform_post_id' | 'platform_url' | 'deleted_at' | 'role'>>
+
+// ---------------------------------------------------------------------------
+// 5b. studio_drafts — Mode 1 Studio pre-campaign scratch content (ADR 0019 §2.2)
+// ---------------------------------------------------------------------------
+
+export type StudioDraftRow = {
+  id: string
+  business_id: string
+  content: string
+  // Nullable, unlike PostRow['platform'] — a draft has no target platform
+  // until the author picks one ([db-MINOR-1]).
+  platform: Platform | null
+  // Generated column (encode(sha256(content::bytea),'hex')) — read-only from
+  // the app's perspective; never present on an Insert/Update payload.
+  content_hash: string
+  // A "suggestion set" (ADR 0019 §10/§11.1) — a JSON array, not a single
+  // object; shape is owned by lib/studio's suggestion types, not this layer.
+  suggestions: unknown[] | null
+  suggestions_for_hash: string | null
+  deleted_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type StudioDraftInsert = {
+  id?: string
+  business_id: string
+  content?: string
+  platform?: Platform | null
+  suggestions?: unknown[] | null
+  suggestions_for_hash?: string | null
+  deleted_at?: string | null
+  created_at?: string
+  updated_at?: string
+}
+
+// business_id excluded (tenancy-critical); content_hash excluded (generated,
+// read-only on every write type — the DB computes it from content).
+export type StudioDraftUpdate = Partial<Omit<StudioDraftRow, 'id' | 'created_at' | 'business_id' | 'content_hash'>>
+
+// ---------------------------------------------------------------------------
+// 5c. Signal ingestion — github_connections, watched_repos, signals,
+//     signal_candidates (ADR 0020 §3). Written almost exclusively by the
+//     poller's service-role client; connect/disconnect and watch-list edits
+//     are the only authenticated-path writes (ADR 0020 §8).
+// ---------------------------------------------------------------------------
+
+export type SignalSource = 'github'
+export type SignalKind = 'release'
+export type SignalIngestedVia = 'poll' | 'webhook'
+// ADR 0021 §2.11 (Session 28 E5.2) widened the DB CHECK to all five values —
+// this type was missed at E5.2 and only carried 'new' until E5.6 caught it.
+// terminal: carded, no_card, triage_failed. non-terminal (upsert_signal_
+// candidate restarts these): new, triaging.
+export type SignalCandidateStatus = 'new' | 'triaging' | 'carded' | 'no_card' | 'triage_failed'
+
+export type GithubConnectionRow = {
+  id: string
+  business_id: string
+  installation_id: number
+  account_login: string
+  is_active: boolean
+  connected_by: string | null
+  connected_at: string
+  last_poll_started_at: string | null
+  last_poll_completed_at: string | null
+  last_poll_status: string | null
+  rate_limited_until: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type GithubConnectionInsert = {
+  id?: string
+  business_id: string
+  installation_id: number
+  account_login: string
+  is_active?: boolean
+  connected_by?: string | null
+  connected_at?: string
+  last_poll_started_at?: string | null
+  last_poll_completed_at?: string | null
+  last_poll_status?: string | null
+  rate_limited_until?: string | null
+  created_at?: string
+  updated_at?: string
+}
+
+// business_id excluded (tenancy-critical).
+export type GithubConnectionUpdate = Partial<Omit<GithubConnectionRow, 'id' | 'created_at' | 'business_id'>>
+
+export type WatchedRepoRow = {
+  id: string
+  business_id: string
+  connection_id: string
+  // GitHub's immutable numeric repo id — not owner/name, which can rename.
+  repo_id: number
+  owner: string
+  name: string
+  is_active: boolean
+  releases_etag: string | null
+  last_polled_at: string | null
+  weight: number
+  added_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type WatchedRepoInsert = {
+  id?: string
+  business_id: string
+  connection_id: string
+  repo_id: number
+  owner: string
+  name: string
+  is_active?: boolean
+  releases_etag?: string | null
+  last_polled_at?: string | null
+  weight?: number
+  added_by?: string | null
+  created_at?: string
+  updated_at?: string
+}
+
+// business_id excluded (tenancy-critical).
+export type WatchedRepoUpdate = Partial<Omit<WatchedRepoRow, 'id' | 'created_at' | 'business_id'>>
+
+export type SignalRow = {
+  id: string
+  business_id: string
+  watched_repo_id: string
+  source: SignalSource
+  kind: SignalKind
+  external_id: string
+  // ADR 0020 §7.3/§7.4 — branded, not plain string. Third-party-authored
+  // GitHub release text, never sanitized at ingest (§7.2 — fidelity is the
+  // point; sanitizing at rest would corrupt what a human reviewer must read
+  // in Session 28's card). Reaches a prompt only through
+  // wrapSignalForPrompt(): RenderedSignalText (lib/ai/wrap-evidence.ts).
+  title: UntrustedText
+  body: UntrustedText
+  body_truncated: boolean
+  html_url: string | null
+  occurred_at: string
+  is_prerelease: boolean
+  author_is_bot: boolean
+  ingested_via: SignalIngestedVia
+  // Generated column — read-only, never present on an Insert/Update payload.
+  content_hash: string
+  created_at: string
+  updated_at: string
+}
+
+// ⚠️ STRUCTURAL, not a runtime filter (ADR 0020 §5.3): this type has no
+// author.login / author.id / author.avatar_url / author.html_url /
+// author_association / assets / reactions / mentions_count / tarball_url /
+// zipball_url fields at all. The parser cannot forget to drop them — they
+// have nowhere to go.
+export type SignalInsert = {
+  id?: string
+  business_id: string
+  watched_repo_id: string
+  source: SignalSource
+  kind: SignalKind
+  external_id: string
+  // ADR 0020 §7.3 sink narrowing: the ingestion parser must already hold an
+  // UntrustedText value (via its own mint) before it can build this Insert
+  // — a plain string is rejected here without a cast.
+  title: UntrustedText
+  body?: UntrustedText
+  body_truncated?: boolean
+  html_url?: string | null
+  occurred_at: string
+  is_prerelease?: boolean
+  author_is_bot?: boolean
+  ingested_via?: SignalIngestedVia
+  created_at?: string
+  updated_at?: string
+}
+
+// business_id, watched_repo_id, external_id, created_at excluded — the
+// BEFORE UPDATE trigger (guard_signals_identity_update) raises on any of
+// these regardless, so excluding them here is the app-layer echo of that DB
+// boundary. content_hash excluded (generated, read-only).
+export type SignalUpdate = Partial<Omit<SignalRow, 'id' | 'created_at' | 'business_id' | 'watched_repo_id' | 'external_id' | 'content_hash'>>
+
+export type SignalCandidateRow = {
+  id: string
+  business_id: string
+  signal_id: string
+  score: number
+  score_inputs: Record<string, unknown>
+  // Denormalised from signals.occurred_at ([db-MAJOR-C]) — Postgres cannot
+  // index across two tables and the feed's ORDER BY spans both.
+  occurred_at: string
+  status: SignalCandidateStatus
+  // ADR 0021 §2.9 (Session 28 E5.2) — also missed at E5.2, caught alongside
+  // SignalCandidateStatus's widening at E5.6. NULL except while status is
+  // 'triaging'.
+  triage_claimed_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+// type-design-analyzer (E2.4 pass) — lib/db/signal-candidates.ts's
+// listNewCandidates() joins `signals(title, body, html_url, occurred_at,
+// author_is_bot)` onto every row (ADR §13.1's join list, minus tag_name —
+// see that file's comment). SignalCandidateRow alone has no field for that
+// joined data, so casting a join result to SignalCandidateRow silently
+// erases it — and erases the UntrustedText brand along with it, leaving a
+// future caller to reach for an unbranded `{ title: string, ... }` shape by
+// hand. This type is the SECOND read boundary (after lib/db/signals.ts's
+// asSignalRow) that mints UntrustedText out of raw Postgres JSON, declared
+// explicitly rather than left to whoever writes Session 28's consumer.
+export type SignalCandidateWithSignal = SignalCandidateRow & {
+  signals: {
+    title: UntrustedText
+    body: UntrustedText
+    html_url: string | null
+    occurred_at: string
+    author_is_bot: boolean
+    // Session 28 E5.7 — added alongside the join widening in
+    // lib/db/signal-candidates.ts (ADR §4.4's sensitivity rule needs it).
+    is_prerelease: boolean
+  }
+}
+
+export type SignalCandidateInsert = {
+  id?: string
+  business_id: string
+  signal_id: string
+  score: number
+  score_inputs?: Record<string, unknown>
+  occurred_at: string
+  status?: SignalCandidateStatus
+  created_at?: string
+  updated_at?: string
+}
+
+// business_id, signal_id excluded (tenancy-critical / the upsert arbiter).
+export type SignalCandidateUpdate = Partial<Omit<SignalCandidateRow, 'id' | 'created_at' | 'business_id' | 'signal_id'>>
+
+// ---------------------------------------------------------------------------
+// insight_cards / signal_triage_budget — ADR 0021 §4.1, §8 (Session 28 E5.1)
+// ---------------------------------------------------------------------------
+
+// §5.3's state machine: pending -> approved | dismissed | saved;
+// saved -> approved | dismissed. Enforced in the DB by
+// enforce_insight_card_legal_transition (BEFORE UPDATE trigger), not by this
+// type alone — this is the app-layer echo of that DB boundary.
+export type InsightCardStatus = 'pending' | 'approved' | 'dismissed' | 'saved'
+
+// The closed five of §5.4.
+export type InsightCardDismissReason =
+  | 'not_relevant'
+  | 'already_covered'
+  | 'too_sensitive'
+  | 'wrong_timing'
+  | 'weak_evidence'
+
+export type InsightCardAngleOption = {
+  angle: string
+  rationale: string
+}
+
+export type InsightCardRow = {
+  id: string
+  business_id: string
+  signal_candidate_id: string
+  observation: string
+  why_it_matters: string
+  audience: string
+  angle_options: InsightCardAngleOption[]
+  // The verified evidence-memory id set (§4.6) — a jsonb id array, no FK.
+  evidence: string[]
+  suggested_objective: string | null
+  novelty: number
+  freshness: number
+  sensitivity: number
+  confidence: number
+  rubric_scores: Record<string, unknown>
+  // Denormalised from signal_candidates.score/occurred_at ([db-MAJOR-C]
+  // precedent) — Postgres cannot index across two tables and the feed's
+  // ORDER BY (§5.7) spans both.
+  score: number
+  occurred_at: string
+  status: InsightCardStatus
+  dismiss_reason: InsightCardDismissReason | null
+  expires_at: string | null
+  // §9.2/§6.4 (Session 28-D, D7, MINOR-7) — Stage F's write-back
+  // (seedCampaignFromCard, service-role only) links an approved card to the
+  // campaign it seeded. NULL for every pre-migration row and for the brief
+  // window between an approve transition and the write-back landing — both
+  // render the existing inert fallback (OpportunityFeed.tsx), never an
+  // error.
+  campaign_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type InsightCardInsert = {
+  id?: string
+  business_id: string
+  signal_candidate_id: string
+  observation: string
+  why_it_matters: string
+  audience: string
+  angle_options: InsightCardAngleOption[]
+  evidence: string[]
+  suggested_objective?: string | null
+  novelty: number
+  freshness: number
+  sensitivity: number
+  confidence: number
+  rubric_scores: Record<string, unknown>
+  score: number
+  occurred_at: string
+  status?: InsightCardStatus
+  dismiss_reason?: InsightCardDismissReason | null
+  expires_at?: string | null
+  created_at?: string
+  updated_at?: string
+}
+
+// business_id, signal_candidate_id excluded (tenancy-critical / the upsert
+// arbiter). score, occurred_at excluded — denormalised at insert only, never
+// touched by a triage transition. Every other Stage-D-authored field
+// excluded too: a triage UPDATE (the only authenticated write path, §5.3)
+// only ever changes status/dismiss_reason/expires_at.
+export type InsightCardUpdate = Partial<
+  Pick<InsightCardRow, 'status' | 'dismiss_reason' | 'expires_at'>
+>
+
+export type SignalTriageBudgetRow = {
+  id: string
+  business_id: string
+  day: string
+  reserved_cents: number
+  created_at: string
+  updated_at: string
+}
+
+export type SignalTriageBudgetInsert = {
+  id?: string
+  business_id: string
+  day: string
+  reserved_cents?: number
+  created_at?: string
+  updated_at?: string
+}
 
 // ---------------------------------------------------------------------------
 // 6. post_metrics — upsert-in-place; nullable metrics mean "not exposed by platform"

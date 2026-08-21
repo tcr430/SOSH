@@ -1,0 +1,11 @@
+{
+  "id": 222222,
+  "tag_name": "v2.0.0",
+  "name": "v2.0.0 — Automated dependency bump",
+  "body": "Bumps lodash from 4.17.20 to 4.17.21.",
+  "html_url": "https://github.com/acme/widgets/releases/tag/v2.0.0",
+  "published_at": "2026-07-05T09:00:00Z",
+  "prerelease": false,
+  "draft": false,
+  "author": { "type": "Bot" }
+}

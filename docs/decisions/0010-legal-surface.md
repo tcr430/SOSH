@@ -1076,8 +1076,33 @@ GRANT EXECUTE ON FUNCTION public.purge_business(uuid) TO service_role;
 | email_webhook_events | no | — | n/a | RETAIN (not business-scoped) |
 | auth_rate_limits | no (keyed by bucket_key) | — | n/a | RETAIN (separate TTL purge — A1.4 / launch-checklist §16) |
 | cron_health | no | — | n/a | RETAIN (ops) |
+| studio_drafts | yes (business_id) | CASCADE | yes | none — cascade = erasure (may hold third-party quote PII, same wording as evidence_memory above: a Studio draft is customer content and SOSH is the processor, matching posts) |
+| github_connections | yes (business_id) | CASCADE | yes | none — cascade = erasure (holds an installation id, not a credential; no Vault secret exists to delete, ADR 0020 §2.3) |
+| watched_repos | yes (business_id) | CASCADE | yes | none — cascade = erasure (holds repo owner/name chosen by the customer) |
+| signals | yes (business_id) | CASCADE | yes | none — cascade = erasure (holds third-party-authored release text; contributor identity fields are never stored, ADR 0020 §5.3) |
+| signal_candidates | yes (business_id + signal_id) | CASCADE (both) | yes | none — cascade = erasure |
+| insight_cards | yes (business_id) | CASCADE | yes | none — cascade = erasure (quotes third-party-authored release text; contributor identity is never stored, ADR 0020 §5.3) |
+| signal_triage_budget | yes (business_id) | CASCADE | yes | none — cascade = erasure (holds only a per-day cent counter) |
 
 Only `business_deletion_requests` (NO ACTION) would have blocked the root delete; D2.1 resolves it. Every other business-scoped table either cascades or is deliberately retained.
+
+**Session 27-E2.1 note (2026-07-31):** the four ADR 0020 (Mode 3 signal ingestion) rows above —
+`github_connections`, `watched_repos`, `signals`, `signal_candidates` — added in the same PR as their
+migration (`20260731090000_signal_ingestion.sql`), per this file's own mandatory rule and CLAUDE.md's
+erasure-cascade rule. No `purge_business` edit is required for any of the four: confirmed against the
+function's current definition (`20260702120700_purge_business_member_delete.sql:14-72`), which carries
+explicit lines only for tables needing Vault cleanup, legal-hold redaction, or belt-and-braces identity
+deletion — none of the four has that shape, so the root `DELETE FROM public.businesses` at `:62` and its
+cascade suffice (ADR 0020 §3.7).
+
+**Session 26-D2.1 note (2026-07-30):** `studio_drafts` (ADR 0019 §2.2/§12) added above. Two traps
+recorded as decisions, not omissions (ADR 0019 §12.4): (1) retention/expiry of stale drafts is a
+**deferred** follow-on (A-2, no reaper in this track — drafts persist until explicitly deleted or the
+business is erased); (2) no provenance field is captured on the row (drafts are customer content and SOSH
+is a processor here, exactly matching `posts`'s existing posture — no separate justification needed).
+No `BEFORE DELETE` trigger exists on this table (§12.2) — `purge_business`'s root `DELETE FROM
+public.businesses` (`20260702120700_purge_business_member_delete.sql:62`) is unedited and its cascade
+purges `studio_drafts` the same way it purges every other CASCADE row in this table.
 
 **Session 24-D confirmation (2026-07-24):** the `campaign_briefs` row above (added when ADR 0017's B2.0
 migration shipped, per the §D2.5/A3 note in `docs/reviews/session-24-reviewer.md`) is present and correct

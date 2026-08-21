@@ -1,0 +1,71 @@
+{
+  "title": "Oportunidades",
+  "subtitle": "Lançamentos do produto que valem a pena virar conteúdo — você decide o que perseguir.",
+  "empty": {
+    "noConnectionTitle": "Conecte o GitHub para ver oportunidades aqui.",
+    "noConnectionBody": "As oportunidades são construídas a partir da atividade de lançamentos do seu produto.",
+    "noConnectionCta": "Conectar um repositório do GitHub",
+    "connectedNothingYetTitle": "Ainda não há oportunidades.",
+    "connectedNothingYetBody": "A triagem de sinais roda uma vez por dia — volte em breve."
+  },
+  "card": {
+    "observation": "O que aconteceu",
+    "whyItMatters": "Por que importa",
+    "audience": "Público",
+    "modelAssessment": "Avaliação do modelo — não verificada",
+    "verifiedEvidence": "Evidência verificada",
+    "angleOptions": "Opções de ângulo",
+    "angleOptionsHint": "Opções, não texto pronto — escolha uma direção, não um rascunho.",
+    "scores": "Pontuações",
+    "confidence": "Confiança",
+    "novelty": "Novidade",
+    "freshness": "Atualidade",
+    "sourceLink": "Ver o lançamento"
+  },
+  "sensitivity": {
+    "warning": "Este lançamento toca um tema sensível (segurança, descontinuação ou jurídico). Revise com cuidado antes de aprovar.",
+    "confirmApprove": "Este cartão está sinalizado como sensível. Aprovar mesmo assim?",
+    "excludedFromDigest": "Excluído de resumos e notificações."
+  },
+  "actions": {
+    "approve": "Aprovar",
+    "approveConfirm": "Sim, aprovar",
+    "dismiss": "Descartar",
+    "dismissReasonPrompt": "Por que está descartando isto? (opcional)",
+    "save": "Guardar para depois",
+    "cancel": "Cancelar",
+    "error": "Algo deu errado. Tente novamente.",
+    "announceApproved": "Cartão aprovado.",
+    "announceDismissed": "Cartão descartado.",
+    "announceSaved": "Cartão guardado.",
+    "announceAlreadyTriaged": "Este cartão já foi triado por outra pessoa — mostrando o estado atual."
+  },
+  "dismissReason": {
+    "not_relevant": "Não relevante",
+    "already_covered": "Já coberto",
+    "too_sensitive": "Muito sensível",
+    "wrong_timing": "Momento errado",
+    "weak_evidence": "Evidência fraca"
+  },
+  "status": {
+    "pending": "Pendente",
+    "saved": "Guardado",
+    "savedHint": "Guardado — sem prazo de expiração.",
+    "approved": "Aprovado",
+    "approvedInFlightBody": "Este cartão iniciou uma campanha. O briefing ainda precisa de revisão — a triagem é o primeiro de três controlos (triagem → aprovação do briefing → aprovação da publicação).",
+    "approvedLinkPendingHint": "O link do briefing ainda não está disponível.",
+    "approvedLinkToBrief": "Rever o briefing — ainda precisa de aprovação",
+    "dismissed": "Descartado",
+    "expired": "Expirado",
+    "expiredHint": "Já não é acionável.",
+    "triageFailedTitle": "Alguns lançamentos não puderam ser triados.",
+    "triageFailedBody": "A triagem falhou para um ou mais lançamentos e será repetida automaticamente. Nada foi descartado silenciosamente.",
+    "pausedTitle": "Triagem pausada — limite diário atingido.",
+    "pausedBody": "O restante dos lançamentos de hoje será triado na próxima execução."
+  },
+  "filters": {
+    "showExpired": "Mostrar expirados",
+    "hideExpired": "Ocultar expirados",
+    "noneVisible": "Nenhuma oportunidade corresponde a este filtro."
+  }
+}

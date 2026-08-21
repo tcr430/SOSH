@@ -1,0 +1,9 @@
+{
+  "description": "No markers, no rationale — valid, renders nothing, not an error.",
+  "nonce": "deadbeef",
+  "originalDraft": "A short draft with nothing to suggest.",
+  "rawRevision": "A short draft with nothing to suggest.",
+  "rationale": [],
+  "expectedOutcome": "clean",
+  "expectedSuggestionIds": []
+}

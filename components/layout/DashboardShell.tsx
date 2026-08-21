@@ -9,6 +9,7 @@ import {
   CalendarDays,
   BarChart2,
   Inbox,
+  Lightbulb,
   Settings,
   Users,
   CreditCard,
@@ -16,6 +17,7 @@ import {
   LogOut,
   User,
   X,
+  Plus,
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -32,6 +34,10 @@ import { logoutAction } from '@/app/[locale]/(dashboard)/actions'
 // ADR 0014 §6/§9.5 — capability-gated nav entries. `capability: null` means
 // visible to every member (echo only — the DB is the real boundary, L-3).
 export const ACTIVE_NAV = [
+  // ADR 0019 §3.1 — the pre-chamber's nav entry point. Additive: 'campaigns'
+  // below is UNCHANGED and still browses existing campaigns; this is a new,
+  // separate entry, not a repoint (founder-directed, Session 26 D2.9).
+  { key: 'create',    href: 'create',              icon: Plus,         capability: null },
   { key: 'campaigns', href: 'campaigns',         icon: Megaphone,    capability: null },
   { key: 'calendar',  href: 'calendar',           icon: CalendarDays, capability: null },
   { key: 'billing',   href: 'billing',            icon: CreditCard,   capability: CAPABILITIES.MANAGE_BILLING },
@@ -48,6 +54,12 @@ export const COMING_SOON_NAV = [
 // capability-gated <Link> below (approver + admin only), not a COMING_SOON_NAV
 // placeholder.
 export const APPROVALS_NAV_CAPABILITY = CAPABILITIES.APPROVE
+
+// ADR 0021 §5.1/§5.8 — the opportunities feed's nav entry: a live,
+// capability-gated <Link> mirroring the Approvals block exactly (author or
+// admin, not APPROVE — this surface originates campaigns, it approves
+// nothing for publication).
+export const OPPORTUNITIES_NAV_CAPABILITY = CAPABILITIES.AUTHOR
 
 const BANNER_KEY = 'sosh_connect_banner_dismissed'
 const TRIAL_BILLING_BANNER_KEY = 'sosh_trial_billing_banner_dismissed'
@@ -77,6 +89,8 @@ export function DashboardShell({
   // the approvals/page.tsx server guard exactly (not a plain APPROVE echo,
   // which alone would exclude a non-approver admin).
   const canApprove = useCan(APPROVALS_NAV_CAPABILITY) || member.isAdmin
+  // §5.8 — AUTHOR || isAdmin, same shape as canApprove above.
+  const canTriageOpportunities = useCan(OPPORTUNITIES_NAV_CAPABILITY) || member.isAdmin
   const capabilityGrants: Record<string, boolean> = {
     [CAPABILITIES.MANAGE_BILLING]: canManageBilling,
     [CAPABILITIES.MANAGE_MEMBERS]: canManageMembers,
@@ -166,6 +180,21 @@ export function DashboardShell({
           >
             <Inbox className="h-4 w-4 shrink-0" />
             {t('approvals')}
+          </Link>
+        )}
+
+        {/* Opportunities — ADR 0021 §5.1/§5.8; author + admin only */}
+        {canTriageOpportunities && (
+          <Link
+            href={`/${locale}/opportunities`}
+            className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+              pathname.includes('/opportunities')
+                ? 'bg-accent text-accent-foreground'
+                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+            }`}
+          >
+            <Lightbulb className="h-4 w-4 shrink-0" />
+            {t('opportunities')}
           </Link>
         )}
       </aside>

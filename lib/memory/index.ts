@@ -15,7 +15,12 @@
 export { retrieveRelevant as retrieveBrandMemory } from './brand'
 export { retrieveRelevant as retrieveEvidenceMemory } from './evidence'
 export { retrieveRelevant as retrieveAudienceMemory } from './audience'
-export { retrieveRelevant as retrievePerformancePatterns, type PerformancePattern } from './performance'
+export {
+  retrieveRelevant as retrievePerformancePatterns,
+  retrieveStudioPerformancePatterns,
+  type PerformancePattern,
+  type GovernedPerformancePattern,
+} from './performance'
 export { retrieveVoice, type CoreVoiceRules } from './voice'
 
 export type { MemoryQueryContext } from './scoring'

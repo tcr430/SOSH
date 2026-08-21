@@ -11,6 +11,13 @@ export type AiErrorCode =
   // invalid_response so generate-native.ts's re-prompt (§4.4) can send a
   // targeted correction instead of a generic retry.
   | 'policy_violation'
+  // ADR 0019 §5.4 [sec-HIGH-7] — the response truncated (stop_reason ===
+  // 'max_tokens') BEFORE a parseable JSON payload completed. Distinct from
+  // invalid_response: a truncated response is not malformed content, it is
+  // an availability failure driven by input length, and the UI must say
+  // something true and different ("this draft is too long") rather than
+  // the generic "we couldn't read the suggestions" copy.
+  | 'response_truncated'
 
 export class AiError extends Error {
   constructor(public readonly code: AiErrorCode, message: string) {

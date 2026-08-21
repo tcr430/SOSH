@@ -143,4 +143,60 @@ describe('rubricPrompt', () => {
     const msg = rubricPrompt.buildUserMessage(input, makeCtx())
     expect(msg).toContain('target platform: linkedin')
   })
+
+  // ADR 0021 §4.3 (Session 28 E5.7) — SIGNAL3-RUBRIC-UNCHANGED, as FIXTURE
+  // EQUIVALENCE: mode:'card' was added ADDITIVELY (A-1). buildSystemPrompt
+  // takes no `input` param (Prompt<TInput,TOutput>'s own interface), so it
+  // is byte-identical for every mode by construction — asserted anyway,
+  // exactly, not just "no error." buildUserMessage's card-mode branch is a
+  // pure ADDITION at the end of the section list; brief/post mode output
+  // must be byte-identical to what it was before this session's edit.
+  describe('SIGNAL3-RUBRIC-UNCHANGED — mode:card is additive, brief/post output is byte-identical', () => {
+    it("buildSystemPrompt is identical regardless of mode (it doesn't receive mode at all)", () => {
+      const briefSystem = rubricPrompt.buildSystemPrompt(makeCtx())
+      expect(briefSystem).not.toContain('TRIAGE CARD DRAFT')
+      expect(briefSystem).toContain('exactly these ten dimensions')
+    })
+
+    it('mode:brief buildUserMessage is byte-identical to its pre-E5.7 form (no card-mode text leaks in)', () => {
+      const input: RubricInput = { mode: 'brief', contentLabel: 'campaign brief', content: 'Our narrative.' }
+      const msg = rubricPrompt.buildUserMessage(input, makeCtx())
+      expect(msg).toBe(
+        [
+          '## Content to score: campaign brief\n[DATA]\nOur narrative.\n[/DATA]',
+          'Score the content above across all ten dimensions. Return ONLY the JSON object.',
+        ].join('\n\n'),
+      )
+      expect(msg).not.toContain('TRIAGE CARD DRAFT')
+    })
+
+    it('mode:post buildUserMessage is byte-identical to its pre-E5.7 form (no card-mode text leaks in)', () => {
+      const input: RubricInput = { mode: 'post', contentLabel: 'LinkedIn post draft', content: 'Our post copy.', platform: 'linkedin' }
+      const msg = rubricPrompt.buildUserMessage(input, makeCtx())
+      expect(msg).toBe(
+        [
+          '## Content to score: LinkedIn post draft (target platform: linkedin)\n[DATA]\nOur post copy.\n[/DATA]',
+          'Score the content above across all ten dimensions. Return ONLY the JSON object.',
+        ].join('\n\n'),
+      )
+      expect(msg).not.toContain('TRIAGE CARD DRAFT')
+    })
+
+    it('mode:card appends the four-dimension n/a instruction, additively', () => {
+      const input: RubricInput = { mode: 'card', contentLabel: 'triage card draft', content: 'Observation. Why it matters. Audience.' }
+      const msg = rubricPrompt.buildUserMessage(input, makeCtx())
+      expect(msg).toContain('## Content to score: triage card draft')
+      expect(msg).toContain('TRIAGE CARD DRAFT')
+      expect(msg).toContain('platformNativeness, brandVoiceAlignment, openingStrength, and ctaFit as 0')
+      // Not the structural platform-suffix mode:'post' renders — the n/a
+      // guidance prose legitimately mentions "no target platform" in
+      // passing, which is a different string.
+      expect(msg).not.toContain('(target platform:')
+    })
+
+    it('RubricOutputSchema is untouched — still exactly ten dimensions, no eleventh', () => {
+      const shape = RubricOutputSchema.shape.dimensions.shape
+      expect(Object.keys(shape).sort()).toEqual([...ALL_DIMENSIONS].sort())
+    })
+  })
 })

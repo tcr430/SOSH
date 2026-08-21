@@ -1,0 +1,15 @@
+{
+  "description": "THE PURE-ASCII CONFUSED-DEPUTY CASE: marker and rationale both present and well-formed, but the wrapped text is byte-identical to the original — no diff hunk overlaps it, so nothing renders. This is what proves the three-way join, not the marker grammar, is the primary defence.",
+  "nonce": "deadbeef",
+  "originalDraft": "Our onboarding is fast. It really is fast.",
+  "rawRevision": "Our onboarding is fast. It really is 󰀀deadbeef:s3󰀁fast󰀀/deadbeef:s3󰀁.",
+  "rationale": [
+    {
+      "id": "s3",
+      "category": "brandVoiceAlignment",
+      "rationale": "the word 'fast' is on your avoid-words list"
+    }
+  ],
+  "expectedOutcome": "clean",
+  "expectedSuggestionIds": []
+}

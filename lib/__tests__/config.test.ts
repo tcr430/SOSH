@@ -11,6 +11,11 @@ vi.hoisted(() => {
 import { serverSchema } from '@/lib/config'
 
 // Fields that are always required (no .default()) — provide minimal valid values.
+// [E2.3] GITHUB_APP_ID/CLIENT_ID/CLIENT_SECRET/PRIVATE_KEY joined this list
+// (ADR 0020 §2.2/§8.3 — the OAuth leg's ownership proof is load-bearing, so
+// omitting it must fail at boot, not silently). PRIVATE_KEY only needs to be
+// base64 that DECODES to a PEM-shaped string — this file never signs a JWT,
+// only exercises serverSchema's structural validation.
 const REQUIRED_FIELDS = {
   ANTHROPIC_API_KEY: 'sk-ant-test',
   SUPABASE_SERVICE_ROLE_KEY: 'service-role-key-test',
@@ -20,6 +25,10 @@ const REQUIRED_FIELDS = {
   STRIPE_PRICE_ID_PRO: 'price_pro_test',
   OAUTH_STATE_SECRET: 'a'.repeat(32),
   INVITE_TOKEN_SECRET: 'b'.repeat(32),
+  GITHUB_APP_ID: '123456',
+  GITHUB_APP_CLIENT_ID: 'Iv1.test-client-id',
+  GITHUB_APP_CLIENT_SECRET: 'test-client-secret',
+  GITHUB_APP_PRIVATE_KEY: Buffer.from('-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEAtest\n-----END RSA PRIVATE KEY-----\n').toString('base64'),
 }
 
 // CRON_SECRET needs ≥ 32 chars in production (existing refine) — include in prod tests.

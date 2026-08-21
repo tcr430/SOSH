@@ -1,0 +1,14 @@
+{
+  "description": "A rationale array entry whose id never appears as a marker in the revision.",
+  "nonce": "deadbeef",
+  "originalDraft": "Ship the feature by Friday.",
+  "rawRevision": "Ship the feature by Friday.",
+  "rationale": [
+    {
+      "id": "s1",
+      "category": "specificity",
+      "rationale": "Claims a change that was never marked."
+    }
+  ],
+  "expectedOutcome": "rejected"
+}

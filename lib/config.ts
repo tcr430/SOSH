@@ -72,6 +72,10 @@ export const serverSchema = z.object({
   LEARNING_SUMMARY_MIN_INTERVAL_DAYS: z.coerce.number().int().positive().default(7),
   LEARNING_SUMMARY_MAX_INPUT_TOKENS: z.coerce.number().int().positive().default(12000),
   LEARNING_SUMMARY_MAX_MONTHLY_CALLS_PER_BUSINESS: z.coerce.number().int().positive().default(8),
+  // ADR 0021 §3.1 (Session 28 E5.3) — Mode 3 triage's daily cost ceiling.
+  // 5 x 22c worst case = 110c, so the full TRIAGE_SHORTLIST_PER_TICK shortlist
+  // fits with headroom and the cap binds only on pathology (§3.1).
+  TRIAGE_DAILY_CAP_CENTS: z.coerce.number().int().positive().default(125),
   LINKEDIN_CLIENT_ID: z.string().default(''),
   LINKEDIN_CLIENT_SECRET: z.string().default(''),
   X_CLIENT_ID: z.string().default(''),
@@ -81,6 +85,58 @@ export const serverSchema = z.object({
   CRON_TRIGGER: z.enum(['qstash', 'secret']).default('secret'),
   QSTASH_CURRENT_SIGNING_KEY: z.string().min(1).optional(),
   QSTASH_NEXT_SIGNING_KEY: z.string().min(1).optional(),
+  // ADR 0020 §2.2 — GitHub App credentials for Mode 3 signal ingestion.
+  // [Session 27-D / A-4 amendment, MAJOR-3] The four load-bearing fields
+  // below (GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY, GITHUB_APP_CLIENT_ID,
+  // GITHUB_APP_CLIENT_SECRET) are now `.optional()`, NOT unconditionally
+  // required. The prior E2.3 shape (bare `z.string().min(1)`, no
+  // superRefine) made every environment lacking all four boot-fail —
+  // exactly what reddened both Session 27 CI jobs at the range head, fixed
+  // only outside the audited range by pasting dummy values into two
+  // workflow YAMLs. That coupled every unrelated CI job, preview deploy and
+  // contributor checkout to an opt-in feature no tenant uses. The
+  // superRefine below restores fail-fast where it actually belongs:
+  // required TOGETHER in production, and an error in EVERY environment if
+  // only some of the four are set (a partial paste is never a supported
+  // mode). GITHUB_APP_SLUG is NOT part of this co-required set — it stays
+  // independently optional via its own default(''), unchanged: it is
+  // cosmetic (a human-facing install URL), never a security boundary, and
+  // requiring it alongside the other four would make a fully-configured
+  // deployment that simply never set a slug fail parse for no reason.
+  GITHUB_APP_ID: z.string().min(1, "GITHUB_APP_ID is required").optional(),
+  GITHUB_APP_SLUG: z.string().default(''),
+  // [sec-MEDIUM-5] — validated AT PARSE TIME, not first use, WHENEVER a
+  // value is present. This contract is unconditional and survives the
+  // optionality amendment above untouched: `.optional()` short-circuits
+  // Zod validation only for `undefined`, so a present-but-malformed key
+  // still fails parse in every environment, including development. Without
+  // it, a truncated or mis-pasted key fails at the FIRST POLLER TICK, up to
+  // an hour later, inside a background cron whose only output is one
+  // structured log line — exactly the silent failure L-11 forbids.
+  // Validating here preserves parseServerEnv()'s existing fail-fast
+  // contract instead of deferring the decode into lib/signals/.
+  //
+  // BASE64-ENCODED, not a raw multi-line PEM. Two losers, both recorded:
+  //   - Raw multi-line PEM as the env var value: no multi-line/PEM
+  //     precedent exists anywhere in this file (every entry above is a
+  //     single-line scalar), and PEM newlines surviving through .env files,
+  //     shell exports, and platform env-var UIs (which often collapse or
+  //     escape newlines) is a well-known operational trap.
+  //   - Deferring the decode/validation into lib/signals/ (validate at
+  //     first poller use instead of here): breaks parseServerEnv()'s
+  //     fail-fast contract — see [sec-MEDIUM-5] above.
+  GITHUB_APP_PRIVATE_KEY: z.string().min(1, "GITHUB_APP_PRIVATE_KEY is required").refine((val) => {
+    // [NIT-1] Buffer.from(val, 'base64') never throws on malformed input —
+    // Node silently discards invalid characters instead of raising, so a
+    // try/catch here has nothing to catch. Rejection is carried entirely by
+    // the PEM regex below.
+    const decoded = Buffer.from(val, 'base64').toString('utf8')
+    return /-----BEGIN (RSA )?PRIVATE KEY-----/.test(decoded)
+  }, {
+    message: 'GITHUB_APP_PRIVATE_KEY must be base64-encoded and decode to a PEM private key matching -----BEGIN (RSA )?PRIVATE KEY-----',
+  }).optional(),
+  GITHUB_APP_CLIENT_ID: z.string().min(1, "GITHUB_APP_CLIENT_ID is required").optional(),
+  GITHUB_APP_CLIENT_SECRET: z.string().min(1, "GITHUB_APP_CLIENT_SECRET is required").optional(),
 }).superRefine((data, ctx) => {
   if (
     data.CRON_TRIGGER === 'qstash' &&
@@ -102,6 +158,30 @@ export const serverSchema = z.object({
       code: z.ZodIssueCode.custom,
       message:
         'RESEND_API_KEY and RESEND_WEBHOOK_SECRET are both required when EMAIL_PROVIDER=resend in production',
+    })
+  }
+  // ADR 0020 §2.2 amendment (Session 27-D / A-4, MAJOR-3) — the four
+  // load-bearing GITHUB_APP_* credentials. Required together in
+  // production; a partial set (some present, some absent) is an error in
+  // EVERY environment, since 1-of-4 present is always a mis-paste, never a
+  // supported mode.
+  const githubAppKeys = [
+    'GITHUB_APP_ID',
+    'GITHUB_APP_CLIENT_ID',
+    'GITHUB_APP_CLIENT_SECRET',
+    'GITHUB_APP_PRIVATE_KEY',
+  ] as const
+  const presentGithubAppKeys = githubAppKeys.filter((key) => data[key] !== undefined)
+  if (presentGithubAppKeys.length > 0 && presentGithubAppKeys.length < githubAppKeys.length) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `GITHUB_APP_ID, GITHUB_APP_CLIENT_ID, GITHUB_APP_CLIENT_SECRET and GITHUB_APP_PRIVATE_KEY must be set together — partial GitHub App configuration (${presentGithubAppKeys.length} of ${githubAppKeys.length} present) is not valid in any environment`,
+    })
+  } else if (presentGithubAppKeys.length === 0 && process.env.NODE_ENV === 'production') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        'GITHUB_APP_ID, GITHUB_APP_CLIENT_ID, GITHUB_APP_CLIENT_SECRET and GITHUB_APP_PRIVATE_KEY are all required when NODE_ENV=production',
     })
   }
 });
@@ -188,6 +268,7 @@ function parseServerEnv() {
     LEARNING_SUMMARY_MIN_INTERVAL_DAYS: process.env.LEARNING_SUMMARY_MIN_INTERVAL_DAYS,
     LEARNING_SUMMARY_MAX_INPUT_TOKENS: process.env.LEARNING_SUMMARY_MAX_INPUT_TOKENS,
     LEARNING_SUMMARY_MAX_MONTHLY_CALLS_PER_BUSINESS: process.env.LEARNING_SUMMARY_MAX_MONTHLY_CALLS_PER_BUSINESS,
+    TRIAGE_DAILY_CAP_CENTS: process.env.TRIAGE_DAILY_CAP_CENTS,
     LINKEDIN_CLIENT_ID: process.env.LINKEDIN_CLIENT_ID,
     LINKEDIN_CLIENT_SECRET: process.env.LINKEDIN_CLIENT_SECRET,
     X_CLIENT_ID: process.env.X_CLIENT_ID,
@@ -204,6 +285,11 @@ function parseServerEnv() {
     CRON_TRIGGER: process.env.CRON_TRIGGER,
     QSTASH_CURRENT_SIGNING_KEY: process.env.QSTASH_CURRENT_SIGNING_KEY,
     QSTASH_NEXT_SIGNING_KEY: process.env.QSTASH_NEXT_SIGNING_KEY,
+    GITHUB_APP_ID: process.env.GITHUB_APP_ID,
+    GITHUB_APP_SLUG: process.env.GITHUB_APP_SLUG,
+    GITHUB_APP_PRIVATE_KEY: process.env.GITHUB_APP_PRIVATE_KEY,
+    GITHUB_APP_CLIENT_ID: process.env.GITHUB_APP_CLIENT_ID,
+    GITHUB_APP_CLIENT_SECRET: process.env.GITHUB_APP_CLIENT_SECRET,
   });
 }
 
@@ -383,6 +469,9 @@ export const config = {
     get LEARNING_SUMMARY_MAX_MONTHLY_CALLS_PER_BUSINESS() {
       return serverOnly("LEARNING_SUMMARY_MAX_MONTHLY_CALLS_PER_BUSINESS", () => server().LEARNING_SUMMARY_MAX_MONTHLY_CALLS_PER_BUSINESS);
     },
+    get TRIAGE_DAILY_CAP_CENTS() {
+      return serverOnly("TRIAGE_DAILY_CAP_CENTS", () => server().TRIAGE_DAILY_CAP_CENTS);
+    },
     get LINKEDIN_CLIENT_ID() {
       return serverOnly("LINKEDIN_CLIENT_ID", () => server().LINKEDIN_CLIENT_ID);
     },
@@ -430,6 +519,21 @@ export const config = {
     },
     get QSTASH_NEXT_SIGNING_KEY() {
       return serverOnly("QSTASH_NEXT_SIGNING_KEY", () => server().QSTASH_NEXT_SIGNING_KEY);
+    },
+    get GITHUB_APP_ID() {
+      return serverOnly("GITHUB_APP_ID", () => server().GITHUB_APP_ID);
+    },
+    get GITHUB_APP_SLUG() {
+      return serverOnly("GITHUB_APP_SLUG", () => server().GITHUB_APP_SLUG);
+    },
+    get GITHUB_APP_PRIVATE_KEY() {
+      return serverOnly("GITHUB_APP_PRIVATE_KEY", () => server().GITHUB_APP_PRIVATE_KEY);
+    },
+    get GITHUB_APP_CLIENT_ID() {
+      return serverOnly("GITHUB_APP_CLIENT_ID", () => server().GITHUB_APP_CLIENT_ID);
+    },
+    get GITHUB_APP_CLIENT_SECRET() {
+      return serverOnly("GITHUB_APP_CLIENT_SECRET", () => server().GITHUB_APP_CLIENT_SECRET);
     },
   },
 

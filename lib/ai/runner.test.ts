@@ -643,3 +643,71 @@ describe('Step 3 — per-template model input (MEM-RUNNER-CACHE-SPLIT, MAJOR-1a)
     expect(sent).not.toContain('"brandVoice"')
   })
 })
+
+// ── STUDIO-RUNNER-DEFAULT-PRESERVED (ADR 0019 §4.5, founder ruling A-5's
+// CONDITION) — "an optional field with the existing 4096 default preserved
+// is not a Mode 2 behaviour change... on the condition that the promised
+// regression test is actually written, since that's the only thing making
+// the claim true." Two halves, together: (1) every REAL existing prompt
+// object leaves maxTokens unset (static); (2) an unset maxTokens resolves
+// to EXACTLY DEFAULT_MAX_TOKENS=4096 at the SDK call site (behavioural).
+describe('STUDIO-RUNNER-DEFAULT-PRESERVED (ADR 0019 §4.5 / A-5)', () => {
+  it('none of the existing prompt objects sets maxTokens — the SHARED-FUNCTION CALLERS table for runPrompt, one row per prompt', async () => {
+    const { postGenerationPrompt: pg } = await import('@/lib/ai/prompts/post-generation')
+    const { postRegenerationPrompt: pr } = await import('@/lib/ai/prompts/post-regeneration')
+    const { rubricPrompt } = await import('@/lib/ai/prompts/rubric')
+    const { briefAssemblyPrompt } = await import('@/lib/ai/prompts/brief')
+    const { learningSummarizerPrompt } = await import('@/lib/ai/prompts/learning-summarizer')
+    const { brandVoiceInferencePrompt: bv } = await import('@/lib/ai/prompts/brand-voice-inference')
+    const { createNativeGenerationPrompt } = await import('@/lib/ai/prompts/formats/native-generation-prompt')
+
+    // Caller table — every existing runPrompt call site's prompt object:
+    //   post-generation.ts (lib/campaigns/generate.ts)
+    //   post-regeneration.ts (app/.../posts/actions.ts)
+    //   rubric.ts (lib/campaigns/generate.ts, lib/campaigns/brief.ts)
+    //   brief.ts (lib/campaigns/brief.ts)
+    //   learning-summarizer.ts (lib/learning/summarize.ts)
+    //   brand-voice-inference.ts (onboarding/infer-brand-voice, settings/voice/refine-from-posts)
+    //   native-generation-prompt.ts ×2 families (lib/campaigns/generate.ts)
+    const prompts = [pg, pr, rubricPrompt, briefAssemblyPrompt, learningSummarizerPrompt, bv, createNativeGenerationPrompt('single'), createNativeGenerationPrompt('thread')]
+    expect(prompts).toHaveLength(8)
+    for (const prompt of prompts) {
+      expect(prompt.maxTokens).toBeUndefined()
+    }
+  })
+
+  it('an unset maxTokens resolves to EXACTLY 4096 at the SDK call site', async () => {
+    await runPrompt(mockPrompt, mockContext, { text: 'hi' })
+    const callArgs = mockCreate.mock.calls[0][0]
+    expect(callArgs.max_tokens).toBe(4096)
+  })
+
+  it('a prompt that DOES set maxTokens overrides the default (proves the ?? actually reads prompt.maxTokens, not a constant)', async () => {
+    const withMaxTokens: Prompt<MockInput, MockOutput> = { ...mockPrompt, maxTokens: 8192 }
+    await runPrompt(withMaxTokens, mockContext, { text: 'hi' })
+    const callArgs = mockCreate.mock.calls[0][0]
+    expect(callArgs.max_tokens).toBe(8192)
+  })
+})
+
+describe('response_truncated (ADR 0019 §5.4 [sec-HIGH-7])', () => {
+  it('stop_reason === "max_tokens" throws response_truncated, distinct from invalid_response, and never reaches the parse step', async () => {
+    mockCreate.mockResolvedValue({
+      content: [{ type: 'text', text: '{"incomplete json' }], // would otherwise fail as invalid_response
+      stop_reason: 'max_tokens',
+      usage: { input_tokens: 100, output_tokens: 50, cache_read_input_tokens: 0 },
+    })
+    await expect(runPrompt(mockPrompt, mockContext, { text: 'hi' })).rejects.toMatchObject({
+      code: 'response_truncated',
+    })
+  })
+
+  it('a normal end_turn completion with valid JSON is unaffected', async () => {
+    mockCreate.mockResolvedValue({
+      content: [{ type: 'text', text: JSON.stringify({ result: 'ok' }) }],
+      stop_reason: 'end_turn',
+      usage: { input_tokens: 100, output_tokens: 50, cache_read_input_tokens: 0 },
+    })
+    await expect(runPrompt(mockPrompt, mockContext, { text: 'hi' })).resolves.toEqual({ result: 'ok' })
+  })
+})

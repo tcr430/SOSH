@@ -153,6 +153,16 @@ jobs:
           NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: 'pk_test_dummy0000000000000000'
           OAUTH_STATE_SECRET: 'ci-dummy-oauth-state-secret-32chars-min'
           INVITE_TOKEN_SECRET: 'ci-dummy-invite-token-secret-32chars-min'
+          # [Session 27-D / A-4] GITHUB_APP_* deliberately NOT set. The
+          # E2.11-era comment this replaces recorded that these four were
+          # unconditionally REQUIRED in lib/config.ts's serverSchema, so
+          # every supabase/__tests__ file's createServiceRoleClient() call
+          # triggered a full server() parse that failed without them. That
+          # was MAJOR-3 (Session 27-D): unconditional requirement coupled
+          # this workflow — which never exercises signal ingestion — to an
+          # opt-in feature. The fields are now optional under
+          # NODE_ENV=test, required together only in production. A green
+          # run here with no GITHUB_APP_* entries is the proof.
         # --no-file-parallelism: these tests all share one local Postgres/GoTrue
         # instance (single ephemeral CI container), so running test files
         # concurrently buys no isolation — only connection pressure. Vitest's
