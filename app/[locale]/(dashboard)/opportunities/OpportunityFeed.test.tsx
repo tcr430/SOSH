@@ -9,6 +9,7 @@
 // shipped app/globals.css tokens — mirrors ApprovalsInbox.test.tsx's
 // mechanism, not a hand-transcribed copy, per ADR 0015 §1(c)).
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { addDays, formatISO } from 'date-fns'
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 import { act } from 'react'
@@ -44,6 +45,17 @@ import type { InsightCardRow } from '@/lib/db/types'
 
 // ── Fixtures ────────────────────────────────────────────────────────────
 
+// Relative to now, never an absolute literal. OpportunityFeed.tsx:222 marks a
+// pending card expired once `expires_at < new Date()`, and :354 renders the
+// approve/dismiss/save buttons only when `!isExpired` — so a fixture date that
+// silently falls into the past stops rendering the buttons, every
+// `buttonWithText(...)?.click()` becomes a no-op through the optional chain,
+// and eight tests turn red with no commit having touched them. That is exactly
+// what the previous literal ('2026-08-15T00:00:00Z') did: it went green at
+// 2026-08-14T22:21 and had rotted ~1h38m later. The deliberately-expired
+// fixture below stays absolute and in the past, where a literal is correct.
+const NOT_YET_EXPIRED = formatISO(addDays(new Date(), 7))
+
 function makeCard(overrides: Partial<InsightCardRow> = {}): InsightCardRow {
   return {
     id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
@@ -64,7 +76,7 @@ function makeCard(overrides: Partial<InsightCardRow> = {}): InsightCardRow {
     occurred_at: '2026-08-01T00:00:00Z',
     status: 'pending',
     dismiss_reason: null,
-    expires_at: '2026-08-15T00:00:00Z',
+    expires_at: NOT_YET_EXPIRED,
     campaign_id: null,
     created_at: '2026-08-01T00:00:00Z',
     updated_at: '2026-08-01T00:00:00Z',
