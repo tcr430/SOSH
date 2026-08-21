@@ -102,7 +102,7 @@ re-derive a contract from memory.
    question in this ADR.
 4. **F1 is the caller that reopens a deferred ADR 0018 amendment.** ADR 0019 A-3 deferred an additive
    `generation_kind` value (the CHECK is `IN ('initial','regeneration')`,
-   `20260726010000_post_ai_originals.sql:34`) on the stated ground that *"Track D has no promote step, so
+   `20260726010000_learning_capture.sql:34`) on the stated ground that *"Track D has no promote step, so
    the amendment has no caller."* **Track F1 is that caller.** The amendment is now due, it is additive,
    and writing it is a named deliverable of this Architect phase (L-6).
 5. **F1 opens a path ADR 0019 §5.6(2) named as unbounded.** Promoted content reaches `posts.content` →
@@ -132,12 +132,21 @@ re-derive a contract from memory.
    *"We don't generate images at launch."* A carousel is a sequence of image slides, so **carousel at
    launch is slide copy plus per-slide `imageBrief`, and nothing else**. The ADR must state that as the
    shipped product, not as a stopgap (L-8).
-10. **`assembleBrief` gains a third production caller.** Today: Mode 2's own path and Stage F
-    (`seedCampaignFromCard`). ADR 0021 A-2 required a **Tier-1 live-Postgres test driving `assembleBrief`
-    end to end** through Stage F, precisely because a function with few real callers has never met real
-    auth, real RLS-filtered memory, or the missing-rows path — *"both Session 22 blockers were that gap."*
-    **SHARED-FUNCTION CALLERS applies in full to F1**: enumerate all three callers, state per caller which
-    test covers it, and confirm no existing caller's behaviour changes.
+10. **`assembleBrief` gains a SECOND production caller — not a third.** *(CORRECTED 2026-08-21 by the
+    F1a seam sweep; the original text below was wrong and is preserved so the correction is legible.)*
+    ~~Today: Mode 2's own path and Stage F (`seedCampaignFromCard`).~~ A repo-wide `git grep` finds
+    **exactly one** production caller today: `seedCampaignFromCard` at `lib/signals/seed.ts:85`. There are
+    **zero** callers under `app/**` — Mode 2 has no production `assembleBrief` call site. ADR 0021 §6.4's
+    own SHARED-FUNCTION CALLERS table said so at Session 28 (*"(none in production today)"* / *"its first
+    production caller"*); this guide contradicted it and this guide was wrong. Promote is therefore
+    `assembleBrief`'s **second** production caller. ADR 0021 A-2 required a **Tier-1 live-Postgres test
+    driving `assembleBrief` end to end** through Stage F, precisely because a function with few real
+    callers has never met real auth, real RLS-filtered memory, or the missing-rows path — *"both Session 22
+    blockers were that gap."* **SHARED-FUNCTION CALLERS applies in full to F1**: enumerate **both**
+    production callers plus every test caller, state per caller which test covers it, and confirm no
+    existing caller's behaviour changes. Note that `lib/signals/seed.test.ts:14` **mocks** `assembleBrief`
+    (`vi.fn()`) and therefore does **not** execute its body; the only test that drives the real function
+    through a production caller is the Tier-1 `supabase/__tests__/signals3-seed.test.ts:139`.
 11. **Studio's surfaces are `app/[locale]/(dashboard)/studio/page.tsx` and `studio/[draftId]/page.tsx`,
     with `actions.ts` alongside**, and `lib/studio/` holds `categories`, `diff`, `guard`, `markers`,
     `verify`. The closest shipped triage/approve surface to model promote's UX on is
@@ -147,6 +156,50 @@ re-derive a contract from memory.
 12. **Mode 3 is untouched by this session.** No change to the poller, the watch list, the scorer, the
     candidate schema, the triage loop, the card schema or the feed. If a step appears to need one, that is
     a Session 27/28 amendment and it is **flagged, not made** (L-12).
+
+**Items 13-19 were added 2026-08-21 by the F1a seam sweep and its three advisory passes.** Each falsified
+or materially sharpened something the Architect would otherwise have taken on trust. They are Reality, not
+decisions — the decisions they forced are in §0.2.
+
+13. **`generation_kind` is written by APPLICATION CODE, not by a trigger.** ADR 0019 §2.6/§15's phrase
+    *"the existing trigger does the rest, unchanged"* is **half true, and the load-bearing half is false**.
+    The value is supplied at exactly two sites — `lib/campaigns/generate.ts:407` (`'initial'`) and
+    `app/[locale]/(dashboard)/campaigns/[id]/posts/actions.ts:363` (`'regeneration'`). The trigger
+    `enqueue_post_edit_signal()` only **reads** the latest snapshot
+    (`20260726010000_learning_capture.sql:199-203`). Promote must write its own `post_ai_originals` row.
+14. **A snapshot-less post is already handled, deliberately.** `20260726010000_learning_capture.sql:205-207`
+    guards with `IF v_origin_id IS NOT NULL THEN` and the comment *"a snapshot-less post (manual origin, or
+    any post with no `post_ai_originals` row) must NOT fail the approve — just skip."* **A promoted post
+    does not need a snapshot for approval to work.** Writing a *fabricated* one is worse than writing none:
+    Track C would diff the human's text against the human's own text wearing an AI label and synthesize a
+    phantom pattern into `performance_memory`. This is why §0.2 A-1 exists.
+15. **`studio_drafts` does not retain the accepted-suggestion revision.** Columns are `content`, `platform`,
+    `content_hash`, `suggestions`, `suggestions_for_hash` — the accepted revision is **merged into
+    `content`**, not stored separately. ADR 0019 §2.6's plan to snapshot *"the accepted-suggestion
+    revision"* is therefore **not implementable as written**. §0.2 A-1 rules on it.
+16. **`studio_drafts.content` is UNBOUNDED today.** `createStudioDraftAction` / `saveStudioDraftAction`
+    validate with a bare `z.string()` — no `.max()` (`studio/actions.ts:267`, `:296`). Inert only because
+    nothing consumes it downstream. The moment promote reads it, the worst case is *whatever a human can
+    paste*, **not** the "~3x5000 chars" that `post-generation.ts:167-178` reasons about — that number
+    assumes the edit-path caps (`calendar/actions.ts:48`, `posts/actions.ts:179`) apply, and they do not.
+17. **`instagram` maps to `'single'` UNCONDITIONALLY** (`platform-map.ts:25-35`), and
+    `platform-map.test.ts:5-12` asserts it is single *"regardless of content volume."* Carousel cannot be
+    reachable without touching that arm — see §0.2 A-4 for how L-10 is satisfied anyway.
+18. **Three ternaries switch on a bare `FormatFamily` string and are NOT exhaustiveness-checked** —
+    `lib/ai/generate-native.ts:110`, `native-generation-prompt.ts:36-52`, and the factory body at `:138`.
+    `selectFormatFamily`'s `switch` buys exhaustiveness over **`Platform`**, and **nothing** over
+    `FormatFamily`. The first site **silently misroutes** a carousel call into `generateThread`; it throws
+    only because `validateThreadPolicy` happens to crash on the missing `posts[0].role` — an accidental
+    safety net, not a designed one. Converting all three to `switch` + `assertNever` is a **precondition**
+    of adding carousel (L-7), not a cleanup.
+19. **Two soft-delete / worker facts that will look like bugs later if unstated.**
+    (a) `softDeleteCampaignGuarded` is an **UPDATE** setting `deleted_at` (`campaigns.ts:141-155`), so
+    `ON DELETE SET NULL` **never fires** — this is exactly why Session 28-D D7 needed
+    `clearCampaignReferenceOnCards` (`insight-cards.ts:172-191`), and any new draft-to-campaign FK needs
+    the same mirror. (b) `claim_posts_for_publishing` filters `platform IN ('linkedin','twitter')`
+    (`20260524230000_publishing_worker.sql:34`) while `studio_drafts.platform` permits all five — a
+    promoted Instagram/Facebook/Threads post sits `approved` **forever**. Pre-existing, not introduced
+    here; say it out loud.
 
 ---
 
@@ -359,20 +412,38 @@ silently contradict a §0 Locked decision; if it needs to, it **STOPS and flags 
 
 ---
 
-## §0.2 — Founder adjudications
+## §0.2 — Founder adjudications (2026-08-21)
 
-> **PLACEHOLDER — written after §1 runs, before the Builder starts.**
->
-> If any §0.1 answer required a founder ruling — Q1's promote shape if F1a wants to contradict L-3, Q6's
-> STOP if a recommendation field cannot carry script's value, a new `user_can` capability, a new
-> dependency, a change to Mode 2's generation behaviour, or any change to a Session 27/28 artefact — it is
-> recorded here as a
-> `## §0.2 — Founder adjudications (YYYY-MM-DD)` block **before** §2 is authored, in the table form
-> Sessions 22–28 used: `| # | Question | Decision | Where encoded |`, with `A-n` ids, and with the
-> Architect's original recommendation preserved rather than rewritten where a ruling went against it.
->
-> **This section is the Builder's gate.** F1b does not start until it exists or is explicitly recorded as
-> "no adjudications required."
+**Raised by F1a after the seam sweep and the three advisory passes (`database-reviewer`,
+`typescript-reviewer`, `security-reviewer` — one batch, read-only, never re-consulted). Adjudicated by the
+founder 2026-08-21.** This section is **the Builder's gate**: F1b does not start until ADR 0022 encodes
+every row below. Where a ruling went against F1a's original recommendation, that recommendation is
+**preserved, not rewritten** (A-4).
+
+| # | Question | Decision | Where encoded |
+|---|---|---|---|
+| **A-1** | **L-6 mandates the `generation_kind` amendment, but both reviewers independently concluded promote should write NO `post_ai_originals` row** (Reality 14) — and ADR 0019 §2.6's "accepted-suggestion revision" is **not retrievable** from `studio_drafts` (Reality 15). | **Retain the accepted revision in a new column on `studio_drafts`, snapshot THAT** — it is genuinely model-generated, so the row is truthful and the diff measures a real AI→human delta. **The L-6 amendment stands.** Rejected: fabricating a snapshot from human text (corrupts ADR 0018's corpus); skipping the snapshot (discharges L-6 by contradiction). | ADR 0022 §Q1/§Q3 + the ADR 0018 amendment + an **ADR 0019 §2.2 amendment** (new column) |
+| **A-2** | Promote needs a `campaigns.origin` value; the CHECK has only `manual`/`objective_generated`/`signal_generated` (`20260722190000:112-118`) and Stage F needed no migration. | **Add `'studio_promoted'`.** A migration against `campaigns` **and** an amendment to **ADR 0017 §3.1**. Rejected: reusing `'manual'` — a lie the learning loop cannot see through. | ADR 0022 §Q1 + ADR 0017 §3.1 amendment |
+| **A-3** | `posts.scheduled_at` is `NOT NULL` (`20260430120010:24`), and a defaulted past date means `claim_posts_for_publishing` publishes **within minutes of approval** with no deliberate scheduling. | **The user picks `scheduled_at`, and approve MUST re-touch it.** Promote is therefore **two steps, not one click** — every reference to it as a one-click affordance must say so. | ADR 0022 §Q1/§Q8 (UX contract) |
+| **A-4** | **L-10 vs carousel.** `instagram` maps to `'single'` unconditionally (Reality 17); carousel cannot be reachable without changing that arm. | **Carousel is triggered by a NEW required input dimension (`carouselRequested`), sourced from the brief — not by a volume heuristic.** Every call that exists today supplies no such value and resolves **byte-identically**, so **L-10 holds in its strict form** and `platform-map.test.ts:5-12` stays true as written. `selectFormatFamily` gains a third **required** parameter; there is exactly one caller (`generate-native.ts:98`). *F1a's original recommendation was to **reinterpret** L-10 as "inputs still resolving to single/thread are byte-identical" — preserved here; the ruling supersedes it with a fix that needs no reinterpretation.* Rejected: a volume-derived trigger (**changes output for inputs that already exist — the original problem restated**); amending L-10 by fiat; deferring carousel. | ADR 0022 §Q5/§Q7 |
+| **A-5** | **Guard-strength drift.** `guardStudioField`'s wider `neutralizeWithSentinels` runs only at **suggest** time; `saveStudioDraftAction` is a bare `z.string()`, so manually-saved content — exactly what promote reads — is never guarded. The memory→generation sink uses the weaker `\p{Cf}`-only `neutralize()` (`wrap-evidence.ts:108-115`). | **Apply `neutralizeWithSentinels` at the writer boundary.** A length bound closes the cost problem and does **not** close this. Recorded as a decision, never an unstated gap. | ADR 0022 §Q4 + the ADR 0018 amendment |
+| **A-6** | Promote burns a paid campaign slot at `createCampaign` (`countActiveCampaigns`, `campaigns.ts:157-169`, `status IN ('active','draft')`), and a crash strands an orphan campaign with no reconciliation story. | **Deliberate and accepted**, plus a **staleness window** on the claim column so orphans are reclaimable (`promotion_claimed_at` older than N minutes AND `promoted_campaign_id IS NULL`). Rejected: the stuck-forever case, because unlike Stage F's invisible card a stuck Studio draft is directly in the user's face. | ADR 0022 §Q2 |
+| **A-7** | **Two linked problems:** `total_posts_planned` goes permanently off by one for promoted campaigns; and the human's post can be **held hostage** by a brief HARD gate (`< 70`) they never wrote and cannot fix. | **Package A — the post is independent of the brief.** The brief is still assembled, critiqued and gated exactly as ADR 0017 specifies, but it governs **generation**, so its outcome does not block the promoted post's own approval. `activateCampaign`'s caller computes `planned = brief-derived N + count of posts already attached` (byte-identical for every non-promoted campaign, whose count is 0). **Gate count, corrected:** the promoted post passes **two** gates (Studio accept → post approval), matching Mode 2's two; *generated* posts in that campaign pass **three**. Rejected: Package B (couples promote into the brief-approval flow — an L-1 risk — and hides the user's post behind a gate they don't control); Package C (one gate; the Q1 loser L-2 rules out). | ADR 0022 §Q1/§Q7 |
+| **A-8** | This guide carried two factual errors into the Architect phase. | **Corrected in place, with the original preserved where it was load-bearing:** Reality 10 (`assembleBrief` has **one** production caller, not two) and the `20260726010000_post_ai_originals.sql` filename, which **does not exist** — it is `20260726010000_learning_capture.sql`. | Reality 10; §0.1 Q3; §1b file list |
+
+**Scope consequence the founder must see: THREE landed ADRs now need amendments, not one.** §1's brief
+anticipated only ADR 0018. A-2 adds **ADR 0017 §3.1** (the `origin` CHECK) and A-1/Q2 add **ADR 0019 §2.2**
+(new columns, and the supersession of its A-4 refusal of a draft→campaign FK). Both are additive and both
+are written in the ADR 0014 Amendment A / ADR 0010 Amendment 2 house form.
+
+**Two items ship as STATED-OPEN, not silently resolved** — ADR 0022 records them as open with the command
+that closes them: (1) the live `SELECT count(*) FROM performance_memory WHERE length(pattern) > 500` that
+must run **before** Q4's number is fixed (the table is **no longer necessarily empty** — Track C is live via
+`promote.ts`/`summarize.ts`), and (2) whether `renderPatternStatement` (`orchestrator.ts:273`) and
+`renderTierZeroSummary` (`summarize.ts:47`) interpolate unbounded content — if they do, reject-not-truncate
+silently starves `performance_memory` instead of bounding it.
+
+**No new `user_can` capability and no new dependency** is required by any row above.
 
 ---
 
@@ -406,10 +477,20 @@ and carousel/script previews are **renderings of a schema this ADR defines**. So
 
 ```
 Session 29 — Closing the Mode 1 / Mode 2 deferrals: promote-to-campaign + carousel & script format
-families. ARCHITECT phase (Track F). You produce TWO artefacts and NO code:
+families. ARCHITECT phase (Track F). You produce FOUR artefacts and NO code:
   (a) docs/decisions/0022-promote-to-campaign-and-format-families.md (status: Accepted)
-  (b) an additive amendment appended to docs/decisions/0018-diff-based-learning-capture.md, adding the
-      generation_kind value that promote needs
+  (b) an additive amendment appended to docs/decisions/0018-diff-based-learning-capture.md — the
+      generation_kind value promote needs (L-6), AND the write-time length bound on
+      performance_memory.pattern, AND A-5's neutralizeWithSentinels guard at that writer. All three
+      concern objects ADR 0018 OWNS (its CHECK, its column, its writer, its RPC), so they belong in
+      its amendment and are CITED from 0022, never duplicated there.
+  (c) an additive amendment to docs/decisions/0017-mode-2-upgrade.md §3.1 — the 'studio_promoted'
+      origin value (§0.2 A-2).
+  (d) an additive amendment to docs/decisions/0019-mode-1-studio.md §2.2 — the new studio_drafts
+      columns, AND an explicit, in-words supersession of its A-4 refusal of a draft→campaign FK,
+      citing it rather than acting as though it never existed (§0.2 A-1, Q2).
+Count corrected 2026-08-21: §0.2 found that A-1 and A-2 pull two further landed ADRs into scope. All
+four are additive and written in the ADR 0014 Amendment A / ADR 0010 Amendment 2 house form.
 No .ts, no .sql, no .tsx. If you catch yourself writing a migration, a zod schema body, a prompt template
 or a component, stop: that is the Builder's job (F1b), and the constitution requires Architect-attempted
 code to be discarded.
@@ -495,7 +576,7 @@ The CLOSED file list for the ONE ecc:code-explorer sweep — map these, cite fil
   concedes the missing length cap. Quote it.
 - lib/db/memory-performance.ts (or wherever performance_memory.pattern is written) — the write site Q4's
   bound attaches to.
-- supabase/migrations/20260726010000_post_ai_originals.sql:34 — the generation_kind CHECK you are amending.
+- supabase/migrations/20260726010000_learning_capture.sql:34 — the generation_kind CHECK you are amending.
 - app/[locale]/(dashboard)/approvals/** and opportunities/OpportunityFeed.tsx — the shipped inbox
   precedents, including OpportunityFeed's globals.css status-band tokens and its both-themes contrast
   assertion (Session 28-D D5). That is the design floor Q8 inherits.
