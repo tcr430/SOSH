@@ -560,3 +560,229 @@ Recorded as **open with the command that closes each**, rather than resolved by 
 1. **Does `performance_memory` contain rows exceeding the bound?** The "ships EMPTY" comment (`20260719010000_governed_memory.sql:200-203`) predates Track C, which is **live** and writes through `lib/learning/promote.ts:122` and `lib/learning/summarize.ts:150`. **Closing command:** `SELECT count(*) FROM performance_memory WHERE length(pattern) > 500;` — read-only, cheap, no lock. The result goes in the Builder's step notes, and if non-zero the migration states the remediation before `VALIDATE`.
 2. **Do the pattern renderers interpolate unbounded content?** `renderPatternStatement` (`lib/learning/orchestrator.ts:273`) and `renderTierZeroSummary` (`lib/learning/summarize.ts:47`) produce the value written to `pattern`. If either interpolates an unbounded excerpt, a legitimate distillation could organically exceed 500 chars, and §5.3's reject-not-truncate rule would **silently starve `performance_memory`** rather than bound it — degrading Track C's output in a way nobody would notice. **Closing action:** read both functions; if either is unbounded, either bound the interpolation at its source or raise the number with new arithmetic stated here.
 3. **Does the distillation worker handle a rejected item per-item or per-batch?** §5.3 requires per-item log-and-skip. The existing tick loop was not verified during this Architect phase. **Closing action:** read the worker; if it fails the batch, that is a Builder fix inside this ADR's scope.
+
+---
+
+## 17. §16 closure record (2026-08-21, additive)
+
+Written after §16 was authored, in the ADR 0014 Amendment A / ADR 0010 Amendment 2 additive form: **§16 is
+not edited.** Each item below cites *finding → evidence → consequence for the Builder*. All three were
+closed by reading the code at `dd748435`; item 1 additionally carries a production confirmation the Builder
+records rather than decides on.
+
+**§16 item 2 — CLOSED: no unbounded interpolation. The item named the wrong function.**
+
+`renderTierZeroSummary` (`lib/learning/summarize.ts:47`) is **not a writer of `pattern`.** It builds
+*prompt input*: `summarize.ts:131` maps it over `tierZeroRows` to feed `runPrompt`. Its output never
+reaches `performance_memory`. §16 item 2's premise is therefore wrong about that half, and the function
+that actually needed auditing is the model-output write at `summarize.ts:150`.
+
+There are exactly **two** production write paths into `performance_memory.pattern` (`git grep` over
+`upsertDistilledPerformancePattern` / `recomputeAndUpsertPattern` finds no third non-test caller, and no
+migration inserts into the table):
+
+| Writer | Value written | Bound |
+|---|---|---|
+| `lib/learning/orchestrator.ts:273` → `renderPatternStatement` (`orchestrator.ts:105`) | `` `${KIND_LABEL[kind]} on ${platform}.` `` | Closed set of **9 fixed labels**; longest is 62 chars, plus `" on "` + platform + `"."` → **≈ 80 chars, hard maximum** |
+| `lib/learning/summarize.ts:150` | `statement.statement` — raw model output | `z.string().max(LEARNING_SUMMARY_MAX_STATEMENT_CHARS)` = **200** (`lib/ai/prompts/learning-summarizer.ts:16`, `lib/learning/constants.ts:16`), enforced at parse |
+
+**Consequence:** §5.3's reject-not-truncate rule **cannot silently starve `performance_memory`.** The Zod
+parse rejects at 200 long before the 500 CHECK is reached, so no legitimate distillation can organically
+overflow the bound. Neither writer needs bounding at source, and Q4's number needs no new arithmetic.
+
+**§16 item 1 — CLOSED in code; the query remains as confirmation, NOT as a gate.**
+
+`git log -L16,16:lib/learning/constants.ts` shows `LEARNING_SUMMARY_MAX_STATEMENT_CHARS = 200` landed in
+**`387c8c64`** — *the same commit that introduced the summarizer*. There was never a window in which an
+unbounded statement could be written. Combined with item 2's writer inventory, **no row exceeding 500 can
+exist from any production path.**
+
+**Consequence:** the Builder still runs `SELECT count(*) FROM performance_memory WHERE length(pattern) >
+500;` — read-only, cheap, and it catches what static analysis cannot (manual inserts, dev/staging seeds) —
+and records the result in the step notes. But it is **not a decision input**: the migration is written
+`NOT VALID` + `VALIDATE` in one step regardless. §16's stated fear — that `VALIDATE` becomes the discovery
+mechanism `[db-Q4]` — is discharged by the arithmetic above, not by the query result.
+
+**Corollary, recorded so a later session does not "tighten" it as an oversight:** with writers capped at
+200 and ≈80, **a 500 CHECK can never fire from a legitimate Track C write.** That is the intended
+property — it makes the constraint a pure defence-in-depth guard on the §5 promote-path writer boundary
+(A-5), not a live participant in Track C's distillation. **Keep 500. Do not reduce it to 200.**
+
+**§16 item 3 — HALF CLOSED. The row loop is per-item; the statement loop is not. The remainder is a small in-scope Builder fix.**
+
+*The row loop is correct.* `runLearningTick` (`lib/learning/orchestrator.ts:350-351`) calls `processRow`,
+whose own `try/catch` (`orchestrator.ts:211`, `orchestrator.ts:284`) funnels every exception into the
+permanent/transient handling and **returns without rethrowing**. One rejected row cannot fail the batch.
+§5.3's requirement is already met at this level.
+
+*The statement loop is not.* `lib/learning/summarize.ts:146` iterates `output.statements` and awaits
+`upsertDistilledPerformancePattern` with **no per-statement `try/catch`**. A CHECK rejection on statement
+#2 throws out of `summarizeBusinessLearning` into the per-business catch at `orchestrator.ts:358`. The tick
+survives and other businesses are unaffected — but statements #3–5 for that business are **never written**,
+and the loss surfaces as a single `summarizeFailed` with `summarizeFailedCode: 'unknown'`, indistinguishable
+in the canonical log line from an Anthropic-side outage.
+
+**Consequence — Builder scope (§2), small and bounded:** wrap the `summarize.ts:146` upsert in a
+`try/catch` that logs and continues to the next statement, and add a **`summarizeRejected`** counter to
+`LearningTickSummary` (`orchestrator.ts:44-58`, initialised at `orchestrator.ts:319-334`) so a bound
+rejection is legible as itself rather than as a generic failure. **This is latent today** — nothing can
+currently produce a >200-char statement — so it is a correctness-of-the-guard fix, not a live bug, and it
+must not be described as one.
+
+### 17.1 — A stale-comment correction the Builder makes in the same commit
+
+The `governed_memory.sql:200-203` "ships EMPTY" comment that `[db-Q4]` caught is **not the only stale
+comment in this area.** Two further comments assert that the Tier-0 arithmetic writer has no production
+caller:
+
+- `lib/ai/prompts/learning-summarizer.ts:41` — *"the arithmetic Tier-0 writer (lib/learning/promote.ts's `recomputeAndUpsertPattern`) has no production caller yet"*
+- `lib/db/memory-performance.ts:51-52` — the same claim, same wording
+
+`lib/learning/orchestrator.ts:270` **is** that production caller, and has been since the tick loop landed.
+
+**Precision matters here:** only the *premise* is stale. Both comments use it to argue that `pattern` text
+must **not** be assumed arithmetic-and-therefore-safe — and that **conclusion remains correct and must not
+be weakened**; it is now correct for a stronger reason (both writers are live, and there is still no column
+distinguishing an arithmetic row from an LLM-summarizer row). The Builder corrects the "no production
+caller yet" clause in both comments and leaves the guard posture exactly as it stands. ADR 0022's own
+reasoning leans on comment claims in these files, which is precisely why they are corrected rather than
+left for the next Architect to re-derive.
+
+---
+
+## 18. Corrections to §6.3 and §9 (2026-08-21, additive)
+
+Two defects found by an audit of this ADR against the code at `dd748435`. Both are corrected **here**, in
+the append-only house form — **§6.3 and §9 are not edited**, so the original claims stay legible as what
+they were. Neither correction changes a founder adjudication; A-4 and Q5 stand exactly as ruled.
+
+### 18.1 — §9's `upsertDistilledPerformancePattern` row was wrong in three ways, and hid a fourth thing
+
+§9's final row reads:
+
+> `upsertDistilledPerformancePattern` (`lib/db/memory-performance.ts:95`) | `lib/learning/promote.ts:122`,
+> `lib/learning/summarize.ts:150`; `recomputeAndUpsertPattern` (`:52`, not yet live) | ADR 0018's existing
+> tests + the new bound's Tier-1/Tier-2 | **Yes, deliberately**
+
+**(1) Wrong location.** `recomputeAndUpsertPattern` is at **`lib/learning/promote.ts:109`**.
+`lib/db/memory-performance.ts:52` is a *comment mentioning it* — the same stale comment §17.1 corrects.
+
+**(2) Wrong liveness.** It is **live**: `lib/learning/orchestrator.ts:270` calls it in production. The
+`[sec-3]` argument §5.2 draws from it is therefore **stronger** than stated, not weaker — see §18.2.
+
+**(3) Double-counted.** `promote.ts:122` **is** `recomputeAndUpsertPattern`'s own upsert call
+(`promote.ts:119`, `pattern:` at `:122`). The row lists one call site twice and presents the two as
+distinct callers, reporting three callers where there are **two**.
+
+**(4) What the row hid — and this is the reason the rule exists.** The cell "ADR 0018's existing tests"
+does not name a test *per caller*, which `SHARED-FUNCTION CALLERS` requires and every other row in §9 does.
+Naming them exposes an `AUTHORED-NOT-EXECUTED` gap: **both production callers mock the function.**
+`lib/learning/promote.test.ts:16-18` and `lib/learning/summarize.test.ts:23-25` each
+`vi.mock('@/lib/db/memory-performance')` with `upsertDistilledPerformancePattern: vi.fn()`, and
+`lib/learning/orchestrator.test.ts:71-72` mocks `recomputeAndUpsertPattern` itself. **No Tier-2 test
+executes this function's real body through any production caller.** `lib/db/memory-performance.test.ts:168`
+does run the real body, but directly and against a stubbed Supabase client — which **cannot** exercise a
+Postgres CHECK.
+
+**Corrected row (supersedes §9's final row):**
+
+| Function | Caller | Test covering that caller | Behaviour change? |
+|---|---|---|---|
+| `upsertDistilledPerformancePattern` (`lib/db/memory-performance.ts:95`) | `recomputeAndUpsertPattern` (`lib/learning/promote.ts:109`, upsert at `:119`) — **live**, driven by `lib/learning/orchestrator.ts:270` | `lib/learning/promote.test.ts` — **MOCKS the function** (`:16-18`); `lib/learning/orchestrator.test.ts` — **MOCKS `recomputeAndUpsertPattern`** (`:71-72`). **`AUTHORED-NOT-EXECUTED` for this caller.** | **Yes, deliberately** — over-length patterns rejected (§5.3) |
+| " | `summarizeBusinessLearning` (`lib/learning/summarize.ts:147`, `pattern:` at `:150`) | `lib/learning/summarize.test.ts` — **MOCKS the function** (`:23-25`). **`AUTHORED-NOT-EXECUTED` for this caller.** | **Yes, deliberately** |
+| " | *(direct, non-production)* `lib/db/memory-performance.test.ts:168` | Runs the real body against a **stubbed** client — Tier-2 only; **a stub cannot fire a CHECK**, so this is not coverage of the bound | — |
+
+**Binding consequence for the Builder.** `MEM-PATTERN-BOUNDED` (§11.1) is a **DB CHECK** and **Tier-1 is
+its only valid home** — live Postgres, in `supabase/__tests__/`, alongside
+`performance-memory-promotion.test.ts`. It **cannot** be discharged by a Tier-2 test on either production
+caller, because both mock the writer, nor by `memory-performance.test.ts`, because its client is a stub.
+A Tier-2 test may prove the *promoter-level Zod bound* (§5.2's input hygiene) — that is a different
+guarantee at a different boundary, and it must be labelled as such, never as proof of the CHECK.
+
+This is the same trap §9 already records for `seed.test.ts` mocking `assembleBrief`. It was caught there
+and missed here.
+
+### 18.2 — §5.2's "in embryo" framing is stale (same root cause)
+
+§5.2 describes `recomputeAndUpsertPattern` as a writer that *"already exists **in embryo**"* and warns a
+summarizer-only bound would be *"silently void **the day it goes live**."* **It is already live**
+(`orchestrator.ts:270`), and the citation `lib/db/memory-performance.ts:52` points at the stale comment
+rather than the function (`lib/learning/promote.ts:109`).
+
+**The decision is unchanged and its ground is firmer:** the bound belongs at the RPC precisely because a
+second writer is **shipping today**, not because one might ship later. §5.5 already states this correctly
+(*"Track C … is live"*); §5.2 contradicts it, and §5.2 is the side that is wrong.
+
+### 18.3 — §6.3 overclaims twice: the test does not stay "as written," and the cost is not "one line"
+
+§6.3 states that with `carouselRequested` added, *"`platform-map.test.ts:5-12` stays **true as written**"*
+and that, because there is one production caller, *"the cost is one line."* **A-4's ruling that the
+parameter is REQUIRED is not disturbed** — the reasoning §6.3 gives for it (forcing the decision to be
+visible at every future call site) is accepted and stands. Only the two claims about its cost are corrected.
+
+**`lib/ai/prompts/formats/platform-map.test.ts` contains TEN two-argument call sites of
+`selectFormatFamily`.** A required third parameter fails `tsc` at every one. The file **cannot** stay as
+written; the true cost is **one production line (`lib/ai/generate-native.ts:98`) plus ten test call sites.**
+
+What survives, and what §6.3 was reaching for: the test's **assertions** stay true — content volume
+genuinely is not the carousel trigger, and every existing input resolves byte-identically. L-10 holds in
+its strict form. It is the *arity of the calls*, not the *truth of the expectations*, that changes.
+
+**The tension this creates with §8.2, and its resolution.** §8.2 Rot mode 1 warns that a test co-edited in
+the same commit as its subject is not evidence — and the Builder is now obliged to edit `platform-map.test.ts`
+in the same commit that edits `platform-map.ts`. That is **not** Rot mode 1, and the distinction is
+mechanical enough to enforce:
+
+> **The `platform-map.test.ts` diff in the carousel commit MUST change call arity ONLY.** Every existing
+> call gains a third argument `false` and **nothing else changes** — not one `expect(...).toBe(...)`
+> right-hand side, not one `it.each` platform list, not one description string. Rot mode 1 is an *expected
+> value* edited to match new behaviour; this is an *argument list* extended while every expectation is
+> preserved byte-for-byte. **The PR must show that diff and state that it contains zero changed
+> expectations.** A single altered expectation in that file, in that commit, is an L-10 violation and the
+> reviewer treats it as one.
+
+§8.2's frozen `Record<Platform, …>` table remains the primary instrument and is unaffected: it is authored
+new, in three-tuple form, and has no "as written" baseline to preserve.
+
+---
+
+## 19. Minor corrections (2026-08-21, additive)
+
+Same append-only form: **§2, §5, §12 and §14 are not edited.** These are citation and completeness defects
+only — no decision in this ADR changes.
+
+### 19.1 — §14's table is not, as it claims, consolidated
+
+§14 opens *"Advisory findings, consolidated."* Three refs cited in the body have **no row**:
+
+| Ref | Cited at | Why its absence matters |
+|---|---|---|
+| `[sec-4]` | §5.2 (rejecting *"refuse the promote"*) and §5.3 (the truncation-as-imitable-instruction argument) | **Load-bearing.** §5.3's reject-never-truncate ruling rests on it; a reader auditing that ruling from §14 finds nothing. |
+| `[db-addition]` | §2.8(1) — the publishing worker's `linkedin`/`twitter` allowlist | Flags a real defect deferred to §15.4; absent from the one table that inventories advisory output. |
+| `[db-correction]` | §2.8 — `createCampaign` sets no status, so a promoted campaign lands `'draft'` by column default | Corrects a draft assumption; same. |
+
+**Separately, `[type-5]` appears nowhere in this document.** The `type` refs run 1, 2, 3, 4, 6, 7, 8.
+Whether a finding was dropped, merged or renumbered during drafting **is not recoverable from the record**,
+and this ADR does not invent one. Stated so the gap reads as a known unknown rather than as something lost.
+
+**Consequence:** §14 is a *near*-complete index, not a complete one. Anyone auditing this ADR's advisory
+provenance reads §14 **plus** a grep for the `db`/`type`/`sec` ref markers across the body.
+
+### 19.2 — Three citation drifts
+
+| Section | As cited | Correct | Note |
+|---|---|---|---|
+| §12.1 | `clearCampaignReferenceOnCards` (`lib/db/insight-cards.ts:172-191`) | **`:183`** — `:172-182` is the preceding comment block | The D7 precedent the section turns on |
+| §2.2 | `post_id` and `campaign_id` both `NOT NULL` (`20260726010000_learning_capture.sql:32`) | **`:31-32`** — `:31` is `post_id`, `:32` is `campaign_id` | The cite covers only one of the two columns it names |
+| §5.2 | CHECK precedent `20260722190000:112-118` | **`:113-118`** — `ADD CONSTRAINT` at `:113`, `CHECK` at `:114`, `VALIDATE` at `:118` | Off-by-one on the range start only |
+
+### 19.3 — Forward pointers §5.3 and §5.5 do not have
+
+Both subsections close by referring the reader to *"a **stated-open** item (§16)"*. **All three §16 items
+were closed on 2026-08-21 — see §17.** A reader arriving at §5.3 or §5.5 has no signal of that. Read those
+two references as **§16 → §17**:
+
+- §5.3's *"Whether the existing tick loop already does this is a stated-open item (§16)"* → **§17, item 3**:
+  the row loop already satisfies it; the **statement** loop does not, and that is a named Builder fix.
+- §5.5's *"The count query and its result are a stated-open item (§16)"* → **§17, item 1**: closed in code;
+  the query is retained as confirmation and is **not** a gate on the migration.

@@ -738,6 +738,33 @@ names. **§4 stays a placeholder** until the Reviewer has run and its findings d
 > - **Two scope tripwires specific to this session**, to be written as executable scans rather than review
 >   comments: any diff touching `lib/ai/runner.ts` breaks `MODE2-RUNNER-UNTOUCHED` (L-7), and any image
 >   generation call anywhere breaks `MODE2-CAROUSEL-NO-IMAGE-GEN` (L-8).
+> - **One step is already fixed by ADR 0022 §17 and must appear in `F1b.*`.** The three §16 stated-open
+>   items were closed on 2026-08-21 by reading the code at `dd748435` (evidence and per-item consequences:
+>   ADR 0022 §17). Items 1 and 2 add **no** Builder work — both `performance_memory.pattern` writers are
+>   structurally bounded (≈80 chars and a Zod `.max(200)`), so the 500 CHECK can never fire from a
+>   legitimate Track C write and the migration is written `NOT VALID` + `VALIDATE` in one step regardless
+>   of the count query, which is recorded as confirmation only. Item 3 adds exactly one small step:
+>   `lib/learning/summarize.ts:146`'s statement loop has **no per-statement `try/catch`**, so a single
+>   rejected statement silently drops the rest of that business's batch and reports as a generic
+>   `summarizeFailed`. The step wraps that upsert in log-and-skip per §5.3 and adds a `summarizeRejected`
+>   counter to `LearningTickSummary` (`orchestrator.ts:44-58`). **It is latent, not a live bug** — nothing
+>   can currently produce a >200-char statement — and must not be written up as one. The same step corrects
+>   the two stale *"no production caller yet"* comments at `lib/ai/prompts/learning-summarizer.ts:41` and
+>   `lib/db/memory-performance.ts:51-52` (`orchestrator.ts:270` **is** that caller), **leaving their guard
+>   posture exactly as it stands** — only the premise is stale, the conclusion is not.
+> - **Two binding rules from ADR 0022 §18, which corrects §9 and §6.3.** (a) **`MEM-PATTERN-BOUNDED` is
+>   Tier-1 ONLY.** Both production callers of `upsertDistilledPerformancePattern` mock it
+>   (`promote.test.ts:16-18`, `summarize.test.ts:23-25`, and `orchestrator.test.ts:71-72` mocks
+>   `recomputeAndUpsertPattern`), and `memory-performance.test.ts:168` runs the real body against a
+>   **stubbed** client — a stub cannot fire a Postgres CHECK. The bound is proved in `supabase/__tests__/`
+>   against live Postgres or it is not proved. A Tier-2 test may prove the promoter-level Zod bound, but
+>   must be labelled as that and never as proof of the CHECK. (b) **The `platform-map.test.ts` diff in the
+>   carousel commit changes call ARITY only.** The file has **ten** two-argument `selectFormatFamily` call
+>   sites; a required third parameter breaks all ten, so the file cannot stay untouched (ADR 0022 §6.3 said
+>   it could — §18.3 corrects that). Each call gains a third argument `false` and **nothing else changes**:
+>   no `expect(...).toBe(...)` right-hand side, no `it.each` list, no description string. The PR shows that
+>   diff and states it contains zero changed expectations. One altered expectation there is an L-10
+>   violation.
 
 ---
 
@@ -754,7 +781,11 @@ names. **§4 stays a placeholder** until the Reviewer has run and its findings d
 >   (e.g. *"Scope reviewed: `<base>..<head>`; all citations are `git show <sha>:<path>` at that range,
 >   never HEAD."*). A report that does not name its range is not a valid review. Reading at HEAD produced a
 >   false-positive MAJOR in Session 21B; this is not a formality.
-> - **`SHARED-FUNCTION CALLERS` is the first thing checked** for `assembleBrief`'s three callers. Both
+> - **`SHARED-FUNCTION CALLERS` is the first thing checked** for `assembleBrief`'s callers. **The count is
+>   one today, two after promote lands** — `lib/signals/seed.ts:85` is the only production caller at
+>   `dd748435` (`git grep assembleBrief`, non-test), and this ADR's promote path adds the second. *An
+>   earlier draft of this section said "three callers"; that predates the A-8 correction to Reality 10 and
+>   was never true.* Both
 >   Session 22 blockers were a shared function verified against one caller. The reviewer lists, per caller,
 >   which test file exercises it, and marks any caller with no listed test `AUTHORED-NOT-EXECUTED` **even
 >   if another caller is fully covered**.
