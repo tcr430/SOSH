@@ -438,6 +438,50 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
       same rule as every entry above: this is a `pull_request`-event run on `session-22-d`, not a `master`
       run. Promotion to `master`-gated required status still needs three consecutive green `master` runs,
       none of which have happened yet for either `db-tests` or `eval-reported`.
+    - **2026-08-21 (Session 29 · Step 0 — Sessions 26–28 land on `master`):** PR
+      [#5](https://github.com/tcr430/SOSH/pull/5) merged to `master` as `e69e5c41` (merge commit, not
+      squash — the per-session history is the audit trail the ADR appendices cite by SHA). The
+      **`master` push-event** runs at that head: `app-tests`
+      [run 32493839424](https://github.com/tcr430/SOSH/actions/runs/32493839424) — `skip-guard: 212
+      file(s) under [app, lib, components] all visible, zero failures — green. (2848/2848 tests passed)`;
+      `db-tests` [run 32493839443](https://github.com/tcr430/SOSH/actions/runs/32493839443) —
+      `skip-guard: 30 file(s) under [supabase/__tests__] all visible, zero failures — green. (282/282
+      tests passed)`. `eval-triage.yml` triggers on `pull_request` + `workflow_dispatch` only and
+      therefore **cannot** produce a push-event run; it was dispatched explicitly against `master` —
+      [run 32494213095](https://github.com/tcr430/SOSH/actions/runs/32494213095), `eval-reported` and
+      `eval-threshold` both green. **These are genuine `master` runs and they do count.**
+      - **Step 0 also found `app-tests` RED at `f692a30e` and it was not a regression.** Eight tests in
+        `OpportunityFeed.test.tsx` failed against source byte-identical to `87a4dfc8`, whose D9-cited run
+        was green. `makeCard()` defaulted `expires_at` to the absolute literal `'2026-08-15T00:00:00Z'`;
+        `OpportunityFeed.tsx:222` expires a pending card once `expires_at < new Date()` and `:354` renders
+        the action buttons only under `!isExpired`, so past that date the buttons stopped rendering and
+        every `buttonWithText(...)?.click()` became a silent no-op through the optional chain. The green
+        run was 2026-08-14T22:21Z — about 1h38m before the fixture rotted. Fixed in `ca27d268` by deriving
+        the default from `formatISO(addDays(new Date(), 7))` per CLAUDE.md's date rule. Two notes for the
+        record: D9's commit message cites `app-tests` run 31846312604 as evidence for its own range head,
+        but that run's `headSha` is `87a4dfc8` (**D8**); and the optional-chain idiom is what let a missing
+        button degrade into a passing-looking no-op instead of a loud failure.
+      - **⚠ DISCREPANCY — the tally above appears to have been under-counted all along, and the promotion
+        decision is a founder adjudication, not a Builder's.** Every entry above records a
+        `pull_request`-event run and correctly says "tally unchanged" — but **no entry ever recorded the
+        `master` push-event run that each merge produced.** Those runs exist and were full-green with
+        clean, non-zero skip-guards. Consecutive full-green `master` push runs since the Session 22-D
+        topology (`skip-guard` + flag deletion) landed:
+        1. `4b035d3b` — 2026-07-22 — [db-tests 29947011885](https://github.com/tcr430/SOSH/actions/runs/29947011885), `13 file(s) … all visible, zero failures — green`
+        2. `d97e55c8` — 2026-07-25 — [db-tests 30156271345](https://github.com/tcr430/SOSH/actions/runs/30156271345), green
+        3. `f1c730cc` — 2026-07-27 — [db-tests 30302554218](https://github.com/tcr430/SOSH/actions/runs/30302554218), green
+        4. `51264772` — 2026-07-29 — [db-tests 30436667567](https://github.com/tcr430/SOSH/actions/runs/30436667567), `22 file(s) … green`
+        5. `e69e5c41` — 2026-08-21 — [db-tests 32493839443](https://github.com/tcr430/SOSH/actions/runs/32493839443), `30 file(s) / 282 tests`
+        The last red `master` run was `e2812ec8` (2026-07-14). On the face of ADR 0015 §5 — *"three
+        consecutive full green runs on `master`"* — the threshold was **reached at `f1c730cc` on
+        2026-07-27**, and the streak now stands at **5**. Session 29's build guide (`session-29.md`
+        Step 0) asserts the opposite — *"no post-Session-22 code has ever run on `master` at all"* — which
+        is **false**: `master` already carried Sessions 23–25 via PRs #1–#4. **This line is therefore NOT
+        updated to a number.** Promoting `db-tests` to Required changes a merge gate and updates the
+        `master-app-tests` ruleset; per ADR 0015 §5 that is the tech lead's / founder's call. Recorded
+        here for adjudication rather than silently backfilled (which would fabricate history) or silently
+        ignored (which would keep asserting a 0 that the run log contradicts). `session-29.md` Step 0's
+        stale premise needs correcting either way.
   - **Merge-gate enforcement (Session 22-D):** GitHub ruleset `master-app-tests` (id `19038239`) is live on
     `refs/heads/master`, requiring `app-tests` with no bypass actors. `db-tests` is intentionally **not**
     in any ruleset yet — it stays advisory until the tally above reaches 3/3, at which point the ruleset is
