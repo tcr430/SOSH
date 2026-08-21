@@ -972,3 +972,167 @@ location above; the full narrative for *why* each change was made is in
 
 **Evidence:** `docs/reviews/session-25-reviewer.md` CORRECTION PASS, D0–D7 (SHAs `052c48fc` through
 `aabe6152`, D7 pending its own commit at the time this amendment was written).
+
+---
+
+## Amendment A — Promote-to-campaign's learning surface (2026-08-21)
+
+**Author:** Session 29 Track F Architect (F1a). **Amending ADR:** `0022-promote-to-campaign-and-format-families.md`.
+**Authority:** build guide `docs/build-guide/session-29.md` §0 L-5, L-6 and §0.2 rulings **A-1** and **A-5**,
+adjudicated by the founder 2026-08-21. **Form:** ADR 0014 Amendment A / ADR 0010 Amendment 2 house form.
+
+**Everything above this line is unchanged.** This amendment is **additive**: it widens one CHECK, bounds one
+column, and strengthens one guard. It rewrites no decision in the original ADR, and it retracts nothing.
+
+**Why here and not in ADR 0022.** All three changes are to objects **this ADR owns** — its CHECK, its column,
+its writer, its RPC. A future reader asking *"why does `performance_memory.pattern` have a length CHECK?"*
+opens ADR 0018, because the column is ADR 0018's. ADR 0022 records the promote decision and **cites** this
+amendment; no fact is stated in both places.
+
+### A.1 — `post_ai_originals.generation_kind` gains a third value (L-6)
+
+**Change.** The CHECK at `supabase/migrations/20260726010000_learning_capture.sql:34` —
+`generation_kind text NOT NULL CHECK (generation_kind IN ('initial', 'regeneration'))` — widens to admit
+**`'studio_promoted'`**.
+
+**Additive, and no backfill.** Widening a CHECK cannot invalidate an existing row: every extant row is
+`'initial'` or `'regeneration'` and satisfies the wider constraint. Stated explicitly because Session 29 L-12
+requires an additive migration to carry an explicit backfill statement, and *"none, and here is why"* is that
+statement.
+
+**Its caller now exists.** ADR 0019 §2.6 named and specified this amendment and deferred it under founder
+ruling A-3 on the sole ground that *"Track D has no promote step, so the amendment has no caller."* Session 29
+Track F1 is that caller. **The deferral is discharged, not overridden** — its stated condition no longer holds.
+
+**A correction to a claim in ADR 0019, verified rather than quoted.** ADR 0019 §2.6 and §15 state that at
+promote *"the existing trigger does the rest, unchanged."* Verified against the shipped migration, that is
+**half true, and the load-bearing half is false**:
+
+- **True:** `enqueue_post_edit_signal()` is `AFTER UPDATE ON posts` with no `WHEN` clause (`:224-226`) and
+  requires no modification whatsoever.
+- **False:** it **only reads** the latest snapshot (`:199-203`). **No trigger anywhere writes
+  `post_ai_originals`.** `generation_kind` is supplied by application code at exactly two sites —
+  `lib/campaigns/generate.ts:407` (`'initial'`) and
+  `app/[locale]/(dashboard)/campaigns/[id]/posts/actions.ts:363` (`'regeneration'`).
+
+**Promote therefore writes its own snapshot row**, following `createPostAiOriginal`'s existing shape
+(`lib/campaigns/generate.ts:400-414`). Recorded as a correction to a landed ADR rather than silently absorbed.
+
+**What is snapshotted, and the condition under which nothing is (A-1).** The row's `payload` /
+`rendered_content` is the **accepted-suggestion revision** — model-generated text the human endorsed — **not**
+the human's raw draft. This matters because `database-reviewer` and `security-reviewer` **independently**
+recommended writing no snapshot at all, on the correct ground that this table's own comment (`:4-5`) defines it
+as an *"immutable snapshot of what the model generated"* and that a **fabricated** original would make the
+classifier diff human text against human text wearing an AI label, synthesizing a phantom pattern into
+`performance_memory` — corrupting the corpus this ADR exists to keep clean. Their objection was to
+**fabrication**, and it is accepted in full.
+
+> **Binding corollary.** A snapshot is written **if and only if a genuine model-generated baseline exists.**
+> When a draft carries no accepted revision — the human wrote it and promoted it without accepting any
+> suggestion — promote writes **no `post_ai_originals` row**, and the trigger's existing skip path at
+> `:205-207` applies exactly as designed: *"a snapshot-less post … must NOT fail the approve — just skip."*
+> Nothing about that path changes.
+
+*(Retrievability note: `studio_drafts` merges the accepted revision into `content` and does not retain it
+separately, so ADR 0019 §2.6's plan was **not implementable as written**. ADR 0019 Amendment A adds the
+retaining column. Recorded here because this amendment depends on it.)*
+
+**What the classifier does with the new value.** It processes the row normally. Recorded, so no future reader
+mistakes it for equivalence, that **the measurement differs**: for `'initial'`/`'regeneration'` the baseline is
+AI-authored and the diff measures *a human correcting a machine*; for `'studio_promoted'` the baseline is *an
+AI suggestion the human had already accepted*, so the diff measures the human deviating from advice they
+endorsed. Both are valid signals; the second is arguably cleaner. **No promotion gate, threshold or
+`pattern_key` rule changes.**
+
+**Loser: reusing `'initial'`** — it erases exactly this distinction and leaves the learning loop unable to tell
+a human baseline from a machine one.
+
+### A.2 — `performance_memory.pattern` gains a write-time length bound (L-5)
+
+**Change.** `pattern` is bounded at **500 characters**, enforced by a **CHECK constraint** added `NOT VALID`
+then `VALIDATE`d as a separate statement — the precedent being `campaigns_origin_check` itself
+(`20260722190000_mode2_brief_and_roles.sql:112-118`) — with a Zod bound at
+`upsertDistilledPerformancePattern` (`lib/db/memory-performance.ts:95-114`) in front of it.
+
+**This discharges an obligation this codebase wrote down and then carried unmet for three sessions.** The
+comment at `lib/ai/prompts/post-generation.ts:167-178` states it in its own words: *"Once Track C's
+distillation writer populates performance_memory.pattern (also an unbounded text column) with synthesized, not
+platform-constrained, values, THAT writer must enforce its own length bound at write time — neutralize() was
+never designed to bound length, only to defuse injection primitives."* ADR 0016 §15 and ADR 0019 §15 item 10
+both carried it forward. Session 29 L-5 removes the option to defer it again.
+
+**The arithmetic.** `topContent` renders at `post-generation.ts:179` under `PERFORMANCE_CAP = 3`. Today's live
+source is real `posts.content`, bounded by the manual-edit path's `z.string().max(5000)` — a tolerated worst
+case of approximately 3 x 5,000 = 15,000 chars, roughly 3,750 tokens in one prompt section. A distilled pattern
+is a synthesized sentence or two, not a post: **3 x 500 = 1,500 chars, roughly 375 tokens** — an order of
+magnitude below what is already tolerated.
+
+**Where, and why not elsewhere.** The RPC `upsert_distilled_performance_pattern`
+(`20260726030000_performance_memory_promotion.sql:39-72`) is `SECURITY DEFINER`, granted only to `service_role`
+(`:74-75`), and is the **last chokepoint before the value becomes durable and indefinitely re-renderable** — a
+pattern persists up to 90 days (`expires_at`, `:61`) and renders into *every* subsequent generation for that
+business until it decays. It is also the only place a **future second writer cannot bypass**, and that writer
+already exists in embryo: `recomputeAndUpsertPattern` (`lib/db/memory-performance.ts:52`) calls the same RPC
+**without passing through the summarizer**. A bound placed only at the summarizer is silently void the day it
+goes live. The promoter-level bound is **input hygiene**; the RPC's is a **durable-storage invariant** — two
+different guarantees at two boundaries, which is the defence-in-depth posture this ADR already adopts at
+`memory-performance.ts:135-139`, not redundancy.
+
+**Overflow behaviour: REJECT, never truncate.** The value renders under the section header *"Top-Performing
+Post Snippets (use for tone calibration)"* — **an instruction to imitate**. A statement cut mid-clause becomes,
+to the model, a complete stylistic instruction it has no signal to distrust; there is no truncation marker on
+this path (`TRUNCATION_SUFFIX` exists in `wrap-evidence.ts` for evidence, and `post-generation.ts:179` has no
+truncation logic at all). Rejection also matches house policy: ADR 0019 founder ruling A-6 settled the sibling
+case as *"REFUSE input over the authoritative, derived cap outright"* (`lib/studio/guard.ts:106-108`).
+
+**Operational requirement.** The distillation worker handles a rejected item **per item** — log and skip that
+pattern — and **must not fail the whole batch**. Whether the shipped tick loop already does this is recorded as
+a stated-open item in ADR 0022 §16.3.
+
+**Existing rows.** `VALIDATE` **must not be the discovery mechanism** — a failure there is a full-table scan
+that aborts a deploy with a bare Postgres error rather than a legible report. This ADR's *"ships EMPTY"* note
+(`20260719010000_governed_memory.sql:200-203`) **predates Track C**, which is live and writes through
+`lib/learning/promote.ts:122` and `lib/learning/summarize.ts:150`; the table can no longer be assumed empty.
+`SELECT count(*) FROM performance_memory WHERE length(pattern) > 500;` runs first, read-only and unlocked, and
+its result is recorded before the migration is written (ADR 0022 §16.1).
+
+### A.3 — `neutralizeWithSentinels` at the writer boundary (A-5)
+
+**Change.** Any `pattern` value whose provenance chain touches human-authored text is guarded with
+`neutralizeWithSentinels` (`lib/ai/wrap-evidence.ts:118-132`), not plain `neutralize()`.
+
+**The gap this closes, which the length bound does not.** ADR 0019 §5.5 built the wider guard **precisely
+because** plain `neutralize()`'s `\p{Cf}`-only strip (`:84-93`) was judged insufficient — it misses `\p{Co}`
+(private-use sentinels), `\p{Cs}` (lone surrogates) and variation selectors, a gap stated in-code at
+`:108-115`. But `guardStudioField` (`lib/studio/guard.ts:83-129`) runs **only at Studio's suggest-time sink**;
+`saveStudioDraftAction` validates with a bare `z.string()`
+(`app/[locale]/(dashboard)/studio/actions.ts:296`), so **manually-saved content — exactly what promote reads —
+is never guarded at all**. And this ADR's own second sink (`performance_memory` → `post-generation.ts:179`)
+routes through the **weaker** `neutralize()`, chosen before ADR 0019 §5.5's standard existed.
+
+**Honest severity, stated so it is neither inflated nor buried.** `security-reviewer` traced the full read side
+and confirms **no cross-tenant path exists**: `listPerformanceMemoryCandidates`
+(`lib/db/memory-performance.ts:11-35`), `retrieveRelevant` (`lib/memory/performance.ts:45-56`) and all three
+RPCs (`20260726030000:63`, `:114`, `:158`) key on `business_id` with no widening branch, and
+`enqueue_post_edit_signal` copies `NEW.business_id` verbatim (`20260726010000_learning_capture.sql:211`).
+**This is SAME-TENANT self-poisoning and a cost concern — not a tenancy breach and not an exfiltration
+finding. MEDIUM once promote lands, unmitigated; no action needed before then.**
+
+**Loser:** documenting the residual as an accepted carve-out, in the manner of `wrap-evidence.ts:54-59`'s
+Unicode-confusables note. Declined — the wider guard already exists and the cost of calling it is one function
+swap.
+
+### A.4 — What this amendment does NOT change
+
+Stated explicitly, because an amendment's silence is not evidence:
+
+- **No change to the classifier's logic**, its correction-vs-preference split, or its Tier-0 heuristics.
+- **No change to any promotion gate or threshold**, including `promote_performance_pattern`'s
+  `count(DISTINCT campaign_id) >= 2` cross-campaign generality test.
+- **No change to `pattern_key`**, to `post_edit_signals`, or to the `enqueue_post_edit_signal` trigger.
+- **No new table, no new RPC, no new §D2.5 cascade row** — every object touched is already covered.
+- **`LEARN-MODE-AGNOSTIC` remains true as written.** It keys off an AI-authored draft a human approved, never
+  off `campaigns.origin`. Track F1 simply produces such an artefact for the first time from Mode 1.
+
+**Evidence:** ADR 0022 §4, §5 and §12.3; `docs/build-guide/session-29.md` §0.2 rulings A-1 and A-5 and Reality
+items 13-16. Builder commits pending at the time this amendment was written.

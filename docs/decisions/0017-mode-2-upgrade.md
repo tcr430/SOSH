@@ -729,3 +729,61 @@ callers), not a behavior change, since the function only ever reads via `.map()`
 **Evidence:** Session 24-D correction pass D4 (`f9797d4c`); `type-design-analyzer` confirmed the retype is
 sound and the softened comment now matches both code and this ADR. `docs/reviews/session-24-reviewer.md`'s
 CORRECTION PASS section, MINOR-5 row.
+
+---
+
+## Amendment B — `campaigns.origin` gains a fourth value (2026-08-21)
+
+**Author:** Session 29 Track F Architect (F1a). **Amending ADR:** `0022-promote-to-campaign-and-format-families.md`.
+**Authority:** build guide `docs/build-guide/session-29.md` §0.2 ruling **A-2**, adjudicated by the founder
+2026-08-21. **Form:** ADR 0014 Amendment A / ADR 0010 Amendment 2 house form.
+
+**Everything above this line is unchanged**, including Amendment A. This amendment is **additive**: one value
+on one CHECK. No decision in the original ADR is rewritten or retracted.
+
+### B.1 — The change
+
+`campaigns.origin`'s CHECK, defined by §3.1 and shipped at
+`supabase/migrations/20260722190000_mode2_brief_and_roles.sql:112-115` as
+`CHECK (origin IN ('manual', 'objective_generated', 'signal_generated'))`, widens to admit a fourth value,
+**`'studio_promoted'`** — the provenance of a campaign created by Mode 1 Studio's promote-to-campaign step
+(ADR 0022 §2.3).
+
+**Additive, and no backfill.** Widening a CHECK cannot invalidate an existing row; every extant row carries one
+of the three original values and satisfies the wider constraint. The column's DEFAULT was added at `:107` and
+**deliberately dropped** at `:109-110`, so every insert already states `origin` explicitly and no default
+changes. `NOT VALID` then `VALIDATE CONSTRAINT` as a separate statement, matching the sequencing this
+migration already uses at `:112-118`.
+
+### B.2 — Why this amendment is needed when Stage F needed none
+
+Worth recording, because the two cases look alike and are not. §3.1 shipped the `origin` enum
+**forward-compatibly**, and ADR 0021 §6.2 was able to state — verified, not assumed — that *"`'signal_generated'`
+already exists. Stage F costs no migration."*
+
+**Promote has no such luck.** There is no studio-shaped value in the set, so Track F1 is the first consumer
+since §3.1 that genuinely requires the enum to grow. That is the whole of this amendment.
+
+### B.3 — The loser
+
+**Reusing `'manual'`.** Mechanically free and semantically corrosive: it would make a promoted campaign
+indistinguishable from a hand-typed one in `listCampaigns` (`lib/db/campaigns.ts:11-19`), in any future
+provenance analysis, and — most damagingly — in the learning loop, whose value rests on knowing where a piece
+of content came from. `origin` is the one column whose purpose *is* provenance; writing a false value into it
+is not a shortcut but a defect.
+
+### B.4 — What this amendment does NOT change
+
+- **No change to `campaigns.status`**, whose CHECK remains `('draft','awaiting_brief','active','paused','completed')`
+  (`:175`). A promoted campaign lands `'draft'` by column default and passes `assembleBrief`'s
+  `status !== 'draft'` guard (`lib/campaigns/brief.ts:84-86`) exactly as a signal-seeded one does.
+- **No change to `role`**, to `campaign_briefs`, to the frozen-brief model, or to the brief critique/HARD gate.
+- **No change to Mode 2's generation behaviour** — Session 29 L-1 forbids it, and ADR 0022 §8 makes that
+  testable rather than asserted.
+- **No change to the format-family union, the platform map or the per-family Prompt factory** by *this*
+  amendment. Carousel extends all three; that is ADR 0022 §6, and it deliberately leaves §4's existing rows
+  byte-identical (ADR 0022 §6.3).
+- **No new §D2.5 cascade row** — `campaigns` is already covered.
+
+**Evidence:** ADR 0022 §2.3 and §13.2; `docs/build-guide/session-29.md` §0.2 ruling A-2. Builder commits
+pending at the time this amendment was written.
