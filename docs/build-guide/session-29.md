@@ -865,6 +865,482 @@ Both are scans in `F1b.11`, not review comments — a scope rule that lives as p
 **Do not claim a constraint count until it is executed green in CI at the head it is dated to.** Session 28
 shipped a false *"29/29 executed green"* that took three correction steps to undo.
 
+The twelve pastes follow, one per step, in the Sessions 26-28 form.
+
+#### F1b.0 — Grounding pass: re-verify every ADR premise against the live repo  ·  no code, no commit
+
+```
+BUILDER — Session 29 · F1b.0. NO CODE, NO COMMIT. Produce a premise → file:line → still-true? table before
+anything is built. ADR 0022 and its three amendments cite ~70 exact locations; if any has drifted, the step
+that depends on it is not built until the drift is reconciled and recorded here. Session 26's C2.0 is the
+precedent for this step existing at all.
+
+VERIFY these premises specifically (each is load-bearing for a named later step):
+- Reality 1-19 in docs/build-guide/session-29.md, every one. Items 13-19 were added by the F1a sweep and
+  are the ones most likely to have moved.
+- lib/signals/seed.ts:62-96 (the step order promote mirrors), :22-26 (composeObjective), and the :52-61
+  non-idempotency comment VERBATIM. Confirm it still says what ADR 0022 §3.2 quotes.
+- lib/campaigns/brief.ts:80 (assembleBrief), :84-86 (the status!=='draft' guard), :88-90 (the
+  if-existing-throw guard), :143 (critiqueBrief), :197-216 (the HARD gate).
+- git grep assembleBrief across the WHOLE repo including tests. Publish the caller table. THE COUNT IS ONE
+  PRODUCTION CALLER TODAY (lib/signals/seed.ts:85). If you find two, ADR 0022 §9 and Reality 10 are both
+  stale and you STOP and report before building.
+- supabase/migrations/20260722190000_mode2_brief_and_roles.sql:107-118 (origin DEFAULT dropped, the CHECK,
+  NOT VALID then VALIDATE) and :175 (the status CHECK).
+- supabase/migrations/20260730100000_studio_drafts.sql — all columns, :48-52's refusal comment, :71-86's
+  four RLS policies, :17's businesses CASCADE.
+- supabase/migrations/20260726010000_learning_capture.sql:34 (the generation_kind CHECK), :199-203 (the
+  trigger's READ), :205-207 (the skip path and its comment), :224-226 (AFTER UPDATE, no WHEN).
+- lib/ai/prompts/formats/: schemas.ts:9-46, platform-map.ts:25-35, policy.ts:15-32,
+  native-generation-prompt.ts:36-52, :105-125, :133-139. Count the two-argument selectFormatFamily call
+  sites in platform-map.test.ts — ADR 0022 §18.3 says TEN. Confirm the number yourself.
+- lib/ai/generate-native.ts:98 (the only selectFormatFamily caller) and :110 (the ternary F1b.6 converts).
+- lib/ai/prompts/post-generation.ts:167-178 (the comment) and :179 (the render).
+- lib/db/memory-performance.ts:95-114 and 20260726030000_performance_memory_promotion.sql:39-75.
+- lib/learning/summarize.ts:146-150 (the statement loop with NO try/catch) and
+  lib/learning/orchestrator.ts:44-58, :270, :319-334, :350-351.
+- lib/db/campaigns.ts:37-49 (createCampaign), :92-107 (activateCampaign), :141-155
+  (softDeleteCampaignGuarded — confirm it is an UPDATE), :157-169 (countActiveCampaigns).
+- lib/db/insight-cards.ts:161-170 (setCardCampaignId) and :172-191 (clearCampaignReferenceOnCards — the
+  function F1b.3 mirrors).
+- app/globals.css:98-110 and :149-156 (the status-band tokens) and
+  app/[locale]/(dashboard)/opportunities/OpportunityFeed.test.tsx:412-534 (the contrast mechanism F1b.5
+  copies — confirm it READS the token file at :439).
+
+ALSO RUN, and record the result as CONFIRMATION only, never as a decision input:
+  SELECT count(*) FROM performance_memory WHERE length(pattern) > 500;
+ADR 0022 §17 closed this by arithmetic (both writers are capped at 200 and ~80 chars). The migration in
+F1b.2 is written NOT VALID + VALIDATE regardless of what this returns. If it returns non-zero, that is a
+drift finding about manual or seed data and you STOP and report it.
+
+CONFIRM ABSENT: no promoteDraftToCampaign anywhere; no carousel branch in schemas.ts; no scriptBrief
+anywhere; studio_drafts has no promotion_claimed_at, no promoted_campaign_id, no retained-revision column.
+Anything pre-existing here is a drift finding.
+
+OUTPUT: the premise table, any drift found with the affected step named, the count-query result, and
+"Ready for F1b.1." Do NOT commit. Then stop.
+```
+
+#### F1b.1 — Migration A: promote schema  ·  ADR 0022 §2.3, §3.1, §12.2 · ADR 0017 Amd B · ADR 0019 Amd A.1  ·  PROMOTE-RLS-ISOLATED, PROMOTE-CASCADE-COMPLETE
+
+```
+BUILDER — Session 29 · F1b.1. Migration + Tier-1 DB tests + row types in lib/db/types.ts ONLY. No helpers,
+no action, no UI. Run /ecc:plan → /ecc:tdd-workflow → /ecc:verification-loop. Invoke database-reviewer ONCE
+with the scope "F1b.1 + F1b.2 TOGETHER — both migrations"; this is the phase's only DB review and F1b.2
+does not get a second one. Use the supabase:supabase-postgres-best-practices skill (free) while authoring.
+
+BUILD — one additive migration:
+- ALTER the campaigns_origin_check to admit 'studio_promoted' as a FOURTH value, keeping the existing
+  three. NOT VALID then VALIDATE CONSTRAINT as a SEPARATE statement — copy the sequencing at
+  20260722190000:112-118 exactly. Do NOT restore a DEFAULT; it was deliberately dropped at :109-110.
+- ALTER studio_drafts ADD three columns:
+    promotion_claimed_at  timestamptz NULL
+    promoted_campaign_id  uuid NULL REFERENCES campaigns(id) ON DELETE SET NULL
+    <retained accepted revision>  text NULL
+  Name the third column yourself, descriptively (it holds the accepted-suggestion revision promote
+  snapshots). All three nullable. NO new RLS policy — the four at :71-86 are column-agnostic and already
+  carry USING and WITH CHECK. NO BEFORE DELETE trigger.
+- State the backfill IN A COMMENT: none, and why (every existing row is legitimately NULL). L-12 requires
+  an additive migration to carry an explicit backfill statement.
+- State in a comment WHY no new ADR 0010 Amendment 2 §D2.5 row is required: columns on an already-covered
+  table whose cascade row exists and whose business_id already CASCADEs from businesses (:17) — the
+  Session 28-D D7 insight_cards.campaign_id precedent. L-11 requires saying which case applies and why.
+
+TEST — supabase/__tests__/, live Postgres:
+- PROMOTE-RLS-ISOLATED: tenant A cannot SELECT or UPDATE tenant B's draft through the new columns.
+  MIRROR IT BOTH DIRECTIONS with a real signed-in owner-B session (the Session 26-D MINOR-2 precedent) —
+  one direction is not isolation.
+- PROMOTE-CASCADE-COMPLETE: deleting the business CASCADEs the rows away and erasure SUCCEEDS. Assert
+  success, not merely absence.
+- The origin CHECK accepts all four values and rejects a bogus one.
+
+VERIFY: npx tsc --noEmit --skipLibCheck ; npm run test:db. Demonstrate each new assertion REDDENS against
+the pre-migration schema, then restore. Commit: "F1b.1 complete — promote schema (ADR 0022 §2.3/§3.1,
+ADR 0017 Amd B, ADR 0019 Amd A.1)".
+
+STOP AND REPORT IF: the origin CHECK will not VALIDATE, or any existing studio_drafts RLS test reddens —
+that would mean the new columns changed policy behaviour, which they must not.
+```
+
+#### F1b.2 — Migration B: learning schema  ·  ADR 0018 Amd A.1, A.2  ·  LEARN-GENERATION-KIND-WIDENED, MEM-PATTERN-BOUNDED
+
+```
+BUILDER — Session 29 · F1b.2. Migration + Tier-1 DB tests ONLY. Run /ecc:plan → /ecc:tdd-workflow →
+/ecc:verification-loop. NO second database-reviewer call — F1b.1's review covered both migrations.
+
+BUILD — one additive migration:
+- Widen post_ai_originals' generation_kind CHECK (20260726010000_learning_capture.sql:34) to admit
+  'studio_promoted' as a THIRD value. Backfill stated as none, with the reason: widening a CHECK cannot
+  invalidate an existing row.
+- Add a CHECK bounding performance_memory.pattern at 500 characters. NOT VALID then VALIDATE as a separate
+  statement (same precedent as F1b.1).
+
+KEEP 500. DO NOT REDUCE IT TO 200. ADR 0018 Amendment A.2 and ADR 0022 §17's corollary are explicit: the
+two production writers are capped at 200 (a Zod .max at learning-summarizer.ts:16) and ~80 (nine fixed
+labels via renderPatternStatement), so a 500 CHECK CAN NEVER FIRE from a legitimate Track C write. That is
+the INTENDED property — it makes the constraint a pure defence-in-depth guard on the §5 promote-path writer
+boundary (A-5), not a live participant in distillation. A later session may read 500 as slack and try to
+"tighten" it; leave a comment saying it is deliberate and pointing at ADR 0018 Amd A.2.
+
+TEST — supabase/__tests__/, live Postgres:
+- LEARN-GENERATION-KIND-WIDENED: the CHECK accepts all three values and rejects a bogus one.
+- MEM-PATTERN-BOUNDED: an INSERT/UPDATE with a 501-character pattern is REJECTED by Postgres; 500 passes.
+
+⚠️ MEM-PATTERN-BOUNDED IS TIER-1 ONLY. It is a Postgres CHECK. ADR 0022 §18.1 established that BOTH
+production callers of upsertDistilledPerformancePattern mock it (promote.test.ts:16-18,
+summarize.test.ts:23-25) and that memory-performance.test.ts:168 runs the real body against a STUBBED
+client — a stub cannot fire a CHECK. If you discharge this constraint anywhere but supabase/__tests__/
+against live Postgres, you have not discharged it. Put this test beside
+performance-memory-promotion.test.ts.
+
+VERIFY: npx tsc --noEmit --skipLibCheck ; npm run test:db. Demonstrate both assertions REDDEN pre-migration.
+Commit: "F1b.2 complete — generation_kind widened, performance_memory.pattern bounded (ADR 0018 Amd A.1/A.2)".
+```
+
+#### F1b.3 — The claim, the write-back, and the soft-delete cleanup  ·  ADR 0022 §3.1-§3.4, §12.1  ·  PROMOTE-CLAIM-ATOMIC, PROMOTE-WRITEBACK-GUARDED, PROMOTE-CLAIM-RECLAIMABLE, PROMOTE-SOFTDELETE-CLEARED
+
+```
+BUILDER — Session 29 · F1b.3. lib/db/ + lib/config.ts ONLY. No Server Action, no UI. Run /ecc:plan →
+/ecc:tdd-workflow → /ecc:verification-loop.
+
+BUILD — lib/db/studio-drafts.ts gains three functions, and lib/config.ts one constant:
+- The CLAIM: an ATOMIC conditional UPDATE setting promotion_claimed_at, guarded on
+  (promotion_claimed_at IS NULL OR promotion_claimed_at < now() - <window>) AND promoted_campaign_id IS
+  NULL. It RETURNS A TYPED RESULT — claimed | already_promoted | claimed_by_another — mirroring
+  transitionCardStatus's already_triaged arm (lib/db/insight-cards.ts:206-232). It must NOT return void.
+  ADR 0022 §3.3: "silently no-op" is correct for the write-back and WRONG for the claim, because the
+  claim's loser has to render something truthful.
+- The WRITE-BACK: an atomic UPDATE setting promoted_campaign_id, guarded .is('promoted_campaign_id', null),
+  returning void. This one MAY silently no-op — it mirrors setCardCampaignId (insight-cards.ts:161-170).
+- clearPromotedCampaignReferenceOnDrafts(campaignId): nulls promoted_campaign_id for that campaign.
+  WIRE IT from every call site of softDeleteCampaignGuarded. Mirror clearCampaignReferenceOnCards
+  (insight-cards.ts:172-191) including its comment explaining why it exists.
+- lib/config.ts gains the staleness window as a NAMED CONSTANT with its arithmetic stated in a comment: it
+  must exceed the worst-case createCampaign + write-back latency by a wide margin, and it need NOT
+  accommodate assembleBrief, which runs after the write-back. Never a literal at the call site.
+
+WHY THE CLEANUP EXISTS, and do not let a reviewer talk you out of it: softDeleteCampaignGuarded
+(lib/db/campaigns.ts:141-155) is an UPDATE setting deleted_at, NOT a DELETE — so ON DELETE SET NULL NEVER
+FIRES. That is exactly the bug Session 28-D D7 had to close for insight_cards.campaign_id.
+
+TEST — supabase/__tests__/, live Postgres, and this is the step's whole point:
+- PROMOTE-CLAIM-ATOMIC: two concurrent claims of ONE draft. Exactly one wins; the loser gets a TYPED
+  outcome, not an exception and not a silent success. Must REDDEN if the WHERE guard is removed.
+- PROMOTE-WRITEBACK-GUARDED: a second write-back no-ops rather than overwriting.
+- PROMOTE-CLAIM-RECLAIMABLE: a claim older than the window WITH promoted_campaign_id IS NULL is
+  reclaimable; a fresh one is not; and one with promoted_campaign_id SET is never reclaimable.
+- PROMOTE-SOFTDELETE-CLEARED: soft-deleting the campaign leaves no dangling promoted_campaign_id. Must
+  REDDEN with the cleanup function unwired — demonstrate that, then restore.
+
+VERIFY: npx tsc --noEmit --skipLibCheck ; npm run test:app ; npm run test:db. Commit: "F1b.3 complete —
+atomic claim, guarded write-back, soft-delete cleanup (ADR 0022 §3, §12.1)".
+```
+
+#### F1b.4 — `promoteDraftToCampaign`  ·  ADR 0022 §2.1-§2.7, §5.1 · ADR 0018 Amd A.1  ·  PROMOTE-ACTION-VALIDATED, PROMOTE-BRIEF-END-TO-END, ACTIVATE-PLANNED-UNCHANGED
+
+```
+BUILDER — Session 29 · F1b.4. The Server Action + the activateCampaign counting fix. No UI. Run /ecc:plan →
+/ecc:tdd-workflow → /ecc:verification-loop. Invoke security-reviewer ONCE over this step before committing
+— this is the step where human-authored text enters posts.content.
+
+BUILD — promoteDraftToCampaign(draftId) in the Studio surface's actions.ts, in ADR 0022 §2.1's EXACT order:
+  1. Claim the draft (F1b.3's function). On a losing claim, return its typed outcome and do NOTHING else.
+  2. createCampaign with origin='studio_promoted', objective composed from the draft.
+  3. Write back promoted_campaign_id IMMEDIATELY — before step 6, not after.
+  4. Insert the draft content as a posts row, status='draft', with the USER-CHOSEN scheduled_at.
+  5. Write the post_ai_originals snapshot — SEE THE CONDITION BELOW.
+  6. Call assembleBrief(campaignId) UNCHANGED.
+
+Compose the objective by REUSING composeObjective's SHAPE (lib/signals/seed.ts:22-26), generalized. Do NOT
+extend BriefAssemblyInput — its six fields (lib/ai/prompts/brief.ts:61-68) are untouched. ADR 0021 §6.1's
+named loser, unchanged: a seed variant on BriefAssemblyInput is a change to Mode 2's generation behaviour
+and L-1 forbids it.
+
+⚠️ THE SNAPSHOT CONDITION IS BINDING (ADR 0018 Amd A.1's corollary). Write the post_ai_originals row IF AND
+ONLY IF the retained accepted revision is NON-NULL, with generation_kind='studio_promoted' and the
+REVISION as its content — never the human's raw draft. When the column is NULL (the human wrote the draft
+and promoted it without accepting any suggestion) write NO ROW AT ALL; the trigger's skip path at
+20260726010000_learning_capture.sql:205-207 handles it exactly as designed. A snapshot fabricated from
+human text makes the classifier diff human text against itself and poisons performance_memory. This is the
+single most damaging thing you could get wrong in this session.
+
+ALSO: Zod on the input (draftId uuid, scheduled_at). Apply z.string().min(1).max(5000) to the content copy
+into posts.content, matching calendar/actions.ts:48 and posts/actions.ts:179 — promote must not be the one
+write path to that column with a different contract (ADR 0022 §5.1; studio_drafts.content is UNBOUNDED
+today, so the 5000 does real work here).
+
+ALSO: activateCampaign's CALLER computes planned = brief-derived N + count of posts already attached. For
+every non-promoted campaign that count is 0, so behaviour is byte-identical (ADR 0022 §2.7).
+
+TEST:
+- Tier-1, live Postgres: PROMOTE-BRIEF-END-TO-END drives assembleBrief END TO END through promote against
+  real auth, real RLS-filtered memory and the missing-rows path. This is ADR 0021 A-2's binding condition
+  applied to assembleBrief's SECOND production caller — a Tier-2 mock does not discharge it.
+- Tier-2: PROMOTE-ACTION-VALIDATED (the Zod contract incl. the 5000 bound); the snapshot written when the
+  revision exists AND not written when it is NULL; the losing-claim path performs no writes.
+- Tier-2: ACTIVATE-PLANNED-UNCHANGED — a non-promoted campaign's planned value is IDENTICAL to today.
+
+VERIFY: npx tsc --noEmit --skipLibCheck ; npm run test:app ; npm run test:db. Commit: "F1b.4 complete —
+promoteDraftToCampaign (ADR 0022 §2, ADR 0018 Amd A.1)".
+
+STOP AND REPORT IF: you find yourself needing to change assembleBrief, critiqueBrief,
+approveBriefIfQualified, or BriefAssemblyInput. All four are unchanged by design (L-3).
+```
+
+#### F1b.5 — The Studio promote surface  ·  ADR 0022 §10 · A-3, L-11  ·  PROMOTE-STATES-RENDERED, PROMOTE-CONTRAST-AA, PROMOTE-I18N-COMPLETE
+
+```
+BUILDER — Session 29 · F1b.5. UI only. Run /ecc:plan → /ecc:tdd-workflow → /ecc:verification-loop. Invoke
+taste-skill for the build and impeccable for the review pass, BOTH against ADR 0022 §10's UX contract —
+not against their own taste. They may not introduce a colour outside globals.css tokens.
+
+BUILD — the promote affordance on app/[locale]/(dashboard)/studio/[draftId]:
+- Server Component page owns auth, the business lookup and every bounded read; the Client component owns
+  interaction ONLY. Precedent, in code: opportunities/page.tsx:13-16 — "NO client-side data fetching".
+- ⚠️ PROMOTE IS TWO STEPS, NOT ONE CLICK (A-3). The user chooses scheduled_at before the action fires. Any
+  affordance implying one click is wrong, and the reviewer is instructed to check this specifically.
+- All SEVEN §10 states, each with visible text AND an accessible name: not promotable (content empty OR
+  platform IS NULL — the column is nullable by design); promotable; promoting; promoted (a REAL link to
+  the brief, following D7's insight_cards.campaign_id link precedent); promote failed; already promoted
+  (the lost-race arm — render THAT draft's real current state, never a generic error, mirroring
+  OpportunityFeed's already_triaged); reclaimable.
+- Any new status colour goes on app/globals.css tokens beside --warning / --success / --info-foreground
+  (light :98-110, dark :149-156). NEVER an ad-hoc Tailwind colour class.
+- i18n keys in en, pt AND es simultaneously, registered in i18n/request.ts.
+- shadcn v4 is Base UI: NO asChild on Button or DropdownMenu. Use buttonVariants() for a link styled as a
+  button. Zero dangerouslySetInnerHTML. No console.*.
+
+TEST — Tier-2, rendering the REAL component (not a mock — page.test.tsx mocking the component to () => null
+is what made OpportunityFeed.tsx 387 lines of AUTHORED-NOT-EXECUTED before Session 28-D D5):
+- PROMOTE-STATES-RENDERED: all seven states, with the two "cannot promote" states asserted DISTINCT and
+  already-promoted asserted to render that draft's own status.
+- PROMOTE-CONTRAST-AA: both themes, ≥4.5:1, READING THE SHIPPED TOKEN FILE via
+  readFileSync(path.resolve(process.cwd(), 'app/globals.css')) — copy OpportunityFeed.test.tsx:412-534's
+  mechanism, do not hand-transcribe a hex. Add the negative assertion that no raw amber|emerald|sky-\d
+  class survives in the rendered output.
+- PROMOTE-I18N-COMPLETE: every new key present in all three locales.
+
+⚠️ NO ABSOLUTE DATE LITERALS IN FIXTURES. A fixture date compared against new Date() is a time bomb — the
+OpportunityFeed suite went red on 2026-08-15 from exactly that (ca27d268). Derive from
+formatISO(addDays(new Date(), n)).
+
+VERIFY: npx tsc --noEmit --skipLibCheck ; npm run test:app. Commit: "F1b.5 complete — the Studio promote
+surface (ADR 0022 §10)". TRACK F1 IS NOW COMPLETE. Confirm the full suite is green before F1b.6.
+```
+
+#### F1b.6 — The exhaustiveness precondition  ·  ADR 0022 §6.5  ·  (enables CAROUSEL-*)
+
+```
+BUILDER — Session 29 · F1b.6. TRACK F2 OPENS HERE. This step adds NO new format family. Run /ecc:plan →
+/ecc:tdd-workflow → /ecc:verification-loop.
+
+BUILD — convert three bare-FormatFamily ternaries to exhaustive switches with an assertNever default:
+  lib/ai/generate-native.ts:110
+  lib/ai/prompts/formats/native-generation-prompt.ts:36-52 (buildSystemPrompt)
+  lib/ai/prompts/formats/native-generation-prompt.ts:138 (the factory body)
+
+WHY THIS IS ITS OWN COMMIT AND WHY IT LANDS FIRST. These three switch on a bare FormatFamily STRING, not on
+a tagged object, so tsc's discriminated-union narrowing does not apply and NONE of them is exhaustiveness-
+checked. generate-native.ts:110 is the dangerous one: add carousel without touching it and a carousel call
+falls silently into generateThread, receiving the thread prompt and validateThreadPolicy. It throws only
+because that validator happens to crash on the missing posts[0].role — an ACCIDENTAL safety net, not a
+designed one. Landing the conversion first means the compiler, not luck, catches F1b.7's third arm.
+
+DO NOT TOUCH lib/campaigns/generate.ts:48 (extractOpener) or :55 (joinContent). ADR 0022 §6.5 records them
+as ALREADY SAFE — they narrow on the output union where CarouselOutput has slides and not posts, which is a
+genuine compile error. Changing them is out of scope.
+
+THIS COMMIT MUST BE GREEN WITH FormatFamily STILL 'single' | 'thread'. If you find yourself adding
+'carousel' to make it compile, you have merged F1b.6 into F1b.7 — split them.
+
+VERIFY: npx tsc --noEmit --skipLibCheck ; npm run test:app. Prove the conversion is behaviour-preserving:
+the existing generate-native and native-generation-prompt suites pass UNCHANGED. Commit: "F1b.6 complete —
+FormatFamily dispatch made exhaustive (ADR 0022 §6.5, precondition for carousel)".
+```
+
+#### F1b.7 — The carousel family  ·  ADR 0022 §6, §8 · A-4  ·  CAROUSEL-SCHEMA-STRUCTURAL, CAROUSEL-POLICY-SEQUENCE, MODE2-FORMAT-SELECTION-UNCHANGED, MODE2-PROMPT-BYTE-IDENTICAL
+
+```
+BUILDER — Session 29 · F1b.7. The third union branch and everything that makes it reachable. Run /ecc:plan
+→ /ecc:tdd-workflow → /ecc:verification-loop.
+
+BUILD:
+- schemas.ts: a THIRD discriminatedUnion branch, format: 'carousel', with slides bounded 3..10 as LITERAL
+  schema bounds, each slide { text, role, imageBrief }, role a closed enum 'cover' | 'body' | 'cta', plus
+  the branch-level imageBrief. NO order field — array position IS the order (ADR 0017 §4.1's [type-2]).
+  Repeat imageBrief per-branch; discriminatedUnion has no shared base merge.
+- policy.ts: validateCarouselPolicy(output) mirroring validateThreadPolicy's shape (:15-32) — first slide
+  is 'cover', at least one 'cta', throwing AiError('policy_violation'). Shape failures must keep surfacing
+  as invalid_response from zod; the two codes stay DISTINGUISHABLE (ADR 0017 §4.2).
+- native-generation-prompt.ts: buildCarouselPrompt + a third overload, with its OWN hardcoded prompt.id
+  alongside 'native-generation-single' (:107) and 'native-generation-thread' (:118).
+- platform-map.ts: selectFormatFamily gains a THIRD REQUIRED PARAMETER, carouselRequested, sourced from the
+  brief. Instagram's arm becomes conditional on it. EVERY OTHER ARM IS UNTOUCHED.
+- lib/ai/generate-native.ts:98 — the only caller — supplies the new argument.
+
+⚠️ WHY A NEW PARAMETER AND NOT A VOLUME RULE (A-4, and this is the whole reason L-10 survives). Every call
+that exists today supplies no such value and resolves BYTE-IDENTICALLY, so carousel is a DOMAIN EXTENSION,
+not a mapping change, and L-10 holds in its STRICT form. A volume-derived trigger ("3 slides' worth →
+carousel") is derived from inputs that ALREADY EXIST, so calls resolving to 'single' today would start
+resolving to 'carousel' — that is the L-10 violation this design exists to avoid. It is the named loser.
+The parameter is REQUIRED, not optional, precisely because there is one caller: the cost is one line and it
+forces the decision to be visible at every future call site.
+
+⚠️ THE platform-map.test.ts DIFF IS ARITY-ONLY (ADR 0022 §18.3). The file has TEN two-argument
+selectFormatFamily call sites. Each gains a third argument `false`. NOTHING ELSE CHANGES: no
+expect(...).toBe(...) right-hand side, no it.each list, no description string. In the commit body, state
+that the diff contains ZERO changed expectations. ONE altered expectation is an L-10 violation and voids
+MODE2-FORMAT-SELECTION-UNCHANGED entirely. Note that :5-12's "regardless of content volume" assertion for
+instagram REMAINS TRUE, because volume is not the trigger — do not "update" it.
+
+TEST — Tier-2:
+- CAROUSEL-SCHEMA-STRUCTURAL: safeParse REJECTS 2 slides, 11 slides, a bad role, and prose-where-carousel-
+  expected — structurally, not by a downstream string check.
+- CAROUSEL-POLICY-SEQUENCE: a cover-less or cta-less carousel throws policy_violation, and a JSON-shape
+  failure throws invalid_response. Assert the codes are DIFFERENT.
+- MODE2-FORMAT-SELECTION-UNCHANGED: the frozen expectation table, typed as Record<Platform, ...> so tsc
+  --noEmit HARD-FAILS if Platform ever gains a member the table does not cover — that is strictly stronger
+  than a runtime completeness check. Enumerate every (platform, estimatedTweetsWorth, carouselRequested)
+  combination and assert the pre-F2 value. NOT a snapshot file: a snapshot rots and gets -u'd back to green.
+- MODE2-PROMPT-BYTE-IDENTICAL: buildSinglePrompt() and buildThreadPrompt() output byte-compared against
+  frozen fixtures.
+
+VERIFY: npx tsc --noEmit --skipLibCheck ; npm run test:app. Commit: "F1b.7 complete — the carousel family
+(ADR 0022 §6, A-4); platform-map.test.ts diff is arity-only, zero changed expectations".
+```
+
+#### F1b.8 — `scriptBrief`  ·  ADR 0022 §7  ·  SCRIPT-BRIEF-BOUNDED, SCRIPT-NEVER-PUBLISHED
+
+```
+BUILDER — Session 29 · F1b.8. The recommendation field and its Tier-3 scan. Run /ecc:plan →
+/ecc:tdd-workflow → /ecc:verification-loop.
+
+BUILD:
+- scriptBrief: string | null on EXACTLY imageBrief's footing (schemas.ts:12, :36) — declared per-branch,
+  with a LITERAL length bound in the schema.
+- ⚠️ IT IS A BOUNDED STRING, NOT A STRUCTURED OBJECT. A { hook, beats[], cta } shape was the Architect's
+  draft and was REJECTED (ADR 0022 §7.1): a structured multi-field object with its own array bound "starts
+  looking exactly like a format family in miniature", which is the thing L-9 forbids. If you find yourself
+  adding fields to it, stop.
+- i18n keys in en, pt AND es, registered in i18n/request.ts.
+
+TEST:
+- Tier-2 SCRIPT-BRIEF-BOUNDED: over-length is rejected by safeParse.
+- Tier-3 SCRIPT-NEVER-PUBLISHED: an EXECUTABLE SOURCE SCAN asserting the field name appears nowhere outside
+  the generation-output module and the single mapper that consumes generation output — and NEVER in
+  posts.content's write path or the publishing worker. Follow lib/signals/source-scans.test.ts's shape.
+  ⚠️ IT MUST HAVE A PER-ROOT VACUITY GUARD (expect(files.length).toBeGreaterThan(0) PER ROOT, not in
+  aggregate — the Session 26-D MINOR-1 precedent). A scan that passes over an empty root proves nothing.
+  Demonstrate it REDDENS against a temporary violation, then revert.
+
+WHY A SCAN AND NOT A TYPE. ADR 0022 §7.2 evaluated a compile-error guarantee and REJECTED IT ON COST, which
+is different from skipping it: a brand only constrains what may be assigned TO a branded slot, so the brand
+would have to sit on the SINK, and posts.content has several legitimate plain-string producers (manual
+edits, joinContent at generate.ts:270, the regeneration and brand-voice paths). Forcing all of them through
+one mint point makes the brand mean "passed through the function everything passes through" — a tautology.
+Do not re-litigate this; it is recorded with its reasoning.
+
+VERIFY: npx tsc --noEmit --skipLibCheck ; npm run test:app. Commit: "F1b.8 complete — scriptBrief as a
+recommendation field + the never-published scan (ADR 0022 §7)".
+```
+
+#### F1b.9 — Carousel and script previews  ·  ADR 0022 §10
+
+```
+BUILDER — Session 29 · F1b.9. UI only. Run /ecc:plan → /ecc:tdd-workflow → /ecc:verification-loop. Invoke
+taste-skill for the build and impeccable for the review pass, BOTH against ADR 0022 §10.
+
+BUILD — in the approvals surface:
+- A carousel preview: slides IN ORDER with their roles VISIBLE (cover / body / cta), so a misplaced cta is
+  legible to a human reviewer rather than only to the policy validator.
+- imageBrief and scriptBrief rendered as recommendations EXPLICITLY MARKED NEVER-PUBLISHED, in visible text
+  and in the accessible name. This is the same treatment imageBrief already receives — not a new category.
+- Reuse the existing status-band tokens; add none unless the design genuinely needs one, and if it does,
+  it lands on globals.css with a both-themes contrast assertion like F1b.5's.
+- i18n en/pt/es. No asChild. Zero dangerouslySetInnerHTML. No console.*.
+
+TEST — Tier-2, rendering the REAL component: a carousel post renders every slide with its role; a post
+carrying scriptBrief renders it with the never-published marker present in the accessible name.
+
+VERIFY: npx tsc --noEmit --skipLibCheck ; npm run test:app. Commit: "F1b.9 complete — carousel and script
+previews (ADR 0022 §10)".
+```
+
+#### F1b.10 — The learning-loop per-statement guard and two stale comments  ·  ADR 0022 §17 item 3, §17.1
+
+```
+BUILDER — Session 29 · F1b.10. A small, bounded fix plus two comment corrections. Run /ecc:plan →
+/ecc:tdd-workflow → /ecc:verification-loop.
+
+BUILD:
+- lib/learning/summarize.ts:146 — the statement loop has NO per-statement try/catch, so a rejection on
+  statement #2 throws out of summarizeBusinessLearning into the per-business catch at orchestrator.ts:358,
+  and statements #3-5 for that business are never written. Wrap the upsert in a try/catch that LOGS AND
+  CONTINUES to the next statement (ADR 0022 §5.3's per-item requirement).
+- Add a summarizeRejected counter to LearningTickSummary (lib/learning/orchestrator.ts:44-58, initialised
+  :319-334) and to the canonical tick log line, so a bound rejection is legible AS ITSELF rather than as a
+  generic summarizeFailed with code 'unknown' — today it is indistinguishable from an Anthropic outage.
+
+⚠️ WRITE THIS UP AS LATENT, NOT AS A LIVE BUG. Nothing can currently produce a >200-char statement (the Zod
+.max at learning-summarizer.ts:16 rejects at parse, long before the 500 CHECK). This is a correctness-of-
+the-guard fix. Do not describe it as a bug in the commit message or anywhere else.
+- The ROW loop is already correct and needs NO change: processRow's own try/catch (orchestrator.ts:211,
+  :284) funnels every exception into permanent/transient handling and returns without rethrowing.
+
+ALSO — two stale comments (§17.1):
+  lib/ai/prompts/learning-summarizer.ts:41
+  lib/db/memory-performance.ts:51-52
+Both assert the arithmetic Tier-0 writer "has no production caller yet". lib/learning/orchestrator.ts:270
+IS that caller and has been since the tick loop landed. ⚠️ CORRECT ONLY THE PREMISE. Both comments use it
+to argue that pattern text must NOT be assumed arithmetic-and-therefore-safe, and THAT CONCLUSION IS STILL
+CORRECT and must not be weakened — it is now correct for a stronger reason (both writers are live, and no
+column distinguishes an arithmetic row from an LLM-summarizer row). Leave the guard posture exactly as it
+stands.
+
+TEST — Tier-2: a rejected statement does not prevent subsequent statements in the same batch from being
+written, and summarizeRejected increments. Must REDDEN without the try/catch.
+
+VERIFY: npx tsc --noEmit --skipLibCheck ; npm run test:app. Commit: "F1b.10 complete — per-statement
+log-and-skip in the summarizer, summarizeRejected counter, two stale premises corrected (ADR 0022 §17)".
+```
+
+#### F1b.11 — Scope scans, constraint map, and the verification pass  ·  ADR 0022 §11.3  ·  RUNNER-UNMODIFIED, MODE3-UNTOUCHED, POSTS-DDL-UNMODIFIED, NO-SKIP-REVIEW-PATH
+
+```
+BUILDER — Session 29 · F1b.11. The last step. Run /ecc:verification-loop over the WHOLE range.
+
+BUILD — four EXECUTABLE scans, each with a PER-ROOT vacuity guard, each demonstrated to REDDEN against a
+temporary violation and then reverted:
+- MODE2-RUNNER-UNTOUCHED: fails if lib/ai/runner.ts is modified in this range, and asserts there is no
+  third prompt.id branch alongside isPostGeneration / isBrandVoice (runner.ts:17-25).
+- MODE2-CAROUSEL-NO-IMAGE-GEN: fails on any image-generation call anywhere in the repo (L-8, constitution).
+- POSTS-DDL-UNMODIFIED: posts gains no column, constraint, index, policy or trigger in this range.
+- MODE3-UNTOUCHED: no change to the poller, watch list, scorer, candidate schema, triage loop, card schema
+  or feed (L-12).
+A scope rule that lives as prose is not enforced. These are tests, not review comments.
+
+THEN PRODUCE, in the step notes:
+- EVERY ADR 0022 constraint mapped to its EXECUTING CI JOB, with "reddens if broken" stated PER ROW. Tier-1
+  → db-tests, Tier-2 → app-tests, Tier-3 → the scan or the diff that proves it.
+- The Tier-3 five enumerated AS DECISIONS (ADR 0022 §11.3), so "no runtime test" reads as a recorded choice.
+- SHARED-FUNCTION CALLERS re-grepped at the range head and the ADR §9 table EXTENDED if a caller appeared.
+  State per caller which test exercises it. assembleBrief should now show TWO production callers. Note
+  explicitly that lib/signals/seed.test.ts:14 MOCKS assembleBrief and therefore does not execute its body.
+- The §18.1 correction reflected: upsertDistilledPerformancePattern has TWO production callers, both
+  mocking it, and MEM-PATTERN-BOUNDED is discharged in Tier-1 ONLY.
+
+THEN PUSH and cite REAL run URLs for app-tests and db-tests, quoting the skip-guard's own line with its
+NON-ZERO file and test counts. ⚠️ DO NOT CLAIM A CONSTRAINT COUNT UNTIL IT IS EXECUTED GREEN IN CI AT THE
+HEAD IT IS DATED TO. Session 28 shipped a false "29/29 executed green" that took three correction steps to
+undo. If a constraint is authored but not executed, label it AUTHORED-NOT-EXECUTED and say so.
+
+VERIFY: npx tsc --noEmit --skipLibCheck ; npm run test:app ; npm run test:db. Commit: "F1b.11 complete —
+four scope scans, full constraint map, SHARED-FUNCTION CALLERS re-grepped; <app-tests URL>, <db-tests URL>".
+
+End with one line: "Session 29 Track F Builder complete — F1b.0..F1b.11, <n> constraints executed green at
+<sha>." Then /exit.
+```
+
 ---
 
 ## §3 — Reviewer session (F1c)  ·  (paste into Claude Code · Opus)
