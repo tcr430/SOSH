@@ -8,6 +8,7 @@ import { selectFormatFamily } from './prompts/formats/platform-map'
 import { createNativeGenerationPrompt, type NativeGenInput } from './prompts/formats/native-generation-prompt'
 import { validateThreadPolicy } from './prompts/formats/policy'
 import type { SinglePostOutput, ThreadOutput } from './prompts/formats/schemas'
+import { assertNever } from '@/lib/utils'
 
 export interface GenerateNativeContentInput {
   businessId: string
@@ -107,5 +108,17 @@ export async function generateNativeContent(
     scheduledAt: input.scheduledAt,
   }
 
-  return family === 'single' ? generateSingle(ctx, genInput) : generateThread(ctx, genInput)
+  // ADR 0022 §6.5 (Session 29, F1b.6) — exhaustive switch, not a ternary:
+  // `family` is a bare FormatFamily STRING, not a tagged object, so tsc's
+  // discriminated-union narrowing does not apply to a ternary here. Adding
+  // a third FormatFamily value without adding its case is now a COMPILE
+  // ERROR at the assertNever(family) default arm, not a silent fallthrough
+  // into generateThread (the accidental safety net this replaces — it only
+  // ever failed because validateThreadPolicy happened to crash on the
+  // missing posts[0].role, not by design).
+  switch (family) {
+    case 'single': return generateSingle(ctx, genInput)
+    case 'thread': return generateThread(ctx, genInput)
+    default: return assertNever(family)
+  }
 }
