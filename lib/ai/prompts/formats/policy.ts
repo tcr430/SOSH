@@ -1,5 +1,5 @@
 import { AiError } from '@/lib/ai/errors'
-import type { ThreadOutput } from './schemas'
+import type { ThreadOutput, CarouselOutput } from './schemas'
 
 // ADR 0017 §4.2 [type-3] — POLICY, kept separate from the schema. Structural
 // bounds (thread length 3..8) are in the zod schema (same failure channel as
@@ -28,5 +28,27 @@ export function validateThreadPolicy(output: ThreadOutput): void {
 
   if (problems.length > 0) {
     throw new AiError('policy_violation', `Thread role sequence violates policy: ${problems.join('; ')}`)
+  }
+}
+
+// ADR 0022 §6.2 (Session 29, F1b.7) — mirrors validateThreadPolicy's shape
+// exactly: structural bounds (slide count) stay in the zod schema; this is
+// the SHAPE-VALID-but-still-policy-violating case — first slide isn't a
+// cover, or nothing closes the carousel with a call to action. No "last
+// slide must be X" rule (unlike thread's close requirement) — the guide
+// names only these two.
+export function validateCarouselPolicy(output: CarouselOutput): void {
+  const { slides } = output
+  const problems: string[] = []
+
+  if (slides[0]?.role !== 'cover') {
+    problems.push(`the first slide's role must be 'cover' (was '${slides[0]?.role}')`)
+  }
+  if (!slides.some((s) => s.role === 'cta')) {
+    problems.push(`at least one slide must have role 'cta'`)
+  }
+
+  if (problems.length > 0) {
+    throw new AiError('policy_violation', `Carousel role sequence violates policy: ${problems.join('; ')}`)
   }
 }

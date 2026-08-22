@@ -3,7 +3,7 @@ import type { CustomerContext } from '@/lib/ai/context'
 import type { CampaignPostRole, Platform } from '@/lib/db/types'
 import { PLATFORM_CONSTRAINTS } from '@/lib/ai/prompts/post-generation'
 import type { RenderedEvidence } from '@/lib/ai/wrap-evidence'
-import { SinglePostOutputSchema, ThreadOutputSchema, type SinglePostOutput, type ThreadOutput } from './schemas'
+import { SinglePostOutputSchema, ThreadOutputSchema, CarouselOutputSchema, type SinglePostOutput, type ThreadOutput, type CarouselOutput } from './schemas'
 import type { FormatFamily } from './platform-map'
 import { assertNever } from '@/lib/utils'
 
@@ -62,6 +62,18 @@ function buildSystemPrompt(family: FormatFamily) {
 }
 The posts array must have 3 to 8 entries. The FIRST post's role must be "hook" (it is the only part visible pre-expansion — it must stand alone). The LAST post's role must be "close". At least one post must have role "pull_quote". Do NOT include an "order" field — array position IS the order.`
         formatWord = 'thread'
+        break
+      case 'carousel':
+        shapeInstructions = `Return a JSON object with this exact structure:
+{
+  "format": "carousel",
+  "slides": [
+    { "text": "string", "role": "cover" | "body" | "cta", "imageBrief": "string describing a recommended image for THIS slide, or null if none" }
+  ],
+  "imageBrief": "string describing a recommended image for the carousel as a whole, or null if none"
+}
+The slides array must have 3 to 10 entries. The FIRST slide's role must be "cover" (it is the only part visible pre-swipe — it must stand alone and earn the swipe). At least one slide must have role "cta". Do NOT include an "order" field — array position IS the order.`
+        formatWord = 'carousel'
         break
       default:
         return assertNever(family)
@@ -140,6 +152,17 @@ function buildThreadPrompt(): Prompt<NativeGenInput, ThreadOutput> {
   }
 }
 
+function buildCarouselPrompt(): Prompt<NativeGenInput, CarouselOutput> {
+  return {
+    id: 'native-generation-carousel',
+    version: 1,
+    modelKey: 'SONNET_4_6',
+    outputSchema: CarouselOutputSchema,
+    buildSystemPrompt: buildSystemPrompt('carousel'),
+    buildUserMessage,
+  }
+}
+
 // ADR 0017 §4.4 [type-1] — the per-family Prompt FACTORY. Prompt<TInput,TOutput>
 // binds ONE concrete outputSchema per Prompt object (lib/ai/prompts/types.ts);
 // a per-call variable schema would break that contract. Overloads give
@@ -148,14 +171,16 @@ function buildThreadPrompt(): Prompt<NativeGenInput, ThreadOutput> {
 // restricts to two unrelated named carve-outs.
 export function createNativeGenerationPrompt(family: 'single'): Prompt<NativeGenInput, SinglePostOutput>
 export function createNativeGenerationPrompt(family: 'thread'): Prompt<NativeGenInput, ThreadOutput>
+export function createNativeGenerationPrompt(family: 'carousel'): Prompt<NativeGenInput, CarouselOutput>
 export function createNativeGenerationPrompt(
   family: FormatFamily,
-): Prompt<NativeGenInput, SinglePostOutput> | Prompt<NativeGenInput, ThreadOutput> {
+): Prompt<NativeGenInput, SinglePostOutput> | Prompt<NativeGenInput, ThreadOutput> | Prompt<NativeGenInput, CarouselOutput> {
   // ADR 0022 §6.5 (Session 29, F1b.6) — exhaustive switch, not a ternary;
   // see generate-native.ts's identical comment for why this matters.
   switch (family) {
     case 'single': return buildSinglePrompt()
     case 'thread': return buildThreadPrompt()
+    case 'carousel': return buildCarouselPrompt()
     default: return assertNever(family)
   }
 }

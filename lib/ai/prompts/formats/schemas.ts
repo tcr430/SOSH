@@ -38,9 +38,37 @@ export const ThreadOutputSchema = z.object({
 
 export type ThreadOutput = z.infer<typeof ThreadOutputSchema>
 
+// ADR 0022 §6.1 (Session 29, F1b.7) — the THIRD discriminatedUnion branch.
+// slides bounded 3..10 as LITERAL schema bounds (mirroring thread's
+// .min(3).max(8)), so safeParse rejects a malformed carousel structurally,
+// never by a downstream string check. role is a closed 'cover'|'body'|'cta'
+// set. No order field ([type-2], same reasoning as thread) — array position
+// IS the order. Each slide carries its OWN imageBrief (a carousel needs a
+// distinct image recommendation per slide, unlike single/thread's one post
+// = one image) IN ADDITION to the branch-level imageBrief field ([type-4] —
+// declared again here, not shared, for the same discriminatedUnion-has-no-
+// base-merge reason single/thread each declare their own).
+export const CarouselOutputSchema = z.object({
+  format: z.literal('carousel'),
+  slides: z
+    .array(
+      z.object({
+        text: z.string().min(1),
+        role: z.enum(['cover', 'body', 'cta']),
+        imageBrief: z.string().nullable(),
+      }),
+    )
+    .min(3)
+    .max(10),
+  imageBrief: z.string().nullable(),
+})
+
+export type CarouselOutput = z.infer<typeof CarouselOutputSchema>
+
 export const NativeOutputSchema = z.discriminatedUnion('format', [
   SinglePostOutputSchema,
   ThreadOutputSchema,
+  CarouselOutputSchema,
 ])
 
 export type NativeOutput = z.infer<typeof NativeOutputSchema>

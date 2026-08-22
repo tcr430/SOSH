@@ -96,7 +96,14 @@ export async function generateNativeContent(
   ctx: CustomerContext,
   input: GenerateNativeContentInput,
 ): Promise<SinglePostOutput | ThreadOutput> {
-  const family = selectFormatFamily(input.platform, input.estimatedTweetsWorth)
+  // ADR 0022 §6.3/A-4 (Session 29, F1b.7) — `false`: Mode 2's automatic
+  // per-slot pipeline has no carousel consumer yet (lib/campaigns/generate.ts
+  // §6.5's extractOpener/joinContent are explicitly OUT OF SCOPE for this
+  // step — they narrow on SinglePostOutput | ThreadOutput only, and adding
+  // CarouselOutput to THIS function's return type would break them, which
+  // is exactly the "already safe" compile error §6.5 says to leave alone).
+  // Every call that exists today resolves byte-identically (L-10, A-4).
+  const family = selectFormatFamily(input.platform, input.estimatedTweetsWorth, false)
   const renderedEvidence = await wrapEvidenceForPrompt(client, input.businessId, input.pinnedEvidenceIds)
 
   const genInput: NativeGenInput = {
@@ -115,10 +122,16 @@ export async function generateNativeContent(
   // ERROR at the assertNever(family) default arm, not a silent fallthrough
   // into generateThread (the accidental safety net this replaces — it only
   // ever failed because validateThreadPolicy happened to crash on the
-  // missing posts[0].role, not by design).
+  // missing posts[0].role, not by design). F1b.7 lands exactly that arm:
+  // structurally UNREACHABLE today (selectFormatFamily only returns
+  // 'carousel' when carouselRequested is true, and the call above always
+  // passes false), so it throws rather than silently returning a
+  // CarouselOutput this function's return type does not admit.
   switch (family) {
     case 'single': return generateSingle(ctx, genInput)
     case 'thread': return generateThread(ctx, genInput)
+    case 'carousel':
+      throw new Error('generateNativeContent: carousel format is not yet reachable through this pipeline (ADR 0022 §6.5) — selectFormatFamily was called with carouselRequested=true unexpectedly.')
     default: return assertNever(family)
   }
 }
