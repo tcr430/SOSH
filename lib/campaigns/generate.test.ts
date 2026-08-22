@@ -549,7 +549,15 @@ describe('generatePostsForCampaign — success path', () => {
     }
   })
 
-  it('updates campaign to active (guarded on awaiting_brief) with actual inserted post count', async () => {
+  // ADR 0022 §2.7 — ACTIVATE-PLANNED-UNCHANGED: activateCampaign's `planned`
+  // argument is now `postsCreated + existingPosts.length` (the promoted-
+  // campaign fix), not bare `postsCreated`. For every NON-promoted campaign
+  // — this test's fixture, via the default listPostsByCampaign mock at
+  // beforeEach's `mockResolvedValue([])` — existingPosts.length is 0 (and
+  // this function's own idempotency guard at generate.ts:106-114 guarantees
+  // it can never be otherwise by the time this line runs), so the value is
+  // BYTE-IDENTICAL to before the fix: 6, not 6 + something.
+  it('updates campaign to active (guarded on awaiting_brief) with actual inserted post count — unchanged for a non-promoted campaign', async () => {
     await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
     expect(activateCampaign).toHaveBeenCalledWith(expect.anything(), CAMPAIGN_ID, 6)
   })

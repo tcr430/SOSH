@@ -5,6 +5,7 @@ import * as Sentry from '@sentry/nextjs'
 import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
 import { getStudioDraft, persistSuggestions, acceptSuggestion, createStudioDraft, saveStudioDraft } from '@/lib/db/studio-drafts'
+import { promoteDraftToCampaignCore } from '@/lib/campaigns/promote'
 import { buildCustomerContext } from '@/lib/ai/context'
 import { runPrompt } from '@/lib/ai/runner'
 import { AiError, type AiErrorCode } from '@/lib/ai/errors'
@@ -314,4 +315,38 @@ export async function saveStudioDraftAction(draftId: string, content: string, pl
   }
 
   return { success: true, contentHash: draft.content_hash }
+}
+
+// ── ADR 0022 §2 — promote-to-campaign (Session 29, F1b.4) ───────────────────
+// Thin wrapper: Zod-validate, resolve the authenticated client, delegate to
+// promoteDraftToCampaignCore (lib/campaigns/promote.ts — see that file's
+// header comment for why the actual logic lives there, not here).
+
+export type PromoteDraftToCampaignState =
+  | { outcome: 'promoted'; campaignId: string; briefId: string; postId: string }
+  | { outcome: 'already_promoted'; draft: StudioDraftRow }
+  | { outcome: 'claimed_by_another'; draft: StudioDraftRow }
+  | { outcome: 'not_eligible' }
+  | { outcome: 'error'; error: StudioActionErrorCode }
+
+const promoteDraftSchema = z.object({
+  draftId: z.string().uuid(),
+  scheduledAt: z.string().datetime(),
+})
+
+export async function promoteDraftToCampaign(
+  draftId: string,
+  scheduledAt: string,
+): Promise<PromoteDraftToCampaignState> {
+  const parsedInput = promoteDraftSchema.safeParse({ draftId, scheduledAt })
+  if (!parsedInput.success) return { outcome: 'error', error: 'invalid_input' }
+
+  const ctx = await getAuthContext()
+  if (!ctx) return { outcome: 'error', error: 'generic' }
+  const { client, business } = ctx
+
+  const result = await promoteDraftToCampaignCore(client, business.id, parsedInput.data.draftId, parsedInput.data.scheduledAt)
+  if (result.outcome === 'content_too_long') return { outcome: 'error', error: 'draft_too_long' }
+  if (result.outcome === 'error') return { outcome: 'error', error: 'generic' }
+  return result
 }

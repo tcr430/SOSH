@@ -9,6 +9,7 @@ vi.mock('@/lib/db/studio-drafts', () => ({
   createStudioDraft: vi.fn(),
   saveStudioDraft: vi.fn(),
 }))
+vi.mock('@/lib/campaigns/promote', () => ({ promoteDraftToCampaignCore: vi.fn() }))
 vi.mock('@/lib/ai/context', () => ({ buildCustomerContext: vi.fn() }))
 vi.mock('@/lib/ai/runner', () => ({ runPrompt: vi.fn() }))
 vi.mock('@/lib/memory', () => ({
@@ -34,10 +35,11 @@ vi.mock('@/lib/studio/markers', async (importOriginal) => {
   return { ...actual, generateNonce: () => 'aaaaaaaa' }
 })
 
-import { suggestStudioSuggestions, acceptStudioSuggestion, createStudioDraftAction, saveStudioDraftAction } from './actions'
+import { suggestStudioSuggestions, acceptStudioSuggestion, createStudioDraftAction, saveStudioDraftAction, promoteDraftToCampaign } from './actions'
 import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
 import { getStudioDraft, persistSuggestions, acceptSuggestion, createStudioDraft, saveStudioDraft } from '@/lib/db/studio-drafts'
+import { promoteDraftToCampaignCore } from '@/lib/campaigns/promote'
 import { buildCustomerContext } from '@/lib/ai/context'
 import { runPrompt } from '@/lib/ai/runner'
 import { retrieveStudioPerformancePatterns, retrieveEvidenceMemory } from '@/lib/memory'
@@ -220,5 +222,66 @@ describe('acceptStudioSuggestion', () => {
     vi.mocked(acceptSuggestion).mockResolvedValue({ outcome: 'accepted', draft: { ...draftRow, content: 'accepted content' } } as never)
     const result = await acceptStudioSuggestion(DRAFT_ID, 'accepted content', 'h1', 'h2')
     expect(result).toEqual({ outcome: 'accepted', content: 'accepted content' })
+  })
+})
+
+// ADR 0022 §2 (Session 29, F1b.4) — PROMOTE-ACTION-VALIDATED's Zod-contract
+// half. The core logic (promoteDraftToCampaignCore, lib/campaigns/promote.ts)
+// is mocked here: this describe block exercises ONLY the thin wrapper's own
+// job — Zod-validate draftId/scheduledAt, resolve auth, delegate, map errors.
+describe('promoteDraftToCampaign', () => {
+  const SCHEDULED_AT = '2026-09-01T09:00:00.000Z'
+
+  it('rejects an invalid draftId (not a uuid) before any auth/DB call', async () => {
+    const result = await promoteDraftToCampaign('not-a-uuid', SCHEDULED_AT)
+    expect(result).toEqual({ outcome: 'error', error: 'invalid_input' })
+    expect(getBusinessForUser).not.toHaveBeenCalled()
+    expect(promoteDraftToCampaignCore).not.toHaveBeenCalled()
+  })
+
+  it('rejects an invalid scheduledAt (not a datetime string) before any auth/DB call', async () => {
+    const result = await promoteDraftToCampaign(DRAFT_ID, 'not-a-date')
+    expect(result).toEqual({ outcome: 'error', error: 'invalid_input' })
+    expect(promoteDraftToCampaignCore).not.toHaveBeenCalled()
+  })
+
+  it('returns generic on no authenticated user, without calling the core', async () => {
+    FAKE_CLIENT.auth = { getUser: vi.fn().mockResolvedValue({ data: { user: null } }) }
+    const result = await promoteDraftToCampaign(DRAFT_ID, SCHEDULED_AT)
+    expect(result).toEqual({ outcome: 'error', error: 'generic' })
+    expect(promoteDraftToCampaignCore).not.toHaveBeenCalled()
+  })
+
+  it('delegates to promoteDraftToCampaignCore with the authenticated business id and parsed input', async () => {
+    vi.mocked(promoteDraftToCampaignCore).mockResolvedValue({
+      outcome: 'promoted',
+      campaignId: 'campaign-1',
+      briefId: 'brief-1',
+      postId: 'post-1',
+    })
+
+    const result = await promoteDraftToCampaign(DRAFT_ID, SCHEDULED_AT)
+
+    expect(promoteDraftToCampaignCore).toHaveBeenCalledWith(FAKE_CLIENT, BUSINESS_ID, DRAFT_ID, SCHEDULED_AT)
+    expect(result).toEqual({ outcome: 'promoted', campaignId: 'campaign-1', briefId: 'brief-1', postId: 'post-1' })
+  })
+
+  it('passes through already_promoted and claimed_by_another unmodified', async () => {
+    const draft = { ...draftRow, promoted_campaign_id: 'campaign-existing' }
+    vi.mocked(promoteDraftToCampaignCore).mockResolvedValue({ outcome: 'already_promoted', draft } as never)
+    const result = await promoteDraftToCampaign(DRAFT_ID, SCHEDULED_AT)
+    expect(result).toEqual({ outcome: 'already_promoted', draft })
+  })
+
+  it('maps content_too_long to the draft_too_long StudioActionErrorCode', async () => {
+    vi.mocked(promoteDraftToCampaignCore).mockResolvedValue({ outcome: 'content_too_long' })
+    const result = await promoteDraftToCampaign(DRAFT_ID, SCHEDULED_AT)
+    expect(result).toEqual({ outcome: 'error', error: 'draft_too_long' })
+  })
+
+  it('maps a core-level error to the generic StudioActionErrorCode', async () => {
+    vi.mocked(promoteDraftToCampaignCore).mockResolvedValue({ outcome: 'error' })
+    const result = await promoteDraftToCampaign(DRAFT_ID, SCHEDULED_AT)
+    expect(result).toEqual({ outcome: 'error', error: 'generic' })
   })
 })

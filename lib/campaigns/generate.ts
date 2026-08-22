@@ -414,7 +414,13 @@ export async function generatePostsForCampaign(
     )
 
     // STEP 10 — Update campaign atomically (guard on 'awaiting_brief' prevents double-write)
-    const activated = await activateCampaign(client, campaignId, postsCreated)
+    // ADR 0022 §2.7 — a promoted campaign already carries one post (inserted
+    // by promoteDraftToCampaign, before this function ever runs) that this
+    // batch does not include, so `planned` must be THIS batch's count PLUS
+    // whatever was already attached. existingPosts was read at this
+    // function's own idempotency guard above (:106) — for every
+    // non-promoted campaign it is 0, so this is byte-identical to today.
+    const activated = await activateCampaign(client, campaignId, postsCreated + existingPosts.length)
     if (!activated) {
       // Guard rejected: campaign no longer in 'awaiting_brief' status.
       // Self-healing — next generation attempt re-evaluates — but operator-visible.

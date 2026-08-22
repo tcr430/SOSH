@@ -1175,7 +1175,11 @@ export type CampaignBriefUpdate = Partial<
 // is added there.
 // ---------------------------------------------------------------------------
 
-export type PostAiOriginalGenerationKind = 'initial' | 'regeneration'
+// Third value 'studio_promoted' (ADR 0018 Amd A.1, F1b.2/F1b.4) — the
+// post_ai_originals snapshot promote writes from studio_drafts.accepted_revision
+// (the accepted AI suggestion, never the human's raw draft) when a genuine
+// model-generated baseline exists.
+export type PostAiOriginalGenerationKind = 'initial' | 'regeneration' | 'studio_promoted'
 export type PostAiOriginalFormat = 'single' | 'thread'
 
 export type PostAiOriginalRow = {

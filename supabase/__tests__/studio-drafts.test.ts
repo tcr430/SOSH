@@ -548,6 +548,10 @@ describe('studio_drafts — accept/suggest guards and learning-reuse boundary (A
       expect(result.draft.content).toBe('clean case content, revised')
       expect(result.draft.suggestions).toBeNull()
       expect(result.draft.suggestions_for_hash).toBeNull()
+      // ADR 0022 §4.2/§13.3 (F1b.4 security-review fix) — the SAME statement
+      // must also retain the accepted revision separately from content, or
+      // promote's post_ai_originals snapshot silently never fires.
+      expect(result.draft.accepted_revision).toBe('clean case content, revised')
     }
   })
 

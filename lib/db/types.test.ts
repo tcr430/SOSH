@@ -20,6 +20,7 @@ import type {
   CampaignOrigin,
   PostStatus,
   PostRole,
+  PostAiOriginalGenerationKind,
   EngagementType,
   EngagementSentiment,
   EngagementStatus,
@@ -68,6 +69,7 @@ type _PlatformValues = Assert<Equals<Platform, 'linkedin' | 'twitter' | 'instagr
 type _FrequencyValues = Assert<Equals<CampaignFrequency, 'daily' | '3x_week' | 'weekly' | 'custom'>>
 type _CampaignStatusValues = Assert<Equals<CampaignStatus, 'draft' | 'awaiting_brief' | 'active' | 'paused' | 'completed'>>
 type _CampaignOriginValues = Assert<Equals<CampaignOrigin, 'manual' | 'objective_generated' | 'signal_generated' | 'studio_promoted'>>
+type _PostAiOriginalGenerationKindValues = Assert<Equals<PostAiOriginalGenerationKind, 'initial' | 'regeneration' | 'studio_promoted'>>
 type _PostStatusValues = Assert<Equals<PostStatus, 'draft' | 'approved' | 'scheduled' | 'published' | 'failed' | 'skipped'>>
 type _PostRoleValues = Assert<Equals<PostRole, 'anchor_thesis' | 'founder_perspective' | 'customer_proof' | 'objection_response' | 'conversation_starter' | 'follow_up'>>
 type _EngagementTypeValues = Assert<Equals<EngagementType, 'comment' | 'dm' | 'mention'>>

@@ -170,9 +170,15 @@ export async function persistSuggestions(
 //   - suggestions_for_hash = expectedSuggestionsHash: the regenerate race
 //     ([db-MAJOR-6]) — suggestions regenerated while content stayed the same
 //     still pass the content-hash guard alone.
-// The same statement writes the accepted revision AND clears
-// suggestions/suggestions_for_hash — leaving a set bound to a hash that no
-// longer matches is the same bug one step later.
+// The same statement writes the accepted revision into BOTH content (merged,
+// per ADR 0019 §2.2) AND accepted_revision (retained separately, ADR 0022
+// §4.2/§13.3, F1b.1's migration) — AND clears suggestions/suggestions_for_hash
+// — leaving a set bound to a hash that no longer matches is the same bug one
+// step later. Writing accepted_revision here (not just content) is load-
+// bearing for promote (F1b.4, lib/campaigns/promote.ts): it is the ONLY
+// write site for that column, and promote's post_ai_originals snapshot is
+// silently skipped whenever it is NULL (security-reviewer, Session 29 F1b.4
+// review — found this column unpopulated before this fix landed).
 //
 // ⚠️ Callers MUST pass hashes computed over the EXACT STORED BYTES. Any
 // trim/whitespace-normalisation/NFKC applied before hashing, while the
@@ -189,7 +195,12 @@ export async function acceptSuggestion(
 ): Promise<AcceptSuggestionResult> {
   const { data, error } = await client
     .from('studio_drafts')
-    .update({ content: acceptedContent, suggestions: null, suggestions_for_hash: null })
+    .update({
+      content: acceptedContent,
+      accepted_revision: acceptedContent,
+      suggestions: null,
+      suggestions_for_hash: null,
+    })
     .eq('id', id)
     .eq('business_id', businessId)
     .is('deleted_at', null)
