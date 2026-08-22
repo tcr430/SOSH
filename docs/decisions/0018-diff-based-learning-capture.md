@@ -1136,3 +1136,110 @@ Stated explicitly, because an amendment's silence is not evidence:
 
 **Evidence:** ADR 0022 §4, §5 and §12.3; `docs/build-guide/session-29.md` §0.2 rulings A-1 and A-5 and Reality
 items 13-16. Builder commits pending at the time this amendment was written.
+
+---
+
+## Amendment A.4 — corrections to A.2 (2026-08-22, additive)
+
+**Author:** Session 29, post-ADR audit. **Form:** append-only — **not one character of A.1, A.2 or A.3 is
+edited**, so the original claims stay legible as written. Every correction below is a **factual** one; the
+decisions A.2 records — the 500-char bound, the CHECK-at-the-RPC instrument, reject-never-truncate, and the
+per-item operational requirement — are **unchanged, and two of them are now better grounded**.
+
+**Why this exists.** A.2 was drafted from the same source as ADR 0022 §5.2 and §9, and inherited the same
+three defects from a **stale in-code comment**. ADR 0022 §§17–18 corrected its copies on 2026-08-21. This
+amendment corrects A.2's, because ADR 0022 §13.1 deliberately routes the Builder *here* for the migration —
+*"a future reader asking 'why does `pattern` have a length CHECK?' opens ADR 0018."* An uncorrected A.2 would
+be the version the Builder actually reads.
+
+### A.4.1 — `recomputeAndUpsertPattern` is cited at the wrong location, and it is already live
+
+A.2 states, under *"Where, and why not elsewhere"*:
+
+> that writer already exists **in embryo**: `recomputeAndUpsertPattern` (`lib/db/memory-performance.ts:52`)
+> calls the same RPC **without passing through the summarizer**. A bound placed only at the summarizer is
+> silently void **the day it goes live**.
+
+Three corrections:
+
+1. **Wrong location.** The function is **`lib/learning/promote.ts:109`** (its upsert call at `:119`,
+   `pattern:` at `:122`). `lib/db/memory-performance.ts:52` is a **comment mentioning it** — the same stale
+   comment ADR 0022 §17.1 flags for correction.
+2. **Not "in embryo" — live.** `lib/learning/orchestrator.ts:270` calls it in production, and has since the
+   tick loop landed. There is no future date on which it "goes live."
+3. **A.2 already contradicts itself on this.** Two paragraphs later, under *"Existing rows"*, it states
+   correctly that Track C *"is live and writes through `lib/learning/promote.ts:122` and
+   `lib/learning/summarize.ts:150`."* **That sentence is right; the "in embryo" one is wrong.**
+
+**The decision stands and its ground is firmer.** The bound belongs at the RPC precisely because a second
+writer is **shipping today**, not because one might ship later. The stale premise understated A.2's own case.
+
+### A.4.2 — the count query is confirmation, not a gate on the migration
+
+A.2's *"Existing rows"* paragraph ends: *"`SELECT count(*) …` runs first, read-only and unlocked, and its
+result is **recorded before the migration is written** (ADR 0022 §16.1)."*
+
+**ADR 0022 §16.1 is closed — see ADR 0022 §17.** `git log -L16,16:lib/learning/constants.ts` shows
+`LEARNING_SUMMARY_MAX_STATEMENT_CHARS = 200` landed in **`387c8c64`**, the same commit that introduced the
+summarizer, so no unbounded write window ever existed. Both production writers are structurally bounded:
+`lib/learning/orchestrator.ts:273` via `renderPatternStatement` (a closed 9-entry label table, ≈80 chars hard
+max) and `lib/learning/summarize.ts:150` via a Zod `.max(200)` enforced at parse.
+
+**Corrected instruction to the Builder:** run the query — it is cheap and catches what static analysis cannot
+(manual inserts, dev/staging seeds) — and record the result in the step notes. **It is not a decision input.**
+The migration is written `NOT VALID` + `VALIDATE` in one step regardless of the count. A.2's underlying
+concern — that `VALIDATE` must not be the discovery mechanism — is **discharged by the arithmetic above**,
+not by the query result.
+
+**Corollary, recorded so a later session does not "tighten" it as an oversight:** with writers capped at 200
+and ≈80, **a 500 CHECK can never fire from a legitimate Track C write.** That is the intended property — the
+constraint is a pure defence-in-depth guard on the promote-path writer boundary (A.3), not a live participant
+in Track C's distillation. **Keep 500. Do not reduce it to 200.**
+
+### A.4.3 — the per-item requirement: half satisfied, half a named Builder fix
+
+A.2's *"Operational requirement"* paragraph defers to ADR 0022 §16.3. **That item is also closed — ADR 0022
+§17, item 3** — and the answer is split:
+
+- **Satisfied at the row level.** `runLearningTick` (`lib/learning/orchestrator.ts:350-351`) calls
+  `processRow`, whose own `try/catch` (`:211`, `:284`) funnels every exception into permanent/transient
+  handling and **returns without rethrowing**. One rejected row cannot fail the batch.
+- **Not satisfied at the statement level.** `lib/learning/summarize.ts:146` iterates `output.statements` and
+  awaits the upsert with **no per-statement `try/catch`**. A rejection on statement #2 throws out of
+  `summarizeBusinessLearning` into the per-business catch at `orchestrator.ts:358`: the tick survives and
+  other businesses are unaffected, but statements #3–5 for that business are **never written**, surfacing as
+  a single `summarizeFailed` with `summarizeFailedCode: 'unknown'` — indistinguishable in the canonical log
+  line from an Anthropic-side outage.
+
+**Builder scope, small and bounded:** wrap that upsert in a `try/catch` that logs and continues, and add a
+**`summarizeRejected`** counter to `LearningTickSummary` (`orchestrator.ts:44-58`, initialised at `:319-334`)
+so a bound rejection is legible as itself. **Latent today** — nothing can currently produce a >200-char
+statement — so it is a correctness-of-the-guard fix, **not a live bug**, and must not be written up as one.
+
+### A.4.4 — where the bound is proved: Tier 1 only
+
+Not stated in A.2, and binding — from ADR 0022 §18.1. **Both production callers of
+`upsertDistilledPerformancePattern` mock it** (`lib/learning/promote.test.ts:16-18`,
+`lib/learning/summarize.test.ts:23-25`; `lib/learning/orchestrator.test.ts:71-72` mocks
+`recomputeAndUpsertPattern` itself), and `lib/db/memory-performance.test.ts:168` runs the real body against a
+**stubbed** Supabase client. **A stub cannot fire a Postgres CHECK.**
+
+Therefore `MEM-PATTERN-BOUNDED` has **exactly one valid home: Tier 1, live Postgres, in
+`supabase/__tests__/`**, alongside `performance-memory-promotion.test.ts`. A Tier-2 test may prove the
+*promoter-level Zod bound* — that is a different guarantee at a different boundary (A.2 says so itself) and
+must be labelled as such, **never as proof of the CHECK**.
+
+### A.4.5 — two stale comments the Builder corrects in the same commit
+
+Both assert the Tier-0 arithmetic writer has no production caller — the premise A.4.1 corrects:
+
+- `lib/ai/prompts/learning-summarizer.ts:41` — *"the arithmetic Tier-0 writer (lib/learning/promote.ts's `recomputeAndUpsertPattern`) has no production caller yet"*
+- `lib/db/memory-performance.ts:51-52` — the same claim, same wording
+
+**Only the premise is stale.** Both comments use it to argue that `pattern` text must **not** be assumed
+arithmetic-and-therefore-safe, and that **conclusion remains correct and must not be weakened** — it is now
+correct for a stronger reason (both writers are live, and no column distinguishes an arithmetic row from an
+LLM-summarizer row). Correct the "no production caller yet" clause; leave the guard posture exactly as it
+stands.
+
+**Evidence:** ADR 0022 §17 and §18.1 (`5e9ed904`); code read at `dd748435`.
