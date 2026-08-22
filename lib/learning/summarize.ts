@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import * as Sentry from '@sentry/nextjs'
 import { differenceInDays, parseISO } from 'date-fns'
 import { runPrompt } from '@/lib/ai/runner'
 import { buildCustomerContext } from '@/lib/ai/context'
@@ -22,6 +23,16 @@ export type SummarizeSkipReason = 'monthly_ceiling' | 'gates_not_met'
 export interface SummarizeResult {
   readonly skipped: SummarizeSkipReason | null
   readonly statementsWritten: number
+  // ADR 0022 §5.3, §17 item 3 (Session 29, F1b.10) — a statement rejected by
+  // upsertDistilledPerformancePattern's own guards (§17.1: the 500-char
+  // performance_memory.pattern CHECK, defence-in-depth on the promote-path
+  // writer boundary, not a live participant in Track C) is logged and
+  // skipped, not thrown — the remaining statements in this SAME batch still
+  // get written. Latent, not live: no writer today can produce a
+  // >200-char statement (the Zod .max at learning-summarizer.ts:16 rejects
+  // at parse, long before this batch's own upsert could ever reach the
+  // 500-char CHECK) — this is a correctness-of-the-guard fix, not a bug fix.
+  readonly statementsRejected: number
 }
 
 export interface SummarizeGateInput {
@@ -111,7 +122,7 @@ export async function summarizeBusinessLearning(
     LEARNING_SUMMARIZER_PROMPT_ID,
   )
   if (monthlyCalls >= LEARNING_SUMMARY_MAX_MONTHLY_CALLS_PER_BUSINESS) {
-    return { skipped: 'monthly_ceiling', statementsWritten: 0 }
+    return { skipped: 'monthly_ceiling', statementsWritten: 0, statementsRejected: 0 }
   }
 
   const lastSummaryAt = await getLastSuccessfulCallAt(client, businessId, LEARNING_SUMMARIZER_PROMPT_ID)
@@ -119,7 +130,7 @@ export async function summarizeBusinessLearning(
   const daysSinceLastSummary = lastSummaryAt === null ? null : differenceInDays(new Date(), parseISO(lastSummaryAt))
 
   if (!shouldSummarize({ newSignalCount, daysSinceLastSummary })) {
-    return { skipped: 'gates_not_met', statementsWritten: 0 }
+    return { skipped: 'gates_not_met', statementsWritten: 0, statementsRejected: 0 }
   }
 
   const [tierZeroRows, editExcerpts, context] = await Promise.all([
@@ -143,37 +154,53 @@ export async function summarizeBusinessLearning(
     editExcerpts,
   })
 
+  let statementsWritten = 0
+  let statementsRejected = 0
   for (const statement of output.statements) {
-    await upsertDistilledPerformancePattern(client, {
-      business_id: businessId,
-      dimension: statement.dimension,
-      pattern: statement.statement,
-      pattern_key: computeSummaryPatternKey(statement.dimension, statement.statement),
-      platform: null,
-      scope: 'brand',
-      scope_ref: null,
-      // [Session 25-D correction, MAJOR-2] A summarizer row is not merely
-      // unable to promote on its FIRST observation — it can never promote AT
-      // ALL, on any volume, for any duration. computeConfidence(1, 0) ≈
-      // 0.333 < 0.70 and observation_count=1 < 5 are both gates a REPEAT
-      // observation would eventually clear (same LEARN-NO-SINGLE-DIFF-
-      // PROMOTION shape Tier-0 signals get) — but promote_performance_
-      // pattern's third gate, the distinct-campaign count, is a correlated
-      // subquery over post_edit_signals filtered on `pes.pattern_key =
-      // p_pattern_key`. This row's pattern_key is namespaced
-      // `summarize:<dimension>:<hash>` (computeSummaryPatternKey, above),
-      // which by construction never matches ANY post_edit_signals row (that
-      // is the same property that keeps it from colliding with a Tier-0
-      // key) — so the subquery is always `COUNT(DISTINCT campaign_id) = 0`,
-      // and `0 >= 2` is always false, permanently. This is INTENDED and
-      // recorded, not a bug: summarizer rows are candidate-only forever,
-      // read back only by listDistilledPatternsForSummary (never by
-      // listPerformanceMemoryCandidates, which filters status='active'). See
-      // ADR 0018 §6.1 amendment and §12 Tier-3.
-      confidence: computeConfidence(1, 0),
-      observation_count: 1,
-    })
+    // ADR 0022 §5.3 (Session 29, F1b.10) — per-statement try/catch: a
+    // rejection on ANY ONE statement must not throw the remaining
+    // statements in this same batch out of the loop and into the caller's
+    // per-business catch (orchestrator.ts), which would silently lose them.
+    // See the SummarizeResult.statementsRejected doc comment for why this
+    // is latent, not a live bug.
+    try {
+      await upsertDistilledPerformancePattern(client, {
+        business_id: businessId,
+        dimension: statement.dimension,
+        pattern: statement.statement,
+        pattern_key: computeSummaryPatternKey(statement.dimension, statement.statement),
+        platform: null,
+        scope: 'brand',
+        scope_ref: null,
+        // [Session 25-D correction, MAJOR-2] A summarizer row is not merely
+        // unable to promote on its FIRST observation — it can never promote AT
+        // ALL, on any volume, for any duration. computeConfidence(1, 0) ≈
+        // 0.333 < 0.70 and observation_count=1 < 5 are both gates a REPEAT
+        // observation would eventually clear (same LEARN-NO-SINGLE-DIFF-
+        // PROMOTION shape Tier-0 signals get) — but promote_performance_
+        // pattern's third gate, the distinct-campaign count, is a correlated
+        // subquery over post_edit_signals filtered on `pes.pattern_key =
+        // p_pattern_key`. This row's pattern_key is namespaced
+        // `summarize:<dimension>:<hash>` (computeSummaryPatternKey, above),
+        // which by construction never matches ANY post_edit_signals row (that
+        // is the same property that keeps it from colliding with a Tier-0
+        // key) — so the subquery is always `COUNT(DISTINCT campaign_id) = 0`,
+        // and `0 >= 2` is always false, permanently. This is INTENDED and
+        // recorded, not a bug: summarizer rows are candidate-only forever,
+        // read back only by listDistilledPatternsForSummary (never by
+        // listPerformanceMemoryCandidates, which filters status='active'). See
+        // ADR 0018 §6.1 amendment and §12 Tier-3.
+        confidence: computeConfidence(1, 0),
+        observation_count: 1,
+      })
+      statementsWritten++
+    } catch (err) {
+      statementsRejected++
+      Sentry.captureException(err, {
+        tags: { business_id: businessId, phase: 'learning-summarize-statement', dimension: statement.dimension },
+      })
+    }
   }
 
-  return { skipped: null, statementsWritten: output.statements.length }
+  return { skipped: null, statementsWritten, statementsRejected }
 }

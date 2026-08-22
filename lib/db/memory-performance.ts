@@ -44,16 +44,18 @@ export async function listPerformanceMemoryCandidates(
 // via status, not just deleted_at) since a retired pattern is exactly the
 // kind of stale signal the summarizer should not be reminded of.
 //
-// security-reviewer (C2.7 pass): despite "distilled" implying arithmetic
-// Tier-0 output, source='distilled' rows returned here are NOT guaranteed
-// to be deterministic/arithmetic — the summarizer itself (lib/ai/prompts/
-// learning-summarizer.ts) is currently the ONLY live writer of this bucket
-// via upsertDistilledPerformancePattern below; the arithmetic Tier-0 writer
-// (lib/learning/promote.ts's recomputeAndUpsertPattern) has no production
-// caller yet, and there is no column distinguishing the two once it does.
-// Callers of this function MUST treat every returned `pattern` string as
-// untrusted, attacker-reachable-adjacent text — see
-// learning-summarizer.ts's guardTierZeroSummaries(), which neutralize()s it.
+// security-reviewer (C2.7 pass; premise corrected Session 29 F1b.10, ADR
+// 0022 §17.1): despite "distilled" implying arithmetic Tier-0 output,
+// source='distilled' rows returned here are NOT guaranteed to be
+// deterministic/arithmetic — the summarizer itself (lib/ai/prompts/
+// learning-summarizer.ts) is a live writer of this bucket via
+// upsertDistilledPerformancePattern below, and so is the arithmetic Tier-0
+// writer (lib/learning/promote.ts's recomputeAndUpsertPattern, called from
+// lib/learning/orchestrator.ts's tick loop) — BOTH are live, and there is
+// no column distinguishing the two. Callers of this function MUST treat
+// every returned `pattern` string as untrusted, attacker-reachable-adjacent
+// text — see learning-summarizer.ts's guardTierZeroSummaries(), which
+// neutralize()s it.
 //
 // [Session 25-D correction, MINOR-6] Deliberately NOT filtered on
 // expires_at, unlike listPerformanceMemoryCandidates above. The summarizer

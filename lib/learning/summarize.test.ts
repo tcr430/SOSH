@@ -130,21 +130,21 @@ describe('summarizeBusinessLearning', () => {
   it('the monthly ceiling blocks the call — no runPrompt invocation', async () => {
     vi.mocked(countRecentCalls).mockResolvedValue(LEARNING_SUMMARY_MAX_MONTHLY_CALLS_PER_BUSINESS)
     const result = await summarizeBusinessLearning(mockClient, 'biz-1')
-    expect(result).toEqual({ skipped: 'monthly_ceiling', statementsWritten: 0 })
+    expect(result).toEqual({ skipped: 'monthly_ceiling', statementsWritten: 0, statementsRejected: 0 })
     expect(runPrompt).not.toHaveBeenCalled()
   })
 
   it('gates_not_met (signal count too low) skips without calling runPrompt', async () => {
     vi.mocked(countProcessedSignalsSince).mockResolvedValue(5)
     const result = await summarizeBusinessLearning(mockClient, 'biz-1')
-    expect(result).toEqual({ skipped: 'gates_not_met', statementsWritten: 0 })
+    expect(result).toEqual({ skipped: 'gates_not_met', statementsWritten: 0, statementsRejected: 0 })
     expect(runPrompt).not.toHaveBeenCalled()
   })
 
   it('gates_not_met (interval too short) skips without calling runPrompt', async () => {
     vi.mocked(getLastSuccessfulCallAt).mockResolvedValue(formatISO(subDays(new Date(), 3)))
     const result = await summarizeBusinessLearning(mockClient, 'biz-1')
-    expect(result).toEqual({ skipped: 'gates_not_met', statementsWritten: 0 })
+    expect(result).toEqual({ skipped: 'gates_not_met', statementsWritten: 0, statementsRejected: 0 })
     expect(runPrompt).not.toHaveBeenCalled()
   })
 
@@ -169,7 +169,7 @@ describe('summarizeBusinessLearning', () => {
     })
     const result = await summarizeBusinessLearning(mockClient, 'biz-1')
 
-    expect(result).toEqual({ skipped: null, statementsWritten: 1 })
+    expect(result).toEqual({ skipped: null, statementsWritten: 1, statementsRejected: 0 })
     expect(upsertDistilledPerformancePattern).toHaveBeenCalledWith(
       mockClient,
       expect.objectContaining({
@@ -191,8 +191,36 @@ describe('summarizeBusinessLearning', () => {
 
   it('writes nothing when the model returns zero statements', async () => {
     const result = await summarizeBusinessLearning(mockClient, 'biz-1')
-    expect(result).toEqual({ skipped: null, statementsWritten: 0 })
+    expect(result).toEqual({ skipped: null, statementsWritten: 0, statementsRejected: 0 })
     expect(upsertDistilledPerformancePattern).not.toHaveBeenCalled()
+  })
+
+  // ADR 0022 §5.3, §17 item 3 (Session 29, F1b.10) — the per-statement
+  // log-and-skip. MUST REDDEN without the try/catch: prior to this fix, a
+  // rejection on statement #1 threw out of the loop entirely, so statement
+  // #2 was never even attempted — this test proves both halves at once
+  // (the survivor is written AND the rejection is counted, not silently
+  // dropped by an unrelated code path).
+  it('a rejected statement does not prevent subsequent statements in the same batch from being written, and statementsRejected increments', async () => {
+    vi.mocked(runPrompt).mockResolvedValue({
+      statements: [
+        { statement: 'Rejected statement', dimension: 'topic' },
+        { statement: 'Surviving statement', dimension: 'hook' },
+      ],
+    })
+    vi.mocked(upsertDistilledPerformancePattern)
+      .mockRejectedValueOnce(new Error('performance_memory_pattern_length_check violation'))
+      .mockResolvedValueOnce({} as PerformanceMemoryRow)
+
+    const result = await summarizeBusinessLearning(mockClient, 'biz-1')
+
+    expect(result).toEqual({ skipped: null, statementsWritten: 1, statementsRejected: 1 })
+    expect(upsertDistilledPerformancePattern).toHaveBeenCalledTimes(2)
+    expect(upsertDistilledPerformancePattern).toHaveBeenNthCalledWith(
+      2,
+      mockClient,
+      expect.objectContaining({ pattern: 'Surviving statement' }),
+    )
   })
 
   // §10.3 — ONE business per call, proven end-to-end: two sequential calls
