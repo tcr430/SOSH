@@ -280,7 +280,7 @@ describe('regeneratePostAction', () => {
         campaign_id: MOCK_DRAFT_POST.campaign_id,
         generation_kind: 'regeneration',
         format: 'single',
-        payload: { format: 'single', body: MOCK_REGEN_OUTPUT.content, imageBrief: null },
+        payload: { format: 'single', body: MOCK_REGEN_OUTPUT.content, imageBrief: null, scriptBrief: null },
         rendered_content: MOCK_REGEN_OUTPUT.content,
         hashtags: MOCK_REGEN_OUTPUT.hashtags,
       }),

@@ -22,7 +22,11 @@
     "skipPlaceholder": "Reason for skipping",
     "error": "Something went wrong. Please try again.",
     "announceApproved": "Post approved.",
-    "announceSkipped": "Post skipped."
+    "announceSkipped": "Post skipped.",
+    "scriptBrief": {
+      "heading": "Script recommendation",
+      "neverPublishedNote": "A suggestion for a short-form video treatment of this post — never published."
+    }
   },
   "empty": {
     "title": "No posts waiting for approval.",

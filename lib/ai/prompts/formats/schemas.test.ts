@@ -169,3 +169,51 @@ describe('CarouselOutputSchema (CAROUSEL-SCHEMA-STRUCTURAL)', () => {
     expect(parsed.imageBrief).toBe('An overall carousel image')
   })
 })
+
+// ADR 0022 §7.1 (Session 29, F1b.8) — SCRIPT-BRIEF-BOUNDED: an over-length
+// scriptBrief is REJECTED by safeParse structurally, on all three branches
+// (declared per-branch, same as imageBrief). scriptBrief is .nullish() (see
+// schemas.ts's comment on why) — a MISSING key must also still parse, since
+// no prompt yet asks the model to emit one.
+describe('scriptBrief bound (SCRIPT-BRIEF-BOUNDED)', () => {
+  const OK_LENGTH = 'x'.repeat(500)
+  const OVER_LENGTH = 'x'.repeat(501)
+
+  it('single: accepts a scriptBrief at exactly 500 chars, rejects 501', () => {
+    expect(SinglePostOutputSchema.safeParse({ format: 'single', body: 'b', imageBrief: null, scriptBrief: OK_LENGTH }).success).toBe(true)
+    expect(SinglePostOutputSchema.safeParse({ format: 'single', body: 'b', imageBrief: null, scriptBrief: OVER_LENGTH }).success).toBe(false)
+  })
+
+  it('single: accepts scriptBrief as null, and accepts the key MISSING entirely (no prompt asks for it yet)', () => {
+    expect(SinglePostOutputSchema.safeParse({ format: 'single', body: 'b', imageBrief: null, scriptBrief: null }).success).toBe(true)
+    expect(SinglePostOutputSchema.safeParse({ format: 'single', body: 'b', imageBrief: null }).success).toBe(true)
+  })
+
+  it('thread: rejects an over-length scriptBrief', () => {
+    const base = {
+      format: 'thread' as const,
+      posts: [
+        { text: 'a', role: 'hook' as const },
+        { text: 'b', role: 'pull_quote' as const },
+        { text: 'c', role: 'close' as const },
+      ],
+      imageBrief: null,
+    }
+    expect(ThreadOutputSchema.safeParse({ ...base, scriptBrief: OK_LENGTH }).success).toBe(true)
+    expect(ThreadOutputSchema.safeParse({ ...base, scriptBrief: OVER_LENGTH }).success).toBe(false)
+  })
+
+  it('carousel: rejects an over-length scriptBrief', () => {
+    const base = {
+      format: 'carousel' as const,
+      slides: [
+        { text: 'a', role: 'cover' as const, imageBrief: null },
+        { text: 'b', role: 'body' as const, imageBrief: null },
+        { text: 'c', role: 'cta' as const, imageBrief: null },
+      ],
+      imageBrief: null,
+    }
+    expect(CarouselOutputSchema.safeParse({ ...base, scriptBrief: OK_LENGTH }).success).toBe(true)
+    expect(CarouselOutputSchema.safeParse({ ...base, scriptBrief: OVER_LENGTH }).success).toBe(false)
+  })
+})

@@ -13,6 +13,7 @@ function makeThread(overrides: Partial<ThreadOutput['posts'][number]>[] = []): T
   return {
     format: 'thread',
     imageBrief: null,
+    scriptBrief: null,
     posts: overrides.length > 0 ? (overrides as ThreadOutput['posts']) : base,
   }
 }
@@ -99,6 +100,7 @@ function makeCarousel(overrides: CarouselOutput['slides'] = []): CarouselOutput 
   return {
     format: 'carousel',
     imageBrief: null,
+    scriptBrief: null,
     slides: overrides.length > 0 ? overrides : base,
   }
 }

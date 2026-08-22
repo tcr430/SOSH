@@ -355,6 +355,7 @@ export async function regeneratePostAction(
       format: 'single',
       body: output.content,
       imageBrief: null,
+      scriptBrief: null,
     }
     await createNextPostAiOriginalRevision(ctx.client, {
       business_id: post.business_id,

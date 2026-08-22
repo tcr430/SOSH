@@ -42,6 +42,7 @@ function makeThread(firstPostText: string): ThreadOutput {
       { text: 'closing', role: 'close' },
     ],
     imageBrief: null,
+    scriptBrief: null,
   }
 }
 
@@ -71,6 +72,7 @@ describe('checkLinkPlacement (MODE2-LINK-PLACEMENT, ADR §8 item 2)', () => {
         { text: 'Read more: https://example.com', role: 'close' },
       ],
       imageBrief: null,
+      scriptBrief: null,
     }
     const result = checkLinkPlacement([thread])
     expect(result.ok).toBe(true)

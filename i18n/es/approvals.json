@@ -22,7 +22,11 @@
     "skipPlaceholder": "Motivo para omitir",
     "error": "Algo salió mal. Inténtalo de nuevo.",
     "announceApproved": "Publicación aprobada.",
-    "announceSkipped": "Publicación omitida."
+    "announceSkipped": "Publicación omitida.",
+    "scriptBrief": {
+      "heading": "Recomendación de guion",
+      "neverPublishedNote": "Una sugerencia para un tratamiento en vídeo corto de esta publicación — nunca se publica."
+    }
   },
   "empty": {
     "title": "No hay publicaciones esperando aprobación.",

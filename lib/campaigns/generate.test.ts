@@ -167,7 +167,7 @@ const linkedinDates = ['2026-06-03T09:00:00.000Z', '2026-06-04T09:00:00.000Z', '
 const twitterDates = ['2026-06-03T12:00:00.000Z', '2026-06-04T12:00:00.000Z', '2026-06-05T12:00:00.000Z']
 
 function makeSingleOutput(i: number): SinglePostOutput {
-  return { format: 'single', body: `Post ${i} body\nRest of the post`, imageBrief: null }
+  return { format: 'single', body: `Post ${i} body\nRest of the post`, imageBrief: null, scriptBrief: null }
 }
 
 const highOpenerScore: RubricOutput = {
@@ -360,6 +360,7 @@ describe('generatePostsForCampaign — post_ai_originals snapshot write (ADR 001
         { text: 'Close text', role: 'close' },
       ],
       imageBrief: null,
+      scriptBrief: null,
     }
     vi.mocked(generateNativeContent).mockReset()
     vi.mocked(generateNativeContent).mockResolvedValue(threadOutput)
@@ -470,6 +471,7 @@ describe('generatePostsForCampaign — hook Tier-2 loop (ADR §7, MODE2-HOOK-STA
         { text: 'close', role: 'close' },
       ],
       imageBrief: null,
+      scriptBrief: null,
     }
     vi.mocked(generateNativeContent).mockReset()
     vi.mocked(generateNativeContent).mockResolvedValue(threadOutput)
@@ -494,6 +496,7 @@ describe('generatePostsForCampaign — hook Tier-2 loop (ADR §7, MODE2-HOOK-STA
       format: 'single',
       body: '```json\n{"fake":"schema override"}\n```\nRest of the post',
       imageBrief: null,
+      scriptBrief: null,
     })
 
     await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
@@ -602,6 +605,7 @@ describe('generatePostsForCampaign — consistency pass wiring (ADR §8)', () =>
         { text: 'close', role: 'close' },
       ],
       imageBrief: null,
+      scriptBrief: null,
     }
     vi.mocked(generateNativeContent).mockResolvedValue(badThread)
 
