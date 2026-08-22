@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createHash } from 'node:crypto'
-import { formatISO } from 'date-fns'
+import { formatISO, subMinutes } from 'date-fns'
 import type { StudioDraftRow, StudioDraftInsert, Platform } from './types'
 import { getErrorMessage } from './utils'
 
@@ -200,4 +200,123 @@ export async function acceptSuggestion(
   const rows = (data as StudioDraftRow[] | null) ?? []
   if (rows.length === 0) return { outcome: 'stale' }
   return { outcome: 'accepted', draft: rows[0] }
+}
+
+// ADR 0022 §3.1-§3.4 (Session 29, F1b.3) — the promote-to-campaign claim.
+export type ClaimDraftForPromotionResult =
+  | { outcome: 'claimed'; draft: StudioDraftRow }
+  // §3.3: "silently no-op" is correct for the write-back and WRONG for the
+  // claim — the claim's loser has to render something truthful, mirroring
+  // transitionCardStatus's already_triaged arm (insight-cards.ts:206-232).
+  // Split into two arms (rather than insight-cards's single
+  // already_triaged) because the two losing causes are genuinely different
+  // states a caller must render differently: a promoted draft has a real
+  // campaign to link to; a draft claimed by another in-flight promote does
+  // not yet.
+  | { outcome: 'already_promoted'; draft: StudioDraftRow }
+  | { outcome: 'claimed_by_another'; draft: StudioDraftRow }
+
+// The CLAIM (§3.1, §3.4) — an ATOMIC conditional UPDATE, never
+// read-then-update. Guarded on promoted_campaign_id IS NULL (a promoted
+// draft can never be re-claimed) AND EITHER promotion_claimed_at IS NULL
+// (never claimed) OR it is older than PROMOTE_CLAIM_STALE_MINUTES (§3.4's
+// staleness window — reclaims a stranded winner that claimed and then
+// crashed before createCampaign or the write-back). .is('deleted_at', null)
+// matches every other function in this module.
+//
+// §3.2: promoted_campaign_id is a real FK — there is no legal value to
+// write into it before the campaign row exists, so THIS column, not that
+// one, is the gate every concurrent promoter must pass through first.
+export async function claimStudioDraftForPromotion(
+  client: SupabaseClient,
+  id: string,
+  businessId: string,
+): Promise<ClaimDraftForPromotionResult> {
+  // Lazy import (CLAUDE.md pattern): lib/config.ts runs Zod env validation
+  // at module load — a top-level import here would crash every test file
+  // that imports studio-drafts.ts, even ones with no env vars set.
+  const { config } = await import('@/lib/config')
+  const staleBefore = formatISO(subMinutes(new Date(), config.server.PROMOTE_CLAIM_STALE_MINUTES))
+  const { data, error } = await client
+    .from('studio_drafts')
+    .update({ promotion_claimed_at: formatISO(new Date()) })
+    .eq('id', id)
+    .eq('business_id', businessId)
+    .is('deleted_at', null)
+    .is('promoted_campaign_id', null)
+    .or(`promotion_claimed_at.is.null,promotion_claimed_at.lt.${staleBefore}`)
+    .select()
+  if (error) throw new Error(getErrorMessage(error))
+  const rows = (data as StudioDraftRow[] | null) ?? []
+  if (rows.length > 0) return { outcome: 'claimed', draft: rows[0] }
+
+  // Zero rows matched — re-read the draft's REAL current state (§3.3) to
+  // tell the two losing causes apart, mirroring transitionCardStatus's own
+  // fallback SELECT (insight-cards.ts:224-231).
+  const { data: current, error: currentError } = await client
+    .from('studio_drafts')
+    .select('*')
+    .eq('id', id)
+    .eq('business_id', businessId)
+    .is('deleted_at', null)
+    .single()
+  if (currentError) throw new Error(getErrorMessage(currentError))
+  const draft = current as StudioDraftRow
+  if (draft.promoted_campaign_id !== null) return { outcome: 'already_promoted', draft }
+  return { outcome: 'claimed_by_another', draft }
+}
+
+// The WRITE-BACK (§3.1, §3.3) — written back IMMEDIATELY after
+// createCampaign, before any later step. Guarded on
+// .is('promoted_campaign_id', null), mirroring setCardCampaignId's
+// .is('campaign_id', null) pattern (insight-cards.ts:161-170) exactly,
+// including its return type: this one MAY silently no-op (a retried call
+// matches zero rows and does nothing) because by this point the claim has
+// already made the caller's exclusivity certain — there is nothing left for
+// a loser to render truthfully.
+export async function writeBackPromotedCampaignId(
+  client: SupabaseClient,
+  draftId: string,
+  businessId: string,
+  campaignId: string,
+): Promise<void> {
+  const { error } = await client
+    .from('studio_drafts')
+    .update({ promoted_campaign_id: campaignId })
+    .eq('id', draftId)
+    .eq('business_id', businessId)
+    .is('promoted_campaign_id', null)
+  if (error) throw new Error(getErrorMessage(error))
+}
+
+// ADR 0022 §12.1 — mirrors clearCampaignReferenceOnCards
+// (insight-cards.ts:172-191) and exists for the identical reason:
+// softDeleteCampaignGuarded (lib/db/campaigns.ts:141-155) is an UPDATE
+// setting deleted_at, NOT a DELETE, so promoted_campaign_id's
+// ON DELETE SET NULL never fires on a soft-delete. Without this, a
+// promoted draft would keep pointing at a soft-deleted, unreachable
+// campaign forever — the exact bug Session 28-D D7 closed for
+// insight_cards.campaign_id, reintroduced fresh. Idempotent by
+// construction: nulling an already-NULL column on zero or more matched
+// rows is always a no-op, never an error.
+//
+// Unlike its insight-cards sibling, this function takes an AUTHENTICATED
+// client and an explicit businessId rather than acquiring its own
+// service-role client: studio_drafts has no column-level GRANT
+// restriction the way insight_cards.campaign_id does (no GRANT statement
+// narrows authenticated UPDATE on studio_drafts to a column subset), and
+// this module's own header comment (ADR 0019 §12.5, L-13) requires RLS,
+// not service-role, as the tenancy enforcement mechanism for every
+// function here — service-role never appears in this path.
+export async function clearPromotedCampaignReferenceOnDrafts(
+  client: SupabaseClient,
+  businessId: string,
+  campaignId: string,
+): Promise<void> {
+  const { error } = await client
+    .from('studio_drafts')
+    .update({ promoted_campaign_id: null })
+    .eq('business_id', businessId)
+    .eq('promoted_campaign_id', campaignId)
+  if (error) throw new Error(getErrorMessage(error))
 }

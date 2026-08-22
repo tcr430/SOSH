@@ -9,6 +9,7 @@ import {
   softDeleteCampaignGuarded,
 } from '@/lib/db/campaigns'
 import { clearCampaignReferenceOnCards } from '@/lib/db/insight-cards'
+import { clearPromotedCampaignReferenceOnDrafts } from '@/lib/db/studio-drafts'
 
 export type CampaignActionState = {
   success?: boolean
@@ -90,6 +91,16 @@ export async function deleteCampaignAction(
       await clearCampaignReferenceOnCards(campaignId)
     } catch (cleanupErr: unknown) {
       console.error('campaigns/actions: clearCampaignReferenceOnCards failed after delete', campaignId, cleanupErr)
+    }
+
+    // ADR 0022 §12.1 — the identical D7 bug, reintroduced fresh for
+    // studio_drafts.promoted_campaign_id: this soft-delete UPDATE never
+    // fires that column's ON DELETE SET NULL. Own try/catch for the same
+    // reason as clearCampaignReferenceOnCards above.
+    try {
+      await clearPromotedCampaignReferenceOnDrafts(ctx.client, ctx.business.id, campaignId)
+    } catch (cleanupErr: unknown) {
+      console.error('campaigns/actions: clearPromotedCampaignReferenceOnDrafts failed after delete', campaignId, cleanupErr)
     }
 
     return { success: true }

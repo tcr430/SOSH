@@ -59,6 +59,15 @@ export const serverSchema = z.object({
   METRICS_STALE_MINUTES: z.coerce.number().int().positive().default(360),
   METRICS_MAX_AGE_DAYS: z.coerce.number().int().positive().default(90),
   POST_GENERATION_SESSION_STALE_MINUTES: z.coerce.number().int().positive().default(15),
+  // ADR 0022 §3.4 (Session 29, F1b.3) — promote's claim staleness window.
+  // Unlike POST_GENERATION_SESSION_STALE_MINUTES (which spans an LLM call),
+  // the claim only has to outlive createCampaign (one INSERT) and the
+  // write-back (one guarded UPDATE) — no LLM call sits inside this window;
+  // assembleBrief runs AFTER the write-back and does not need to fit here.
+  // Worst-case latency for two sequential Postgres round-trips, even under
+  // connection-pool contention or a retried request, is low single-digit
+  // seconds. 5 minutes is a two-orders-of-magnitude margin over that.
+  PROMOTE_CLAIM_STALE_MINUTES: z.coerce.number().int().positive().default(5),
   DELETION_RETENTION_DAYS: z.coerce.number().int().positive().default(30),
   DELETION_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
   DELETION_RETRY_BACKOFF_BASE_MINUTES: z.coerce.number().int().positive().default(60),
@@ -258,6 +267,7 @@ function parseServerEnv() {
     PUBLISH_RETRY_BACKOFF_SECONDS: process.env.PUBLISH_RETRY_BACKOFF_SECONDS,
     PUBLISH_STUCK_MINUTES: process.env.PUBLISH_STUCK_MINUTES,
     POST_GENERATION_SESSION_STALE_MINUTES: process.env.POST_GENERATION_SESSION_STALE_MINUTES,
+    PROMOTE_CLAIM_STALE_MINUTES: process.env.PROMOTE_CLAIM_STALE_MINUTES,
     DELETION_RETENTION_DAYS: process.env.DELETION_RETENTION_DAYS,
     DELETION_MAX_ATTEMPTS: process.env.DELETION_MAX_ATTEMPTS,
     DELETION_RETRY_BACKOFF_BASE_MINUTES: process.env.DELETION_RETRY_BACKOFF_BASE_MINUTES,
@@ -438,6 +448,9 @@ export const config = {
     },
     get POST_GENERATION_SESSION_STALE_MINUTES() {
       return serverOnly("POST_GENERATION_SESSION_STALE_MINUTES", () => server().POST_GENERATION_SESSION_STALE_MINUTES);
+    },
+    get PROMOTE_CLAIM_STALE_MINUTES() {
+      return serverOnly("PROMOTE_CLAIM_STALE_MINUTES", () => server().PROMOTE_CLAIM_STALE_MINUTES);
     },
     get DELETION_RETENTION_DAYS() {
       return serverOnly("DELETION_RETENTION_DAYS", () => server().DELETION_RETENTION_DAYS);
