@@ -306,6 +306,41 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
     landed in this session, so the count starts now. `db-tests` stays **advisory-but-must-be-read** until
     three consecutive full-green runs land on `master`; update this line with each green/red run rather
     than waiting for the third to backfill the count.
+    - > **⚠ RECONCILIATION, 2026-08-22 — the tally below is STALE. The true count is 5, and the promotion
+      > condition was met on 2026-07-27.** The entries beneath this note are each individually correct:
+      > every one describes a `pull_request`-event run and correctly says such a run never moves the tally.
+      > **The defect is one of omission — no entry was ever written for a `push`-on-`master` run, and five
+      > of them happened.** Queried from the Actions history
+      > (`gh run list --workflow=db-tests.yml --branch master --event push`), all five are full-green
+      > **and non-vacuous**: in each, the step *"Skip-guard — fail if any suite is INVISIBLE or RED"*
+      > reports `success`, so none is a FALSE-GREEN. Under the new topology (which landed 2026-07-21,
+      > Session 23-D), the `master` push runs are:
+      >
+      > | # | Date | Head | Run | Suite | Skip-guard |
+      > |---|---|---|---|---|---|
+      > | 1 | 2026-07-22 | `4b035d3b` | [29947011885](https://github.com/tcr430/SOSH/actions/runs/29947011885) | success | success |
+      > | 2 | 2026-07-25 | `d97e55c8` | [30156271345](https://github.com/tcr430/SOSH/actions/runs/30156271345) | success | success |
+      > | 3 | 2026-07-27 | `f1c730cc` | [30302554218](https://github.com/tcr430/SOSH/actions/runs/30302554218) | success | success |
+      > | 4 | 2026-07-29 | `51264772` | [30436667567](https://github.com/tcr430/SOSH/actions/runs/30436667567) | success | success |
+      > | 5 | 2026-08-21 | `e69e5c41` | [32493839443](https://github.com/tcr430/SOSH/actions/runs/32493839443) | success | success |
+      >
+      > **Run 3 (2026-07-27) is the third consecutive full-green `master` run**, so `db-tests` satisfied
+      > ADR 0015 §5's promotion rule on that date and has held it through two further greens since. The
+      > last `master` failure was 2026-07-14 (`e2812ec8`), before the new topology — nothing has broken
+      > the streak. **No backfill of branch/PR runs is involved:** every run counted here is a genuine
+      > `push`-on-`master` event, exactly as build guide §0.4 requires.
+      >
+      > **Consequence — an open decision, deliberately not taken here.** Promoting `db-tests` from
+      > advisory to **Required** is a branch-protection change on the repository, not a documentation
+      > change, and it is the founder's call. Recorded as **met and pending action**. Until it is taken,
+      > every Tier-1 constraint — including ADR 0022 §11.1's nine promote constraints and
+      > `MEM-PATTERN-BOUNDED`, which ADR 0018 Amendment A.4.4 makes Tier-1-only — lands behind a gate
+      > that can go red without blocking a merge.
+      >
+      > **Why this went unnoticed for four weeks.** The ledger tracked the runs it was told to distrust
+      > (PR events) and never queried the runs that count. A tally maintained by appending *"still 0 of 3"*
+      > to each PR run cannot detect a `master` run nobody wrote down. **Future entries must be sourced
+      > from `--event push --branch master`, not from whichever run the session happened to be watching.**
     - **2026-07-21 (Session 23-D · D5):** `db-tests` ran **green** on PR #1 (branch `session-22-d`,
       head `f022e08f`) — [run 29860240741](https://github.com/tcr430/SOSH/actions/runs/29860240741);
       skip-guard confirmed all 13 `supabase/__tests__` suites visible (non-zero executed), incl. the two
