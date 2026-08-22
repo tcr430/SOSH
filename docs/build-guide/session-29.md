@@ -766,6 +766,105 @@ names. **§4 stays a placeholder** until the Reviewer has run and its findings d
 >   diff and states it contains zero changed expectations. One altered expectation there is an L-10
 >   violation.
 
+**✅ AUTHORED 2026-08-22 — the placeholder above is retained as the specification this section was written
+against; everything below is the section itself.** Gate satisfied: ADR 0022 is Accepted (`dd748435`), its
+§§17-19 closure and correction record is appended (`5e9ed904`), the three amendments are appended
+(`dd748435`, `c56332b0`), and §0.2 exists with eight adjudications.
+
+**Ordering rationale, restated because it is binding.** **Track F1 (`F1b.0`-`F1b.5`) lands in full before
+Track F2 (`F1b.6`-`F1b.11`) begins.** F1 is smaller, has an exact shipped precedent (`lib/signals/seed.ts`),
+and touches no shared generation code. F2 edits a `z.discriminatedUnion` that every Mode 2 call flows
+through. **Do not interleave them.** Inside F2, the exhaustiveness precondition (`F1b.6`) lands **before**
+the carousel branch (`F1b.7`) — ADR 0022 §6.5 makes it a precondition, not a cleanup, and adding the branch
+first means shipping `generate-native.ts:110`'s silent misroute for the length of one commit.
+
+**Definition of done for every step:** `npx tsc --noEmit --skipLibCheck` clean, `npm run test:app` green,
+`npm run test:db` green where the step touches DB behaviour, each named constraint **demonstrated to redden
+against the pre-fix code and then reverted**, and one commit per step.
+
+### §2a — Builder primer  (paste first · wait for acknowledgement)
+
+```
+Session 29 Track F — BUILDER phase (F1b). You implement ADR 0022 and its three amendments. You write code;
+you do NOT make architectural decisions. Every decision you need has already been made and carries a named
+loser. If you find yourself choosing between two designs, STOP and report — that is an ADR gap, not your
+call.
+
+READ FIRST, in this order:
+- docs/decisions/0022-promote-to-campaign-and-format-families.md — ALL of it, including §§17-19, which are
+  additive and CORRECT §6.3, §9 and §16. Where §17/§18 correct an earlier section, THE CORRECTION WINS and
+  the original text is left standing deliberately so you can see what changed.
+- The three amendments: ADR 0018 Amendment A (incl. A.4), ADR 0017 Amendment B, ADR 0019 Amendment A.
+- docs/build-guide/session-29.md — Reality 1-19, §0 (Locked L-1..L-12), §0.2 (the eight adjudications).
+  §0.2 IS YOUR GATE. Every row must end up encoded.
+- CLAUDE.md — the AI-layer / DB-access / three-client / RLS + erasure-cascade / atomic-transition / Zod /
+  i18n / bounded-query rules, and the test-execution-integrity section.
+
+BINDING RULES YOU WILL BE REVIEWED AGAINST:
+1. ORDER. F1b.0 through F1b.5 (Track F1) complete and green BEFORE F1b.6 begins. No interleaving.
+2. lib/ai/runner.ts is NOT modified. No third prompt.id branch in the runner. If you are editing runner.ts,
+   you have taken ADR 0017 D-3's losing option — stop.
+3. posts is NOT modified — no column, constraint, index, policy, trigger, RPC, or PostUpdate field.
+4. MEM-PATTERN-BOUNDED is TIER-1 ONLY (ADR 0022 §18.1). Both production callers of
+   upsertDistilledPerformancePattern MOCK it, and memory-performance.test.ts:168 runs the real body against
+   a STUBBED client — a stub cannot fire a Postgres CHECK. Prove the CHECK in supabase/__tests__/ against
+   live Postgres or it is not proved. A Tier-2 test may prove the promoter-level Zod bound; label it as
+   that, never as proof of the CHECK.
+5. The platform-map.test.ts diff in F1b.7 changes call ARITY ONLY (ADR 0022 §18.3). Ten two-argument
+   selectFormatFamily call sites each gain a third argument `false`. NOTHING else changes: no
+   expect(...).toBe(...) right-hand side, no it.each list, no description string. One altered expectation
+   is an L-10 violation.
+6. Every list query bounded + explicit ORDER BY matching an index. Zod on every Server Action input. Atomic
+   conditional UPDATEs, never read-then-update. date-fns (toUtcIso()), never raw .toISOString(). No `any`.
+   No console.* on a user-facing surface. env only via lib/config.ts. i18n en/pt/es landed together and
+   registered in i18n/request.ts.
+7. shadcn v4 is Base UI: NO asChild on Button or DropdownMenu primitives. Use buttonVariants() for a link
+   styled as a button.
+8. SHARED-FUNCTION CALLERS: before you mark any constraint on a shared function as tested, git grep its
+   callers and state, per caller, which test file exercises it. A caller with no listed test is
+   AUTHORED-NOT-EXECUTED even if another caller is fully covered. Both Session 22 blockers were this.
+
+ECC BUDGET FOR THIS PHASE: per step, /ecc:plan then /ecc:tdd-workflow then /ecc:verification-loop. Skills
+are free. Design skills belong to F1b.5 and F1b.9 ONLY: taste-skill for the build, impeccable for the
+review pass, BOTH against ADR 0022 §10's UX contract — not against their own taste. You may dispatch
+database-reviewer before committing F1b.1/F1b.2 and security-reviewer before committing F1b.4. Do not
+dispatch a reviewer per step.
+
+VERIFICATION, every step: npx tsc --noEmit --skipLibCheck ; npm run test:app ; npm run test:db (where the
+step touches DB behaviour). Each named constraint must be DEMONSTRATED TO REDDEN against the pre-fix code
+and then reverted — an assertion that cannot fail is not coverage. One commit per step, subject naming the
+step id and the constraints it closes.
+
+Acknowledge with a one-line confirmation that you have read ADR 0022 INCLUDING §§17-19 and understand that
+§17/§18 correct §6.3, §9 and §16. Then STOP and wait for the step list.
+```
+
+### §2b — Builder steps
+
+Each step is one paste, one commit. **A step that closes no ADR constraint should not exist.**
+
+| Step | What it ships | Constraints closed | Tier |
+|---|---|---|---|
+| **F1b.0** | **Grounding pass, no code.** Re-verify Reality 1-19 against the live repo and report any drift *before* writing anything (Session 26's C2.0 precedent). Run the §17 confirmation query `SELECT count(*) FROM performance_memory WHERE length(pattern) > 500;` and record the result **as confirmation, not as a decision input** — §17 closed item 1 by arithmetic, and the migration is written `NOT VALID` + `VALIDATE` regardless. Re-run `git grep assembleBrief` and publish the caller table. | — | — |
+| **F1b.1** | **Promote schema.** `campaigns.origin` gains `'studio_promoted'` (ADR 0017 Amd B). `studio_drafts` gains `promotion_claimed_at`, `promoted_campaign_id` and the retained-revision column (ADR 0019 Amd A.1). Both `NOT VALID` + `VALIDATE`, backfill stated as none. **No new §D2.5 row** — state which case applies and why (ADR 0022 §12.2). | `PROMOTE-RLS-ISOLATED`, `PROMOTE-CASCADE-COMPLETE` | 1 |
+| **F1b.2** | **Learning schema.** `generation_kind` gains `'studio_promoted'` (ADR 0018 Amd A.1). `performance_memory.pattern` gains the **500-char CHECK** (Amd A.2). **Keep 500 — do not reduce it to 200** (§17's corollary: with writers capped at 200 and ≈80 the CHECK can never fire from a legitimate Track C write, and that is the intended defence-in-depth property). | `LEARN-GENERATION-KIND-WIDENED`, **`MEM-PATTERN-BOUNDED`** (Tier-1 only, rule 4) | 1 |
+| **F1b.3** | **The claim, the write-back, the cleanup.** `lib/db/studio-drafts.ts` gains the atomic claim (guarded `promotion_claimed_at IS NULL`, with the staleness window from a named `lib/config.ts` constant), the guarded write-back, and **`clearPromotedCampaignReferenceOnDrafts`** wired from `softDeleteCampaignGuarded`'s call sites. The claim returns a **typed** result; the write-back returns void (ADR 0022 §3.3). | `PROMOTE-CLAIM-ATOMIC`, `PROMOTE-WRITEBACK-GUARDED`, `PROMOTE-CLAIM-RECLAIMABLE`, `PROMOTE-SOFTDELETE-CLEARED` | 1 |
+| **F1b.4** | **`promoteDraftToCampaign`.** The Server Action in ADR 0022 §2.1's exact six-step order. Composes into `objective` (no `BriefAssemblyInput` change), applies the `z.string().min(1).max(5000)` copy bound (§5.1), inserts the post with a **user-chosen** `scheduled_at` (A-3), writes the snapshot **only when the retained revision is non-NULL** (Amd A.1's binding corollary), then calls `assembleBrief` unchanged. Also: `activateCampaign`'s caller computes `planned = brief-derived N + existing post count` (§2.7). | `PROMOTE-ACTION-VALIDATED`, `PROMOTE-BRIEF-END-TO-END`, `ACTIVATE-PLANNED-UNCHANGED` | 1 + 2 |
+| **F1b.5** | **The Studio promote surface.** Server Component page + Client interaction; the **two-step** scheduled_at flow (A-3 — never a one-click affordance); all **seven** §10 states incl. `already promoted` rendering that draft's real state and `reclaimable`. New status colour on `globals.css` tokens with a **both-themes contrast assertion reading the shipped token file** (`OpportunityFeed.test.tsx:439` mechanism). i18n en/pt/es. `taste-skill` + `impeccable` against §10. | `PROMOTE-STATES-RENDERED`, `PROMOTE-CONTRAST-AA`, `PROMOTE-I18N-COMPLETE` | 2 |
+| **F1b.6** | **The exhaustiveness precondition — Track F2 opens here, and this lands BEFORE carousel.** Convert all three bare-`FormatFamily` ternaries to `switch` + `assertNever`: `lib/ai/generate-native.ts:110`, `native-generation-prompt.ts:36-52`, `native-generation-prompt.ts:138`. **No new family in this commit** — it must be green with `FormatFamily` still `'single' \| 'thread'`. Leave `generate.ts:48`/`:55` alone; ADR 0022 §6.5 records them as already safe. | — (enables `CAROUSEL-*`) | 2 |
+| **F1b.7** | **The carousel branch.** Third union branch, slides `3..10`, `role: 'cover' \| 'body' \| 'cta'`, per-slide `imageBrief`, no `order` field. `validateCarouselPolicy` in `policy.ts` throwing `AiError('policy_violation')`. `selectFormatFamily` gains the **required third parameter**; `platform-map.test.ts`'s ten call sites gain `false` and **nothing else** (rule 5). The `Record<Platform, …>`-typed frozen table lands here. | `CAROUSEL-SCHEMA-STRUCTURAL`, `CAROUSEL-POLICY-SEQUENCE`, **`MODE2-FORMAT-SELECTION-UNCHANGED`**, `MODE2-PROMPT-BYTE-IDENTICAL` | 2 |
+| **F1b.8** | **`scriptBrief`.** `string \| null` on `imageBrief`'s exact footing, per-branch, literal length bound. **Not a structured object** (§7.1's loser). Plus the Tier-3 source scan with a **per-root vacuity guard**. i18n en/pt/es. | `SCRIPT-BRIEF-BOUNDED`, `SCRIPT-NEVER-PUBLISHED` | 2 + 3 |
+| **F1b.9** | **Carousel and script previews** in the approvals surface: slides in order with roles visible; `imageBrief` and `scriptBrief` rendered as recommendations **explicitly marked never-published**. `taste-skill` + `impeccable` against §10. | (renders `SCRIPT-NEVER-PUBLISHED`'s affordance) | 2 |
+| **F1b.10** | **The §17 learning-loop fix and the stale comments.** Wrap `lib/learning/summarize.ts:146`'s upsert in per-statement `try/catch` (log-and-skip) and add **`summarizeRejected`** to `LearningTickSummary` (`orchestrator.ts:44-58`, initialised `:319-334`). **Write it up as latent, not as a live bug** — nothing can currently produce a >200-char statement. Correct the two stale *"no production caller yet"* clauses (`learning-summarizer.ts:41`, `memory-performance.ts:51-52`) — `orchestrator.ts:270` **is** that caller — and **leave their guard posture exactly as it stands** (§17.1: only the premise is stale, the conclusion is not). | (closes §16 item 3's remainder) | 2 |
+| **F1b.11** | **The scope scans and the verification pass.** Four executable scans, each with a per-root vacuity guard and each demonstrated to redden against a temporary violation then reverted: `MODE2-RUNNER-UNTOUCHED`, `MODE2-CAROUSEL-NO-IMAGE-GEN`, `POSTS-DDL-UNMODIFIED`, `MODE3-UNTOUCHED`. Then: every ADR 0022 constraint mapped to its executing CI job with *reddens-if-broken* stated per row; **`SHARED-FUNCTION CALLERS` re-grepped and the §9 table extended if a caller appeared**; the Tier-3 five enumerated **as decisions**. Push and cite real run URLs. | `RUNNER-UNMODIFIED`, `MODE3-UNTOUCHED`, `POSTS-DDL-UNMODIFIED`, `NO-SKIP-REVIEW-PATH` | 3 |
+
+**Two scope tripwires, executable rather than advisory.** `MODE2-RUNNER-UNTOUCHED` fails if any diff touches
+`lib/ai/runner.ts` (L-7). `MODE2-CAROUSEL-NO-IMAGE-GEN` fails on any image-generation call anywhere (L-8).
+Both are scans in `F1b.11`, not review comments — a scope rule that lives as prose is not enforced.
+
+**Do not claim a constraint count until it is executed green in CI at the head it is dated to.** Session 28
+shipped a false *"29/29 executed green"* that took three correction steps to undo.
+
 ---
 
 ## §3 — Reviewer session (F1c)  ·  (paste into Claude Code · Opus)
@@ -794,6 +893,126 @@ names. **§4 stays a placeholder** until the Reviewer has run and its findings d
 > - The reviewer independently verifies that every constraint claimed COVERED is **executed green in CI at
 >   the stated head** — not merely authored. A claimed count that is false at its dated head is the exact
 >   failure Session 28 shipped and 28-D spent three steps correcting.
+
+**✅ AUTHORED 2026-08-22 — the placeholder above is retained as the specification this section was written
+against; everything below is the section itself.** Authored alongside §2, per its own gate: the reviewer's
+checklist **is** ADR 0022's constraint table, so it can be written before the Builder runs. **Only the
+commit range is filled in at run time, by the Reviewer itself.**
+
+### §3a — Reviewer primer  (paste first · wait for acknowledgement)
+
+```
+Session 29 Track F — REVIEWER phase (F1c). You are independent. You MODIFY NOTHING: no source, no tests, no
+ADR, no build guide. Your single output is docs/reviews/session-29-reviewer.md. This is the ONE review pass
+for this session; there is no separate re-review track.
+
+PROC-REVIEW-AT-COMMIT IS ABSOLUTE AND IS YOUR FIRST OBLIGATION.
+Read every artefact AT THE STATED COMMIT RANGE — git diff <base>..<head>, git show <sha>:<path>,
+git log --oneline <base>..<head>. NEVER at HEAD. Reading at HEAD produced a false-positive MAJOR finding in
+Session 21B that the next session's reviewer had to withdraw. Your report MUST OPEN by naming the exact
+range, e.g.:
+  "Scope reviewed: <base>..<head>; all citations are git show <sha>:<path> at that range, never HEAD."
+A report that does not name its range is not a valid review.
+
+Exception you may rely on (Session 22-F, NEW-12): the ADR and build guide you audit AGAINST are read at
+their own commits, which you name separately — they postdate or predate the range and cannot be read
+inside it. State both: "ADR 0022 read at <sha>; reviewed artefacts read at <base>..<head>."
+
+WHAT YOU ARE AUDITING AGAINST:
+- docs/decisions/0022-promote-to-campaign-and-format-families.md, INCLUDING §§17-19. §17 and §18 are
+  additive corrections to §6.3, §9 and §16. WHERE THEY CORRECT AN EARLIER SECTION, THE CORRECTION IS THE
+  STANDARD. Do not raise a finding against §9's superseded row or §6.3's superseded claim — §18 already
+  corrected both, deliberately leaving the originals legible.
+- ADR 0018 Amendment A (incl. A.4), ADR 0017 Amendment B, ADR 0019 Amendment A.
+- docs/build-guide/session-29.md §0 (L-1..L-12), §0.2 (A-1..A-8), Reality 1-19, and §2b's step table.
+
+THE FOUR THINGS MOST LIKELY TO BE WRONG, in the order I want them checked:
+
+1. SHARED-FUNCTION CALLERS on assembleBrief. THE COUNT IS ONE TODAY, TWO AFTER PROMOTE LANDS.
+   lib/signals/seed.ts:85 is the only production caller at dd748435; promote adds the second. Verify by
+   git grep at the range, not by trusting the ADR. Then do the same for upsertDistilledPerformancePattern,
+   where ADR 0022 §18.1 records that BOTH production callers MOCK the function — confirm the Builder did
+   not discharge MEM-PATTERN-BOUNDED with a Tier-2 test. List, per caller, which test file exercises it.
+   A caller with no listed test is AUTHORED-NOT-EXECUTED EVEN IF another caller is fully covered.
+
+2. MEM-PATTERN-BOUNDED must be TIER-1. It is a Postgres CHECK. A Tier-2 test against a stubbed client
+   CANNOT fire it (memory-performance.test.ts:168 runs the real body against a stub). If the Builder proved
+   it anywhere but supabase/__tests__/ against live Postgres, that is a BLOCKER, not a MINOR.
+
+3. THE platform-map.test.ts DIFF MUST BE ARITY-ONLY. Ten call sites gain a third argument `false`. Open the
+   diff and confirm ZERO changed expectations — no altered expect(...).toBe(...) right-hand side, no
+   changed it.each list, no reworded description. ONE altered expectation is an L-10 violation and the
+   whole MODE2-FORMAT-SELECTION-UNCHANGED guarantee is void.
+
+4. THE ORDER. F1b.6's exhaustiveness conversion must land BEFORE F1b.7's carousel branch, in a separate
+   commit that is green with FormatFamily still 'single' | 'thread'. If carousel landed first, or in the
+   same commit, generate-native.ts:110's silent misroute shipped — say so.
+
+ALSO VERIFY, and do not take the Builder's word for any of it:
+- Every constraint claimed COVERED is EXECUTED GREEN IN CI AT THE STATED HEAD, not merely authored. Open
+  the runs. A claimed count that is false at its dated head is exactly what Session 28 shipped and 28-D
+  spent three steps correcting.
+- The db-tests skip-guard line shows a NON-ZERO file and test count, read from the log, not inferred.
+- lib/ai/runner.ts is untouched (L-7, MODE2-RUNNER-UNTOUCHED) and posts is untouched (POSTS-DDL-UNMODIFIED)
+  — check the diff yourself, do not trust the scan's existence.
+- Each of the four executable scans has a PER-ROOT VACUITY GUARD. A scan that passes over an empty root
+  proves nothing.
+- The promote snapshot is written ONLY when the retained revision is non-NULL (ADR 0018 Amd A.1's binding
+  corollary). A snapshot fabricated from the human's raw draft corrupts ADR 0018's corpus — BLOCKER.
+- The staleness window is a named lib/config.ts constant with stated arithmetic, not a literal.
+- clearPromotedCampaignReferenceOnDrafts exists AND is wired from softDeleteCampaignGuarded's call sites —
+  ON DELETE SET NULL never fires on a soft delete, which is the D7 bug this would reintroduce.
+- scheduled_at is user-chosen and approve re-touches it (A-3). If a default slipped in, the surprise-publish
+  path at claim_posts_for_publishing (scheduled_at <= p_now) is live — MAJOR at minimum.
+- i18n landed in en, pt AND es simultaneously and is registered in i18n/request.ts.
+- No asChild on Button or DropdownMenu. Zero dangerouslySetInnerHTML. No console.* on a user-facing surface.
+- Any new status colour is a globals.css token with a both-themes contrast assertion that READS THE SHIPPED
+  TOKEN FILE. A hand-transcribed hex is the anti-pattern that assertion exists to prevent.
+
+Acknowledge in one line, naming the commit range you have been given and confirming you will read at that
+range and never at HEAD. Then STOP and wait for the review prompt.
+```
+
+### §3b — Reviewer prompt  (paste after the primer is acknowledged)
+
+```
+Review the Session 29 Track F Builder range and write docs/reviews/session-29-reviewer.md.
+
+Open the report with the range line (PROC-REVIEW-AT-COMMIT), and name separately the commit at which you
+read ADR 0022 and the build guide.
+
+Organise findings by the ADR's own sections so a correction pass can cite them:
+  1. Promote contract and gate count (ADR 0022 §2; A-3, A-7)
+  2. Atomicity, the claim, the staleness window, the soft-delete cleanup (§3, §12.1; A-6)
+  3. The generation_kind amendment and the snapshot corollary (§4; ADR 0018 Amd A.1; A-1)
+  4. The write-time bound, its TIER, and the A-5 guard (§5; ADR 0018 Amd A.2/A.3; §18.1)
+  5. The carousel family, roles, policy, and the exhaustiveness precondition (§6; A-4)
+  6. scriptBrief and the never-published scan (§7)
+  7. MODE2-FORMAT-SELECTION-UNCHANGED and the arity-only diff (§8; §18.3)
+  8. SHARED-FUNCTION CALLERS, per caller, with the test that exercises each (§9; §18.1)
+  9. The UX contract and the design floor (§10)
+ 10. Constraint-to-CI mapping: every constraint, its tier, its executing job, and whether it REDDENS if the
+     property breaks (§11)
+ 11. Scope and process: L-1's out-of-scope list not shipped; the Tier-3 five enumerated AS DECISIONS
+
+Severities: BLOCKER / MAJOR / MINOR / NIT, each with a STABLE ID (BLOCKER-1, MAJOR-2, ...) the correction
+pass will cite. For each finding give: what is wrong, the file:line AT THE RANGE, why it matters, and what
+would prove it fixed. Do not propose patches — you write no code.
+
+Where you believe the ADR itself is wrong rather than the implementation, say so explicitly and mark it as
+an ADR finding, not a Builder finding. §17 and §18 exist because an audit of this ADR against the code
+found three real defects; a fourth is possible and you should say so if you find one.
+
+State plainly anything you could NOT verify and why — an unverified claim recorded as unverified is worth
+more than a confident guess. Do not pad the report to look thorough.
+
+End with one line: "Session 29 review complete — <n> findings (<b> BLOCKER, <m> MAJOR, <mi> MINOR, <ni>
+NIT) over range <base>..<head>." Then /exit.
+```
+
+**Gate:** `§4` is authored **only after** this Reviewer has actually run and `docs/reviews/session-29-reviewer.md`
+exists. A correction pass is a response to findings; there is nothing to order or prioritise until they
+exist, and inventing them ahead of time produces a fictional resolution log.
 
 ---
 
