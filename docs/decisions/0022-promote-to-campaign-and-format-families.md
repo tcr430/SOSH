@@ -798,20 +798,33 @@ required output: every constraint mapped to its executing CI job with *reddens-i
 the Tier-3 five re-stated now that four of them are executable scans (not the original "no runtime test by
 decision"), and the SHARED-FUNCTION CALLERS re-grep.
 
-**Scope note on "executed green":** everything below was run locally (`npx tsc --noEmit --skipLibCheck`,
-`npm run test:app`) at commit `a038678d` (F1b.9) plus this session's uncommitted F1b.11 work, immediately
-before the F1b.11 commit. **None of it has yet been pushed or observed green in an actual CI run** — per
-this ADR's own §11.4 warning and the Session 28 false-"29/29" incident, this is labeled
-**LOCALLY-EXECUTED-GREEN, NOT YET CI-VERIFIED**, not "executed green in CI." Push and citing a real run URL
-is a separate, following action.
+**Update — CI-verified (2026-08-23), superseding the local-only note this paragraph originally read:**
+`docs/build-guide/session-29.md`'s F1b.11 spec requires real run URLs, not a local claim — PR #6
+(`session-29` → `master`, opened solely to trigger CI, not to merge) produced them.
 
-**`npm run test:db` was also run locally at the same range head: 25 of 34 files passed; 9 files / 27 tests
-failed, every single failure `AuthApiError: Request rate limit reached` against the hosted dev Supabase
-project's auth endpoint (never an assertion failure) — the documented pre-existing infra flakiness this
-ADR's §11.4 and `docs/current-phase.md` already record for a full ~34-file Tier-1 run against the hosted
-project. Re-running any of the failed files in isolation is expected to pass (this is the established
-pattern from F1b.1–F1b.5's own Tier-1 work this session). Labelled honestly: `db-tests`
-**RATE-LIMITED-LOCALLY, NOT EVIDENCE OF A REGRESSION** — not asserted as either green or red.**
+**First attempt reddened for real, and the redden was a genuine bug, not noise.** Run
+`https://github.com/tcr430/SOSH/actions/runs/32609638366` (`app-tests`, commit `0601090e`, the original
+F1b.11 commit) FAILED both `MODE2-RUNNER-UNTOUCHED` and `MODE3-UNTOUCHED` — this repo has no
+`.gitattributes`, so a Windows checkout (`core.autocrlf=true`) normalizes LF→CRLF on disk while the Ubuntu
+CI runner keeps LF; hashing raw file bytes made both frozen pins environment-dependent rather than
+content-dependent. Fixed in commit `b01a9985` (`readNormalized` strips `\r` before hashing; both frozen
+SHA-256 constants recomputed against normalized content) and re-verified locally (redden-then-revert
+re-demonstrated for `MODE2-RUNNER-UNTOUCHED`) before pushing.
+
+**Both jobs green at `b01a9985` (the current range head):**
+
+| Job | Run URL | Skip-guard line, quoted verbatim |
+|---|---|---|
+| `app-tests` | `https://github.com/tcr430/SOSH/actions/runs/32609963073` | `skip-guard: 219 file(s) under [app, lib, components] all visible, zero failures — green. (2963/2963 tests passed)` |
+| `db-tests` | `https://github.com/tcr430/SOSH/actions/runs/32609963087` | `skip-guard: 34 file(s) under [supabase/__tests__] all visible, zero failures — green. (309/309 tests passed)` |
+
+**Note on the earlier local `test:db` rate-limiting** this paragraph also originally reported (25/34 files,
+9 files / 27 tests all failing `AuthApiError: Request rate limit reached`, never an assertion failure): CI's
+`db-tests` job runs against a **local Supabase stack it starts itself** (`supabase/setup-cli@v2.1.1` →
+"Start local Supabase stack"), not the hosted dev project this session's local runs hit — so it was never
+subject to that rate limit, confirmed by the 309/309 clean result above. The local rate-limiting was
+correctly never asserted as a regression signal; it simply wasn't informative either way, and CI is the
+authoritative result.
 
 ### 20.1 Every ADR 0022 constraint → its executing CI job
 
