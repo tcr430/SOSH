@@ -786,3 +786,106 @@ two references as **§16 → §17**:
   the row loop already satisfies it; the **statement** loop does not, and that is a named Builder fix.
 - §5.5's *"The count query and its result are a stated-open item (§16)"* → **§17, item 1**: closed in code;
   the query is retained as confirmation and is **not** a gate on the migration.
+
+---
+
+## 20. F1b.11 close-out: the constraint map, re-grepped callers, Tier-3 as executed scans (Session 29, 2026-08-23, additive)
+
+Append-only, same form as §17–19: **§9 and §11 are not edited** — a §9 row correction is given below (§20.3)
+as a **corrected row (supersedes §9's `selectFormatFamily` row)**, exactly the pattern §18.1 already
+established for the `upsertDistilledPerformancePattern` row. This section is the F1b.11 build step's
+required output: every constraint mapped to its executing CI job with *reddens-if-broken* stated per row,
+the Tier-3 five re-stated now that four of them are executable scans (not the original "no runtime test by
+decision"), and the SHARED-FUNCTION CALLERS re-grep.
+
+**Scope note on "executed green":** everything below was run locally (`npx tsc --noEmit --skipLibCheck`,
+`npm run test:app`) at commit `a038678d` (F1b.9) plus this session's uncommitted F1b.11 work, immediately
+before the F1b.11 commit. **None of it has yet been pushed or observed green in an actual CI run** — per
+this ADR's own §11.4 warning and the Session 28 false-"29/29" incident, this is labeled
+**LOCALLY-EXECUTED-GREEN, NOT YET CI-VERIFIED**, not "executed green in CI." Push and citing a real run URL
+is a separate, following action.
+
+**`npm run test:db` was also run locally at the same range head: 25 of 34 files passed; 9 files / 27 tests
+failed, every single failure `AuthApiError: Request rate limit reached` against the hosted dev Supabase
+project's auth endpoint (never an assertion failure) — the documented pre-existing infra flakiness this
+ADR's §11.4 and `docs/current-phase.md` already record for a full ~34-file Tier-1 run against the hosted
+project. Re-running any of the failed files in isolation is expected to pass (this is the established
+pattern from F1b.1–F1b.5's own Tier-1 work this session). Labelled honestly: `db-tests`
+**RATE-LIMITED-LOCALLY, NOT EVIDENCE OF A REGRESSION** — not asserted as either green or red.**
+
+### 20.1 Every ADR 0022 constraint → its executing CI job
+
+| Constraint | Tier → job | Reddens if broken |
+|---|---|---|
+| `PROMOTE-CLAIM-ATOMIC` | 1 → `db-tests.yml` | The claim guard is removed; two concurrent promoters both succeed. |
+| `PROMOTE-WRITEBACK-GUARDED` | 1 → `db-tests.yml` | The write-back stops no-oping on a lost race. |
+| `PROMOTE-CLAIM-RECLAIMABLE` | 1 → `db-tests.yml` | A stale claim stops being reclaimable, or a fresh one becomes reclaimable. |
+| `PROMOTE-RLS-ISOLATED` | 1 → `db-tests.yml` | Tenant A can read/update tenant B's promote columns, or an UPDATE policy loses its `WITH CHECK`. |
+| `PROMOTE-CASCADE-COMPLETE` | 1 → `db-tests.yml` | Erasure leaves a promote-related row behind `businesses` cascade or `purge_business`. |
+| `PROMOTE-SOFTDELETE-CLEARED` | 1 → `db-tests.yml` | A soft-deleted campaign leaves a dangling `promoted_campaign_id`. |
+| `PROMOTE-BRIEF-END-TO-END` | 1 → `db-tests.yml` | `assembleBrief` stops being driven through promote against real Postgres (the second caller, §9). |
+| `LEARN-GENERATION-KIND-WIDENED` | 1 → `db-tests.yml` | The CHECK stops accepting `'studio_promoted'`, or starts accepting an arbitrary value. |
+| `MEM-PATTERN-BOUNDED` | 1 → `db-tests.yml` | The `pattern` CHECK stops rejecting an over-length write. |
+| `CAROUSEL-SCHEMA-STRUCTURAL` | 2 → `app-tests.yml` | An out-of-bounds slide count or an unknown slide role parses instead of failing `safeParse`. |
+| `CAROUSEL-POLICY-SEQUENCE` | 2 → `app-tests.yml` | `validateCarouselPolicy` stops distinguishing `policy_violation` from `invalid_response`. |
+| `MODE2-FORMAT-SELECTION-UNCHANGED` | 2 → `app-tests.yml` | Any `(platform, estimatedTweetsWorth, carouselRequested)` row in the frozen table changes value. |
+| `MODE2-PROMPT-BYTE-IDENTICAL` | 2 → `app-tests.yml` | The single/thread prompt fixtures stop matching byte-for-byte. |
+| `SCRIPT-BRIEF-BOUNDED` | 2 → `app-tests.yml` | `scriptBrief` stops rejecting a string over `SCRIPT_BRIEF_MAX_CHARS`. |
+| `PROMOTE-ACTION-VALIDATED` | 2 → `app-tests.yml` | The Zod contract stops enforcing the `max(5000)` copy bound. |
+| `PROMOTE-STATES-RENDERED` | 2 → `app-tests.yml` | Any of the seven §10 states stops rendering through the real `PromoteDraftDialog`/`StudioEditor` component. |
+| `PROMOTE-CONTRAST-AA` | 2 → `app-tests.yml` | A promote-surface token drops below 4.5:1 in either theme, read live from `app/globals.css`. |
+| `PROMOTE-I18N-COMPLETE` | 2 → `app-tests.yml` | en/pt/es key sets diverge. |
+| `ACTIVATE-PLANNED-UNCHANGED` | 2 → `app-tests.yml` | A non-promoted campaign's `planned` computation changes. |
+| `RUNNER-UNMODIFIED` | 3 → executable scan, `app-tests.yml` (`lib/scope-scans.test.ts`, `MODE2-RUNNER-UNTOUCHED`) | `lib/ai/runner.ts`'s content hash changes, or a fourth `is*(promptId)` predicate joins the three pre-existing ones. |
+| `SCRIPT-NEVER-PUBLISHED` | 3 → executable scan, `app-tests.yml` (`lib/ai/prompts/formats/script-never-published.test.ts`) | `scriptBrief` appears in any file outside the three allowed (`schemas.ts`, `campaigns/[id]/posts/actions.ts`, F1b.9's `AiOutputPreview.tsx`). |
+| `MODE3-UNTOUCHED` | 3 → executable scan, `app-tests.yml` (`lib/scope-scans.test.ts`, `MODE3-UNTOUCHED`) | Any of the 16 production files under `lib/signals/` or the opportunities feed changes — combined content hash. |
+| `POSTS-DDL-UNMODIFIED` | 3 → executable scan, `app-tests.yml` (`lib/scope-scans.test.ts`, `POSTS-DDL-UNMODIFIED`) | Any migration filed after `20260814220000_insight_card_campaign_id.sql` adds `posts` DDL. |
+| `NO-SKIP-REVIEW-PATH` | 3 → executable scan, `app-tests.yml` (`lib/scope-scans.test.ts`, `NO-SKIP-REVIEW-PATH`) | A skip/bypass-review identifier appears in `lib/` or `app/`, or `CampaignStatus` gains a sixth value. |
+| `MODE2-CAROUSEL-NO-IMAGE-GEN` | **New at F1b.11**, 3 → executable scan, `app-tests.yml` (`lib/scope-scans.test.ts`) | Any image-generation API call/SDK reference appears in `lib/` or `app/` (L-8, constitution — not one of the original Tier-3 five; added because carousel work makes this concretely checkable for the first time). |
+
+### 20.2 The Tier-3 five, restated: no longer "no runtime test by decision" — four are now executable scans
+
+§11.3 originally enumerated these as diff-verified **by decision, with no runtime test**, per ADR 0015 §2.
+F1b.11 upgrades four of the five to actual executable tests (the fifth, `SCRIPT-NEVER-PUBLISHED`, was
+already upgraded at F1b.8). This is **not** a re-scoping of what Tier 3 means — `RUNNER-UNMODIFIED`,
+`MODE3-UNTOUCHED` and `POSTS-DDL-UNMODIFIED` are hash-pinned/content-scanned rather than git-diffed against
+a moving base commit (a base-SHA diff is a point-in-time fact, not a standing test — see `lib/scope-scans.
+test.ts`'s header comment for why). All five, restated:
+
+1. `RUNNER-UNMODIFIED` — executable (`MODE2-RUNNER-UNTOUCHED`).
+2. `SCRIPT-NEVER-PUBLISHED` — executable (F1b.8, extended at F1b.9 to admit `AiOutputPreview.tsx`).
+3. `MODE3-UNTOUCHED` — executable.
+4. `POSTS-DDL-UNMODIFIED` — executable.
+5. `NO-SKIP-REVIEW-PATH` — executable.
+
+Each was demonstrated to redden against a real, temporary violation and then reverted before this section
+was written (a blank-line edit to `runner.ts`; a scratch file with `images.generate(`; a bogus
+`ALTER TABLE posts` line in F1b.2's migration; a blank-line edit to `lib/signals/score.ts`; a scratch file
+defining `skipReview`) — the demonstration commands and their output are not reproduced here; the test
+file's own header comment records what was done.
+
+### 20.3 SHARED-FUNCTION CALLERS — re-grepped at F1b.11's range head
+
+`git grep` re-run for every function named in §9's table, at this range's head. **One new caller was
+found** — `selectFormatFamily`'s second caller (`lib/ai/prompts/studio-suggestion.ts:142`), already fixed
+during F1b.7 but never reflected in §9's own row, which still reads as it did before F1b.7 (**§9 is not
+edited**, per this section's own rule — see §20 preamble).
+
+**Corrected row (supersedes §9's `selectFormatFamily` row):**
+
+| Function | Caller | Test covering that caller | Behaviour change? |
+|---|---|---|---|
+| `selectFormatFamily` (`platform-map.ts:36`) | `lib/ai/generate-native.ts:106` (production Mode 2 dispatch) **and** `lib/ai/prompts/studio-suggestion.ts:142` — **a SECOND production caller**, found by `git grep` during F1b.7 and missed by §9's original text and the build guide's premise that there was exactly one; **signature gains a required third parameter** (§6.3), fixed at both call sites during F1b.7 | `platform-map.test.ts` + §8's frozen table (both call sites' arity); `lib/ai/prompts/studio-suggestion.test.ts` exercises the SECOND caller's real body — no mock on `selectFormatFamily` or `platform-map` in that file, so this is genuine execution, not `AUTHORED-NOT-EXECUTED` | **No** for every existing input (§6.3), at both call sites. |
+
+No other function in §9 gained a caller this session:
+
+- `assembleBrief` — still exactly two production callers (`lib/campaigns/promote.ts:151`,
+  `lib/signals/seed.ts:85`); `lib/signals/seed.test.ts:14` still mocks it (unchanged from §9's existing note).
+- `createCampaign` — three call sites confirmed (`promote.ts:96`, `seed.ts:70`,
+  `campaigns/new/actions.ts:120`), consistent with §9's "existing callers + promoteDraftToCampaign (NEW)".
+- `activateCampaign`, `softDeleteCampaignGuarded`, `approveBriefIfQualified` — one production caller each,
+  unchanged.
+- `upsertDistilledPerformancePattern` — confirmed exactly two production callers
+  (`lib/learning/promote.ts:119`, `lib/learning/summarize.ts:167`), **both mocking it** in their own test
+  files (`lib/learning/promote.test.ts:18`, `lib/learning/summarize.test.ts:25`) — `MEM-PATTERN-BOUNDED` is
+  discharged in **Tier-1 only** (§18.1's correction, re-confirmed here at F1b.11's range head).
