@@ -33,6 +33,15 @@ function stripLineComments(source: string): string {
     .join('\n')
 }
 
+// No .gitattributes in this repo — Windows checkouts (core.autocrlf=true)
+// normalize LF->CRLF on disk while Linux CI checkouts keep LF, so a raw-byte
+// hash of file content is NOT stable across environments. Every hash-pinned
+// scan below reads through this so the pin is a property of the CONTENT,
+// not of which OS checked it out.
+function readNormalized(filePath: string): string {
+  return fs.readFileSync(filePath, 'utf8').replace(/\r\n/g, '\n')
+}
+
 function collectTsFiles(dir: string, excludeDirNames = new Set(['node_modules', '__fixtures__', '.next'])): string[] {
   const out: string[] = []
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -62,17 +71,17 @@ describe('MODE2-RUNNER-UNTOUCHED (ADR 0022 §6.5/§11.3 RUNNER-UNMODIFIED)', () 
   const RUNNER_PATH = path.join(ROOT, 'lib', 'ai', 'runner.ts')
   // Frozen at Session 29 F1b.11 (commit range d3e6c27e..a038678d) — the exact
   // SHA-256 of lib/ai/runner.ts's content, unchanged since before F1b.1.
-  const FROZEN_SHA256 = 'f0a3aed3d67b711d02a1b398e1e682cfb7248650284ada040c8170fe4e1387c7'
+  const FROZEN_SHA256 = 'c4cbff947361f23524231a3fb8794b8e2c12f962fac1811213ba506f668cf955'
 
   it('lib/ai/runner.ts exists and its content hash matches the frozen pin', () => {
     expect(fs.existsSync(RUNNER_PATH)).toBe(true)
-    const content = fs.readFileSync(RUNNER_PATH, 'utf8')
+    const content = readNormalized(RUNNER_PATH)
     const hash = crypto.createHash('sha256').update(content).digest('hex')
     expect(hash).toBe(FROZEN_SHA256)
   })
 
   it('has exactly the pre-existing prompt-kind predicates — no fourth one added alongside them', () => {
-    const content = fs.readFileSync(RUNNER_PATH, 'utf8')
+    const content = readNormalized(RUNNER_PATH)
     // isBrandVoice / isPostGeneration are the two ADR 0022 names by name;
     // isScoringOnly predates this ADR (Session 28, ADR 0021 §4.2) and is not
     // a carousel-work addition — the guarantee is no FOURTH predicate joined
@@ -172,7 +181,7 @@ describe('MODE3-UNTOUCHED (ADR 0022 §11.3/L-12)', () => {
   ]
   // Frozen at Session 29 F1b.11 — combined SHA-256 over every production
   // file's relative path + content, in sorted order, under both roots.
-  const FROZEN_SHA256 = 'eef2e31949e638d93e7ad2d3afbf004324a1e7f158770b62771d46aaf899cc6b'
+  const FROZEN_SHA256 = 'be0913e9f9ee7885b761dbff015e6b6059d41d3b9c3b28e78b36513f712ebea8'
 
   it('every Mode 3 root contributed files to the scan (vacuity guard)', () => {
     for (const root of ROOTS) {
@@ -188,7 +197,7 @@ describe('MODE3-UNTOUCHED (ADR 0022 §11.3/L-12)', () => {
     const hash = crypto.createHash('sha256')
     for (const f of files) {
       hash.update(f + '\n')
-      hash.update(fs.readFileSync(path.join(ROOT, f), 'utf8'))
+      hash.update(readNormalized(path.join(ROOT, f)))
       hash.update('\n')
     }
     expect(hash.digest('hex')).toBe(FROZEN_SHA256)
