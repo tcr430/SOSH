@@ -223,6 +223,24 @@ describe('acceptStudioSuggestion', () => {
     const result = await acceptStudioSuggestion(DRAFT_ID, 'accepted content', 'h1', 'h2')
     expect(result).toEqual({ outcome: 'accepted', content: 'accepted content' })
   })
+
+  // ADR 0022 §5.1, §5.4 (Session 29-D, D2/NIT-7) — acceptedContent is the
+  // ONLY write path into studio_drafts.accepted_revision, which flows
+  // unmodified into post_ai_originals.rendered_content on promote. This
+  // must not be the one write path with a weaker bound than posts.content's
+  // established max(5000) contract.
+  it('rejects acceptedContent over 5000 characters before any DB call', async () => {
+    const result = await acceptStudioSuggestion(DRAFT_ID, 'x'.repeat(5001), 'h1', 'h2')
+    expect(result).toEqual({ outcome: 'error', error: 'invalid_input' })
+    expect(acceptSuggestion).not.toHaveBeenCalled()
+  })
+
+  it('accepts acceptedContent at exactly 5000 characters', async () => {
+    const atBound = 'x'.repeat(5000)
+    vi.mocked(acceptSuggestion).mockResolvedValue({ outcome: 'accepted', draft: { ...draftRow, content: atBound } } as never)
+    const result = await acceptStudioSuggestion(DRAFT_ID, atBound, 'h1', 'h2')
+    expect(result).toEqual({ outcome: 'accepted', content: atBound })
+  })
 })
 
 // ADR 0022 §2 (Session 29, F1b.4) — PROMOTE-ACTION-VALIDATED's Zod-contract

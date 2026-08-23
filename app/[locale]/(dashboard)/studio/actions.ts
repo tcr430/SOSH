@@ -230,9 +230,21 @@ export type AcceptStudioSuggestionState =
   | { outcome: 'stale' }
   | { outcome: 'error'; error: StudioActionErrorCode }
 
+// ADR 0022 §5.1, §5.4 (Session 29-D, D2/NIT-7) — acceptedContent is written
+// verbatim to BOTH studio_drafts.content and studio_drafts.accepted_revision
+// (lib/db/studio-drafts.ts's acceptSuggestion, the ONLY write site for
+// accepted_revision), which promote.ts:141-142 later copies unmodified into
+// post_ai_originals.rendered_content and payload.content. Mirrors the
+// existing max(5000) contract for posts.content (calendar/actions.ts:48,
+// posts/actions.ts:179, and promote.ts's own PROMOTE_CONTENT_MAX_CHARS
+// guard on draft.content) so this is not the one write path with a weaker
+// bound. No DB CHECK added: posts.content itself has none either — the
+// app-layer Zod bound at this sole write site is the established pattern
+// for this class of field, and a CHECK would duplicate it for no added
+// safety (accepted_revision has no other producer to defend against).
 const acceptSchema = z.object({
   draftId: z.string().uuid(),
-  acceptedContent: z.string().min(1),
+  acceptedContent: z.string().min(1).max(5000),
   expectedContentHash: z.string().min(1),
   expectedSuggestionsHash: z.string().min(1),
 })
