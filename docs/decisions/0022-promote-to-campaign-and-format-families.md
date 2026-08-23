@@ -835,7 +835,7 @@ authoritative result.
 | `PROMOTE-CLAIM-RECLAIMABLE` | 1 → `db-tests.yml` | A stale claim stops being reclaimable, or a fresh one becomes reclaimable. |
 | `PROMOTE-RLS-ISOLATED` | 1 → `db-tests.yml` | Tenant A can read/update tenant B's promote columns, or an UPDATE policy loses its `WITH CHECK`. |
 | `PROMOTE-CASCADE-COMPLETE` | 1 → `db-tests.yml` | Erasure leaves a promote-related row behind `businesses` cascade or `purge_business`. |
-| `PROMOTE-SOFTDELETE-CLEARED` | 1 → `db-tests.yml` | A soft-deleted campaign leaves a dangling `promoted_campaign_id`. |
+| `PROMOTE-SOFTDELETE-CLEARED` | 1 → `db-tests.yml` | A soft-deleted campaign leaves a dangling `promoted_campaign_id`. **Added Session 29-D, D3 (MAJOR-3):** this Tier-1 case proves `clearPromotedCampaignReferenceOnDrafts` itself, called directly — it does NOT redden if `campaigns/actions.ts:101`'s call site is deleted. That gap is closed by three new Tier-2 cases in `campaigns/actions.test.ts` mirroring the `clearCampaignReferenceOnCards` trio: called with the deleted campaign's id (this one reddens on the call-site deletion), a throw from it does not fail the delete, and it is not called when the delete guard fails (the latter two assert a different guarantee and remain true whether or not the call site exists — they do not redden on this mutation, and are not claimed to). |
 | `PROMOTE-BRIEF-END-TO-END` | 1 → `db-tests.yml` | `assembleBrief` stops being driven through promote against real Postgres (the second caller, §9). |
 | `LEARN-GENERATION-KIND-WIDENED` | 1 → `db-tests.yml` | The CHECK stops accepting `'studio_promoted'`, or starts accepting an arbitrary value. |
 | `MEM-PATTERN-BOUNDED` | 1 → `db-tests.yml` | The `pattern` CHECK stops rejecting an over-length write. |
