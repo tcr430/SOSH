@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import * as Sentry from '@sentry/nextjs'
+import { ZodError } from 'zod'
 import { differenceInDays, parseISO } from 'date-fns'
 import { runPrompt } from '@/lib/ai/runner'
 import { buildCustomerContext } from '@/lib/ai/context'
@@ -7,6 +8,7 @@ import { learningSummarizerPrompt } from '@/lib/ai/prompts/learning-summarizer'
 import { getLastSuccessfulCallAt, countRecentCalls } from '@/lib/db/ai-usage'
 import { countProcessedSignalsSince, listRecentHumanEditExcerpts } from '@/lib/db/post-edit-signals'
 import { listDistilledPatternsForSummary, upsertDistilledPerformancePattern } from '@/lib/db/memory-performance'
+import { getErrorMessage } from '@/lib/db/utils'
 import { computeConfidence } from '@/lib/learning/promote'
 import {
   LEARNING_SUMMARIZER_PROMPT_ID,
@@ -32,7 +34,22 @@ export interface SummarizeResult {
   // >200-char statement (the Zod .max at learning-summarizer.ts:16 rejects
   // at parse, long before this batch's own upsert could ever reach the
   // 500-char CHECK) — this is a correctness-of-the-guard fix, not a bug fix.
+  //
+  // Session 29-D, D2 (NIT-4) — narrowed to ONLY a genuine over-the-bound
+  // rejection: the promoter-level ZodError (MEM-PATTERN-PROMOTER-BOUNDED)
+  // or the DB CHECK's own constraint name
+  // (performance_memory_pattern_length_check) in the error message. §5.3's
+  // semantics reserve "rejected" for "over the bound" — a transient
+  // DB/network failure on the same upsert call is a DIFFERENT thing and is
+  // now counted separately, in statementsErrored below, never folded in
+  // here.
   readonly statementsRejected: number
+  // Session 29-D, D2 (NIT-4) — any upsertDistilledPerformancePattern
+  // failure that is NOT a bound rejection (a transient DB or network
+  // error). Still reported to Sentry either way; this counter exists so an
+  // operator reading statementsRejected can trust it means "over the
+  // bound", not "something went wrong".
+  readonly statementsErrored: number
 }
 
 export interface SummarizeGateInput {
@@ -122,7 +139,7 @@ export async function summarizeBusinessLearning(
     LEARNING_SUMMARIZER_PROMPT_ID,
   )
   if (monthlyCalls >= LEARNING_SUMMARY_MAX_MONTHLY_CALLS_PER_BUSINESS) {
-    return { skipped: 'monthly_ceiling', statementsWritten: 0, statementsRejected: 0 }
+    return { skipped: 'monthly_ceiling', statementsWritten: 0, statementsRejected: 0, statementsErrored: 0 }
   }
 
   const lastSummaryAt = await getLastSuccessfulCallAt(client, businessId, LEARNING_SUMMARIZER_PROMPT_ID)
@@ -130,7 +147,7 @@ export async function summarizeBusinessLearning(
   const daysSinceLastSummary = lastSummaryAt === null ? null : differenceInDays(new Date(), parseISO(lastSummaryAt))
 
   if (!shouldSummarize({ newSignalCount, daysSinceLastSummary })) {
-    return { skipped: 'gates_not_met', statementsWritten: 0, statementsRejected: 0 }
+    return { skipped: 'gates_not_met', statementsWritten: 0, statementsRejected: 0, statementsErrored: 0 }
   }
 
   const [tierZeroRows, editExcerpts, context] = await Promise.all([
@@ -156,6 +173,7 @@ export async function summarizeBusinessLearning(
 
   let statementsWritten = 0
   let statementsRejected = 0
+  let statementsErrored = 0
   for (const statement of output.statements) {
     // ADR 0022 §5.3 (Session 29, F1b.10) — per-statement try/catch: a
     // rejection on ANY ONE statement must not throw the remaining
@@ -195,12 +213,23 @@ export async function summarizeBusinessLearning(
       })
       statementsWritten++
     } catch (err) {
-      statementsRejected++
+      const isBoundRejection =
+        err instanceof ZodError || /performance_memory_pattern_length_check/.test(getErrorMessage(err))
+      if (isBoundRejection) {
+        statementsRejected++
+      } else {
+        statementsErrored++
+      }
       Sentry.captureException(err, {
-        tags: { business_id: businessId, phase: 'learning-summarize-statement', dimension: statement.dimension },
+        tags: {
+          business_id: businessId,
+          phase: 'learning-summarize-statement',
+          dimension: statement.dimension,
+          outcome: isBoundRejection ? 'rejected' : 'errored',
+        },
       })
     }
   }
 
-  return { skipped: null, statementsWritten, statementsRejected }
+  return { skipped: null, statementsWritten, statementsRejected, statementsErrored }
 }

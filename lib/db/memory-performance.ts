@@ -1,8 +1,20 @@
+import { z } from 'zod'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { PerformanceMemoryRow, PerformanceMemoryInsert } from './types'
 import { getErrorMessage } from './utils'
 import { MEMORY_CANDIDATE_LIMIT } from './memory-constants'
 import { neutralizeWithSentinels } from '@/lib/ai/wrap-evidence'
+
+// ADR 0018 Amd A.2 / ADR 0022 §5.2, §11.2 MEM-PATTERN-PROMOTER-BOUNDED
+// (Session 29-D, MAJOR-2) — a Zod bound at THIS promoter boundary, IN FRONT
+// of the RPC's own performance_memory_pattern_length_check CHECK. Two
+// different guarantees at two boundaries, not redundancy (§5.2): this one
+// is app-layer input hygiene (a synchronous, typed rejection before a round
+// trip to Postgres); the CHECK is the durable-storage invariant that holds
+// regardless of which caller writes here. Mirrors the CHECK's value (500)
+// deliberately — see 20260822093000_learning_generation_kind_and_pattern_
+// bound.sql's "KEEP 500" comment; do not let the two drift apart.
+const PATTERN_PROMOTER_BOUND_SCHEMA = z.string().max(500)
 
 // ADR 0016 §5.1 (Q4) — candidate query only. No scoring, no capping; that is
 // lib/memory/performance.ts's job (B2), which also prefers this table's
@@ -112,10 +124,11 @@ export async function upsertDistilledPerformancePattern(
   client: SupabaseClient,
   insert: PerformanceMemoryInsert,
 ): Promise<PerformanceMemoryRow> {
+  const pattern = PATTERN_PROMOTER_BOUND_SCHEMA.parse(neutralizeWithSentinels(insert.pattern))
   const { data, error } = await client.rpc('upsert_distilled_performance_pattern', {
     p_business_id: insert.business_id,
     p_dimension: insert.dimension,
-    p_pattern: neutralizeWithSentinels(insert.pattern),
+    p_pattern: pattern,
     p_pattern_key: insert.pattern_key,
     p_platform: insert.platform,
     p_scope: insert.scope,
