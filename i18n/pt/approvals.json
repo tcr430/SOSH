@@ -21,6 +21,9 @@
     "skipLabel": "Por que está ignorando esta publicação?",
     "skipPlaceholder": "Motivo para ignorar",
     "error": "Algo correu mal. Tente novamente.",
+    "scheduleExpired": "A hora agendada desta publicação já passou. Escolha uma nova hora para a aprovar.",
+    "scheduleExpiredLabel": "Nova hora agendada",
+    "confirmNewTime": "Aprovar com nova hora",
     "announceApproved": "Publicação aprovada.",
     "announceSkipped": "Publicação ignorada.",
     "scriptBrief": {

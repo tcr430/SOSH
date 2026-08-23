@@ -317,6 +317,24 @@ export async function updatePost(
   return row as PostRow
 }
 
+// ADR 0022 §2.5, §5.4-equivalent A-3 second half (Session 29-D, MAJOR-4) —
+// approve REFUSES a scheduled_at that has already passed, rather than
+// silently publishing on the next worker tick. A-3 ruled the user picks
+// scheduled_at at promote time AND approve must re-touch it: a promoted
+// post's chosen date narrows claim_posts_for_publishing's window, it does
+// not close it, because nothing else requires that date to still be in the
+// future by the time the post is approved.
+export type ApprovePostResult =
+  | { outcome: 'approved'; post: PostRow }
+  // Not found, wrong business, soft-deleted, or status was not 'draft'.
+  | { outcome: 'not_eligible' }
+  // Status WAS 'draft', but the effective scheduled_at (the existing value
+  // when newScheduledAt is omitted, or newScheduledAt itself when supplied)
+  // is not in the future. The named loser (silently bumping to now + some
+  // lead) is declined — this refuses instead, so the caller can re-prompt
+  // for a time the user actually chose.
+  | { outcome: 'schedule_expired' }
+
 export async function approvePost(
   client: SupabaseClient,
   id: string,
@@ -325,18 +343,68 @@ export async function approvePost(
   // defense-in-depth, not the sole guard — so it stays optional to avoid
   // touching call sites that rely on RLS alone (e.g. campaigns/[id]/posts).
   businessId?: string,
-): Promise<PostRow> {
+  // When provided, the status flip and the schedule re-touch are written
+  // ATOMICALLY in the same conditional UPDATE (CLAUDE.md's atomic-transition
+  // rule) — never a separate reschedule call, which would reopen the same
+  // race the conditional UPDATE exists to close. Validated against "now"
+  // BEFORE the query is built: this is a synchronous comparison against
+  // caller-supplied input, not a read of DB state, so it adds no
+  // read-then-update race of its own.
+  newScheduledAt?: string,
+): Promise<ApprovePostResult> {
+  const nowIso = toUtcIso(new Date())
+
+  // database-reviewer (Session 29-D, MAJOR-4 review) — this MUST be a
+  // numeric instant comparison, not a string one. z.string().datetime()'s
+  // default precision permits any number of fractional digits (including
+  // none), while nowIso always renders exactly 3 (toISOString()'s fixed
+  // shape). '2026-...:00Z' <= '2026-...:00.500Z' is FALSE under ASCII
+  // comparison ('Z' > '.') even though the left side is the earlier
+  // instant — a same-second, differently-precision pair would silently
+  // bypass this guard, and with no DB-level backstop on this branch (the
+  // .gt guard below is skipped whenever newScheduledAt is supplied), that
+  // bypass would write the exact past-schedule-approved state MAJOR-4
+  // exists to prevent.
+  if (newScheduledAt !== undefined && new Date(newScheduledAt).getTime() <= Date.now()) {
+    return { outcome: 'schedule_expired' }
+  }
+
+  const updatePayload: PostUpdate =
+    newScheduledAt !== undefined ? { status: 'approved', scheduled_at: newScheduledAt } : { status: 'approved' }
+
   let query = client
     .from('posts')
-    .update({ status: 'approved' })
+    .update(updatePayload)
     .eq('id', id)
     .eq('status', 'draft')
     .is('deleted_at', null)
   if (businessId !== undefined) query = query.eq('business_id', businessId)
-  const { data: row, error } = await query.select().single()
+  // The ATOMIC guard (MAJOR-4): when the caller has not supplied a
+  // replacement time, the existing scheduled_at must itself still be in the
+  // future for this UPDATE to match any row — the single conditional UPDATE
+  // that both flips status AND enforces the schedule invariant in one trip.
+  if (newScheduledAt === undefined) query = query.gt('scheduled_at', nowIso)
+
+  const { data: row, error } = await query.select().maybeSingle()
   if (error) throw new Error(getErrorMessage(error))
-  if (!row) throw new Error(`Post ${id} not found or not in 'draft' status`)
-  return row as PostRow
+  if (row) return { outcome: 'approved', post: row as PostRow }
+
+  // No row matched. This SELECT is diagnostic only — it informs which typed
+  // outcome to return, never a subsequent write — so it carries none of the
+  // read-then-update race the atomic UPDATE above exists to avoid. It
+  // mirrors the SAME predicates as the UPDATE above (including businessId,
+  // per database-reviewer's Session 29-D review) so a business_id mismatch
+  // is never misclassified as schedule_expired just because the row
+  // happens to still be in 'draft' status for some other tenant's view.
+  if (newScheduledAt === undefined) {
+    let diagQuery = client.from('posts').select('status, scheduled_at').eq('id', id).is('deleted_at', null)
+    if (businessId !== undefined) diagQuery = diagQuery.eq('business_id', businessId)
+    const diag = await diagQuery.maybeSingle()
+    if (diag.data && (diag.data as { status: string }).status === 'draft') {
+      return { outcome: 'schedule_expired' }
+    }
+  }
+  return { outcome: 'not_eligible' }
 }
 
 export async function schedulePost(

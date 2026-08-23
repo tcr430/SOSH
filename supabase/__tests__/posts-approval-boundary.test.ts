@@ -5,7 +5,7 @@ import { createClient } from '@supabase/supabase-js'
 // of the query proves only that Postgres honours a predicate — it stays green
 // if someone deletes a filter from bulkApproveDraftPosts itself, which is the
 // mutation this suite exists to catch.
-import { bulkApproveDraftPosts } from '@/lib/db/posts'
+import { bulkApproveDraftPosts, approvePost } from '@/lib/db/posts'
 
 const PASSWORD = 'TestPass123!'
 
@@ -501,5 +501,74 @@ describe('posts approval boundary — DB-enforced (ADR 0013 §5)', () => {
       }
       await admin.from('posts').delete().in('id', [inScopeId, alreadyApprovedId, softDeletedId])
     }
+  })
+
+  // ADR 0022 §2.5 (Session 29-D, MAJOR-4) — PROMOTE-SCHEDULE-RETOUCHED.
+  // approvePost() re-touches scheduled_at at the real DB boundary: a post
+  // whose chosen time has already passed by approval time must be refused,
+  // not silently published on the next claim_posts_for_publishing tick.
+  describe('PROMOTE-SCHEDULE-RETOUCHED (MAJOR-4)', () => {
+    async function createPostAt(scheduledAt: string) {
+      const { data, error } = await admin
+        .from('posts')
+        .insert({
+          campaign_id: campaignId,
+          business_id: businessId,
+          platform: 'linkedin',
+          content: 'Schedule re-touch boundary test post',
+          scheduled_at: scheduledAt,
+          status: 'draft',
+        })
+        .select('id')
+        .single()
+      if (error) throw error
+      return data.id as string
+    }
+
+    // claim_posts_for_publishing has no business_id scope (it is the global
+    // worker query) — timestamps are kept tight, relative offsets from the
+    // real test-run clock rather than a hardcoded far-future date, so a
+    // p_now used here sweeps as little of a shared test DB as possible.
+    it('a draft whose scheduled_at has already passed is refused by approvePost, stays draft, and is NOT claimable', async () => {
+      const pastId = await createPostAt(new Date(Date.now() - 60_000).toISOString())
+
+      const result = await approvePost(admin, pastId, businessId)
+      expect(result).toEqual({ outcome: 'schedule_expired' })
+
+      const { data: check } = await admin.from('posts').select('status').eq('id', pastId).single()
+      expect(check.status).toBe('draft')
+
+      const { data: claimed, error: claimErr } = await admin.rpc('claim_posts_for_publishing', {
+        p_now: new Date().toISOString(),
+        p_limit: 50,
+      })
+      if (claimErr) throw claimErr
+      expect((claimed ?? []).some((row: { id: string }) => row.id === pastId)).toBe(false)
+
+      await admin.from('posts').delete().eq('id', pastId)
+    })
+
+    it('a draft whose scheduled_at is in the future is approved normally, and IS claimable once that time arrives', async () => {
+      const futureId = await createPostAt(new Date(Date.now() + 60_000).toISOString())
+
+      const result = await approvePost(admin, futureId, businessId)
+      expect(result.outcome).toBe('approved')
+
+      const { data: check } = await admin.from('posts').select('status').eq('id', futureId).single()
+      expect(check.status).toBe('approved')
+
+      // "When it arrives" — simulate the worker tick firing after the chosen time.
+      const { data: claimed, error: claimErr } = await admin.rpc('claim_posts_for_publishing', {
+        p_now: new Date(Date.now() + 120_000).toISOString(),
+        p_limit: 50,
+      })
+      if (claimErr) throw claimErr
+      expect((claimed ?? []).some((row: { id: string }) => row.id === futureId)).toBe(true)
+
+      const { data: afterClaim } = await admin.from('posts').select('status').eq('id', futureId).single()
+      expect(afterClaim.status).toBe('scheduled')
+
+      await admin.from('posts').delete().eq('id', futureId)
+    })
   })
 })

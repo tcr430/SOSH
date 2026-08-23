@@ -99,13 +99,22 @@ export function ApprovalsInbox({
     setItems(prev => prev.filter(p => p.id !== postId))
   }
 
-  function handleApprove(postId: string) {
+  // ADR 0022 §2.5 (Session 29-D, MAJOR-4) — approve refuses a scheduled_at
+  // already in the past. rescheduleFor tracks which row, if any, is showing
+  // the inline re-pick input; approving again with newScheduledAt writes the
+  // status flip and the schedule re-touch atomically (lib/db/posts.ts).
+  const [rescheduleFor, setRescheduleFor] = useState<string | null>(null)
+
+  function handleApprove(postId: string, newScheduledAt?: string) {
     setErrorKey(null)
     startTransition(async () => {
-      const result = await approvePostAction(postId)
+      const result = await approvePostAction(postId, newScheduledAt)
       if (result.success) {
         removeFromList(postId)
         setStatusMessage(t('row.announceApproved'))
+        setRescheduleFor(null)
+      } else if (result.error === 'schedule_expired') {
+        setRescheduleFor(postId)
       } else {
         setErrorKey(postId)
       }
@@ -291,8 +300,11 @@ export function ApprovalsInbox({
                   locale={locale}
                   isPending={isPending}
                   hasError={errorKey === post.id}
+                  showReschedule={rescheduleFor === post.id}
                   original={originalsByPostId[post.id]}
                   onApprove={() => handleApprove(post.id)}
+                  onApproveWithNewTime={newScheduledAt => handleApprove(post.id, newScheduledAt)}
+                  onCancelReschedule={() => setRescheduleFor(null)}
                   onSkip={note => handleSkip(post.id, note)}
                 />
               ))}
@@ -309,21 +321,36 @@ function DraftRow({
   locale,
   isPending,
   hasError,
+  showReschedule,
   original,
   onApprove,
+  onApproveWithNewTime,
+  onCancelReschedule,
   onSkip,
 }: {
   post: CalendarPostRow
   locale: string
   isPending: boolean
   hasError: boolean
+  showReschedule: boolean
   original: PostAiOriginalRow | undefined
   onApprove: () => void
+  onApproveWithNewTime: (newScheduledAt: string) => void
+  onCancelReschedule: () => void
   onSkip: (note: string) => void
 }) {
   const t = useTranslations('approvals')
   const [isSkipOpen, setIsSkipOpen] = useState(false)
   const [note, setNote] = useState('')
+  // ADR 0022 §2.5 (Session 29-D, MAJOR-4) — a <input type="datetime-local">
+  // is interpreted in the VIEWER's browser timezone, not the business
+  // timezone the rest of scheduling uses (calendar/actions.ts's
+  // fromZonedTime pattern). Scoped decision for this correction pass: the
+  // approver is re-picking a time they intend to see published "now-ish",
+  // so browser-local is an acceptable, much smaller surface than plumbing
+  // business timezone into this component — recorded here rather than
+  // silently assumed.
+  const [newTime, setNewTime] = useState('')
 
   return (
     <li className="rounded-lg border border-border bg-card p-4">
@@ -341,7 +368,7 @@ function DraftRow({
           <AiOutputPreview original={original} />
         </div>
 
-        {!isSkipOpen && (
+        {!isSkipOpen && !showReschedule && (
           <div className="flex shrink-0 items-center gap-2">
             <Button
               size="sm"
@@ -374,6 +401,48 @@ function DraftRow({
         <p role="alert" className="mt-2 text-xs text-destructive">
           {t('row.error')}
         </p>
+      )}
+
+      {showReschedule && (
+        <div className="mt-3 flex flex-col gap-2 rounded-md border border-border bg-muted/30 p-3">
+          <p role="alert" className="text-xs text-destructive">
+            {t('row.scheduleExpired')}
+          </p>
+          <label
+            className="text-xs font-medium text-muted-foreground"
+            htmlFor={`reschedule-${post.id}`}
+          >
+            {t('row.scheduleExpiredLabel')}
+          </label>
+          <input
+            id={`reschedule-${post.id}`}
+            type="datetime-local"
+            value={newTime}
+            onChange={e => setNewTime(e.target.value)}
+            autoFocus
+            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/50"
+          />
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              disabled={!newTime || isPending}
+              onClick={() => onApproveWithNewTime(new Date(newTime).toISOString())}
+              className="bg-emerald-700 hover:bg-emerald-600 text-white"
+            >
+              {t('row.confirmNewTime')}
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                onCancelReschedule()
+                setNewTime('')
+              }}
+            >
+              {t('row.cancel')}
+            </Button>
+          </div>
+        </div>
       )}
 
       {isSkipOpen && (

@@ -452,6 +452,7 @@ The Builder designs; this ADR fixes the contract it is held to. **No `.tsx` appe
 | `PROMOTE-BRIEF-END-TO-END` | **`assembleBrief` driven end to end through promote against real Postgres** — ADR 0021 A-2's binding condition applied to the second caller (§9). |
 | `LEARN-GENERATION-KIND-WIDENED` | The CHECK accepts `'studio_promoted'` and still rejects a bogus value. |
 | `MEM-PATTERN-BOUNDED` | The `pattern` CHECK rejects an over-length write. |
+| `PROMOTE-SCHEDULE-RETOUCHED` | **Added Session 29-D, D4 (MAJOR-4).** A draft whose `scheduled_at` has already passed by approval time is refused by `approvePost` (typed `schedule_expired`), stays `draft`, and is proved NOT claimable by `claim_posts_for_publishing` on the next tick; the positive case — a future-scheduled draft approved normally — IS claimable once that time arrives. Must redden if `approvePost`'s atomic `scheduled_at > now` guard is removed (verified: temporarily disabling it let the negative case's post reach `approved` with a past `scheduled_at`). |
 
 ### 11.2 Tier 2 — app layer, executed by `app-tests.yml`
 
@@ -847,6 +848,7 @@ authoritative result.
 | `PROMOTE-CASCADE-COMPLETE` | 1 → `db-tests.yml` | Erasure leaves a promote-related row behind `businesses` cascade or `purge_business`. |
 | `PROMOTE-SOFTDELETE-CLEARED` | 1 → `db-tests.yml` | A soft-deleted campaign leaves a dangling `promoted_campaign_id`. **Added Session 29-D, D3 (MAJOR-3):** this Tier-1 case proves `clearPromotedCampaignReferenceOnDrafts` itself, called directly — it does NOT redden if `campaigns/actions.ts:101`'s call site is deleted. That gap is closed by three new Tier-2 cases in `campaigns/actions.test.ts` mirroring the `clearCampaignReferenceOnCards` trio: called with the deleted campaign's id (this one reddens on the call-site deletion), a throw from it does not fail the delete, and it is not called when the delete guard fails (the latter two assert a different guarantee and remain true whether or not the call site exists — they do not redden on this mutation, and are not claimed to). |
 | `PROMOTE-BRIEF-END-TO-END` | 1 → `db-tests.yml` | `assembleBrief` stops being driven through promote against real Postgres (the second caller, §9). |
+| `PROMOTE-SCHEDULE-RETOUCHED` | 1 → `db-tests.yml` | **Added Session 29-D, D4 (MAJOR-4).** `approvePost`'s `scheduled_at > now` atomic guard is removed or the `newScheduledAt` instant-comparison pre-check regresses to a string comparison — a draft with an already-passed `scheduled_at` reaches `approved` and becomes claimable by `claim_posts_for_publishing`. |
 | `LEARN-GENERATION-KIND-WIDENED` | 1 → `db-tests.yml` | The CHECK stops accepting `'studio_promoted'`, or starts accepting an arbitrary value. |
 | `MEM-PATTERN-BOUNDED` | 1 → `db-tests.yml` | The `pattern` CHECK stops rejecting an over-length write. |
 | `CAROUSEL-SCHEMA-STRUCTURAL` | 2 → `app-tests.yml` | An out-of-bounds slide count or an unknown slide role parses instead of failing `safeParse`. |

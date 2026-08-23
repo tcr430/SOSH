@@ -21,6 +21,9 @@
     "skipLabel": "¿Por qué omites esta publicación?",
     "skipPlaceholder": "Motivo para omitir",
     "error": "Algo salió mal. Inténtalo de nuevo.",
+    "scheduleExpired": "La hora programada de esta publicación ya pasó. Elige una nueva hora para aprobarla.",
+    "scheduleExpiredLabel": "Nueva hora programada",
+    "confirmNewTime": "Aprobar con nueva hora",
     "announceApproved": "Publicación aprobada.",
     "announceSkipped": "Publicación omitida.",
     "scriptBrief": {

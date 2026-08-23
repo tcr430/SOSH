@@ -95,7 +95,11 @@ export function PostCard({ post, onOptimisticUpdate }: PostCardProps) {
       const result = await approvePostAction(post.id)
       if (!result.success) {
         onOptimisticUpdate(post.id, { status: prev })
-        setCardError(t('regenerate.error.generic'))
+        // ADR 0022 §2.5 (Session 29-D, MAJOR-4) — a typed message, not the
+        // generic fallback: this surface has no inline re-pick input (that
+        // full treatment lives in ApprovalsInbox.tsx), so the message
+        // directs the user to this page's existing reschedule control.
+        setCardError(result.error === 'schedule_expired' ? t('regenerate.error.scheduleExpired') : t('regenerate.error.generic'))
       }
     })
   }

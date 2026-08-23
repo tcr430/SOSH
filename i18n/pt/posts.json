@@ -90,6 +90,7 @@
       "invalid_response": "A IA devolveu uma resposta inesperada. Tenta novamente.",
       "timeout": "A IA demorou demasiado. Tenta novamente.",
       "not_eligible": "Esta publicação não pode ser regenerada no seu estado atual.",
+      "scheduleExpired": "A hora agendada desta publicação já passou. Reagende-a para uma hora futura e aprove novamente.",
       "generic": "Algo correu mal. Por favor, tenta novamente."
     }
   }

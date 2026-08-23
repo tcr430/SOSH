@@ -21,6 +21,9 @@
     "skipLabel": "Why are you skipping this post?",
     "skipPlaceholder": "Reason for skipping",
     "error": "Something went wrong. Please try again.",
+    "scheduleExpired": "This post's scheduled time has already passed. Pick a new time to approve it.",
+    "scheduleExpiredLabel": "New scheduled time",
+    "confirmNewTime": "Approve with new time",
     "announceApproved": "Post approved.",
     "announceSkipped": "Post skipped.",
     "scriptBrief": {
