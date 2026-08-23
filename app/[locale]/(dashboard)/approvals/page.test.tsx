@@ -14,12 +14,16 @@ vi.mock('@/lib/db/campaigns', () => ({ listCampaigns: vi.fn().mockResolvedValue(
 vi.mock('@/lib/db/posts', () => ({
   listPendingDraftPosts: vi.fn().mockResolvedValue({ rows: [], total: 0 }),
 }))
+vi.mock('@/lib/db/post-ai-originals', () => ({
+  listLatestPostAiOriginalsByPostIds: vi.fn().mockResolvedValue(new Map()),
+}))
 vi.mock('./ApprovalsInbox', () => ({ ApprovalsInbox: vi.fn(() => null) }))
 
 import * as serverModule from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
 import { getMemberForUser } from '@/lib/db/business-members'
 import { listPendingDraftPosts } from '@/lib/db/posts'
+import { listLatestPostAiOriginalsByPostIds } from '@/lib/db/post-ai-originals'
 import { ApprovalsInbox } from './ApprovalsInbox'
 import ApprovalsPage from './page'
 
@@ -208,5 +212,34 @@ describe('ApprovalsPage — ROLE-APPROVALS-GATED (ADR 0014 §9.1)', () => {
     const outer = result as unknown as { props: { children: ReactElementLike[] } }
     const inboxElement = outer.props.children.find(child => child.type === ApprovalsInbox)
     expect(inboxElement?.props.totalPendingCount).toBe(12)
+  })
+
+  // ─── F1b.9: post_ai_originals wiring (ADR 0022 §10) ───────────────────────
+
+  it('fetches the latest post_ai_originals snapshot for exactly the rendered post ids', async () => {
+    mockClient(OWNER_ID)
+    vi.mocked(getBusinessForUser).mockResolvedValue(BUSINESS as never)
+    vi.mocked(listPendingDraftPosts).mockResolvedValue({
+      rows: [{ id: 'post-1' }, { id: 'post-2' }] as never,
+      total: 2,
+    })
+
+    await ApprovalsPage({ params: Promise.resolve({ locale: 'en' }), searchParams: NO_SEARCH_PARAMS })
+
+    expect(listLatestPostAiOriginalsByPostIds).toHaveBeenCalledWith(expect.anything(), ['post-1', 'post-2'])
+  })
+
+  it('threads originalsByPostId (as a plain object, not a Map) to ApprovalsInbox', async () => {
+    mockClient(OWNER_ID)
+    vi.mocked(getBusinessForUser).mockResolvedValue(BUSINESS as never)
+    const originalRow = { id: 'origin-1', post_id: 'post-1', payload: { format: 'single', body: 'x', imageBrief: null } }
+    vi.mocked(listLatestPostAiOriginalsByPostIds).mockResolvedValue(new Map([['post-1', originalRow as never]]))
+
+    const result = await ApprovalsPage({ params: Promise.resolve({ locale: 'en' }), searchParams: NO_SEARCH_PARAMS })
+
+    type ReactElementLike = { type: unknown; props: { originalsByPostId?: Record<string, unknown> } }
+    const outer = result as unknown as { props: { children: ReactElementLike[] } }
+    const inboxElement = outer.props.children.find(child => child.type === ApprovalsInbox)
+    expect(inboxElement?.props.originalsByPostId).toEqual({ 'post-1': originalRow })
   })
 })

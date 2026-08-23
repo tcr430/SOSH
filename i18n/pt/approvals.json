@@ -26,6 +26,18 @@
     "scriptBrief": {
       "heading": "Recomendação de guião",
       "neverPublishedNote": "Uma sugestão para um tratamento em vídeo curto desta publicação — nunca publicado."
+    },
+    "imageBrief": {
+      "heading": "Recomendação de imagem",
+      "neverPublishedNote": "Uma sugestão para uma imagem de acompanhamento — nunca publicada."
+    },
+    "carousel": {
+      "heading": "Pré-visualização do carrossel",
+      "slideRole": {
+        "cover": "Capa",
+        "body": "Corpo",
+        "cta": "Chamada para ação"
+      }
     }
   },
   "empty": {

@@ -46,13 +46,18 @@ const ROOT = process.cwd()
 const LIB_DIR = path.join(ROOT, 'lib')
 const APP_DIR = path.join(ROOT, 'app')
 
-// The generation-output module (defines the field) and the single mapper
-// that consumes generation output (synthesizes a SinglePostOutput from
+// The generation-output module (defines the field), the single mapper that
+// consumes generation output (synthesizes a SinglePostOutput from
 // regeneration output, and so legitimately writes `scriptBrief: null`) —
-// §7.2's exact two named locations.
+// §7.2's original two named locations — plus the Session 29 F1b.9 addition:
+// the approvals-surface preview component that renders scriptBrief per §7.3
+// ("renders wherever posts are reviewed... the same treatment imageBrief
+// receives"). Three legitimate producers/consumers, not a re-scoping of the
+// guarantee — the scan's whole point (nowhere ELSE) is unchanged.
 const ALLOWED_FILES = new Set([
   path.join(ROOT, 'lib', 'ai', 'prompts', 'formats', 'schemas.ts'),
   path.join(ROOT, 'app', '[locale]', '(dashboard)', 'campaigns', '[id]', 'posts', 'actions.ts'),
+  path.join(ROOT, 'app', '[locale]', '(dashboard)', 'approvals', 'AiOutputPreview.tsx'),
 ])
 
 describe('SCRIPT-NEVER-PUBLISHED (ADR 0022 §7.2)', () => {

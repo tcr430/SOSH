@@ -65,6 +65,35 @@ export async function getPostAiOriginalById(
   return (data as PostAiOriginalRow | null) ?? null
 }
 
+// ADR 0022 §10 (Session 29, F1b.9) — the Approvals surface's bulk read: one
+// query for every rendered post's latest snapshot instead of N getLatestRevision
+// round-trips. Bounded by postIds.length (CLAUDE.md's list-query rule — never
+// unbounded), with an explicit ORDER BY (post_id, then revision desc) so the
+// FIRST row seen per post_id is deterministically its latest revision — no
+// separate per-post MAX() query needed. Tenancy note mirrors getLatestRevision
+// (:20-29): enforced by the CALLER'S CLIENT (the approvals page's RLS-scoped
+// client), not by this function.
+export async function listLatestPostAiOriginalsByPostIds(
+  client: SupabaseClient,
+  postIds: string[],
+): Promise<Map<string, PostAiOriginalRow>> {
+  if (postIds.length === 0) return new Map()
+  const { data, error } = await client
+    .from('post_ai_originals')
+    .select('*')
+    .in('post_id', postIds)
+    .order('post_id', { ascending: true })
+    .order('revision', { ascending: false })
+    .limit(postIds.length * 20)
+  if (error) throw new Error(getErrorMessage(error))
+
+  const result = new Map<string, PostAiOriginalRow>()
+  for (const row of (data ?? []) as PostAiOriginalRow[]) {
+    if (!result.has(row.post_id)) result.set(row.post_id, row)
+  }
+  return result
+}
+
 function isPostgresError(e: unknown): e is { code: string; message: string } {
   return (
     typeof e === 'object' &&

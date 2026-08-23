@@ -26,6 +26,18 @@
     "scriptBrief": {
       "heading": "Script recommendation",
       "neverPublishedNote": "A suggestion for a short-form video treatment of this post — never published."
+    },
+    "imageBrief": {
+      "heading": "Image recommendation",
+      "neverPublishedNote": "A suggestion for an accompanying image — never published."
+    },
+    "carousel": {
+      "heading": "Carousel preview",
+      "slideRole": {
+        "cover": "Cover",
+        "body": "Body",
+        "cta": "Call to action"
+      }
     }
   },
   "empty": {

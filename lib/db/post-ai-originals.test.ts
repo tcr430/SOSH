@@ -5,6 +5,7 @@ import {
   getLatestRevision,
   createNextPostAiOriginalRevision,
   getPostAiOriginalById,
+  listLatestPostAiOriginalsByPostIds,
   AI_ORIGINAL_SCHEMA_VERSION,
 } from './post-ai-originals'
 import type { PostAiOriginalRow, PostAiOriginalInsert } from './types'
@@ -144,5 +145,51 @@ describe('getPostAiOriginalById', () => {
   it('throws on DB error', async () => {
     const { client } = createMockClient(null, { message: 'query failed' })
     await expect(getPostAiOriginalById(client, 'origin-1')).rejects.toThrow('query failed')
+  })
+})
+
+// ADR 0022 §10 (Session 29, F1b.9) — the Approvals surface's bulk read.
+describe('listLatestPostAiOriginalsByPostIds', () => {
+  it('returns an empty Map without querying when given no post ids', async () => {
+    const { client, from } = createMockClient(null, null)
+    const result = await listLatestPostAiOriginalsByPostIds(client, [])
+    expect(result.size).toBe(0)
+    expect(from).not.toHaveBeenCalled()
+  })
+
+  it('queries with an explicit bounded limit and (post_id, revision desc) order', async () => {
+    const { client, builder } = createMockClient([mockRow], null)
+    await listLatestPostAiOriginalsByPostIds(client, ['post-1'])
+    expect(client.from).toHaveBeenCalledWith('post_ai_originals')
+    expect(builder.in).toHaveBeenCalledWith('post_id', ['post-1'])
+    expect(builder.order).toHaveBeenCalledWith('post_id', { ascending: true })
+    expect(builder.order).toHaveBeenCalledWith('revision', { ascending: false })
+    expect(builder.limit).toHaveBeenCalledWith(20)
+  })
+
+  it('keeps only the FIRST row seen per post_id — the latest revision under the (post_id, revision desc) order', async () => {
+    const olderRevision = { ...mockRow, revision: 1, rendered_content: 'old' }
+    const latestRevision = { ...mockRow, revision: 2, rendered_content: 'new' }
+    // Rows arrive latest-first per post_id under the query's own ORDER BY —
+    // the mock returns them in that already-ordered shape.
+    const { client } = createMockClient([latestRevision, olderRevision], null)
+    const result = await listLatestPostAiOriginalsByPostIds(client, ['post-1'])
+    expect(result.get('post-1')).toEqual(latestRevision)
+    expect(result.size).toBe(1)
+  })
+
+  it('returns one entry per distinct post_id', async () => {
+    const rowA = { ...mockRow, post_id: 'post-1' }
+    const rowB = { ...mockRow, post_id: 'post-2' }
+    const { client } = createMockClient([rowA, rowB], null)
+    const result = await listLatestPostAiOriginalsByPostIds(client, ['post-1', 'post-2'])
+    expect(result.size).toBe(2)
+    expect(result.get('post-1')).toEqual(rowA)
+    expect(result.get('post-2')).toEqual(rowB)
+  })
+
+  it('throws on error', async () => {
+    const { client } = createMockClient(null, { message: 'query failed' })
+    await expect(listLatestPostAiOriginalsByPostIds(client, ['post-1'])).rejects.toThrow('query failed')
   })
 })

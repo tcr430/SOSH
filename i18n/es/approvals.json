@@ -26,6 +26,18 @@
     "scriptBrief": {
       "heading": "Recomendación de guion",
       "neverPublishedNote": "Una sugerencia para un tratamiento en vídeo corto de esta publicación — nunca se publica."
+    },
+    "imageBrief": {
+      "heading": "Recomendación de imagen",
+      "neverPublishedNote": "Una sugerencia para una imagen de acompañamiento — nunca se publica."
+    },
+    "carousel": {
+      "heading": "Vista previa del carrusel",
+      "slideRole": {
+        "cover": "Portada",
+        "body": "Cuerpo",
+        "cta": "Llamada a la acción"
+      }
     }
   },
   "empty": {

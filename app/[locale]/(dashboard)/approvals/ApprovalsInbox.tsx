@@ -19,8 +19,9 @@ import {
   bulkApprovePostsAction,
   skipPostAction,
 } from '@/app/[locale]/(dashboard)/campaigns/[id]/posts/actions'
+import { AiOutputPreview } from './AiOutputPreview'
 import type { CalendarPostRow } from '@/lib/calendar/types'
-import type { CampaignRow, Platform } from '@/lib/db/types'
+import type { CampaignRow, Platform, PostAiOriginalRow } from '@/lib/db/types'
 
 const PLATFORM_LABELS: Record<Platform, string> = {
   linkedin: 'LinkedIn',
@@ -38,9 +39,20 @@ interface ApprovalsInboxProps {
   // (m1, ADR 0014 §9.4). Real pagination is deferred; this is the honesty
   // signal only.
   totalPendingCount: number
+  // ADR 0022 §10 (F1b.9) — each rendered post's latest post_ai_originals
+  // snapshot, keyed by post_id. Optional/defaulted so every pre-existing test
+  // call site (none of which knows about this prop) keeps rendering exactly
+  // as before — a snapshot-less post (manual origin, or none fetched) simply
+  // renders no preview.
+  originalsByPostId?: Record<string, PostAiOriginalRow>
 }
 
-export function ApprovalsInbox({ posts, campaigns, totalPendingCount }: ApprovalsInboxProps) {
+export function ApprovalsInbox({
+  posts,
+  campaigns,
+  totalPendingCount,
+  originalsByPostId = {},
+}: ApprovalsInboxProps) {
   const t = useTranslations('approvals')
   const params = useParams<{ locale: string }>()
   const locale = params.locale
@@ -279,6 +291,7 @@ export function ApprovalsInbox({ posts, campaigns, totalPendingCount }: Approval
                   locale={locale}
                   isPending={isPending}
                   hasError={errorKey === post.id}
+                  original={originalsByPostId[post.id]}
                   onApprove={() => handleApprove(post.id)}
                   onSkip={note => handleSkip(post.id, note)}
                 />
@@ -296,6 +309,7 @@ function DraftRow({
   locale,
   isPending,
   hasError,
+  original,
   onApprove,
   onSkip,
 }: {
@@ -303,6 +317,7 @@ function DraftRow({
   locale: string
   isPending: boolean
   hasError: boolean
+  original: PostAiOriginalRow | undefined
   onApprove: () => void
   onSkip: (note: string) => void
 }) {
@@ -323,6 +338,7 @@ function DraftRow({
             </span>
           </div>
           <p className="line-clamp-2 text-sm leading-relaxed">{post.content}</p>
+          <AiOutputPreview original={original} />
         </div>
 
         {!isSkipOpen && (
