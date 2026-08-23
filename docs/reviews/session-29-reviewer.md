@@ -455,3 +455,18 @@ see it, and it is an `AUTHORED-NOT-EXECUTED` set of exactly the kind ADR 0015 ex
 ---
 
 Session 29 review complete — 15 findings (0 BLOCKER, 5 MAJOR, 6 MINOR, 4 NIT) over range `dac7ddac..4db4053f`.
+
+---
+
+## CORRECTION PASS (Session 29-D)
+
+**Author:** Session 29-D (Claude Code, Sonnet 5). **Date:** 2026-08-23. **Commit range fixed:** starts at
+`6411708a` (D0, this report landed unmodified) and continues through this pass's remaining steps
+(D1…D12), each its own commit on `session-29`. Everything above this line is the Reviewer's; everything
+from here down is the correction author's. Per CLAUDE.md REVIEWER-REPORT APPEND-ONLY, not one character
+above this section is edited — including §10's correction table and the closing tally line immediately
+above, which stay exactly as written even after every finding below is closed.
+
+| Finding | Fix | Test that now proves it | Commit |
+|---|---|---|---|
+| **MAJOR-1** | `neutralizeWithSentinels` (the existing `lib/ai/wrap-evidence.ts` function, not a second copy) is applied inside `upsertDistilledPerformancePattern` (`lib/db/memory-performance.ts`) to `insert.pattern` before the RPC call. This is the sole writer of `performance_memory` — both production producers (`lib/learning/summarize.ts`'s LLM-synthesized statements, which echo human-authored edit excerpts, and `lib/learning/promote.ts`'s deterministic template) route through this one choke point, and grep confirms no third write path exists — so guarding here covers both regardless of which producer's composition touches human text. Constraint named: `MEM-PATTERN-SENTINEL-GUARDED`, added to ADR 0022 §11.2 (Tier 2, per the correction step's own classification — it is a mocked-client `app-tests.yml` test, not a live-Postgres one, so it belongs in the Tier-2 table alongside the other `app-tests.yml` constraints rather than the Tier-1 table at §11.1) and to §20.1's constraint map with an honest "reddens if" column. | `lib/db/memory-performance.test.ts` — new case `'neutralizes a sentinel-class payload in pattern before it reaches the RPC (MEM-PATTERN-SENTINEL-GUARDED)'`, asserting a `[/DATA]`-class payload arrives at `client.rpc` as `[/data-blocked]`. Demonstrated to redden: reverting `p_pattern: neutralizeWithSentinels(insert.pattern)` to `p_pattern: insert.pattern` fails this case (raw `'... [/DATA] ...'` observed at the RPC boundary instead of the neutralized string); reverted immediately after confirming red. All 25 cases in the file, plus the full `lib/db lib/learning lib/ai` scoped suite (1049 tests), pass with the fix applied. | D1 |

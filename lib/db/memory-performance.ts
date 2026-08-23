@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { PerformanceMemoryRow, PerformanceMemoryInsert } from './types'
 import { getErrorMessage } from './utils'
 import { MEMORY_CANDIDATE_LIMIT } from './memory-constants'
+import { neutralizeWithSentinels } from '@/lib/ai/wrap-evidence'
 
 // ADR 0016 §5.1 (Q4) — candidate query only. No scoring, no capping; that is
 // lib/memory/performance.ts's job (B2), which also prefers this table's
@@ -94,6 +95,19 @@ export async function listDistilledPatternsForSummary(
 // does NOT resolve to a partial index. Governance columns (source, status,
 // sensitivity, public_use_permission) are fixed inside the RPC itself, per
 // §7.1's table — never accepted as caller input here.
+// ADR 0022 §11.1 MEM-PATTERN-SENTINEL-GUARDED / A-5 (Session 29-D, MAJOR-1) —
+// insert.pattern's provenance chain is NOT uniformly trusted: this is the
+// SOLE writer of performance_memory (both production callers —
+// lib/learning/summarize.ts's LLM-synthesized statements, which echo
+// listRecentHumanEditExcerpts' human-authored prose, and
+// lib/learning/promote.ts's deterministic template — route through here,
+// and there is no third write path). neutralizeWithSentinels() (the SAME
+// function guard.ts and wrap-evidence.ts already use, per ADR 0018 Amd A.3 —
+// not a second copy) is applied at THIS single choke point rather than at
+// each producer, so the guard holds regardless of which caller's
+// composition touches human text and regardless of any future caller added
+// here. Plain neutralize() is deliberately NOT used: it lacks the \p{Co}
+// plane-15 marker-sentinel strip this boundary needs (ADR §5.1).
 export async function upsertDistilledPerformancePattern(
   client: SupabaseClient,
   insert: PerformanceMemoryInsert,
@@ -101,7 +115,7 @@ export async function upsertDistilledPerformancePattern(
   const { data, error } = await client.rpc('upsert_distilled_performance_pattern', {
     p_business_id: insert.business_id,
     p_dimension: insert.dimension,
-    p_pattern: insert.pattern,
+    p_pattern: neutralizeWithSentinels(insert.pattern),
     p_pattern_key: insert.pattern_key,
     p_platform: insert.platform,
     p_scope: insert.scope,
