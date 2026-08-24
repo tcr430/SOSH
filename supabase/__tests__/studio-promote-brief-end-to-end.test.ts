@@ -10,17 +10,54 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 // mocked (matching signals3-seed.test.ts's own Tier-2-adjacent approach) —
 // the property under test here is DB correctness, not generation quality.
 
+// A-9 (Session 29-D, MAJOR-5, D5) — routed by prompt.id so this ONE mock can
+// drive the full brief -> critique -> approve -> generate -> activate chain,
+// not just assembleBrief. 'brief-assembly' shape matches CampaignBriefContent
+// (narrative/proofPlan/pinnedEvidence/roleSequence); 'rubric' is shared by
+// critiqueBrief's brief-mode call AND generate.ts's per-post opener-scoring
+// call — both just need a score above BRIEF_QUALITY_THRESHOLD (70); the
+// 'native-generation-*' ids are generateNativeContent's real production
+// callers (lib/ai/generate-native.ts).
+const RUBRIC_DIMENSIONS = [
+  'specificity', 'originality', 'evidenceSufficiency', 'audienceRelevance',
+  'platformNativeness', 'brandVoiceAlignment', 'openingStrength', 'ctaFit',
+  'unsupportedClaimsRisk', 'redundancy',
+] as const
+
 vi.mock('@/lib/ai/runner', () => ({
-  runPrompt: vi.fn().mockResolvedValue({
-    hook: 'Our new SSO feature is live.',
-    body: 'We just shipped SSO support for enterprise customers.',
-    hashtags: [],
-    pinnedEvidence: [],
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  runPrompt: vi.fn(async (prompt: { id: string }): Promise<any> => {
+    if (prompt.id === 'brief-assembly') {
+      return {
+        narrative: 'We just shipped SSO support for enterprise customers, removing their biggest blocker.',
+        proofPlan: 'Cite the SSO launch and early customer reaction.',
+        pinnedEvidence: [],
+        roleSequence: [
+          { order: 0, role: 'anchor_thesis', platform: 'linkedin', angle: 'Announce SSO for enterprise customers' },
+          { order: 1, role: 'customer_proof', platform: 'linkedin', angle: 'Early customer reaction to SSO' },
+        ],
+      }
+    }
+    if (prompt.id === 'rubric') {
+      return {
+        dimensions: Object.fromEntries(RUBRIC_DIMENSIONS.map((d) => [d, { score: 90, note: 'ok' }])),
+        overall: 90,
+        critique: ['fine as-is'],
+        verdict: 'pass',
+      }
+    }
+    if (prompt.id === 'native-generation-single') {
+      return { format: 'single', body: 'Generated post body\nRest of the generated post.', imageBrief: null, scriptBrief: null }
+    }
+    throw new Error(`studio-promote-brief-end-to-end.test.ts mock: unexpected prompt id "${prompt.id}"`)
   }),
 }))
 
 import { promoteDraftToCampaignCore } from '@/lib/campaigns/promote'
 import { createStudioDraft, persistSuggestions, acceptSuggestion } from '@/lib/db/studio-drafts'
+import { critiqueBrief, approveBriefIfQualified } from '@/lib/campaigns/brief'
+import { generatePostsForCampaign } from '@/lib/campaigns/generate'
+import { createGenerationSession } from '@/lib/db/post-generation-sessions'
 
 const PASSWORD = 'TestPass123!'
 
@@ -69,6 +106,14 @@ describe('promoteDraftToCampaignCore end-to-end (ADR 0022 §2, §9, §11.1)', ()
     // — deliberately NO evidence_memory, audience_memory, or brand_memory
     // rows for this business.
 
+    // brand_voices is a DIFFERENT table (voice/tone config, not the learned
+    // memory stores above) — buildCustomerContext requires a non-null
+    // brandVoice or generatePostsForCampaign refuses with
+    // invalid_campaign_state (lib/ai/context.ts). All-default row: only
+    // business_id is required (20260430120005_brand_voices.sql).
+    const { error: voiceErr } = await admin.from('brand_voices').insert({ business_id: businessId })
+    if (voiceErr) throw voiceErr
+
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL
     const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
     if (!url || !anonKey) {
@@ -83,11 +128,13 @@ describe('promoteDraftToCampaignCore end-to-end (ADR 0022 §2, §9, §11.1)', ()
 
   afterAll(async () => {
     if (!admin) return
+    await admin.from('post_generation_sessions').delete().eq('business_id', businessId)
     await admin.from('posts').delete().eq('business_id', businessId)
     await admin.from('post_ai_originals').delete().eq('business_id', businessId)
     await admin.from('campaign_briefs').delete().eq('business_id', businessId)
     await admin.from('studio_drafts').delete().eq('business_id', businessId)
     await admin.from('campaigns').delete().eq('business_id', businessId)
+    await admin.from('brand_voices').delete().eq('business_id', businessId)
     if (businessId) await admin.from('businesses').delete().eq('id', businessId)
     if (ownerId) await admin.auth.admin.deleteUser(ownerId)
   })
@@ -195,5 +242,53 @@ describe('promoteDraftToCampaignCore end-to-end (ADR 0022 §2, §9, §11.1)', ()
     expect(snapshots).toHaveLength(1)
     expect(snapshots[0].generation_kind).toBe('studio_promoted')
     expect(snapshots[0].rendered_content).toBe(acceptedRevision)
+  })
+
+  // A-9 (Session 29-D, MAJOR-5, D5) — THE regression this correction closes:
+  // pre-fix, generatePostsForCampaign's idempotency guard counted the
+  // promoted campaign's own pre-existing post (role===null) as "already
+  // generated" and returned immediately, so activateCampaign was NEVER
+  // reached and the campaign stayed 'awaiting_brief' forever. Driven through
+  // REAL Postgres end to end: promote -> critique -> approve -> generate ->
+  // activate.
+  it('drives a promoted campaign through brief -> generation -> activation, ending active (not stuck at awaiting_brief)', async () => {
+    const draftId2 = await createDraft()
+    const promoted = await promoteDraftToCampaignCore(authedClient, businessId, draftId2, '2026-09-03T09:00:00.000Z')
+    expect(promoted.outcome).toBe('promoted')
+    if (promoted.outcome !== 'promoted') return
+
+    await critiqueBrief(promoted.campaignId)
+    const approved = await approveBriefIfQualified(promoted.campaignId)
+    expect(approved.approved).toBe(true)
+
+    const session = await createGenerationSession(admin, {
+      business_id: businessId,
+      campaign_id: promoted.campaignId,
+      status: 'pending',
+      posts_planned: 2,
+    })
+
+    const result = await generatePostsForCampaign(promoted.campaignId, businessId, session.id)
+    expect(result.postsCreated).toBe(2)
+
+    const { data: campaign, error: campErr } = await admin
+      .from('campaigns')
+      .select('status, total_posts_planned')
+      .eq('id', promoted.campaignId)
+      .single()
+    if (campErr) throw campErr
+    // §2.7 arithmetic, now the live path: 2 brief-derived posts + the 1
+    // pre-existing promoted post = 3.
+    expect(campaign.status).toBe('active')
+    expect(campaign.total_posts_planned).toBe(3)
+
+    const { data: allPosts, error: postsErr } = await admin
+      .from('posts')
+      .select('id, role')
+      .eq('campaign_id', promoted.campaignId)
+    if (postsErr) throw postsErr
+    expect(allPosts).toHaveLength(3)
+    expect(allPosts.filter((p: { role: string | null }) => p.role === null)).toHaveLength(1)
+    expect(allPosts.filter((p: { role: string | null }) => p.role !== null)).toHaveLength(2)
   })
 })

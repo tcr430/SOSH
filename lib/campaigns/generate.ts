@@ -101,10 +101,19 @@ export async function generatePostsForCampaign(
       return { sessionId, postsCreated: 0 }
     }
 
-    // PRESERVED UNCHANGED (generate.ts:63-71 pre-B2.6) — idempotency guard,
-    // same position, same logic.
+    // A-9 (Session 29-D correction, MAJOR-5) — the guard counts GENERATED
+    // posts (role IS NOT NULL), not all posts. A promoted campaign (ADR 0022
+    // §2.1) always holds exactly one human-authored post with role === null
+    // before generation ever runs (promote.ts's createPosts call never sets
+    // role); counting it here made every promoted campaign return
+    // 'already_generated' forever and activateCampaign below unreachable.
+    // Origin-blind by construction: this discriminates on posts.role (set
+    // only by this function, ADR 0017 §3.2, write-once), never on
+    // campaigns.origin. existingPosts itself is kept as ALL posts (not just
+    // generated ones) — §2.7's arithmetic below still needs that full count.
     const existingPosts = await listPostsByCampaign(client, campaignId)
-    if (existingPosts.length > 0) {
+    const generatedPosts = existingPosts.filter((p) => p.role !== null)
+    if (generatedPosts.length > 0) {
       await updateGenerationSessionStatus(client, sessionId, {
         status: 'failed',
         error_code: 'already_generated',
