@@ -24,8 +24,9 @@ export type FormatFamily = 'single' | 'thread' | 'carousel'
 // happening in practice.
 // ADR 0022 §6.3/A-4 (Session 29, F1b.7) — carouselRequested is a THIRD,
 // REQUIRED parameter (never optional): with exactly two real callers today
-// (generate-native.ts:98, studio-suggestion.ts:136 — both grepped, not
-// assumed) and both passing `false`, EVERY call that exists resolves
+// (generate-native.ts:106, studio-suggestion.ts:142 — Session 29-D, D7
+// (NIT-6) corrected these line numbers; both grepped, not assumed) and both
+// passing `false`, EVERY call that exists resolves
 // byte-identically to before this change, so L-10 holds in its strict form.
 // A volume-derived trigger was rejected precisely because it would change
 // the result for inputs that already exist — this parameter changes it for

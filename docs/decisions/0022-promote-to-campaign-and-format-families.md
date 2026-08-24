@@ -772,6 +772,14 @@ mechanical enough to enforce:
 §8.2's frozen `Record<Platform, …>` table remains the primary instrument and is unaffected: it is authored
 new, in three-tuple form, and has no "as written" baseline to preserve.
 
+### 18.4 — Session 29-D correction (D7, NIT-1): §18.3 itself miscounted the file it was correcting
+
+§18.3 (above, not edited — same append-only form this section already established) states **`lib/ai/prompts/formats/platform-map.test.ts` contains TEN two-argument call sites of `selectFormatFamily`**, and the build guide's own `§2b` step table (`docs/build-guide/session-29.md`, the `F1b.7` row) repeats the same **"ten"**. Recounted directly against the file: it has **ELEVEN** — the final `it` block (`platform-map.test.ts:28`, the `twitter`/`threads` cross-check) has **two** `selectFormatFamily` calls on one line, which a line-count undercounts. A miscount inside the very section written to correct §6.3's original miscount of the same file.
+
+Separately, §18.3's own citation `lib/ai/generate-native.ts:98` for the production call site is stale — the current line is **`lib/ai/generate-native.ts:106`** (Session 29-D, D7, NIT-6 corrects the same stale citation where it recurs in `platform-map.ts`'s source comment).
+
+No ruling changes: A-4's required-third-parameter decision, and the "cost is real, not one line" correction §18.3 makes, both stand. Only the counts are corrected, here, not in §18.3's or the build guide's own text.
+
 ---
 
 ## 19. Minor corrections (2026-08-21, additive)
@@ -870,7 +878,7 @@ authoritative result.
 | `MEM-PATTERN-BOUNDED` | 1 → `db-tests.yml` | The `pattern` CHECK stops rejecting an over-length write. |
 | `CAROUSEL-SCHEMA-STRUCTURAL` | 2 → `app-tests.yml` | An out-of-bounds slide count or an unknown slide role parses instead of failing `safeParse`. |
 | `CAROUSEL-POLICY-SEQUENCE` | 2 → `app-tests.yml` | `validateCarouselPolicy` stops distinguishing `policy_violation` from `invalid_response`. |
-| `MODE2-FORMAT-SELECTION-UNCHANGED` | 2 → `app-tests.yml` | Any `(platform, estimatedTweetsWorth, carouselRequested)` row in the frozen table changes value. |
+| `MODE2-FORMAT-SELECTION-UNCHANGED` | 2 → `app-tests.yml` | Any `(platform, estimatedTweetsWorth, carouselRequested)` row in the frozen table changes value. **Strengthened Session 29-D, D7 (MINOR-1):** the table now spans the `>= 3` threshold itself (volumes 2, 2.9, 3 added alongside the pre-existing 1 and 5) — editing `platform-map.ts`'s `>= 3` to `>= 2` or `>= 4` now reddens this table directly (verified: both mutations observed red, then reverted), not just the weaker `platform-map.test.ts`. |
 | `MODE2-PROMPT-BYTE-IDENTICAL` | 2 → `app-tests.yml` | The single/thread prompt fixtures stop matching byte-for-byte. |
 | `SCRIPT-BRIEF-BOUNDED` | 2 → `app-tests.yml` | `scriptBrief` stops rejecting a string over `SCRIPT_BRIEF_MAX_CHARS`. |
 | `PROMOTE-ACTION-VALIDATED` | 2 → `app-tests.yml` | The Zod contract stops enforcing the `max(5000)` copy bound. |
