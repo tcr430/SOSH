@@ -6,27 +6,9 @@ import { z } from 'zod'
 // branch body is validated, so a shape mismatch fails deterministically
 // (MODE2-FORMAT-FAMILY-STRUCTURAL).
 
-// ADR 0022 §7.1 (Session 29, F1b.8) — scriptBrief: string | null, on
-// EXACTLY imageBrief's footing — a bounded RECOMMENDATION, never a
-// structured { hook, beats[], cta } object (that shape was rejected: a
-// multi-field object with its own array bound "starts looking exactly like
-// a format family in miniature", the thing L-9 forbids). Declared per-branch
-// below (not factored into a shared base type), same reason imageBrief is:
-// zod's discriminatedUnion has no shared-base merge, and repeating it keeps
-// each branch's shape independently driftable without touching the others.
-// 500 chars is generous for a few sentences of short-form-video guidance
-// without inviting a mini-script — SCRIPT-BRIEF-BOUNDED's whole point.
-//
-// .nullish() (optional AND nullable), NOT bare .nullable() like imageBrief:
-// this step is schema-only (ADR 0022 §7's build list touches schemas.ts
-// alone — native-generation-prompt.ts's shapeInstructions is NOT updated to
-// ask the model for this field, deliberately, to keep MODE2-PROMPT-BYTE-
-// IDENTICAL's frozen fixtures untouched by this step). A real model response
-// therefore OMITS the key entirely, not "includes it as null" — imageBrief's
-// bare .nullable() would reject that response outright (a required key,
-// simply absent). Future work that starts prompting for scriptBrief can
-// tighten this to .nullable() once the model is actually asked to always
-// emit it.
+// ADR 0022 §7.1, amended §7.1 (Session 29-D, D6, MINOR-5 / A-11) — the full
+// rationale (why .nullish() not .nullable(), why no prompt is updated, the
+// §8.2-wins ruling and its revival condition) lives there, not here.
 const SCRIPT_BRIEF_MAX_CHARS = 500
 
 export const SinglePostOutputSchema = z.object({
