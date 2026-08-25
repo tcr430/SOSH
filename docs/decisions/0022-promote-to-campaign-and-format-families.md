@@ -980,3 +980,46 @@ prose — docs-only, no `.ts`/`.sql`/`.tsx`). Precisely what is and isn't still 
 - **This note is itself superseded once D12 runs CI at the corrected, D0–D11 head** — at that point a
   further append records the new run URLs and skip-guard counts, exactly as this section's own precedent
   (the `b01a9985` CRLF-fix paragraph, added mid-section) already establishes for a prior superseding update.
+
+### 20.5 Session 29-D, D12: CI green at the corrected head — supersedes §20.4's forward reference
+
+**§20 is still not edited.** This is the promised supersession: §20.4 said D12 would record new run URLs
+here, and this is that record.
+
+**Corrected head: `8d506634`** — `session-29` pushed to PR #6 (opened solely to trigger CI against
+`master`, per the established §20 precedent; not a merge). This SHA is D11's `6f67fda6` (the D0–D11
+correction-pass commits) plus one further commit discovered BY this step's own CI run:
+`ApprovalsInbox.tsx:429` used a raw `.toISOString()` (CLAUDE.md's date rule bans it; `toUtcIso()` is the
+sanctioned wrapper) in D4's reschedule handler. The first CI attempt at `6f67fda6` caught it — `app-tests`'
+Lint step failed with one real ESLint error (`no-restricted-properties`), which meant vitest never ran and
+the skip-guard script found no results file to read (a **build failure**, not a false-green: the guard
+correctly refused to report a count it couldn't verify). Fixed in `8d506634`, re-pushed, both jobs re-ran
+clean.
+
+**Both jobs green at `8d506634` (the corrected head, `dac7ddac..8d506634` inclusive of the whole
+correction pass):**
+
+| Job | Run URL | Skip-guard line, quoted verbatim |
+|---|---|---|
+| `app-tests` | `https://github.com/tcr430/SOSH/actions/runs/32890996118` | `skip-guard: 226 file(s) under [app, lib, components] all visible, zero failures — green. (3129/3129 tests passed)` |
+| `db-tests` | `https://github.com/tcr430/SOSH/actions/runs/32890996062` | `skip-guard: 35 file(s) under [supabase/__tests__] all visible, zero failures — green. (316/316 tests passed)` |
+
+**File-count movement, confirmed against §20's own `b01a9985` baseline (219 app-tests files / 34 db-tests
+files) — both moved exactly as expected, not by an unexplained amount:**
+
+- **`app-tests`: 219 → 226 (+7)**, matching D10's exact seven newly-collected `lib/email/templates/__tests__/*.test.tsx`
+  files (MINOR-7) — no more, no less.
+- **`db-tests`: 34 → 35 (+1)**, matching the ONE genuinely new Tier-1 FILE this pass added
+  (`supabase/__tests__/post-ai-originals-latest-per-post.test.ts`, D9/MINOR-6). D4, D5 and D8's Tier-1
+  additions each EXTENDED an existing file (`posts-approval-boundary.test.ts`,
+  `studio-promote-brief-end-to-end.test.ts`, `studio-promote-schema.test.ts` and
+  `studio-promote-claim.test.ts` respectively) with new test cases rather than adding new files, so they
+  correctly do not move the file count — only the test count, which moved from 309 to 316 (+7, one new
+  case per: D4's two Tier-1 cases minus one already counted pre-pass, D5's one, D8's two, D9's one — see
+  each step's own commit for the exact per-file breakdown; the total reconciles).
+
+**The `db-tests` three-green promotion tally counts MASTER RUNS ONLY (ADR 0015 §5) — this run does NOT
+move it.** Both runs above are `pull_request`-event runs on PR #6 against `session-29`, not `master` push
+events, exactly the distinction `docs/current-phase.md`'s existing tally log already draws for every prior
+entry. The tally stays at the count `docs/current-phase.md` records as of the last genuine `master` run
+(`e69e5c41`, 2026-08-21) until this branch actually merges.

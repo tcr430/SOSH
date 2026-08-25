@@ -3,16 +3,18 @@
 **Phase:** 1 — MVP
 **Goal:** First paying customer
 **Status:** **Session 29 (Mode 1 Studio "promote to campaign" + carousel/script format families, ADR 0022,
-Track F) code-complete; correction pass Session 29-D (D0–D11) closed all twenty Reviewer findings (5
-MAJOR, 8 MINOR, 7 NIT — 0 BLOCKER; the Reviewer's own closing tally understated this as 15, corrected in
-the appendix's row zero). D12 (CI at the corrected head, PR, merge to `master`) is the one remaining step —
-not yet run at the time this line was written, so Track F is not yet formally CLOSED by this document's
-own convention (a session/track is marked CLOSED only once its `master`-run evidence exists, per every
-other entry below).** Every MAJOR was the same root cause restated three times: a requirement ADR 0022
-stated in prose but named no constraint for — MAJOR-1, MAJOR-2 and MAJOR-4 all trace back to that single
-process failure, now recorded as a standing rule in ADR 0022 §11's preamble (D11). See the Session 29
-entries under "What's done" below for the full detail, including the D8 live-Postgres RLS finding
-(`security-reviewer`-confirmed) and D5's promoted-campaign generation fix.
+Track F) code-complete and CI-verified; correction pass Session 29-D (D0–D12) closed all twenty Reviewer
+findings (5 MAJOR, 8 MINOR, 7 NIT — 0 BLOCKER; the Reviewer's own closing tally understated this as 15,
+corrected in the appendix's row zero) and ran both required CI jobs green at the corrected head
+(`8d506634`, PR #6 — see the D12 entry below for run URLs and verbatim skip-guard lines).** Track F is
+**not yet formally CLOSED by this document's own convention**, though: a session/track is marked CLOSED
+only once its `master`-run evidence exists (per every other entry below), and D12's green runs are
+`pull_request`-event runs on `session-29`, not `master` push events — merging is a separate, not-yet-taken
+step. Every MAJOR was the same root cause restated three times: a requirement ADR 0022 stated in prose but
+named no constraint for — MAJOR-1, MAJOR-2 and MAJOR-4 all trace back to that single process failure, now
+recorded as a standing rule in ADR 0022 §11's preamble (D11). See the Session 29 entries under "What's
+done" below for the full detail, including the D8 live-Postgres RLS finding (`security-reviewer`-confirmed)
+and D5's promoted-campaign generation fix.
 
 **Session 28 (Mode 3 Part 2: Triage, Insight Cards, Opportunity Feed, ADR 0021) CLOSED, correction
 pass Session 28-D CLOSED (D0–D9, Track E).** E5.1–E5.12 shipped Stage C (bounded tool-using triage loop),
@@ -542,6 +544,27 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
       push-event skip-guard reading — Session 29-D has not merged to `master` at this point in the
       correction pass; the actual CI `skip-guard: N file(s) …` line will reflect this once `app-tests`
       runs on the merged range.
+    - **2026-08-25 (Session 29-D, D12 — CI at the corrected head, `pull_request`-event, PR #6):** Corrected
+      head `8d506634` — D11's `6f67fda6` plus one commit this step's own CI run discovered:
+      `ApprovalsInbox.tsx:429` used a raw `.toISOString()` in D4's reschedule handler (banned by CLAUDE.md's
+      date rule; `toUtcIso()` is the sanctioned wrapper). The FIRST CI attempt at `6f67fda6` failed
+      `app-tests`' Lint step on this one real ESLint error, which meant vitest never ran and the skip-guard
+      script correctly errored ("could not read/parse vitest JSON output") rather than reporting a false
+      count. Fixed, re-pushed, both jobs green on the second attempt. **Both jobs green at `8d506634`:**
+      `app-tests` [run 32890996118](https://github.com/tcr430/SOSH/actions/runs/32890996118) —
+      `skip-guard: 226 file(s) under [app, lib, components] all visible, zero failures — green.
+      (3129/3129 tests passed)`; `db-tests` [run 32890996062](https://github.com/tcr430/SOSH/actions/runs/32890996062)
+      — `skip-guard: 35 file(s) under [supabase/__tests__] all visible, zero failures — green.
+      (316/316 tests passed)`. File counts moved exactly as expected against the `b01a9985` baseline
+      (219/34): app-tests **+7** (219→226, D10's seven newly-collected `.test.tsx` files, no more no
+      less); db-tests **+1** (34→35, the one genuinely new Tier-1 file this pass added,
+      `post-ai-originals-latest-per-post.test.ts`, D9) — D4/D5/D8's Tier-1 additions each extended an
+      EXISTING file rather than adding a new one, so they correctly move only the test count (309→316,
+      +7), not the file count. **Full detail: ADR 0022 §20.5.** **These are `pull_request`-event runs on
+      PR #6 against `session-29`, NOT `master` push events — the `db-tests` three-green promotion tally
+      (ADR 0015 §5, tracked above at 5 consecutive as of `e69e5c41`) is UNCHANGED by this entry.** Session
+      29-D's correction pass (D0–D12) is now code-complete and CI-verified at this head; merging to
+      `master` is a separate, not-yet-taken step.
   - **Merge-gate enforcement (Session 22-D):** GitHub ruleset `master-app-tests` (id `19038239`) is live on
     `refs/heads/master`, requiring `app-tests` with no bypass actors. `db-tests` is intentionally **not**
     in any ruleset yet — it stays advisory until the tally above reaches 3/3, at which point the ruleset is
