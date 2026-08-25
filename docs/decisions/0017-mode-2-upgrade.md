@@ -787,3 +787,37 @@ is not a shortcut but a defect.
 
 **Evidence:** ADR 0022 §2.3 and §13.2; `docs/build-guide/session-29.md` §0.2 ruling A-2. Builder commits
 pending at the time this amendment was written.
+
+---
+
+## Amendment C — §15's D-6 deferral, partially closed by ADR 0022 (2026-08-25, Session 29-D, D11)
+
+**Author:** Session 29-D (Claude Code, Sonnet 5), the Track F correction pass's close-out step.
+**Authority:** ADR 0022 §6 (carousel), §7 (script), and its own §6.3/§7.1 amendments (Session 29-D, D6).
+**Everything above this line is unchanged**, including Amendments A and B. This amendment records §15's D-6
+line's current status; it does not restate or re-argue ADR 0022's own reasoning.
+
+§15 states *"**Carousel + script format families** (D-6) — added when Instagram carousel / TikTok-Shorts
+are prioritized; one new union branch each."* That line is **not rewritten** — it is superseded, in part,
+by what actually shipped:
+
+- **Carousel is CLOSED as a format family.** ADR 0022 §6 adds the third `FormatFamily` union branch,
+  `CarouselOutputSchema`, `validateCarouselPolicy`, and the platform-map extension — all shipped and
+  tested (`CAROUSEL-SCHEMA-STRUCTURAL`, `CAROUSEL-POLICY-SEQUENCE`). **Not fully closed**: ADR 0022 §6.3's
+  amendment (Session 29-D, D6) records that the SOURCING half — a brief field or other Tier-0 signal that
+  ever sets `carouselRequested` to `true` for a real campaign — was never built, deferred behind
+  re-opening §8's frozen Mode 2 prompt fixtures (ADR 0022 §15 item 9 carries the revival condition).
+  **Do not read this as "carousel closed"** — the family exists and is reachable in principle; nothing
+  produces the input that reaches it yet.
+- **Script is RE-DEFERRED as a format family — it did not become one.** ADR 0022 §7 ships `scriptBrief` as
+  a bounded **recommendation field** (`imageBrief`'s footing, never published), explicitly rejecting the
+  format-family shape L-9 forbids (ADR 0022 §7.1's original text, and its Session 29-D D6 amendment). §15's
+  D-6 line's premise — that script would eventually become a union branch — is superseded: what shipped
+  instead is a schema-and-render-ready field that no production prompt populates, with its own revival
+  condition (ADR 0022 §15 item 10) shared with carousel's.
+- **The skip-review fast path (L-11) is unaffected** — confirmed not touched by ADR 0022 or its
+  correction pass; §15's original deferral for it stands exactly as written.
+
+**Net effect on this ADR's own D-6 line:** carousel — mostly closed (family shipped, sourcing deferred);
+script — its original framing (eventual format family) does not happen; a recommendation field ships
+instead, which is a different shape than D-6 anticipated, not merely a delayed version of it.

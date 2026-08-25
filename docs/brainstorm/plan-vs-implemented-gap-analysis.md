@@ -24,18 +24,26 @@ Source docs compared:
 - **Voice memory has no dedicated table** — it deliberately reads through the existing `brand_voices`/`avoid_words` tables rather than a new `voice_memory` store (a documented ADR decision, not an omission).
 
 ### Mode 3 candidate scoring (campaign-modes doc §1, Stage B)
-Planned as "cheap embeddings + dedup + clustering." ADR 0020 explicitly rejected this: **no pgvector, no embeddings, no LLM anywhere in Stage B** — deterministic dedup only, with a named revival condition (`EMBEDDINGS_UNDEFER_THRESHOLD`, only once a second unstructured signal source exists).
+Planned as "cheap embeddings + dedup + clustering." ADR 0020 explicitly rejected this: **no pgvector, no embeddings, no LLM anywhere in Stage B** — deterministic dedup only, with a revival condition named in ADR 0020 §6.5 but not a constant: **a second, unstructured signal source** (news, RSS, competitor social — one with no stable per-item identity, unlike GitHub's release ids). *(Corrected Session 29-D, D11: this gap analysis previously mis-cited this revival condition as `EMBEDDINGS_UNDEFER_THRESHOLD` — that name belongs to a DIFFERENT, unrelated constant, ADR 0016 §5.3's `audience_memory` un-defer trigger (`= 200` active rows), which has nothing to do with Mode 3 Stage B. Conflating the two would send a future session after the wrong ruling.)*
 
 ### Mode 3 opportunity types (intelligence-layer doc §2)
 Only **company-originated** (GitHub releases/changelog) shipped, exactly per the plan's own instruction to "start with one signal source" and "skip market-responsive entirely at first."
 - **Market-responsive (competitor/news monitoring) and evergreen-strategic are not built.**
 
 ### Mode 1 Studio "promote to campaign" (campaign-modes doc §1, Mode 1)
-Explicitly deferred. ADR 0019 Locked Decision L-3/D-1 names "promote-to-campaign" as out of scope for Track D, a distinct future surface. Studio currently produces a reviewed draft but cannot yet seed a campaign brief the way an approved Mode 3 insight card can.
+**CLOSED (Session 29, ADR 0022; correction pass Session 29-D).** No longer a gap: a Studio draft can seed a campaign brief exactly the way an approved Mode 3 insight card can — `promoteDraftToCampaignCore` (`lib/campaigns/promote.ts`) claims the draft atomically, creates the campaign (`origin='studio_promoted'`) and its first post, and drives `assembleBrief` through the same pipeline. Session 29-D's correction pass additionally closed the idempotency-guard bug that made a promoted campaign unable to ever actually generate its remaining posts (MAJOR-5 / A-9, D5) — without that fix this entry would still read as only *partially* closed.
 
 ### Format-family schemas (campaign-modes doc §1, Mode 2)
-Only **single-post and thread** shipped (ADR 0017).
-- **Carousel and script format families are not built** — deferred to when Instagram/TikTok are prioritized, per the original plan.
+**Updated (Session 29, ADR 0022; correction pass Session 29-D).** Single-post and thread shipped (ADR
+0017); carousel and script partially addressed since:
+- **Carousel is a shipped `FormatFamily` branch** (schema, policy, platform-map selection) — but the
+  SOURCING that would ever set it to `true` for a real campaign is deferred (ADR 0022 §6.3 amendment,
+  Session 29-D D6), because building it means re-opening ADR 0017's frozen Mode 2 prompt fixtures. Not a
+  "not built" gap any more — a specific, named half-gap.
+- **Script did NOT become a format family.** It ships instead as `scriptBrief`, a bounded recommendation
+  field on `imageBrief`'s footing (ADR 0022 §7), rendered in the approvals surface but never published and
+  never populated by a production prompt yet (ADR 0022 §7.1 amendment, Session 29-D D6) — a deliberate,
+  different shape than "eventually a union branch," not a delayed version of the original plan.
 
 ### Skip-review fast path (campaign-modes doc, Phase A risk note)
 The idea of letting repeat users skip the brief-review checkpoint once brief quality is validated — **not built**, deferred as ADR 0017 L-11.

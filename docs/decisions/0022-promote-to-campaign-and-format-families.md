@@ -453,6 +453,18 @@ The Builder designs; this ADR fixes the contract it is held to. **No `.tsx` appe
 
 ## 11. Test plan across the tiers (Q8, ADR 0015 §2)
 
+**Process finding, Session 29-D (D11) — read this before adding a requirement anywhere in this ADR.**
+Three of this correction pass's five MAJOR findings (MAJOR-1, MAJOR-2, MAJOR-4) were requirements this
+document stated in prose — §5.2's second bound, A-5's writer-boundary guard, A-3's second half — that no
+constraint row in this section or §20.1 ever named, and that consequently no CI job ever ran. **A
+requirement that names no constraint in §11 is a requirement that will not ship.** This is not a claim that
+prose requirements are worthless — §2.7, §6.3 and §7.1's amendments above are exactly that kind of prose,
+doing real work — it is a claim about THIS document's own failure mode: prose without a row here reads as
+decided but is not verified, and the next Architect or Builder has no mechanical way to tell the two apart
+by scanning this section. Every future requirement in this ADR, and in whatever ADR reads this one, needs a
+named constraint here (or an explicit Tier-3 "no runtime test, by decision" entry, §11.3) in the SAME
+session that states the requirement — not a follow-up, not an assumption that the next session will notice.
+
 ### 11.1 Tier 1 — DB behaviour, live Postgres, executed by `db-tests.yml`
 
 | Constraint | What it proves |
@@ -949,3 +961,22 @@ No other function in §9 gained a caller this session:
   (`lib/learning/promote.ts:119`, `lib/learning/summarize.ts:167`), **both mocking it** in their own test
   files (`lib/learning/promote.test.ts:18`, `lib/learning/summarize.test.ts:25`) — `MEM-PATTERN-BOUNDED` is
   discharged in **Tier-1 only** (§18.1's correction, re-confirmed here at F1b.11's range head).
+
+### 20.4 Session 29-D correction (D11, NIT-2): §20.2's "current range head" is stale
+
+**§20 is not edited** — same append-only rule this section itself establishes. §20's own text (above,
+unedited) states *"Both jobs green at `b01a9985` (the current range head)."* That was true when written.
+The Reviewer's range head is `4db4053f` (one commit past `b01a9985`, correcting §20's own CI-citation
+prose — docs-only, no `.ts`/`.sql`/`.tsx`). Precisely what is and isn't still true:
+
+- The CI evidence quoted above (`app-tests` run `32609963073`, `db-tests` run `32609963087`, both green at
+  `b01a9985`) **still covers all code at that head**, because `4db4053f` changed no code — a docs-only
+  commit cannot un-verify what CI already proved.
+- The sentence *"the current range head"* is now **false as written**: `4db4053f` is the actual head of
+  the range this Reviewer read (`dac7ddac..4db4053f`, stated at the top of
+  `docs/reviews/session-29-reviewer.md`). A reader could misread the original sentence as a claim that CI
+  ran at `4db4053f` specifically — it did not; it ran one commit earlier, and the docs-only commit on top
+  changed nothing CI would need to re-verify.
+- **This note is itself superseded once D12 runs CI at the corrected, D0–D11 head** — at that point a
+  further append records the new run URLs and skip-guard counts, exactly as this section's own precedent
+  (the `b01a9985` CRLF-fix paragraph, added mid-section) already establishes for a prior superseding update.

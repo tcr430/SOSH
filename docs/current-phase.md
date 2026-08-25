@@ -2,7 +2,19 @@
 
 **Phase:** 1 — MVP
 **Goal:** First paying customer
-**Status:** **Session 28 (Mode 3 Part 2: Triage, Insight Cards, Opportunity Feed, ADR 0021) CLOSED, correction
+**Status:** **Session 29 (Mode 1 Studio "promote to campaign" + carousel/script format families, ADR 0022,
+Track F) code-complete; correction pass Session 29-D (D0–D11) closed all twenty Reviewer findings (5
+MAJOR, 8 MINOR, 7 NIT — 0 BLOCKER; the Reviewer's own closing tally understated this as 15, corrected in
+the appendix's row zero). D12 (CI at the corrected head, PR, merge to `master`) is the one remaining step —
+not yet run at the time this line was written, so Track F is not yet formally CLOSED by this document's
+own convention (a session/track is marked CLOSED only once its `master`-run evidence exists, per every
+other entry below).** Every MAJOR was the same root cause restated three times: a requirement ADR 0022
+stated in prose but named no constraint for — MAJOR-1, MAJOR-2 and MAJOR-4 all trace back to that single
+process failure, now recorded as a standing rule in ADR 0022 §11's preamble (D11). See the Session 29
+entries under "What's done" below for the full detail, including the D8 live-Postgres RLS finding
+(`security-reviewer`-confirmed) and D5's promoted-campaign generation fix.
+
+**Session 28 (Mode 3 Part 2: Triage, Insight Cards, Opportunity Feed, ADR 0021) CLOSED, correction
 pass Session 28-D CLOSED (D0–D9, Track E).** E5.1–E5.12 shipped Stage C (bounded tool-using triage loop),
 Stage D (card generation + verification), the `/opportunities` feed (ten states), Stage F (seeding into the
 existing brief pipeline), and Tier E — a new MEASURED-never-COVERED eval category. **28 of 29 §11 constraints
