@@ -3,17 +3,18 @@
 **Phase:** 1 — MVP
 **Goal:** First paying customer
 **Status:** **Session 29 (Mode 1 Studio "promote to campaign" + carousel/script format families, ADR 0022,
-Track F) code-complete and CI-verified; correction pass Session 29-D (D0–D12) closed all twenty Reviewer
-findings (5 MAJOR, 8 MINOR, 7 NIT — 0 BLOCKER; the Reviewer's own closing tally understated this as 15,
-corrected in the appendix's row zero) and ran both required CI jobs green at the corrected head
-(`8d506634`, PR #6 — see the D12 entry below for run URLs and verbatim skip-guard lines).** Track F is
-**not yet formally CLOSED by this document's own convention**, though: a session/track is marked CLOSED
-only once its `master`-run evidence exists (per every other entry below), and D12's green runs are
-`pull_request`-event runs on `session-29`, not `master` push events — merging is a separate, not-yet-taken
-step. Every MAJOR was the same root cause restated three times: a requirement ADR 0022 stated in prose but
-named no constraint for — MAJOR-1, MAJOR-2 and MAJOR-4 all trace back to that single process failure, now
-recorded as a standing rule in ADR 0022 §11's preamble (D11). See the Session 29 entries under "What's
-done" below for the full detail, including the D8 live-Postgres RLS finding (`security-reviewer`-confirmed)
+Track F) CLOSED.** Correction pass Session 29-D (D0–D12) closed all twenty Reviewer findings (5 MAJOR, 8
+MINOR, 7 NIT — 0 BLOCKER; the Reviewer's own closing tally understated this as 15, corrected in the
+appendix's row zero); PR #6 merged to `master` as `2e6d3915` (real merge commit, not squash, matching every
+prior session's convention) with a genuine `master` push-event green run for both required jobs — `app-tests`
+[run 32893410518](https://github.com/tcr430/SOSH/actions/runs/32893410518) (`226 file(s) … 3129/3129 tests
+passed`), `db-tests` [run 32893410504](https://github.com/tcr430/SOSH/actions/runs/32893410504) (`35
+file(s) … 316/316 tests passed`) — extending the `db-tests` promotion streak to **6** consecutive green
+`master` runs (see the tally entry below). Every MAJOR was the same root cause restated three times: a
+requirement ADR 0022 stated in prose but named no constraint for — MAJOR-1, MAJOR-2 and MAJOR-4 all trace
+back to that single process failure, now recorded as a standing rule in ADR 0022 §11's preamble (D11). See
+the Session 29 entries under "What's done" below for the full detail, including the D8 live-Postgres RLS
+finding (`security-reviewer`-confirmed)
 and D5's promoted-campaign generation fix.
 
 **Session 28 (Mode 3 Part 2: Triage, Insight Cards, Opportunity Feed, ADR 0021) CLOSED, correction
@@ -521,9 +522,15 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
         3. `f1c730cc` — 2026-07-27 — [db-tests 30302554218](https://github.com/tcr430/SOSH/actions/runs/30302554218), green
         4. `51264772` — 2026-07-29 — [db-tests 30436667567](https://github.com/tcr430/SOSH/actions/runs/30436667567), `22 file(s) … green`
         5. `e69e5c41` — 2026-08-21 — [db-tests 32493839443](https://github.com/tcr430/SOSH/actions/runs/32493839443), `30 file(s) / 282 tests`
+        6. `2e6d3915` — 2026-08-25 — [db-tests 32893410504](https://github.com/tcr430/SOSH/actions/runs/32893410504),
+           `35 file(s) under [supabase/__tests__] all visible, zero failures — green. (316/316 tests passed)`
+           — Session 29 Track F (ADR 0022) merged via PR #6, `app-tests`
+           [run 32893410518](https://github.com/tcr430/SOSH/actions/runs/32893410518) also green
+           (`226 file(s) under [app, lib, components] all visible, zero failures — green. (3129/3129 tests
+           passed)`). No red `master` run between this and `e69e5c41` — the streak extends, it doesn't restart.
         The last red `master` run was `e2812ec8` (2026-07-14). On the face of ADR 0015 §5 — *"three
         consecutive full green runs on `master`"* — the threshold was **reached at `f1c730cc` on
-        2026-07-27**, and the streak now stands at **5**. Session 29's build guide (`session-29.md`
+        2026-07-27**, and the streak now stands at **6**. Session 29's build guide (`session-29.md`
         Step 0) asserts the opposite — *"no post-Session-22 code has ever run on `master` at all"* — which
         is **false**: `master` already carried Sessions 23–25 via PRs #1–#4. **This line is therefore NOT
         updated to a number.** Promoting `db-tests` to Required changes a merge gate and updates the
