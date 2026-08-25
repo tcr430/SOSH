@@ -718,7 +718,7 @@ describe('approvePostFromCalendarAction', () => {
 
   it('approves post and revalidates calendar', async () => {
     setupAuth()
-    vi.mocked(approvePost).mockResolvedValue({ ...MOCK_POST, status: 'approved' })
+    vi.mocked(approvePost).mockResolvedValue({ outcome: 'approved', post: { ...MOCK_POST, status: 'approved' } })
 
     const result = await approvePostFromCalendarAction(POST_ID)
     expect(result).toEqual({ ok: true })
@@ -728,9 +728,37 @@ describe('approvePostFromCalendarAction', () => {
   // MINOR-2: defense-in-depth business_id predicate, matching reschedulePost's posture.
   it('passes the server-derived business_id through to approvePost (MINOR-2)', async () => {
     setupAuth()
-    vi.mocked(approvePost).mockResolvedValue({ ...MOCK_POST, status: 'approved' })
+    vi.mocked(approvePost).mockResolvedValue({ outcome: 'approved', post: { ...MOCK_POST, status: 'approved' } })
 
     await approvePostFromCalendarAction(POST_ID)
-    expect(approvePost).toHaveBeenCalledWith(expect.anything(), POST_ID, BIZ_ID)
+    expect(approvePost).toHaveBeenCalledWith(expect.anything(), POST_ID, BIZ_ID, undefined)
+  })
+
+  // ADR 0022 §2.5 (Session 29-D, MAJOR-4) — approve refuses a scheduled_at
+  // that has already passed, and the UI gets a typed reason to act on.
+  it('returns schedule_expired when approvePost refuses an already-passed time', async () => {
+    setupAuth()
+    vi.mocked(approvePost).mockResolvedValue({ outcome: 'schedule_expired' })
+
+    const result = await approvePostFromCalendarAction(POST_ID)
+    expect(result).toEqual({ ok: false, reason: 'schedule_expired' })
+    expect(revalidatePath).not.toHaveBeenCalled()
+  })
+
+  it('returns not_eligible when approvePost finds no matching draft row', async () => {
+    setupAuth()
+    vi.mocked(approvePost).mockResolvedValue({ outcome: 'not_eligible' })
+
+    const result = await approvePostFromCalendarAction(POST_ID)
+    expect(result).toEqual({ ok: false, reason: 'not_eligible' })
+  })
+
+  it('passes a caller-supplied newScheduledAt through to approvePost for the atomic re-touch', async () => {
+    setupAuth()
+    const newScheduledAt = '2099-01-01T09:00:00.000Z'
+    vi.mocked(approvePost).mockResolvedValue({ outcome: 'approved', post: { ...MOCK_POST, status: 'approved' } })
+
+    await approvePostFromCalendarAction(POST_ID, newScheduledAt)
+    expect(approvePost).toHaveBeenCalledWith(expect.anything(), POST_ID, BIZ_ID, newScheduledAt)
   })
 })

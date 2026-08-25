@@ -82,6 +82,40 @@
       "avoidWord": "Corresponde à tua lista de palavras a evitar: \"{word}\"",
       "performancePattern": "Corresponde a um padrão de desempenho governado (confiança de {confidence}%, observado {count}x)",
       "evidence": "Sustentado por evidência fixada"
+    },
+    "promote": {
+      "heading": "Promover para campanha",
+      "description": "Transforma este rascunho numa campanha, publicação e briefing reais.",
+      "button": "Promover para campanha",
+      "retryButton": "Tentar novamente",
+      "notEligible": {
+        "emptyDraft": "Adiciona conteúdo antes de promover.",
+        "noPlatform": "Escolhe uma plataforma antes de promover.",
+        "notSaved": "Guarda este rascunho antes de promover."
+      },
+      "promoting": "A promover…",
+      "promoted": {
+        "heading": "Promovido",
+        "body": "Este rascunho é agora uma campanha.",
+        "link": "Ver o briefing"
+      },
+      "alreadyPromoted": {
+        "heading": "Já promovido",
+        "body": "Este rascunho já foi promovido para uma campanha.",
+        "link": "Ver o briefing"
+      },
+      "failed": "Algo correu mal ao promover. O teu rascunho está seguro — podes tentar novamente dentro de alguns minutos.",
+      "notFound": "Este rascunho já não existe — pode ter sido eliminado. Nada foi promovido.",
+      "claimedByAnother": "Este rascunho está a ser promovido neste momento (possivelmente noutro separador). Aguarda alguns minutos e atualiza a página.",
+      "reclaimable": "A última tentativa de promoção não terminou. Podes tentar novamente.",
+      "dialog": {
+        "title": "Escolhe quando esta publicação vai ao ar",
+        "description": "Promover cria a campanha e a publicação agora, mas nada é publicado até aprovares nesta data e hora.",
+        "scheduledAtLabel": "Data e hora agendadas",
+        "confirmButton": "Promover",
+        "confirmButtonSubmitting": "A promover…",
+        "cancelButton": "Cancelar"
+      }
     }
   }
 }

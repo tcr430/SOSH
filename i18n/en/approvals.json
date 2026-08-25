@@ -21,8 +21,31 @@
     "skipLabel": "Why are you skipping this post?",
     "skipPlaceholder": "Reason for skipping",
     "error": "Something went wrong. Please try again.",
+    "scheduleExpired": "This post's scheduled time has already passed. Pick a new time to approve it.",
+    "scheduleExpiredLabel": "New scheduled time",
+    "confirmNewTime": "Approve with new time",
     "announceApproved": "Post approved.",
-    "announceSkipped": "Post skipped."
+    "announceSkipped": "Post skipped.",
+    "scriptBrief": {
+      "heading": "Script recommendation",
+      "neverPublishedNote": "A suggestion for a short-form video treatment of this post — never published."
+    },
+    "imageBrief": {
+      "heading": "Image recommendation",
+      "neverPublishedNote": "A suggestion for an accompanying image — never published."
+    },
+    "carousel": {
+      "heading": "Carousel preview",
+      "slideRole": {
+        "cover": "Cover",
+        "body": "Body",
+        "cta": "Call to action"
+      },
+      "slideImageBrief": {
+        "heading": "Image recommendation for this slide",
+        "neverPublishedNote": "A suggestion for this slide's image — never published."
+      }
+    }
   },
   "empty": {
     "title": "No posts waiting for approval.",

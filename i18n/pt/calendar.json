@@ -33,6 +33,7 @@
   "post": {
     "approve": "Aprovar",
     "approve_disabled_tooltip": "Apenas os aprovadores podem aprovar",
+    "approve_schedule_expired": "A hora agendada desta publicação já passou. Use \"Mover para…\" para escolher uma nova data e aprove novamente.",
     "edit": "Editar",
     "save": "Guardar",
     "cancel": "Cancelar",

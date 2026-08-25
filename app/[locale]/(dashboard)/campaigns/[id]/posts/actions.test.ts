@@ -280,7 +280,7 @@ describe('regeneratePostAction', () => {
         campaign_id: MOCK_DRAFT_POST.campaign_id,
         generation_kind: 'regeneration',
         format: 'single',
-        payload: { format: 'single', body: MOCK_REGEN_OUTPUT.content, imageBrief: null },
+        payload: { format: 'single', body: MOCK_REGEN_OUTPUT.content, imageBrief: null, scriptBrief: null },
         rendered_content: MOCK_REGEN_OUTPUT.content,
         hashtags: MOCK_REGEN_OUTPUT.hashtags,
       }),
@@ -377,11 +377,11 @@ describe('regeneratePostAction', () => {
 describe('approvePostAction', () => {
   it('calls approvePost with the postId and returns { success: true }', async () => {
     makeAuthClient()
-    vi.mocked(approvePost).mockResolvedValue({ ...MOCK_DRAFT_POST, status: 'approved' })
+    vi.mocked(approvePost).mockResolvedValue({ outcome: 'approved', post: { ...MOCK_DRAFT_POST, status: 'approved' } })
 
     const result = await approvePostAction(VALID_POST_ID)
 
-    expect(approvePost).toHaveBeenCalledWith(expect.anything(), VALID_POST_ID)
+    expect(approvePost).toHaveBeenCalledWith(expect.anything(), VALID_POST_ID, undefined, undefined)
     expect(result).toEqual({ success: true })
   })
 
@@ -399,6 +399,33 @@ describe('approvePostAction', () => {
     const result = await approvePostAction(VALID_POST_ID)
 
     expect(result).toEqual({ error: 'generic' })
+  })
+
+  // ADR 0022 §2.5 (Session 29-D, MAJOR-4) — approve refuses a scheduled_at
+  // that has already passed, and the UI gets a typed reason to act on.
+  it('returns schedule_expired when approvePost refuses an already-passed time', async () => {
+    makeAuthClient()
+    vi.mocked(approvePost).mockResolvedValue({ outcome: 'schedule_expired' })
+
+    const result = await approvePostAction(VALID_POST_ID)
+    expect(result).toEqual({ error: 'schedule_expired' })
+  })
+
+  it('returns not_eligible when approvePost finds no matching draft row', async () => {
+    makeAuthClient()
+    vi.mocked(approvePost).mockResolvedValue({ outcome: 'not_eligible' })
+
+    const result = await approvePostAction(VALID_POST_ID)
+    expect(result).toEqual({ error: 'not_eligible' })
+  })
+
+  it('passes a caller-supplied newScheduledAt through to approvePost for the atomic re-touch', async () => {
+    makeAuthClient()
+    const newScheduledAt = '2099-01-01T09:00:00.000Z'
+    vi.mocked(approvePost).mockResolvedValue({ outcome: 'approved', post: { ...MOCK_DRAFT_POST, status: 'approved' } })
+
+    await approvePostAction(VALID_POST_ID, newScheduledAt)
+    expect(approvePost).toHaveBeenCalledWith(expect.anything(), VALID_POST_ID, undefined, newScheduledAt)
   })
 })
 

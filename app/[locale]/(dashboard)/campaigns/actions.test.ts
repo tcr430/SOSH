@@ -22,11 +22,16 @@ vi.mock('@/lib/db/insight-cards', () => ({
   clearCampaignReferenceOnCards: vi.fn(),
 }))
 
+vi.mock('@/lib/db/studio-drafts', () => ({
+  clearPromotedCampaignReferenceOnDrafts: vi.fn(),
+}))
+
 import { pauseCampaignAction, resumeCampaignAction, deleteCampaignAction } from './actions'
 import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
 import { pauseCampaign, resumeCampaign, softDeleteCampaignGuarded } from '@/lib/db/campaigns'
 import { clearCampaignReferenceOnCards } from '@/lib/db/insight-cards'
+import { clearPromotedCampaignReferenceOnDrafts } from '@/lib/db/studio-drafts'
 import type { BusinessRow, CampaignRow } from '@/lib/db/types'
 
 const mockCreateClient = vi.mocked(createClient)
@@ -215,5 +220,42 @@ describe('deleteCampaignAction', () => {
     await deleteCampaignAction(VALID_UUID)
 
     expect(clearCampaignReferenceOnCards).not.toHaveBeenCalled()
+  })
+
+  // ADR 0022 §12.1 (Session 29-D, D3 — MAJOR-3): the identical D7 bug
+  // shape reintroduced fresh for studio_drafts.promoted_campaign_id.
+  // PROMOTE-SOFTDELETE-CLEARED (supabase/__tests__/studio-promote-claim.
+  // test.ts) proves clearPromotedCampaignReferenceOnDrafts's own
+  // behaviour but calls it directly — it stays green even if
+  // actions.ts:101's CALL SITE is deleted. These three mirror the
+  // clearCampaignReferenceOnCards trio above exactly, so the call site
+  // itself has coverage independent of the function's own test.
+  it('nulls studio_drafts.promoted_campaign_id for the deleted campaign on a successful delete', async () => {
+    makeAuthClient()
+    mockSoftDeleteCampaignGuarded.mockResolvedValue(true)
+    vi.mocked(clearPromotedCampaignReferenceOnDrafts).mockResolvedValue(undefined)
+
+    await deleteCampaignAction(VALID_UUID)
+
+    expect(clearPromotedCampaignReferenceOnDrafts).toHaveBeenCalledWith(expect.anything(), 'biz-456', VALID_UUID)
+  })
+
+  it('still returns success when clearPromotedCampaignReferenceOnDrafts throws — cleanup failure must not mask a real delete', async () => {
+    makeAuthClient()
+    mockSoftDeleteCampaignGuarded.mockResolvedValue(true)
+    vi.mocked(clearPromotedCampaignReferenceOnDrafts).mockRejectedValue(new Error('boom'))
+
+    const result = await deleteCampaignAction(VALID_UUID)
+
+    expect(result).toEqual({ success: true })
+  })
+
+  it('does NOT call clearPromotedCampaignReferenceOnDrafts when the delete guard fails', async () => {
+    makeAuthClient()
+    mockSoftDeleteCampaignGuarded.mockResolvedValue(false)
+
+    await deleteCampaignAction(VALID_UUID)
+
+    expect(clearPromotedCampaignReferenceOnDrafts).not.toHaveBeenCalled()
   })
 })

@@ -167,7 +167,7 @@ const linkedinDates = ['2026-06-03T09:00:00.000Z', '2026-06-04T09:00:00.000Z', '
 const twitterDates = ['2026-06-03T12:00:00.000Z', '2026-06-04T12:00:00.000Z', '2026-06-05T12:00:00.000Z']
 
 function makeSingleOutput(i: number): SinglePostOutput {
-  return { format: 'single', body: `Post ${i} body\nRest of the post`, imageBrief: null }
+  return { format: 'single', body: `Post ${i} body\nRest of the post`, imageBrief: null, scriptBrief: null }
 }
 
 const highOpenerScore: RubricOutput = {
@@ -258,9 +258,14 @@ describe('generatePostsForCampaign — campaign validation', () => {
   })
 })
 
-describe('generatePostsForCampaign — idempotency guard (PRESERVED)', () => {
-  it('sets session failed with already_generated when posts exist for campaign', async () => {
-    vi.mocked(listPostsByCampaign).mockResolvedValue(makeInsertedRows(1))
+describe('generatePostsForCampaign — idempotency guard (A-9, Session 29-D MAJOR-5)', () => {
+  // BYTE-IDENTITY (A-9's required regression) — a non-promoted campaign with
+  // at least one GENERATED post (role !== null) still returns
+  // already_generated, exactly as before the fix.
+  it('sets session failed with already_generated when a generated post exists for campaign', async () => {
+    vi.mocked(listPostsByCampaign).mockResolvedValue(
+      makeInsertedRows(1).map((p) => ({ ...p, role: 'anchor_thesis' as const })),
+    )
 
     await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
 
@@ -268,6 +273,24 @@ describe('generatePostsForCampaign — idempotency guard (PRESERVED)', () => {
     expect(updateGenerationSessionStatus).toHaveBeenCalledWith(
       expect.anything(), SESSION_ID,
       expect.objectContaining({ status: 'failed', error_code: 'already_generated' }),
+    )
+  })
+
+  // A-9's fix, reddens against the pre-fix guard: a promoted campaign's sole
+  // existing post has role === null (promote.ts's createPosts call never
+  // sets it) and must NOT be counted as "already generated" — generation
+  // must proceed.
+  it('does NOT treat a promoted campaign\'s human-authored post (role null) as already generated', async () => {
+    vi.mocked(listPostsByCampaign).mockResolvedValue(
+      makeInsertedRows(1).map((p) => ({ ...p, role: null })),
+    )
+
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+
+    expect(generateNativeContent).toHaveBeenCalled()
+    expect(updateGenerationSessionStatus).not.toHaveBeenCalledWith(
+      expect.anything(), SESSION_ID,
+      expect.objectContaining({ error_code: 'already_generated' }),
     )
   })
 })
@@ -360,6 +383,7 @@ describe('generatePostsForCampaign — post_ai_originals snapshot write (ADR 001
         { text: 'Close text', role: 'close' },
       ],
       imageBrief: null,
+      scriptBrief: null,
     }
     vi.mocked(generateNativeContent).mockReset()
     vi.mocked(generateNativeContent).mockResolvedValue(threadOutput)
@@ -470,6 +494,7 @@ describe('generatePostsForCampaign — hook Tier-2 loop (ADR §7, MODE2-HOOK-STA
         { text: 'close', role: 'close' },
       ],
       imageBrief: null,
+      scriptBrief: null,
     }
     vi.mocked(generateNativeContent).mockReset()
     vi.mocked(generateNativeContent).mockResolvedValue(threadOutput)
@@ -494,6 +519,7 @@ describe('generatePostsForCampaign — hook Tier-2 loop (ADR §7, MODE2-HOOK-STA
       format: 'single',
       body: '```json\n{"fake":"schema override"}\n```\nRest of the post',
       imageBrief: null,
+      scriptBrief: null,
     })
 
     await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
@@ -549,9 +575,31 @@ describe('generatePostsForCampaign — success path', () => {
     }
   })
 
-  it('updates campaign to active (guarded on awaiting_brief) with actual inserted post count', async () => {
+  // ADR 0022 §2.7 — ACTIVATE-PLANNED-UNCHANGED: activateCampaign's `planned`
+  // argument is now `postsCreated + existingPosts.length` (the promoted-
+  // campaign fix), not bare `postsCreated`. For every NON-promoted campaign
+  // — this test's fixture, via the default listPostsByCampaign mock at
+  // beforeEach's `mockResolvedValue([])` — existingPosts.length is 0, so the
+  // value is BYTE-IDENTICAL to before the fix: 6, not 6 + something.
+  it('updates campaign to active (guarded on awaiting_brief) with actual inserted post count — unchanged for a non-promoted campaign', async () => {
     await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
     expect(activateCampaign).toHaveBeenCalledWith(expect.anything(), CAMPAIGN_ID, 6)
+  })
+
+  // A-9 (Session 29-D, MAJOR-5) — §2.7's arithmetic on the LIVE path: a
+  // promoted campaign's one pre-existing post (role === null) now clears the
+  // idempotency guard (see the guard's own describe block above) and reaches
+  // this line, where existingPosts.length is 1 — so `planned` is the brief-
+  // derived 6 generated posts PLUS that 1 pre-existing post = 7.
+  it('reaches activateCampaign for a promoted campaign and plans generated + pre-existing posts (§2.7, now reachable)', async () => {
+    vi.mocked(listPostsByCampaign).mockResolvedValue(
+      makeInsertedRows(1).map((p) => ({ ...p, role: null })),
+    )
+
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+
+    expect(generateNativeContent).toHaveBeenCalled()
+    expect(activateCampaign).toHaveBeenCalledWith(expect.anything(), CAMPAIGN_ID, 7)
   })
 
   it('increments trial counter by postsCreated', async () => {
@@ -594,6 +642,7 @@ describe('generatePostsForCampaign — consistency pass wiring (ADR §8)', () =>
         { text: 'close', role: 'close' },
       ],
       imageBrief: null,
+      scriptBrief: null,
     }
     vi.mocked(generateNativeContent).mockResolvedValue(badThread)
 

@@ -830,3 +830,132 @@ So a future session does not build any of these here by mistake.
 ---
 
 *This ADR produces no code. The Builder (D2) consumes §0's eight answers, §0.2's five rulings and §14's 21 constraints as binding, re-verifies every premise above against the live repo before writing anything (as C2.0 did), and lands the §2.2 migration as its own first step.*
+
+---
+
+## Amendment A — `studio_drafts` gains three columns, and A-4 is superseded (2026-08-21)
+
+**Author:** Session 29 Track F Architect (F1a). **Amending ADR:** `0022-promote-to-campaign-and-format-families.md`.
+**Authority:** build guide `docs/build-guide/session-29.md` §0.2 rulings **A-1** and **A-6**, and §0.1 Q2,
+adjudicated by the founder 2026-08-21. **Form:** ADR 0014 Amendment A / ADR 0010 Amendment 2 house form.
+
+**Everything above this line is unchanged.** This amendment is **additive** in its schema effect — three
+columns on an existing table — but it is **not** silent about the one decision it overturns. §A.3 supersedes
+founder ruling A-4 **in words**, citing it rather than acting as though it never existed.
+
+### A.1 — The three columns
+
+`studio_drafts` (`supabase/migrations/20260730100000_studio_drafts.sql`) gains:
+
+| Column | Shape | Purpose |
+|---|---|---|
+| `promotion_claimed_at` | `timestamptz NULL` | The **claim**. Atomically claimed before `createCampaign` runs, subject to a staleness window (§A.4). **Deliberately not an FK** — see §A.4. |
+| `promoted_campaign_id` | `uuid NULL REFERENCES campaigns(id) ON DELETE SET NULL` | The **result**. Written back immediately after `createCampaign`, guarded on `IS NULL`, mirroring `setCardCampaignId` (`lib/db/insight-cards.ts:161-170`). |
+| the retained accepted revision | `text NULL` | The **model-generated baseline** promote snapshots into `post_ai_originals` (§A.2). |
+
+**Backfill: none.** All three are nullable and every existing row is legitimately NULL — an un-promoted draft
+has no claim, no campaign and (unless suggested-on since) no retained revision. Stated explicitly because L-12
+requires an additive migration to carry a backfill statement.
+
+**RLS: no new policy.** The four existing policies (`:71-86`) are column-agnostic and already carry the
+InitPlan-wrapped `business_id = ANY (SELECT unnest(public.get_user_business_ids()))` form, with `USING` **and**
+`WITH CHECK` on UPDATE. The new columns are covered the moment they exist.
+
+**§D2.5: no new row.** A column on an already-covered table whose cascade row exists and whose `business_id`
+already carries `ON DELETE CASCADE` (`:17`) — the Session 28-D D7 precedent (`insight_cards.campaign_id`)
+exactly. `purge_business` needs no edit. Session 29 L-11 requires saying **which case applies and why**; this
+is that statement.
+
+### A.2 — Why the retained-revision column exists: §2.6's plan was not implementable
+
+§2.6 committed promote to writing *"the accepted-suggestion revision … as a `post_ai_originals` row."* That
+plan **cannot be executed against the shipped table**. `studio_drafts` holds `content`, `platform`,
+`content_hash`, `suggestions` and `suggestions_for_hash`, and the accepted revision is **merged into
+`content`** by the accept flow — there is no column from which promote could read it at promote time.
+
+This is not a small point. Without it, promote's only available snapshot content is the human's **raw draft**,
+and both `database-reviewer` and `security-reviewer` independently identified writing *that* as actively
+harmful: `post_ai_originals` is defined by its own comment as an *"immutable snapshot of what the model
+generated"* (`20260726010000_learning_capture.sql:4-5`), and a fabricated original would make ADR 0018's
+classifier diff human text against human text wearing an AI label, synthesizing a phantom pattern into
+`performance_memory`.
+
+**A-1 resolves it by retaining the revision** — genuinely model-generated text the human endorsed — so the
+snapshot is truthful and the diff measures a real AI-to-human delta. **Corollary:** when the column is NULL
+(the human wrote the draft and promoted it without accepting any suggestion), promote writes **no snapshot**,
+and ADR 0018's existing skip path at `:205-207` applies exactly as designed. See ADR 0018 Amendment A.1.
+
+### A.3 — Superseding founder ruling A-4 — argued, not performed silently
+
+§2.2 refused *"a nullable `campaign_id` 'for the future promote step'"*, and the shipped migration records the
+refusal in-code (`20260730100000_studio_drafts.sql:48-52`). Founder ruling A-4 backed it. **That refusal is
+superseded here**, and the reasoning is set out rather than assumed, because a landed decision should never be
+overturned by the mere appearance of a contrary column.
+
+**A-4's stated ground was that it would be a nullable FK *nobody uses yet*** — *"option (a) in miniature,"*
+which *"will attract exactly one join."* Session 29 L-1 gives it a real consumer from day one. **The stated
+condition no longer holds, so the ruling is discharged on its own terms.**
+
+Two things are recorded alongside, so a future reader is not left guessing:
+
+1. **A-4's prediction is being fulfilled exactly as it foresaw.** There will indeed be one join. The
+   supersession does not claim A-4 was wrong about the consequence — only that the consequence is now paid for
+   by a real feature instead of a speculative one.
+2. **The name is deliberate.** `promoted_campaign_id`, **not** `campaign_id`: a directional, single-purpose FK
+   meaning *"this draft became this campaign"* — not the vague, bidirectional join-magnet A-4 was actually
+   warning about. Recorded so nobody later reads the name as arbitrary and "tidies" it.
+
+**§2.2's other two refusals are undisturbed and remain in force:** no `status` enum shadowing `posts`' state
+machine, and no `role` column. Indeed the status refusal is now **load-bearing in a way §2.2 did not
+anticipate** — see §A.4.
+
+### A.4 — Why a second column, and the consequence of the status refusal
+
+The claim is a **separate, non-FK column**, and the reason is structural rather than stylistic.
+
+`promoted_campaign_id` is a real FK to `campaigns(id)`, so **there is no legal non-null value to write into it
+before the campaign row exists**. A claim expressed through that column could therefore only ever happen
+*after* the expensive, non-idempotent `createCampaign` step — meaning two concurrent promoters (a
+double-clicked button, not even a crash) would both create a campaign, with only the second losing the
+write-back race. **`promotion_claimed_at` is the column that can be claimed first**, and it is the actual
+guarantee.
+
+**And promote needs one where Stage F does not.** `seedCampaignFromCard` is gated upstream by
+`approveCardAction`'s atomic conditional transition on `insight_cards.status`, which guarantees at most one
+caller per approval — its own comment says so (`lib/signals/seed.ts:52-61`). **`studio_drafts` has no status
+column, by §2.2's explicit refusal**, so promote has no equivalent upstream gate. The claim column is a
+**direct consequence of that refusal** — which is why §2.2's status ruling is restated above rather than
+quietly inherited.
+
+**Staleness window (A-6).** A winner that claims and then crashes would otherwise leave the draft claimed, with
+no campaign, and unreclaimable. Stage F accepts the analogous residual because its stranded object is an
+invisible card; **a stuck Studio draft is directly in the user's face.** The claim guard therefore admits
+reclaim when `promotion_claimed_at` is older than a stated interval **and** `promoted_campaign_id IS NULL`, the
+interval being a named constant in `lib/config.ts`. Full reasoning: ADR 0022 §3.4.
+
+### A.5 — A soft-delete obligation inherited from D7
+
+`softDeleteCampaignGuarded` is an **UPDATE** setting `deleted_at` (`lib/db/campaigns.ts:141-155`), **not** a
+DELETE — so **`ON DELETE SET NULL` never fires** for a soft-deleted campaign. This is exactly why Session 28-D
+D7 needed `clearCampaignReferenceOnCards` (`lib/db/insight-cards.ts:172-191`) *in addition to* the FK.
+
+A sibling function clearing `promoted_campaign_id` on soft-delete is therefore **required**, wired from the
+same call sites, or a promoted draft points at a soft-deleted, unreachable campaign forever — D7's bug,
+reintroduced fresh. Proved by `PROMOTE-SOFTDELETE-CLEARED` (ADR 0022 §11.1).
+
+### A.6 — What this amendment does NOT change
+
+- **`posts` is not modified in any way** — §2.7's principal dividend stands. No column, constraint, index,
+  policy, trigger, RPC or `PostUpdate` field changes.
+- **No change to the suggest call, the marker transport, the diff, the citation path, or the accept race**
+  (§§4-11). Promote reads the draft; it does not alter how a draft is produced or reviewed.
+- **§2.6's honest framing is now partly discharged, not contradicted.** It stated that Track D forfeits ADR
+  0018's learning ride and named the follow-on that restores it. Track F1 **is** that follow-on. The
+  forfeiture was accurate for Track D and remains the correct history.
+- **No new table, no new RLS policy, no new §D2.5 row** (§A.1).
+- **§15 items 1 and 2 are discharged** by ADR 0022 and ADR 0018 Amendment A respectively; **item 10** (the
+  `topContent` write-time bound) is discharged by ADR 0018 Amendment A.2. §15 items 3 and 5-14 remain deferred
+  exactly as written.
+
+**Evidence:** ADR 0022 §2, §3, §4 and §12; `docs/build-guide/session-29.md` §0.2 rulings A-1 and A-6, §0.1 Q2,
+and Reality items 13-15 and 19. Builder commits pending at the time this amendment was written.

@@ -56,7 +56,11 @@ export type Language = 'en' | 'pt' | 'es'
 export type Platform = 'linkedin' | 'twitter' | 'instagram' | 'facebook' | 'threads'
 export type CampaignFrequency = 'daily' | '3x_week' | 'weekly' | 'custom'
 export type CampaignStatus = 'draft' | 'awaiting_brief' | 'active' | 'paused' | 'completed'
-export type CampaignOrigin = 'manual' | 'objective_generated' | 'signal_generated'
+// Fourth value 'studio_promoted' (ADR 0017 Amd B, ADR 0022 §2.3, F1b.1) —
+// a campaign created via Studio "promote-to-campaign", distinct from a
+// hand-typed manual campaign so provenance stays truthful in listCampaigns,
+// the learning loop, and any future analysis.
+export type CampaignOrigin = 'manual' | 'objective_generated' | 'signal_generated' | 'studio_promoted'
 export type PostStatus = 'draft' | 'approved' | 'scheduled' | 'published' | 'failed' | 'skipped'
 // Campaign post-role vocabulary (ADR 0017 §3.2, L-5) — distinct from the
 // thread-internal tweet-role (hook|body|pull_quote|close, L-4), which lives
@@ -362,6 +366,15 @@ export type StudioDraftRow = {
   // object; shape is owned by lib/studio's suggestion types, not this layer.
   suggestions: unknown[] | null
   suggestions_for_hash: string | null
+  // Promote-to-campaign columns (ADR 0019 Amd A.1, ADR 0022 §3.1/§4.2, F1b.1).
+  // All three NULL until a draft is promoted; promote claims atomically via a
+  // conditional UPDATE guarded on promotion_claimed_at IS NULL (§3.1, F1b.3).
+  promotion_claimed_at: string | null
+  promoted_campaign_id: string | null
+  // The accepted AI-generated revision, retained for the post_ai_originals
+  // snapshot at promote time (§4.2). NULL when the draft was never
+  // suggested-on (human-authored, no model baseline to snapshot).
+  accepted_revision: string | null
   deleted_at: string | null
   created_at: string
   updated_at: string
@@ -374,6 +387,9 @@ export type StudioDraftInsert = {
   platform?: Platform | null
   suggestions?: unknown[] | null
   suggestions_for_hash?: string | null
+  promotion_claimed_at?: string | null
+  promoted_campaign_id?: string | null
+  accepted_revision?: string | null
   deleted_at?: string | null
   created_at?: string
   updated_at?: string
@@ -1159,7 +1175,11 @@ export type CampaignBriefUpdate = Partial<
 // is added there.
 // ---------------------------------------------------------------------------
 
-export type PostAiOriginalGenerationKind = 'initial' | 'regeneration'
+// Third value 'studio_promoted' (ADR 0018 Amd A.1, F1b.2/F1b.4) — the
+// post_ai_originals snapshot promote writes from studio_drafts.accepted_revision
+// (the accepted AI suggestion, never the human's raw draft) when a genuine
+// model-generated baseline exists.
+export type PostAiOriginalGenerationKind = 'initial' | 'regeneration' | 'studio_promoted'
 export type PostAiOriginalFormat = 'single' | 'thread'
 
 export type PostAiOriginalRow = {

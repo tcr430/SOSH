@@ -5,6 +5,7 @@ import {
   getLatestRevision,
   createNextPostAiOriginalRevision,
   getPostAiOriginalById,
+  listLatestPostAiOriginalsByPostIds,
   AI_ORIGINAL_SCHEMA_VERSION,
 } from './post-ai-originals'
 import type { PostAiOriginalRow, PostAiOriginalInsert } from './types'
@@ -144,5 +145,44 @@ describe('getPostAiOriginalById', () => {
   it('throws on DB error', async () => {
     const { client } = createMockClient(null, { message: 'query failed' })
     await expect(getPostAiOriginalById(client, 'origin-1')).rejects.toThrow('query failed')
+  })
+})
+
+// ADR 0022 §10 (Session 29, F1b.9) — the Approvals surface's bulk read.
+//
+// Session 29-D, D9 (MINOR-6 correction) — rewritten from a raw ordered,
+// LIST-WIDE-capped SELECT to the get_latest_post_ai_originals RPC (a
+// DISTINCT ON (post_id) read, per-post bounded, not per-list). These tests
+// now assert the RPC call shape; the REAL per-post-bounded guarantee (a
+// post with >20 revisions can no longer starve another post's slot) is a
+// DB-ordering property a mock cannot exhibit — proved instead at Tier-1 in
+// supabase/__tests__/post-ai-originals-latest-per-post.test.ts.
+describe('listLatestPostAiOriginalsByPostIds', () => {
+  it('returns an empty Map without querying when given no post ids', async () => {
+    const { client } = createMockClient(null, null)
+    const result = await listLatestPostAiOriginalsByPostIds(client, [])
+    expect(result.size).toBe(0)
+    expect(client.rpc).not.toHaveBeenCalled()
+  })
+
+  it('calls the get_latest_post_ai_originals RPC with the requested post ids', async () => {
+    const { client } = createMockClient([mockRow], null)
+    await listLatestPostAiOriginalsByPostIds(client, ['post-1'])
+    expect(client.rpc).toHaveBeenCalledWith('get_latest_post_ai_originals', { p_post_ids: ['post-1'] })
+  })
+
+  it('returns one entry per distinct post_id in the RPC result', async () => {
+    const rowA = { ...mockRow, post_id: 'post-1' }
+    const rowB = { ...mockRow, post_id: 'post-2' }
+    const { client } = createMockClient([rowA, rowB], null)
+    const result = await listLatestPostAiOriginalsByPostIds(client, ['post-1', 'post-2'])
+    expect(result.size).toBe(2)
+    expect(result.get('post-1')).toEqual(rowA)
+    expect(result.get('post-2')).toEqual(rowB)
+  })
+
+  it('throws on error', async () => {
+    const { client } = createMockClient(null, { message: 'query failed' })
+    await expect(listLatestPostAiOriginalsByPostIds(client, ['post-1'])).rejects.toThrow('query failed')
   })
 })

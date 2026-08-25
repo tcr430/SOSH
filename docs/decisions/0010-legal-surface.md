@@ -1109,6 +1109,15 @@ migration shipped, per the §D2.5/A3 note in `docs/reviews/session-24-reviewer.m
 — `business_id` FK, `CASCADE`, no redaction needed. No table-level change; this is the doc-side
 confirmation the correction pass's D6 step was asked to record.
 
+**Session 29-D confirmation (2026-08-25, D11 close-out):** ADR 0022 (promote-to-campaign) added three
+new **columns** to `studio_drafts` (`promotion_claimed_at`, `promoted_campaign_id`, `accepted_revision`) —
+no new table, so **no new §D2.5 row is required**; the existing `studio_drafts` row above already covers
+the whole table by `business_id` CASCADE, and `PROMOTE-CASCADE-COMPLETE` (ADR 0022 §11.1, both `db-tests`
+Tier-1 cases) proves erasure reaches rows carrying the new columns specifically. Session 29-D's own D9 step
+added a new Postgres FUNCTION (`get_latest_post_ai_originals`, `SECURITY INVOKER`, no new table or column)
+— functions carry no PII of their own and need no cascade row. No other table-shaped change landed in
+Session 29 or its correction pass.
+
 #### D2.6 — Retention & redaction (D1 / D2)
 
 - **Retain `billing_events`** — tax/financial record (10-year retention, §5). `business_id` auto-nulled by its SET NULL FK on root delete; redact `stripe_customer_id` → NULL and `payload` → `{redacted:true,type}` **before** the delete (the SET NULL means the rows can no longer be found by `business_id` afterward). PK `id` retained (pseudonymous Stripe event ref, audit key).

@@ -34,16 +34,17 @@ export type SummarizerOutput = z.infer<typeof SummarizerOutputSchema>
 export interface SummarizerInput {
   // Tier-0's DETERMINISTIC pattern statements for this business, when the
   // arithmetic writer populates them. IMPORTANT (security-reviewer, C2.7
-  // pass): today this input is sourced from performance_memory rows with
-  // source='distilled' (listDistilledPatternsForSummary), and this
-  // summarizer's OWN prior output is the only live writer of that bucket —
-  // the arithmetic Tier-0 writer (lib/learning/promote.ts's
-  // recomputeAndUpsertPattern) has no production caller yet. So "this text
-  // is arithmetic, not attacker-reachable" is NOT a safe assumption to rely
-  // on today, and there is no column distinguishing an arithmetic row from
-  // an LLM-summarizer row even once that writer ships — both share
-  // source='distilled'. Guarded identically to editExcerpts below as a
-  // result; see guardTierZeroSummaries().
+  // pass; premise corrected Session 29 F1b.10, ADR 0022 §17.1): today this
+  // input is sourced from performance_memory rows with source='distilled'
+  // (listDistilledPatternsForSummary), and BOTH this summarizer's own prior
+  // output AND the arithmetic Tier-0 writer (lib/learning/promote.ts's
+  // recomputeAndUpsertPattern, called from lib/learning/orchestrator.ts's
+  // tick loop) are LIVE writers of that same bucket. So "this text is
+  // arithmetic, not attacker-reachable" is NOT a safe assumption to rely on
+  // — now for a STRONGER reason than before: both writers are live, and no
+  // column distinguishes an arithmetic row from an LLM-summarizer row
+  // (both share source='distilled'). Guarded identically to editExcerpts
+  // below as a result; see guardTierZeroSummaries().
   readonly tierZeroSummaries: readonly string[]
   // Raw human-edited post copy — the NEW data-flow direction this ADR
   // names (§6.3, LEARN-SUMMARY-DATA-GUARDED). Guarded entirely inside

@@ -90,6 +90,7 @@
       "invalid_response": "The AI returned an unexpected response. Try again.",
       "timeout": "The AI took too long. Try again.",
       "not_eligible": "This post can't be regenerated in its current state.",
+      "scheduleExpired": "This post's scheduled time has already passed. Reschedule it to a future time, then approve again.",
       "generic": "Something went wrong. Please try again."
     }
   }

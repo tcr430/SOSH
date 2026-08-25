@@ -32,7 +32,7 @@ import type { SinglePostOutput } from '@/lib/ai/prompts/formats/schemas'
 // State types
 // ---------------------------------------------------------------------------
 
-export type PostActionErrorCode = 'invalid_input' | 'generic' | 'not_eligible' | AiErrorCode
+export type PostActionErrorCode = 'invalid_input' | 'generic' | 'not_eligible' | 'schedule_expired' | AiErrorCode
 
 export type PostActionState = {
   success?: boolean
@@ -68,6 +68,14 @@ function revalidateCampaignPosts(campaignId: string): void {
 // ---------------------------------------------------------------------------
 
 const postIdSchema = z.object({ postId: z.string().uuid() })
+
+// ADR 0022 §2.5 (Session 29-D, MAJOR-4) — approvePostAction's own input
+// contract, extending postIdSchema with the optional re-picked time a
+// 'schedule_expired' refusal prompts the user for.
+const approvePostSchema = z.object({
+  postId: z.string().uuid(),
+  newScheduledAt: z.string().datetime().optional(),
+})
 const bulkApproveSchema = z.object({
   campaignId: z.string().uuid(),
   // Capped at BULK_APPROVE_ID_CAP (ADR 0014 §A1.2, Session 22-F NEW-7): a
@@ -86,16 +94,19 @@ const bulkApproveSchema = z.object({
 // approvePostAction
 // ---------------------------------------------------------------------------
 
-export async function approvePostAction(postId: string): Promise<PostActionState> {
-  const parsed = postIdSchema.safeParse({ postId })
+export async function approvePostAction(postId: string, newScheduledAt?: string): Promise<PostActionState> {
+  const parsed = approvePostSchema.safeParse({ postId, newScheduledAt })
   if (!parsed.success) return { error: 'invalid_input' }
 
   try {
     const ctx = await getAuthContext()
     if (!ctx) return { error: 'generic' }
 
-    const row = await approvePost(ctx.client, postId)
-    revalidateCampaignPosts(row.campaign_id)
+    const result = await approvePost(ctx.client, postId, undefined, parsed.data.newScheduledAt)
+    if (result.outcome === 'schedule_expired') return { error: 'schedule_expired' }
+    if (result.outcome === 'not_eligible') return { error: 'not_eligible' }
+
+    revalidateCampaignPosts(result.post.campaign_id)
     return { success: true }
   } catch {
     return { error: 'generic' }
@@ -355,6 +366,7 @@ export async function regeneratePostAction(
       format: 'single',
       body: output.content,
       imageBrief: null,
+      scriptBrief: null,
     }
     await createNextPostAiOriginalRevision(ctx.client, {
       business_id: post.business_id,

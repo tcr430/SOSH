@@ -3,11 +3,13 @@
 import { useRef, useState, useTransition } from 'react'
 import { useTranslations } from 'next-intl'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { DiffView } from './DiffView'
 import { SuggestionCard } from './SuggestionCard'
 import { DraftObservations } from './DraftObservations'
+import { PromoteDraftDialog } from './PromoteDraftDialog'
 import {
   suggestStudioSuggestions,
   acceptStudioSuggestion,
@@ -15,6 +17,7 @@ import {
   saveStudioDraftAction,
   type StudioActionErrorCode,
   type SuggestStudioSuggestionsState,
+  type PromoteDraftToCampaignState,
 } from '@/app/[locale]/(dashboard)/studio/actions'
 import { VALID_PLATFORMS, PLATFORM_CONFIGS } from '@/lib/social'
 import type { Platform } from '@/lib/db/types'
@@ -33,15 +36,40 @@ interface StudioEditorProps {
   draftId: string | null
   initialContent: string
   initialPlatform: Platform | null
+  // ADR 0022 §10 (Session 29 F1b.5) — the promote affordance's server-read
+  // facts. initialPromotedCampaignId is null for every pre-existing draft
+  // and for the new-draft page (studio/page.tsx). isClaimReclaimable is
+  // computed server-side (it needs config.server.PROMOTE_CLAIM_STALE_MINUTES,
+  // a server-only constant) — never recomputed client-side.
+  initialPromotedCampaignId?: string | null
+  isClaimReclaimable?: boolean
 }
 
-export function StudioEditor({ locale, draftId: initialDraftId, initialContent, initialPlatform }: StudioEditorProps) {
+export function StudioEditor({
+  locale,
+  draftId: initialDraftId,
+  initialContent,
+  initialPlatform,
+  initialPromotedCampaignId = null,
+  isClaimReclaimable = false,
+}: StudioEditorProps) {
   const t = useTranslations('studio.editor')
   const router = useRouter()
 
   const [draftId, setDraftId] = useState(initialDraftId)
   const [content, setContent] = useState(initialContent)
   const [platform, setPlatform] = useState<Platform | null>(initialPlatform)
+
+  // ADR 0022 §10 — promote state. promotedCampaignId is the terminal fact
+  // (server-seeded, or set the moment THIS session's own promote succeeds);
+  // promoteOutcome is ephemeral messaging for the non-terminal typed
+  // outcomes (§3.3's already_promoted/claimed_by_another, plus 'error').
+  const [promotedCampaignId, setPromotedCampaignId] = useState(initialPromotedCampaignId)
+  const [promoteDialogOpen, setPromoteDialogOpen] = useState(false)
+  // Session 29-D, D8 (MINOR-8) — 'not_found' is distinct from the generic
+  // 'error': the draft was soft-deleted or removed, not a transient failure,
+  // and the reclaimable-after-staleness framing 'error' implies is wrong for it.
+  const [promoteOutcome, setPromoteOutcome] = useState<'already_promoted' | 'claimed_by_another' | 'error' | 'not_found' | null>(null)
 
   const [suggestionResult, setSuggestionResult] = useState<SuggestSuccess | null>(null)
   const [stale, setStale] = useState(false)
@@ -117,6 +145,74 @@ export function StudioEditor({ locale, draftId: initialDraftId, initialContent, 
   const isEmptyDraft = content.trim().length === 0
   const missingPlatform = platform === null
   const suggestDisabledReason = isEmptyDraft ? t('suggestDisabled.emptyDraft') : missingPlatform ? t('suggestDisabled.noPlatform') : null
+
+  // ADR 0022 §10 — the seven promote states, precedence order:
+  // 1. promoted (terminal — a real fact once set, outlives any later edit)
+  // 2. claimed_by_another (a live, non-stale claim held elsewhere right now)
+  // 3. failed (§3.4's residual — the claim is still held, fresh; an
+  //    immediate retry would just return claimed_by_another, so this takes
+  //    precedence over 'promotable' rather than rendering alongside it) —
+  //    Session 29-D, D8 (MINOR-8) adds 'not_found' alongside 'failed' here,
+  //    a distinct sub-case rendered with its own message, not a new state.
+  // 4. not eligible (content/platform, OR no saved draft yet to promote)
+  // 5. reclaimable (server-computed: claimed, stale, no campaign)
+  // 6. promotable (otherwise)
+  const promoteState: 'promoted' | 'already_promoted' | 'claimed_by_another' | 'failed' | 'not_found' | 'not_eligible' | 'reclaimable' | 'promotable' =
+    promotedCampaignId !== null
+      ? promoteOutcome === 'already_promoted'
+        ? 'already_promoted'
+        : 'promoted'
+      : promoteOutcome === 'claimed_by_another'
+        ? 'claimed_by_another'
+        : promoteOutcome === 'not_found'
+          ? 'not_found'
+          : promoteOutcome === 'error'
+            ? 'failed'
+            : draftId === null || isEmptyDraft || missingPlatform
+              ? 'not_eligible'
+              : isClaimReclaimable
+                ? 'reclaimable'
+                : 'promotable'
+
+  // impeccable review (Session 29 F1b.5) — the third case here (neither
+  // reason true) is a real, reachable state: content and platform are BOTH
+  // fine but draftId is still null (the new-draft page before first save/
+  // suggest). Naming it distinctly avoids the earlier bug where that case
+  // fell through to the "add content" message even though content wasn't
+  // empty.
+  const notEligibleReasonKey = isEmptyDraft
+    ? 'promote.notEligible.emptyDraft'
+    : missingPlatform
+      ? 'promote.notEligible.noPlatform'
+      : 'promote.notEligible.notSaved'
+
+  function handlePromoteOutcome(result: PromoteDraftToCampaignState) {
+    if (result.outcome === 'promoted') {
+      setPromotedCampaignId(result.campaignId)
+      setPromoteOutcome(null)
+      return
+    }
+    if (result.outcome === 'already_promoted') {
+      setPromotedCampaignId(result.draft.promoted_campaign_id)
+      setPromoteOutcome('already_promoted')
+      return
+    }
+    if (result.outcome === 'claimed_by_another') {
+      setPromoteOutcome('claimed_by_another')
+      return
+    }
+    // Session 29-D, D8 (MINOR-8) — the draft is gone (soft-deleted or
+    // removed between page load and this attempt), not merely stale-claimed.
+    if (result.outcome === 'error' && result.error === 'draft_not_found') {
+      setPromoteOutcome('not_found')
+      return
+    }
+    // 'not_eligible' and 'error' — §3.4's stranded-claim residual. The
+    // draft stays claimed until PROMOTE_CLAIM_STALE_MINUTES elapses; this
+    // page has no live countdown, so it renders the honest "failed, draft
+    // is safe" message rather than a state it cannot actually observe yet.
+    setPromoteOutcome('error')
+  }
 
   function handleSuggest() {
     if (isEmptyDraft || missingPlatform || pendingAction !== null) return
@@ -256,6 +352,75 @@ export function StudioEditor({ locale, draftId: initialDraftId, initialContent, 
 
       {stale && suggestionResult !== null && (
         <p className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm">{t('staleBanner')}</p>
+      )}
+
+      {/* ADR 0022 §10 (Session 29 F1b.5) — the seven promote states. Terminal
+          states (promoted/already_promoted) render a REAL link (D7's
+          insight_cards.campaign_id precedent), never an inert placeholder. */}
+      <div className="flex flex-col gap-2 border-t border-border pt-6">
+        <h2 className="text-sm font-medium">{t('promote.heading')}</h2>
+        <p className="text-xs text-muted-foreground">{t('promote.description')}</p>
+
+        {(promoteState === 'promoted' || promoteState === 'already_promoted') && (
+          <div className="rounded-md border border-success-border bg-success px-3 py-2">
+            <p className="text-xs font-medium text-success-foreground">
+              {t(promoteState === 'already_promoted' ? 'promote.alreadyPromoted.heading' : 'promote.promoted.heading')}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {t(promoteState === 'already_promoted' ? 'promote.alreadyPromoted.body' : 'promote.promoted.body')}
+            </p>
+            <Link
+              href={`/${locale}/campaigns/${promotedCampaignId}/brief`}
+              className="mt-1 inline-block text-xs text-info-foreground underline underline-offset-2"
+            >
+              {t(promoteState === 'already_promoted' ? 'promote.alreadyPromoted.link' : 'promote.promoted.link')}
+            </Link>
+          </div>
+        )}
+
+        {promoteState === 'claimed_by_another' && (
+          <p className="text-xs text-muted-foreground">{t('promote.claimedByAnother')}</p>
+        )}
+
+        {promoteState === 'not_eligible' && (
+          <p className="text-xs text-muted-foreground">{t(notEligibleReasonKey)}</p>
+        )}
+
+        {promoteState === 'reclaimable' && (
+          <div className="rounded-md border border-warning-border bg-warning px-3 py-2">
+            <p className="text-xs font-medium text-warning-foreground">{t('promote.reclaimable')}</p>
+            <Button className="mt-2" size="sm" onClick={() => setPromoteDialogOpen(true)} disabled={pendingAction !== null}>
+              {t('promote.retryButton')}
+            </Button>
+          </div>
+        )}
+
+        {promoteState === 'promotable' && (
+          <Button onClick={() => setPromoteDialogOpen(true)} disabled={pendingAction !== null} className="self-start">
+            {t('promote.button')}
+          </Button>
+        )}
+
+        {promoteState === 'failed' && (
+          <p role="alert" className="text-xs text-destructive">
+            {t('promote.failed')}
+          </p>
+        )}
+
+        {promoteState === 'not_found' && (
+          <p role="alert" className="text-xs text-destructive">
+            {t('promote.notFound')}
+          </p>
+        )}
+      </div>
+
+      {draftId !== null && (
+        <PromoteDraftDialog
+          draftId={draftId}
+          open={promoteDialogOpen}
+          onOpenChange={setPromoteDialogOpen}
+          onOutcome={handlePromoteOutcome}
+        />
       )}
 
       {suggestionResult !== null && (

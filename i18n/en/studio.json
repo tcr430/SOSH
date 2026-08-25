@@ -82,6 +82,40 @@
       "avoidWord": "Matches your avoid-word list: \"{word}\"",
       "performancePattern": "Matches a governed performance pattern ({confidence}% confidence, seen {count}x)",
       "evidence": "Backed by pinned evidence"
+    },
+    "promote": {
+      "heading": "Promote to campaign",
+      "description": "Turn this draft into a real campaign, post, and brief.",
+      "button": "Promote to campaign",
+      "retryButton": "Try again",
+      "notEligible": {
+        "emptyDraft": "Add some content before promoting.",
+        "noPlatform": "Choose a platform before promoting.",
+        "notSaved": "Save this draft before promoting."
+      },
+      "promoting": "Promoting…",
+      "promoted": {
+        "heading": "Promoted",
+        "body": "This draft is now a campaign.",
+        "link": "View the brief"
+      },
+      "alreadyPromoted": {
+        "heading": "Already promoted",
+        "body": "This draft was already promoted to a campaign.",
+        "link": "View the brief"
+      },
+      "failed": "Something went wrong while promoting. Your draft is safe — you can try again in a few minutes.",
+      "notFound": "This draft no longer exists — it may have been deleted. Nothing was promoted.",
+      "claimedByAnother": "This draft is currently being promoted (possibly from another tab). Please wait a few minutes and refresh.",
+      "reclaimable": "The last promote attempt didn't finish. You can try again.",
+      "dialog": {
+        "title": "Choose when this post goes live",
+        "description": "Promote creates the campaign and post now, but nothing publishes until you approve it at this time.",
+        "scheduledAtLabel": "Scheduled date and time",
+        "confirmButton": "Promote",
+        "confirmButtonSubmitting": "Promoting…",
+        "cancelButton": "Cancel"
+      }
     }
   }
 }

@@ -21,8 +21,31 @@
     "skipLabel": "Por que está ignorando esta publicação?",
     "skipPlaceholder": "Motivo para ignorar",
     "error": "Algo correu mal. Tente novamente.",
+    "scheduleExpired": "A hora agendada desta publicação já passou. Escolha uma nova hora para a aprovar.",
+    "scheduleExpiredLabel": "Nova hora agendada",
+    "confirmNewTime": "Aprovar com nova hora",
     "announceApproved": "Publicação aprovada.",
-    "announceSkipped": "Publicação ignorada."
+    "announceSkipped": "Publicação ignorada.",
+    "scriptBrief": {
+      "heading": "Recomendação de guião",
+      "neverPublishedNote": "Uma sugestão para um tratamento em vídeo curto desta publicação — nunca publicado."
+    },
+    "imageBrief": {
+      "heading": "Recomendação de imagem",
+      "neverPublishedNote": "Uma sugestão para uma imagem de acompanhamento — nunca publicada."
+    },
+    "carousel": {
+      "heading": "Pré-visualização do carrossel",
+      "slideRole": {
+        "cover": "Capa",
+        "body": "Corpo",
+        "cta": "Chamada para ação"
+      },
+      "slideImageBrief": {
+        "heading": "Recomendação de imagem para este slide",
+        "neverPublishedNote": "Uma sugestão para a imagem deste slide — nunca publicada."
+      }
+    }
   },
   "empty": {
     "title": "Nenhuma publicação a aguardar aprovação.",

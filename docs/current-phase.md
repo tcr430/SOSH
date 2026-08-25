@@ -2,7 +2,21 @@
 
 **Phase:** 1 — MVP
 **Goal:** First paying customer
-**Status:** **Session 28 (Mode 3 Part 2: Triage, Insight Cards, Opportunity Feed, ADR 0021) CLOSED, correction
+**Status:** **Session 29 (Mode 1 Studio "promote to campaign" + carousel/script format families, ADR 0022,
+Track F) code-complete and CI-verified; correction pass Session 29-D (D0–D12) closed all twenty Reviewer
+findings (5 MAJOR, 8 MINOR, 7 NIT — 0 BLOCKER; the Reviewer's own closing tally understated this as 15,
+corrected in the appendix's row zero) and ran both required CI jobs green at the corrected head
+(`8d506634`, PR #6 — see the D12 entry below for run URLs and verbatim skip-guard lines).** Track F is
+**not yet formally CLOSED by this document's own convention**, though: a session/track is marked CLOSED
+only once its `master`-run evidence exists (per every other entry below), and D12's green runs are
+`pull_request`-event runs on `session-29`, not `master` push events — merging is a separate, not-yet-taken
+step. Every MAJOR was the same root cause restated three times: a requirement ADR 0022 stated in prose but
+named no constraint for — MAJOR-1, MAJOR-2 and MAJOR-4 all trace back to that single process failure, now
+recorded as a standing rule in ADR 0022 §11's preamble (D11). See the Session 29 entries under "What's
+done" below for the full detail, including the D8 live-Postgres RLS finding (`security-reviewer`-confirmed)
+and D5's promoted-campaign generation fix.
+
+**Session 28 (Mode 3 Part 2: Triage, Insight Cards, Opportunity Feed, ADR 0021) CLOSED, correction
 pass Session 28-D CLOSED (D0–D9, Track E).** E5.1–E5.12 shipped Stage C (bounded tool-using triage loop),
 Stage D (card generation + verification), the `/opportunities` feed (ten states), Stage F (seeding into the
 existing brief pipeline), and Tier E — a new MEASURED-never-COVERED eval category. **28 of 29 §11 constraints
@@ -306,6 +320,41 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
     landed in this session, so the count starts now. `db-tests` stays **advisory-but-must-be-read** until
     three consecutive full-green runs land on `master`; update this line with each green/red run rather
     than waiting for the third to backfill the count.
+    - > **⚠ RECONCILIATION, 2026-08-22 — the tally below is STALE. The true count is 5, and the promotion
+      > condition was met on 2026-07-27.** The entries beneath this note are each individually correct:
+      > every one describes a `pull_request`-event run and correctly says such a run never moves the tally.
+      > **The defect is one of omission — no entry was ever written for a `push`-on-`master` run, and five
+      > of them happened.** Queried from the Actions history
+      > (`gh run list --workflow=db-tests.yml --branch master --event push`), all five are full-green
+      > **and non-vacuous**: in each, the step *"Skip-guard — fail if any suite is INVISIBLE or RED"*
+      > reports `success`, so none is a FALSE-GREEN. Under the new topology (which landed 2026-07-21,
+      > Session 23-D), the `master` push runs are:
+      >
+      > | # | Date | Head | Run | Suite | Skip-guard |
+      > |---|---|---|---|---|---|
+      > | 1 | 2026-07-22 | `4b035d3b` | [29947011885](https://github.com/tcr430/SOSH/actions/runs/29947011885) | success | success |
+      > | 2 | 2026-07-25 | `d97e55c8` | [30156271345](https://github.com/tcr430/SOSH/actions/runs/30156271345) | success | success |
+      > | 3 | 2026-07-27 | `f1c730cc` | [30302554218](https://github.com/tcr430/SOSH/actions/runs/30302554218) | success | success |
+      > | 4 | 2026-07-29 | `51264772` | [30436667567](https://github.com/tcr430/SOSH/actions/runs/30436667567) | success | success |
+      > | 5 | 2026-08-21 | `e69e5c41` | [32493839443](https://github.com/tcr430/SOSH/actions/runs/32493839443) | success | success |
+      >
+      > **Run 3 (2026-07-27) is the third consecutive full-green `master` run**, so `db-tests` satisfied
+      > ADR 0015 §5's promotion rule on that date and has held it through two further greens since. The
+      > last `master` failure was 2026-07-14 (`e2812ec8`), before the new topology — nothing has broken
+      > the streak. **No backfill of branch/PR runs is involved:** every run counted here is a genuine
+      > `push`-on-`master` event, exactly as build guide §0.4 requires.
+      >
+      > **Consequence — an open decision, deliberately not taken here.** Promoting `db-tests` from
+      > advisory to **Required** is a branch-protection change on the repository, not a documentation
+      > change, and it is the founder's call. Recorded as **met and pending action**. Until it is taken,
+      > every Tier-1 constraint — including ADR 0022 §11.1's nine promote constraints and
+      > `MEM-PATTERN-BOUNDED`, which ADR 0018 Amendment A.4.4 makes Tier-1-only — lands behind a gate
+      > that can go red without blocking a merge.
+      >
+      > **Why this went unnoticed for four weeks.** The ledger tracked the runs it was told to distrust
+      > (PR events) and never queried the runs that count. A tally maintained by appending *"still 0 of 3"*
+      > to each PR run cannot detect a `master` run nobody wrote down. **Future entries must be sourced
+      > from `--event push --branch master`, not from whichever run the session happened to be watching.**
     - **2026-07-21 (Session 23-D · D5):** `db-tests` ran **green** on PR #1 (branch `session-22-d`,
       head `f022e08f`) — [run 29860240741](https://github.com/tcr430/SOSH/actions/runs/29860240741);
       skip-guard confirmed all 13 `supabase/__tests__` suites visible (non-zero executed), incl. the two
@@ -438,6 +487,84 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
       same rule as every entry above: this is a `pull_request`-event run on `session-22-d`, not a `master`
       run. Promotion to `master`-gated required status still needs three consecutive green `master` runs,
       none of which have happened yet for either `db-tests` or `eval-reported`.
+    - **2026-08-21 (Session 29 · Step 0 — Sessions 26–28 land on `master`):** PR
+      [#5](https://github.com/tcr430/SOSH/pull/5) merged to `master` as `e69e5c41` (merge commit, not
+      squash — the per-session history is the audit trail the ADR appendices cite by SHA). The
+      **`master` push-event** runs at that head: `app-tests`
+      [run 32493839424](https://github.com/tcr430/SOSH/actions/runs/32493839424) — `skip-guard: 212
+      file(s) under [app, lib, components] all visible, zero failures — green. (2848/2848 tests passed)`;
+      `db-tests` [run 32493839443](https://github.com/tcr430/SOSH/actions/runs/32493839443) —
+      `skip-guard: 30 file(s) under [supabase/__tests__] all visible, zero failures — green. (282/282
+      tests passed)`. `eval-triage.yml` triggers on `pull_request` + `workflow_dispatch` only and
+      therefore **cannot** produce a push-event run; it was dispatched explicitly against `master` —
+      [run 32494213095](https://github.com/tcr430/SOSH/actions/runs/32494213095), `eval-reported` and
+      `eval-threshold` both green. **These are genuine `master` runs and they do count.**
+      - **Step 0 also found `app-tests` RED at `f692a30e` and it was not a regression.** Eight tests in
+        `OpportunityFeed.test.tsx` failed against source byte-identical to `87a4dfc8`, whose D9-cited run
+        was green. `makeCard()` defaulted `expires_at` to the absolute literal `'2026-08-15T00:00:00Z'`;
+        `OpportunityFeed.tsx:222` expires a pending card once `expires_at < new Date()` and `:354` renders
+        the action buttons only under `!isExpired`, so past that date the buttons stopped rendering and
+        every `buttonWithText(...)?.click()` became a silent no-op through the optional chain. The green
+        run was 2026-08-14T22:21Z — about 1h38m before the fixture rotted. Fixed in `ca27d268` by deriving
+        the default from `formatISO(addDays(new Date(), 7))` per CLAUDE.md's date rule. Two notes for the
+        record: D9's commit message cites `app-tests` run 31846312604 as evidence for its own range head,
+        but that run's `headSha` is `87a4dfc8` (**D8**); and the optional-chain idiom is what let a missing
+        button degrade into a passing-looking no-op instead of a loud failure.
+      - **⚠ DISCREPANCY — the tally above appears to have been under-counted all along, and the promotion
+        decision is a founder adjudication, not a Builder's.** Every entry above records a
+        `pull_request`-event run and correctly says "tally unchanged" — but **no entry ever recorded the
+        `master` push-event run that each merge produced.** Those runs exist and were full-green with
+        clean, non-zero skip-guards. Consecutive full-green `master` push runs since the Session 22-D
+        topology (`skip-guard` + flag deletion) landed:
+        1. `4b035d3b` — 2026-07-22 — [db-tests 29947011885](https://github.com/tcr430/SOSH/actions/runs/29947011885), `13 file(s) … all visible, zero failures — green`
+        2. `d97e55c8` — 2026-07-25 — [db-tests 30156271345](https://github.com/tcr430/SOSH/actions/runs/30156271345), green
+        3. `f1c730cc` — 2026-07-27 — [db-tests 30302554218](https://github.com/tcr430/SOSH/actions/runs/30302554218), green
+        4. `51264772` — 2026-07-29 — [db-tests 30436667567](https://github.com/tcr430/SOSH/actions/runs/30436667567), `22 file(s) … green`
+        5. `e69e5c41` — 2026-08-21 — [db-tests 32493839443](https://github.com/tcr430/SOSH/actions/runs/32493839443), `30 file(s) / 282 tests`
+        The last red `master` run was `e2812ec8` (2026-07-14). On the face of ADR 0015 §5 — *"three
+        consecutive full green runs on `master`"* — the threshold was **reached at `f1c730cc` on
+        2026-07-27**, and the streak now stands at **5**. Session 29's build guide (`session-29.md`
+        Step 0) asserts the opposite — *"no post-Session-22 code has ever run on `master` at all"* — which
+        is **false**: `master` already carried Sessions 23–25 via PRs #1–#4. **This line is therefore NOT
+        updated to a number.** Promoting `db-tests` to Required changes a merge gate and updates the
+        `master-app-tests` ruleset; per ADR 0015 §5 that is the tech lead's / founder's call. Recorded
+        here for adjudication rather than silently backfilled (which would fabricate history) or silently
+        ignored (which would keep asserting a 0 that the run log contradicts). `session-29.md` Step 0's
+        stale premise needs correcting either way.
+    - **2026-08-25 (Session 29-D, D10 — MINOR-7, out of range, fixed anyway):** `vitest.config.ts`'s
+      `include` for `lib/**` was `*.test.ts` only — it never matched `.tsx`, so the seven
+      `lib/email/templates/__tests__/*.test.tsx` files (`first-post-published`, `layout`,
+      `payment-failed-courtesy`, `team-invite`, `trial-warning-t1`, `trial-warning-t3`,
+      `welcome-to-plan`) were `AUTHORED-NOT-EXECUTED` — invisible to the skip-guard rather than caught by
+      it, since Vitest never collected them at all. Fixed to `lib/**/*.test.{ts,tsx}` (mirroring `app/**`
+      and `components/**`'s existing pattern). All seven ran green on the first try — no discovery, no
+      fix needed, nothing excluded. **Local file count moved 219 → 226 (+7)** (`npm run test:app`'s "Test
+      Files … passed (N)" line, same three pre-existing unrelated env-var failures as before, all app
+      tests otherwise green: 3071/3071 passing tests). This is a **local** count, not yet a `master`
+      push-event skip-guard reading — Session 29-D has not merged to `master` at this point in the
+      correction pass; the actual CI `skip-guard: N file(s) …` line will reflect this once `app-tests`
+      runs on the merged range.
+    - **2026-08-25 (Session 29-D, D12 — CI at the corrected head, `pull_request`-event, PR #6):** Corrected
+      head `8d506634` — D11's `6f67fda6` plus one commit this step's own CI run discovered:
+      `ApprovalsInbox.tsx:429` used a raw `.toISOString()` in D4's reschedule handler (banned by CLAUDE.md's
+      date rule; `toUtcIso()` is the sanctioned wrapper). The FIRST CI attempt at `6f67fda6` failed
+      `app-tests`' Lint step on this one real ESLint error, which meant vitest never ran and the skip-guard
+      script correctly errored ("could not read/parse vitest JSON output") rather than reporting a false
+      count. Fixed, re-pushed, both jobs green on the second attempt. **Both jobs green at `8d506634`:**
+      `app-tests` [run 32890996118](https://github.com/tcr430/SOSH/actions/runs/32890996118) —
+      `skip-guard: 226 file(s) under [app, lib, components] all visible, zero failures — green.
+      (3129/3129 tests passed)`; `db-tests` [run 32890996062](https://github.com/tcr430/SOSH/actions/runs/32890996062)
+      — `skip-guard: 35 file(s) under [supabase/__tests__] all visible, zero failures — green.
+      (316/316 tests passed)`. File counts moved exactly as expected against the `b01a9985` baseline
+      (219/34): app-tests **+7** (219→226, D10's seven newly-collected `.test.tsx` files, no more no
+      less); db-tests **+1** (34→35, the one genuinely new Tier-1 file this pass added,
+      `post-ai-originals-latest-per-post.test.ts`, D9) — D4/D5/D8's Tier-1 additions each extended an
+      EXISTING file rather than adding a new one, so they correctly move only the test count (309→316,
+      +7), not the file count. **Full detail: ADR 0022 §20.5.** **These are `pull_request`-event runs on
+      PR #6 against `session-29`, NOT `master` push events — the `db-tests` three-green promotion tally
+      (ADR 0015 §5, tracked above at 5 consecutive as of `e69e5c41`) is UNCHANGED by this entry.** Session
+      29-D's correction pass (D0–D12) is now code-complete and CI-verified at this head; merging to
+      `master` is a separate, not-yet-taken step.
   - **Merge-gate enforcement (Session 22-D):** GitHub ruleset `master-app-tests` (id `19038239`) is live on
     `refs/heads/master`, requiring `app-tests` with no bypass actors. `db-tests` is intentionally **not**
     in any ruleset yet — it stays advisory until the tally above reaches 3/3, at which point the ruleset is

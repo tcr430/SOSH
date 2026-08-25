@@ -133,7 +133,13 @@ Respond in ${ctx.business.language}.`
 
     const constraintsText = PLATFORM_CONSTRAINTS[input.platform]
     const estimatedTweetsWorth = splitThreadSegments(input.draft).length
-    const formatFamily = selectFormatFamily(input.platform, estimatedTweetsWorth)
+    // ADR 0022 §6.3/A-4 (Session 29, F1b.7) — a SECOND selectFormatFamily
+    // caller the build guide's "exactly one caller" premise missed (verified
+    // by grep, not assumed). Purely informational here (labels the platform-
+    // constraints section for the model's context) — Studio suggestions
+    // never request a carousel, so `false` is correct and preserves
+    // byte-identical behaviour, same as generate-native.ts's call.
+    const formatFamily = selectFormatFamily(input.platform, estimatedTweetsWorth, false)
     sections.push(`## Platform: ${input.platform} (format: ${formatFamily})\n${constraintsText}`)
 
     if (ctx.brandVoice) {

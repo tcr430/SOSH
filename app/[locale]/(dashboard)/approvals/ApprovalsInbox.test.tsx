@@ -209,7 +209,38 @@ describe('ApprovalsInbox — single and batch approve (APV-SINGLE-AND-BATCH)', (
 
     act(() => { buttonWithText(container, 'row.approve')?.click() })
 
-    expect(approvePostAction).toHaveBeenCalledWith(post.id)
+    expect(approvePostAction).toHaveBeenCalledWith(post.id, undefined)
+    cleanup()
+  })
+
+  // ADR 0022 §2.5 (Session 29-D, MAJOR-4) — approve refuses an already-passed
+  // scheduled_at with a typed outcome; the row shows an inline re-pick input
+  // and approving again writes the status flip and the new time atomically.
+  it('shows an inline re-pick input on schedule_expired, and approving again passes the chosen time', async () => {
+    const post = makePost()
+    approvePostAction.mockResolvedValueOnce({ error: 'schedule_expired' })
+    const { container, cleanup } = renderInbox([post])
+
+    await act(async () => { buttonWithText(container, 'row.approve')?.click() })
+
+    expect(container.textContent).toContain('row.scheduleExpired')
+    const input = container.querySelector('input[type="datetime-local"]') as HTMLInputElement
+    expect(input).not.toBeNull()
+
+    const nativeSetter = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      'value',
+    )!.set!
+    act(() => {
+      nativeSetter.call(input, '2099-01-01T09:00')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+
+    approvePostAction.mockResolvedValueOnce({ success: true })
+    const confirmButton = buttonWithText(container, 'row.confirmNewTime')
+    await act(async () => { confirmButton?.click() })
+
+    expect(approvePostAction).toHaveBeenLastCalledWith(post.id, new Date('2099-01-01T09:00').toISOString())
     cleanup()
   })
 

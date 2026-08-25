@@ -59,6 +59,7 @@ export function PostRow({ post, tz }: PostRowProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState(post.content)
   const [editHashtags, setEditHashtags] = useState(post.hashtags.join(' '))
+  const [approveScheduleExpired, setApproveScheduleExpired] = useState(false)
 
   const isDraft = post.status === 'draft'
   const canReschedule = post.status === 'draft' || post.status === 'approved'
@@ -75,8 +76,14 @@ export function PostRow({ post, tz }: PostRowProps) {
     : null
 
   function handleApprove() {
+    setApproveScheduleExpired(false)
     startTransition(async () => {
-      await approvePostFromCalendarAction(post.id)
+      const result = await approvePostFromCalendarAction(post.id)
+      // ADR 0022 §2.5 (Session 29-D, MAJOR-4) — a typed message, not silent
+      // failure: this row already has a "Move to…" reschedule control right
+      // beside Approve, so the message directs the user there rather than
+      // duplicating a second date input inline.
+      if (!result.ok && result.reason === 'schedule_expired') setApproveScheduleExpired(true)
     })
   }
 
@@ -232,6 +239,13 @@ export function PostRow({ post, tz }: PostRowProps) {
             </a>
           )}
         </div>
+      )}
+
+      {/* ADR 0022 §2.5 (Session 29-D, MAJOR-4) — approve refused an already-passed scheduled_at. */}
+      {!isEditing && approveScheduleExpired && (
+        <p role="alert" className="text-xs text-destructive">
+          {t('post.approve_schedule_expired')}
+        </p>
       )}
 
       {/* Metrics — published posts only; null metric → "—", real 0 → "0" */}

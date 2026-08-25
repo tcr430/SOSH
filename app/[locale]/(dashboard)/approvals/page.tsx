@@ -5,6 +5,7 @@ import { getBusinessForUser } from '@/lib/db/businesses'
 import { getMemberForUser } from '@/lib/db/business-members'
 import { listCampaigns } from '@/lib/db/campaigns'
 import { listPendingDraftPosts } from '@/lib/db/posts'
+import { listLatestPostAiOriginalsByPostIds } from '@/lib/db/post-ai-originals'
 import { hasCapability, resolveMemberContext, CAPABILITIES } from '@/lib/members/capabilities'
 import type { Platform } from '@/lib/db/types'
 import { ApprovalsInbox } from './ApprovalsInbox'
@@ -61,6 +62,13 @@ export default async function ApprovalsPage({
     listCampaigns(client, business.id),
   ])
 
+  // ADR 0022 §10 (Session 29, F1b.9) — carousel/script previews need each
+  // rendered post's latest post_ai_originals snapshot. A plain object, not the
+  // Map listLatestPostAiOriginalsByPostIds returns — a Map isn't a serializable
+  // prop across the Server->Client boundary.
+  const originalsMap = await listLatestPostAiOriginalsByPostIds(client, posts.map(p => p.id))
+  const originalsByPostId = Object.fromEntries(originalsMap)
+
   return (
     <div className="space-y-6">
       <div>
@@ -68,7 +76,12 @@ export default async function ApprovalsPage({
         <p className="mt-1 text-sm text-muted-foreground">{t('subtitle')}</p>
       </div>
 
-      <ApprovalsInbox posts={posts} campaigns={campaigns} totalPendingCount={totalPendingCount} />
+      <ApprovalsInbox
+        posts={posts}
+        campaigns={campaigns}
+        totalPendingCount={totalPendingCount}
+        originalsByPostId={originalsByPostId}
+      />
     </div>
   )
 }

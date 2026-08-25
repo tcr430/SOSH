@@ -22,7 +22,7 @@ import { toUtcIso } from '@/lib/utils'
 
 export type CalendarActionResult =
   | { ok: true }
-  | { ok: false; reason: 'invalid_input' | 'too_soon' | 'claimed' | 'not_eligible' | 'generic' }
+  | { ok: false; reason: 'invalid_input' | 'too_soon' | 'claimed' | 'not_eligible' | 'schedule_expired' | 'generic' }
 
 export type GroupRescheduleResult =
   | { ok: true; moved: number; skipped: number }
@@ -50,6 +50,14 @@ const updateContentSchema = z.object({
 })
 
 const postIdSchema = z.object({ postId: z.string().uuid() })
+
+// ADR 0022 §2.5 (Session 29-D, MAJOR-4) — approvePostFromCalendarAction's own
+// input contract, extending postIdSchema with the optional re-picked time a
+// 'schedule_expired' refusal prompts the user for.
+const approvePostSchema = z.object({
+  postId: z.string().uuid(),
+  newScheduledAt: z.string().datetime().optional(),
+})
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
@@ -81,7 +89,7 @@ function logCalendarEvent(kind: string, ids: Record<string, string | number>): v
 }
 
 function logRescheduleRejected(
-  reason: 'too_soon' | 'claimed' | 'mixed' | 'not_eligible' | 'generic',
+  reason: 'too_soon' | 'claimed' | 'mixed' | 'not_eligible' | 'schedule_expired' | 'generic',
   ids: Record<string, string>,
 ): void {
   logCalendarEvent('reschedule_rejected', { reason, ...ids })
@@ -269,15 +277,22 @@ export async function updatePostFromCalendarAction(
 
 export async function approvePostFromCalendarAction(
   postId: string,
+  newScheduledAt?: string,
 ): Promise<CalendarActionResult> {
-  const parsed = postIdSchema.safeParse({ postId })
+  const parsed = approvePostSchema.safeParse({ postId, newScheduledAt })
   if (!parsed.success) return { ok: false, reason: 'invalid_input' }
 
   try {
     const ctx = await getAuthContext()
     if (!ctx) return { ok: false, reason: 'generic' }
 
-    await approvePost(ctx.client, postId, ctx.business.id)
+    const result = await approvePost(ctx.client, postId, ctx.business.id, parsed.data.newScheduledAt)
+    if (result.outcome === 'schedule_expired') {
+      logRescheduleRejected('schedule_expired', { post_id: postId, business_id: ctx.business.id })
+      return { ok: false, reason: 'schedule_expired' }
+    }
+    if (result.outcome === 'not_eligible') return { ok: false, reason: 'not_eligible' }
+
     revalidateCalendar()
     return { ok: true }
   } catch {

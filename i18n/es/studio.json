@@ -82,6 +82,40 @@
       "avoidWord": "Coincide con tu lista de palabras a evitar: \"{word}\"",
       "performancePattern": "Coincide con un patrón de rendimiento gobernado (confianza del {confidence}%, observado {count}x)",
       "evidence": "Respaldado por evidencia fijada"
+    },
+    "promote": {
+      "heading": "Promocionar a campaña",
+      "description": "Convierte este borrador en una campaña, publicación y briefing reales.",
+      "button": "Promocionar a campaña",
+      "retryButton": "Intentar de nuevo",
+      "notEligible": {
+        "emptyDraft": "Añade contenido antes de promocionar.",
+        "noPlatform": "Elige una plataforma antes de promocionar.",
+        "notSaved": "Guarda este borrador antes de promocionar."
+      },
+      "promoting": "Promocionando…",
+      "promoted": {
+        "heading": "Promocionado",
+        "body": "Este borrador ahora es una campaña.",
+        "link": "Ver el briefing"
+      },
+      "alreadyPromoted": {
+        "heading": "Ya promocionado",
+        "body": "Este borrador ya fue promocionado a una campaña.",
+        "link": "Ver el briefing"
+      },
+      "failed": "Algo salió mal al promocionar. Tu borrador está a salvo — puedes intentarlo de nuevo en unos minutos.",
+      "notFound": "Este borrador ya no existe — puede haber sido eliminado. No se promocionó nada.",
+      "claimedByAnother": "Este borrador se está promocionando en este momento (posiblemente desde otra pestaña). Espera unos minutos y actualiza la página.",
+      "reclaimable": "El último intento de promoción no se completó. Puedes intentarlo de nuevo.",
+      "dialog": {
+        "title": "Elige cuándo se publica esta publicación",
+        "description": "Promocionar crea la campaña y la publicación ahora, pero nada se publica hasta que la apruebes en esta fecha y hora.",
+        "scheduledAtLabel": "Fecha y hora programadas",
+        "confirmButton": "Promocionar",
+        "confirmButtonSubmitting": "Promocionando…",
+        "cancelButton": "Cancelar"
+      }
     }
   }
 }

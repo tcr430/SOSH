@@ -5,6 +5,7 @@ import * as Sentry from '@sentry/nextjs'
 import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
 import { getStudioDraft, persistSuggestions, acceptSuggestion, createStudioDraft, saveStudioDraft } from '@/lib/db/studio-drafts'
+import { promoteDraftToCampaignCore } from '@/lib/campaigns/promote'
 import { buildCustomerContext } from '@/lib/ai/context'
 import { runPrompt } from '@/lib/ai/runner'
 import { AiError, type AiErrorCode } from '@/lib/ai/errors'
@@ -68,6 +69,9 @@ export type StudioActionErrorCode =
   // that is no longer current and are discarded; the user's newer text is
   // kept untouched.
   | 'draft_superseded'
+  // Session 29-D, D8 (MINOR-8) — the draft was soft-deleted or removed
+  // between page load and a promote attempt.
+  | 'draft_not_found'
   | AiErrorCode
 
 export type SuggestStudioSuggestionsState =
@@ -229,9 +233,21 @@ export type AcceptStudioSuggestionState =
   | { outcome: 'stale' }
   | { outcome: 'error'; error: StudioActionErrorCode }
 
+// ADR 0022 §5.1, §5.4 (Session 29-D, D2/NIT-7) — acceptedContent is written
+// verbatim to BOTH studio_drafts.content and studio_drafts.accepted_revision
+// (lib/db/studio-drafts.ts's acceptSuggestion, the ONLY write site for
+// accepted_revision), which promote.ts:141-142 later copies unmodified into
+// post_ai_originals.rendered_content and payload.content. Mirrors the
+// existing max(5000) contract for posts.content (calendar/actions.ts:48,
+// posts/actions.ts:179, and promote.ts's own PROMOTE_CONTENT_MAX_CHARS
+// guard on draft.content) so this is not the one write path with a weaker
+// bound. No DB CHECK added: posts.content itself has none either — the
+// app-layer Zod bound at this sole write site is the established pattern
+// for this class of field, and a CHECK would duplicate it for no added
+// safety (accepted_revision has no other producer to defend against).
 const acceptSchema = z.object({
   draftId: z.string().uuid(),
-  acceptedContent: z.string().min(1),
+  acceptedContent: z.string().min(1).max(5000),
   expectedContentHash: z.string().min(1),
   expectedSuggestionsHash: z.string().min(1),
 })
@@ -314,4 +330,51 @@ export async function saveStudioDraftAction(draftId: string, content: string, pl
   }
 
   return { success: true, contentHash: draft.content_hash }
+}
+
+// ── ADR 0022 §2 — promote-to-campaign (Session 29, F1b.4) ───────────────────
+// Thin wrapper: Zod-validate, resolve the authenticated client, delegate to
+// promoteDraftToCampaignCore (lib/campaigns/promote.ts — see that file's
+// header comment for why the actual logic lives there, not here).
+
+export type PromoteDraftToCampaignState =
+  | { outcome: 'promoted'; campaignId: string; briefId: string; postId: string }
+  | { outcome: 'already_promoted'; draft: StudioDraftRow }
+  | { outcome: 'claimed_by_another'; draft: StudioDraftRow }
+  | { outcome: 'not_eligible' }
+  | { outcome: 'error'; error: StudioActionErrorCode }
+
+const promoteDraftSchema = z.object({
+  draftId: z.string().uuid(),
+  scheduledAt: z.string().datetime(),
+})
+
+export async function promoteDraftToCampaign(
+  draftId: string,
+  scheduledAt: string,
+): Promise<PromoteDraftToCampaignState> {
+  const parsedInput = promoteDraftSchema.safeParse({ draftId, scheduledAt })
+  if (!parsedInput.success) return { outcome: 'error', error: 'invalid_input' }
+
+  const ctx = await getAuthContext()
+  if (!ctx) return { outcome: 'error', error: 'generic' }
+  const { client, business } = ctx
+
+  // Session 29-D, D8 (MINOR-8) — this wrapper had no try/catch, so any
+  // uncaught exception from promoteDraftToCampaignCore's dependencies (a
+  // draft's fallback re-read throwing, or any other unexpected DB error)
+  // rendered Next's generic error boundary instead of a typed §10 state.
+  // Mirrors this file's other actions (e.g. saveStudioDraftAction above),
+  // all of which already wrap their core call.
+  let result
+  try {
+    result = await promoteDraftToCampaignCore(client, business.id, parsedInput.data.draftId, parsedInput.data.scheduledAt)
+  } catch (e) {
+    Sentry.captureException(e, { tags: { studio_action: 'promoteDraftToCampaign' } })
+    return { outcome: 'error', error: 'generic' }
+  }
+  if (result.outcome === 'content_too_long') return { outcome: 'error', error: 'draft_too_long' }
+  if (result.outcome === 'error') return { outcome: 'error', error: 'generic' }
+  if (result.outcome === 'not_found') return { outcome: 'error', error: 'draft_not_found' }
+  return result
 }

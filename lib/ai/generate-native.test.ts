@@ -24,7 +24,7 @@ function makeCtx(): CustomerContext {
   }
 }
 
-const validSingle: SinglePostOutput = { format: 'single', body: 'Great post content', imageBrief: null }
+const validSingle: SinglePostOutput = { format: 'single', body: 'Great post content', imageBrief: null, scriptBrief: null }
 const validThread: ThreadOutput = {
   format: 'thread',
   posts: [
@@ -33,6 +33,7 @@ const validThread: ThreadOutput = {
     { text: 'Close', role: 'close' },
   ],
   imageBrief: null,
+  scriptBrief: null,
 }
 const policyBrokenThread: ThreadOutput = {
   format: 'thread',
@@ -42,6 +43,7 @@ const policyBrokenThread: ThreadOutput = {
     { text: 'Close', role: 'close' },
   ],
   imageBrief: null,
+  scriptBrief: null,
 }
 
 function singleInput(overrides: Partial<GenerateNativeContentInput> = {}): GenerateNativeContentInput {

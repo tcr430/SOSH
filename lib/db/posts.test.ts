@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { createMockClient } from './__test-utils__/mock-client'
+import { createMockClient, createSequentialMockClient } from './__test-utils__/mock-client'
 import {
   listPostsByCampaign,
   getPostById,
@@ -139,13 +139,73 @@ describe('approvePost', () => {
   it('returns the approved post when currently draft', async () => {
     const { client, builder } = createMockClient(mockPost)
     const result = await approvePost(client, 'post-1')
-    expect(result).toEqual(mockPost)
+    expect(result).toEqual({ outcome: 'approved', post: mockPost })
     expect(builder.eq).toHaveBeenCalledWith('status', 'draft')
   })
 
-  it('throws when post not found or wrong status', async () => {
-    const { client } = createMockClient(null, null)
-    await expect(approvePost(client, 'post-1')).rejects.toThrow("not found or not in 'draft' status")
+  // ADR 0022 §2.5 (Session 29-D, MAJOR-4) — the atomic guard: when no
+  // replacement time is supplied, the existing scheduled_at must itself be
+  // in the future for the UPDATE to match any row.
+  it('adds a scheduled_at > now guard when newScheduledAt is not supplied', async () => {
+    const { client, builder } = createMockClient(mockPost)
+    await approvePost(client, 'post-1')
+    expect(builder.gt).toHaveBeenCalledWith('scheduled_at', expect.any(String))
+  })
+
+  it('does not add the scheduled_at > now guard when newScheduledAt is supplied — the write sets it instead', async () => {
+    const { client, builder } = createMockClient(mockPost)
+    await approvePost(client, 'post-1', undefined, '2099-01-01T09:00:00.000Z')
+    expect(builder.gt).not.toHaveBeenCalled()
+    expect(builder.update).toHaveBeenCalledWith({ status: 'approved', scheduled_at: '2099-01-01T09:00:00.000Z' })
+  })
+
+  it('returns schedule_expired without any DB call when newScheduledAt is itself in the past', async () => {
+    const { client, from } = createMockClient(mockPost)
+    const result = await approvePost(client, 'post-1', undefined, '2020-01-01T00:00:00.000Z')
+    expect(result).toEqual({ outcome: 'schedule_expired' })
+    expect(from).not.toHaveBeenCalled()
+  })
+
+  // database-reviewer (Session 29-D, MAJOR-4 review) — a STRING comparison
+  // of ISO-8601 timestamps is wrong when fractional-second precision
+  // differs: '2026-...:00Z' <= '2026-...:00.500Z' is FALSE under ASCII
+  // comparison ('Z' sorts after '.') even though the left side names the
+  // earlier instant. This pins the fix as a numeric instant comparison.
+  it('classifies newScheduledAt as expired via instant comparison, not string comparison, across fractional-second precision', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-23T22:35:00.500Z'))
+    try {
+      const { client, from } = createMockClient(mockPost)
+      // No milliseconds — lexicographically this STRING sorts before the
+      // fake "now" above only by coincidence of the 'Z' vs '.' bytes; as an
+      // instant it is the SAME second and must read as already past/at now.
+      const result = await approvePost(client, 'post-1', undefined, '2026-08-23T22:35:00Z')
+      expect(result).toEqual({ outcome: 'schedule_expired' })
+      expect(from).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('returns not_eligible when the atomic UPDATE matches no row and the diagnostic read finds no draft', async () => {
+    // Sequential: [0] the atomic UPDATE (no match), [1] the diagnostic SELECT (no such row).
+    const { client } = createSequentialMockClient([
+      { data: null, error: null },
+      { data: null, error: null },
+    ])
+    const result = await approvePost(client, 'post-1')
+    expect(result).toEqual({ outcome: 'not_eligible' })
+  })
+
+  it('returns schedule_expired when the atomic UPDATE matches no row but the diagnostic read finds a draft (schedule already passed)', async () => {
+    // Sequential: [0] the atomic UPDATE (no match — scheduled_at > now failed),
+    // [1] the diagnostic SELECT (status IS draft — so the schedule was the reason).
+    const { client } = createSequentialMockClient([
+      { data: null, error: null },
+      { data: { status: 'draft', scheduled_at: '2020-01-01T00:00:00.000Z' }, error: null },
+    ])
+    const result = await approvePost(client, 'post-1')
+    expect(result).toEqual({ outcome: 'schedule_expired' })
   })
 
   it('throws when supabase returns an error', async () => {

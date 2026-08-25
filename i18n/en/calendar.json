@@ -33,6 +33,7 @@
   "post": {
     "approve": "Approve",
     "approve_disabled_tooltip": "Only approvers can approve",
+    "approve_schedule_expired": "This post's scheduled time has already passed. Use \"Move to…\" to pick a new date, then approve again.",
     "edit": "Edit",
     "save": "Save",
     "cancel": "Cancel",

@@ -1,7 +1,20 @@
+import { z } from 'zod'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { PerformanceMemoryRow, PerformanceMemoryInsert } from './types'
 import { getErrorMessage } from './utils'
 import { MEMORY_CANDIDATE_LIMIT } from './memory-constants'
+import { neutralizeWithSentinels } from '@/lib/ai/wrap-evidence'
+
+// ADR 0018 Amd A.2 / ADR 0022 §5.2, §11.2 MEM-PATTERN-PROMOTER-BOUNDED
+// (Session 29-D, MAJOR-2) — a Zod bound at THIS promoter boundary, IN FRONT
+// of the RPC's own performance_memory_pattern_length_check CHECK. Two
+// different guarantees at two boundaries, not redundancy (§5.2): this one
+// is app-layer input hygiene (a synchronous, typed rejection before a round
+// trip to Postgres); the CHECK is the durable-storage invariant that holds
+// regardless of which caller writes here. Mirrors the CHECK's value (500)
+// deliberately — see 20260822093000_learning_generation_kind_and_pattern_
+// bound.sql's "KEEP 500" comment; do not let the two drift apart.
+const PATTERN_PROMOTER_BOUND_SCHEMA = z.string().max(500)
 
 // ADR 0016 §5.1 (Q4) — candidate query only. No scoring, no capping; that is
 // lib/memory/performance.ts's job (B2), which also prefers this table's
@@ -44,16 +57,18 @@ export async function listPerformanceMemoryCandidates(
 // via status, not just deleted_at) since a retired pattern is exactly the
 // kind of stale signal the summarizer should not be reminded of.
 //
-// security-reviewer (C2.7 pass): despite "distilled" implying arithmetic
-// Tier-0 output, source='distilled' rows returned here are NOT guaranteed
-// to be deterministic/arithmetic — the summarizer itself (lib/ai/prompts/
-// learning-summarizer.ts) is currently the ONLY live writer of this bucket
-// via upsertDistilledPerformancePattern below; the arithmetic Tier-0 writer
-// (lib/learning/promote.ts's recomputeAndUpsertPattern) has no production
-// caller yet, and there is no column distinguishing the two once it does.
-// Callers of this function MUST treat every returned `pattern` string as
-// untrusted, attacker-reachable-adjacent text — see
-// learning-summarizer.ts's guardTierZeroSummaries(), which neutralize()s it.
+// security-reviewer (C2.7 pass; premise corrected Session 29 F1b.10, ADR
+// 0022 §17.1): despite "distilled" implying arithmetic Tier-0 output,
+// source='distilled' rows returned here are NOT guaranteed to be
+// deterministic/arithmetic — the summarizer itself (lib/ai/prompts/
+// learning-summarizer.ts) is a live writer of this bucket via
+// upsertDistilledPerformancePattern below, and so is the arithmetic Tier-0
+// writer (lib/learning/promote.ts's recomputeAndUpsertPattern, called from
+// lib/learning/orchestrator.ts's tick loop) — BOTH are live, and there is
+// no column distinguishing the two. Callers of this function MUST treat
+// every returned `pattern` string as untrusted, attacker-reachable-adjacent
+// text — see learning-summarizer.ts's guardTierZeroSummaries(), which
+// neutralize()s it.
 //
 // [Session 25-D correction, MINOR-6] Deliberately NOT filtered on
 // expires_at, unlike listPerformanceMemoryCandidates above. The summarizer
@@ -92,14 +107,28 @@ export async function listDistilledPatternsForSummary(
 // does NOT resolve to a partial index. Governance columns (source, status,
 // sensitivity, public_use_permission) are fixed inside the RPC itself, per
 // §7.1's table — never accepted as caller input here.
+// ADR 0022 §11.1 MEM-PATTERN-SENTINEL-GUARDED / A-5 (Session 29-D, MAJOR-1) —
+// insert.pattern's provenance chain is NOT uniformly trusted: this is the
+// SOLE writer of performance_memory (both production callers —
+// lib/learning/summarize.ts's LLM-synthesized statements, which echo
+// listRecentHumanEditExcerpts' human-authored prose, and
+// lib/learning/promote.ts's deterministic template — route through here,
+// and there is no third write path). neutralizeWithSentinels() (the SAME
+// function guard.ts and wrap-evidence.ts already use, per ADR 0018 Amd A.3 —
+// not a second copy) is applied at THIS single choke point rather than at
+// each producer, so the guard holds regardless of which caller's
+// composition touches human text and regardless of any future caller added
+// here. Plain neutralize() is deliberately NOT used: it lacks the \p{Co}
+// plane-15 marker-sentinel strip this boundary needs (ADR §5.1).
 export async function upsertDistilledPerformancePattern(
   client: SupabaseClient,
   insert: PerformanceMemoryInsert,
 ): Promise<PerformanceMemoryRow> {
+  const pattern = PATTERN_PROMOTER_BOUND_SCHEMA.parse(neutralizeWithSentinels(insert.pattern))
   const { data, error } = await client.rpc('upsert_distilled_performance_pattern', {
     p_business_id: insert.business_id,
     p_dimension: insert.dimension,
-    p_pattern: insert.pattern,
+    p_pattern: pattern,
     p_pattern_key: insert.pattern_key,
     p_platform: insert.platform,
     p_scope: insert.scope,

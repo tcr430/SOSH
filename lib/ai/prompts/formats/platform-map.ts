@@ -1,6 +1,6 @@
 import type { Platform } from '@/lib/db/types'
 
-export type FormatFamily = 'single' | 'thread'
+export type FormatFamily = 'single' | 'thread' | 'carousel'
 
 // ADR 0017 §4.3 — a deterministic Tier-0 lookup, never model-chosen (a
 // model-chosen family would be nondeterministic and unverifiable). linkedin/
@@ -22,12 +22,25 @@ export type FormatFamily = 'single' | 'thread'
 // state. A caller-side unit/sign bug would be absorbed quietly rather than
 // surfaced loudly; revisit with a stricter input type if B2.6 shows this
 // happening in practice.
-export function selectFormatFamily(platform: Platform, estimatedTweetsWorth: number): FormatFamily {
+// ADR 0022 §6.3/A-4 (Session 29, F1b.7) — carouselRequested is a THIRD,
+// REQUIRED parameter (never optional): with exactly two real callers today
+// (generate-native.ts:106, studio-suggestion.ts:142 — Session 29-D, D7
+// (NIT-6) corrected these line numbers; both grepped, not assumed) and both
+// passing `false`, EVERY call that exists resolves
+// byte-identically to before this change, so L-10 holds in its strict form.
+// A volume-derived trigger was rejected precisely because it would change
+// the result for inputs that already exist — this parameter changes it for
+// NO existing input, only for a call that opts in explicitly. Instagram's
+// arm is the only one made conditional on it; every other arm (linkedin/
+// facebook's unconditional 'single', twitter/threads' volume rule) is
+// UNTOUCHED.
+export function selectFormatFamily(platform: Platform, estimatedTweetsWorth: number, carouselRequested: boolean): FormatFamily {
   switch (platform) {
     case 'linkedin':
     case 'facebook':
-    case 'instagram':
       return 'single'
+    case 'instagram':
+      return carouselRequested ? 'carousel' : 'single'
     case 'twitter':
     case 'threads':
       return estimatedTweetsWorth >= 3 ? 'thread' : 'single'

@@ -53,6 +53,14 @@ export interface LearningTickSummary {
   // still requires Sentry. Accepted, consistent with `abandoned` already
   // collapsing "permanent" vs "transient_exhausted" the same way.
   summarizeFailedCode: AiErrorCode | 'unknown' | null
+  // ADR 0022 §5.3, §17 item 3 (Session 29, F1b.10) — a REJECTED statement
+  // (summarize.ts's per-item log-and-skip) is legible AS ITSELF here,
+  // distinct from summarizeFailed (a whole-business call that threw with
+  // code 'unknown' before this fix existed to catch it) — a rejection is
+  // now caught and counted per-statement, never thrown out of
+  // summarizeBusinessLearning at all. Latent, not live: see
+  // SummarizeResult.statementsRejected's doc comment.
+  summarizeRejected: number
   // [Session 25-D correction, NIT-4] Renamed from `failed`: this counter
   // means "sent back to pending with a backoff, will retry" — not
   // "failed" in the terminal sense `abandoned`/`promoted`/`demoted` carry.
@@ -329,6 +337,7 @@ export async function runLearningTick(opts: {
     summarized: 0,
     summarizeFailed: 0,
     summarizeFailedCode: null,
+    summarizeRejected: 0,
     retrying: 0,
     abandoned: 0,
     raceLost: 0,
@@ -355,6 +364,7 @@ export async function runLearningTick(opts: {
           try {
             const result = await summarizeBusinessLearning(client, businessId)
             if (result.skipped === null) summary.summarized++
+            summary.summarizeRejected += result.statementsRejected
           } catch (err) {
             // [silent-failure-hunter, C2.8 review MAJOR-2] Sentry-only
             // reporting made a broken summarizer indistinguishable, in the
