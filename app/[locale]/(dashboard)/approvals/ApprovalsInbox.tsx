@@ -12,6 +12,7 @@ import { useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { format } from 'date-fns'
 import { CheckCircle2 } from 'lucide-react'
+import { toUtcIso } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -426,7 +427,7 @@ function DraftRow({
             <Button
               size="sm"
               disabled={!newTime || isPending}
-              onClick={() => onApproveWithNewTime(new Date(newTime).toISOString())}
+              onClick={() => onApproveWithNewTime(toUtcIso(new Date(newTime)))}
               className="bg-emerald-700 hover:bg-emerald-600 text-white"
             >
               {t('row.confirmNewTime')}
