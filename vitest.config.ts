@@ -17,7 +17,7 @@ export default defineConfig({
     // picks up supabase/__tests__ even though this include now covers it.
     include: [
       'app/**/*.test.{ts,tsx}',
-      'lib/**/*.test.ts',
+      'lib/**/*.test.{ts,tsx}',
       'components/**/*.test.{ts,tsx}',
       'supabase/__tests__/**/*.test.ts',
     ],

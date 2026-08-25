@@ -517,6 +517,19 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
         here for adjudication rather than silently backfilled (which would fabricate history) or silently
         ignored (which would keep asserting a 0 that the run log contradicts). `session-29.md` Step 0's
         stale premise needs correcting either way.
+    - **2026-08-25 (Session 29-D, D10 — MINOR-7, out of range, fixed anyway):** `vitest.config.ts`'s
+      `include` for `lib/**` was `*.test.ts` only — it never matched `.tsx`, so the seven
+      `lib/email/templates/__tests__/*.test.tsx` files (`first-post-published`, `layout`,
+      `payment-failed-courtesy`, `team-invite`, `trial-warning-t1`, `trial-warning-t3`,
+      `welcome-to-plan`) were `AUTHORED-NOT-EXECUTED` — invisible to the skip-guard rather than caught by
+      it, since Vitest never collected them at all. Fixed to `lib/**/*.test.{ts,tsx}` (mirroring `app/**`
+      and `components/**`'s existing pattern). All seven ran green on the first try — no discovery, no
+      fix needed, nothing excluded. **Local file count moved 219 → 226 (+7)** (`npm run test:app`'s "Test
+      Files … passed (N)" line, same three pre-existing unrelated env-var failures as before, all app
+      tests otherwise green: 3071/3071 passing tests). This is a **local** count, not yet a `master`
+      push-event skip-guard reading — Session 29-D has not merged to `master` at this point in the
+      correction pass; the actual CI `skip-guard: N file(s) …` line will reflect this once `app-tests`
+      runs on the merged range.
   - **Merge-gate enforcement (Session 22-D):** GitHub ruleset `master-app-tests` (id `19038239`) is live on
     `refs/heads/master`, requiring `app-tests` with no bypass actors. `db-tests` is intentionally **not**
     in any ruleset yet — it stays advisory until the tally above reaches 3/3, at which point the ruleset is
