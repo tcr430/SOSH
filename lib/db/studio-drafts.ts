@@ -226,6 +226,11 @@ export type ClaimDraftForPromotionResult =
   // not yet.
   | { outcome: 'already_promoted'; draft: StudioDraftRow }
   | { outcome: 'claimed_by_another'; draft: StudioDraftRow }
+  // Session 29-D, D8 (MINOR-8) — the draft was soft-deleted or removed
+  // between page load and this claim attempt (the fallback re-read below
+  // finds nothing). A fourth, genuinely distinct outcome — not a restructure
+  // of the three above, which §C.2 already verified.
+  | { outcome: 'not_found' }
 
 // The CLAIM (§3.1, §3.4) — an ATOMIC conditional UPDATE, never
 // read-then-update. Guarded on promoted_campaign_id IS NULL (a promoted
@@ -264,14 +269,23 @@ export async function claimStudioDraftForPromotion(
   // Zero rows matched — re-read the draft's REAL current state (§3.3) to
   // tell the two losing causes apart, mirroring transitionCardStatus's own
   // fallback SELECT (insight-cards.ts:224-231).
+  //
+  // Session 29-D, D8 (MINOR-8) — .maybeSingle(), not .single(): the draft
+  // may have been soft-deleted or removed between the caller's page load and
+  // this claim attempt, in which case this re-read legitimately finds ZERO
+  // rows too (a real, expected state, not an error condition). .single()
+  // would throw on that and propagate an uncaught exception up through
+  // promoteDraftToCampaignCore into the Server Action wrapper, rendering
+  // Next's generic error boundary instead of a typed §10 state.
   const { data: current, error: currentError } = await client
     .from('studio_drafts')
     .select('*')
     .eq('id', id)
     .eq('business_id', businessId)
     .is('deleted_at', null)
-    .single()
+    .maybeSingle()
   if (currentError) throw new Error(getErrorMessage(currentError))
+  if (current === null) return { outcome: 'not_found' }
   const draft = current as StudioDraftRow
   if (draft.promoted_campaign_id !== null) return { outcome: 'already_promoted', draft }
   return { outcome: 'claimed_by_another', draft }

@@ -105,6 +105,7 @@
         "link": "Ver el briefing"
       },
       "failed": "Algo salió mal al promocionar. Tu borrador está a salvo — puedes intentarlo de nuevo en unos minutos.",
+      "notFound": "Este borrador ya no existe — puede haber sido eliminado. No se promocionó nada.",
       "claimedByAnother": "Este borrador se está promocionando en este momento (posiblemente desde otra pestaña). Espera unos minutos y actualiza la página.",
       "reclaimable": "El último intento de promoción no se completó. Puedes intentarlo de nuevo.",
       "dialog": {

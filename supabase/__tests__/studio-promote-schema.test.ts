@@ -178,6 +178,54 @@ describe('studio_drafts promote columns — RLS isolation and cascade (ADR 0022 
     expect(stillThere.promotion_claimed_at).toBeNull()
   })
 
+  it('PROMOTE-RLS-ISOLATED (Session 29-D, D8, MINOR-3): WITH CHECK refuses moving a legitimately-visible row into another tenant', async () => {
+    const { data: row, error: insertErr } = await admin
+      .from('studio_drafts')
+      .insert({ business_id: businessAId, content: 'owner A tries to tunnel this row' })
+      .select('id')
+      .single()
+    expect(insertErr).toBeNull()
+
+    const client = await signInAs(ownerAEmail)
+    // Owner A CAN see this row (USING passes — it's their own business_id).
+    // The attempted mutation tries to move it INTO business B's tenant —
+    // exactly what WITH CHECK, not USING, is supposed to refuse (§20.1's
+    // amended PROMOTE-RLS-ISOLATED row records the mutation-test finding
+    // below).
+    const { data, error } = await client
+      .from('studio_drafts')
+      .update({ business_id: businessBId })
+      .eq('id', row.id)
+      .select()
+    // Postgres raises a row-level-security violation for a WITH CHECK
+    // failure (distinct from USING's silent zero-rows-matched shape).
+    expect(error).not.toBeNull()
+    expect(error?.message).toMatch(/row-level security/i)
+    expect(data ?? []).toHaveLength(0)
+
+    const { data: stillOwnedByA } = await admin
+      .from('studio_drafts')
+      .select('business_id')
+      .eq('id', row.id)
+      .single()
+    expect(stillOwnedByA.business_id).toBe(businessAId)
+  })
+
+  // Session 29-D, D8 mutation-test finding, recorded because it changes what
+  // "drop WITH CHECK" means for THIS table: loosening ONLY
+  // studio_drafts_update_own's WITH CHECK to `true` does NOT let the tunnel
+  // above succeed — it still refuses with the same row-level-security error.
+  // Postgres's RLS for UPDATE also applies the table's SELECT policy's
+  // USING clause to the NEW row (you cannot UPDATE a row into a state you
+  // could not otherwise SELECT), independently of the UPDATE policy's own
+  // WITH CHECK. Verified live against this exact schema: loosening BOTH
+  // studio_drafts_update_own.WITH CHECK and studio_drafts_select_own.USING
+  // to `true` together let a real cross-tenant move succeed (business_id
+  // actually changed tenants); restoring either alone re-blocks it. The
+  // isolation here is therefore enforced REDUNDANTLY by both policies, not
+  // solely by WITH CHECK — a stronger guarantee than MINOR-3 assumed was
+  // missing, not a weaker one.
+
   it('PROMOTE-CASCADE-COMPLETE: deleting the business succeeds and removes drafts carrying promote columns', async () => {
     const owner = await createUser('cascade-direct')
     const { data: biz, error: bizErr } = await admin

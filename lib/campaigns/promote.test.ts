@@ -132,6 +132,22 @@ describe('promoteDraftToCampaignCore (ADR 0022 §2)', () => {
     expect(assembleBrief).not.toHaveBeenCalled()
   })
 
+  // Session 29-D, D8 (MINOR-8) — the draft was soft-deleted or removed
+  // between page load and this claim attempt; passed through as a fourth,
+  // distinct typed outcome, not restructuring the three above.
+  it('a claim outcome of not_found performs NO writes and returns the typed outcome', async () => {
+    vi.mocked(claimStudioDraftForPromotion).mockResolvedValue({ outcome: 'not_found' })
+
+    const result = await promoteDraftToCampaignCore(CLIENT, BUSINESS_ID, DRAFT_ID, SCHEDULED_AT)
+
+    expect(result).toEqual({ outcome: 'not_found' })
+    expect(createCampaign).not.toHaveBeenCalled()
+    expect(writeBackPromotedCampaignId).not.toHaveBeenCalled()
+    expect(createPosts).not.toHaveBeenCalled()
+    expect(createPostAiOriginal).not.toHaveBeenCalled()
+    expect(assembleBrief).not.toHaveBeenCalled()
+  })
+
   it('a WON but ineligible claim (empty content) returns not_eligible and performs no further writes', async () => {
     const draft = draftFixture({ content: '   ' })
     vi.mocked(claimStudioDraftForPromotion).mockResolvedValue({ outcome: 'claimed', draft })

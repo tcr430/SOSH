@@ -302,4 +302,19 @@ describe('promoteDraftToCampaign', () => {
     const result = await promoteDraftToCampaign(DRAFT_ID, SCHEDULED_AT)
     expect(result).toEqual({ outcome: 'error', error: 'generic' })
   })
+
+  // Session 29-D, D8 (MINOR-8) — the draft was soft-deleted or removed
+  // between page load and this attempt: a typed outcome, not a thrown
+  // exception rendering Next's generic error boundary.
+  it('maps a not_found core outcome to the draft_not_found StudioActionErrorCode', async () => {
+    vi.mocked(promoteDraftToCampaignCore).mockResolvedValue({ outcome: 'not_found' })
+    const result = await promoteDraftToCampaign(DRAFT_ID, SCHEDULED_AT)
+    expect(result).toEqual({ outcome: 'error', error: 'draft_not_found' })
+  })
+
+  it('catches an exception thrown by promoteDraftToCampaignCore and returns a typed generic error, never rethrowing', async () => {
+    vi.mocked(promoteDraftToCampaignCore).mockRejectedValue(new Error('unexpected DB failure'))
+    const result = await promoteDraftToCampaign(DRAFT_ID, SCHEDULED_AT)
+    expect(result).toEqual({ outcome: 'error', error: 'generic' })
+  })
 })

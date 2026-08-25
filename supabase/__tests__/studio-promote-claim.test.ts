@@ -5,6 +5,7 @@ import {
   claimStudioDraftForPromotion,
   writeBackPromotedCampaignId,
   clearPromotedCampaignReferenceOnDrafts,
+  softDeleteStudioDraft,
 } from '@/lib/db/studio-drafts'
 import { softDeleteCampaignGuarded } from '@/lib/db/campaigns'
 import type { StudioDraftRow } from '@/lib/db/types'
@@ -104,6 +105,7 @@ describe('studio_drafts promote claim, write-back, and cleanup (ADR 0022 §3, §
 
     const winner = first.outcome === 'claimed' ? first : second
     const loser = first.outcome === 'claimed' ? second : first
+    if (winner.outcome !== 'claimed') throw new Error('expected exactly one winner')
     expect(winner.draft.promotion_claimed_at).not.toBeNull()
     // The loser's typed result carries the draft's REAL current state (§3.3),
     // not a generic error — it must reflect the winner's claim.
@@ -111,6 +113,27 @@ describe('studio_drafts promote claim, write-back, and cleanup (ADR 0022 §3, §
       expect(loser.draft.promotion_claimed_at).not.toBeNull()
       expect(loser.draft.promoted_campaign_id).toBeNull()
     }
+  })
+
+  // Session 29-D, D8 (MINOR-8) — PROMOTE-MISSING-DRAFT-TYPED. The draft is
+  // soft-deleted (deleted_at set) between "page load" and this claim
+  // attempt. The claim's own UPDATE excludes it (.is('deleted_at', null)),
+  // so it falls into the fallback re-read — which must ALSO exclude the
+  // soft-deleted row and, per this fix, return a typed 'not_found' outcome
+  // rather than throwing (the pre-fix .single() call throws on zero rows).
+  it('PROMOTE-MISSING-DRAFT-TYPED: claiming a soft-deleted draft returns not_found instead of throwing', async () => {
+    const draft = await createDraft('draft about to be soft-deleted')
+    await softDeleteStudioDraft(authedClient, draft.id, businessId)
+
+    const result = await claimStudioDraftForPromotion(authedClient, draft.id, businessId)
+
+    expect(result).toEqual({ outcome: 'not_found' })
+  })
+
+  it('PROMOTE-MISSING-DRAFT-TYPED: claiming a draft id that never existed returns not_found instead of throwing', async () => {
+    const result = await claimStudioDraftForPromotion(authedClient, '00000000-0000-0000-0000-000000000000', businessId)
+
+    expect(result).toEqual({ outcome: 'not_found' })
   })
 
   it('PROMOTE-WRITEBACK-GUARDED: a second write-back no-ops rather than overwriting', async () => {

@@ -105,6 +105,7 @@
         "link": "View the brief"
       },
       "failed": "Something went wrong while promoting. Your draft is safe — you can try again in a few minutes.",
+      "notFound": "This draft no longer exists — it may have been deleted. Nothing was promoted.",
       "claimedByAnother": "This draft is currently being promoted (possibly from another tab). Please wait a few minutes and refresh.",
       "reclaimable": "The last promote attempt didn't finish. You can try again.",
       "dialog": {

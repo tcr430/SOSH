@@ -105,6 +105,7 @@
         "link": "Ver o briefing"
       },
       "failed": "Algo correu mal ao promover. O teu rascunho está seguro — podes tentar novamente dentro de alguns minutos.",
+      "notFound": "Este rascunho já não existe — pode ter sido eliminado. Nada foi promovido.",
       "claimedByAnother": "Este rascunho está a ser promovido neste momento (possivelmente noutro separador). Aguarda alguns minutos e atualiza a página.",
       "reclaimable": "A última tentativa de promoção não terminou. Podes tentar novamente.",
       "dialog": {

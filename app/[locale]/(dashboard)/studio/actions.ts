@@ -69,6 +69,9 @@ export type StudioActionErrorCode =
   // that is no longer current and are discarded; the user's newer text is
   // kept untouched.
   | 'draft_superseded'
+  // Session 29-D, D8 (MINOR-8) — the draft was soft-deleted or removed
+  // between page load and a promote attempt.
+  | 'draft_not_found'
   | AiErrorCode
 
 export type SuggestStudioSuggestionsState =
@@ -357,8 +360,21 @@ export async function promoteDraftToCampaign(
   if (!ctx) return { outcome: 'error', error: 'generic' }
   const { client, business } = ctx
 
-  const result = await promoteDraftToCampaignCore(client, business.id, parsedInput.data.draftId, parsedInput.data.scheduledAt)
+  // Session 29-D, D8 (MINOR-8) — this wrapper had no try/catch, so any
+  // uncaught exception from promoteDraftToCampaignCore's dependencies (a
+  // draft's fallback re-read throwing, or any other unexpected DB error)
+  // rendered Next's generic error boundary instead of a typed §10 state.
+  // Mirrors this file's other actions (e.g. saveStudioDraftAction above),
+  // all of which already wrap their core call.
+  let result
+  try {
+    result = await promoteDraftToCampaignCore(client, business.id, parsedInput.data.draftId, parsedInput.data.scheduledAt)
+  } catch (e) {
+    Sentry.captureException(e, { tags: { studio_action: 'promoteDraftToCampaign' } })
+    return { outcome: 'error', error: 'generic' }
+  }
   if (result.outcome === 'content_too_long') return { outcome: 'error', error: 'draft_too_long' }
   if (result.outcome === 'error') return { outcome: 'error', error: 'generic' }
+  if (result.outcome === 'not_found') return { outcome: 'error', error: 'draft_not_found' }
   return result
 }

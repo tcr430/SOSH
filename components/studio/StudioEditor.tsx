@@ -66,7 +66,10 @@ export function StudioEditor({
   // outcomes (§3.3's already_promoted/claimed_by_another, plus 'error').
   const [promotedCampaignId, setPromotedCampaignId] = useState(initialPromotedCampaignId)
   const [promoteDialogOpen, setPromoteDialogOpen] = useState(false)
-  const [promoteOutcome, setPromoteOutcome] = useState<'already_promoted' | 'claimed_by_another' | 'error' | null>(null)
+  // Session 29-D, D8 (MINOR-8) — 'not_found' is distinct from the generic
+  // 'error': the draft was soft-deleted or removed, not a transient failure,
+  // and the reclaimable-after-staleness framing 'error' implies is wrong for it.
+  const [promoteOutcome, setPromoteOutcome] = useState<'already_promoted' | 'claimed_by_another' | 'error' | 'not_found' | null>(null)
 
   const [suggestionResult, setSuggestionResult] = useState<SuggestSuccess | null>(null)
   const [stale, setStale] = useState(false)
@@ -148,24 +151,28 @@ export function StudioEditor({
   // 2. claimed_by_another (a live, non-stale claim held elsewhere right now)
   // 3. failed (§3.4's residual — the claim is still held, fresh; an
   //    immediate retry would just return claimed_by_another, so this takes
-  //    precedence over 'promotable' rather than rendering alongside it)
+  //    precedence over 'promotable' rather than rendering alongside it) —
+  //    Session 29-D, D8 (MINOR-8) adds 'not_found' alongside 'failed' here,
+  //    a distinct sub-case rendered with its own message, not a new state.
   // 4. not eligible (content/platform, OR no saved draft yet to promote)
   // 5. reclaimable (server-computed: claimed, stale, no campaign)
   // 6. promotable (otherwise)
-  const promoteState: 'promoted' | 'already_promoted' | 'claimed_by_another' | 'failed' | 'not_eligible' | 'reclaimable' | 'promotable' =
+  const promoteState: 'promoted' | 'already_promoted' | 'claimed_by_another' | 'failed' | 'not_found' | 'not_eligible' | 'reclaimable' | 'promotable' =
     promotedCampaignId !== null
       ? promoteOutcome === 'already_promoted'
         ? 'already_promoted'
         : 'promoted'
       : promoteOutcome === 'claimed_by_another'
         ? 'claimed_by_another'
-        : promoteOutcome === 'error'
-          ? 'failed'
-          : draftId === null || isEmptyDraft || missingPlatform
-            ? 'not_eligible'
-            : isClaimReclaimable
-              ? 'reclaimable'
-              : 'promotable'
+        : promoteOutcome === 'not_found'
+          ? 'not_found'
+          : promoteOutcome === 'error'
+            ? 'failed'
+            : draftId === null || isEmptyDraft || missingPlatform
+              ? 'not_eligible'
+              : isClaimReclaimable
+                ? 'reclaimable'
+                : 'promotable'
 
   // impeccable review (Session 29 F1b.5) — the third case here (neither
   // reason true) is a real, reachable state: content and platform are BOTH
@@ -192,6 +199,12 @@ export function StudioEditor({
     }
     if (result.outcome === 'claimed_by_another') {
       setPromoteOutcome('claimed_by_another')
+      return
+    }
+    // Session 29-D, D8 (MINOR-8) — the draft is gone (soft-deleted or
+    // removed between page load and this attempt), not merely stale-claimed.
+    if (result.outcome === 'error' && result.error === 'draft_not_found') {
+      setPromoteOutcome('not_found')
       return
     }
     // 'not_eligible' and 'error' — §3.4's stranded-claim residual. The
@@ -391,6 +404,12 @@ export function StudioEditor({
         {promoteState === 'failed' && (
           <p role="alert" className="text-xs text-destructive">
             {t('promote.failed')}
+          </p>
+        )}
+
+        {promoteState === 'not_found' && (
+          <p role="alert" className="text-xs text-destructive">
+            {t('promote.notFound')}
           </p>
         )}
       </div>

@@ -221,6 +221,27 @@ describe('promote failed', () => {
   })
 })
 
+// Session 29-D, D8 (MINOR-8) — PROMOTE-MISSING-DRAFT-TYPED's Tier-2 half:
+// a distinct rendered case beside the ADR §10 seven (not a renumbering of
+// them), reached the same real way — through handlePromoteOutcome — and
+// distinguishable from the generic 'promote failed' message above by its
+// own, more specific text.
+describe('promote draft not found (soft-deleted or removed since page load)', () => {
+  it('renders a distinct alert-role message from a draft_not_found error, WITHOUT the promote button', () => {
+    promoteOutcomeRef.current = { outcome: 'error', error: 'draft_not_found' }
+    const { container, cleanup } = renderEditor(baseProps())
+
+    act(() => { buttonWithText(container, 'promote.button')?.click() })
+    act(() => { buttonWithText(container, 'promote-dialog-confirm-stub')?.click() })
+
+    const alert = container.querySelector('[role="alert"]')
+    expect(alert?.textContent).toBe('promote.notFound')
+    expect(container.textContent).not.toContain('promote.failed')
+    expect(buttonWithText(container, 'promote.button')).toBeUndefined()
+    cleanup()
+  })
+})
+
 // ── PROMOTE-CONTRAST-AA — read the SHIPPED app/globals.css tokens at test
 // time, mirroring OpportunityFeed.test.tsx's mechanism exactly (not a
 // hand-transcribed hex). No NEW tokens were added for this surface — it

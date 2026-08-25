@@ -28,6 +28,8 @@ export type PromoteDraftToCampaignResult =
   // "reclaimable" arms), never a generic error.
   | { outcome: 'already_promoted'; draft: StudioDraftRow }
   | { outcome: 'claimed_by_another'; draft: StudioDraftRow }
+  // Session 29-D, D8 (MINOR-8) — passed through from claimStudioDraftForPromotion.
+  | { outcome: 'not_found' }
   // §10's "not promotable" gate, re-checked server-side. A won-but-
   // ineligible claim is deliberately left claimed (not un-claimed) — it
   // becomes reclaimable after PROMOTE_CLAIM_STALE_MINUTES elapses, the same
@@ -79,6 +81,7 @@ export async function promoteDraftToCampaignCore(
   const claim = await claimStudioDraftForPromotion(client, draftId, businessId)
   if (claim.outcome === 'already_promoted') return { outcome: 'already_promoted', draft: claim.draft }
   if (claim.outcome === 'claimed_by_another') return { outcome: 'claimed_by_another', draft: claim.draft }
+  if (claim.outcome === 'not_found') return { outcome: 'not_found' }
   const draft = claim.draft
 
   const trimmedContent = draft.content.trim()
