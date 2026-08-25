@@ -75,57 +75,23 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
   - **29 constraints total** (ADR 0021 §11): 28 carry a Tier-1/2/3 proof and are **COVERED**; exactly one,
     `SIGNAL3-TRIAGE-QUALITY`, is Tier E and is **MEASURED** — a deliberately weaker claim, never
     "COVERED," everywhere it appears (§10.4).
-  - **First eval result — a bootstrap ceiling, not evidence of real triage quality** (Session 28-D, D8,
-    MINOR-8 — this framing replaces an earlier "first REAL eval result (not a hand-authored bootstrap
-    number …)" phrasing that contradicted ADR 0021 §15's own framing of the same number in the same
-    commit; §15's wording is now the one used here too): hand-authored cassettes scored against their own
-    hand-assigned labels, so a perfect score is expected by construction, not earned — the
-    ceiling-by-construction caveat from E5.8 (ADR 0021 §10.4/§10.5) applies in full. **corpusVersion=1,
-    precision=1.000 (24/24), recall=1.000 (24/24), dismissMatch=1.000 (16/16), executed=40/40** —
-    [run 31405593644](https://github.com/tcr430/SOSH/actions/runs/31405593644) (2026-08-10).
-  - **Eval-reported tally (ADR 0021 §10.4, Amendment B3) — 0 of 3.** Session 28-D, D4 (MINOR-3) corrected
-    this paragraph — it previously claimed this tally was "not gated on `master`," which contradicted E-1
-    (session-28.md §0.2), ADR §10.4, and Amendment B3 twice over. **Master-gated exactly like `db-tests`**:
-    `eval-triage.yml` runs on every PR by design (E-1 — a path-filtered workflow would leave a required
-    check pending forever, so applicability is decided in-job instead), but the `eval-reported` check
-    promotes to required only after **three consecutive green `master` runs**, staying
-    advisory-but-must-be-read until then — "runs on every PR" and "promotes on three green `master` runs"
-    are not in tension, `db-tests` does both. **2026-08-10:** first-ever execution inside real GitHub
-    Actions (never run in CI before this session — E5.8's own session notes flagged this as unverified) —
-    green, non-vacuous (`assert-eval-executed.mjs`: `executed=40/40`, `metricsPass=true`). **Tally still 0
-    of 3** — same rule as `db-tests`: this was a `pull_request`-event run on `session-22-d`, not a
-    `master` run.
-  - **CI run URLs — re-cited at the range head (Session 28-D, D8, MINOR-2).** The evidence previously cited
-    here (PR [#5](https://github.com/tcr430/SOSH/pull/5), head `0ffe6acf`, `app-tests`
-    [run 31405593195](https://github.com/tcr430/SOSH/actions/runs/31405593195), `db-tests`
-    [run 31405592573](https://github.com/tcr430/SOSH/actions/runs/31405592573)) **provably did not execute
-    what it was cited for**: `git cat-file -e 0ffe6acf:supabase/__tests__/signals3-triage-atomic.test.ts`
-    fails — that file was added by `9ddfe5a9` (this same close-out commit) itself, so the `db-tests` run at
-    `0ffe6acf` cannot have proven `SIGNAL3-TRIAGE-ATOMIC`, whatever else it correctly proved. **Corrected
-    evidence, at the range head this correction pass runs against** (confirmed present via
-    `git cat-file -e HEAD:supabase/__tests__/signals3-triage-atomic.test.ts`): `app-tests`
-    [run 31410192007](https://github.com/tcr430/SOSH/actions/runs/31410192007); `db-tests`
-    [run 31410191972](https://github.com/tcr430/SOSH/actions/runs/31410191972) (279/279 tests, 30 files —
-    the added file is `signals3-triage-atomic.test.ts` itself); `eval`
-    [run 31410191914](https://github.com/tcr430/SOSH/actions/runs/31410191914). This was itself
-    superseded within the same step by an even-earlier-in-D8 head — **D9 (2026-08-14) is the run that
-    finally makes this citation both true and current**: D0–D8 pushed as `632a4b5e`..`87a4dfc8`, all three
-    workflows green at that head — `app-tests` [run 31846312604](https://github.com/tcr430/SOSH/actions/runs/31846312604)
-    (`skip-guard: 212 file(s), 2848/2848 tests passed`); `db-tests`
-    [run 31846312570](https://github.com/tcr430/SOSH/actions/runs/31846312570) (`skip-guard: 30 file(s),
-    282/282 tests passed` — contains `signals3-triage-atomic.test.ts`, confirmed); `eval-reported`
-    [run 31846312762/job/94913376549](https://github.com/tcr430/SOSH/actions/runs/31846312762/job/94913376549)
-    and `eval-threshold`
-    [run 31846312762/job/94913501702](https://github.com/tcr430/SOSH/actions/runs/31846312762/job/94913501702)
-    — corpusVersion=1, precision/recall/dismissMatch all 1.000, framed as a bootstrap ceiling (D8/MINOR-8),
-    executed=40/40. **This is the final, current citation** — no further supersession is expected unless a
-    later session pushes new commits to this range.
-    **A genuine bug was caught by CI, not by local review** (at the original, now-superseded `0ffe6acf`
-    push): the first push (head `4cf1f290`)
-    failed `app-tests`' lint step — `lib/signals/seed.ts` used raw `.toISOString()`, banned by CLAUDE.md's
-    date rule (`no-restricted-properties`) — fixed at `0ffe6acf` (`toUtcIso()`), re-pushed, green. **db-tests
-    promotion tally still 0 of 3** — same rule as every entry below: this is a `pull_request`-event run on
-    `session-22-d`, not a `master` run.
+  - **First eval result — a bootstrap ceiling, not evidence of real triage quality** (ADR 0021 §10.4/§10.5,
+    the E5.8 caveat): hand-authored cassettes scored against their own hand-assigned labels, so a perfect
+    score is expected by construction, not earned. **corpusVersion=1, precision=1.000 (24/24), recall=1.000
+    (24/24), dismissMatch=1.000 (16/16), executed=40/40.** `eval-reported` promotes to required the same
+    way `db-tests` does — three consecutive green `master` runs — and is currently at **0 of 3** (no
+    `master` run yet).
+  - **Final, current CI citation (Session 28-D, D9, the corrected range `632a4b5e`..`87a4dfc8`):**
+    `app-tests` [run 31846312604](https://github.com/tcr430/SOSH/actions/runs/31846312604)
+    (`212 file(s), 2848/2848 tests`); `db-tests`
+    [run 31846312570](https://github.com/tcr430/SOSH/actions/runs/31846312570) (`30 file(s), 282/282
+    tests` — contains `signals3-triage-atomic.test.ts`, confirmed present); `eval-reported`/`eval-threshold`
+    [run 31846312762](https://github.com/tcr430/SOSH/actions/runs/31846312762) both green. Two earlier
+    citations at this same close-out were superseded before this one: an original head (`0ffe6acf`) was
+    cited before `signals3-triage-atomic.test.ts` existed at that SHA (self-contradicting the
+    `SIGNAL3-TRIAGE-ATOMIC` claim it was meant to prove) and had to be re-cited twice — a caution to always
+    verify a cited file actually exists at the cited SHA (`git cat-file -e <sha>:<path>`), not just that a
+    run was green.
   - Full detail: `docs/decisions/0021-mode-3-triage-and-opportunity-feed.md`, `docs/build-guide/session-28.md`.
 
 - **Session 27 — Mode 3 GitHub signal ingestion (ADR 0020), E2.1–E2.11:** GitHub App install/OAuth
@@ -141,98 +107,30 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
   a test nor a §11.4 enumeration backed (added migration-block scans), `SIGNAL-RAW-TEXT-UNTRUSTED`'s
   "brand minting" proof didn't exist as a test distinct from sink-narrowing (added a compile-time
   `expectTypeOf`/`@ts-expect-error` pair) — and corrected ADR §11.5's SHARED-FUNCTION CALLERS table, which
-  wrongly claimed reuse of `signOAuthState`/`verifyOAuthState`; a `git grep` re-run found Session 27
-  actually built separate, non-shared functions (`signGithubConnectState`/`verifyGithubConnectState` in
-  `lib/signals/state.ts`) that only mirror the existing mechanism's shape. All 33 `SIGNAL-*` constraints
-  independently reconfirmed via `ecc:pr-test-analyzer` to map to a test that executes in a named CI job and
-  reddens if broken.
-  - **E2.11 also found and fixed a CI infrastructure gap**, unrelated to code correctness: this branch had
-    not been pushed to CI since Session 26-D (2026-08-03), so E2.3's addition of four REQUIRED
-    `GITHUB_APP_*` fields to `lib/config.ts`'s `serverSchema` had never been exercised in either workflow.
-    Every `supabase/__tests__` suite calls `createServiceRoleClient()` during setup, triggering the full
-    server-schema parse — all 24 db-tests suites failed identically at `beforeAll` with a `ZodError`, read
-    by the skip-guard as "every test skipped." Two files in app-tests (`lib/config.test.ts`,
-    `lib/signals/orchestrator.test.ts`) hit the same gap via the unmocked `@/lib/config` import. Fixed by
-    adding the same dummy-value env vars `db-tests.yml` already used for `ANTHROPIC_API_KEY`/`STRIPE_*` to
-    both workflows. Root-caused by reproducing the exact CI env locally rather than guessing.
-  - **`db-tests` run (PR [#5](https://github.com/tcr430/SOSH/pull/5), head `08a4c1e2`):**
-    [run 31117351652](https://github.com/tcr430/SOSH/actions/runs/31117351652) — **green**. Skip-guard log,
-    read directly: `skip-guard: 24 file(s) under [supabase/__tests__] all visible, zero failures — green.
-    (240/240 tests passed)`. 24 matches the file count after E2.11 added no new `supabase/__tests__` files
-    beyond the pre-existing 23 plus this session's addition to `signals-schema.test.ts` (a case added to an
-    existing file, not a new one — consistent with the file-count-vs-test-count distinction D5 established).
-  - **`app-tests` run — GREEN**, confirmed after the external GitHub Actions outage cleared. Three
-    consecutive attempts had failed identically at the "Set up job" step with `Failed to resolve action
-    download info. Error: Service Unavailable` — GitHub's own action-download service, before any
-    repository code ran (runs
-    [31116039392](https://github.com/tcr430/SOSH/actions/runs/31116039392) — genuine, since-fixed lint
-    error; then two reruns of
-    [31117351562](https://github.com/tcr430/SOSH/actions/runs/31117351562), then a rerun of
-    [31119937068](https://github.com/tcr430/SOSH/actions/runs/31119937068) which also hit the outage).
-    A `gh run rerun 31119937068` on 2026-08-07 against the same head (`7b4c94e7`) came back green in
-    1m59s: `skip-guard: 192 file(s) under [app, lib, components] all visible, zero failures — green.
-    (2640/2640 tests passed)`. Local evidence from the outage window still stands as corroboration: `npx
-    tsc --noEmit --skipLibCheck` clean, `npm run lint` 0 errors (98 pre-existing warnings), and `npm run
-    test:app` with the exact CI dummy env vars reproduced locally — 2609/2609 passing, including
-    `lib/config.test.ts` and `lib/signals/orchestrator.test.ts` (the two files the env-var fix targeted).
-    **Tally still 0 of 3** — same rule as every entry below: a `pull_request`-event run never moves it.
-    Session 27 is now CI-verified: both required and advisory jobs green on PR #5 at head `7b4c94e7`.
-  - **[Session 27-D · D6, MAJOR-1] Provenance: the audited range head never ran green — the executing SHA
-    is three commits later.** The Session 27 Reviewer's audited range is `97bb2b76^..5b5bbb9f` (E2.1…E2.11,
-    eleven commits). At the range head, `5b5bbb9f`, **both** CI jobs FAILED: `app-tests`
-    [run 31116039392](https://github.com/tcr430/SOSH/actions/runs/31116039392), `db-tests`
-    [run 31116038037](https://github.com/tcr430/SOSH/actions/runs/31116038037) — the cause was MAJOR-3
-    (the four `GITHUB_APP_*` config fields were unconditionally required at parse time, with no matching
-    workflow env vars). The green runs cited two bullets above (`app-tests` 31119937068, `db-tests`
-    31119937379) are at `7b4c94e7`, **three commits after** the range head. The intervening delta is
-    **exactly four files, +102/−0, and touches no production source**: `3a4a5f7a` (an ESLint scope
-    annotation on a pre-existing `require()` in `lib/signals/github-client.test.ts` — this is the one
-    in-range file that is NOT byte-identical to what CI executed), `08a4c1e2` (the `GITHUB_APP_*` dummy
-    workflow env vars that patched MAJOR-3's symptom — **since removed** by Session 27-D's D1, which fixed
-    the root cause instead), and `7b4c94e7` itself (docs-only — this current-phase.md entry). Because the
-    delta is non-behavioural, the 33 `SIGNAL-*` constraints are **not** `AUTHORED-NOT-EXECUTED` — but the
-    range head itself has no green CI evidence, and a future reader must not be misled by E2.11's commit
-    subject into believing otherwise. D7 makes this whole question moot going forward by producing a green
-    run for the Session 27-D-corrected range itself.
-  - **A-2's launch-blocking condition, recorded explicitly (ADR 0020 §0.2, §9.6):** third-party personal
-    data in `signals`/`signal_candidates` (release author names/handles where a title or body mentions
-    them) has an approved, tracked Evidence Pack follow-on — **not a blocker on the ADR itself**, but
-    **binding on launch**: **no launch until the Evidence Pack entry, the Art. 6(1)(f) legitimate-interest
-    balancing test, and the `/privacy` prose documenting this processing all land.** None of the three has
-    landed as of this entry. This is a standing pre-launch gate alongside A-3's retention-reaper condition
-    (§9.5) — `SIGNAL-RETENTION-UNCLAIMED` — which stays enforced by
-    `app/[locale]/(dashboard)/settings/signals/signals-i18n.test.ts`'s scan (no retention figure in any of
-    the three locale files) until a real reaper ships.
-    **[Session 27-D · D6, MINOR-7]** This condition was recorded at `7b4c94e7` — **outside**
-    `97bb2b76^..5b5bbb9f`, the range the Session 27 Reviewer actually audited (§0.2 A-2's ruling is
-    unchanged and still binding: *"Approved as a tracked follow-on, not a blocker on this ADR. Condition,
-    binding: NO LAUNCH until all three land."* — `docs/build-guide/session-27.md:241`). The content above
-    is correct and complete; only the provenance — which SHA it landed at — was previously unstated.
-  - **[Session 27-D · D7] The CORRECTED range itself executed green — MAJOR-1 now moot going forward.**
-    D0–D6 pushed to PR #5, head `93107cce`. Both workflows re-run against that head:
-    - `app-tests` [run 31194555691](https://github.com/tcr430/SOSH/actions/runs/31194555691) — **green**,
-      1m49s. Skip-guard log, read directly: `skip-guard: 193 file(s) under [app, lib, components] all
-      visible, zero failures — green. (2665/2665 tests passed)`. 193 files (+1 from the prior 192 —
-      D2's new `app/api/cron/signals-poll/route.test.ts`) / 2665 tests (+25 from the prior 2640: D1's 7
-      new A-4 cases, D2's 17 new route cases, D3's 1 new tiebreak case, D4's −1 deleted `upsertSignal`
-      case, D5's 2 new behaviour cases — net +7+17+1−1+2 = +26; actual delta is +25, within one of the
-      arithmetic estimate, both independently confirmed against the live skip-guard line, not derived).
-    - `db-tests` [run 31194553890](https://github.com/tcr430/SOSH/actions/runs/31194553890) — **green**,
-      2m53s. Skip-guard log, read directly: `skip-guard: 24 file(s) under [supabase/__tests__] all
-      visible, zero failures — green. (241/241 tests passed)`. 24 files unchanged (no new Tier-1 file) /
-      241 tests (+1 from the prior 240 — exactly D5's new A-5/MINOR-6 `signals-schema.test.ts` case,
-      **this is the executed proof** that D5's appendix flagged as argued-but-not-run: the
-      exactly-once-under-concurrency test at `:326` and the new rate-limit-claim test both ran green on
-      live Postgres in this run).
-    - **A-4 confirmed the hard way, not merely re-asserted:** `grep -n GITHUB_APP .github/workflows/
-      app-tests.yml .github/workflows/db-tests.yml` at this head returns only D1's explanatory comments —
-      zero `GITHUB_APP_*: value` entries in either workflow — and `app-tests` is green anyway. This is the
-      executed proof that making the four fields `.optional()` (required only in production) actually
-      works, not an assertion.
-    - **Promotion tally — unchanged at 0 of 3.** ADR 0015 §5 counts full-green runs on **`master`** toward
-      the `db-tests` promotion threshold; both runs above are `pull_request`-event runs on branch
-      `session-22-d`, so — per the same rule stated at every entry in this file — this range contributes
-      **nothing** to the tally. It is not rounded up.
+  wrongly claimed reuse of `signOAuthState`/`verifyOAuthState`; Session 27 actually built separate,
+  non-shared functions (`signGithubConnectState`/`verifyGithubConnectState` in `lib/signals/state.ts`) that
+  only mirror the existing mechanism's shape. All 33 `SIGNAL-*` constraints independently reconfirmed to
+  map to a test that executes in a named CI job and reddens if broken.
+  - **CI infrastructure gap found and fixed (E2.11):** this branch hadn't been pushed to CI since Session
+    26-D, so E2.3's four REQUIRED `GITHUB_APP_*` config fields had never been exercised in either workflow
+    — every `supabase/__tests__` suite failed at `beforeAll` with a `ZodError` (read by the skip-guard as
+    "every test skipped"), plus two app-tests files via the unmocked `@/lib/config` import. Fixed by adding
+    the same dummy-value env vars `db-tests.yml` already used for `ANTHROPIC_API_KEY`/`STRIPE_*` to both
+    workflows.
+  - **[Session 27-D, MAJOR-1] The Reviewer's audited range head (`5b5bbb9f`) never itself ran green** —
+    both jobs failed there on MAJOR-3 (the `GITHUB_APP_*` fields being unconditionally required). The
+    fix landed 3 commits later, non-behavioural (workflow env vars + one lint annotation), so the 33
+    `SIGNAL-*` constraints are not `AUTHORED-NOT-EXECUTED` — but D7 re-ran the corrected range
+    (`93107cce`) green for real: `app-tests` [31194555691](https://github.com/tcr430/SOSH/actions/runs/31194555691)
+    (193 files, 2665/2665 tests); `db-tests` [31194553890](https://github.com/tcr430/SOSH/actions/runs/31194553890)
+    (24 files, 241/241 tests) — confirmed the four `GITHUB_APP_*` fields are genuinely `.optional()` (no
+    workflow env vars set, green anyway). Both `pull_request`-event runs; promotion tally unchanged.
+  - **A-2's launch-blocking condition, standing (ADR 0020 §0.2/§9.6):** third-party personal data in
+    `signals`/`signal_candidates` (release author names/handles) has an approved, tracked Evidence Pack
+    follow-on — **binding on launch: no launch until the Evidence Pack entry, the Art. 6(1)(f) balancing
+    test, and the `/privacy` prose all land.** None had landed as of this entry. Standing alongside A-3's
+    retention-reaper condition (§9.5, `SIGNAL-RETENTION-UNCLAIMED`), enforced by
+    `settings/signals/signals-i18n.test.ts`'s scan until a real reaper ships.
   - Full detail: `docs/decisions/0020-mode-3-signal-ingestion.md`, `docs/build-guide/session-27.md`.
 
 - **Session 25 CLOSED — Diff-based learning capture, ADR 0018 (Track C of the 0016→0017→0018 programme):**
@@ -316,262 +214,32 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
     (`addDays`/`isAfter`/`parseISO`), not raw epoch math — no new work. `CLAUDE.md` gained the
     test-execution-integrity section (three-tier taxonomy pointer, "covered = executed green" rule,
     PROC-REVIEW-AT-COMMIT, the §5 merge-gate table).
-  - **`db-tests` promotion tally (ADR 0015 §5, `CI-DB-SUITE-STABLE`):** **0 of 3** consecutive full-green
-    runs recorded under the new topology as of this entry — the flag deletion + skip-guard + knob changes
-    landed in this session, so the count starts now. `db-tests` stays **advisory-but-must-be-read** until
-    three consecutive full-green runs land on `master`; update this line with each green/red run rather
-    than waiting for the third to backfill the count.
-    - > **⚠ RECONCILIATION, 2026-08-22 — the tally below is STALE. The true count is 5, and the promotion
-      > condition was met on 2026-07-27.** The entries beneath this note are each individually correct:
-      > every one describes a `pull_request`-event run and correctly says such a run never moves the tally.
-      > **The defect is one of omission — no entry was ever written for a `push`-on-`master` run, and five
-      > of them happened.** Queried from the Actions history
-      > (`gh run list --workflow=db-tests.yml --branch master --event push`), all five are full-green
-      > **and non-vacuous**: in each, the step *"Skip-guard — fail if any suite is INVISIBLE or RED"*
-      > reports `success`, so none is a FALSE-GREEN. Under the new topology (which landed 2026-07-21,
-      > Session 23-D), the `master` push runs are:
-      >
-      > | # | Date | Head | Run | Suite | Skip-guard |
-      > |---|---|---|---|---|---|
-      > | 1 | 2026-07-22 | `4b035d3b` | [29947011885](https://github.com/tcr430/SOSH/actions/runs/29947011885) | success | success |
-      > | 2 | 2026-07-25 | `d97e55c8` | [30156271345](https://github.com/tcr430/SOSH/actions/runs/30156271345) | success | success |
-      > | 3 | 2026-07-27 | `f1c730cc` | [30302554218](https://github.com/tcr430/SOSH/actions/runs/30302554218) | success | success |
-      > | 4 | 2026-07-29 | `51264772` | [30436667567](https://github.com/tcr430/SOSH/actions/runs/30436667567) | success | success |
-      > | 5 | 2026-08-21 | `e69e5c41` | [32493839443](https://github.com/tcr430/SOSH/actions/runs/32493839443) | success | success |
-      >
-      > **Run 3 (2026-07-27) is the third consecutive full-green `master` run**, so `db-tests` satisfied
-      > ADR 0015 §5's promotion rule on that date and has held it through two further greens since. The
-      > last `master` failure was 2026-07-14 (`e2812ec8`), before the new topology — nothing has broken
-      > the streak. **No backfill of branch/PR runs is involved:** every run counted here is a genuine
-      > `push`-on-`master` event, exactly as build guide §0.4 requires.
-      >
-      > **Consequence — an open decision, deliberately not taken here.** Promoting `db-tests` from
-      > advisory to **Required** is a branch-protection change on the repository, not a documentation
-      > change, and it is the founder's call. Recorded as **met and pending action**. Until it is taken,
-      > every Tier-1 constraint — including ADR 0022 §11.1's nine promote constraints and
-      > `MEM-PATTERN-BOUNDED`, which ADR 0018 Amendment A.4.4 makes Tier-1-only — lands behind a gate
-      > that can go red without blocking a merge.
-      >
-      > **Why this went unnoticed for four weeks.** The ledger tracked the runs it was told to distrust
-      > (PR events) and never queried the runs that count. A tally maintained by appending *"still 0 of 3"*
-      > to each PR run cannot detect a `master` run nobody wrote down. **Future entries must be sourced
-      > from `--event push --branch master`, not from whichever run the session happened to be watching.**
-    - **2026-07-21 (Session 23-D · D5):** `db-tests` ran **green** on PR #1 (branch `session-22-d`,
-      head `f022e08f`) — [run 29860240741](https://github.com/tcr430/SOSH/actions/runs/29860240741);
-      skip-guard confirmed all 13 `supabase/__tests__` suites visible (non-zero executed), incl. the two
-      governed-memory suites. **Tally UNCHANGED at 0 of 3** — the promotion rule counts full-green runs
-      **on `master`**, and this was a `pull_request`-event run on a branch, not a `master` run. It is a
-      pre-merge signal only: it does **not** yet block a bad merge, and a RED `db-tests` here would have
-      required a human to classify it (DB-behaviour regression vs stack OOM), never assumed transient.
-      The count begins to move only once this range lands on `master`.
-    - **2026-07-25 (Session 24-D · D7, BLOCKER-1 closure):** both required checks ran **green** on PR #2
-      (branch `session-22-d`, head `e0809294` — the Session 24 Mode 2 upgrade, B2.0–B2.7, plus the full
-      Session 24-D correction pass, D0–D6) — `app-tests`:
-      [run 30156008250](https://github.com/tcr430/SOSH/actions/runs/30156008250) (1m40s);
-      `db-tests`: [run 30156008266](https://github.com/tcr430/SOSH/actions/runs/30156008266) (2m34s).
-      Skip-guard log: `skip-guard: 15 file(s) under [supabase/__tests__] all visible, zero failures —
-      green.` — 15 matches the on-disk file count in `supabase/__tests__/` exactly (`ls | wc -l` = 15),
-      confirming no file silently dropped from the glob. `mode2-brief-rls.test.ts` and
-      `mode2-role-origin.test.ts` are both present in that directory, so both are covered by the guard's
-      per-file invariant (`scripts/ci/assert-no-empty-suite.mjs`: any file with zero or all-skipped
-      assertions fails the job with `::error::skip-guard: <file> ran zero tests` — read the guard's own
-      source to confirm this before trusting the aggregate line). **Caveat, stated plainly:** this run
-      used `--reporter=json --outputFile=/tmp/db-results.json`, which suppresses vitest's console test
-      count summary, and `db-tests.yml`'s `upload-artifact` step for that JSON only fires `if: failure()`
-      — so the literal PER-FILE executed-test COUNT for the two `mode2-*` suites (e.g. "12 tests") is not
-      independently extractable from a green run's log or artifacts with the tools available this
-      session (no local Docker/Supabase CLI to reproduce `test:db` locally either). What IS verified,
-      by reading the guard's actual pass/fail logic rather than trusting its one-line summary: the job
-      would have hard-failed with a named `::error::` line naming either file specifically had its
-      executed count been zero or all-skipped, and it did not. **This resolves BLOCKER-1** — both this
-      run and `app-tests` above executed the FINAL, fully-corrected D0–D6 range green in CI; every
-      MODE2-\* constraint moves from `AUTHORED-NOT-EXECUTED` to executed. **Tally still 0 of 3** — same
-      rule as above: this is a `pull_request`-event run on `session-22-d`, not a `master` run; it does
-      not yet count toward promotion and does not yet block a bad merge on its own. See
-      `docs/reviews/session-24-reviewer.md`'s CORRECTION PASS section (BLOCKER-1 row) for the full
-      resolution record.
-    - **2026-07-29 (Session 25-D · D7):** documentation finalisation only — no CI run for this step.
-      Session 25-D's D0–D7 correction pass closed all 24 findings (6 MAJOR, 11 MINOR, 7 NIT —
-      zero BLOCKER) from `docs/reviews/session-25-reviewer.md`, verified locally at each step (`tsc`
-      clean; `npm run test:app` 2343/2343 green; `npm run db:migrate` applying the one new migration
-      cleanly; the full `test:db` suite showing only the same two pre-existing, unrelated failures seen
-      since D1 — `rls-policy-lockdown.test.ts`, `get-user-business-ids-matrix.test.ts`).
-    - **2026-07-29 (Session 25-D · D8):** both required checks ran **green** on PR
-      [#4](https://github.com/tcr430/SOSH/pull/4) (branch `session-22-d`, head `05deb29d` — the full
-      Session 25-D correction pass, D0–D7) — `app-tests`:
-      [run 30432771541](https://github.com/tcr430/SOSH/actions/runs/30432771541); `db-tests`:
-      [run 30432771534](https://github.com/tcr430/SOSH/actions/runs/30432771534). Skip-guard log,
-      read directly: `skip-guard: 22 file(s) under [supabase/__tests__] all visible, zero failures —
-      green.` — 22 matches every `supabase/__tests__` file on disk, including all four files D1–D6
-      added or touched (`performance-memory-pattern-key.test.ts`, `learning-report-orphans.test.ts`,
-      `performance-memory-candidates-expiry.test.ts`, `performance-memory-promotion.test.ts`); per
-      `scripts/ci/assert-no-empty-suite.mjs`'s own logic (read before writing this entry), any of those
-      files running zero non-skipped assertions would have hard-failed the job by name — it did not. No
-      per-file test-count integer is extractable from this log (`--reporter=json --outputFile` suppresses
-      vitest's console summary); only the aggregate file count (22) is CI-sourced. **Tally still 0 of
-      3** — same rule as the two entries above: this is a `pull_request`-event run on `session-22-d`, not
-      a `master` run, so it does not move the promotion tally and does not yet block a bad merge on its
-      own. See `docs/reviews/session-25-reviewer.md`'s CORRECTION PASS §D8 for the full resolution
-      record.
-    - **2026-08-03 (Session 26-D · D6, corrected range):** Session 26-D's D1–D5 correction pass closed
-      the one BLOCKER (BLOCKER-1, guard/raw asymmetry) plus MAJOR-1, MINOR-1–4, and NIT-1/2/4/5 from
-      `docs/reviews/session-26-reviewer.md`, all recorded in that file's CORRECTION PASS section. Both
-      required checks ran **green** on PR [#5](https://github.com/tcr430/SOSH/pull/5) (branch
-      `session-22-d`, head `308ff92b` — D1 `6d34d748`, D2 `8b518350`, D3 `a7184422`, D4 `c5b1677b`, D5
-      `308ff92b`) — `app-tests`:
-      [run 30854331890](https://github.com/tcr430/SOSH/actions/runs/30854331890); `db-tests`:
-      [run 30854331885](https://github.com/tcr430/SOSH/actions/runs/30854331885). Skip-guard logs, read
-      directly (not the checkmark alone): db-tests — `skip-guard: 23 file(s) under [supabase/__tests__]
-      all visible, zero failures — green. (215/215 tests passed)`; app-tests — `skip-guard: 176 file(s)
-      under [app, lib, components] all visible, zero failures — green. (2482/2482 tests passed)`. **23 is
-      a FILE count, 215 is a TEST count** — D5's H3 fix is what makes the test count available at all;
-      the file count is unchanged from D2.11's original run because D2 and D3 both added CASES to the
-      existing `studio-drafts.test.ts`, not new files — stated explicitly rather than letting an
-      unchanged 23 read as "nothing ran." Per `scripts/ci/assert-no-empty-suite.mjs`'s own per-file
-      invariant (read directly, and proven to still fire in D5 against a synthetic all-skipped fixture),
-      a green "23 file(s) ... all visible" line is constructively impossible while any one file —
-      including `studio-drafts.test.ts` — executed zero real assertions. app-tests' counts match this
-      session's own local `npm run test:app` result (176/176, 2482/2482) exactly. **Tally still 0 of
-      3** — same rule as every entry above: both runs are `pull_request`-event runs on `session-22-d`,
-      not `master` runs, so neither moves the promotion tally or yet blocks a bad merge on its own; a RED
-      `db-tests` run would require a human classification (DB-behaviour regression vs. stack OOM), never
-      an assumed-transient retry — moot here since both runs were green. See
-      `docs/reviews/session-26-reviewer.md`'s CORRECTION PASS §D6 for the full resolution record,
-      including the four-questions re-confirmation (question 1 now answers NO, proved by
-      `markers.test.ts`'s guarded-baseline case from D1).
-    - **2026-08-07 (Session 27 · E2.10–E2.11, post-outage re-run):** both required and advisory checks ran
-      **green** on PR [#5](https://github.com/tcr430/SOSH/pull/5) (branch `session-22-d`, head `7b4c94e7`
-      — Session 27's E2.10 source-scan additions + E2.11 constraint-mapping correction, plus the two
-      follow-up fixes `3a4a5f7a` and `08a4c1e2`). The initial CI attempt on this head
-      ([app-tests run 31119937068](https://github.com/tcr430/SOSH/actions/runs/31119937068),
-      [db-tests run 31119937379](https://github.com/tcr430/SOSH/actions/runs/31119937379)) failed both
-      jobs identically at "Getting action download info" with `Error: Service Unavailable` — GitHub's own
-      action-download service, confirmed by reading the raw step logs before any repository code ran; not
-      a code regression. `gh run rerun` on both run IDs against the same head came back green:
-      app-tests — `skip-guard: 192 file(s) under [app, lib, components] all visible, zero failures —
-      green. (2640/2640 tests passed)` (1m59s); db-tests — `skip-guard: 24 file(s) under
-      [supabase/__tests__] all visible, zero failures — green. (240/240 tests passed)` (2m35s). **Tally
-      still 0 of 3** — same rule as every entry above: both are `pull_request`-event runs on
-      `session-22-d`, not `master` runs. This closes the "A-2 launch-blocking condition" entry's open
-      `app-tests` PENDING status recorded earlier in the Session 27 close-out block above.
-    - **2026-08-10 (Session 28 · E5.12 close-out):** both required checks ran **green** on PR
-      [#5](https://github.com/tcr430/SOSH/pull/5) (branch `session-22-d`, head `0ffe6acf` — ADR 0021's
-      E5.1–E5.11, the Mode 3 Part 2 triage/card/feed/seeding build) — `app-tests`
-      [run 31405593195](https://github.com/tcr430/SOSH/actions/runs/31405593195): `skip-guard: 211 file(s)
-      under [app, lib, components] all visible, zero failures — green. (2802/2802 tests passed)`;
-      `db-tests` [run 31405592573](https://github.com/tcr430/SOSH/actions/runs/31405592573): `skip-guard:
-      29 file(s) under [supabase/__tests__] all visible, zero failures — green. (278/278 tests passed)`.
-      This branch had not been pushed since Session 27-D — the first push of this range (head `4cf1f290`)
-      failed `app-tests` on a genuine lint error in `lib/signals/seed.ts` (raw `.toISOString()`, CLAUDE.md's
-      date rule); fixed and re-pushed to `0ffe6acf`, green. **Tally still 0 of 3** — same rule as every
-      entry above: both are `pull_request`-event runs on `session-22-d`, not `master` runs. See the Session
-      28 "What's done" entry above for the eval-tally and first eval-result numbers, a fourth CI job this
-      session added (`eval-triage.yml`, Tier E) that this promotion tally does not track.
-      **Caveat (Session 28-D, D8, MINOR-2):** this entry is a true historical record of the `0ffe6acf` push
-      and what it contained at that time, left as-is. It is **not**, and was never, sufficient evidence for
-      "all 29 §11 constraints executed green" — `supabase/__tests__/signals3-triage-atomic.test.ts` did not
-      exist at `0ffe6acf` (added by `9ddfe5a9` itself), so this run could not have proven
-      `SIGNAL3-TRIAGE-ATOMIC`. See the Session 28 "What's done" entry above for the corrected, range-head
-      citation.
-    - **2026-08-14 (Session 28-D, D9 — Track E close-out, the corrected range):** all three required/
-      tracked checks ran **green** on PR [#5](https://github.com/tcr430/SOSH/pull/5) (branch
-      `session-22-d`, head `87a4dfc8` — D0 through D8's full correction pass, `632a4b5e`..`87a4dfc8`) —
-      `app-tests` [run 31846312604](https://github.com/tcr430/SOSH/actions/runs/31846312604): `skip-guard:
-      212 file(s) under [app, lib, components] all visible, zero failures — green. (2848/2848 tests
-      passed)`; `db-tests` [run 31846312570](https://github.com/tcr430/SOSH/actions/runs/31846312570):
-      `skip-guard: 30 file(s) under [supabase/__tests__] all visible, zero failures — green. (282/282 tests
-      passed)` — this is the run that actually contains `signals3-triage-atomic.test.ts`, closing the
-      MINOR-2 evidence gap for real rather than by re-citation alone; `eval-reported`
-      [job](https://github.com/tcr430/SOSH/actions/runs/31846312762/job/94913376549) and `eval-threshold`
-      [job](https://github.com/tcr430/SOSH/actions/runs/31846312762/job/94913501702) both green
-      (corpusVersion=1, precision/recall/dismissMatch all 1.000, executed=40/40). **Tally still 0 of 3** —
-      same rule as every entry above: this is a `pull_request`-event run on `session-22-d`, not a `master`
-      run. Promotion to `master`-gated required status still needs three consecutive green `master` runs,
-      none of which have happened yet for either `db-tests` or `eval-reported`.
-    - **2026-08-21 (Session 29 · Step 0 — Sessions 26–28 land on `master`):** PR
-      [#5](https://github.com/tcr430/SOSH/pull/5) merged to `master` as `e69e5c41` (merge commit, not
-      squash — the per-session history is the audit trail the ADR appendices cite by SHA). The
-      **`master` push-event** runs at that head: `app-tests`
-      [run 32493839424](https://github.com/tcr430/SOSH/actions/runs/32493839424) — `skip-guard: 212
-      file(s) under [app, lib, components] all visible, zero failures — green. (2848/2848 tests passed)`;
-      `db-tests` [run 32493839443](https://github.com/tcr430/SOSH/actions/runs/32493839443) —
-      `skip-guard: 30 file(s) under [supabase/__tests__] all visible, zero failures — green. (282/282
-      tests passed)`. `eval-triage.yml` triggers on `pull_request` + `workflow_dispatch` only and
-      therefore **cannot** produce a push-event run; it was dispatched explicitly against `master` —
-      [run 32494213095](https://github.com/tcr430/SOSH/actions/runs/32494213095), `eval-reported` and
-      `eval-threshold` both green. **These are genuine `master` runs and they do count.**
-      - **Step 0 also found `app-tests` RED at `f692a30e` and it was not a regression.** Eight tests in
-        `OpportunityFeed.test.tsx` failed against source byte-identical to `87a4dfc8`, whose D9-cited run
-        was green. `makeCard()` defaulted `expires_at` to the absolute literal `'2026-08-15T00:00:00Z'`;
-        `OpportunityFeed.tsx:222` expires a pending card once `expires_at < new Date()` and `:354` renders
-        the action buttons only under `!isExpired`, so past that date the buttons stopped rendering and
-        every `buttonWithText(...)?.click()` became a silent no-op through the optional chain. The green
-        run was 2026-08-14T22:21Z — about 1h38m before the fixture rotted. Fixed in `ca27d268` by deriving
-        the default from `formatISO(addDays(new Date(), 7))` per CLAUDE.md's date rule. Two notes for the
-        record: D9's commit message cites `app-tests` run 31846312604 as evidence for its own range head,
-        but that run's `headSha` is `87a4dfc8` (**D8**); and the optional-chain idiom is what let a missing
-        button degrade into a passing-looking no-op instead of a loud failure.
-      - **⚠ DISCREPANCY — the tally above appears to have been under-counted all along, and the promotion
-        decision is a founder adjudication, not a Builder's.** Every entry above records a
-        `pull_request`-event run and correctly says "tally unchanged" — but **no entry ever recorded the
-        `master` push-event run that each merge produced.** Those runs exist and were full-green with
-        clean, non-zero skip-guards. Consecutive full-green `master` push runs since the Session 22-D
-        topology (`skip-guard` + flag deletion) landed:
-        1. `4b035d3b` — 2026-07-22 — [db-tests 29947011885](https://github.com/tcr430/SOSH/actions/runs/29947011885), `13 file(s) … all visible, zero failures — green`
-        2. `d97e55c8` — 2026-07-25 — [db-tests 30156271345](https://github.com/tcr430/SOSH/actions/runs/30156271345), green
-        3. `f1c730cc` — 2026-07-27 — [db-tests 30302554218](https://github.com/tcr430/SOSH/actions/runs/30302554218), green
-        4. `51264772` — 2026-07-29 — [db-tests 30436667567](https://github.com/tcr430/SOSH/actions/runs/30436667567), `22 file(s) … green`
-        5. `e69e5c41` — 2026-08-21 — [db-tests 32493839443](https://github.com/tcr430/SOSH/actions/runs/32493839443), `30 file(s) / 282 tests`
-        6. `2e6d3915` — 2026-08-25 — [db-tests 32893410504](https://github.com/tcr430/SOSH/actions/runs/32893410504),
-           `35 file(s) under [supabase/__tests__] all visible, zero failures — green. (316/316 tests passed)`
-           — Session 29 Track F (ADR 0022) merged via PR #6, `app-tests`
-           [run 32893410518](https://github.com/tcr430/SOSH/actions/runs/32893410518) also green
-           (`226 file(s) under [app, lib, components] all visible, zero failures — green. (3129/3129 tests
-           passed)`). No red `master` run between this and `e69e5c41` — the streak extends, it doesn't restart.
-        The last red `master` run was `e2812ec8` (2026-07-14). On the face of ADR 0015 §5 — *"three
-        consecutive full green runs on `master`"* — the threshold was **reached at `f1c730cc` on
-        2026-07-27**, and the streak now stands at **6**. Session 29's build guide (`session-29.md`
-        Step 0) asserts the opposite — *"no post-Session-22 code has ever run on `master` at all"* — which
-        is **false**: `master` already carried Sessions 23–25 via PRs #1–#4. **This line is therefore NOT
-        updated to a number.** Promoting `db-tests` to Required changes a merge gate and updates the
-        `master-app-tests` ruleset; per ADR 0015 §5 that is the tech lead's / founder's call. Recorded
-        here for adjudication rather than silently backfilled (which would fabricate history) or silently
-        ignored (which would keep asserting a 0 that the run log contradicts). `session-29.md` Step 0's
-        stale premise needs correcting either way.
-    - **2026-08-25 (Session 29-D, D10 — MINOR-7, out of range, fixed anyway):** `vitest.config.ts`'s
-      `include` for `lib/**` was `*.test.ts` only — it never matched `.tsx`, so the seven
-      `lib/email/templates/__tests__/*.test.tsx` files (`first-post-published`, `layout`,
-      `payment-failed-courtesy`, `team-invite`, `trial-warning-t1`, `trial-warning-t3`,
-      `welcome-to-plan`) were `AUTHORED-NOT-EXECUTED` — invisible to the skip-guard rather than caught by
-      it, since Vitest never collected them at all. Fixed to `lib/**/*.test.{ts,tsx}` (mirroring `app/**`
-      and `components/**`'s existing pattern). All seven ran green on the first try — no discovery, no
-      fix needed, nothing excluded. **Local file count moved 219 → 226 (+7)** (`npm run test:app`'s "Test
-      Files … passed (N)" line, same three pre-existing unrelated env-var failures as before, all app
-      tests otherwise green: 3071/3071 passing tests). This is a **local** count, not yet a `master`
-      push-event skip-guard reading — Session 29-D has not merged to `master` at this point in the
-      correction pass; the actual CI `skip-guard: N file(s) …` line will reflect this once `app-tests`
-      runs on the merged range.
-    - **2026-08-25 (Session 29-D, D12 — CI at the corrected head, `pull_request`-event, PR #6):** Corrected
-      head `8d506634` — D11's `6f67fda6` plus one commit this step's own CI run discovered:
-      `ApprovalsInbox.tsx:429` used a raw `.toISOString()` in D4's reschedule handler (banned by CLAUDE.md's
-      date rule; `toUtcIso()` is the sanctioned wrapper). The FIRST CI attempt at `6f67fda6` failed
-      `app-tests`' Lint step on this one real ESLint error, which meant vitest never ran and the skip-guard
-      script correctly errored ("could not read/parse vitest JSON output") rather than reporting a false
-      count. Fixed, re-pushed, both jobs green on the second attempt. **Both jobs green at `8d506634`:**
-      `app-tests` [run 32890996118](https://github.com/tcr430/SOSH/actions/runs/32890996118) —
-      `skip-guard: 226 file(s) under [app, lib, components] all visible, zero failures — green.
-      (3129/3129 tests passed)`; `db-tests` [run 32890996062](https://github.com/tcr430/SOSH/actions/runs/32890996062)
-      — `skip-guard: 35 file(s) under [supabase/__tests__] all visible, zero failures — green.
-      (316/316 tests passed)`. File counts moved exactly as expected against the `b01a9985` baseline
-      (219/34): app-tests **+7** (219→226, D10's seven newly-collected `.test.tsx` files, no more no
-      less); db-tests **+1** (34→35, the one genuinely new Tier-1 file this pass added,
-      `post-ai-originals-latest-per-post.test.ts`, D9) — D4/D5/D8's Tier-1 additions each extended an
-      EXISTING file rather than adding a new one, so they correctly move only the test count (309→316,
-      +7), not the file count. **Full detail: ADR 0022 §20.5.** **These are `pull_request`-event runs on
-      PR #6 against `session-29`, NOT `master` push events — the `db-tests` three-green promotion tally
-      (ADR 0015 §5, tracked above at 5 consecutive as of `e69e5c41`) is UNCHANGED by this entry.** Session
-      29-D's correction pass (D0–D12) is now code-complete and CI-verified at this head; merging to
-      `master` is a separate, not-yet-taken step.
+  - **`db-tests` promotion tally (ADR 0015 §5, `CI-DB-SUITE-STABLE`):** Promotion to Required needs three
+    consecutive full-green `db-tests` runs on genuine **`master` push events** — `pull_request` runs never
+    move this tally, however green, and every session's own PR-event CI runs are recorded in that
+    session's build guide / reviewer appendix instead of here. **Threshold met 2026-07-27 (run 3); current
+    streak: 6, unbroken** (last `master` red was `e2812ec8`, 2026-07-14, before the current topology).
+    Reconciled 2026-08-22 after four weeks of only logging PR-event runs here and never querying
+    `--event push --branch master` directly — every row below is confirmed non-vacuous (the skip-guard
+    step itself reported `success`, not merely the overall check).
+
+    | # | Date | `master` head | `db-tests` run | Skip-guard |
+    |---|---|---|---|---|
+    | 1 | 2026-07-22 | `4b035d3b` | [29947011885](https://github.com/tcr430/SOSH/actions/runs/29947011885) | `13 file(s) … green` |
+    | 2 | 2026-07-25 | `d97e55c8` | [30156271345](https://github.com/tcr430/SOSH/actions/runs/30156271345) | green |
+    | 3 | 2026-07-27 | `f1c730cc` | [30302554218](https://github.com/tcr430/SOSH/actions/runs/30302554218) | green — **threshold met** |
+    | 4 | 2026-07-29 | `51264772` | [30436667567](https://github.com/tcr430/SOSH/actions/runs/30436667567) | `22 file(s) … green` |
+    | 5 | 2026-08-21 | `e69e5c41` | [32493839443](https://github.com/tcr430/SOSH/actions/runs/32493839443) | `30 file(s) / 282 tests` — Sessions 26–28 (PR #5) merged |
+    | 6 | 2026-08-25 | `2e6d3915` | [32893410504](https://github.com/tcr430/SOSH/actions/runs/32893410504) | `35 file(s) / 316 tests` — Session 29 Track F, ADR 0022 (PR #6) merged; `app-tests` also green ([32893410518](https://github.com/tcr430/SOSH/actions/runs/32893410518), 226 file(s) / 3129 tests) |
+
+    **Promoting `db-tests` from advisory to Required is a branch-protection change and the founder's
+    call, not a documentation update** — recorded as met-and-pending, not auto-applied. Two defects worth
+    keeping on record from this reconciliation: (a) `OpportunityFeed.test.tsx` went red at `f692a30e`
+    (2026-08-21) on a hardcoded `expires_at` literal rotting past the "present" date it assumed — fixed in
+    `ca27d268` by deriving it from `formatISO(addDays(new Date(), 7))`, not a regression in the code under
+    test; (b) Session 29-D's D12 CI run caught `ApprovalsInbox.tsx` using a raw `.toISOString()` (banned,
+    CLAUDE.md's date rule) in D4's reschedule handler — fixed before merge, full detail in ADR 0022 §20.5.
+    Full tally detail: `docs/decisions/0015-test-execution-and-ci-gates.md` §5.
   - **Merge-gate enforcement (Session 22-D):** GitHub ruleset `master-app-tests` (id `19038239`) is live on
     `refs/heads/master`, requiring `app-tests` with no bypass actors. `db-tests` is intentionally **not**
     in any ruleset yet — it stays advisory until the tally above reaches 3/3, at which point the ruleset is
