@@ -38,11 +38,28 @@ export function AiOutputPreview({ original }: AiOutputPreviewProps) {
           <p className="font-medium text-foreground">{t('row.carousel.heading')}</p>
           <ol className="mt-1 space-y-1.5">
             {output.slides.map((slide, i) => (
-              <li key={i} className="flex items-start gap-2">
-                <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-medium uppercase tracking-wide text-muted-foreground">
-                  {t(`row.carousel.slideRole.${slide.role}`)}
-                </span>
-                <span className="text-foreground">{slide.text}</span>
+              <li key={i} className="flex flex-col gap-1">
+                <div className="flex items-start gap-2">
+                  <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-medium uppercase tracking-wide text-muted-foreground">
+                    {t(`row.carousel.slideRole.${slide.role}`)}
+                  </span>
+                  <span className="text-foreground">{slide.text}</span>
+                </div>
+                {/* Session 29-D, D9 (NIT-5) — §6.1's per-slide imageBrief,
+                    rendered alongside role/text with the SAME "recommendation,
+                    never published" framing §7.3 already establishes for the
+                    branch-level imageBrief/scriptBrief blocks below. */}
+                {slide.imageBrief && (
+                  <div
+                    role="note"
+                    aria-label={`${t('row.carousel.slideImageBrief.heading')} — ${t('row.carousel.slideImageBrief.neverPublishedNote')}`}
+                    className="pl-1 text-muted-foreground"
+                  >
+                    <p className="font-medium text-foreground">{t('row.carousel.slideImageBrief.heading')}</p>
+                    <p>{slide.imageBrief}</p>
+                    <p className="italic">{t('row.carousel.slideImageBrief.neverPublishedNote')}</p>
+                  </div>
+                )}
               </li>
             ))}
           </ol>

@@ -40,6 +40,10 @@
         "cover": "Cover",
         "body": "Body",
         "cta": "Call to action"
+      },
+      "slideImageBrief": {
+        "heading": "Image recommendation for this slide",
+        "neverPublishedNote": "A suggestion for this slide's image — never published."
       }
     }
   },

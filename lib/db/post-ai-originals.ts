@@ -67,29 +67,33 @@ export async function getPostAiOriginalById(
 
 // ADR 0022 §10 (Session 29, F1b.9) — the Approvals surface's bulk read: one
 // query for every rendered post's latest snapshot instead of N getLatestRevision
-// round-trips. Bounded by postIds.length (CLAUDE.md's list-query rule — never
-// unbounded), with an explicit ORDER BY (post_id, then revision desc) so the
-// FIRST row seen per post_id is deterministically its latest revision — no
-// separate per-post MAX() query needed. Tenancy note mirrors getLatestRevision
-// (:20-29): enforced by the CALLER'S CLIENT (the approvals page's RLS-scoped
-// client), not by this function.
+// round-trips. Tenancy note mirrors getLatestRevision (:20-29): enforced by
+// the CALLER'S CLIENT (the approvals page's RLS-scoped client) — this RPC is
+// SECURITY INVOKER (no SECURITY DEFINER), so RLS applies through it exactly
+// as it would a plain table read.
+//
+// Session 29-D, D9 (MINOR-6 correction) — this used to be a single ordered,
+// LIST-WIDE-capped SELECT (.limit(postIds.length * 20)). That cap was a
+// per-list heuristic, not a per-post one: one post with more than 20
+// revisions consumed the whole list's budget, and because the ordering was
+// post_id-major, posts sorted AFTER it in that ordering fell off the result
+// entirely — their preview silently rendered nothing, no error.
+// createNextPostAiOriginalRevision increments on every regeneration, so
+// >20 revisions on one post is reachable. Now a DISTINCT ON (post_id) read
+// via get_latest_post_ai_originals (20260825190000_post_ai_originals_latest_per_post.sql)
+// — every post_id in the list is guaranteed exactly one row (its latest),
+// independent of how many revisions any OTHER post has.
 export async function listLatestPostAiOriginalsByPostIds(
   client: SupabaseClient,
   postIds: string[],
 ): Promise<Map<string, PostAiOriginalRow>> {
   if (postIds.length === 0) return new Map()
-  const { data, error } = await client
-    .from('post_ai_originals')
-    .select('*')
-    .in('post_id', postIds)
-    .order('post_id', { ascending: true })
-    .order('revision', { ascending: false })
-    .limit(postIds.length * 20)
+  const { data, error } = await client.rpc('get_latest_post_ai_originals', { p_post_ids: postIds })
   if (error) throw new Error(getErrorMessage(error))
 
   const result = new Map<string, PostAiOriginalRow>()
   for (const row of (data ?? []) as PostAiOriginalRow[]) {
-    if (!result.has(row.post_id)) result.set(row.post_id, row)
+    result.set(row.post_id, row)
   }
   return result
 }

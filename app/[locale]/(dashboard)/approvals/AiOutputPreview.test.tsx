@@ -113,6 +113,45 @@ describe('AiOutputPreview — carousel slides (ADR 0022 §10)', () => {
   })
 })
 
+// Session 29-D, D9 (NIT-5) — §6.1 gives every slide its own imageBrief; the
+// component previously rendered only slide.role and slide.text.
+describe('AiOutputPreview — per-slide imageBrief (Session 29-D, D9, NIT-5)', () => {
+  it('renders a slide-level imageBrief alongside role/text, with the same never-published marker', () => {
+    const original = makeOriginal({
+      format: 'carousel',
+      slides: [
+        { text: 'Cover slide text', role: 'cover', imageBrief: 'A wide establishing shot for the cover.' },
+        { text: 'Body slide text', role: 'body', imageBrief: null },
+        { text: 'CTA slide text', role: 'cta', imageBrief: null },
+      ],
+      imageBrief: null,
+      scriptBrief: null,
+    })
+    const { container, cleanup } = render(original)
+
+    const items = Array.from(container.querySelectorAll('li'))
+    expect(items[0].textContent).toContain('A wide establishing shot for the cover.')
+    const note = items[0].querySelector('[role="note"][aria-label*="row.carousel.slideImageBrief.neverPublishedNote"]')
+    expect(note).not.toBeNull()
+    // The other two slides carry no imageBrief — nothing rendered for them.
+    expect(items[1].querySelector('[role="note"]')).toBeNull()
+    expect(items[2].querySelector('[role="note"]')).toBeNull()
+    cleanup()
+  })
+
+  it('renders nothing extra for a slide whose imageBrief is null', () => {
+    const original = makeOriginal({
+      format: 'carousel',
+      slides: [{ text: 'Cover slide text', role: 'cover', imageBrief: null }],
+      imageBrief: null,
+      scriptBrief: null,
+    })
+    const { container, cleanup } = render(original)
+    expect(container.querySelector('[role="note"]')).toBeNull()
+    cleanup()
+  })
+})
+
 // ── ADR 0022 §7.3/§10 — scriptBrief and imageBrief, never-published recommendations ──
 
 describe('AiOutputPreview — scriptBrief renders with a never-published marker (ADR 0022 §7.3)', () => {

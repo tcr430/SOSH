@@ -40,6 +40,10 @@
         "cover": "Capa",
         "body": "Corpo",
         "cta": "Chamada para ação"
+      },
+      "slideImageBrief": {
+        "heading": "Recomendação de imagem para este slide",
+        "neverPublishedNote": "Uma sugestão para a imagem deste slide — nunca publicada."
       }
     }
   },

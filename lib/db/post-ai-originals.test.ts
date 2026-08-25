@@ -149,36 +149,29 @@ describe('getPostAiOriginalById', () => {
 })
 
 // ADR 0022 §10 (Session 29, F1b.9) — the Approvals surface's bulk read.
+//
+// Session 29-D, D9 (MINOR-6 correction) — rewritten from a raw ordered,
+// LIST-WIDE-capped SELECT to the get_latest_post_ai_originals RPC (a
+// DISTINCT ON (post_id) read, per-post bounded, not per-list). These tests
+// now assert the RPC call shape; the REAL per-post-bounded guarantee (a
+// post with >20 revisions can no longer starve another post's slot) is a
+// DB-ordering property a mock cannot exhibit — proved instead at Tier-1 in
+// supabase/__tests__/post-ai-originals-latest-per-post.test.ts.
 describe('listLatestPostAiOriginalsByPostIds', () => {
   it('returns an empty Map without querying when given no post ids', async () => {
-    const { client, from } = createMockClient(null, null)
+    const { client } = createMockClient(null, null)
     const result = await listLatestPostAiOriginalsByPostIds(client, [])
     expect(result.size).toBe(0)
-    expect(from).not.toHaveBeenCalled()
+    expect(client.rpc).not.toHaveBeenCalled()
   })
 
-  it('queries with an explicit bounded limit and (post_id, revision desc) order', async () => {
-    const { client, builder } = createMockClient([mockRow], null)
+  it('calls the get_latest_post_ai_originals RPC with the requested post ids', async () => {
+    const { client } = createMockClient([mockRow], null)
     await listLatestPostAiOriginalsByPostIds(client, ['post-1'])
-    expect(client.from).toHaveBeenCalledWith('post_ai_originals')
-    expect(builder.in).toHaveBeenCalledWith('post_id', ['post-1'])
-    expect(builder.order).toHaveBeenCalledWith('post_id', { ascending: true })
-    expect(builder.order).toHaveBeenCalledWith('revision', { ascending: false })
-    expect(builder.limit).toHaveBeenCalledWith(20)
+    expect(client.rpc).toHaveBeenCalledWith('get_latest_post_ai_originals', { p_post_ids: ['post-1'] })
   })
 
-  it('keeps only the FIRST row seen per post_id — the latest revision under the (post_id, revision desc) order', async () => {
-    const olderRevision = { ...mockRow, revision: 1, rendered_content: 'old' }
-    const latestRevision = { ...mockRow, revision: 2, rendered_content: 'new' }
-    // Rows arrive latest-first per post_id under the query's own ORDER BY —
-    // the mock returns them in that already-ordered shape.
-    const { client } = createMockClient([latestRevision, olderRevision], null)
-    const result = await listLatestPostAiOriginalsByPostIds(client, ['post-1'])
-    expect(result.get('post-1')).toEqual(latestRevision)
-    expect(result.size).toBe(1)
-  })
-
-  it('returns one entry per distinct post_id', async () => {
+  it('returns one entry per distinct post_id in the RPC result', async () => {
     const rowA = { ...mockRow, post_id: 'post-1' }
     const rowB = { ...mockRow, post_id: 'post-2' }
     const { client } = createMockClient([rowA, rowB], null)

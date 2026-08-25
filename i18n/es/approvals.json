@@ -40,6 +40,10 @@
         "cover": "Portada",
         "body": "Cuerpo",
         "cta": "Llamada a la acción"
+      },
+      "slideImageBrief": {
+        "heading": "Recomendación de imagen para esta diapositiva",
+        "neverPublishedNote": "Una sugerencia para la imagen de esta diapositiva — nunca publicada."
       }
     }
   },
