@@ -2251,26 +2251,26 @@ last two columns as each step lands.
 
 | ID | Step | Fix in one line | Test that now proves it | SHA |
 |---|---|---|---|---|
-| MAJOR-1 | D1 | `neutralizeWithSentinels` at the writer boundary; `MEM-PATTERN-SENTINEL-GUARDED` named in §11 | | |
-| MAJOR-2 | D2 | Promoter-level Zod bound in front of the RPC; `MEM-PATTERN-PROMOTER-BOUNDED` | | |
-| MAJOR-3 | D3 | Three Tier-2 cases on `deleteCampaignAction`'s cleanup **call site** | | |
-| MAJOR-4 | D4 | Approve re-touches `scheduled_at` and refuses a past time; `PROMOTE-SCHEDULE-RETOUCHED` | | |
-| MAJOR-5 | D5 | A-9 — the idempotency guard counts **generated** posts; promoted campaigns activate | | |
-| MINOR-1 | D7 | Frozen table spans the `>= 3` boundary (2, 2.9, 3) | | |
-| MINOR-2 | D7 | The tautological assertion removed or replaced with one that can fail | | |
-| MINOR-3 | D8 | Tier-1 `WITH CHECK` case added to the promote RLS suite | | |
-| MINOR-4 | D6 | A-10 — carousel's brief-sourcing recorded as deferred, revival condition in §15 | ADR — no test | |
-| MINOR-5 | D6 | A-11 — §8.2 wins, §7.1 yields, revival condition in §15 | ADR — no test | |
-| MINOR-6 | D9 | Per-post-bounded AI-originals read; truncation impossible, not absorbed | | |
-| MINOR-7 | D10 | `vitest.config.ts` collects `lib/**/*.test.tsx`; seven files execute | | |
-| MINOR-8 | D8 | Deleted/missing draft returns a typed §10 state; `PROMOTE-MISSING-DRAFT-TYPED` | | |
-| NIT-1 | D7 | "ten call sites" → eleven, in §18.3 and §2b | ADR — no test | |
-| NIT-2 | D11 | §20's "current range head" corrected, then superseded by D12's runs | ADR — no test | |
-| NIT-3 | D3 | **Argued and declined** — server-side Server-Action log, CLAUDE.md carve-out | none — argued | |
-| NIT-4 | D2 | Summarizer's catch narrowed to CHECK rejections | | |
-| NIT-5 | D9 | Per-slide `imageBrief` rendered | | |
-| NIT-6 | D7 | `platform-map.ts:27-28`'s stale line citations fixed | none — comment | |
-| NIT-7 | D2 | `accepted_revision` bounded (Zod, and a CHECK or a written reason) | | |
+| MAJOR-1 | D1 | `neutralizeWithSentinels` at the writer boundary; `MEM-PATTERN-SENTINEL-GUARDED` named in §11 | `lib/db/memory-performance.test.ts` (mocked-client, `client.rpc` payload assertion) | `cd95aee9` |
+| MAJOR-2 | D2 | Promoter-level Zod bound in front of the RPC; `MEM-PATTERN-PROMOTER-BOUNDED` | `lib/db/memory-performance.test.ts` (501/500-char boundary cases) | `1ff244ba` |
+| MAJOR-3 | D3 | Three Tier-2 cases on `deleteCampaignAction`'s cleanup **call site** | `app/[locale]/(dashboard)/campaigns/actions.test.ts` | `01512728` |
+| MAJOR-4 | D4 | Approve re-touches `scheduled_at` and refuses a past time; `PROMOTE-SCHEDULE-RETOUCHED` | `lib/db/posts.test.ts` + `supabase/__tests__/posts-approval-boundary.test.ts` (Tier-1) | `6ab2e391` |
+| MAJOR-5 | D5 | A-9 — the idempotency guard counts **generated** posts; promoted campaigns activate | `lib/campaigns/generate.test.ts` + `supabase/__tests__/studio-promote-brief-end-to-end.test.ts` (Tier-1) | `0f1a125f` |
+| MINOR-1 | D7 | Frozen table spans the `>= 3` boundary (2, 2.9, 3) | `platform-map.frozen-table.test.ts` | `40786c76` |
+| MINOR-2 | D7 | The tautological assertion removed or replaced with one that can fail | `platform-map.frozen-table.test.ts` (deletion; remaining per-cell assertions) | `40786c76` |
+| MINOR-3 | D8 | Tier-1 `WITH CHECK` case added to the promote RLS suite | `supabase/__tests__/studio-promote-schema.test.ts` (Tier-1) | `d140f4b7` |
+| MINOR-4 | D6 | A-10 — carousel's brief-sourcing recorded as deferred, revival condition in §15 | ADR — no test | `3b1a1985` |
+| MINOR-5 | D6 | A-11 — §8.2 wins, §7.1 yields, revival condition in §15 | ADR — no test | `3b1a1985` |
+| MINOR-6 | D9 | Per-post-bounded AI-originals read; truncation impossible, not absorbed | `supabase/__tests__/post-ai-originals-latest-per-post.test.ts` (Tier-1, new file) | `50f3b1e8` |
+| MINOR-7 | D10 | `vitest.config.ts` collects `lib/**/*.test.tsx`; seven files execute | the seven `lib/email/templates/__tests__/*.test.tsx` files themselves | `99982288` |
+| MINOR-8 | D8 | Deleted/missing draft returns a typed §10 state; `PROMOTE-MISSING-DRAFT-TYPED` | `supabase/__tests__/studio-promote-claim.test.ts` (Tier-1) + `promote.test.ts` + `studio/actions.test.ts` + `StudioEditor.test.tsx` | `d140f4b7` |
+| NIT-1 | D7 | "ten call sites" → eleven, in §18.3 and §2b | ADR — no test (verified by `grep -c`, 11 matches) | `40786c76` |
+| NIT-2 | D11 | §20's "current range head" corrected, then superseded by D12's runs | ADR — no test | `6f67fda6` (superseded `8d506634`/`30281de7`) |
+| NIT-3 | D3 | **Argued and declined** — server-side Server-Action log, CLAUDE.md carve-out | none — argued | `01512728` |
+| NIT-4 | D2 | Summarizer's catch narrowed to CHECK rejections | `lib/learning/summarize.test.ts` | `1ff244ba` |
+| NIT-5 | D9 | Per-slide `imageBrief` rendered | `app/[locale]/(dashboard)/approvals/AiOutputPreview.test.tsx` | `50f3b1e8` |
+| NIT-6 | D7 | `platform-map.ts:27-28`'s stale line citations fixed | none — comment (verified by `grep -n` against both call sites) | `40786c76` |
+| NIT-7 | D2 | `accepted_revision` bounded (Zod, and a CHECK or a written reason) | `app/[locale]/(dashboard)/studio/actions.test.ts` | `7a68817a` (D2 follow-up) |
 
 **Plus one non-finding row, argued in the appendix and edited nowhere:** the report's closing tally line
 says *"15 findings (0 BLOCKER, 5 MAJOR, 6 MINOR, 4 NIT)"* against **twenty** finding IDs in its own body.
@@ -2291,31 +2291,48 @@ The findings are right; the arithmetic is not; **the reviewer's text stands as w
 
 ## §5 — Docs to update at close-out (Track F done)
 
-- [ ] `docs/current-phase.md` — the Session 29 entry closing Track F; the `db-tests` promotion tally with
+- [x] `docs/current-phase.md` — the Session 29 entry closing Track F; the `db-tests` promotion tally with
       run URLs and the skip-guard's file/test counts **quoted verbatim from the log line**, not summarized.
       Note that Step 0 already moved the tally to 1 of 3; this session's `master` runs may move it further
       — count only genuine `master` runs.
-- [ ] `docs/decisions/0022-promote-to-campaign-and-format-families.md` — status / close-out block (§15),
+      **Done (D11/D12):** Session 29 entry added, D10/D12 sub-entries with verbatim skip-guard lines and
+      run URLs. Tally explicitly NOT moved by D12's runs (`pull_request`-event, not `master`); stays at the
+      5-consecutive count recorded as of `e69e5c41`.
+- [x] `docs/decisions/0022-promote-to-campaign-and-format-families.md` — status / close-out block (§15),
       amended by the correction pass if it changed anything the ADR asserts.
-- [ ] `docs/decisions/0018-diff-based-learning-capture.md` — the additive `generation_kind` amendment in
+      **Done (D6/D11/D12):** §15 items 9/10 (carousel/script revival conditions, D6); §20.4 (NIT-2, D11);
+      §20.5 (D12's CI results, this pass's actual close-out).
+- [x] `docs/decisions/0018-diff-based-learning-capture.md` — the additive `generation_kind` amendment in
       place, with its line range cited.
-- [ ] `docs/decisions/0019-mode-1-studio.md` — §15 item 1 (promote-to-campaign) and item 10 (the
+      **Confirmed already done** (Amendment A, §992-996, pre-dating this correction pass — no change needed).
+- [x] `docs/decisions/0019-mode-1-studio.md` — §15 item 1 (promote-to-campaign) and item 10 (the
       `topContent` write-time bound) marked as **closed by ADR 0022**, with the ADR and session named.
       Appended, not rewritten.
-- [ ] `docs/decisions/0017-mode-2-upgrade.md` — §15's D-6 deferral marked **partially** closed by ADR 0022:
+      **Confirmed already done** (§956-960, pre-dating this correction pass — no change needed).
+- [x] `docs/decisions/0017-mode-2-upgrade.md` — §15's D-6 deferral marked **partially** closed by ADR 0022:
       **carousel closed** as a format family; **script re-deferred as a family** with its new revival
       condition, and its recommendation-field form recorded as what shipped instead. Appended, not
       rewritten — and do not let it read as "carousel/script closed", which would be false.
       **The skip-review fast path (L-11) stays deferred** — confirm it was not touched.
-- [ ] `docs/decisions/0010-legal-surface.md` Amendment 2 §D2.5 — a new cascade row **if** a new
+      **Done (D11):** Amendment C appended, stating exactly this partial-closure framing; L-11 confirmed
+      untouched.
+- [x] `docs/decisions/0010-legal-surface.md` Amendment 2 §D2.5 — a new cascade row **if** a new
       business-scoped table landed; an explicit note that none was required **if** the change was a column
       on an already-covered table (the Session 28-D D7 precedent).
-- [ ] `docs/brainstorm/plan-vs-implemented-gap-analysis.md` — refreshed, or superseded by a Session-29
+      **Done (D11):** no new table landed (three columns on the already-covered `studio_drafts`, plus D9's
+      new FUNCTION which carries no cascade obligation) — a confirmation note appended, no new row.
+- [x] `docs/brainstorm/plan-vs-implemented-gap-analysis.md` — refreshed, or superseded by a Session-29
       successor. **A gap analysis that still lists closed gaps is worse than none**, because the next
       session plans against it. Correct its `EMBEDDINGS_UNDEFER_THRESHOLD` attribution at the same time:
       that constant is ADR 0016 §5.3's `audience_memory` trigger, **not** Mode 3 Stage B's — Stage B's
       revival condition is ADR 0020 §6.5's second-unstructured-source clause, and conflating them would
       send Session 30 after the wrong ruling.
-- [ ] `.wolf/anatomy.md`, `.wolf/memory.md`, `.wolf/cerebrum.md` — updated per the OpenWolf protocol.
+      **Done (D11):** `EMBEDDINGS_UNDEFER_THRESHOLD` misattribution corrected; the stale "promote to
+      campaign" and "carousel/script not built" gap entries refreshed to their actual (partial) closure
+      status.
+- [x] `.wolf/anatomy.md`, `.wolf/memory.md`, `.wolf/cerebrum.md` — updated per the OpenWolf protocol.
+      **Done (D11):** `anatomy.md`/`memory.md` auto-update via hook (confirmed current); `cerebrum.md`
+      manually updated with this pass's genuine learnings (the RLS USING/WITH-CHECK finding, the
+      origin-blind discriminator pattern, the append-only self-check, the stale NIT-1 count correction).
 - [ ] **Next:** `docs/build-guide/session-30.md` · Track G — the second signal source (ADR 0023), which
       carries the Stage B embeddings ruling ADR 0020 §6.5 deferred.
