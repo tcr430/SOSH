@@ -15,7 +15,7 @@
     "postiz:down": "docker-compose -f infra/docker-compose.yml down",
     "postiz:logs": "docker-compose -f infra/docker-compose.yml logs -f",
     "typecheck": "tsc --noEmit --skipLibCheck",
-    "test:app": "vitest run app/ lib/ components/",
+    "test:app": "vitest run app/ lib/ components/ scripts/eval/",
     "test:db": "vitest run supabase/__tests__ --no-file-parallelism --retry=2",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:eval": "tsx scripts/eval/run-triage-eval.ts"
