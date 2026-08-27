@@ -106,6 +106,7 @@ function makeSignalRow(overrides: Partial<SignalRow> = {}): SignalRow {
     id: 'sig-1',
     business_id: 'biz-1',
     watched_repo_id: 'repo-1',
+    watched_feed_id: null,
     source: 'github',
     kind: 'release',
     external_id: 'github:release:111111',

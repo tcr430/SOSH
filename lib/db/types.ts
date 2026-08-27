@@ -406,8 +406,13 @@ export type StudioDraftUpdate = Partial<Omit<StudioDraftRow, 'id' | 'created_at'
 //     are the only authenticated-path writes (ADR 0020 §8).
 // ---------------------------------------------------------------------------
 
-export type SignalSource = 'github'
-export type SignalKind = 'release'
+// ADR 0023 §3.2 (Session 30 G1b.1) widened both CHECKs to add the
+// market-responsive (rss) source — 'rss'/'article' pairs with
+// watched_feed_id, exactly as 'github'/'release' pairs with
+// watched_repo_id (the DB's exactly-one-parent CHECK enforces the pairing;
+// this type does not).
+export type SignalSource = 'github' | 'rss'
+export type SignalKind = 'release' | 'article'
 export type SignalIngestedVia = 'poll' | 'webhook'
 // ADR 0021 §2.11 (Session 28 E5.2) widened the DB CHECK to all five values —
 // this type was missed at E5.2 and only carried 'new' until E5.6 caught it.
@@ -486,10 +491,57 @@ export type WatchedRepoInsert = {
 // business_id excluded (tenancy-critical).
 export type WatchedRepoUpdate = Partial<Omit<WatchedRepoRow, 'id' | 'created_at' | 'business_id'>>
 
+// ADR 0023 §3.2/§8.2 — parallel in shape to WatchedRepoRow above.
+export type WatchedFeedRow = {
+  id: string
+  business_id: string
+  url: string
+  // App-computed (§3.2) — normalized, then hashed. See the migration's
+  // comment on why this is not a generated column.
+  url_hash: string
+  label: string
+  is_active: boolean
+  weight: number
+  added_by: string | null
+  last_fetch_at: string | null
+  last_fetch_status: string | null
+  last_error_code: string | null
+  consecutive_failure_count: number
+  rate_limited_until: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type WatchedFeedInsert = {
+  id?: string
+  business_id: string
+  url: string
+  url_hash: string
+  label: string
+  is_active?: boolean
+  weight?: number
+  added_by?: string | null
+  last_fetch_at?: string | null
+  last_fetch_status?: string | null
+  last_error_code?: string | null
+  consecutive_failure_count?: number
+  rate_limited_until?: string | null
+  created_at?: string
+  updated_at?: string
+}
+
+// business_id excluded (tenancy-critical).
+export type WatchedFeedUpdate = Partial<Omit<WatchedFeedRow, 'id' | 'created_at' | 'business_id'>>
+
 export type SignalRow = {
   id: string
   business_id: string
-  watched_repo_id: string
+  // ADR 0023 §3.2 — exactly one of watched_repo_id / watched_feed_id is
+  // non-null, matching `source` ('github' <-> watched_repo_id, 'rss' <->
+  // watched_feed_id). Enforced by the DB's exactly-one-parent CHECK, not by
+  // this type.
+  watched_repo_id: string | null
+  watched_feed_id: string | null
   source: SignalSource
   kind: SignalKind
   external_id: string
@@ -520,7 +572,10 @@ export type SignalRow = {
 export type SignalInsert = {
   id?: string
   business_id: string
-  watched_repo_id: string
+  // ADR 0023 §3.2 — caller supplies exactly one, matching `source`; the DB
+  // CHECK is the actual arbiter.
+  watched_repo_id?: string | null
+  watched_feed_id?: string | null
   source: SignalSource
   kind: SignalKind
   external_id: string
@@ -539,11 +594,15 @@ export type SignalInsert = {
   updated_at?: string
 }
 
-// business_id, watched_repo_id, external_id, created_at excluded — the
-// BEFORE UPDATE trigger (guard_signals_identity_update) raises on any of
-// these regardless, so excluding them here is the app-layer echo of that DB
-// boundary. content_hash excluded (generated, read-only).
-export type SignalUpdate = Partial<Omit<SignalRow, 'id' | 'created_at' | 'business_id' | 'watched_repo_id' | 'external_id' | 'content_hash'>>
+// business_id, watched_repo_id, watched_feed_id, external_id, created_at
+// excluded — the BEFORE UPDATE trigger (guard_signals_identity_update)
+// raises on any of these regardless (watched_feed_id joining the guard as
+// the fifth immutable column, ADR 0023 §3.2), so excluding them here is the
+// app-layer echo of that DB boundary. content_hash excluded (generated,
+// read-only).
+export type SignalUpdate = Partial<
+  Omit<SignalRow, 'id' | 'created_at' | 'business_id' | 'watched_repo_id' | 'watched_feed_id' | 'external_id' | 'content_hash'>
+>
 
 export type SignalCandidateRow = {
   id: string
