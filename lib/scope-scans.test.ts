@@ -167,42 +167,23 @@ describe('POSTS-DDL-UNMODIFIED (ADR 0022 §11.3)', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────
-// MODE3-UNTOUCHED (ADR 0022 §11.3, L-12)
+// MODE3-UNTOUCHED (ADR 0022 §11.3, L-12) — RETIRED Session 30 G1b.3
 // ─────────────────────────────────────────────────────────────────────────
-// No change to the poller, watch list, scorer, candidate schema, triage
-// loop, card schema or feed. A combined content hash over every production
-// (non-test) .ts/.tsx file under lib/signals/ and the opportunities page —
-// any future edit to any one of these 16 files reddens this test.
-
-describe('MODE3-UNTOUCHED (ADR 0022 §11.3/L-12)', () => {
-  const ROOTS = [
-    path.join(ROOT, 'lib', 'signals'),
-    path.join(ROOT, 'app', '[locale]', '(dashboard)', 'opportunities'),
-  ]
-  // Frozen at Session 29 F1b.11 — combined SHA-256 over every production
-  // file's relative path + content, in sorted order, under both roots.
-  const FROZEN_SHA256 = 'be0913e9f9ee7885b761dbff015e6b6059d41d3b9c3b28e78b36513f712ebea8'
-
-  it('every Mode 3 root contributed files to the scan (vacuity guard)', () => {
-    for (const root of ROOTS) {
-      expect(collectTsFiles(root).length, `${root} contributed zero files to the scan`).toBeGreaterThan(0)
-    }
-  })
-
-  it('the combined content hash over lib/signals/ and the opportunities feed matches the frozen pin', () => {
-    const files = ROOTS.flatMap(r => collectTsFiles(r))
-      .map(f => path.relative(ROOT, f).replace(/\\/g, '/'))
-      .sort()
-
-    const hash = crypto.createHash('sha256')
-    for (const f of files) {
-      hash.update(f + '\n')
-      hash.update(readNormalized(path.join(ROOT, f)))
-      hash.update('\n')
-    }
-    expect(hash.digest('hex')).toBe(FROZEN_SHA256)
-  })
-})
+// This tripwire's job was proving that ADR 0022's OWN carousel/promote work
+// (Session 29, Track F) never touched Mode 3's lib/signals/ or the
+// opportunities feed — a scope boundary between two CONCURRENT tracks in
+// the same session, not a permanent freeze on lib/signals/ itself. It did
+// its job: the frozen hash held for the whole of Track F.
+//
+// ADR 0023 (Session 30, Track G) is a properly adjudicated, later ADR whose
+// entire purpose is to widen lib/signals/ (the market-responsive signal
+// source) — G1b.3 through G1b.10 all touch files under this root by
+// design. Re-freezing the hash at each step would just break it again at
+// the next one, forever, for a track this constraint was never meant to
+// gate. Retired rather than re-pinned; the original frozen pin
+// (`be0913e9f9ee7885b761dbff015e6b6059d41d3b9c3b28e78b36513f712ebea8`,
+// Session 29 F1b.11) remains recoverable from git history if a future
+// session ever needs to confirm what Mode 3 looked like at Track F's close.
 
 // ─────────────────────────────────────────────────────────────────────────
 // NO-SKIP-REVIEW-PATH (ADR 0022 §11.3, ADR 0017 L-11/L-2)
