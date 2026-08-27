@@ -53,6 +53,19 @@ describe('lib/db/insight-cards.ts (ADR 0021 §10.1)', () => {
     expect(builder.limit).toHaveBeenCalledWith(50)
   })
 
+  it('SIGNAL-MR-PROVENANCE-VISIBLE / security-review finding — a non-http(s) canonical link (javascript:, data:) never survives into provenance, since it renders as a real <a href>', async () => {
+    const rowWithGithubLink = { id: 'card-1', signal_candidates: { signals: { html_url: 'https://github.com/acme/repo/releases/v1' } } }
+    const rowWithJsLink = { id: 'card-2', signal_candidates: { signals: { html_url: 'javascript:alert(document.cookie)' } } }
+    const rowWithDataLink = { id: 'card-3', signal_candidates: { signals: { html_url: 'data:text/html,<script>alert(1)</script>' } } }
+    const { client } = createMockClient([rowWithGithubLink, rowWithJsLink, rowWithDataLink], null)
+
+    const cards = await listPendingCardsForBusiness(client, 'biz-1')
+
+    expect(cards[0].provenance).toEqual({ publisher: 'github.com', canonicalLink: 'https://github.com/acme/repo/releases/v1' })
+    expect(cards[1].provenance).toEqual({ publisher: null, canonicalLink: null })
+    expect(cards[2].provenance).toEqual({ publisher: null, canonicalLink: null })
+  })
+
   it('getCardForBusiness scopes to id + business_id', async () => {
     const { client, builder } = createMockClient(null, null)
 

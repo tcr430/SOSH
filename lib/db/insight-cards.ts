@@ -25,10 +25,25 @@ interface RawCardWithJoin extends InsightCardRow {
 // works identically for both sources). A malformed/missing link yields
 // null for both fields — never thrown, since a card with no reachable
 // provenance must still render, just without it.
+//
+// Session 30 G1b.8 security-review finding — signals.html_url has NO
+// scheme constraint upstream (lib/signals/parse-article.ts's rawFeedItemSchema
+// validates `link` as a bare optional string; the DB column carries no CHECK
+// either), so a subscribed feed's raw <link>/href reaches here verbatim. This
+// value is rendered as a real `<a href>` in OpportunityFeed.tsx — an
+// attribute, not text content, so React's JSX escaping (which protects every
+// OTHER field on this card) does not apply: a `javascript:`/`data:` scheme
+// would execute on click. The http(s)-only check below is the single choke
+// point closing that gap, matching the "derived, never stored" posture
+// already used for `publisher`.
+const ALLOWED_LINK_PROTOCOLS = new Set(['http:', 'https:'])
+
 function deriveProvenance(canonicalLink: string | null): { publisher: string | null; canonicalLink: string | null } {
   if (!canonicalLink) return { publisher: null, canonicalLink: null }
   try {
-    return { publisher: new URL(canonicalLink).hostname, canonicalLink }
+    const url = new URL(canonicalLink)
+    if (!ALLOWED_LINK_PROTOCOLS.has(url.protocol)) return { publisher: null, canonicalLink: null }
+    return { publisher: url.hostname, canonicalLink }
   } catch {
     return { publisher: null, canonicalLink: null }
   }
