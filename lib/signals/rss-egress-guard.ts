@@ -213,6 +213,21 @@ export async function fetchWithEgressGuard(
       return { ok: false, errorCode: 'fetch_failed', message: err instanceof Error ? err.message : String(err) }
     }
 
+    // 304 Not Modified is in the 3xx range but is NOT a redirect — it has
+    // no Location header and no body. Bug found integrating G1b.4's
+    // conditional-GET caller: excluding it here is required, or a 304
+    // falls into the redirect branch below and fails with
+    // 'redirect_invalid' (no Location header) instead of surfacing as the
+    // successful "unchanged" outcome the caller (rss-client.ts) expects.
+    if (response.status === 304) {
+      return {
+        ok: true,
+        status: 304,
+        body: '',
+        headers: { etag: response.headers.get('etag'), lastModified: response.headers.get('last-modified') },
+      }
+    }
+
     if (response.status >= 300 && response.status < 400) {
       redirectCount += 1
       if (redirectCount > MAX_REDIRECTS) {

@@ -221,6 +221,33 @@ describe('SIGNAL-NO-PROVIDER-COUPLING (D-8, ADR §11.3 scan #2)', () => {
     expect(importers).toHaveLength(1)
     expect(importers[0]!.replace(/\\/g, '/')).toMatch(/^lib\/signals\//)
   })
+
+  // Session 30 G1b.4 (ADR 0023 §10.4 table row #2, deferred from G1b.2 —
+  // "CANNOT pass before the parser import exists"): the parallel scan for
+  // the RSS parser package, founder-confirmed as xml2js direct (G1b.3's
+  // dependency gate). Same toHaveLength(1) shape as the @octokit/ scan
+  // above. `sax` (also a direct dependency, imported by
+  // rss-egress-guard.ts for the XXE DOCTYPE check, G1b.3) is deliberately
+  // NOT scanned here — the build guide names "the RSS parser package"
+  // (singular, xml2js), and sax's import there is a security-guard
+  // concern, not the feed-parsing coupling this scan exists to police.
+  it('xml2js is imported in exactly one file, and it is under lib/signals/**', () => {
+    for (const root of SCAN_ROOTS) {
+      expect(collectTsFiles(root).length, `${root} contributed zero files to the scan`).toBeGreaterThan(0)
+    }
+
+    const files = SCAN_ROOTS.flatMap((root) => collectTsFiles(root))
+    expect(files.length).toBeGreaterThan(0)
+
+    const importers: string[] = []
+    for (const file of files) {
+      const source = stripLineComments(fs.readFileSync(file, 'utf8'))
+      if (/from\s+['"]xml2js['"]/.test(source)) importers.push(path.relative(ROOT, file))
+    }
+
+    expect(importers).toHaveLength(1)
+    expect(importers[0]!.replace(/\\/g, '/')).toMatch(/^lib\/signals\//)
+  })
 })
 
 describe('SIGNAL-CONFIG-ONLY-ENV (ADR §11.3 scan #3)', () => {
@@ -265,11 +292,25 @@ describe('SIGNAL-PROMPT-SINK-NARROWED (ADR §11.3 scan #4)', () => {
   // RenderedSignalText via wrapSignalForPrompt(). Any OTHER file performing
   // this cast is a new, unreviewed sink — exactly what this scan exists to
   // catch.
+  //
+  // Session 30 G1b.4 (ADR 0023 §10.4 table row #4) — SECURITY-RELEVANT
+  // WIDENING, argued here and in the commit message per the ADR's explicit
+  // requirement, not slipped in: lib/signals/parse-article.ts joins this
+  // set as the market-responsive source's exact structural counterpart to
+  // parse-release.ts — the ONLY place a raw RSS/Atom item becomes
+  // UntrustedText (title/body), for the identical reason parse-release.ts
+  // is already here (ADR §7.1 draws this parallel explicitly). No other
+  // file needed to be added: rss-client.ts (the xml2js-importing file, per
+  // the new scan #2 above) does XML tree navigation only and produces
+  // plain, UNBRANDED strings — parse-article.ts remains the sole minting
+  // boundary on the RSS write path, exactly mirroring the split between
+  // github-client.ts (fetch) and parse-release.ts (mint) on the GitHub side.
   const ALLOWED_MINTING_FILES = new Set(
     [
       path.join(ROOT, 'lib', 'signals', 'parse-release.ts'),
       path.join(ROOT, 'lib', 'signals', 'orchestrator.ts'),
       path.join(ROOT, 'lib', 'ai', 'wrap-evidence.ts'),
+      path.join(ROOT, 'lib', 'signals', 'parse-article.ts'),
     ],
   )
 

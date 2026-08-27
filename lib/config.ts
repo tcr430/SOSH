@@ -106,6 +106,13 @@ export const serverSchema = z.object({
   // (a whole feed, not one page), still bounded against an attacker-
   // controlled Content-Length or an unbounded stream.
   RSS_FEED_MAX_BODY_BYTES: z.coerce.number().int().positive().default(2_000_000),
+  // ADR 0023 §3.4/§16 (Session 30 G1b.4) — the per-tick item bound: how many
+  // items/entries a single feed fetch parses, capped to the N most recent.
+  // 50 mirrors the order of magnitude of GithubClient's per_page=30 for
+  // releases (github-client.ts:175) — generous enough to catch a genuine
+  // burst of new posts since the last poll, bounded against a feed with
+  // thousands of historical items costing unbounded parse/mint work.
+  RSS_FEED_MAX_ITEMS_PER_FETCH: z.coerce.number().int().positive().default(50),
   LINKEDIN_CLIENT_ID: z.string().default(''),
   LINKEDIN_CLIENT_SECRET: z.string().default(''),
   X_CLIENT_ID: z.string().default(''),
@@ -303,6 +310,7 @@ function parseServerEnv() {
     RSS_FEED_FETCH_TIMEOUT_MS: process.env.RSS_FEED_FETCH_TIMEOUT_MS,
     RSS_FEED_POLL_TICK_BUDGET_MS: process.env.RSS_FEED_POLL_TICK_BUDGET_MS,
     RSS_FEED_MAX_BODY_BYTES: process.env.RSS_FEED_MAX_BODY_BYTES,
+    RSS_FEED_MAX_ITEMS_PER_FETCH: process.env.RSS_FEED_MAX_ITEMS_PER_FETCH,
     LINKEDIN_CLIENT_ID: process.env.LINKEDIN_CLIENT_ID,
     LINKEDIN_CLIENT_SECRET: process.env.LINKEDIN_CLIENT_SECRET,
     X_CLIENT_ID: process.env.X_CLIENT_ID,
@@ -517,6 +525,9 @@ export const config = {
     },
     get RSS_FEED_MAX_BODY_BYTES() {
       return serverOnly("RSS_FEED_MAX_BODY_BYTES", () => server().RSS_FEED_MAX_BODY_BYTES);
+    },
+    get RSS_FEED_MAX_ITEMS_PER_FETCH() {
+      return serverOnly("RSS_FEED_MAX_ITEMS_PER_FETCH", () => server().RSS_FEED_MAX_ITEMS_PER_FETCH);
     },
     get LINKEDIN_CLIENT_ID() {
       return serverOnly("LINKEDIN_CLIENT_ID", () => server().LINKEDIN_CLIENT_ID);

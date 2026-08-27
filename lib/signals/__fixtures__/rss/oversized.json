@@ -1,0 +1,4 @@
+{
+  "description": "A response body exceeding RSS_FEED_MAX_BODY_BYTES (2,000,000 bytes) — the egress guard (G1b.3) aborts mid-stream against bytes actually read, never a literal multi-megabyte fixture file checked into the repo.",
+  "bytesExceedingCap": 1
+}

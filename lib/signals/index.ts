@@ -32,5 +32,16 @@ export type {
 export { parseRelease, BODY_MAX_CHARS } from './parse-release'
 export type { ParsedSignal, ParseReleaseResult } from './parse-release'
 
+// ADR 0023 §3.1/§7.1 — the market-responsive (RSS/Atom) source's fetch,
+// egress-guard and mint boundary, parallel to the GitHub exports above.
+export { fetchAndParseFeed } from './rss-client'
+export type { FetchAndParseFeedResult, FetchAndParseFeedOptions, RssClientErrorCode } from './rss-client'
+
+export { parseArticleItem, BODY_MAX_CHARS as ARTICLE_BODY_MAX_CHARS } from './parse-article'
+export type { ParsedArticle, ParseArticleResult, RawFeedItem } from './parse-article'
+
+export { fetchWithEgressGuard, rejectIfDeclaresDoctype, XxeRejectedError } from './rss-egress-guard'
+export type { EgressFetchResult, EgressFetchOptions, EgressGuardErrorCode } from './rss-egress-guard'
+
 export { scoreSignal, sortScoredSignals, scoreAndSortSignals, upsertScoredCandidate } from './score'
 export type { ScoreInputs, ScorableSignal, ScoredSignal } from './score'

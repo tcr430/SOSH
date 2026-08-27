@@ -158,6 +158,25 @@ describe('clause 1 — re-checked per redirect hop', () => {
   })
 })
 
+// ── 304 Not Modified — in the 3xx range but NOT a redirect ──────────────────
+
+describe('304 Not Modified is surfaced as ok, not treated as a redirect', () => {
+  it('returns ok:true with status 304 and no body, without requiring a Location header', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 304,
+      headers: { get: (h: string) => (h === 'etag' ? '"unchanged"' : null) },
+    } as never)
+    const result = await fetchWithEgressGuard('https://example.com/feed.xml')
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.status).toBe(304)
+      expect(result.body).toBe('')
+      expect(result.headers.etag).toBe('"unchanged"')
+    }
+  })
+})
+
 // ── Clause 2: canonical IP normalization, every encoded form ────────────────
 
 describe('clause 2 — canonical IP normalization via the real URL parser', () => {
