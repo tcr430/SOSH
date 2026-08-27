@@ -13,6 +13,43 @@ import path from 'node:path'
 // temporarily introduced, the test file was re-run and observed to fail for
 // the intended reason, then the violation was reverted. See the E2.10
 // commit message for the four transcripts.
+//
+// Session 30 G1b.10 (ADR 0023 §10.3/§10.4, SIGNAL-MR-SCANS-EXTENDED final) —
+// re-confirmed all six describe blocks below at the shipped tree. Table:
+//
+// | # | Constraint                  | Asserts now (both arms where 2 exist)                                    | Extended at | Per-root vacuity guard | Redden transcript SHA |
+// |---|------------------------------|---------------------------------------------------------------------------|-------------|------------------------|------------------------|
+// | 1 | SIGNAL-NO-LLM-IN-STAGE-AB    | no lib/ai/*|@anthropic-ai/sdk import under lib/signals/**|poller route beyond 6 sanctioned patterns; the 6-pattern allowlist itself still exercised; wrapSignalForPrompt has exactly 2 callers; no local sanitizeDataField | G1b.2 (scope decision: no new root added — collectTsFiles already walks lib/signals/** recursively) | Yes, both SCAN_ROOTS (lib/signals/, poller route dir) | 805234e7 (original 4-scan redden pass, E2.10) |
+// | 2 | SIGNAL-NO-PROVIDER-COUPLING  | @octokit/* in exactly 1 file (github-client.ts); xml2js in exactly 1 file (rss-client.ts) — sax deliberately NOT scanned here (a security-guard concern, not feed-parsing coupling) | G1b.4 (xml2js arm added) | Yes, both SCAN_ROOTS (lib/, app/) | 805234e7 (@octokit/ arm); f197033f (xml2js arm) |
+// | 3 | SIGNAL-CONFIG-ONLY-ENV       | no process.env.GITHUB* outside lib/config.ts | Not extended — no RSS-specific process.env prefix exists (Zod defaults, no env override), recorded as the reason at G1b.2 | Yes, both SCAN_ROOTS | 805234e7 |
+// | 4 | SIGNAL-PROMPT-SINK-NARROWED  | no `as UntrustedText`/`as RenderedSignalText` cast outside 4 allowed minting files (parse-release.ts, orchestrator.ts, wrap-evidence.ts, parse-article.ts); allowlist files still exist and still mint | G1b.4 (parse-article.ts added as 4th file, security-relevant widening, argued in that commit) | Yes, both SCAN_ROOTS | 805234e7 (original 3-file form); f197033f (4th-file widening) |
+// | 5 | SIGNAL-NO-TOKEN-AT-REST      | github_connections CREATE TABLE has no token-shaped column; watched_feeds CREATE TABLE has no token-shaped column (§3.1: rss has no credential at all — must hold TRIVIALLY) | 5b5bbb9f (github_connections arm, E2.11); G1b.2 (watched_feeds arm) | N/A — single-file migration-text scans, not a multi-root directory walk | G1b.10 (this step) demonstrated the github_connections arm's previously-unrecorded transcript (see below); 2380b150 (watched_feeds arm) |
+// | 6 | SIGNAL-WEBHOOK-SEAM-CLEAN    | signals CREATE TABLE has no poller-specific column beyond ingested_via; the market-responsive migration's ALTER TABLE statements add none either — the ONLY proof §15 "webhook seam stays unused" | 5b5bbb9f (signals arm, E2.11); G1b.2 (market-responsive ALTER arm) | N/A — single-file migration-text scans | G1b.10 (this step) demonstrated the signals arm's previously-unrecorded transcript (see below); 2380b150 (market-responsive arm) |
+//
+// GAP FOUND AND CLOSED at G1b.10: 5b5bbb9f (E2.11) added scan #5's and #6's
+// ORIGINAL (github_connections / signals) halves without pasting a redden
+// transcript into that commit's message — a real evidence gap under this
+// ADR's own "without a recorded redden transcript, is not evidence" rule,
+// not a re-litigation of E2.11's decision to add the scans. Demonstrated
+// now, both reverted via `git checkout --` immediately after (confirmed
+// byte-identical via `git diff --stat`, zero lines):
+//
+// 1) Injected `access_token text,` into github_connections' CREATE TABLE
+//    block (supabase/migrations/20260731090000_signal_ingestion.sql):
+//      FAIL  SIGNAL-NO-TOKEN-AT-REST > the github_connections CREATE TABLE
+//      block in the migration defines no token-shaped column
+//      AssertionError: expected true to be false
+//        ❯ lib/signals/source-scans.test.ts:368:46
+//
+// 2) Injected `webhook_secret text,` into signals' CREATE TABLE block (same
+//    migration file):
+//      FAIL  SIGNAL-WEBHOOK-SEAM-CLEAN > the signals CREATE TABLE block
+//      defines no poller-specific column beyond the writer-agnostic
+//      ingested_via seam
+//      AssertionError: expected true to be false
+//        ❯ lib/signals/source-scans.test.ts:414:49
+//
+// Full suite re-run green (14/14) after each revert.
 
 const EXCLUDED_DIR_NAMES = new Set(['node_modules', '__fixtures__', '.next'])
 
@@ -461,6 +498,81 @@ describe('SIGNAL-WEBHOOK-SEAM-CLEAN (ADR §12 — E2.11 close-out finding)', () 
 //      in the repo.)
 describe('ADR §11.4 — Tier-3 diff-verified properties (enumerated as decisions, no runtime test by design)', () => {
   it('is a documentation-only block — the six properties above have no assertion here', () => {
+    expect(true).toBe(true)
+  })
+})
+
+// ADR 0023 §10.3 (Session 30 G1b.10) — the market-responsive track's OWN
+// Tier-3 diff-verified properties, enumerated as decisions per the same
+// rule ADR 0020 §11.4 establishes above: a property of ABSENCE has no
+// runtime test because a runtime assertion cannot observe "this was never
+// added" — only a diff read at commit time can. Diff range for every
+// command below: afeafbf3 (last commit before G1b.1) .. HEAD (G1b.9,
+// ec64c3c9) — the full market-responsive track to date. Each command's
+// ACTUAL output is pasted, not summarized.
+//
+// 1. SIGNAL-NO-EMBEDDINGS is NOT retired — no pgvector extension, no
+//    embedding call anywhere in the diff.
+//      $ git diff afeafbf3..HEAD -- . | grep -iE "pgvector|embedding|vector\("
+//      (no output — exit code 1)
+//
+// 2. No clustering.
+//      $ git diff afeafbf3..HEAD -- . | grep -iE "cluster"
+//      (no output — exit code 1)
+//
+// 3. No sixth sanitizeDataField (also covered by scan #1's own assertion
+//    above; re-verified independently over the raw diff, not just the
+//    shipped tree, so a since-reverted local one wouldn't be missed):
+//      $ git diff afeafbf3..HEAD -- . | grep -n "^+" | grep -iE "function\s+sanitizeDataField"
+//      (no output — exit code 1)
+//
+// 4. No second gating seam. Exactly one gate-shaped function was ADDED in
+//    the diff (gateSignalSourceAction, actions.ts, G1b.9); the one mention
+//    of "connectFeedAction" anywhere in the diff is prose in a comment
+//    explaining why a second seam was REJECTED, not a function:
+//      $ git diff afeafbf3..HEAD -- . | grep -cE "^\+(async )?function \w*[Gg]ate\w*Seam\w*\(|^\+(async )?function gateSignalSourceAction\("
+//      1
+//
+// 5. No contributor-identity field on the RSS Insert type. The only two
+//    diff lines matching author/creator/byline/email/contributor in
+//    parse-article.ts / lib/db/types.ts are comment PROSE explaining the
+//    absence, not field declarations:
+//      $ git diff afeafbf3..HEAD -- lib/signals/parse-article.ts lib/db/types.ts | grep -inE "^\+.*\b(author|creator|byline|email|contributor)\b"
+//      177:+// author / creator / byline / email field of any kind. rss-client.ts's own
+//      203:+// produce a contributor-identity field" a compile-time fact about
+//
+// 6. No webhook route, no signature verification, no secret. Zero files
+//    changed under app/api/signals/** other than the pre-existing cron
+//    route's test file; zero webhook-secret/signature-verification code
+//    added anywhere in the diff:
+//      $ git diff afeafbf3..HEAD --name-status -- "app/api/"
+//      M	app/api/cron/signals-poll/route.test.ts
+//      $ git diff afeafbf3..HEAD -- . | grep -inE "^\+.*(webhook.?secret|verifySignature|x-hub-signature|signature.?verif)"
+//      (no output)
+//
+// 7. No change to Stage C's loop bounds, tool inventory or card schema.
+//    lib/signals/triage/tools.ts, lib/ai/tool-runner.ts and
+//    lib/signals/triage/card.ts (production code) have ZERO diff lines in
+//    the range — only card.test.ts changed (G1b.8's additive test
+//    coverage, expected):
+//      $ git diff afeafbf3..HEAD --name-status -- lib/signals/triage/tools.ts lib/ai/tool-runner.ts lib/signals/triage/card.ts
+//      (no output)
+//      $ git diff afeafbf3..HEAD --name-status -- lib/signals/triage/card.test.ts
+//      M	lib/signals/triage/card.test.ts
+//
+// 8. No change to §13.1's contract. listNewCandidates's exported name,
+//    parameters, filter (business_id + status='new') and ORDER BY are
+//    byte-identical; the only change touching this function is an internal
+//    refactor of its .select() call to use the new signalsJoinSelect()
+//    helper, which (with zero extra columns, its default) returns the
+//    EXACT SAME select string as the literal it replaced — confirmed by
+//    reading the helper's own definition (signal-candidates.ts:17-19):
+//      $ git diff afeafbf3..HEAD -- lib/db/signal-candidates.ts | grep -n "listNewCandidates\b"
+//      (shows the .select(...) line and its surrounding comment only — no
+//      change to the function's own `export async function listNewCandidates(`
+//      declaration line, its params, or its .eq()/.order() calls)
+describe('ADR 0023 §10.3 — Tier-3 diff-verified properties for the market-responsive track (enumerated as decisions, no runtime test by design)', () => {
+  it('is a documentation-only block — the eight properties above (this file header comment) have no assertion here', () => {
     expect(true).toBe(true)
   })
 })
