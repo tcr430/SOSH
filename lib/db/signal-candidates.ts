@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { SignalCandidateRow, SignalCandidateWithSignal, SignalCandidateInsert } from './types'
+import type { SignalCandidateRow, SignalCandidateWithSignal, SignalCandidateInsert, SignalSource } from './types'
 import { getErrorMessage } from './utils'
 
 // ADR 0020 §10.1 — the ONLY module that touches signal_candidates. Every
@@ -7,6 +7,16 @@ import { getErrorMessage } from './utils'
 // never through a direct `.from('signal_candidates')` elsewhere.
 
 const NEW_CANDIDATES_DEFAULT_LIMIT = 50
+
+// ADR 0023 §5.3 (Session 30 G1b.7) — the shared join-select fragment
+// listNewCandidates and the new pool reader below both build on, so the
+// column list is written once. listNewCandidates's own exported signature,
+// filter, ordering, default bound and join list stay EXACTLY as ADR 0021
+// §13.1 promises — this helper only adds columns for the NEW reader's
+// callers, never changes what listNewCandidates itself selects.
+function signalsJoinSelect(extraColumns: string = ''): string {
+  return `*, signals(title, body, html_url, occurred_at, author_is_bot, is_prerelease${extraColumns})`
+}
 
 // ADR §13.1 — the EXACT signature the Session 28 contract promises. Do not
 // rename this later; ADR 0021 builds against this name.
@@ -38,7 +48,7 @@ export async function listNewCandidates(
 ): Promise<SignalCandidateWithSignal[]> {
   const { data, error } = await client
     .from('signal_candidates')
-    .select('*, signals(title, body, html_url, occurred_at, author_is_bot, is_prerelease)')
+    .select(signalsJoinSelect())
     .eq('business_id', businessId)
     .eq('status', 'new')
     .order('score', { ascending: false })
@@ -49,8 +59,100 @@ export async function listNewCandidates(
   // The read boundary that mints UntrustedText out of the joined signals
   // row (see the SignalCandidateWithSignal comment in lib/db/types.ts) —
   // Supabase returns plain JSON with no runtime brand, same as
-  // lib/db/signals.ts's asSignalRow.
-  return (data as SignalCandidateWithSignal[]) ?? []
+  // lib/db/signals.ts's asSignalRow. Cast through `unknown`: the select
+  // string now comes from signalsJoinSelect() rather than a literal at the
+  // call site, so supabase-js's generic overload resolution can no longer
+  // infer a row shape from it (GenericStringError) — the same "cast through
+  // unknown" idiom lib/signals/score.ts already uses for an analogous
+  // shape-widening cast, not a new pattern.
+  return (data as unknown as SignalCandidateWithSignal[]) ?? []
+}
+
+// ADR 0023 §5.3 (Session 30 G1b.7) — the reserved-split allocation's pool
+// read: same filter/ordering as listNewCandidates, a LARGER bound, and
+// `signals.source` + `signals.watched_feed_id` added to the join —
+// `source` to partition github vs rss, `watched_feed_id` to enforce "at
+// most 1 per distinct feed" (the ADR names only `source`; `watched_feed_id`
+// is the column the per-feed cap cannot be expressed without, added here
+// for the same reason is_prerelease/tag_name were added to the ORIGINAL
+// join in past sessions — a drift the join list must actually serve).
+//
+// NO new column on signal_candidates, NO new index: source is not a sort
+// key and never enters signal_candidates_feed_idx — allocation is a filter
+// OVER an already-ordered result set, and the existing partial index
+// (business_id, score DESC, occurred_at DESC, id ASC) WHERE status='new'
+// serves this query exactly as it serves listNewCandidates.
+//
+// 30 — six times TRIAGE_SHORTLIST_PER_TICK (5): generous headroom so a
+// score-order read still surfaces enough github candidates even when a
+// high-scoring rss flood occupies much of the pool's top — the exact L-11
+// starvation risk this whole allocation rule exists to close.
+const CANDIDATE_POOL_DEFAULT_LIMIT = 30
+
+export type SignalCandidateWithSourceAndFeed = SignalCandidateWithSignal & {
+  signals: SignalCandidateWithSignal['signals'] & {
+    source: SignalSource
+    watched_feed_id: string | null
+  }
+}
+
+export async function listNewCandidatesPoolWithSource(
+  client: SupabaseClient,
+  businessId: string,
+  limit: number = CANDIDATE_POOL_DEFAULT_LIMIT,
+): Promise<SignalCandidateWithSourceAndFeed[]> {
+  const { data, error } = await client
+    .from('signal_candidates')
+    .select(signalsJoinSelect(', source, watched_feed_id'))
+    .eq('business_id', businessId)
+    .eq('status', 'new')
+    .order('score', { ascending: false })
+    .order('occurred_at', { ascending: false })
+    .order('id', { ascending: true })
+    .limit(limit)
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as unknown as SignalCandidateWithSourceAndFeed[]) ?? []
+}
+
+// ADR 0023 §5.5a (Session 30 G1b.7) — replaces
+// listActiveConnectionBusinessIds (lib/db/github-connections.ts, now
+// deleted — this was its one production caller) at
+// lib/signals/triage/orchestrator.ts:179. That enumeration read
+// github_connections alone, so a feed-only business (no GitHub connection
+// at all) was NEVER triaged — a real defect this closes, not a
+// refactor for its own sake. business_id is the leading column of the
+// existing partial index, so this needs no new index either.
+//
+// PostgREST's fluent query builder has no SELECT DISTINCT — the SQL this
+// function's name promises is expressed as a plain filtered read
+// (index-servable on the leading business_id column) followed by a
+// client-side Set dedupe, which is semantically identical to
+// `SELECT DISTINCT business_id FROM signal_candidates WHERE status='new'`
+// for a result set this size (ADR's own recorded scale caveat: Postgres
+// has no loose index scan, so a real DISTINCT would visit every matching
+// row too — fine at current volumes, worth revisiting if candidates-per-
+// business grows large).
+//
+// Named semantics change (recorded here, not left for a Reviewer to find):
+// a business whose GitHub connection was deactivated now has its already-
+// ingested backlog drained, where today it is stranded. This is ADR 0020
+// §8.6's connect-time grandfathering applied consistently — there was no
+// plan check in the poller-enumeration path to lose, so this does not
+// weaken §8.1's gating seam.
+const BUSINESS_ENUMERATION_LIMIT = 5000
+
+export async function listBusinessesWithNewCandidates(
+  client: SupabaseClient,
+  limit: number = BUSINESS_ENUMERATION_LIMIT,
+): Promise<string[]> {
+  const { data, error } = await client
+    .from('signal_candidates')
+    .select('business_id')
+    .eq('status', 'new')
+    .limit(limit)
+  if (error) throw new Error(getErrorMessage(error))
+  const ids = new Set((data ?? []).map((row) => (row as { business_id: string }).business_id))
+  return Array.from(ids)
 }
 
 // §6.4/§6.5 — Stage B's scorer write. UPSERT on UNIQUE(signal_id), the

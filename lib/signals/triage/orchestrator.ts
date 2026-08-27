@@ -19,8 +19,14 @@
 
 import * as Sentry from '@sentry/nextjs'
 import { formatISO, subDays } from 'date-fns'
-import { listNewCandidates, claimCandidateForTriage, reclaimStaleTriagingCandidates, setCandidateTriageOutcome, ageGateCandidate } from '@/lib/db/signal-candidates'
-import { listActiveConnectionBusinessIds } from '@/lib/db/github-connections'
+import {
+  claimCandidateForTriage,
+  reclaimStaleTriagingCandidates,
+  setCandidateTriageOutcome,
+  ageGateCandidate,
+  listNewCandidatesPoolWithSource,
+  listBusinessesWithNewCandidates,
+} from '@/lib/db/signal-candidates'
 import { reserveTriageBudget, reconcileTriageBudget } from '@/lib/db/signal-triage-budget'
 import { buildCustomerContext } from '@/lib/ai/context'
 import { runToolLoop, TRIAGE_MAX_WALL_CLOCK_MS } from '@/lib/ai/tool-runner'
@@ -28,12 +34,20 @@ import { wrapSignalForPrompt } from '@/lib/ai/wrap-evidence'
 import { buildTriageTools } from './tools'
 import { generateCard } from './card'
 import { createCardCitableContext } from './verify'
+import { allocateReservedShortlist } from './allocate-shortlist'
 import type { SignalCandidateWithSignal } from '@/lib/db/types'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 // §3.1 — the shortlist bound. Never the full 50-row listNewCandidates bound
 // — judgment is deliberately narrower than the poller's own scoring pass.
 export const TRIAGE_SHORTLIST_PER_TICK = 5
+// ADR 0023 §5.3 (Session 30 G1b.7) — the pool listNewCandidatesPoolWith
+// Source reads before allocate-shortlist.ts partitions it. See that
+// function's own default-limit comment for the "why 30" reasoning; kept as
+// a distinct named constant here (not re-derived from the DB function's
+// own default) so a future reader sees the pool size at the same call site
+// as the shortlist size it exists to protect.
+const TRIAGE_POOL_SIZE = 30
 // §2.10 — matches ADR 0020 §6.1's recency term, which already reaches zero
 // at exactly this many days (floor(40 × max(0, 1 − ageDays / 14))).
 export const CARD_TTL_DAYS = 14
@@ -176,14 +190,27 @@ export async function runSignalsTriageTick(opts: { triggeredBy: 'qstash' | 'secr
         const staleBefore = formatISO(new Date(Date.now() - TRIAGE_CLAIM_STALE_MINUTES * 60 * 1000))
         summary.staleReclaimed = await reclaimStaleTriagingCandidates(client, staleBefore)
 
-        const businessIds = await listActiveConnectionBusinessIds(client)
+        // ADR 0023 §5.5a (Session 30 G1b.7) — was listActiveConnectionBusinessIds
+        // (github_connections alone), a source-coupled enumeration that would
+        // never triage a feed-only business. See allocate-shortlist.ts's header
+        // and this function's own commit message for the recorded semantics
+        // change (a deactivated GitHub connection's already-ingested backlog is
+        // now drained, where it was previously stranded).
+        const businessIds = await listBusinessesWithNewCandidates(client)
         summary.businessesConsidered = businessIds.length
 
         const ageCutoffMs = subDays(now, CARD_TTL_DAYS).getTime()
         let deadlineHit = false
 
         for (const businessId of businessIds) {
-          const candidates = await listNewCandidates(client, businessId, TRIAGE_SHORTLIST_PER_TICK)
+          // ADR 0023 §5.3 (Session 30 G1b.7) — the reserved split: a pool
+          // read (score-ordered, larger than the shortlist), then a pure
+          // partition (at most 2 rss/1-per-feed, remainder github) —
+          // replacing the plain listNewCandidates(..., TRIAGE_SHORTLIST_
+          // PER_TICK) read that would let a high-scoring rss flood take all
+          // five slots (L-11).
+          const pool = await listNewCandidatesPoolWithSource(client, businessId, TRIAGE_POOL_SIZE)
+          const candidates = allocateReservedShortlist(pool, TRIAGE_SHORTLIST_PER_TICK)
           let businessCapped = false
 
           for (const candidate of candidates) {
