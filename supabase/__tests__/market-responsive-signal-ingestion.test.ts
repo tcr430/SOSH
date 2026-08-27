@@ -109,7 +109,7 @@ describe('market-responsive signal ingestion (ADR 0023 §3.4/§9)', () => {
 
     const now = new Date('2026-08-01T10:00:00Z')
     const firstScore = scoreSignal(
-      { externalId, occurredAt: inserted.signal.occurred_at, bodyLen: inserted.signal.body.length, isBot: false, repoWeight: 10 },
+      { externalId, occurredAt: inserted.signal.occurred_at, bodyLen: inserted.signal.body.length, isBot: false, repoWeight: 10, kind: 'article' },
       now,
     )
     const firstCandidate = await upsertScoredCandidate(businessId, inserted.signal.id, firstScore)
@@ -124,7 +124,7 @@ describe('market-responsive signal ingestion (ADR 0023 §3.4/§9)', () => {
     expect(updated.content_hash).not.toBe(originalHash)
 
     const secondScore = scoreSignal(
-      { externalId, occurredAt: updated.occurred_at, bodyLen: updated.body.length, isBot: false, repoWeight: 10 },
+      { externalId, occurredAt: updated.occurred_at, bodyLen: updated.body.length, isBot: false, repoWeight: 10, kind: 'article' },
       now,
     )
     const secondCandidate = await upsertScoredCandidate(businessId, updated.id, secondScore)
@@ -180,7 +180,7 @@ describe('market-responsive signal ingestion (ADR 0023 §3.4/§9)', () => {
 
     const now = new Date('2026-08-01T10:00:00Z')
     const score = scoreSignal(
-      { externalId, occurredAt: inserted.signal.occurred_at, bodyLen: inserted.signal.body.length, isBot: false, repoWeight: 10 },
+      { externalId, occurredAt: inserted.signal.occurred_at, bodyLen: inserted.signal.body.length, isBot: false, repoWeight: 10, kind: 'article' },
       now,
     )
     const candidate = await upsertScoredCandidate(businessId, inserted.signal.id, score)
@@ -190,7 +190,7 @@ describe('market-responsive signal ingestion (ADR 0023 §3.4/§9)', () => {
     expect(transitionErr).toBeNull()
 
     const rescoreAttempt = scoreSignal(
-      { externalId, occurredAt: inserted.signal.occurred_at, bodyLen: inserted.signal.body.length, isBot: false, repoWeight: 10 },
+      { externalId, occurredAt: inserted.signal.occurred_at, bodyLen: inserted.signal.body.length, isBot: false, repoWeight: 10, kind: 'article' },
       new Date('2099-01-01T00:00:00Z'),
     )
     const resurrected = await upsertScoredCandidate(businessId, inserted.signal.id, rescoreAttempt)

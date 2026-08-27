@@ -166,6 +166,7 @@ async function ingestParsedArticle(
       bodyLen: result.signal.body.length,
       isBot: result.signal.author_is_bot,
       repoWeight: feedWeight,
+      kind: 'article',
     },
     now,
   )

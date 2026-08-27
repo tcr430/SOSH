@@ -88,6 +88,7 @@ async function scoreAndUpsertCandidate(
       bodyLen: signal.body.length,
       isBot: signal.author_is_bot,
       repoWeight,
+      kind: 'release',
     },
     now,
   )
