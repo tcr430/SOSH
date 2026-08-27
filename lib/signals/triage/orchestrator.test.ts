@@ -185,6 +185,30 @@ describe('runSignalsTriageTick (ADR 0021 §3, Session 28 E5.6)', () => {
     expect(calls.some((c) => JSON.stringify(c).includes(SECRET_BODY_MARKER))).toBe(false)
   })
 
+  it('SIGNAL-MR-METADATA-NOT-PROMPTED (ADR 0023 §6.3) — source, watched_feed_id and html_url never reach the triage prompt', async () => {
+    const base = makeCandidate({ id: 'cand-rss-metadata' })
+    const candidate = {
+      ...base,
+      signals: {
+        ...base.signals,
+        source: 'rss',
+        watched_feed_id: 'ffffffff-feed-marker-eeee-dddddddddddd',
+        html_url: 'https://blog.example-attacker.test/marker-canonical-link',
+      },
+    } as unknown as SignalCandidateWithSignal
+    mockListNewCandidatesPoolWithSource.mockResolvedValue([candidate])
+
+    await runSignalsTriageTick({ triggeredBy: 'secret' })
+
+    expect(mockRunToolLoop).toHaveBeenCalledTimes(1)
+    const [args] = mockRunToolLoop.mock.calls[0]
+    const serialized = JSON.stringify({ systemPrompt: args.systemPrompt, userMessage: args.userMessage })
+    expect(serialized).not.toContain('feed-marker')
+    expect(serialized).not.toContain('example-attacker.test')
+    expect(serialized).not.toContain('watched_feed_id')
+    expect(serialized).not.toContain('rss')
+  })
+
   it('the tick line carries every required field', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined)
 

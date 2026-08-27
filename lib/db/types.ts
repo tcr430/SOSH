@@ -724,6 +724,24 @@ export type InsightCardRow = {
   updated_at: string
 }
 
+// ADR 0023 §6.5 (Session 30 G1b.8) — SIGNAL-MR-PROVENANCE-VISIBLE. Reachable
+// TODAY through the existing two-hop join (insight_cards.signal_candidate_id
+// -> signal_candidates.signal_id -> signals.html_url) — NO denormalised
+// column on insight_cards itself, matching §5.3's refusal of the same move
+// for `source`. publisher is DERIVED from canonicalLink's hostname at query
+// time (lib/db/insight-cards.ts), not a separately stored value — this
+// works identically for both sources (a GitHub release's canonical link
+// hosts at github.com; an RSS article's at whatever domain the customer
+// subscribed to), which is exactly the domain-trust signal the human
+// approval gate needs to see. Computed server-side, NEVER threaded through
+// any prompt (§6.3).
+export interface CardProvenance {
+  publisher: string | null
+  canonicalLink: string | null
+}
+
+export type InsightCardWithProvenance = InsightCardRow & { provenance: CardProvenance }
+
 export type InsightCardInsert = {
   id?: string
   business_id: string

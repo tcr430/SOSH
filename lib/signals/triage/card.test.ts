@@ -260,6 +260,47 @@ describe('generateCard (ADR 0021 §4, Session 28 E5.7)', () => {
     expect(mockInsertCard).not.toHaveBeenCalled()
   })
 
+  it('SIGNAL-MR-PROVENANCE-VISIBLE / §6.5 step 5 — allowedUrl is source-agnostic: an RSS canonical link validates identically to a GitHub one', async () => {
+    const rssCandidate = makeCandidate()
+    rssCandidate.signals.html_url = 'https://blog.example-customer.test/posts/launch'
+    const citable = createCardCitableContext()
+    citable.evidence.set('ev-1', { id: 'ev-1', snippet: 'proof' })
+
+    const result = await generateCard({
+      client: {} as never,
+      context: ctx,
+      candidate: rssCandidate,
+      claimedAtIso: '2026-08-09T00:00:00Z',
+      decision: { verdict: 'card', reason: 'notable', citableEvidenceIds: ['ev-1'], citableBrandIds: [], audienceNote: 'IT buyers' },
+      citable,
+    })
+
+    expect(result.outcome).toBe('inserted')
+  })
+
+  it('§6.5 step 5 (the worst-case walkthrough) — a URL for "Product X" cannot survive validateCardDraft; only the candidate\'s own canonical link is ever allowed', async () => {
+    mockRunPrompt.mockImplementation((prompt) => {
+      if (prompt.id === 'rubric') return Promise.resolve(validRubric)
+      return Promise.resolve({
+        ...validGeneration,
+        whyItMatters: 'See https://attacker.example/product-x for the real story.',
+      })
+    })
+    const citable = createCardCitableContext()
+
+    const result = await generateCard({
+      client: {} as never,
+      context: ctx,
+      candidate: makeCandidate(),
+      claimedAtIso: '2026-08-09T00:00:00Z',
+      decision: { verdict: 'card', reason: 'x', citableEvidenceIds: [], citableBrandIds: [], audienceNote: 'x' },
+      citable,
+    })
+
+    expect(result).toEqual({ outcome: 'skipped', reason: 'validation_failed' })
+    expect(mockInsertCard).not.toHaveBeenCalled()
+  })
+
   it('skips (evidence_tenant_mismatch) — Tier-1-equivalent guard — when the persistence-time re-fetch count disagrees ([db-MAJOR-2])', async () => {
     mockGetEvidenceMemoryByIds.mockResolvedValue([]) // re-fetch found nothing business-scoped
     const citable = createCardCitableContext()

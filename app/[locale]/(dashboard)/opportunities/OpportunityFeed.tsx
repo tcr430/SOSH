@@ -6,10 +6,17 @@
 // markdown/dangerouslySetInnerHTML — §7.6's render-side control, closing the
 // markdown-image/link exfiltration vector by construction).
 //
-// NOTE: §9.1 lists "the source link to the release" in the hierarchy, but
-// insight_cards (§4.1) carries no html_url column — only an evidence id
-// array. Rendering that link would require joining back to signals, which
-// is out of E5.9's additive scope; omitted here rather than fabricated.
+// ADR 0023 §6.5 (Session 30 G1b.8) — SIGNAL-MR-PROVENANCE-VISIBLE closes the
+// gap the note below described: publisher + canonical link now render for
+// EVERY card (both sources — this render layer has no awareness of source,
+// §6.7), via page.tsx's join (lib/db/insight-cards.ts), never via a prompt.
+//
+// [Superseded, kept for history per the file's own append-only convention
+// elsewhere in this codebase] §9.1 lists "the source link to the release" in
+// the hierarchy, but insight_cards (§4.1) carries no html_url column — only
+// an evidence id array. Rendering that link would require joining back to
+// signals, which is out of E5.9's additive scope; omitted here rather than
+// fabricated.
 
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
@@ -17,7 +24,7 @@ import { useTranslations } from 'next-intl'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { approveCardAction, dismissCardAction, saveCardAction } from './actions'
-import type { InsightCardRow, InsightCardStatus, InsightCardDismissReason } from '@/lib/db/types'
+import type { InsightCardWithProvenance, InsightCardStatus, InsightCardDismissReason } from '@/lib/db/types'
 
 const DISMISS_REASONS: InsightCardDismissReason[] = [
   'not_relevant',
@@ -34,8 +41,8 @@ const HIGH_SENSITIVITY_THRESHOLD = 60
 interface OpportunityFeedProps {
   locale: string
   hasConnection: boolean
-  cards: InsightCardRow[]
-  expiredCards: InsightCardRow[]
+  cards: InsightCardWithProvenance[]
+  expiredCards: InsightCardWithProvenance[]
   showExpired: boolean
   hasTriageFailures: boolean
   isTriagePaused: boolean
@@ -56,7 +63,7 @@ export function OpportunityFeed({
   const [errorKey, setErrorKey] = useState<string | null>(null)
   const [statusMessage, setStatusMessage] = useState('')
 
-  function patchCard(id: string, patch: Partial<InsightCardRow>) {
+  function patchCard(id: string, patch: Partial<InsightCardWithProvenance>) {
     setCards(prev => prev.map(c => (c.id === id ? { ...c, ...patch } : c)))
   }
 
@@ -204,7 +211,7 @@ function OpportunityCard({
   onDismiss,
   onSave,
 }: {
-  card: InsightCardRow
+  card: InsightCardWithProvenance
   locale: string
   isPending: boolean
   hasError: boolean
@@ -259,6 +266,34 @@ function OpportunityCard({
         <p className="text-sm leading-relaxed">{card.audience}</p>
         <p className="mt-0.5 text-[11px] font-medium italic text-muted-foreground">{t('card.modelAssessment')}</p>
       </div>
+
+      {/* ADR 0023 §6.5 (Session 30 G1b.8) — SIGNAL-MR-PROVENANCE-VISIBLE.
+          Publisher + canonical link, threaded structurally via page.tsx's
+          join, rendered for EVERY card (both sources — this component has
+          no awareness of source, §6.7). Plain <a>, not <Link>: this points
+          OFF-SITE (a third-party domain), where next/link's prefetch/client
+          -side routing assumptions do not apply. rel="noopener noreferrer"
+          because target="_blank" to an arbitrary external, customer-
+          supplied domain is exactly the window.opener/referrer leak vector
+          those two attributes exist to close. */}
+      {card.provenance.canonicalLink && (
+        <div className="text-xs text-muted-foreground">
+          {card.provenance.publisher && (
+            <span>
+              {t('card.publisher')}: <span className="font-medium text-foreground">{card.provenance.publisher}</span>
+              {' · '}
+            </span>
+          )}
+          <a
+            href={card.provenance.canonicalLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2 hover:text-foreground"
+          >
+            {t('card.sourceLink')}
+          </a>
+        </div>
+      )}
 
       {/* Verified evidence — renders the evidence set's CONTENT (each
           citable evidence-memory id), not merely its count (a bare number
