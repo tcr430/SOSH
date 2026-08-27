@@ -513,6 +513,12 @@ export type WatchedFeedRow = {
   // migration: G1b.4 built If-None-Match support with nowhere to persist
   // its value across ticks until this column existed.
   etag: string | null
+  // ADR 0023 §8.4/§9.4 (Session 30 G1b.9) — set only on an 'ok'/'not_modified'
+  // outcome (recordWatchedFeedPollOutcome), left untouched on 'error'. Unlike
+  // last_fetch_at (which updates on EVERY outcome), this is the timestamp
+  // the config surface's "fetch-failing" state needs to show a last-success
+  // time across a run of consecutive failures.
+  last_success_at: string | null
   created_at: string
   updated_at: string
 }
@@ -532,6 +538,7 @@ export type WatchedFeedInsert = {
   consecutive_failure_count?: number
   rate_limited_until?: string | null
   etag?: string | null
+  last_success_at?: string | null
   created_at?: string
   updated_at?: string
 }

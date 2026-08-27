@@ -20,9 +20,28 @@ vi.mock('@/lib/db/watched-repos', () => ({
   addWatchedRepo: vi.fn(),
   setWatchedRepoActive: vi.fn(),
 }))
+vi.mock('@/lib/db/watched-feeds', () => ({
+  countActiveWatchedFeedsForBusiness: vi.fn(),
+  addWatchedFeed: vi.fn(),
+  setWatchedFeedActive: vi.fn(),
+}))
 vi.mock('@/lib/signals', () => ({
   mintInstallationToken: vi.fn(),
   getInstallationRepositories: vi.fn(),
+  // A REAL (not stubbed) https-only check — G1b.9's whole point is that
+  // addWatchedFeedAction DELEGATES to this function rather than
+  // re-implementing scheme validation, so the test proving that delegation
+  // needs the mock to actually behave like the guard, not just resolve true.
+  validateUrl: vi.fn((raw: string) => {
+    try {
+      const parsed = new URL(raw)
+      if (parsed.protocol !== 'https:') return { errorCode: 'scheme_rejected', message: 'https only' }
+      return parsed
+    } catch {
+      return { errorCode: 'invalid_url', message: 'not a URL' }
+    }
+  }),
+  computeWatchedFeedUrlHash: vi.fn((url: string) => `hash-of-${url}`),
 }))
 
 const mockRedirect = vi.hoisted(() => vi.fn())
@@ -42,6 +61,9 @@ import {
   removeWatchedRepoAction,
   toggleWatchedRepoAction,
   listInstallationRepositoriesAction,
+  addWatchedFeedAction,
+  removeWatchedFeedAction,
+  toggleWatchedFeedAction,
 } from './actions'
 import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
@@ -49,6 +71,7 @@ import { canServer } from '@/lib/members/can-server'
 import { signGithubConnectState } from '@/lib/signals/state'
 import { getGithubConnectionByBusinessId, deactivateGithubConnection } from '@/lib/db/github-connections'
 import { countActiveWatchedReposForBusiness, addWatchedRepo, setWatchedRepoActive } from '@/lib/db/watched-repos'
+import { countActiveWatchedFeedsForBusiness, addWatchedFeed, setWatchedFeedActive } from '@/lib/db/watched-feeds'
 import { mintInstallationToken, getInstallationRepositories } from '@/lib/signals'
 
 const mockCreateClient = vi.mocked(createClient)
@@ -60,6 +83,9 @@ const mockDeactivateGithubConnection = vi.mocked(deactivateGithubConnection)
 const mockCountActiveWatchedReposForBusiness = vi.mocked(countActiveWatchedReposForBusiness)
 const mockAddWatchedRepo = vi.mocked(addWatchedRepo)
 const mockSetWatchedRepoActive = vi.mocked(setWatchedRepoActive)
+const mockCountActiveWatchedFeedsForBusiness = vi.mocked(countActiveWatchedFeedsForBusiness)
+const mockAddWatchedFeed = vi.mocked(addWatchedFeed)
+const mockSetWatchedFeedActive = vi.mocked(setWatchedFeedActive)
 const mockMintInstallationToken = vi.mocked(mintInstallationToken)
 const mockGetInstallationRepositories = vi.mocked(getInstallationRepositories)
 
@@ -79,6 +105,7 @@ beforeEach(() => {
   mockSignGithubConnectState.mockResolvedValue({ state: 'signed-state-jwt', nonce: 'nonce-xyz' })
   mockGetGithubConnectionByBusinessId.mockResolvedValue({ id: 'conn-1', business_id: BUSINESS_ID } as never)
   mockCountActiveWatchedReposForBusiness.mockResolvedValue(0)
+  mockCountActiveWatchedFeedsForBusiness.mockResolvedValue(0)
 })
 
 describe('connectGithubAction — the L-8 gating seam', () => {
@@ -272,5 +299,116 @@ describe('listInstallationRepositoriesAction — the repo picker', () => {
     const result = await listInstallationRepositoriesAction()
 
     expect(result).toEqual({ success: false, error: 'errors.repos_fetch_failed' })
+  })
+})
+
+// ADR 0023 §8.1/§8.4 (Session 30 G1b.9) — the market-responsive watch-list
+// actions. No connection lookup exists in ANY of these three (§3.1: feeds
+// have no credential boundary), which is itself part of what distinguishes
+// them from the repo actions above.
+
+describe('addWatchedFeedAction', () => {
+  const validInput = { url: 'https://example.com/feed.xml', label: 'Example Feed' }
+
+  it('adds a feed, hashing the URL via the delegated (not re-implemented) helper', async () => {
+    const result = await addWatchedFeedAction(validInput)
+    expect(result).toEqual({ success: true })
+    expect(mockAddWatchedFeed).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        business_id: BUSINESS_ID,
+        url: validInput.url,
+        url_hash: 'hash-of-https://example.com/feed.xml',
+        label: 'Example Feed',
+        added_by: USER.id,
+      }),
+    )
+  })
+
+  it('SIGNAL-MR-WATCHLIST-BOUNDED: the 21st active feed is rejected by the action', async () => {
+    mockCountActiveWatchedFeedsForBusiness.mockResolvedValue(20)
+    const result = await addWatchedFeedAction(validInput)
+    expect(result).toEqual({ error: 'errors.feed_cap_reached' })
+    expect(mockAddWatchedFeed).not.toHaveBeenCalled()
+  })
+
+  it('SIGNAL-CAPABILITY-GATED (via the extracted gateSignalSourceAction seam): a canServer(CONNECT_ACCOUNTS) denial returns the typed forbidden result before touching the DB layer', async () => {
+    mockCanServer.mockResolvedValue(false)
+    const result = await addWatchedFeedAction(validInput)
+    expect(result).toEqual({ error: 'errors.forbidden' })
+    expect(mockCountActiveWatchedFeedsForBusiness).not.toHaveBeenCalled()
+    expect(mockAddWatchedFeed).not.toHaveBeenCalled()
+  })
+
+  it('rejects a non-https URL before touching the DB layer — the delegated validateUrl check, not a re-implemented one', async () => {
+    const result = await addWatchedFeedAction({ url: 'http://example.com/feed.xml', label: 'Example' })
+    expect(result).toEqual({ error: 'errors.invalid_url' })
+    expect(mockAddWatchedFeed).not.toHaveBeenCalled()
+  })
+
+  it('rejects a malformed URL before touching the DB layer', async () => {
+    const result = await addWatchedFeedAction({ url: 'not-a-url', label: 'Example' })
+    expect(result).toEqual({ error: 'errors.invalid_url' })
+    expect(mockAddWatchedFeed).not.toHaveBeenCalled()
+  })
+
+  it('rejects an empty label before touching the DB layer', async () => {
+    const result = await addWatchedFeedAction({ url: validInput.url, label: '' })
+    expect(result.error).toBeDefined()
+    expect(mockAddWatchedFeed).not.toHaveBeenCalled()
+  })
+
+  it('a DB write failure (including a duplicate business_id/url_hash) returns the generic add-failed error', async () => {
+    mockAddWatchedFeed.mockRejectedValue(new Error('duplicate key value violates unique constraint'))
+    const result = await addWatchedFeedAction(validInput)
+    expect(result).toEqual({ error: 'errors.feed_add_failed' })
+  })
+})
+
+describe('removeWatchedFeedAction', () => {
+  const validInput = { watchedFeedId: '123e4567-e89b-4abc-8def-426614174000' }
+
+  it('deactivates (never deletes) the watched feed', async () => {
+    const result = await removeWatchedFeedAction(validInput)
+    expect(result).toEqual({ success: true })
+    expect(mockSetWatchedFeedActive).toHaveBeenCalledWith(expect.anything(), validInput.watchedFeedId, BUSINESS_ID, false)
+  })
+
+  it('SIGNAL-CAPABILITY-GATED: a canServer(CONNECT_ACCOUNTS) denial returns the typed forbidden result before touching the DB layer', async () => {
+    mockCanServer.mockResolvedValue(false)
+    const result = await removeWatchedFeedAction(validInput)
+    expect(result).toEqual({ error: 'errors.forbidden' })
+    expect(mockSetWatchedFeedActive).not.toHaveBeenCalled()
+  })
+
+  it('rejects a non-UUID id before touching the DB layer', async () => {
+    const result = await removeWatchedFeedAction({ watchedFeedId: 'not-a-uuid' })
+    expect(result).toEqual({ error: 'errors.invalid_feed' })
+    expect(mockSetWatchedFeedActive).not.toHaveBeenCalled()
+  })
+})
+
+describe('toggleWatchedFeedAction', () => {
+  const validInput = { watchedFeedId: '123e4567-e89b-4abc-8def-426614174000', isActive: true }
+
+  it('toggling on is subject to the SAME 20-feed cap as adding', async () => {
+    mockCountActiveWatchedFeedsForBusiness.mockResolvedValue(20)
+    const result = await toggleWatchedFeedAction(validInput)
+    expect(result).toEqual({ error: 'errors.feed_cap_reached' })
+    expect(mockSetWatchedFeedActive).not.toHaveBeenCalled()
+  })
+
+  it('toggling off is never capped', async () => {
+    mockCountActiveWatchedFeedsForBusiness.mockResolvedValue(20)
+    const result = await toggleWatchedFeedAction({ ...validInput, isActive: false })
+    expect(result).toEqual({ success: true })
+    expect(mockSetWatchedFeedActive).toHaveBeenCalledWith(expect.anything(), validInput.watchedFeedId, BUSINESS_ID, false)
+  })
+
+  it('SIGNAL-CAPABILITY-GATED: a canServer(CONNECT_ACCOUNTS) denial returns the typed forbidden result before touching the DB layer', async () => {
+    mockCanServer.mockResolvedValue(false)
+    const result = await toggleWatchedFeedAction(validInput)
+    expect(result).toEqual({ error: 'errors.forbidden' })
+    expect(mockSetWatchedFeedActive).not.toHaveBeenCalled()
   })
 })

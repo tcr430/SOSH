@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
 import { getGithubConnectionByBusinessId } from '@/lib/db/github-connections'
 import { listWatchedReposForBusiness } from '@/lib/db/watched-repos'
+import { listWatchedFeedsForBusiness } from '@/lib/db/watched-feeds'
 import { listRecentSignalsForBusiness } from '@/lib/db/signals'
 import { SignalsClient, type SignalsPageState } from './SignalsClient'
 
@@ -42,13 +43,15 @@ export default async function SignalsPage({ params, searchParams }: Props) {
   const business = await getBusinessForUser(client, user.id)
   if (!business) redirect(`/${locale}/onboarding`)
 
-  const [connection, watchedRepos, recentSignals] = await Promise.all([
+  const [connection, watchedRepos, watchedFeeds, recentSignals] = await Promise.all([
     getGithubConnectionByBusinessId(client, business.id),
     listWatchedReposForBusiness(client, business.id),
+    listWatchedFeedsForBusiness(client, business.id),
     listRecentSignalsForBusiness(client, business.id, 10),
   ])
 
   const activeWatchedCount = watchedRepos.filter((r) => r.is_active).length
+  const activeWatchedFeedCount = watchedFeeds.filter((f) => f.is_active).length
 
   let state: SignalsPageState
   if (awaitingApprovalParam === '1') {
@@ -85,6 +88,8 @@ export default async function SignalsPage({ params, searchParams }: Props) {
         isRateLimited={isRateLimited}
         watchedRepos={watchedRepos}
         activeWatchedCount={activeWatchedCount}
+        watchedFeeds={watchedFeeds}
+        activeWatchedFeedCount={activeWatchedFeedCount}
         recentSignals={recentSignals}
         locale={locale}
         banner={banner}

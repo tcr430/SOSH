@@ -66,5 +66,48 @@
   },
   "success": {
     "connected": "GitHub connected successfully."
+  },
+  "market_responsive": {
+    "heading": "Market-responsive feeds",
+    "subtitle": "Add RSS or Atom feeds from industry publications. SOSH triages new articles alongside your own product releases.",
+    "disclosure_lower_confidence": "Cards drawn from news feeds are triaged at a lower confidence than cards from your own product releases, until this source has a longer track record.",
+    "disclosure_standing_slot": "If you watch only one feed, that feed is guaranteed a slot in every triage run. Watching a second feed removes that guarantee.",
+    "at_cap": {
+      "title": "Feed list full",
+      "body": "You're watching 20 feeds, the maximum. Remove one before adding another."
+    },
+    "add": {
+      "heading": "Add a feed",
+      "url_label": "Feed URL",
+      "url_placeholder": "https://example.com/feed.xml",
+      "label_label": "Label",
+      "label_placeholder": "e.g. TechCrunch",
+      "submit_cta": "Add feed",
+      "adding": "Adding…"
+    },
+    "feed_list": {
+      "heading": "Watched feeds",
+      "empty": "You're not watching any feeds yet.",
+      "pause": "Pause",
+      "resume": "Resume",
+      "remove": "Remove",
+      "status_active": "Active",
+      "status_paused": "Paused",
+      "status_rate_limited": "Rate limited",
+      "status_fetch_failing": "Not reachable",
+      "status_not_modified": "No new items",
+      "last_error": "Last error: {code}",
+      "last_success": "last successful fetch {date}",
+      "announce_added": "Feed added.",
+      "announce_removed": "Feed removed.",
+      "announce_paused": "Feed paused.",
+      "announce_resumed": "Feed resumed."
+    },
+    "errors": {
+      "invalid_url": "Enter a valid https:// feed URL.",
+      "feed_cap_reached": "You're already watching 20 feeds, the maximum.",
+      "feed_add_failed": "We couldn't add that feed. Please try again.",
+      "invalid_feed": "That feed selection wasn't valid."
+    }
   }
 }

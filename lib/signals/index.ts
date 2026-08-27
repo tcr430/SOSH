@@ -40,8 +40,13 @@ export type { FetchAndParseFeedResult, FetchAndParseFeedOptions, RssClientErrorC
 export { parseArticleItem, BODY_MAX_CHARS as ARTICLE_BODY_MAX_CHARS } from './parse-article'
 export type { ParsedArticle, ParseArticleResult, RawFeedItem } from './parse-article'
 
-export { fetchWithEgressGuard, rejectIfDeclaresDoctype, XxeRejectedError } from './rss-egress-guard'
+export { fetchWithEgressGuard, rejectIfDeclaresDoctype, validateUrl, XxeRejectedError } from './rss-egress-guard'
 export type { EgressFetchResult, EgressFetchOptions, EgressGuardErrorCode } from './rss-egress-guard'
 
 export { scoreSignal, sortScoredSignals, scoreAndSortSignals, upsertScoredCandidate } from './score'
 export type { ScoreInputs, ScorableSignal, ScoredSignal } from './score'
+
+// ADR 0023 §8.2/§8.4 (Session 30 G1b.9) — the settings/signals/ Server
+// Action's own watch-list hash, delegating to the same algorithm §3.4
+// established for item-dedup rather than reimplementing it.
+export { computeWatchedFeedUrlHash } from './rss-orchestrator'

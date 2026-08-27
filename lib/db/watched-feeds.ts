@@ -153,6 +153,10 @@ export async function recordWatchedFeedPollOutcome(
       last_error_code: outcome.errorCode ?? null,
       consecutive_failure_count: outcome.consecutiveFailureCount,
       ...(outcome.etag !== undefined ? { etag: outcome.etag } : {}),
+      // ADR §9.4 (G1b.9) — only 'ok'/'not_modified' are a success; 'error'
+      // leaves the column untouched so a run of failures doesn't lose the
+      // last time this feed actually worked.
+      ...(outcome.status !== 'error' ? { last_success_at: nowIso() } : {}),
     })
     .eq('id', id)
     .eq('business_id', businessId)

@@ -144,7 +144,17 @@ async function resolveAndValidate(
 
 // ── URL validation (clause 1: https-only; F-14 precedent: reject credentials) ─
 
-function validateUrl(raw: string): URL | { errorCode: EgressGuardErrorCode; message: string } {
+// Exported (Session 30 G1b.9, ADR §8.4) so the settings/signals/ Server
+// Action can DELEGATE the add-feed form's URL check to this exact function
+// rather than re-implementing scheme/credential validation in a Zod schema —
+// this is the sync, no-DNS half of the guard (the async DNS-rebinding-aware
+// half, resolveAndValidate, only makes sense against a schedule the poller
+// runs, per §8.3 clause 5's "re-validate on every poll, not once at
+// submission"). A URL that passes THIS check at submission can still fail
+// resolveAndValidate on its first real poll (e.g. a hostname that resolves
+// to a private range) — that is the accepted, disclosed TOCTOU window §8.3
+// itself names, not a gap this export introduces.
+export function validateUrl(raw: string): URL | { errorCode: EgressGuardErrorCode; message: string } {
   let parsed: URL
   try {
     parsed = new URL(raw)

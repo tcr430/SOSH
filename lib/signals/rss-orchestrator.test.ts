@@ -67,6 +67,7 @@ function makeFeed(overrides: Partial<WatchedFeedRow> = {}): WatchedFeedRow {
     consecutive_failure_count: 0,
     rate_limited_until: null,
     etag: null,
+    last_success_at: null,
     created_at: '2026-08-01T00:00:00Z',
     updated_at: '2026-08-01T00:00:00Z',
     ...overrides,

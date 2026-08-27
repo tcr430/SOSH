@@ -80,6 +80,19 @@ export function computeRssExternalId(link: string | null, guid: string | null): 
   return `rss:${hash}`
 }
 
+// §8.2's watched_feeds.url_hash — the UNIQUE(business_id, url_hash) arbiter
+// for the customer's OWN subscribed feed URL (Session 30 G1b.9). Reuses the
+// EXACT SAME normalize-before-hash algorithm §3.4 established for canonical-
+// link dedup above, applied to a different string. Exported (rather than
+// re-implemented in the Server Action) because this is SSRF-adjacent
+// normalization logic — duplicating it a third time risks drift between the
+// dedup key and the uniqueness arbiter, unlike the small, non-security
+// parser helpers SIGNAL-MR-NO-SIXTH-SANITIZER's precedent duplicates. No
+// 'rss:' prefix: this hash is a uniqueness key, not an external_id.
+export function computeWatchedFeedUrlHash(url: string): string {
+  return createHash('sha256').update(normalizeForHashing(url), 'utf8').digest('hex')
+}
+
 // §7.3's sink-narrowed hash replica of the DB's generated column, IDENTICAL
 // to lib/signals/orchestrator.ts's computeContentHash — duplicated rather
 // than imported: each source's ingestion file stays independently
