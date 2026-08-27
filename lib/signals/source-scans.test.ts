@@ -57,6 +57,24 @@ const LIB_DIR = path.join(ROOT, 'lib')
 const APP_DIR = path.join(ROOT, 'app')
 
 describe('SIGNAL-NO-LLM-IN-STAGE-AB (L-1, ADR §11.3 scan #1)', () => {
+  // Session 30 G1b.2 (ADR 0023 §10.4, SIGNAL-MR-SCANS-EXTENDED part 1): ADR
+  // 0023's own table records "a new poller root must be added, with its own
+  // vacuity guard" as what a second source generically requires. As of
+  // G1b.2, no such root is added, and this is a decision, not an oversight:
+  // G1b.3's egress-guard validator and G1b.4's RSS client both land "behind
+  // /lib/signals/" / "under /lib/signals/" (ADR §8.3, §3.1) — i.e. as new
+  // FILES inside the EXISTING lib/signals/ root, which collectTsFiles()
+  // already walks recursively into any subdirectory — and G1b.5's ingestion
+  // path runs "on the daily signals-poll cadence" (ADR §3.4), reusing the
+  // EXISTING app/api/cron/signals-poll route rather than adding a new one.
+  // Neither of ADR 0020's two current roots needs a sibling. A literal new
+  // root also CANNOT be added yet without breaking this test: collectTsFiles
+  // calls fs.readdirSync on each root eagerly, which throws ENOENT for a
+  // directory that does not exist, and no RSS-specific directory exists
+  // before G1b.3/G1b.4 land. If a FUTURE step introduces code at a location
+  // genuinely outside both existing roots (e.g. a dedicated new cron route),
+  // SCAN_ROOTS must be extended at that step, with its own vacuity guard,
+  // before that step's code lands — not after.
   const SCAN_ROOTS = [LIB_SIGNALS_DIR, POLLER_ROUTE_DIR]
 
   // ADR 0021 §2.1 (Session 28 E5.4-E5.7) narrows this Session-27 rule by a
@@ -161,6 +179,11 @@ describe('SIGNAL-NO-LLM-IN-STAGE-AB (L-1, ADR §11.3 scan #1)', () => {
   // proves this at E2.4-authored scope; this assertion is the same check,
   // living in the session's central enforcement file so a reader finds all
   // four-plus-one constraints in one place.
+  //
+  // Session 30 G1b.2 confirmation: collectTsFiles(LIB_SIGNALS_DIR) already
+  // walks every subdirectory recursively, so G1b.3's validator and G1b.4's
+  // RSS client — both landing directly under lib/signals/ — are covered by
+  // this assertion the moment they exist, with no edit required here.
   it('SIGNAL-NO-SIXTH-SANITIZER: lib/signals/** defines no local sanitizeDataField', () => {
     const files = collectTsFiles(LIB_SIGNALS_DIR)
     expect(files.length).toBeGreaterThan(0)
@@ -201,6 +224,16 @@ describe('SIGNAL-NO-PROVIDER-COUPLING (D-8, ADR §11.3 scan #2)', () => {
 })
 
 describe('SIGNAL-CONFIG-ONLY-ENV (ADR §11.3 scan #3)', () => {
+  // Session 30 G1b.2: ADR 0023 §16's four RSS constants (per-fetch timeout,
+  // per-tick budget, max body bytes, plus whatever G1b.3 names) land in
+  // lib/config.ts at G1b.3, not this step — G1b.2 is scoped to "everything
+  // that does not require the rss client to exist." No RSS-specific
+  // process.env prefix exists in the repo yet, so this pattern is NOT
+  // extended now; recorded here as the reason, per the build guide's own
+  // "if a later step adds none, record that as the reason no extension was
+  // made" allowance. G1b.3 must extend this pattern if and when it actually
+  // introduces a new process.env prefix (it may not — Zod defaults with no
+  // env override at all would need none).
   const SCAN_ROOTS = [LIB_DIR, APP_DIR]
   const CONFIG_FILE = path.join(ROOT, 'lib', 'config.ts')
 
@@ -293,6 +326,26 @@ describe('SIGNAL-NO-TOKEN-AT-REST (ADR §12 — E2.11 close-out finding)', () =>
     const block = source.slice(start, end)
     expect(TOKEN_SHAPED_PATTERN.test(block)).toBe(false)
   })
+
+  // Session 30 G1b.2 (ADR 0023 §10.4, table row #5): "must hold TRIVIALLY,
+  // and that is the point — ADR §3.1 rules rss has no credential at all, so
+  // this scan is what keeps 'no auth, nothing to revoke' true rather than
+  // merely asserted." watched_feeds (20260827090000_market_responsive_
+  // signal_source.sql) is the market-responsive source's connection-
+  // equivalent table — the one row per feed a customer configures — and
+  // deliberately carries no vault_*_id, no OAuth state, nothing to revoke.
+  it("watched_feeds' CREATE TABLE block defines no token-shaped column (ADR 0023 §3.1: rss has no credential at all)", () => {
+    const mrMigrationFile = path.join(ROOT, 'supabase', 'migrations', '20260827090000_market_responsive_signal_source.sql')
+    const source = fs.readFileSync(mrMigrationFile, 'utf8')
+    const startMarker = 'CREATE TABLE public.watched_feeds'
+    const start = source.indexOf(startMarker)
+    expect(start, 'watched_feeds CREATE TABLE not found — migration file moved or renamed').toBeGreaterThanOrEqual(0)
+    const end = source.indexOf(');', start)
+    expect(end, 'closing ); not found for watched_feeds CREATE TABLE').toBeGreaterThan(start)
+
+    const block = source.slice(start, end)
+    expect(TOKEN_SHAPED_PATTERN.test(block)).toBe(false)
+  })
 })
 
 describe('SIGNAL-WEBHOOK-SEAM-CLEAN (ADR §12 — E2.11 close-out finding)', () => {
@@ -318,6 +371,22 @@ describe('SIGNAL-WEBHOOK-SEAM-CLEAN (ADR §12 — E2.11 close-out finding)', () 
     const block = source.slice(start, end)
     expect(block).toContain('ingested_via')
     expect(POLLER_SPECIFIC_PATTERN.test(block)).toBe(false)
+  })
+
+  // Session 30 G1b.2 (ADR 0023 §10.4, table row #6): "load-bearing for §15,
+  // which asserts the webhook seam 'stays unused' — this scan is the only
+  // thing that proves it. It must still pass once the poller root is added,
+  // and the RSS poller must not reach for that seam." The ORIGINAL CREATE
+  // TABLE block above cannot see columns added by a LATER migration's ALTER
+  // statements, so this re-confirms the market-responsive migration's own
+  // ALTER TABLE public.signals statements (nullable watched_repo_id, new
+  // watched_feed_id FK, the exactly-one-parent CHECK) introduce no
+  // poller/webhook-specific column of their own — ingested_via remains the
+  // sole writer-related seam even after the second source.
+  it('the market-responsive migration widens signals with no poller/webhook-specific column beyond the existing ingested_via seam', () => {
+    const mrMigrationFile = path.join(ROOT, 'supabase', 'migrations', '20260827090000_market_responsive_signal_source.sql')
+    const source = stripLineComments(fs.readFileSync(mrMigrationFile, 'utf8'))
+    expect(POLLER_SPECIFIC_PATTERN.test(source)).toBe(false)
   })
 })
 

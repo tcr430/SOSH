@@ -307,7 +307,7 @@ describe('market-responsive signal source schema (ADR 0023 §3.2/§7.6)', () => 
       .select('title')
       .single()
     expect(error).toBeNull()
-    expect(data.title).toBe('v1.0.1')
+    expect(data!.title).toBe('v1.0.1')
   })
 
   // ─── SIGNAL-MR-CASCADE-COMPLETE ─────────────────────────────────────────────
