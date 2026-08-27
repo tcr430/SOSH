@@ -93,6 +93,14 @@ const tickSummary = {
   failed: 0,
   skippedDraft: 0,
   skippedPreCutoff: 0,
+  rssFeedsConsidered: 0,
+  rssFeedsFetched: 0,
+  rssFeedsNotModified: 0,
+  rssFeedsFailed: 0,
+  rssItemsIngested: 0,
+  rssDuplicates: 0,
+  rssGuardRejected: 0,
+  rssCandidatesUpserted: 0,
 }
 
 beforeEach(() => {

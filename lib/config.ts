@@ -113,6 +113,16 @@ export const serverSchema = z.object({
   // burst of new posts since the last poll, bounded against a feed with
   // thousands of historical items costing unbounded parse/mint work.
   RSS_FEED_MAX_ITEMS_PER_FETCH: z.coerce.number().int().positive().default(50),
+  // ADR 0023 §3.4/§9.3/§16 (Session 30 G1b.5) — SIGNAL-MR-DEDUP-STABLE's
+  // window: the content_hash near-duplicate backstop for the guid-churn
+  // residual (a republished item whose link/guid changed gets a new
+  // external_id, which would otherwise route around
+  // upsert_signal_candidate's terminal-status guard entirely, §3.4's
+  // "honest residual"). 3 days — generous enough to catch same-day and
+  // next-day republish/redirect churn (the common case), short enough that
+  // a business's SAME headline genuinely recurring weeks apart (a
+  // legitimate follow-up story) is never suppressed as a duplicate.
+  RSS_CONTENT_DEDUP_WINDOW_DAYS: z.coerce.number().int().positive().default(3),
   LINKEDIN_CLIENT_ID: z.string().default(''),
   LINKEDIN_CLIENT_SECRET: z.string().default(''),
   X_CLIENT_ID: z.string().default(''),
@@ -311,6 +321,7 @@ function parseServerEnv() {
     RSS_FEED_POLL_TICK_BUDGET_MS: process.env.RSS_FEED_POLL_TICK_BUDGET_MS,
     RSS_FEED_MAX_BODY_BYTES: process.env.RSS_FEED_MAX_BODY_BYTES,
     RSS_FEED_MAX_ITEMS_PER_FETCH: process.env.RSS_FEED_MAX_ITEMS_PER_FETCH,
+    RSS_CONTENT_DEDUP_WINDOW_DAYS: process.env.RSS_CONTENT_DEDUP_WINDOW_DAYS,
     LINKEDIN_CLIENT_ID: process.env.LINKEDIN_CLIENT_ID,
     LINKEDIN_CLIENT_SECRET: process.env.LINKEDIN_CLIENT_SECRET,
     X_CLIENT_ID: process.env.X_CLIENT_ID,
@@ -528,6 +539,9 @@ export const config = {
     },
     get RSS_FEED_MAX_ITEMS_PER_FETCH() {
       return serverOnly("RSS_FEED_MAX_ITEMS_PER_FETCH", () => server().RSS_FEED_MAX_ITEMS_PER_FETCH);
+    },
+    get RSS_CONTENT_DEDUP_WINDOW_DAYS() {
+      return serverOnly("RSS_CONTENT_DEDUP_WINDOW_DAYS", () => server().RSS_CONTENT_DEDUP_WINDOW_DAYS);
     },
     get LINKEDIN_CLIENT_ID() {
       return serverOnly("LINKEDIN_CLIENT_ID", () => server().LINKEDIN_CLIENT_ID);

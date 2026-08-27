@@ -508,6 +508,11 @@ export type WatchedFeedRow = {
   last_error_code: string | null
   consecutive_failure_count: number
   rate_limited_until: string | null
+  // ADR 0023 §3.1/§9.4 (Session 30 G1b.5) — the conditional-GET cursor,
+  // mirroring watched_repos.releases_etag. Added after G1b.1's original
+  // migration: G1b.4 built If-None-Match support with nowhere to persist
+  // its value across ticks until this column existed.
+  etag: string | null
   created_at: string
   updated_at: string
 }
@@ -526,6 +531,7 @@ export type WatchedFeedInsert = {
   last_error_code?: string | null
   consecutive_failure_count?: number
   rate_limited_until?: string | null
+  etag?: string | null
   created_at?: string
   updated_at?: string
 }

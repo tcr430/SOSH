@@ -69,6 +69,39 @@ export async function listSignalsForWatchedRepo(
   return ((data as unknown[]) ?? []).map(asSignalRow)
 }
 
+// ADR 0023 §3.4/§9.3 (Session 30 G1b.5) — SIGNAL-MR-DEDUP-STABLE's read: the
+// candidate window for the content_hash near-duplicate check, scoped to
+// 'rss' — a guid/link-churned republish of a story already ingested for
+// this business within the window (rss-orchestrator.ts compares
+// content_hash client-side against this bounded set, the same pattern
+// GitHub's orchestrator already uses to diff by external_id). Reuses
+// signals_business_id_occurred_at_idx (business_id, occurred_at DESC, id)
+// — index-served on business_id + the occurred_at bound; source='rss' and
+// the content_hash comparison are filtered over that already-narrow,
+// bounded window, not a fresh index of their own (the MODERATE-2 precedent
+// signal_candidates_business_id_idx already established: a secondary
+// filter over an index-served bounded read is not itself unindexed).
+export async function listRecentSignalsByBusinessAndSource(
+  businessId: string,
+  source: string,
+  sinceIso: string,
+  limit: number = SIGNALS_LIST_LIMIT,
+): Promise<SignalRow[]> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client
+    .from('signals')
+    .select('*')
+    .eq('business_id', businessId)
+    .eq('source', source)
+    .gte('occurred_at', sinceIso)
+    .order('occurred_at', { ascending: false })
+    .order('id', { ascending: true })
+    .limit(limit)
+  if (error) throw new Error(getErrorMessage(error))
+  return ((data as unknown[]) ?? []).map(asSignalRow)
+}
+
 export type InsertSignalResult =
   | { status: 'inserted'; signal: SignalRow }
   | { status: 'duplicate' }
