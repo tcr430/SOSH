@@ -57,7 +57,11 @@ import path from 'node:path'
 //   both numbers on that one mutation; it does not claim one metric each.
 
 const ROOT = process.cwd()
-const CORPUS_PATH = path.join(ROOT, 'lib', 'signals', '__fixtures__', 'eval', 'corpus.v1.json')
+// ADR 0023 §10.5 (Session 30 G1b.12) — CORPUS_PATH repointed to v2. The 40
+// GitHub examples this file mutates are UNCHANGED aside from the added
+// `source` field; every assertion below now reads metricsBySource.github
+// rather than the removed blended `metrics` object (§2.8).
+const CORPUS_PATH = path.join(ROOT, 'lib', 'signals', '__fixtures__', 'eval', 'corpus.v2.json')
 const ARTEFACT_PATH = path.join(ROOT, 'lib', 'signals', '__fixtures__', 'eval', 'latest-run.json')
 
 interface EvalMetric {
@@ -65,6 +69,18 @@ interface EvalMetric {
   numerator: number
   denominator: number
   floor: number
+  sigma: number | null
+}
+
+interface SourceMetrics {
+  declaredCount: number
+  executedCount: number
+  pendingCount: number
+  errorCount: number
+  cardPrecision: EvalMetric
+  cardRecall: EvalMetric
+  dismissReasonMatch: EvalMetric
+  pass: boolean
 }
 
 interface EvalArtefact {
@@ -72,10 +88,9 @@ interface EvalArtefact {
   declaredCorpusCount: number
   executedCount: number
   errorCount: number
-  metrics: {
-    cardPrecision: EvalMetric
-    cardRecall: EvalMetric
-    dismissReasonMatch: EvalMetric
+  metricsBySource: {
+    github: SourceMetrics
+    market_responsive: SourceMetrics
   }
   metricsPass: boolean
 }
@@ -114,9 +129,18 @@ describe('scripts/eval/run-triage-eval.ts — Tier A mutation test (SIGNAL-MR-CO
     const artefact = runEval()
     expect(artefact.declaredCorpusCount).toBe(40)
     expect(artefact.errorCount).toBe(0)
-    expect(artefact.metrics.cardPrecision).toEqual({ value: 1, numerator: 24, denominator: 24, floor: 0.75 })
-    expect(artefact.metrics.cardRecall).toEqual({ value: 1, numerator: 24, denominator: 24, floor: 0.7 })
-    expect(artefact.metrics.dismissReasonMatch).toEqual({ value: 1, numerator: 16, denominator: 16, floor: 0.6 })
+    const github = artefact.metricsBySource.github
+    expect(github.cardPrecision).toMatchObject({ value: 1, numerator: 24, denominator: 24, floor: 0.75 })
+    expect(github.cardRecall).toMatchObject({ value: 1, numerator: 24, denominator: 24, floor: 0.7 })
+    expect(github.dismissReasonMatch).toMatchObject({ value: 1, numerator: 16, denominator: 16, floor: 0.6 })
+    // ADR §10.5 — sigma is the binomial standard error AT THE FLOOR, a
+    // property of the denominator alone, not of this run's observed value.
+    expect(github.cardPrecision.sigma).toBeCloseTo(Math.sqrt((0.75 * 0.25) / 24), 10)
+    expect(github.cardRecall.sigma).toBeCloseTo(Math.sqrt((0.7 * 0.3) / 24), 10)
+    expect(github.dismissReasonMatch.sigma).toBeCloseTo(Math.sqrt((0.6 * 0.4) / 16), 10)
+    // market_responsive has no examples yet (G1b.12 Part B not authored) —
+    // reported with zero denominators, and must not drag metricsPass down.
+    expect(artefact.metricsBySource.market_responsive.declaredCount).toBe(0)
     expect(artefact.metricsPass).toBe(true)
   })
 
@@ -137,17 +161,18 @@ describe('scripts/eval/run-triage-eval.ts — Tier A mutation test (SIGNAL-MR-CO
     writeFileSync(CORPUS_PATH, JSON.stringify(corpus, null, 2))
 
     const artefact = runEval()
-    expect(artefact.metrics.cardRecall.numerator).toBe(16)
-    expect(artefact.metrics.cardRecall.denominator).toBe(24)
-    expect(artefact.metrics.cardRecall.value).toBeCloseTo(16 / 24, 10)
-    expect(artefact.metrics.cardRecall.value).toBeLessThan(0.7)
+    const github = artefact.metricsBySource.github
+    expect(github.cardRecall.numerator).toBe(16)
+    expect(github.cardRecall.denominator).toBe(24)
+    expect(github.cardRecall.value).toBeCloseTo(16 / 24, 10)
+    expect(github.cardRecall.value).toBeLessThan(0.7)
     expect(artefact.metricsPass).toBe(false)
     // Precision and dismiss-match are UNTOUCHED by this mutation — isolating
     // the intended metric, per the build guide's own instruction that the
     // table isolates the intended metric per row (mutation 2 is the
     // deliberate exception, asserted separately below).
-    expect(artefact.metrics.cardPrecision.value).toBe(1)
-    expect(artefact.metrics.dismissReasonMatch.value).toBe(1)
+    expect(github.cardPrecision.value).toBe(1)
+    expect(github.dismissReasonMatch.value).toBe(1)
   })
 
   it('MUTATION 2 — 9 no_card→card cassette flips reddens BOTH precision (24/33 = 0.727 < 0.75) AND dismissMatch (7/16 = 0.4375 < 0.60)', () => {
@@ -166,24 +191,25 @@ describe('scripts/eval/run-triage-eval.ts — Tier A mutation test (SIGNAL-MR-CO
     writeFileSync(CORPUS_PATH, JSON.stringify(corpus, null, 2))
 
     const artefact = runEval()
+    const github = artefact.metricsBySource.github
     // precision: predictedCard = 24 originally-card (untouched) + 9 flipped
     // = 33; truePositives = the 24 whose expectedVerdict is genuinely 'card'.
-    expect(artefact.metrics.cardPrecision.numerator).toBe(24)
-    expect(artefact.metrics.cardPrecision.denominator).toBe(33)
-    expect(artefact.metrics.cardPrecision.value).toBeCloseTo(24 / 33, 10)
-    expect(artefact.metrics.cardPrecision.value).toBeLessThan(0.75)
+    expect(github.cardPrecision.numerator).toBe(24)
+    expect(github.cardPrecision.denominator).toBe(33)
+    expect(github.cardPrecision.value).toBeCloseTo(24 / 33, 10)
+    expect(github.cardPrecision.value).toBeLessThan(0.75)
     // dismissMatch: denominator STAYS 16 (keys off expectedVerdict +
     // expectedDismissReason, both corpus-declared and untouched); the 9
     // flipped rows' actualDismissReason is undefined, so they can never
     // match their expectedDismissReason — only the 7 untouched no_card rows
     // still hit.
-    expect(artefact.metrics.dismissReasonMatch.numerator).toBe(7)
-    expect(artefact.metrics.dismissReasonMatch.denominator).toBe(16)
-    expect(artefact.metrics.dismissReasonMatch.value).toBeCloseTo(7 / 16, 10)
-    expect(artefact.metrics.dismissReasonMatch.value).toBeLessThan(0.6)
+    expect(github.dismissReasonMatch.numerator).toBe(7)
+    expect(github.dismissReasonMatch.denominator).toBe(16)
+    expect(github.dismissReasonMatch.value).toBeCloseTo(7 / 16, 10)
+    expect(github.dismissReasonMatch.value).toBeLessThan(0.6)
     expect(artefact.metricsPass).toBe(false)
     // Recall is untouched — every genuinely-card example is still called card.
-    expect(artefact.metrics.cardRecall.value).toBe(1)
+    expect(github.cardRecall.value).toBe(1)
   })
 
   it('MUTATION 3 — 7 dismiss-reason corruptions reddens dismissMatch: 9/16 = 0.5625 < 0.60 floor', () => {
@@ -223,14 +249,15 @@ describe('scripts/eval/run-triage-eval.ts — Tier A mutation test (SIGNAL-MR-CO
     writeFileSync(CORPUS_PATH, JSON.stringify(corpus, null, 2))
 
     const artefact = runEval()
-    expect(artefact.metrics.dismissReasonMatch.numerator).toBe(9)
-    expect(artefact.metrics.dismissReasonMatch.denominator).toBe(16)
-    expect(artefact.metrics.dismissReasonMatch.value).toBeCloseTo(9 / 16, 10)
-    expect(artefact.metrics.dismissReasonMatch.value).toBeLessThan(0.6)
+    const github = artefact.metricsBySource.github
+    expect(github.dismissReasonMatch.numerator).toBe(9)
+    expect(github.dismissReasonMatch.denominator).toBe(16)
+    expect(github.dismissReasonMatch.value).toBeCloseTo(9 / 16, 10)
+    expect(github.dismissReasonMatch.value).toBeLessThan(0.6)
     expect(artefact.metricsPass).toBe(false)
     // Verdict is untouched by this mutation — only the reason PROSE changed.
-    expect(artefact.metrics.cardPrecision.value).toBe(1)
-    expect(artefact.metrics.cardRecall.value).toBe(1)
+    expect(github.cardPrecision.value).toBe(1)
+    expect(github.cardRecall.value).toBe(1)
   })
 
   it('every mutation-3 corruption actually MOVES the classification, never silently falling through to the not_relevant default', async () => {

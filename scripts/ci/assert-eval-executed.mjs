@@ -157,12 +157,18 @@ function checkThreshold() {
     return
   }
 
-  const m = artefact.metrics ?? {}
+  // ADR 0023 §2.8/§10.5 (Session 30 G1b.12) — the blended `metrics` object
+  // is REMOVED, not merely supplemented, replaced by `metricsBySource`
+  // (one entry per source, each carrying its own numerator/denominator/
+  // floor/sigma). This function stays advisory-only either way.
+  const bySource = artefact.metricsBySource ?? {}
+  const sourceSummary = (name, m) =>
+    `${name}[precision=${m?.cardPrecision?.value?.toFixed?.(3)} (${m?.cardPrecision?.numerator}/${m?.cardPrecision?.denominator}) ` +
+    `recall=${m?.cardRecall?.value?.toFixed?.(3)} (${m?.cardRecall?.numerator}/${m?.cardRecall?.denominator}) ` +
+    `dismissMatch=${m?.dismissReasonMatch?.value?.toFixed?.(3)} (${m?.dismissReasonMatch?.numerator}/${m?.dismissReasonMatch?.denominator})]`
   const summary =
     `corpusVersion=${artefact.corpusVersion} ` +
-    `precision=${m.cardPrecision?.value?.toFixed?.(3)} (${m.cardPrecision?.numerator}/${m.cardPrecision?.denominator}) ` +
-    `recall=${m.cardRecall?.value?.toFixed?.(3)} (${m.cardRecall?.numerator}/${m.cardRecall?.denominator}) ` +
-    `dismissMatch=${m.dismissReasonMatch?.value?.toFixed?.(3)} (${m.dismissReasonMatch?.numerator}/${m.dismissReasonMatch?.denominator}) ` +
+    `${sourceSummary('github', bySource.github)} ${sourceSummary('market_responsive', bySource.market_responsive)} ` +
     `run=${artefact.runUrl}`
 
   if (artefact.metricsPass !== true) {

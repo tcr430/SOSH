@@ -1,0 +1,944 @@
+{
+  "corpusVersion": 2,
+  "note": "ADR 0023 §10.5 (Session 30 G1b.12). Schema bump from v1: every example now carries a source discriminator (github | market_responsive), enabling per-source metrics. The 40 examples below are UNCHANGED from v1 aside from the added source field — same fictional-publisher convention (corpus.v1.json history), same 24 card / 16 no_card composition, same hand-authored cassettes sharing an author with their labels (the v1 bootstrap ceiling ADR 0023 §2.4.1 describes). The market-responsive slice (40 more examples, same 24/16 composition, ADR §10.5 A-3) is added in a LATER, SEPARATE commit: SIGNAL-MR-CORPUS-BLIND-LABELLED requires the founder to author every market-responsive expectedVerdict/expectedDismissReason from the signal text alone and commit it BEFORE any cassette for that example exists (ADR §2.4.1) — see corpus.v2.market-responsive.template.json for the authoring scaffold. labelCommitSha and cassetteCommitSha below are populated once those two commits land, in that order.",
+  "labelCommitSha": null,
+  "cassetteCommitSha": null,
+  "examples": [
+    {
+      "id": "c01-sso-saml",
+      "source": "github",
+      "signal": {
+        "title": "v3.2.0 — SAML SSO for Enterprise",
+        "html_url": "https://github.com/acme-eng/acme-app/releases/tag/v3.2.0",
+        "occurred_at": "2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Adds SAML 2.0 single sign-on with Okta, Azure AD, and Google Workspace as identity providers. Enterprise admins can now enforce SSO org-wide and manage seat provisioning centrally."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "New enterprise SSO capability directly addresses a top procurement blocker for larger accounts.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Enterprise IT/security buyers evaluating vendor consolidation."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c02-slack-integration",
+      "source": "github",
+      "signal": {
+        "title": "v2.9.0 — Two-way Slack sync",
+        "html_url": "https://github.com/nimbus-labs/nimbus-core/releases/tag/v2.9.0",
+        "occurred_at": "2026-02-11T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Ships a bidirectional Slack integration: comments made in Slack now sync back into the app, and mentions trigger notifications in both directions."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "A genuinely two-way integration (not just outbound notifications) is a meaningful workflow improvement for teams already living in Slack.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Ops and support teams coordinating across Slack and the product."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c03-public-api-v2",
+      "source": "github",
+      "signal": {
+        "title": "v4.0.0 — Public API v2 with webhooks",
+        "html_url": "https://github.com/vela-systems/vela/releases/tag/v4.0.0",
+        "occurred_at": "2026-01-20T14:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Launches a redesigned public REST API (v2) with a stable versioning policy and outbound webhooks for the first time, replacing the internal-only v1 surface."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "First stable public API plus webhooks opens the platform to integrations customers have been asking for.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Developer/technical buyers and integration partners."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c04-soc2",
+      "source": "github",
+      "signal": {
+        "title": "SOC 2 Type II report available",
+        "html_url": "https://github.com/acme-eng/acme-app/releases/tag/v3.3.0",
+        "occurred_at": "2026-04-02T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "We have completed our SOC 2 Type II audit. The report is now available to customers under NDA via the trust center."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "A completed compliance certification is a concrete trust signal that removes a common security-review blocker.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Security and procurement reviewers at prospective enterprise accounts."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c05-ai-analytics",
+      "source": "github",
+      "signal": {
+        "title": "v5.1.0 — AI-powered insights dashboard",
+        "html_url": "https://github.com/nimbus-labs/nimbus-core/releases/tag/v5.1.0",
+        "occurred_at": "2026-03-18T11:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "New dashboard automatically surfaces anomalies and trend summaries in plain language, no manual report-building required."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "Automated insight surfacing is a real capability upgrade over manual dashboards, not a cosmetic change.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Data-driven ops and growth teams who currently build reports by hand."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c06-eu-region",
+      "source": "github",
+      "signal": {
+        "title": "v3.4.0 — EU data residency (Frankfurt region)",
+        "html_url": "https://github.com/acme-eng/acme-app/releases/tag/v3.4.0",
+        "occurred_at": "2026-04-15T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Customers can now choose to host all data exclusively in our new Frankfurt region, satisfying EU data-residency requirements."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "EU data residency is a hard requirement for many European enterprise deals and directly unblocks them.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "European enterprise buyers with data-residency mandates."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c07-enterprise-tier",
+      "source": "github",
+      "signal": {
+        "title": "Introducing the Enterprise plan",
+        "html_url": "https://github.com/vela-systems/vela/releases/tag/v4.1.0",
+        "occurred_at": "2026-02-28T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "New Enterprise tier bundles SSO, a dedicated SLA, and a named customer success contact for larger accounts."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "A new packaging tier signals the product is scaling upmarket — relevant to how we position against enterprise competitors.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Enterprise buying committees comparing vendor SLAs."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c08-ios-app",
+      "source": "github",
+      "signal": {
+        "title": "v1.0.0 — Native iOS app launch",
+        "html_url": "https://github.com/nimbus-labs/nimbus-core/releases/tag/mobile-v1.0.0",
+        "occurred_at": "2026-01-08T12:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "The first native iOS app is now live on the App Store, with push notifications and offline read access."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "A first native mobile app is a meaningful platform expansion, not an incremental release.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Field teams and on-the-go users who previously had no mobile option."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c09-zapier",
+      "source": "github",
+      "signal": {
+        "title": "v3.5.0 — Zapier integration",
+        "html_url": "https://github.com/acme-eng/acme-app/releases/tag/v3.5.0",
+        "occurred_at": "2026-05-01T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Official Zapier app published, supporting 12 triggers and 8 actions for connecting to 5,000+ other tools."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "A published Zapier app materially widens who can integrate without engineering effort, a common no-code buyer ask.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Ops-heavy teams without dedicated engineering resources."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c10-realtime-collab",
+      "source": "github",
+      "signal": {
+        "title": "v5.2.0 — Real-time multiplayer editing",
+        "html_url": "https://github.com/nimbus-labs/nimbus-core/releases/tag/v5.2.0",
+        "occurred_at": "2026-04-22T13:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Multiple users can now edit the same document simultaneously with live cursors, matching the collaborative editing experience of modern docs tools."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "Real-time multiplayer is a headline collaboration capability that changes how teams can use the product together.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Teams evaluating collaborative-editing tools as a category."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c11-hipaa",
+      "source": "github",
+      "signal": {
+        "title": "HIPAA compliance now available",
+        "html_url": "https://github.com/vela-systems/vela/releases/tag/v4.2.0",
+        "occurred_at": "2026-03-10T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "We now offer signed BAAs and HIPAA-eligible infrastructure for healthcare customers handling PHI."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "HIPAA eligibility opens an entire regulated vertical that was previously closed to us.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Healthcare and health-tech buyers requiring BAAs."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c12-salesforce-sync",
+      "source": "github",
+      "signal": {
+        "title": "v3.6.0 — Salesforce two-way sync",
+        "html_url": "https://github.com/acme-eng/acme-app/releases/tag/v3.6.0",
+        "occurred_at": "2026-05-20T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Native, bidirectional Salesforce sync for contacts, deals, and custom objects — no middleware required."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "Native Salesforce sync removes a common integration-tax objection for sales-led buyers.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "RevOps and sales teams standardized on Salesforce."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c13-rbac",
+      "source": "github",
+      "signal": {
+        "title": "v5.3.0 — Advanced role-based access control",
+        "html_url": "https://github.com/nimbus-labs/nimbus-core/releases/tag/v5.3.0",
+        "occurred_at": "2026-05-05T11:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Custom roles with field-level permissions, replacing the previous fixed admin/member/viewer model."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "Granular custom roles is a common enterprise governance requirement that the previous fixed-role model blocked.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "IT/security admins at larger, more structured organizations."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c14-audit-log",
+      "source": "github",
+      "signal": {
+        "title": "v4.3.0 — Exportable audit logs",
+        "html_url": "https://github.com/vela-systems/vela/releases/tag/v4.3.0",
+        "occurred_at": "2026-04-08T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Full audit trail of every account action, exportable to CSV or streamed to a SIEM via webhook."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "SIEM-streamable audit logs is exactly the kind of concrete evidence security reviewers ask for during procurement.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Compliance and security teams running vendor audits."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c15-white-label",
+      "source": "github",
+      "signal": {
+        "title": "v3.7.0 — Custom branding / white-label mode",
+        "html_url": "https://github.com/acme-eng/acme-app/releases/tag/v3.7.0",
+        "occurred_at": "2026-06-02T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Agencies and resellers can now fully white-label the customer-facing portal with their own logo, domain, and color scheme."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "White-labeling unlocks an entire reseller/agency go-to-market motion that wasn't previously possible.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Agencies and resellers considering reselling the product under their own brand."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c16-graphql",
+      "source": "github",
+      "signal": {
+        "title": "v5.4.0 — GraphQL API launch",
+        "html_url": "https://github.com/nimbus-labs/nimbus-core/releases/tag/v5.4.0",
+        "occurred_at": "2026-06-14T12:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "A GraphQL API is now available alongside the existing REST API, letting clients fetch exactly the fields they need in one round trip."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "A GraphQL option is a real developer-experience upgrade for integration partners doing complex, nested queries.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Technical integration partners and platform engineers."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c17-data-warehouse-sync",
+      "source": "github",
+      "signal": {
+        "title": "v4.4.0 — Snowflake and BigQuery sync",
+        "html_url": "https://github.com/vela-systems/vela/releases/tag/v4.4.0",
+        "occurred_at": "2026-05-29T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Native connectors now stream account data directly into Snowflake or BigQuery on a configurable schedule."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "Native warehouse sync removes a common data-team objection about vendor lock-in and manual exports.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Data engineering teams who currently build custom ETL to get this data out."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c18-scim",
+      "source": "github",
+      "signal": {
+        "title": "v3.8.0 — SCIM provisioning",
+        "html_url": "https://github.com/acme-eng/acme-app/releases/tag/v3.8.0",
+        "occurred_at": "2026-06-20T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "SCIM 2.0 support means user provisioning and deprovisioning now happens automatically from the customer's identity provider."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "Automated SCIM provisioning pairs with the earlier SSO launch and removes a manual offboarding risk enterprise security teams specifically flag.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "IT admins responsible for offboarding and access hygiene."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c19-workflow-builder",
+      "source": "github",
+      "signal": {
+        "title": "v5.5.0 — No-code workflow automation builder",
+        "html_url": "https://github.com/nimbus-labs/nimbus-core/releases/tag/v5.5.0",
+        "occurred_at": "2026-07-01T11:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "A visual, no-code builder lets customers create multi-step automations without writing scripts or filing engineering tickets."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "A no-code automation builder is a headline capability that expands who at a customer can configure the product.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Ops and business teams without engineering support."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c20-performance-overhaul",
+      "source": "github",
+      "signal": {
+        "title": "v4.5.0 — 10x faster report generation",
+        "html_url": "https://github.com/vela-systems/vela/releases/tag/v4.5.0",
+        "occurred_at": "2026-06-10T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "A rewritten query engine cuts large-report generation time from minutes to seconds for accounts with high data volume."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "A concrete, large performance improvement directly addresses a named pain point for power users, worth surfacing with the specific number.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "High-volume accounts who have previously complained about report speed."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c21-status-page",
+      "source": "github",
+      "signal": {
+        "title": "v3.9.0 — Public status page product",
+        "html_url": "https://github.com/acme-eng/acme-app/releases/tag/v3.9.0",
+        "occurred_at": "2026-07-08T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Customers can now stand up their own branded, public status page powered by our uptime monitoring, for their own downstream users."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "A net-new customer-facing product line is a genuine expansion of what the platform does for its customers.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Customers who currently run a separate status-page tool."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c22-teams-integration",
+      "source": "github",
+      "signal": {
+        "title": "v5.6.0 — Native Microsoft Teams app",
+        "html_url": "https://github.com/nimbus-labs/nimbus-core/releases/tag/v5.6.0",
+        "occurred_at": "2026-07-15T12:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "A native Teams app brings notifications, approvals, and quick actions directly into Microsoft Teams channels."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "First-class Teams support opens the large segment of enterprise buyers standardized on Microsoft 365 rather than Slack.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Microsoft-365-standardized enterprise accounts."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c23-usage-billing",
+      "source": "github",
+      "signal": {
+        "title": "v4.6.0 — Usage-based billing support",
+        "html_url": "https://github.com/vela-systems/vela/releases/tag/v4.6.0",
+        "occurred_at": "2026-07-22T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Customers can now switch to a usage-based pricing model with real-time consumption dashboards, alongside the existing flat-rate plans."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "A new billing model is a structural product change that changes how prospects evaluate cost, worth surfacing on its own.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Cost-sensitive prospects who previously found flat-rate pricing a mismatch for variable usage."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c24-embedded-analytics",
+      "source": "github",
+      "signal": {
+        "title": "v5.7.0 — Embeddable analytics for your own product",
+        "html_url": "https://github.com/nimbus-labs/nimbus-core/releases/tag/v5.7.0",
+        "occurred_at": "2026-07-29T11:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "A new embeddable SDK lets customers surface our analytics inside their own product's UI, white-labeled, via a single script tag."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "An embeddable, white-labeled SDK is a new integration surface that turns the product into infrastructure for customers' own products.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Customers building their own product who want analytics without building it themselves."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "n01-cve-patch",
+      "source": "github",
+      "signal": {
+        "title": "v3.2.1 — Security patch",
+        "html_url": "https://github.com/acme-eng/acme-app/releases/tag/v3.2.1",
+        "occurred_at": "2026-03-06T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Patches CVE-2026-11223, a vulnerability in the SAML assertion parser that could allow signature bypass under specific conditions."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "This is a security vulnerability patch (CVE-2026-11223) — publicizing a security fix as a marketing card risks drawing attention to the underlying exposure rather than building trust.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": ""
+        }
+      ],
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "too_sensitive"
+    },
+    {
+      "id": "n02-data-exposure",
+      "source": "github",
+      "signal": {
+        "title": "v2.9.1 — Fix for data exposure bug",
+        "html_url": "https://github.com/nimbus-labs/nimbus-core/releases/tag/v2.9.1",
+        "occurred_at": "2026-02-13T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Fixes a bug that could expose one workspace's data to another under a narrow race condition. All affected customers have been notified directly."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "This describes a cross-tenant data exposure incident — highly security-sensitive content that must never be surfaced as a content opportunity.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": ""
+        }
+      ],
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "too_sensitive"
+    },
+    {
+      "id": "n03-dependency-vuln",
+      "source": "github",
+      "signal": {
+        "title": "v4.0.1 — Dependency security update",
+        "html_url": "https://github.com/vela-systems/vela/releases/tag/v4.0.1",
+        "occurred_at": "2026-01-22T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Bumps a transitive dependency to patch a known vulnerability rated CVSS 7.5."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "A CVSS-rated vulnerability patch is security-sensitive content, not a product story to surface publicly.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": ""
+        }
+      ],
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "too_sensitive"
+    },
+    {
+      "id": "n04-incident-postmortem",
+      "source": "github",
+      "signal": {
+        "title": "Postmortem: March 14 outage",
+        "html_url": "https://github.com/acme-eng/acme-app/releases/tag/incident-2026-03-14",
+        "occurred_at": "2026-03-15T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "A detailed writeup of the root cause behind the March 14 outage and the remediation steps taken."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "An incident postmortem discusses a security/reliability failure — sensitive content that should not be repurposed as marketing.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": ""
+        }
+      ],
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "too_sensitive"
+    },
+    {
+      "id": "n05-sso-bugfix",
+      "source": "github",
+      "signal": {
+        "title": "v3.2.2 — SSO login bugfix",
+        "html_url": "https://github.com/acme-eng/acme-app/releases/tag/v3.2.2",
+        "occurred_at": "2026-03-10T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Fixes an edge case where SSO login failed for users with unusual characters in their email address."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "This is a minor bugfix to the SSO feature that was already announced and carded in v3.2.0 — already covered, nothing new to say.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": ""
+        }
+      ],
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "already_covered"
+    },
+    {
+      "id": "n06-ai-dashboard-iteration",
+      "source": "github",
+      "signal": {
+        "title": "v5.1.1 — AI dashboard minor iteration",
+        "html_url": "https://github.com/nimbus-labs/nimbus-core/releases/tag/v5.1.1",
+        "occurred_at": "2026-03-25T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Small tuning to the anomaly-detection thresholds introduced in v5.1.0's AI insights dashboard."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "A minor tuning pass on the AI dashboard already announced in v5.1.0 — already covered, not a new story.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": ""
+        }
+      ],
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "already_covered"
+    },
+    {
+      "id": "n07-api-docs-update",
+      "source": "github",
+      "signal": {
+        "title": "v4.0.1-docs — API v2 documentation refresh",
+        "html_url": "https://github.com/vela-systems/vela/releases/tag/v4.0.1-docs",
+        "occurred_at": "2026-01-25T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Updates the public API v2 reference docs with clearer examples, following the v4.0.0 launch."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "A documentation refresh for the API v2 already announced in v4.0.0 — already covered, no new capability.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": ""
+        }
+      ],
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "already_covered"
+    },
+    {
+      "id": "n08-vague-changelog",
+      "source": "github",
+      "signal": {
+        "title": "v3.9.1",
+        "html_url": "https://github.com/acme-eng/acme-app/releases/tag/v3.9.1",
+        "occurred_at": "2026-07-10T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Misc bug fixes and performance improvements."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "The release notes are vague with no concrete specifics — there is insufficient detail here to substantiate any claim worth surfacing.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": ""
+        }
+      ],
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "weak_evidence"
+    },
+    {
+      "id": "n09-internal-refactor",
+      "source": "github",
+      "signal": {
+        "title": "v5.7.1",
+        "html_url": "https://github.com/nimbus-labs/nimbus-core/releases/tag/v5.7.1",
+        "occurred_at": "2026-07-30T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Internal refactor of the build pipeline for faster CI runs."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "This is a vague, internal-facing changelog entry with no concrete customer-relevant detail to substantiate a card.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": ""
+        }
+      ],
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "weak_evidence"
+    },
+    {
+      "id": "n10-ui-polish",
+      "source": "github",
+      "signal": {
+        "title": "v4.6.1",
+        "html_url": "https://github.com/vela-systems/vela/releases/tag/v4.6.1",
+        "occurred_at": "2026-07-24T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Various UI polish across settings screens."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "\"Various UI polish\" is too vague and unclear to substantiate any specific claim — insufficient detail to write a credible card.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": ""
+        }
+      ],
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "weak_evidence"
+    },
+    {
+      "id": "n11-dependency-bumps",
+      "source": "github",
+      "signal": {
+        "title": "v3.8.1",
+        "html_url": "https://github.com/acme-eng/acme-app/releases/tag/v3.8.1",
+        "occurred_at": "2026-06-25T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Dependency bumps and minor tweaks."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "Vague dependency-bump changelog with no concrete customer-facing detail — not enough evidence to substantiate a card.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": ""
+        }
+      ],
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "weak_evidence"
+    },
+    {
+      "id": "n12-beta-opt-in",
+      "source": "github",
+      "signal": {
+        "title": "v5.8.0-beta — Experimental workflow templates",
+        "html_url": "https://github.com/nimbus-labs/nimbus-core/releases/tag/v5.8.0-beta",
+        "occurred_at": "2026-08-01T08:00:00Z",
+        "is_prerelease": true,
+        "author_is_bot": false,
+        "body": "An experimental, opt-in-only preview of workflow templates. Not yet stable and may change significantly before general availability."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "This is an experimental, opt-in-only beta preview — too premature to surface broadly before it's stable enough for a general audience.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": ""
+        }
+      ],
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "wrong_timing"
+    },
+    {
+      "id": "n13-alpha-announcement",
+      "source": "github",
+      "signal": {
+        "title": "v4.7.0-alpha — Early look at usage forecasting",
+        "html_url": "https://github.com/vela-systems/vela/releases/tag/v4.7.0-alpha",
+        "occurred_at": "2026-08-05T08:00:00Z",
+        "is_prerelease": true,
+        "author_is_bot": false,
+        "body": "A very early alpha of usage forecasting, shared with a handful of design-partner customers. No stable release date yet."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "An early alpha with no stable release date is too premature and not yet ready for a broad audience — the timing is wrong to surface this now.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": ""
+        }
+      ],
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "wrong_timing"
+    },
+    {
+      "id": "n14-ci-tooling",
+      "source": "github",
+      "signal": {
+        "title": "v3.9.2",
+        "html_url": "https://github.com/acme-eng/acme-app/releases/tag/v3.9.2",
+        "occurred_at": "2026-07-12T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": true,
+        "body": "Updates the contributor CI workflow to cache dependencies for faster open-source PR checks."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "This is internal contributor tooling with no external customer audience — not relevant to marketing content.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": ""
+        }
+      ],
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "not_relevant"
+    },
+    {
+      "id": "n15-locale-update",
+      "source": "github",
+      "signal": {
+        "title": "v5.8.1",
+        "html_url": "https://github.com/nimbus-labs/nimbus-core/releases/tag/v5.8.1",
+        "occurred_at": "2026-08-03T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": true,
+        "body": "Updates translation files for the Portuguese and Spanish locales."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "A translation-file update has no external customer audience worth surfacing — not relevant as a content opportunity.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": ""
+        }
+      ],
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "not_relevant"
+    },
+    {
+      "id": "n16-community-housekeeping",
+      "source": "github",
+      "signal": {
+        "title": "v4.7.1",
+        "html_url": "https://github.com/vela-systems/vela/releases/tag/v4.7.1",
+        "occurred_at": "2026-08-06T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Renames the #contributors Discord channel to #community and updates the CONTRIBUTING.md link accordingly."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "Community housekeeping with no external customer audience — not relevant to surface as a content opportunity.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": ""
+        }
+      ],
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "not_relevant"
+    }
+  ]
+}

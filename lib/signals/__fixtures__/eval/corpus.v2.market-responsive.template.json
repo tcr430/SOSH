@@ -1,0 +1,582 @@
+{
+  "templateFor": "corpus.v2.json market_responsive slice",
+  "note": "ADR 0023 §10.5/§2.4.1 (Session 30 G1b.12) authoring scaffold — NOT part of the eval corpus until filled in and merged. FOUNDER-AUTHORED ONLY: every signal.title/body/html_url/occurred_at and every expectedVerdict/expectedDismissReason below must be written by the founder from the signal text alone. Fictional publishers/companies only (corpus.v1.json convention) — invented prose is never attributed to a real outlet. Deliberately span the judgment boundary: clear card, clear no_card, and genuinely marginal (ADR §10.5). BINDING ORDER (SIGNAL-MR-CORPUS-BLIND-LABELLED): commit this file with every expectedVerdict/expectedDismissReason filled in and every cassette field ABSENT, BEFORE any live-run cassette exists for these examples — that commit SHA becomes corpus.v2.json labelCommitSha. Only after that commit does G1b.13 run the model against these signals and add cassette fields (commit SHA becomes cassetteCommitSha). Do NOT add a cassette field to any example in this file. Run npx tsx scripts/eval/validate-market-responsive-template.ts before committing — it enforces the 24 card / 16 no_card composition, checks every TODO placeholder has been replaced, and checks no cassette field is present.",
+  "examples": [
+    {
+      "id": "mr-c01-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c02-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c03-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c04-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c05-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c06-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c07-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c08-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c09-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c10-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c11-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c12-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c13-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c14-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c15-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c16-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c17-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c18-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c19-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c20-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c21-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c22-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c23-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c24-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-n01-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "TODO — one of: too_sensitive | already_covered | weak_evidence | wrong_timing | not_relevant"
+    },
+    {
+      "id": "mr-n02-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "TODO — one of: too_sensitive | already_covered | weak_evidence | wrong_timing | not_relevant"
+    },
+    {
+      "id": "mr-n03-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "TODO — one of: too_sensitive | already_covered | weak_evidence | wrong_timing | not_relevant"
+    },
+    {
+      "id": "mr-n04-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "TODO — one of: too_sensitive | already_covered | weak_evidence | wrong_timing | not_relevant"
+    },
+    {
+      "id": "mr-n05-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "TODO — one of: too_sensitive | already_covered | weak_evidence | wrong_timing | not_relevant"
+    },
+    {
+      "id": "mr-n06-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "TODO — one of: too_sensitive | already_covered | weak_evidence | wrong_timing | not_relevant"
+    },
+    {
+      "id": "mr-n07-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "TODO — one of: too_sensitive | already_covered | weak_evidence | wrong_timing | not_relevant"
+    },
+    {
+      "id": "mr-n08-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "TODO — one of: too_sensitive | already_covered | weak_evidence | wrong_timing | not_relevant"
+    },
+    {
+      "id": "mr-n09-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "TODO — one of: too_sensitive | already_covered | weak_evidence | wrong_timing | not_relevant"
+    },
+    {
+      "id": "mr-n10-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "TODO — one of: too_sensitive | already_covered | weak_evidence | wrong_timing | not_relevant"
+    },
+    {
+      "id": "mr-n11-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "TODO — one of: too_sensitive | already_covered | weak_evidence | wrong_timing | not_relevant"
+    },
+    {
+      "id": "mr-n12-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "TODO — one of: too_sensitive | already_covered | weak_evidence | wrong_timing | not_relevant"
+    },
+    {
+      "id": "mr-n13-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "TODO — one of: too_sensitive | already_covered | weak_evidence | wrong_timing | not_relevant"
+    },
+    {
+      "id": "mr-n14-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "TODO — one of: too_sensitive | already_covered | weak_evidence | wrong_timing | not_relevant"
+    },
+    {
+      "id": "mr-n15-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "TODO — one of: too_sensitive | already_covered | weak_evidence | wrong_timing | not_relevant"
+    },
+    {
+      "id": "mr-n16-TODO-slug",
+      "source": "market_responsive",
+      "signal": {
+        "title": "TODO — headline as it would appear in the feed",
+        "html_url": "https://example-fictional-publisher.test/TODO-article-slug",
+        "occurred_at": "TODO — ISO 8601, e.g. 2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "TODO — article body text, fictional publisher/company per v1 convention (corpus.v1.json note)"
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "TODO — one of: too_sensitive | already_covered | weak_evidence | wrong_timing | not_relevant"
+    }
+  ]
+}
