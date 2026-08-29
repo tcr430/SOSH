@@ -140,14 +140,25 @@ describe('scripts/eval/run-triage-eval.ts — Tier A mutation test (SIGNAL-MR-CO
     expect(github.cardPrecision.sigma).toBeCloseTo(Math.sqrt((0.75 * 0.25) / 24), 10)
     expect(github.cardRecall.sigma).toBeCloseTo(Math.sqrt((0.7 * 0.3) / 24), 10)
     expect(github.dismissReasonMatch.sigma).toBeCloseTo(Math.sqrt((0.6 * 0.4) / 16), 10)
-    // market_responsive is merged (G1b.12 Part B, ADR §18) but PENDING — its
-    // 40 examples carry no cassette yet, so they score neither 'ok' nor
-    // 'error' and must not drag metricsPass down.
+    // market_responsive (ADR §18, Session 30 G1b.13's live run) is now
+    // FULLY cassette-bearing — the honest, MEASURED result (Tier E, ADR
+    // 0015 Amendment B4): under the live run's fully-empty stub tool
+    // condition (no audience/brand/campaign memory for any example,
+    // matching every corpus example's stubMemory: {}), the model scored
+    // ZERO of the 24 founder-labelled 'card' examples as 'card' — 0/24
+    // recall. This number is reported, not smoothed over: it is exactly
+    // what Tier E measurement exists to surface, flattering or not.
     const marketResponsive = artefact.metricsBySource.market_responsive
     expect(marketResponsive.declaredCount).toBe(40)
-    expect(marketResponsive.pendingCount).toBe(40)
-    expect(marketResponsive.cardPrecision.denominator).toBe(0)
-    expect(artefact.metricsPass).toBe(true)
+    expect(marketResponsive.pendingCount).toBe(0)
+    expect(marketResponsive.cardPrecision).toMatchObject({ numerator: 0, denominator: 0 })
+    expect(marketResponsive.cardRecall).toMatchObject({ numerator: 0, denominator: 24 })
+    expect(marketResponsive.dismissReasonMatch).toMatchObject({ numerator: 9, denominator: 16 })
+    // Both github's floors (unaffected) and market_responsive's (now real,
+    // below floor on recall/dismissMatch) feed metricsPass — advisory only
+    // (eval-threshold never blocks a merge), so a real regression is still
+    // truthfully reported as false rather than papered over.
+    expect(artefact.metricsPass).toBe(false)
   })
 
   it('MUTATION 1 — 8 card→no_card cassette flips reddens recall: 16/24 = 0.667 < 0.70 floor', () => {

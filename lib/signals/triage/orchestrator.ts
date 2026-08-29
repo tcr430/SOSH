@@ -85,7 +85,10 @@ export interface TriageTickSummary {
 // signal.kind's value in the prompt TEXT — SIGNAL-MR-METADATA-NOT-PROMPTED
 // still governs everything actually sent to the model: publisher, byline,
 // feed URL, and the literal word "rss" never appear below).
-function buildTriageSystemPrompt(candidate: SignalCandidateWithSourceAndFeed): string {
+// Exported (Session 30 G1b.13) so scripts/eval/live-triage-run.ts can reuse
+// the EXACT production prompt logic for the out-of-band live corpus run,
+// rather than risking drift from a duplicated copy.
+export function buildTriageSystemPrompt(candidate: SignalCandidateWithSourceAndFeed): string {
   const isArticle = candidate.signals.source === 'rss'
   const subject = isArticle
     ? "a market-responsive news article or industry signal (not authored by this business) to decide whether it is worth surfacing to the product's marketing team as a reactive content opportunity"
@@ -102,7 +105,7 @@ function buildTriageSystemPrompt(candidate: SignalCandidateWithSourceAndFeed): s
   ].join('\n\n')
 }
 
-function buildTriageUserMessage(candidate: SignalCandidateWithSourceAndFeed): string {
+export function buildTriageUserMessage(candidate: SignalCandidateWithSourceAndFeed): string {
   const rendered = wrapSignalForPrompt({ title: candidate.signals.title, body: candidate.signals.body })
   const intro =
     candidate.signals.source === 'rss'

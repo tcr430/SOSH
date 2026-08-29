@@ -3,7 +3,7 @@
   "labelCommitSha": "7bfe1c7ccad983ac4da87c9d2e3d1bcc22261225",
   "cassetteCommitSha": null,
   "runUrl": "local (no GITHUB_RUN_ID in env)",
-  "generatedAt": "2026-08-29T11:17:44.571Z",
+  "generatedAt": "2026-08-29T14:02:07.790Z",
   "declaredCorpusCount": 80,
   "executedCount": 80,
   "errorCount": 0,
@@ -39,7 +39,7 @@
     "market_responsive": {
       "declaredCount": 40,
       "executedCount": 40,
-      "pendingCount": 40,
+      "pendingCount": 0,
       "errorCount": 0,
       "cardPrecision": {
         "value": 0,
@@ -51,21 +51,21 @@
       "cardRecall": {
         "value": 0,
         "numerator": 0,
-        "denominator": 0,
+        "denominator": 24,
         "floor": 0.7,
-        "sigma": null
+        "sigma": 0.09354143466934854
       },
       "dismissReasonMatch": {
-        "value": 0,
-        "numerator": 0,
-        "denominator": 0,
+        "value": 0.5625,
+        "numerator": 9,
+        "denominator": 16,
         "floor": 0.6,
-        "sigma": null
+        "sigma": 0.1224744871391589
       },
-      "pass": true
+      "pass": false
     }
   },
-  "metricsPass": true,
+  "metricsPass": false,
   "outcomes": [
     {
       "id": "c01-sso-saml",
@@ -382,258 +382,338 @@
     {
       "id": "mr-c01-github-copilot-usage-credits",
       "source": "market_responsive",
-      "status": "pending",
-      "expectedVerdict": "card"
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
     },
     {
       "id": "mr-c02-eu-instant-payments-verification",
       "source": "market_responsive",
-      "status": "pending",
-      "expectedVerdict": "card"
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
     },
     {
       "id": "mr-c03-meta-reach-metric-retired",
       "source": "market_responsive",
-      "status": "pending",
-      "expectedVerdict": "card"
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
     },
     {
       "id": "mr-c04-workday-layoffs-ai-shift",
       "source": "market_responsive",
-      "status": "pending",
-      "expectedVerdict": "card"
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
     },
     {
       "id": "mr-c05-eu-ai-act-article-50",
       "source": "market_responsive",
-      "status": "pending",
-      "expectedVerdict": "card"
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
     },
     {
       "id": "mr-c06-elation-health-acquires-aster",
       "source": "market_responsive",
-      "status": "pending",
-      "expectedVerdict": "card"
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
     },
     {
       "id": "mr-c07-legalon-contract-review-report",
       "source": "market_responsive",
-      "status": "pending",
-      "expectedVerdict": "card"
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
     },
     {
       "id": "mr-c08-shopify-checkout-outage",
       "source": "market_responsive",
-      "status": "pending",
-      "expectedVerdict": "card"
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
     },
     {
       "id": "mr-c09-model-pricing-war-cuts",
       "source": "market_responsive",
-      "status": "pending",
-      "expectedVerdict": "card"
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
     },
     {
       "id": "mr-c10-state-privacy-coppa-update",
       "source": "market_responsive",
-      "status": "pending",
-      "expectedVerdict": "card"
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
     },
     {
       "id": "mr-c11-atlassian-rovo-cross-app-agents",
       "source": "market_responsive",
-      "status": "pending",
-      "expectedVerdict": "card"
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
     },
     {
       "id": "mr-c12-cloud-gpu-pricing-gap",
       "source": "market_responsive",
-      "status": "pending",
-      "expectedVerdict": "card"
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
     },
     {
       "id": "mr-c13-salesforce-agentforce-support-cuts",
       "source": "market_responsive",
-      "status": "pending",
-      "expectedVerdict": "card"
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
     },
     {
       "id": "mr-c14-iconiq-hybrid-pricing-nrr",
       "source": "market_responsive",
-      "status": "pending",
-      "expectedVerdict": "card"
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
     },
     {
       "id": "mr-c15-workforce-pell-grants",
       "source": "market_responsive",
-      "status": "pending",
-      "expectedVerdict": "card"
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
     },
     {
       "id": "mr-c16-fed-rate-cut-proptech",
       "source": "market_responsive",
-      "status": "pending",
-      "expectedVerdict": "card"
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
     },
     {
       "id": "mr-c17-tariff-supply-chain-shock",
       "source": "market_responsive",
-      "status": "pending",
-      "expectedVerdict": "card"
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
     },
     {
       "id": "mr-c18-meta-marketing-api-deprecation",
       "source": "market_responsive",
-      "status": "pending",
-      "expectedVerdict": "card"
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
     },
     {
       "id": "mr-c19-minimax-relicense-backlash",
       "source": "market_responsive",
-      "status": "pending",
-      "expectedVerdict": "card"
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
     },
     {
       "id": "mr-c20-figure-technology-breach",
       "source": "market_responsive",
-      "status": "pending",
-      "expectedVerdict": "card"
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "too_sensitive"
     },
     {
       "id": "mr-c21-right-to-disconnect-us-states",
       "source": "market_responsive",
-      "status": "pending",
-      "expectedVerdict": "card"
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
     },
     {
       "id": "mr-c22-self-hosting-open-source-shift",
       "source": "market_responsive",
-      "status": "pending",
-      "expectedVerdict": "card"
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
     },
     {
       "id": "mr-c23-zillow-preferred-success-fee",
       "source": "market_responsive",
-      "status": "pending",
-      "expectedVerdict": "card"
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
     },
     {
       "id": "mr-c24-gartner-saaspocalypse",
       "source": "market_responsive",
-      "status": "pending",
-      "expectedVerdict": "card"
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
     },
     {
       "id": "mr-n01-acquisition-rumor",
       "source": "market_responsive",
-      "status": "pending",
+      "status": "ok",
       "expectedVerdict": "no_card",
-      "expectedDismissReason": "weak_evidence"
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "weak_evidence",
+      "actualDismissReason": "not_relevant"
     },
     {
       "id": "mr-n02-generic-listicle",
       "source": "market_responsive",
-      "status": "pending",
+      "status": "ok",
       "expectedVerdict": "no_card",
-      "expectedDismissReason": "not_relevant"
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "actualDismissReason": "not_relevant"
     },
     {
       "id": "mr-n03-executive-change",
       "source": "market_responsive",
-      "status": "pending",
+      "status": "ok",
       "expectedVerdict": "no_card",
-      "expectedDismissReason": "not_relevant"
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "actualDismissReason": "not_relevant"
     },
     {
       "id": "mr-n04-conference-recap",
       "source": "market_responsive",
-      "status": "pending",
+      "status": "ok",
       "expectedVerdict": "no_card",
-      "expectedDismissReason": "already_covered"
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "already_covered",
+      "actualDismissReason": "not_relevant"
     },
     {
       "id": "mr-n05-vague-threat-trend",
       "source": "market_responsive",
-      "status": "pending",
+      "status": "ok",
       "expectedVerdict": "no_card",
-      "expectedDismissReason": "weak_evidence"
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "weak_evidence",
+      "actualDismissReason": "too_sensitive"
     },
     {
       "id": "mr-n06-local-market-story",
       "source": "market_responsive",
-      "status": "pending",
+      "status": "ok",
       "expectedVerdict": "no_card",
-      "expectedDismissReason": "not_relevant"
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "actualDismissReason": "not_relevant"
     },
     {
       "id": "mr-n07-celebrity-ai-mention",
       "source": "market_responsive",
-      "status": "pending",
+      "status": "ok",
       "expectedVerdict": "no_card",
-      "expectedDismissReason": "not_relevant"
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "actualDismissReason": "weak_evidence"
     },
     {
       "id": "mr-n08-changelog-as-news",
       "source": "market_responsive",
-      "status": "pending",
+      "status": "ok",
       "expectedVerdict": "no_card",
-      "expectedDismissReason": "already_covered"
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "already_covered",
+      "actualDismissReason": "not_relevant"
     },
     {
       "id": "mr-n09-holiday-puff-piece",
       "source": "market_responsive",
-      "status": "pending",
+      "status": "ok",
       "expectedVerdict": "no_card",
-      "expectedDismissReason": "not_relevant"
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "actualDismissReason": "not_relevant"
     },
     {
       "id": "mr-n10-opinion-no-data",
       "source": "market_responsive",
-      "status": "pending",
+      "status": "ok",
       "expectedVerdict": "no_card",
-      "expectedDismissReason": "weak_evidence"
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "weak_evidence",
+      "actualDismissReason": "weak_evidence"
     },
     {
       "id": "mr-n11-meme-roundup",
       "source": "market_responsive",
-      "status": "pending",
+      "status": "ok",
       "expectedVerdict": "no_card",
-      "expectedDismissReason": "not_relevant"
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "actualDismissReason": "not_relevant"
     },
     {
       "id": "mr-n12-stale-story",
       "source": "market_responsive",
-      "status": "pending",
+      "status": "ok",
       "expectedVerdict": "no_card",
-      "expectedDismissReason": "wrong_timing"
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "wrong_timing",
+      "actualDismissReason": "not_relevant"
     },
     {
       "id": "mr-n13-stock-fluctuation",
       "source": "market_responsive",
-      "status": "pending",
+      "status": "ok",
       "expectedVerdict": "no_card",
-      "expectedDismissReason": "not_relevant"
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "actualDismissReason": "not_relevant"
     },
     {
       "id": "mr-n14-realty-gossip",
       "source": "market_responsive",
-      "status": "pending",
+      "status": "ok",
       "expectedVerdict": "no_card",
-      "expectedDismissReason": "not_relevant"
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "actualDismissReason": "not_relevant"
     },
     {
       "id": "mr-n15-awards-announcement",
       "source": "market_responsive",
-      "status": "pending",
+      "status": "ok",
       "expectedVerdict": "no_card",
-      "expectedDismissReason": "not_relevant"
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "actualDismissReason": "not_relevant"
     },
     {
       "id": "mr-n16-marginal-stretch-tiein",
       "source": "market_responsive",
-      "status": "pending",
+      "status": "ok",
       "expectedVerdict": "no_card",
-      "expectedDismissReason": "weak_evidence"
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "weak_evidence",
+      "actualDismissReason": "not_relevant"
     }
   ]
 }
