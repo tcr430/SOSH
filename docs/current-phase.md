@@ -2,7 +2,41 @@
 
 **Phase:** 1 — MVP
 **Goal:** First paying customer
-**Status:** **Session 29 (Mode 1 Studio "promote to campaign" + carousel/script format families, ADR 0022,
+**Status:** **Session 30 (Track G, market-responsive signal source, ADR 0023, G1b.1–G1b.14) BUILDER
+COMPLETE, PR #9 open, not yet merged.** A second Mode-3 signal source (customer-supplied RSS/Atom feeds)
+ships alongside GitHub releases, gated behind ADR 0021 §12's second-source override (ADR 0023 §17
+Amendment 1 — does not travel to a third source). Two real production bugs were found and fixed along the
+way: the triage prompt was hardcoded to GitHub-release framing for every candidate including RSS articles,
+and `lib/ai/parsers.ts#extractJsonBlock` could not tolerate the model prefacing its JSON decision with
+prose (a real risk on any `runPrompt`/`runToolLoop` call, not eval-only). **27 constraints total** (ADR
+0023 §11): 23 carry a Tier-1/2/3 proof and are **COVERED**; exactly 4
+(`SIGNAL-MR-CORPUS-EXTENDED`/`-MODEL-AUTHORED`/`-BLIND-LABELLED`/`-QUALITY-LOWER-CONFIDENCE`) are Tier E
+and are **MEASURED**, never COVERED. **The live model-authored cassette run (G1b.13) is honest, not
+flattering:** corpusVersion 2 — github precision 1.000 (24/24), recall 1.000 (24/24), dismissMatch 1.000
+(16/16), unchanged v1 bootstrap; **market_responsive precision 0/0, recall 0/24, dismissMatch 9/16** — the
+live model scored zero of the 24 founder-labelled `card` examples as `card`, citing the total absence of
+audience/brand/campaign memory (the corpus's universal `stubMemory: {}` condition) as the reason it could
+not confirm relevance. **`SIGNAL-MR-QUALITY-LOWER-CONFIDENCE`, updated for the post-live-run state (§2.8's
+own instruction — reciting the pre-live-run sentence would now be false):** the market-responsive source is
+no longer merely lower-confidence for lack of measurement — it **has been measured**, and the measured
+result is currently poor; market-responsive floors remain reported-but-advisory until graduation (§2.6),
+and the per-source split (§2.7) is preserved — a blended number remains prohibited. **CI, PR #9
+(`pull_request`-event run, `db-tests` tally unaffected — not a `master` run):** `app-tests`
+[run 33259652839](https://github.com/tcr430/SOSH/actions/runs/33259652839) (`232 file(s) under [app, lib,
+components] all visible, zero failures — green. (3311/3311 tests passed)`), `db-tests`
+[run 33259652907](https://github.com/tcr430/SOSH/actions/runs/33259652907) (`38 file(s) under
+[supabase/__tests__] all visible, zero failures — green. (343/343 tests passed)`),
+`eval-reported`/`eval-threshold` [run 33259652831](https://github.com/tcr430/SOSH/actions/runs/33259652831)
+(`corpusVersion=2 github[precision=1.000 (24/24) recall=1.000 (24/24) dismissMatch=1.000 (16/16)]
+market_responsive[precision=0.000 (0/0) recall=0.000 (0/24) dismissMatch=0.563 (9/16)]`). **Launch-blocking
+counsel items, extending ADR 0020 §9.6's existing blocker (not a parallel one):** article licensing/feed
+ToS; a fresh Art. 6(1)(f) balancing test for a controller posture covering named journalists, quoted
+individuals and photo credits; the `/privacy` prose extension and its `evidenceRef` bump. **`SIGNAL-NO-
+EMBEDDINGS` (Tier 3) is explicitly NOT retired** — embeddings were RE-AFFIRMED as deferred (ADR 0023 §4.1),
+not un-deferred. See the Session 30 entry under "What's done" for the full detail, including the two bug
+fixes and the Reviewer's still-pending independent audit (§3, G1c).
+
+**Session 29 (Mode 1 Studio "promote to campaign" + carousel/script format families, ADR 0022,
 Track F) CLOSED.** Correction pass Session 29-D (D0–D12) closed all twenty Reviewer findings (5 MAJOR, 8
 MINOR, 7 NIT — 0 BLOCKER; the Reviewer's own closing tally understated this as 15, corrected in the
 appendix's row zero); PR #6 merged to `master` as `2e6d3915` (real merge commit, not squash, matching every
@@ -57,6 +91,80 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
 (test-execution integrity + approvals hardening) CLOSED.** W1 (ADR 0015) gave the app-layer suite its own required CI gate (`app-tests.yml`) and made `db-tests.yml` tuned/skip-guarded/flag-free; W2 (ADR 0014 Amendment A) hardened bulk approve to filter-scoped+atomic, added a server-side filter-scoped overflow-honest total, verified WCAG-AA contrast in both themes, and regression-guarded `ROLE-TEAM-ECHO`. B6 closed the session: re-verified three 21B/21C findings already resolved at HEAD (no code needed), and wrote PROC-REVIEW-AT-COMMIT + the merge-gate table into `CLAUDE.md`. **Session 21 (21A + 21B + 21C) CLOSED.** Seats & Permissions is fully shipped: the DB-enforced model (ADR 0013 Rev B, 21A → 21A-D correction), the resolver/invite/team-settings/capability-retrofit/overage surface (ADR 0014, 21B → 21B D1–D4 correction), and the approver quick-approve inbox (ADR 0014 §9, 21C → 21C E1–E3 correction). Session 20 — Content Calendar (ADR 0012 Rev B) shipped, through the 20D-5 correction pass. Voice model (ADR 0011 Rev B) remains code-complete bar the open 19D-5 decision (§7 BP9 read path — needs ADR 0011 amendment). Next phase: pre-launch hardening (Postiz removal, legal gates, perf/CWV — see "Next up" below). tsc clean (one pre-existing error in refine-from-posts-action.test.ts, unrelated to Session 20/21/22), ESLint clean.
 
 ## What's done
+
+- **Session 30 — Track G: Market-responsive signal source (ADR 0023), G1b.1–G1b.14 BUILDER COMPLETE, PR #9
+  open:** A second Mode-3 signal source — customer-supplied RSS/Atom feeds — alongside the existing GitHub
+  releases source. `watched_feeds` migration + RLS + §D2.5 cascade (G1b.1); boundary scans extended ahead
+  of the code that could violate them (G1b.2); the SSRF/XXE egress guard as two separate controls (G1b.3);
+  the RSS/Atom client behind `SIGNAL-MR-CLIENT-BOUNDED` (G1b.4); atomic ingestion with per-feed isolation
+  and dedup (G1b.5); the scorer, kind-keyed and re-proved deterministic across both kinds (G1b.6); the
+  reserved-split allocation — 2-of-5 shortlist slots, 1-per-feed cap (G1b.7); provenance at the human gate,
+  metadata that never reaches a prompt (G1b.8); the gating seam extracted, settings/signals/ watch-list
+  UI (G1b.9); the scan sweep + Tier-3 enumeration (G1b.10); the Tier A mutation test proving the eval
+  script's own arithmetic (G1b.11).
+  - **Corpus v2 (G1b.12/G1b.13):** schema bump to `corpusVersion=2` — every example now carries a `source`
+    discriminator; 80 examples total, `metricsBySource` replacing the removed blended figure, each metric
+    carrying numerator/denominator/floor/sigma. The 40 market-responsive signal inputs and every
+    `expectedVerdict`/`expectedDismissReason` are founder-authored and approved (ADR 0023 §17 Amendment 1
+    permits Claude-drafted inputs under founder review; §18 Amendment 2 records the further ruling to use
+    real companies/events for the 24 `card` examples, fictional for the 16 `no_card`, with the caveat that
+    the real-company figures are pulled from search summaries and not yet verified against primary
+    sources). `SIGNAL-MR-CORPUS-BLIND-LABELLED`'s ordering is provable: the label commit
+    (`7bfe1c7c`) predates the cassette commit (`cd1b7203`), both SHAs recorded in `corpus.v2.json`.
+  - **The live model run (G1b.13) found and fixed two real production bugs before it could produce a
+    usable cassette.** (1) `lib/signals/triage/orchestrator.ts`'s `buildTriageSystemPrompt`/
+    `buildTriageUserMessage` were hardcoded to GitHub-release framing regardless of `signal.source`, even
+    though the candidate pool has enumerated both sources since G1b.7 — every market-responsive candidate
+    was being triaged with a prompt telling the model it was reading a GitHub release. Fixed by branching
+    on `candidate.signals.source` (SIGNAL-MR-METADATA-NOT-PROMPTED still holds — the branch is in code,
+    never in prompt text). (2) `lib/ai/parsers.ts#extractJsonBlock` required the model's entire response
+    to already be valid JSON; the model prefixed its JSON decision with a sentence of commentary despite an
+    explicit "no commentary" instruction in ~75% of the first attempt's calls, all reported as
+    `invalid_response`. Fixed with a balanced-brace, quoted-string-aware fallback scan — a genuine
+    production-code fix (any `runPrompt`/`runToolLoop` call could hit the same non-compliance), not
+    eval-only.
+  - **The measured result, reported honestly (Tier E, ADR 0015 Amendment B4) — not smoothed over:**
+    corpusVersion 2, github precision 1.000 (24/24) recall 1.000 (24/24) dismissMatch 1.000 (16/16,
+    unchanged v1 bootstrap, not itself re-run live yet); **market_responsive precision 0/0 (the model
+    predicted zero cards) recall 0/24 (every founder-labelled `card` example scored `no_card`) dismissMatch
+    9/16.** Every `no_card` reason cited the total absence of audience/brand/campaign memory — the corpus's
+    universal `stubMemory: {}` condition — as the reason it could not confirm relevance. The sabotage
+    experiment (`lib/signals/__fixtures__/eval/sabotage-run.json`) ran the same 40 signals through a
+    deliberately degraded ("always decide card") prompt: 6/40 flipped to card vs 0/40 clean — proving the
+    prompt demonstrably CAN move the output at this out-of-band live-run point (the honest form of ADR
+    0021 §12/L-11's mitigation #1; the deterministic replay harness, `run-triage-eval.ts`, remains provably
+    un-movable by any prompt change, since it never invokes one). Total live-API cost across the session's
+    invocations: ~$3.39.
+  - **27 constraints total** (ADR 0023 §11): 23 carry a Tier-1/2/3 proof and are **COVERED**; exactly 4
+    (`SIGNAL-MR-CORPUS-EXTENDED`, `-MODEL-AUTHORED`, `-BLIND-LABELLED`, `-QUALITY-LOWER-CONFIDENCE`) are
+    Tier E and are **MEASURED**, never COVERED — `SIGNAL-MR-CORPUS-DISCRIMINATIVE` is Tier 2 (a test of
+    `scripts/eval/`'s own arithmetic, explicitly not a corpus-discrimination proof).
+  - **ADR 0021 §12's second-source gate is OVERRIDDEN, not satisfied** (ADR 0023 §2.9/Amendment note on
+    ADR 0021 §16): neither clause (true-card ≥ 40 per source, a recorded run history) was met at ship time.
+    **This override does not travel** — a third signal source re-tests §12 from scratch, and citing this
+    session as precedent is itself a Reviewer finding.
+  - **`SIGNAL-NO-EMBEDDINGS` (Tier 3) is explicitly NOT retired** — embeddings were RE-AFFIRMED as deferred
+    (ADR 0023 §4.1, Q3a), not un-deferred; no pgvector, no embedding call anywhere in the diff.
+  - **Launch-blocking counsel items** (ADR 0023 §7.7/A-2), extending ADR 0020 §9.6's existing blocker
+    rather than a parallel one: article licensing/feed ToS; a fresh Art. 6(1)(f) balancing test for a
+    controller posture covering named journalists, quoted individuals and photo credits; the `/privacy`
+    prose extension and its `evidenceRef` bump. Flagged, not written — no `[LEGAL ENTITY]` placeholder
+    touched.
+  - **CI (PR #9, `pull_request`-event run — the `db-tests` promotion tally is unaffected, not a `master`
+    run):** `app-tests` [run 33259652839](https://github.com/tcr430/SOSH/actions/runs/33259652839)
+    (`232 file(s) under [app, lib, components] all visible, zero failures — green. (3311/3311 tests
+    passed)`), `db-tests` [run 33259652907](https://github.com/tcr430/SOSH/actions/runs/33259652907)
+    (`38 file(s) under [supabase/__tests__] all visible, zero failures — green. (343/343 tests passed)`),
+    `eval-reported`/`eval-threshold`
+    [run 33259652831](https://github.com/tcr430/SOSH/actions/runs/33259652831) (`corpusVersion=2
+    github[precision=1.000 (24/24) recall=1.000 (24/24) dismissMatch=1.000 (16/16)]
+    market_responsive[precision=0.000 (0/0) recall=0.000 (0/24) dismissMatch=0.563 (9/16)]`). Two real
+    lint errors (pre-existing, uncaught until this PR's first CI run: a raw `.toISOString()` in
+    `parse-article.ts`, `require()`-style imports in two RSS test files) plus one this session introduced
+    (`live-triage-run.ts` importing `@anthropic-ai/sdk` directly, banned by ADR 0003 C-2 outside
+    `/lib/ai/`) were found and fixed before `app-tests` went green.
+  - **Reviewer session (§3, G1c) NOT YET RUN** — PR #9 is open, unmerged; `PROC-REVIEW-AT-COMMIT` requires
+    the Reviewer to name the exact commit range it reads, which cannot happen before the range is final.
 
 - **Session 28 — Mode 3 Part 2: Triage, Insight Cards, Opportunity Feed (ADR 0021), E5.1–E5.12 CLOSED:**
   Builds on Session 27's ingestion pipeline. Stage C (a bounded, tool-using triage loop —
