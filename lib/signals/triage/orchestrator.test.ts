@@ -209,6 +209,35 @@ describe('runSignalsTriageTick (ADR 0021 §3, Session 28 E5.6)', () => {
     expect(serialized).not.toContain('rss')
   })
 
+  it('G1b.13 fix — a github candidate gets release framing, an rss candidate gets article framing (prompt branches on source, never mentions it)', async () => {
+    const githubCandidate = makeCandidate({ id: 'cand-github-framing' })
+    mockListNewCandidatesPoolWithSource.mockResolvedValueOnce([githubCandidate])
+    await runSignalsTriageTick({ triggeredBy: 'secret' })
+    expect(mockRunToolLoop).toHaveBeenCalledTimes(1)
+    const githubArgs = mockRunToolLoop.mock.calls[0][0]
+    expect(githubArgs.systemPrompt).toContain('GitHub release')
+    expect(githubArgs.userMessage).toContain('GitHub release')
+
+    mockRunToolLoop.mockClear()
+    mockClaimCandidateForTriage.mockClear()
+    const rssCandidate = {
+      ...makeCandidate({ id: 'cand-rss-framing' }),
+      signals: { ...makeCandidate().signals, source: 'rss', watched_feed_id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' },
+    } as unknown as SignalCandidateWithSignal
+    mockListNewCandidatesPoolWithSource.mockResolvedValueOnce([rssCandidate])
+    await runSignalsTriageTick({ triggeredBy: 'secret' })
+    expect(mockRunToolLoop).toHaveBeenCalledTimes(1)
+    const rssArgs = mockRunToolLoop.mock.calls[0][0]
+    expect(rssArgs.systemPrompt).toContain('news article')
+    expect(rssArgs.userMessage).toContain('news article')
+    expect(rssArgs.systemPrompt).not.toContain('GitHub release')
+    expect(rssArgs.userMessage).not.toContain('GitHub release')
+    // Same metadata boundary the test above already proves — reasserted here
+    // because this test is the one that actually exercises the rss BRANCH.
+    expect(rssArgs.systemPrompt).not.toContain('rss')
+    expect(rssArgs.userMessage).not.toContain('rss')
+  })
+
   it('the tick line carries every required field', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined)
 
