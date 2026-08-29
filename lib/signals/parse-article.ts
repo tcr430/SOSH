@@ -9,6 +9,7 @@
 
 import { z } from 'zod'
 import type { SignalInsert, UntrustedText } from '@/lib/db/types'
+import { toUtcIso } from '@/lib/utils'
 
 // Normalized shape rss-client.ts extracts from EITHER an RSS 2.0 <item> or
 // an Atom <entry> — this file has no XML-parsing knowledge of its own and
@@ -137,7 +138,7 @@ export function parseArticleItem(raw: RawFeedItem): ParseArticleResult {
     body: truncatedBody as UntrustedText,
     body_truncated: truncated,
     html_url: item.link ?? null,
-    occurred_at: occurredAtDate.toISOString(),
+    occurred_at: toUtcIso(occurredAtDate),
     link: item.link ?? null,
   }
   return { status: 'ok', article }

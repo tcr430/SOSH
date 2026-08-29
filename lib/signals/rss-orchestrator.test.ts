@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { createHash } from 'node:crypto'
 import type { WatchedFeedRow, SignalRow } from '@/lib/db/types'
 import type { ParsedArticle } from './parse-article'
 
@@ -335,8 +336,6 @@ describe('per-tick wall-clock budget (§16)', () => {
 // above can construct a matching "existing" row without importing a
 // private function from the module under test.
 function expectedContentHash(article: ParsedArticle): string {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { createHash } = require('node:crypto')
   const body = article.body ?? ''
   return createHash('sha256')
     .update(Buffer.concat([Buffer.from(article.title, 'utf8'), Buffer.from([0]), Buffer.from(body, 'utf8')]))

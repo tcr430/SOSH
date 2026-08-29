@@ -30,7 +30,6 @@
 
 import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import type Anthropic from '@anthropic-ai/sdk'
 import { MODELS, calculateCostCents } from '../../lib/ai/models'
 import { safeParseOrAiError } from '../../lib/ai/parsers'
 import { getAnthropicClient, type AiClientLike } from '../../lib/ai/client'
@@ -41,6 +40,20 @@ import type { UntrustedText } from '../../lib/db/types'
 
 const CORPUS_PATH = resolve(process.cwd(), 'lib/signals/__fixtures__/eval/corpus.v2.json')
 const SABOTAGE_ARTEFACT_PATH = resolve(process.cwd(), 'lib/signals/__fixtures__/eval/sabotage-run.json')
+
+// ADR 0003 C-2 — no file outside /lib/ai/ may import @anthropic-ai/sdk
+// directly. Every type this script needs is derived STRUCTURALLY from
+// AiClientLike (lib/ai/client.ts, already the sanctioned import), never by
+// naming the SDK's own namespace — the params/response shapes still come
+// from the real SDK, just via the one file allowed to import it.
+export type LoopCreateParams = Parameters<AiClientLike['messages']['create']>[0]
+export type LoopMessage = Awaited<ReturnType<AiClientLike['messages']['create']>>
+type LoopContentBlock = LoopMessage['content'][number]
+type LoopToolUseBlock = Extract<LoopContentBlock, { type: 'tool_use' }>
+type LoopTextBlock = Extract<LoopContentBlock, { type: 'text' }>
+type LoopMessageParam = LoopCreateParams['messages'][number]
+type LoopContentBlockParam = Exclude<LoopMessageParam['content'], string | undefined>[number]
+type LoopToolDef = NonNullable<LoopCreateParams['tools']>[number]
 
 // ─── Pure helpers (unit-testable without a network call) ───────────────────
 
@@ -169,8 +182,8 @@ export async function runBoundedTriageLoop(
   userMessage: string,
   tools: TriageTool[],
 ): Promise<BoundedLoopResult> {
-  const anthropicTools: Anthropic.Tool[] = tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.inputSchema }))
-  const messages: Anthropic.MessageParam[] = [{ role: 'user', content: [{ type: 'text', text: userMessage }] }]
+  const anthropicTools: LoopToolDef[] = tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.inputSchema }))
+  const messages: LoopMessageParam[] = [{ role: 'user', content: [{ type: 'text', text: userMessage }] }]
 
   let cumulativeInputTokens = 0
   let cumulativeOutputTokens = 0
@@ -191,9 +204,9 @@ export async function runBoundedTriageLoop(
     cumulativeInputTokens += response.usage.input_tokens
     cumulativeOutputTokens += response.usage.output_tokens
 
-    const toolUseBlock = response.content.find((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use')
+    const toolUseBlock = response.content.find((b): b is LoopToolUseBlock => b.type === 'tool_use')
     if (toolUseBlock) {
-      messages.push({ role: 'assistant', content: response.content as unknown as Anthropic.ContentBlockParam[] })
+      messages.push({ role: 'assistant', content: response.content as unknown as LoopContentBlockParam[] })
       const tool = tools.find((t) => t.name === toolUseBlock.name)
       if (!tool) {
         messages.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: toolUseBlock.id, content: 'Unknown tool', is_error: true }] })
@@ -205,7 +218,7 @@ export async function runBoundedTriageLoop(
       continue
     }
 
-    const textBlock = response.content.find((b): b is Anthropic.TextBlock => b.type === 'text')
+    const textBlock = response.content.find((b): b is LoopTextBlock => b.type === 'text')
     const costCents = calculateCostCents('SONNET_4_6', cumulativeInputTokens, cumulativeOutputTokens, 0)
     try {
       const decision = safeParseOrAiError(TriageDecisionSchema, textBlock?.text ?? '')

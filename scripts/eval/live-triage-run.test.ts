@@ -1,5 +1,4 @@
 import { describe, it, expect, vi } from 'vitest'
-import type Anthropic from '@anthropic-ai/sdk'
 import type { AiClientLike } from '../../lib/ai/client'
 import { TRIAGE_MAX_TURNS } from '../../lib/ai/tool-runner'
 import {
@@ -8,6 +7,8 @@ import {
   buildDegradedSystemPrompt,
   mergeCassetteIntoCorpus,
   toFakeCandidate,
+  type LoopMessage,
+  type LoopCreateParams,
 } from './live-triage-run'
 
 // ADR 0023 §2.4.1/§10.5 (Session 30 G1b.13) — this file tests the PURE and
@@ -20,7 +21,7 @@ import {
 // (the real network calls + file writes) is intentionally NOT covered here
 // — it is Tier E, run once, out-of-band, by a human invoking the script.
 
-function textResponse(json: unknown): Anthropic.Message {
+function textResponse(json: unknown): LoopMessage {
   return {
     id: 'msg_1',
     type: 'message',
@@ -30,10 +31,10 @@ function textResponse(json: unknown): Anthropic.Message {
     stop_reason: 'end_turn',
     stop_sequence: null,
     usage: { input_tokens: 100, output_tokens: 50, cache_creation_input_tokens: null, cache_read_input_tokens: null, server_tool_use: null, service_tier: null },
-  } as unknown as Anthropic.Message
+  } as unknown as LoopMessage
 }
 
-function toolUseResponse(name: string, input: unknown): Anthropic.Message {
+function toolUseResponse(name: string, input: unknown): LoopMessage {
   return {
     id: 'msg_tool',
     type: 'message',
@@ -43,7 +44,7 @@ function toolUseResponse(name: string, input: unknown): Anthropic.Message {
     stop_reason: 'tool_use',
     stop_sequence: null,
     usage: { input_tokens: 80, output_tokens: 20, cache_creation_input_tokens: null, cache_read_input_tokens: null, server_tool_use: null, service_tier: null },
-  } as unknown as Anthropic.Message
+  } as unknown as LoopMessage
 }
 
 const VALID_DECISION = { verdict: 'card', reason: 'a real reason', citableEvidenceIds: [], citableBrandIds: [], audienceNote: 'note' }
@@ -81,7 +82,7 @@ describe('runBoundedTriageLoop', () => {
 
     // The second request must carry the assistant tool_use turn AND the
     // tool_result reply — otherwise the API would reject the conversation.
-    const secondCallArgs = create.mock.calls[1][0] as Anthropic.MessageCreateParamsNonStreaming
+    const secondCallArgs = create.mock.calls[1][0] as LoopCreateParams
     const roles = secondCallArgs.messages.map((m) => m.role)
     expect(roles).toEqual(['user', 'assistant', 'user'])
   })

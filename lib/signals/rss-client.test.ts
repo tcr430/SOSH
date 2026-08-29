@@ -33,12 +33,9 @@ function loadFixture(name: string): string {
   return fs.readFileSync(path.join(FIXTURES_DIR, name), 'utf8')
 }
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const notModifiedFixture = require('./__fixtures__/rss/304-not-modified.json')
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const redirectChainFixture = require('./__fixtures__/rss/redirect-chain.json')
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const oversizedFixture = require('./__fixtures__/rss/oversized.json')
+const notModifiedFixture = JSON.parse(loadFixture('304-not-modified.json'))
+const redirectChainFixture = JSON.parse(loadFixture('redirect-chain.json'))
+const oversizedFixture = JSON.parse(loadFixture('oversized.json'))
 
 function mockOk(body: string, headers: { etag?: string | null; lastModified?: string | null } = {}) {
   mockFetchWithEgressGuard.mockResolvedValue({
