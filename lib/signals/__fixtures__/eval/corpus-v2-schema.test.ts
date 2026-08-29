@@ -53,10 +53,9 @@ describe('corpus.v2.json — SIGNAL-MR-CORPUS-EXTENDED schema bump (ADR 0023 §1
     }
   })
 
-  it('carries labelCommitSha and cassetteCommitSha fields — cassetteCommitSha null until G1b.13 lands (ADR §2.4.1 ordering)', () => {
+  it('labelCommitSha is recorded as a real commit SHA; cassetteCommitSha stays null until G1b.13 lands (ADR §2.4.1 ordering)', () => {
     const corpus = loadCorpusV2()
-    expect(corpus).toHaveProperty('labelCommitSha')
-    expect(corpus).toHaveProperty('cassetteCommitSha')
+    expect(corpus.labelCommitSha).toMatch(/^[0-9a-f]{40}$/)
     expect(corpus.cassetteCommitSha).toBeNull()
   })
 
