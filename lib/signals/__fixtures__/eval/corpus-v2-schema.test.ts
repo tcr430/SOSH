@@ -53,9 +53,11 @@ describe('corpus.v2.json — SIGNAL-MR-CORPUS-EXTENDED schema bump (ADR 0023 §1
     }
   })
 
-  it('labelCommitSha is recorded as a real commit SHA (ADR §2.4.1 ordering — the label commit predates the cassette commit)', () => {
+  it('labelCommitSha and cassetteCommitSha are both real commit SHAs, and are two DIFFERENT commits (ADR §2.4.1 ordering — the label commit predates the cassette commit)', () => {
     const corpus = loadCorpusV2()
     expect(corpus.labelCommitSha).toMatch(/^[0-9a-f]{40}$/)
+    expect(corpus.cassetteCommitSha).toMatch(/^[0-9a-f]{40}$/)
+    expect(corpus.cassetteCommitSha).not.toBe(corpus.labelCommitSha)
   })
 
   it('the 40 market_responsive examples are merged, founder-labelled, and now carry a model-authored cassette (SIGNAL-MR-CORPUS-MODEL-AUTHORED, ADR §18, Session 30 G1b.13 live run)', () => {
