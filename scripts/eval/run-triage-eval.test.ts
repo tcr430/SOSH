@@ -127,7 +127,9 @@ describe('scripts/eval/run-triage-eval.ts — Tier A mutation test (SIGNAL-MR-CO
   // the cassettes were hand-authored alongside their own labels.
   it('unmutated corpus: precision 24/24, recall 24/24, dismissMatch 16/16 (all 1.0, the bootstrap ceiling)', () => {
     const artefact = runEval()
-    expect(artefact.declaredCorpusCount).toBe(40)
+    // 80 total (ADR §18): 40 github (cassette-bearing, unchanged) + 40
+    // market_responsive (founder-labelled, PENDING — no cassette yet).
+    expect(artefact.declaredCorpusCount).toBe(80)
     expect(artefact.errorCount).toBe(0)
     const github = artefact.metricsBySource.github
     expect(github.cardPrecision).toMatchObject({ value: 1, numerator: 24, denominator: 24, floor: 0.75 })
@@ -138,15 +140,23 @@ describe('scripts/eval/run-triage-eval.ts — Tier A mutation test (SIGNAL-MR-CO
     expect(github.cardPrecision.sigma).toBeCloseTo(Math.sqrt((0.75 * 0.25) / 24), 10)
     expect(github.cardRecall.sigma).toBeCloseTo(Math.sqrt((0.7 * 0.3) / 24), 10)
     expect(github.dismissReasonMatch.sigma).toBeCloseTo(Math.sqrt((0.6 * 0.4) / 16), 10)
-    // market_responsive has no examples yet (G1b.12 Part B not authored) —
-    // reported with zero denominators, and must not drag metricsPass down.
-    expect(artefact.metricsBySource.market_responsive.declaredCount).toBe(0)
+    // market_responsive is merged (G1b.12 Part B, ADR §18) but PENDING — its
+    // 40 examples carry no cassette yet, so they score neither 'ok' nor
+    // 'error' and must not drag metricsPass down.
+    const marketResponsive = artefact.metricsBySource.market_responsive
+    expect(marketResponsive.declaredCount).toBe(40)
+    expect(marketResponsive.pendingCount).toBe(40)
+    expect(marketResponsive.cardPrecision.denominator).toBe(0)
     expect(artefact.metricsPass).toBe(true)
   })
 
   it('MUTATION 1 — 8 card→no_card cassette flips reddens recall: 16/24 = 0.667 < 0.70 floor', () => {
     const corpus = loadCorpus()
-    const cardExamples = corpus.examples.filter((e) => e.expectedVerdict === 'card')
+    // Scoped to source: 'github' — corpus.v2.json also carries 40
+    // market_responsive examples (ADR §18), none of which have a cassette
+    // to mutate; this Tier A test is specifically about the cassette-
+    // bearing github slice's arithmetic.
+    const cardExamples = corpus.examples.filter((e) => e.expectedVerdict === 'card' && e.source === 'github')
     expect(cardExamples.length).toBe(24)
 
     for (const example of cardExamples.slice(0, 8)) {
@@ -177,7 +187,7 @@ describe('scripts/eval/run-triage-eval.ts — Tier A mutation test (SIGNAL-MR-CO
 
   it('MUTATION 2 — 9 no_card→card cassette flips reddens BOTH precision (24/33 = 0.727 < 0.75) AND dismissMatch (7/16 = 0.4375 < 0.60)', () => {
     const corpus = loadCorpus()
-    const noCardExamples = corpus.examples.filter((e) => e.expectedVerdict === 'no_card')
+    const noCardExamples = corpus.examples.filter((e) => e.expectedVerdict === 'no_card' && e.source === 'github')
     expect(noCardExamples.length).toBe(16)
 
     for (const example of noCardExamples.slice(0, 9)) {
@@ -214,7 +224,7 @@ describe('scripts/eval/run-triage-eval.ts — Tier A mutation test (SIGNAL-MR-CO
 
   it('MUTATION 3 — 7 dismiss-reason corruptions reddens dismissMatch: 9/16 = 0.5625 < 0.60 floor', () => {
     const corpus = loadCorpus()
-    const noCardExamples = corpus.examples.filter((e) => e.expectedVerdict === 'no_card') as Array<{
+    const noCardExamples = corpus.examples.filter((e) => e.expectedVerdict === 'no_card' && e.source === 'github') as Array<{
       id: string
       expectedDismissReason: string
       cassette: Array<Record<string, unknown>>

@@ -53,19 +53,14 @@ function makeFullyAuthoredFixture(): TemplateFile {
 }
 
 describe('validate-market-responsive-template.ts — SIGNAL-MR-CORPUS-BLIND-LABELLED tooling (ADR 0023 §10.5)', () => {
-  it('the checked-in template (unfilled) reports the composition as correct but every example still placeholder-incomplete', () => {
+  it('the checked-in template (founder-authored, ADR §18) validates clean: right composition, no placeholders, no cassette', () => {
     const file = loadTemplate()
     const issues = validateTemplate(file)
 
     expect(file.examples.length).toBe(40)
     expect(file.examples.filter((e) => e.expectedVerdict === 'card').length).toBe(24)
     expect(file.examples.filter((e) => e.expectedVerdict === 'no_card').length).toBe(16)
-    // Composition is already right, so no composition-count issue should fire —
-    // every remaining issue should be a placeholder or missing-dismiss-reason one.
-    expect(issues.some((i) => i.includes('expected exactly 24'))).toBe(false)
-    expect(issues.some((i) => i.includes('expected exactly 16'))).toBe(false)
-    expect(issues.length).toBeGreaterThan(0)
-    expect(issues.every((i) => i.includes('placeholder') || i.includes('expectedDismissReason'))).toBe(true)
+    expect(issues).toEqual([])
   })
 
   it('no example in the checked-in template carries a cassette field', () => {

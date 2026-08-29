@@ -165,7 +165,12 @@ function scoreSource(source: CorpusSource, outcomes: ExampleOutcome[]) {
     sigma: sigmaAtFloor(MIN_DISMISS_MATCH, dismissMatchDenominator),
   }
 
-  const pass = cardPrecision.value >= cardPrecision.floor && cardRecall.value >= cardRecall.floor && dismissReasonMatch.value >= dismissReasonMatch.floor
+  // A metric with a zero denominator has scored nothing (e.g. a source
+  // that is entirely 'pending', ADR §2.4.1's interim state) and must not
+  // be treated as failing — only a metric that actually scored below its
+  // floor counts against `pass`.
+  const metricPasses = (m: SourceMetric) => m.denominator === 0 || m.value >= m.floor
+  const pass = metricPasses(cardPrecision) && metricPasses(cardRecall) && metricPasses(dismissReasonMatch)
 
   return {
     declaredCount: sourceOutcomes.length,

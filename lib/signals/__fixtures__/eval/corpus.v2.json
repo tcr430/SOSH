@@ -1,6 +1,6 @@
 {
   "corpusVersion": 2,
-  "note": "ADR 0023 §10.5 (Session 30 G1b.12). Schema bump from v1: every example now carries a source discriminator (github | market_responsive), enabling per-source metrics. The 40 examples below are UNCHANGED from v1 aside from the added source field — same fictional-publisher convention (corpus.v1.json history), same 24 card / 16 no_card composition, same hand-authored cassettes sharing an author with their labels (the v1 bootstrap ceiling ADR 0023 §2.4.1 describes). The market-responsive slice (40 more examples, same 24/16 composition, ADR §10.5 A-3) is added in a LATER, SEPARATE commit: SIGNAL-MR-CORPUS-BLIND-LABELLED requires the founder to author every market-responsive expectedVerdict/expectedDismissReason from the signal text alone and commit it BEFORE any cassette for that example exists (ADR §2.4.1) — see corpus.v2.market-responsive.template.json for the authoring scaffold. labelCommitSha and cassetteCommitSha below are populated once those two commits land, in that order.",
+  "note": "ADR 0023 §10.5/§17/§18 (Session 30 G1b.12, amended Session 30-G 2026-08-29). corpusVersion 2: every example carries a source discriminator (github | market_responsive). 80 examples total (SIGNAL-MR-CORPUS-EXTENDED): the 40 github examples are unchanged from v1 aside from the added source field. The 40 market_responsive examples were merged from corpus.v2.market-responsive.template.json after founder approval (2026-08-29) — per §18 Amendment 2, the 24 card examples use REAL companies/events (paraphrased, not quoted, from web search results; figures NOT yet verified against primary sources — see §18 residual risk), and the 16 no_card examples remain fictional per the original v1/§17 convention. None of the 40 market_responsive examples carry a cassette field yet: SIGNAL-MR-CORPUS-BLIND-LABELLED requires this exact commit (the label commit) to predate any cassette for these examples — G1b.13 runs the live model triage afterward and adds cassette fields in a SEPARATE, later commit. labelCommitSha below is set in an immediate follow-up commit (recording this commit's own SHA, once known); cassetteCommitSha remains null until G1b.13.",
   "labelCommitSha": null,
   "cassetteCommitSha": null,
   "examples": [
@@ -939,6 +939,582 @@
       ],
       "expectedVerdict": "no_card",
       "expectedDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-c01-github-copilot-usage-credits",
+      "source": "market_responsive",
+      "signal": {
+        "title": "GitHub moves Copilot to usage-based AI Credits, cuts included allowance from September",
+        "html_url": "https://devtoolsreview.com/pricing/copilot-ai-credits-september-2026/",
+        "occurred_at": "2026-06-01T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "GitHub replaced Copilot's premium-request model with usage-based AI Credits on June 1, 2026, and gave organizations elevated included credits for the first three months as a transition buffer. From September 1, Business plans drop from $30 to $19 of included credits per seat and Enterprise from $70 to $39, with the subscription price itself unchanged — only the included usage shrinks."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c02-eu-instant-payments-verification",
+      "source": "market_responsive",
+      "signal": {
+        "title": "EU's Instant Payments Regulation pushes banks toward mandatory real-time payee verification",
+        "html_url": "https://www.sidley.com/en/insights/newsupdates/2026/01/payments-and-fintech-regulation-2026-whats-on-the-horizon-in-the-uk-and-eu",
+        "occurred_at": "2026-01-14T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "The EU's Instant Payments Regulation is driving banks toward always-on, real-time payments with mandatory payee-name verification aimed at cutting authorized-push-payment fraud, as part of a broader 2026 push to strengthen consumer protections in payments. Smaller fintechs are expected to lean on third-party verification APIs rather than build the capability in-house."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c03-meta-reach-metric-retired",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Meta retires legacy Facebook Reach metric, replaces it with unified Page Viewer count",
+        "html_url": "https://support.sproutsocial.com/hc/en-us/articles/45863997056397-Facebook-Metric-Deprecations-June-2026",
+        "occurred_at": "2026-06-15T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Meta deprecated its long-standing Facebook Reach metric from the API starting June 15, 2026, replacing it with a Page Viewer metric meant to unify measurement across Facebook and Instagram content. Marketing teams relying on historical reach benchmarks in dashboards or automated reports need to rebuild that reporting before the old field disappears entirely."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c04-workday-layoffs-ai-shift",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Workday cuts 8.5% of workforce, concentrated in customer operations, as it redirects spend to AI",
+        "html_url": "https://www.kore1.com/workday-layoffs-2026/",
+        "occurred_at": "2026-02-01T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "HR and finance SaaS vendor Workday laid off 8.5% of its workforce, with the cuts falling almost entirely inside Global Customer Operations — the group covering Customer Success, Adoption Services, and Customer Support — as the company shifts investment toward AI products and international expansion."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c05-eu-ai-act-article-50",
+      "source": "market_responsive",
+      "signal": {
+        "title": "EU AI Act's Article 50 transparency obligations become enforceable for vendors selling into the bloc",
+        "html_url": "https://www.insideprivacy.com/european-union-2/what-to-watch-in-2026-key-eu-privacy-cybersecurity-developments/",
+        "occurred_at": "2026-08-02T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "The European Commission's final guidance on the EU AI Act's Article 50 transparency obligations applies from August 2, 2026, requiring AI-powered features marketed to enterprise buyers in the EU to meet defined disclosure standards. Vendors without documentation in place risk being excluded from regulated-industry and public-sector procurement shortlists."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c06-elation-health-acquires-aster",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Elation Health acquires women's-health EHR platform Aster",
+        "html_url": "https://xtalks.com/healthcare-ma-in-2026-a-roundup-of-deals-4615/",
+        "occurred_at": "2026-06-10T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Primary-care EHR vendor Elation Health acquired Aster, an EHR platform focused on women's clinical care, in June 2026 as part of a broader wave of healthcare-SaaS consolidation. The deal folds Aster's specialty workflows directly into Elation's core primary-care record system."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c07-legalon-contract-review-report",
+      "source": "market_responsive",
+      "signal": {
+        "title": "LegalOn report: AI adoption in contract review doubles year-over-year",
+        "html_url": "https://www.businesswire.com/news/home/20260112080673/en/LegalOn-Report-Finds-AI-Adoption-in-Contract-Review-Doubles-Year-Over-Year",
+        "occurred_at": "2026-01-12T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "A report from LegalOn finds the share of in-house legal teams actively using AI in contract review has doubled year-over-year and nearly quadrupled since 2024, with more than half of teams now using or evaluating the technology. Separate industry data cited alongside the report puts AI-assisted review time savings as high as 85% versus manual first-pass review."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c08-shopify-checkout-outage",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Shopify outage takes down checkout, admin, and POS for roughly two hours",
+        "html_url": "https://www.digitalapplied.com/blog/ecommerce-platform-outage-resilience-2026-incident-readiness-playbook",
+        "occurred_at": "2026-06-03T15:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "A Shopify outage on June 3, 2026 knocked out checkout, admin, storefront, and point-of-sale functionality for roughly two hours, disrupting an unknown number of merchant storefronts during the incident window. Industry data on payment outages generally shows businesses losing over a billion dollars in sales for every minute an outage runs past the eight-to-thirteen-minute mark."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c09-model-pricing-war-cuts",
+      "source": "market_responsive",
+      "signal": {
+        "title": "OpenAI, Anthropic, and Google slash flagship model API pricing amid enterprise AI price war",
+        "html_url": "https://www.scmp.com/tech/tech-trends/article/3363549/enterprise-ai-costs-hit-2026-low-driven-price-wars-chinese-open-source-models-research",
+        "occurred_at": "2026-08-10T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Enterprise AI inference costs hit a 2026 low as OpenAI cut GPT-5.6 series pricing by up to 80%, Anthropic cut Claude Opus 4.5 pricing by 67%, and Google priced Gemini 3 Pro aggressively at $2/$12 per million tokens — average inference prices across providers now sit between $1.16 and $1.18 per million tokens."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c10-state-privacy-coppa-update",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Three more US states' comprehensive privacy laws take effect alongside updated COPPA rule",
+        "html_url": "https://www.omm.com/insights/alerts-publications/2026-data-security-and-privacy-compliance-checklist-key-us-state-law-updates-ai-rules-coppa-changes-and-global-data-protection-risks/",
+        "occurred_at": "2026-04-22T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Indiana, Kentucky, and Rhode Island's comprehensive state privacy laws took effect in 2026, bringing the US total to 20 states with such laws, while the updated COPPA rule's April 22, 2026 compliance deadline adds new consent, retention, and disclosure requirements. SaaS vendors serving US customers now face a wider, unevenly-timed patchwork of state-level obligations."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c11-atlassian-rovo-cross-app-agents",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Atlassian's Rovo AI adds cross-app agents that can act on work items, not just search them",
+        "html_url": "https://monday.com/blog/rnd/software-development-collaboration-tools/",
+        "occurred_at": "2026-03-11T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Atlassian's Rovo AI now offers configurable agents that reason over and update work items across connected apps, moving beyond natural-language search into acting on tickets, docs, and tasks directly. It's part of a broader 2026 shift in collaboration tooling from passive search assistants toward agents that read context and report back on outcomes."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c12-cloud-gpu-pricing-gap",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Google Cloud undercuts Azure on H100 GPU pricing by roughly 4x in 2026 comparisons",
+        "html_url": "https://tech-insider.org/aws-vs-azure-vs-google-cloud-gpu-pricing-2026/",
+        "occurred_at": "2026-05-15T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "2026 cloud-pricing surveys show Google Cloud's A3 series offering on-demand H100 GPU instances as low as $3.00-$3.50/hour, while Azure's ND H100 v5 series consistently prices at $12.25-$14.50/hour — a roughly four-fold gap that's reshaping where AI-heavy SaaS vendors choose to run training workloads."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c13-salesforce-agentforce-support-cuts",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Salesforce shrinks customer-support headcount from 9,000 to 5,000 as Agentforce absorbs tickets",
+        "html_url": "https://www.kore1.com/salesforce-layoffs-2026/",
+        "occurred_at": "2026-02-05T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Salesforce cut under 1,000 roles and redeployed roughly 4,000 more in February 2026, reducing its own customer-support workforce from about 9,000 to around 5,000 as its Agentforce and Einstein Copilot AI products absorb a growing share of Tier 1 and Tier 2 support work."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c14-iconiq-hybrid-pricing-nrr",
+      "source": "market_responsive",
+      "signal": {
+        "title": "ICONIQ Growth report: hybrid-pricing SaaS companies show 13-point NRR edge over seat-based rivals",
+        "html_url": "https://thesaaslibrary.com/b2b-saas-trends-in-2026whats-actually-changing-and-what-isnt/",
+        "occurred_at": "2026-01-20T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "ICONIQ Growth's 2026 State of Go-to-Market report finds 48% of B2B SaaS companies now run hybrid usage-plus-seat pricing as their primary model, and that hybrid pricing carries roughly a 13-point net-revenue-retention advantage over pure seat-based pricing."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c15-workforce-pell-grants",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Workforce Pell Grants open federal aid to short-term job-training programs starting July 2026",
+        "html_url": "https://www.ed.gov/about/news/press-release/us-department-of-education-issues-final-rule-create-new-workforce-pell-grant-program",
+        "occurred_at": "2026-07-01T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Starting July 1, 2026, the US Department of Education's new Workforce Pell Grant program extends federal financial aid to 8-15 week job-training programs in fields like IT, healthcare, and skilled trades — a first-of-its-kind expansion of Pell eligibility beyond traditional degree programs, opening a new funding channel for SaaS-based training platforms that can plug into it."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c16-fed-rate-cut-proptech",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Fed's December rate cut to 3.5%-3.75% resets outlook for proptech and CRE software spending",
+        "html_url": "https://ts2.tech/en/real-estate-stocks-outlook-for-2026-reits-homebuilders-and-proptech-reset-after-december-rate-cuts/",
+        "occurred_at": "2026-01-05T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Following the Federal Reserve's December cut of the federal funds rate to a 3.5%-3.75% range, investors are reassessing REIT dividend durability, housing demand, and refinancing risk — and commercial real estate firms are reopening software budgets frozen during two years of higher borrowing costs."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c17-tariff-supply-chain-shock",
+      "source": "market_responsive",
+      "signal": {
+        "title": "New 10% baseline US tariffs force supply-chain teams into active sourcing overhaul",
+        "html_url": "https://www.freightwaves.com/news/smbs-ditch-wait-and-see-as-tariffs-force-supply-chain-overhaul",
+        "occurred_at": "2026-02-24T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "New US tariffs imposing a 10% baseline on imports from virtually every country took effect February 24, 2026, and a February survey of 225 senior trade professionals found 72% now name tariff volatility as the year's most impactful regulatory change, up sharply from 41% in 2025. Companies are shifting from cautious observation to active supplier diversification, leaning more on scenario-planning software."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c18-meta-marketing-api-deprecation",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Meta sets hard cutoff for legacy Advantage+ Shopping and App campaigns on the Marketing API",
+        "html_url": "https://www.socialmediatoday.com/news/meta-updates-marketing-api-to-align-with-latest-ad-shifts/812648/",
+        "occurred_at": "2026-09-01T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Meta's phased deprecation of legacy Marketing API campaign types reaches its final stage in version 26: remaining Advantage+ Shopping and App campaigns will be paused entirely, with no further extensions after earlier 2025-2026 milestones already blocked new campaign creation on the old endpoints. Agencies running automated bidding tools on the legacy API face a hard migration deadline."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c19-minimax-relicense-backlash",
+      "source": "market_responsive",
+      "signal": {
+        "title": "MiniMax relicenses its M2.7 model from MIT to a non-commercial license, sparking developer backlash",
+        "html_url": "https://dasroot.net/posts/2026/05/navigating-ai-model-licensing-shift/",
+        "occurred_at": "2026-05-20T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "AI company MiniMax shifted its M2.7 model's license from the permissive MIT license to a non-commercial license in 2026, prompting immediate backlash from developers who had built commercial products on top of the earlier terms. It's part of a broader pattern this year of open-source and open-weight projects tightening licenses once cloud providers begin monetizing them at scale."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c20-figure-technology-breach",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Fintech lender Figure discloses breach exposing personal data for nearly 1 million accounts",
+        "html_url": "https://www.cpomagazine.com/cyber-security/data-breach-at-fintech-company-figure-technology-solutions-impacts-nearly-1-million-people/",
+        "occurred_at": "2026-06-20T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Fintech lender Figure Technology Solutions disclosed a breach exposing personal information — names, emails, phone numbers, home addresses, and dates of birth — for roughly 967,200 accounts, traced to a social-engineering attack in which an employee was tricked into authenticating the attacker."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c21-right-to-disconnect-us-states",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Four US states roll out right-to-disconnect protections for after-hours work messages in 2026",
+        "html_url": "https://attorneys.media/the-right-to-disconnect-laws-coming-to-4-new-states-in-2026/",
+        "occurred_at": "2026-01-01T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Four US states, including California and New York, began implementing right-to-disconnect laws in 2026 that let employees ignore after-hours work emails, calls, and texts without retaliation, joining at least 17 countries worldwide with similar legislation. HR platforms serving employers in the affected states are being asked to add automated after-hours message holds."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c22-self-hosting-open-source-shift",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Enterprises shift to self-hosted open-source models as API price war squeezes margins",
+        "html_url": "https://www.cloudzero.com/blog/llm-api-pricing-comparison/",
+        "occurred_at": "2026-07-25T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "As the AI pricing war collapses API costs 90-97% for equivalent intelligence, enterprises processing millions of monthly requests are increasingly self-hosting open-source models on dedicated infrastructure — reported to be 50-80% cheaper than API pricing even at 2026's already-reduced rates — while still negotiating 10-30% volume discounts with API providers as a fallback."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c23-zillow-preferred-success-fee",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Zillow Preferred's post-pay success-fee model can hit 40% in some markets, adjustable on 15 days' notice",
+        "html_url": "https://theclose.com/zillow-preferred/",
+        "occurred_at": "2026-02-20T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Zillow Preferred, the successor to Zillow Flex, charges agents a post-pay success fee — up to 40% in some markets — only after a lead closes, and Zillow can change that fee at any time with 15 days' notice on its pricing page. A 2026 Consumer Policy Center report flags referral fees at this level, from Zillow and rivals alike, as reinforcing high overall commissions."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-c24-gartner-saaspocalypse",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Gartner: $234B in enterprise application software spend at risk as agentic AI reshapes the SaaS category",
+        "html_url": "https://www.gartner.com/en/newsroom/press-releases/2026-07-01-gartner-says-us-dollars-234-billion-in-enterprise-application-software-spend-is-at-risk-from-agentic-artificial-intelligence",
+        "occurred_at": "2026-07-01T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Gartner projects $234 billion in enterprise application software spend is at risk from agentic AI, with analyst George Brocklehurst describing a coming 'Saaspocalypse' — a disaggregation of the legacy per-seat SaaS market as agentic AI reshapes how software is built, priced, and consumed. The framing is broad enough to fit almost any SaaS vendor's narrative, which is exactly what makes it a harder call than the sharper stories above."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "mr-n01-acquisition-rumor",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Sources: Ironvale DevOps 'in talks' with unnamed buyer, deal unconfirmed",
+        "html_url": "https://techfeed.test/ironvale-acquisition-rumor",
+        "occurred_at": "2026-04-02T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "An anonymously sourced report claims DevOps platform Ironvale is 'in talks' with an unnamed acquirer, citing a single unnamed insider. Ironvale has not commented, and no financial terms, buyer identity, or timeline are mentioned anywhere in the piece."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "weak_evidence"
+    },
+    {
+      "id": "mr-n02-generic-listicle",
+      "source": "market_responsive",
+      "signal": {
+        "title": "5 tips to improve your team's productivity in 2026",
+        "html_url": "https://growthwire.test/5-productivity-tips-2026",
+        "occurred_at": "2026-03-09T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "A general productivity listicle offers five broad tips — take breaks, batch meetings, set clear goals, limit notifications, and celebrate wins — with no reference to any specific company, product, or industry event."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-n03-executive-change",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Cinder Payments names new VP of Marketing",
+        "html_url": "https://fintechline.test/cinder-payments-vp-marketing",
+        "occurred_at": "2026-02-14T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Cinder Payments announced a new VP of Marketing hire, a routine personnel update with a short executive bio and no mention of any strategic shift, product change, or market event."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-n04-conference-recap",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Recap: what we saw at this year's SaaS Growth Summit",
+        "html_url": "https://saastribune.test/saas-growth-summit-recap",
+        "occurred_at": "2026-05-03T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "A conference recap summarizes panel topics already widely covered in the weeks leading up to the event — pricing trends, AI agents, and vertical SaaS — without adding any new data, quotes, or announcements beyond what attendees already knew."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "already_covered"
+    },
+    {
+      "id": "mr-n05-vague-threat-trend",
+      "source": "market_responsive",
+      "signal": {
+        "title": "The cybersecurity threat landscape continues to evolve, experts say",
+        "html_url": "https://industrybrief.test/threat-landscape-evolving",
+        "occurred_at": "2026-01-28T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "An industry piece asserts that 'the threat landscape continues to evolve' and that 'organizations must stay vigilant,' without citing a specific incident, vendor, statistic, or new regulation."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "weak_evidence"
+    },
+    {
+      "id": "mr-n06-local-market-story",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Local co-working space in small town adds new meeting rooms",
+        "html_url": "https://b2bpulse.test/local-coworking-meeting-rooms",
+        "occurred_at": "2026-06-19T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "A small-town co-working space announced it added three new meeting rooms to its facility, a local real-estate update with no relevance to software buyers or any broader industry trend."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-n07-celebrity-ai-mention",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Pop star says AI 'is the future' in red-carpet interview",
+        "html_url": "https://techfeed.test/celebrity-ai-red-carpet",
+        "occurred_at": "2026-04-25T20:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "A musician made a passing comment that AI 'is the future' during a red-carpet interview about an unrelated album release, with no connection to any product, vendor, or industry development."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-n08-changelog-as-news",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Ironvale DevOps ships minor bug fix release v4.2.1",
+        "html_url": "https://devnews.test/ironvale-v4-2-1-changelog",
+        "occurred_at": "2026-02-06T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "A routine patch release fixes a rendering bug in the Ironvale dashboard and updates two dependency versions, reported in full as if it were a feature announcement."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "already_covered"
+    },
+    {
+      "id": "mr-n09-holiday-puff-piece",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Getting ready for the holiday shopping rush: a seasonal checklist",
+        "html_url": "https://growthwire.test/holiday-shopping-checklist",
+        "occurred_at": "2026-07-08T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "A seasonal listicle offers generic holiday-shopping-season tips — decorate your storefront, plan email campaigns, check inventory — with no specific vendor, statistic, or news event attached."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-n10-opinion-no-data",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Opinion: why sales teams need to 'think differently' about pipeline",
+        "html_url": "https://salesfloor.test/think-differently-pipeline-opinion",
+        "occurred_at": "2026-03-14T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "An opinion column argues sales teams should 'think differently' about pipeline management, offering the author's personal philosophy without citing any survey, company, product, or verifiable data point."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "weak_evidence"
+    },
+    {
+      "id": "mr-n11-meme-roundup",
+      "source": "market_responsive",
+      "signal": {
+        "title": "The funniest tech memes of the week",
+        "html_url": "https://techfeed.test/funniest-tech-memes-roundup",
+        "occurred_at": "2026-05-30T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "A roundup compiles screenshots of viral social-media jokes about remote work and standup meetings, with no product, company, or news event referenced."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-n12-stale-story",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Recap: the AI pricing war that reshaped the market earlier this year",
+        "html_url": "https://aiwatch.test/ai-pricing-war-recap-stale",
+        "occurred_at": "2026-08-20T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "A retrospective piece revisits the model-provider price cuts from earlier in the year, restating coverage that ran extensively in Q1 and Q2 with no new pricing move, provider statement, or data point added."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "wrong_timing"
+    },
+    {
+      "id": "mr-n13-stock-fluctuation",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Cinder Payments shares up 1.2% in light Tuesday trading",
+        "html_url": "https://fintechline.test/cinder-payments-stock-tuesday",
+        "occurred_at": "2026-06-09T16:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Cinder Payments' publicly traded shares closed up 1.2% on light Tuesday trading volume, with no company announcement, analyst note, or market event cited as a driver."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-n14-realty-gossip",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Rumor mill: which proptech founder just bought a beach house?",
+        "html_url": "https://proptechdaily.test/founder-beach-house-gossip",
+        "occurred_at": "2026-07-21T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "A gossip item speculates about an unnamed proptech founder's recent real-estate purchase, with no business, product, or market relevance beyond idle speculation about personal spending."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-n15-awards-announcement",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Kettlebrook EdTech named to 'Best Places to Work' regional list",
+        "html_url": "https://edtechwire.test/kettlebrook-best-places-to-work",
+        "occurred_at": "2026-04-17T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Kettlebrook EdTech was named to a regional 'Best Places to Work' awards list, an internal-culture recognition with no product update, market event, or customer-facing change involved."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-n16-marginal-stretch-tiein",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Survey: 55% of knowledge workers say they 'multitask during meetings'",
+        "html_url": "https://growthwire.test/multitasking-meetings-survey",
+        "occurred_at": "2026-05-08T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "A workplace-habits survey finds 55% of knowledge workers admit to multitasking during video meetings, a plausible enough data point that it's tempting to tie to any collaboration-software pitch — but the survey names no vendor, tool, or specific workflow change, leaving the audience tie-in speculative."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "weak_evidence"
     }
   ]
 }

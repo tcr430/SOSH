@@ -53,16 +53,21 @@ describe('corpus.v2.json — SIGNAL-MR-CORPUS-EXTENDED schema bump (ADR 0023 §1
     }
   })
 
-  it('carries labelCommitSha and cassetteCommitSha fields, both null until the founder/live-run commits land (ADR §2.4.1 ordering)', () => {
+  it('carries labelCommitSha and cassetteCommitSha fields — cassetteCommitSha null until G1b.13 lands (ADR §2.4.1 ordering)', () => {
     const corpus = loadCorpusV2()
     expect(corpus).toHaveProperty('labelCommitSha')
     expect(corpus).toHaveProperty('cassetteCommitSha')
-    expect(corpus.labelCommitSha).toBeNull()
     expect(corpus.cassetteCommitSha).toBeNull()
   })
 
-  it('no market_responsive examples exist yet — G1b.12 Part B is founder-authored and not this commit (ADR §10.5)', () => {
+  it('the 40 market_responsive examples are merged, founder-labelled, and carry no cassette field yet (SIGNAL-MR-CORPUS-BLIND-LABELLED, ADR §18)', () => {
     const corpus = loadCorpusV2()
-    expect(corpus.examples.filter((e) => e.source === 'market_responsive').length).toBe(0)
+    const marketResponsive = corpus.examples.filter((e) => e.source === 'market_responsive')
+    expect(marketResponsive.length).toBe(40)
+    expect(marketResponsive.filter((e) => e.expectedVerdict === 'card').length).toBe(24)
+    expect(marketResponsive.filter((e) => e.expectedVerdict === 'no_card').length).toBe(16)
+    for (const example of marketResponsive) {
+      expect(example.cassette, `${example.id} must not carry a cassette field yet — label commit must predate the cassette commit`).toBeUndefined()
+    }
   })
 })
