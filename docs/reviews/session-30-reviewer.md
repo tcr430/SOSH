@@ -653,4 +653,4 @@ stderr mentions `pending`. `npx tsc --noEmit --skipLibCheck` clean. `npx vitest 
 scripts/eval/run-triage-eval.test.ts` — 7/7 green (5 pre-existing + 2 new). `npx vitest run lib/db lib/social
 lib/validation` — 731/731 green (unaffected by this change; run as the broader regression sweep this
 project's verification loop requires). `npx eslint` on all three touched files — clean.
-**Commit:** `<pending — filled in immediately after this commit lands, see note below>`
+**Commit:** `a486d618`
