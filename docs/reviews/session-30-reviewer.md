@@ -747,4 +747,4 @@ the D2 commit via `git stash`/re-run before any D3 change — pre-existing, unre
 this step. `npm run test:app` — 3260/3261 passed, the 3 known pre-existing env-gap file-load failures
 unchanged, plus one confirmed-transient parallel-file race (same as D2's appendix) reproduced and
 re-confirmed non-reproducible on isolation/rerun. `npx eslint` on all three touched files — clean.
-**Commit:** `<pending — filled in by a follow-up commit citing this one's own SHA, per the D1/D2 precedent>`
+**Commit:** `801c8f3b`
