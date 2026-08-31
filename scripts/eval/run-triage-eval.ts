@@ -26,6 +26,16 @@
 // periodically refreshed from real, live triage runs (§10.4's separate
 // process) and re-committed, a drop below the metric floors here means the
 // model's real judgment has diverged from the human-labelled corpus.
+//
+// D1 (Session 30-D, MINOR-2) — the paragraph above is bootstrap-only and is
+// no longer true of the whole corpus: ADR 0023's market_responsive slice
+// (Session 30 G1b.13) is now a MODEL-AUTHORED live triage run scored against
+// founder-authored labels, not a hand-authored cassette scored against its
+// own author's labels. It does NOT score close to 1.0 by construction — the
+// live run measured 0/24 recall on that slice. Only the github slice above
+// still carries the bootstrap ceiling described above; market_responsive is
+// the harness's first real, non-tautological measurement (Tier E, ADR 0015
+// Amendment B4), and its numbers are reported exactly as measured.
 
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -90,7 +100,10 @@ interface ExampleOutcome {
 }
 
 interface SourceMetric {
-  value: number
+  // D1 (BLOCKER-1, MINOR-5) — null, never 0, when the denominator is 0: an
+  // unscored metric is UNKNOWN, not a measured zero, and must not print or
+  // serialise as if "the model scored 0%" were an observed fact.
+  value: number | null
   numerator: number
   denominator: number
   floor: number
@@ -118,10 +131,17 @@ function runUrl(): string {
 
 // One source's slice of outcomes -> its three metrics + counts. Pending
 // examples (no cassette yet, ADR §2.4.1) are excluded from every metric
-// denominator — they have produced no actual/decision to score — but are
-// NOT errors: assert-eval-executed.mjs's "silently dropped" check reads
-// executedCount, which counts 'ok' + 'pending' (both are accounted-for
-// outcomes; only 'error' is unaccounted).
+// denominator — they have produced no actual/decision to score.
+//
+// D1 (Session 30-D, BLOCKER-1) — 'pending' is NOT folded into executedCount
+// here. It used to be (executedCount: ok.length + pending.length), which let
+// assert-eval-executed.mjs's "silently dropped" check pass even when every
+// example in a source was pending: stripping every cassette from the corpus
+// left executedCount === declaredCorpusCount (all 'pending'), a textbook
+// ADR 0015 §1(b) FALSE-GREEN on the exact check meant to catch it. pending is
+// now its own reported count (pendingCount) and assert-eval-executed.mjs
+// treats a non-zero pendingCount as a hard-fail shortfall, exactly like
+// 'error' — never expressed by inflating executedCount.
 function scoreSource(source: CorpusSource, outcomes: ExampleOutcome[]) {
   const sourceOutcomes = outcomes.filter((o) => o.source === source)
   const ok = sourceOutcomes.filter((o) => o.status === 'ok')
@@ -131,17 +151,19 @@ function scoreSource(source: CorpusSource, outcomes: ExampleOutcome[]) {
   const predictedCard = ok.filter((o) => o.actualVerdict === 'card')
   const truePositives = predictedCard.filter((o) => o.expectedVerdict === 'card').length
   const precisionDenominator = predictedCard.length
-  const precision = precisionDenominator > 0 ? truePositives / precisionDenominator : 0
+  // D1 (MINOR-5) — null, not 0, when nothing was scored: a source that
+  // predicted zero cards has an UNDEFINED precision, not a measured 0%.
+  const precision = precisionDenominator > 0 ? truePositives / precisionDenominator : null
 
   const expectedCard = ok.filter((o) => o.expectedVerdict === 'card')
   const recallDenominator = expectedCard.length
   const recallHits = expectedCard.filter((o) => o.actualVerdict === 'card').length
-  const recall = recallDenominator > 0 ? recallHits / recallDenominator : 0
+  const recall = recallDenominator > 0 ? recallHits / recallDenominator : null
 
   const expectedNoCard = ok.filter((o) => o.expectedVerdict === 'no_card' && o.expectedDismissReason)
   const dismissMatchDenominator = expectedNoCard.length
   const dismissMatchHits = expectedNoCard.filter((o) => o.actualDismissReason === o.expectedDismissReason).length
-  const dismissMatchRate = dismissMatchDenominator > 0 ? dismissMatchHits / dismissMatchDenominator : 0
+  const dismissMatchRate = dismissMatchDenominator > 0 ? dismissMatchHits / dismissMatchDenominator : null
 
   const cardPrecision: SourceMetric = {
     value: precision,
@@ -165,16 +187,25 @@ function scoreSource(source: CorpusSource, outcomes: ExampleOutcome[]) {
     sigma: sigmaAtFloor(MIN_DISMISS_MATCH, dismissMatchDenominator),
   }
 
-  // A metric with a zero denominator has scored nothing (e.g. a source
-  // that is entirely 'pending', ADR §2.4.1's interim state) and must not
-  // be treated as failing — only a metric that actually scored below its
-  // floor counts against `pass`.
-  const metricPasses = (m: SourceMetric) => m.denominator === 0 || m.value >= m.floor
+  // D1 (Session 30-D, BLOCKER-1) — a metric with a zero denominator has
+  // scored NOTHING and is UNKNOWN, never a pass. The previous
+  // `m.denominator === 0 || ...` early-return-true let a source that
+  // predicted/expected nothing report as passing — concretely,
+  // market_responsive's cardPrecision denominator is 0 right now (the model
+  // carded nothing), and that used to be recorded as a precision PASS. An
+  // unknown metric fails this check; it is reported (not silently green)
+  // via metricsPass/pass, both of which stay advisory-only (checkThreshold
+  // never exits non-zero) — this only changes what "green" means, never
+  // whether the check can block a merge.
+  const metricPasses = (m: SourceMetric) => m.value !== null && m.value >= m.floor
   const pass = metricPasses(cardPrecision) && metricPasses(cardRecall) && metricPasses(dismissReasonMatch)
 
   return {
     declaredCount: sourceOutcomes.length,
-    executedCount: ok.length + pending.length,
+    // D1 (BLOCKER-1) — 'ok' only; pending is reported separately below and
+    // is no longer folded into this count (see the comment above this
+    // function for why that used to be a false-green).
+    executedCount: ok.length,
     pendingCount: pending.length,
     errorCount: errored.length,
     cardPrecision,
@@ -234,7 +265,11 @@ function main(): void {
     }
   })
 
-  const executedCount = outcomes.filter((o) => o.status === 'ok' || o.status === 'pending').length
+  // D1 (BLOCKER-1) — executedCount counts 'ok' ONLY; pendingCount is its own
+  // reported field. See the comment above scoreSource for why folding
+  // pending into executedCount was a false-green.
+  const executedCount = outcomes.filter((o) => o.status === 'ok').length
+  const pendingCount = outcomes.filter((o) => o.status === 'pending').length
   const errorCount = outcomes.filter((o) => o.status === 'error').length
 
   const metricsBySource = {
@@ -264,6 +299,7 @@ function main(): void {
     generatedAt: new Date().toISOString(),
     declaredCorpusCount: declaredCount,
     executedCount,
+    pendingCount,
     errorCount,
     metricsBySource,
     metricsPass,
@@ -273,10 +309,13 @@ function main(): void {
   mkdirSync(resolve(process.cwd(), 'lib/signals/__fixtures__/eval'), { recursive: true })
   writeFileSync(ARTEFACT_PATH, JSON.stringify(artefact, null, 2))
 
+  // D1 (MINOR-5) — value is null on a zero denominator; format as the
+  // literal string 'null' rather than crashing .toFixed on null.
+  const fmt = (v: number | null) => (v === null ? 'null' : v.toFixed(3))
   const summarize = (label: string, m: ReturnType<typeof scoreSource>) =>
-    `${label}: precision=${m.cardPrecision.value.toFixed(3)} (${m.cardPrecision.numerator}/${m.cardPrecision.denominator}) ` +
-    `recall=${m.cardRecall.value.toFixed(3)} (${m.cardRecall.numerator}/${m.cardRecall.denominator}) ` +
-    `dismissMatch=${m.dismissReasonMatch.value.toFixed(3)} (${m.dismissReasonMatch.numerator}/${m.dismissReasonMatch.denominator}) ` +
+    `${label}: precision=${fmt(m.cardPrecision.value)} (${m.cardPrecision.numerator}/${m.cardPrecision.denominator}) ` +
+    `recall=${fmt(m.cardRecall.value)} (${m.cardRecall.numerator}/${m.cardRecall.denominator}) ` +
+    `dismissMatch=${fmt(m.dismissReasonMatch.value)} (${m.dismissReasonMatch.numerator}/${m.dismissReasonMatch.denominator}) ` +
     `pending=${m.pendingCount}`
 
   console.log(

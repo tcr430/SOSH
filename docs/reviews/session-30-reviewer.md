@@ -585,3 +585,72 @@ MEASURED as ADR 0023 §11 claims, with the exceptions named above; the egress gu
 ordering, the gating seam's nine-caller coverage and the Tier-1 DB guarantees are the session's strongest
 work, and BLOCKER-1 (a demonstrated Tier-E false green) plus BLOCKER-2 (the ADR and both amendment notes
 never entered git) are what must close before PR #9 merges.
+
+## CORRECTION PASS (Session 30-D)
+
+Author: Claude (Session 30-D, D0…D9 correction pass). This appendix records resolutions against the
+findings above **by reference only** — nothing above this heading is edited, reworded, or reordered
+(CLAUDE.md REVIEWER-REPORT APPEND-ONLY). Findings declined or disputed are argued here, never erased. Each
+row: finding → fix → test → commit.
+
+### D0 — BLOCKER-2 (part 1 of 2)
+
+**Fix:** Committed `docs/decisions/0023-market-responsive-signal-source.md` (untracked → new file), ADR 0020
+§17 Amendment C, ADR 0021 §16 Amendment A, `docs/build-guide/session-30.md` (entering git with §0.2/§2/§3/§4
+already authored — §4 is D0's own work order and could not land later), and this reviewer report itself, all
+five exactly as they stood in the working tree, in one commit, with no resolution row appended in that same
+commit — so the immutable text above this heading and this appendix are provably in different commits.
+`lib/db/insight-cards.ts` (a pre-existing unrelated working-tree edit) and the untracked
+`corpus.v2.market-responsive.WORKSHEET.md` were deliberately left out, per the step's own instruction.
+**Test:** N/A — Tier 3, diff-verified. Proof: `git status` clean of the five paths post-commit;
+`git show 943ad622:docs/decisions/0023-market-responsive-signal-source.md` resolves and is content-identical
+to the working-tree file (the one raw `diff` mismatch was CRLF normalisation from this repo's
+`core.autocrlf=true`, confirmed identical after stripping `\r`); `git show
+943ad622:docs/reviews/session-30-reviewer.md` is byte-identical to the file as written above this heading;
+`git show 943ad622:docs/decisions/0021-mode-3-triage-and-opportunity-feed.md | grep -c "Amendment A"` → **4**
+(non-zero); the commit contains no `.ts`/`.sql`/`.tsx`/`.json`/`.yml` file.
+**Commit:** `943ad622`
+
+### D1 — BLOCKER-1 + MINOR-5 + MINOR-2
+
+**Fix:** `scripts/eval/run-triage-eval.ts` — (1) `executedCount` now counts `'ok'` only, both per-source
+(`scoreSource`'s returned `executedCount`) and at the top level (`main()`); `pendingCount` is its own
+reported field at both levels. (2) `metricPasses` no longer treats a zero denominator as an automatic pass
+(`m.denominator === 0 || m.value >= m.floor` → `m.value !== null && m.value >= m.floor`) — an unscored metric
+is UNKNOWN and fails this check (still advisory-only: `checkThreshold()` in `assert-eval-executed.mjs` never
+exits non-zero). (3, MINOR-5) `SourceMetric.value` is `number | null`; `precision`/`recall`/`dismissMatchRate`
+serialise `null`, not `0`, on a zero denominator — `run-triage-eval.ts`'s `summarize()` and
+`assert-eval-executed.mjs`'s `checkThreshold()` both format `null` safely (`fmt()` / optional chaining) rather
+than throwing. (4, MINOR-2) Appended (not rewritten) a paragraph to the `run-triage-eval.ts` header
+distinguishing the still-bootstrap github slice from the model-authored market-responsive slice, since "THIS
+FIRST RUN scores close to 1.0 by construction" is now false for half the corpus (market_responsive measured
+0/24 recall). `scripts/ci/assert-eval-executed.mjs`'s `checkArtefactHard()` now hard-fails explicitly on any
+`'pending'` outcome (named per-id in the error output, exactly like the existing `'error'` check), rather
+than relying solely on the generic executed-vs-declared count mismatch. `lib/signals/__fixtures__/eval/latest-run.json`
+regenerated against the real, unmutated corpus.v2.json to reflect the new artefact shape (`pendingCount`
+added; `market_responsive.cardPrecision.value` now `null`, was `0`) — `git diff --stat -- lib/signals/__fixtures__/eval/`
+shows only this one file changed, confirming `corpus.v2.json` itself is untouched.
+**Test:** Re-ran the Reviewer's own demonstration EXACTLY: stripped every `cassette` key from a working-tree
+copy of `corpus.v2.json` (all 80 examples → `'pending'`), ran the harness and both guard modes. BEFORE this
+fix (the code at the D0 commit) this reported `executedCount: 80`/`declaredCorpusCount: 80` and both
+`assert-eval-executed.mjs` (default mode) and `--check-threshold` exited **0**. AFTER this fix, the harness
+reports `executedCount: 0`, `pendingCount: 80`, and the default-mode guard exits **1**
+(`::error::assert-eval-executed: executed 0 example(s) but the corpus declares 80…` plus the new
+`::error::assert-eval-executed: 80 example(s) are 'pending'…` naming every id), while `--check-threshold`
+correctly stays advisory and exits **0** — the split the ADR requires is preserved. The corpus was then
+restored from the D0 commit (`git show 943ad622:lib/signals/__fixtures__/eval/corpus.v2.json`) and
+`git diff --stat -- lib/signals/__fixtures__/eval/` confirmed empty for `corpus.v2.json` before the real run.
+Confirmed the CURRENT real corpus (all 80 cassettes present) still reports `executed=80/80` and stays green
+on `eval-reported` — `market_responsive.cardPrecision`'s legitimately-zero denominator now serialises `null`
+and is correctly excluded from `pass` rather than counted as a pass. New cases added to
+`scripts/eval/run-triage-eval.test.ts` (describe block `D1 — zero-denominator metrics and pending shortfalls
+are never a silent pass`): (a) flips every github `card` example's `expectedVerdict` and cassette `verdict`
+to `no_card`, isolating precision/recall denominators to 0 while leaving `dismissReasonMatch` a real,
+fully-scored 16/16 — asserts both null-valued metrics and `github.pass === false`, closing the exact
+regression the old shortcut caused; (b) deletes one market-responsive example's `cassette`, runs the real
+harness, then spawns `assert-eval-executed.mjs` as a genuine subprocess and asserts a non-zero exit whose
+stderr mentions `pending`. `npx tsc --noEmit --skipLibCheck` clean. `npx vitest run
+scripts/eval/run-triage-eval.test.ts` — 7/7 green (5 pre-existing + 2 new). `npx vitest run lib/db lib/social
+lib/validation` — 731/731 green (unaffected by this change; run as the broader regression sweep this
+project's verification loop requires). `npx eslint` on all three touched files — clean.
+**Commit:** `<pending — filled in immediately after this commit lands, see note below>`

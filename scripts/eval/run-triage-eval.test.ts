@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'vitest'
 import { readFileSync, writeFileSync } from 'node:fs'
-import { execSync } from 'node:child_process'
+import { execSync, spawnSync } from 'node:child_process'
 import path from 'node:path'
 
 // ADR 0023 §2.4.2 (Session 30 G1b.11) — SIGNAL-MR-CORPUS-DISCRIMINATIVE.
@@ -65,7 +65,8 @@ const CORPUS_PATH = path.join(ROOT, 'lib', 'signals', '__fixtures__', 'eval', 'c
 const ARTEFACT_PATH = path.join(ROOT, 'lib', 'signals', '__fixtures__', 'eval', 'latest-run.json')
 
 interface EvalMetric {
-  value: number
+  // D1 (Session 30-D, MINOR-5) — null, not 0, on a zero denominator.
+  value: number | null
   numerator: number
   denominator: number
   floor: number
@@ -87,6 +88,7 @@ interface EvalArtefact {
   corpusVersion: number
   declaredCorpusCount: number
   executedCount: number
+  pendingCount: number
   errorCount: number
   metricsBySource: {
     github: SourceMetrics
@@ -304,5 +306,68 @@ describe('scripts/eval/run-triage-eval.ts — Tier A mutation test (SIGNAL-MR-CO
         example!.expectedDismissReason,
       )
     }
+  })
+
+  // D1 (Session 30-D, BLOCKER-1 + MINOR-5) — the Reviewer's own
+  // demonstration: strip every cassette and watch the false-green guard
+  // that used to exit 0 now exit non-zero. These two tests re-run that
+  // demonstration's underlying mechanics against the real corpus/scripts
+  // rather than reimplementing the arithmetic.
+  describe('D1 — zero-denominator metrics and pending shortfalls are never a silent pass', () => {
+    it('a source with zero predicted/expected cards: precision and recall serialise value null and are NOT a pass (BLOCKER-1, MINOR-5)', () => {
+      const corpus = loadCorpus()
+      // Flip every github 'card' example to 'no_card' — both the ground
+      // truth (expectedVerdict) and the cassette's actual verdict — so
+      // predictedCard.length === 0 (precision denominator 0) AND
+      // expectedCard.length === 0 (recall denominator 0). The 16 original
+      // no_card examples (and their expectedDismissReason) are untouched,
+      // so dismissMatch stays a real, fully-scored 16/16 = 1.0 — isolating
+      // the claim to precision/recall alone.
+      const cardExamples = corpus.examples.filter((e) => e.expectedVerdict === 'card' && e.source === 'github')
+      expect(cardExamples.length).toBe(24)
+      for (const example of cardExamples) {
+        ;(example as Record<string, unknown>).expectedVerdict = 'no_card'
+        const cassette = (example.cassette as Array<Record<string, unknown>>)[0]
+        cassette.verdict = 'no_card'
+        cassette.reason = 'D1 zero-denominator isolation test — not a genuine no_card judgment.'
+      }
+      writeFileSync(CORPUS_PATH, JSON.stringify(corpus, null, 2))
+
+      const artefact = runEval()
+      const github = artefact.metricsBySource.github
+      expect(github.cardPrecision.denominator).toBe(0)
+      expect(github.cardPrecision.value).toBeNull()
+      expect(github.cardRecall.denominator).toBe(0)
+      expect(github.cardRecall.value).toBeNull()
+      // The one metric that DID score something is untouched and perfect.
+      expect(github.dismissReasonMatch.denominator).toBe(16)
+      expect(github.dismissReasonMatch.value).toBe(1)
+      // The regression this closes: the old `denominator === 0 || value >=
+      // floor` shortcut would have reported precision/recall as PASSING
+      // (and github.pass as true) purely because nothing was scored.
+      expect(github.pass).toBe(false)
+      expect(artefact.metricsPass).toBe(false)
+    })
+
+    it('a pending example (no cassette yet) hard-fails assert-eval-executed.mjs exactly like an error (BLOCKER-1)', () => {
+      const corpus = loadCorpus()
+      const target = corpus.examples.find((e) => e.source === 'market_responsive') as Record<string, unknown>
+      expect(target).toBeDefined()
+      delete target.cassette
+      writeFileSync(CORPUS_PATH, JSON.stringify(corpus, null, 2))
+
+      // run-triage-eval.ts itself only exits non-zero on 'error', never on
+      // 'pending' — this call is expected to succeed and merely write an
+      // artefact whose executedCount now excludes the pending example.
+      const artefact = runEval()
+      expect(artefact.metricsBySource.market_responsive.pendingCount).toBeGreaterThan(0)
+
+      const guard = spawnSync('node', ['scripts/ci/assert-eval-executed.mjs'], {
+        cwd: ROOT,
+        encoding: 'utf-8',
+      })
+      expect(guard.status).not.toBe(0)
+      expect(guard.stderr).toMatch(/pending/i)
+    })
   })
 })

@@ -3,9 +3,10 @@
   "labelCommitSha": "7bfe1c7ccad983ac4da87c9d2e3d1bcc22261225",
   "cassetteCommitSha": "cd1b7203522614ed3303bc09940194c70d44b8aa",
   "runUrl": "local (no GITHUB_RUN_ID in env)",
-  "generatedAt": "2026-08-29T14:12:31.290Z",
+  "generatedAt": "2026-08-31T22:37:10.510Z",
   "declaredCorpusCount": 80,
   "executedCount": 80,
+  "pendingCount": 0,
   "errorCount": 0,
   "metricsBySource": {
     "github": {
@@ -42,7 +43,7 @@
       "pendingCount": 0,
       "errorCount": 0,
       "cardPrecision": {
-        "value": 0,
+        "value": null,
         "numerator": 0,
         "denominator": 0,
         "floor": 0.75,
