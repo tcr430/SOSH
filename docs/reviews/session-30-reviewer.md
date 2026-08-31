@@ -671,7 +671,7 @@ status.
 **Test:** N/A for the ruling itself — Tier 3, diff-verified (the amendment is prose). Proof: `git diff --stat
 -- docs/decisions/0020-mode-3-signal-ingestion.md` shows only additive lines below `_End Amendment C_`;
 `grep -c "Amendment D" docs/decisions/0020-mode-3-signal-ingestion.md` is non-zero.
-**Commit:** `<recorded below, same commit as D2 — MAJOR-1>`
+**Commit:** `28710b58`
 
 ### D2 — MAJOR-1
 
@@ -701,4 +701,4 @@ regression. A fourth, transient failure (`corpus-v2-schema.test.ts`) on the firs
 be a parallel-file race against `run-triage-eval.test.ts`'s corpus mutation/restore cycle (both touch
 `lib/signals/__fixtures__/eval/corpus.v2.json`), not reproducible on a clean re-run or in isolation — a
 pre-existing test-suite hazard, not introduced by this step's changes (which touch neither file).
-**Commit:** `<pending — filled in by a follow-up commit citing this one's own SHA, per the D1 precedent>`
+**Commit:** `28710b58`
