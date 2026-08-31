@@ -108,3 +108,144 @@ describe('market-responsive business enumeration (ADR 0023 §5.5a)', () => {
     expect(ids).not.toContain(noCandidateBusinessId)
   })
 })
+
+// D3 (Session 30-D, MAJOR-2) — SIGNAL-MR-BUSINESS-ENUMERATION-PAGED. The
+// original `listBusinessesWithNewCandidates` had NO explicit ORDER BY and
+// capped ROWS (5000), not businesses: once a 'new' backlog exceeded that
+// row cap, a business whose candidates sorted outside the unordered window
+// was silently never enumerated. This test forces the equivalent of "beyond
+// the window" at a tractable scale against a real Postgres instance: a
+// FILLER business whose explicit UUID sorts FIRST (business_id ASC, the
+// enumeration's own ordering) with three 'new' candidates, and a TARGET
+// business whose explicit UUID sorts LAST with exactly one. Calling the
+// enumeration with a small pageSize (2) forces at least three `.range()`
+// fetches to cover all four rows — the target's row lands in the SECOND
+// page, never the first — so if pagination silently stopped after one
+// page (the shape of the original defect), the target would be missing.
+describe('SIGNAL-MR-BUSINESS-ENUMERATION-PAGED (ADR 0023 §5.5a, Session 30-D D3)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let admin: any
+  let fillerOwnerId: string
+  let targetOwnerId: string
+  // Explicit UUIDs (Postgres accepts any well-formed uuid literal on
+  // INSERT, overriding the gen_random_uuid() default) so business_id
+  // ordering is deterministic rather than left to random UUID generation.
+  const fillerBusinessId = '00000000-0000-4000-8000-000000000001'
+  const targetBusinessId = 'ffffffff-ffff-4fff-8fff-fffffffffffe'
+
+  beforeAll(async () => {
+    const { createServiceRoleClient } = await import('@/lib/supabase/service')
+    admin = createServiceRoleClient()
+
+    const fillerEmail = `mrenum-paged-filler-${Date.now()}-${Math.random().toString(36).slice(2)}@integration.test`
+    const { data: fillerUser, error: fillerUserErr } = await admin.auth.admin.createUser({
+      email: fillerEmail,
+      password: 'TestPass123!',
+      email_confirm: true,
+    })
+    if (fillerUserErr) throw fillerUserErr
+    fillerOwnerId = fillerUser.user.id
+
+    const targetEmail = `mrenum-paged-target-${Date.now()}-${Math.random().toString(36).slice(2)}@integration.test`
+    const { data: targetUser, error: targetUserErr } = await admin.auth.admin.createUser({
+      email: targetEmail,
+      password: 'TestPass123!',
+      email_confirm: true,
+    })
+    if (targetUserErr) throw targetUserErr
+    targetOwnerId = targetUser.user.id
+
+    const { error: fillerBizErr } = await admin
+      .from('businesses')
+      .insert({ id: fillerBusinessId, name: 'D3 Paged Filler Business', owner_id: fillerOwnerId, plan: 'plus' })
+    if (fillerBizErr) throw fillerBizErr
+
+    const { error: targetBizErr } = await admin
+      .from('businesses')
+      .insert({ id: targetBusinessId, name: 'D3 Paged Target Business (sorts last)', owner_id: targetOwnerId, plan: 'plus' })
+    if (targetBizErr) throw targetBizErr
+
+    // signals_exactly_one_parent_check requires source='rss' rows to carry
+    // a watched_feed_id (and no watched_repo_id) — one feed per business,
+    // same shape as the feed-only fixture above.
+    const { data: fillerFeed, error: fillerFeedErr } = await admin
+      .from('watched_feeds')
+      .insert({ business_id: fillerBusinessId, url: 'https://example.com/d3-paged/filler.xml', url_hash: `${Date.now()}-d3-filler`, label: 'D3 Filler Feed' })
+      .select('id')
+      .single()
+    if (fillerFeedErr) throw fillerFeedErr
+
+    // Three 'new' candidates for the filler business — occupies all of a
+    // pageSize-2 first page on its own, since business_id ASC sorts it
+    // before the target business.
+    for (let i = 0; i < 3; i++) {
+      const { data: signal, error: signalErr } = await admin
+        .from('signals')
+        .insert({
+          business_id: fillerBusinessId,
+          watched_feed_id: fillerFeed.id,
+          source: 'rss',
+          kind: 'article',
+          external_id: `d3-paged-filler-${Date.now()}-${i}`,
+          title: `Filler release ${i}`,
+          body: 'Body text.',
+          occurred_at: '2026-08-01T00:00:00Z',
+        })
+        .select('id')
+        .single()
+      if (signalErr) throw signalErr
+      const { error: candidateErr } = await admin
+        .from('signal_candidates')
+        .insert({ business_id: fillerBusinessId, signal_id: signal.id, score: 50, occurred_at: '2026-08-01T00:00:00Z' })
+      if (candidateErr) throw candidateErr
+    }
+
+    const { data: targetFeed, error: targetFeedErr } = await admin
+      .from('watched_feeds')
+      .insert({ business_id: targetBusinessId, url: 'https://example.com/d3-paged/target.xml', url_hash: `${Date.now()}-d3-target`, label: 'D3 Target Feed' })
+      .select('id')
+      .single()
+    if (targetFeedErr) throw targetFeedErr
+
+    // One 'new' candidate for the target business — sorts LAST, so it can
+    // only be reached once the enumeration pages past the filler business.
+    const { data: targetSignal, error: targetSignalErr } = await admin
+      .from('signals')
+      .insert({
+        business_id: targetBusinessId,
+        watched_feed_id: targetFeed.id,
+        source: 'rss',
+        kind: 'article',
+        external_id: `d3-paged-target-${Date.now()}`,
+        title: 'Target release',
+        body: 'Body text.',
+        occurred_at: '2026-08-01T00:00:00Z',
+      })
+      .select('id')
+      .single()
+    if (targetSignalErr) throw targetSignalErr
+    const { error: targetCandidateErr } = await admin
+      .from('signal_candidates')
+      .insert({ business_id: targetBusinessId, signal_id: targetSignal.id, score: 50, occurred_at: '2026-08-01T00:00:00Z' })
+    if (targetCandidateErr) throw targetCandidateErr
+  })
+
+  afterAll(async () => {
+    if (!admin) return
+    for (const id of [fillerBusinessId, targetBusinessId]) {
+      await admin.from('businesses').delete().eq('id', id)
+    }
+    for (const id of [fillerOwnerId, targetOwnerId]) {
+      if (id) await admin.auth.admin.deleteUser(id)
+    }
+  })
+
+  it('a business whose only candidate sorts LAST is still enumerated when the read page size is smaller than the total backlog', async () => {
+    const { listBusinessesWithNewCandidates } = await import('@/lib/db/signal-candidates')
+    // pageSize=2 forces >= 3 `.range()` fetches to cover the 4 seeded rows
+    // (3 filler + 1 target) — the target's row falls in the second fetch.
+    const ids = await listBusinessesWithNewCandidates(admin, 2)
+    expect(ids).toContain(fillerBusinessId)
+    expect(ids).toContain(targetBusinessId)
+  })
+})

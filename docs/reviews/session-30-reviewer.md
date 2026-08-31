@@ -702,3 +702,49 @@ be a parallel-file race against `run-triage-eval.test.ts`'s corpus mutation/rest
 `lib/signals/__fixtures__/eval/corpus.v2.json`), not reproducible on a clean re-run or in isolation — a
 pre-existing test-suite hazard, not introduced by this step's changes (which touch neither file).
 **Commit:** `28710b58`
+
+### D3 — MAJOR-2
+
+**Fix:** `lib/db/signal-candidates.ts`'s `listBusinessesWithNewCandidates` no longer issues one
+`.limit(5000)`-capped, unordered read. It now pages through EVERY `status='new'` row via repeated
+`.range()` calls, ordered by all four columns of the existing partial index `signal_candidates_feed_idx`
+(`business_id ASC, score DESC, occurred_at DESC, id ASC` — read from
+`supabase/migrations/20260731090000_signal_ingestion.sql:230-232`, not guessed), collecting `business_id`s
+into a `Set` across pages until a page returns fewer rows than the page size. The bound moved from ROWS
+(5000, an implicit business-dropping cap once a real backlog exceeded it) to a page size
+(`CANDIDATE_ROW_PAGE_SIZE = 5000`, now just a per-fetch batch) plus `MAX_ENUMERATION_PAGES = 2000` as a
+safety valve. The exported signature and name are unchanged (`(client, pageSize? = 5000): Promise<string[]>`
+— was `(client, limit? = 5000)`); the one production caller (`lib/signals/triage/orchestrator.ts:222`)
+passes no second argument, so this reinterpretation of the parameter's meaning affects no caller.
+`invoked database-reviewer once`, per this step's own instruction (tenancy-shaped query bound interacting
+with the partial index). It returned no BLOCKER but one MAJOR: the `MAX_ENUMERATION_PAGES` safety valve, as
+first written, silently returned a partial business list on exhaustion — reproducing, at a ~10M-row
+threshold, the exact "no counter, no log line, no error" failure this step exists to close. Closed
+immediately: the loop now throws (naming `MAX_ENUMERATION_PAGES` in the message) if it exhausts every page
+without ever seeing a short final page, so a backlog that genuinely outgrows the valve fails LOUDLY instead
+of quietly truncating. The reviewer's two MINOR notes (OFFSET-pagination cost degrading toward O(n²) at very
+large scale vs. a true keyset cursor; a theoretical skip/double-count race under concurrent writes during
+enumeration, not exploitable today since no concurrent writer runs against this read in the orchestrator's
+own invocation sequence) are recorded here rather than acted on — not blocking at current/foreseeable
+`'new'`-backlog scale, and reversible later without another correction pass.
+**Test:** `supabase/__tests__/market-responsive-business-enumeration.test.ts` — new Tier-1 describe block
+`SIGNAL-MR-BUSINESS-ENUMERATION-PAGED`: two businesses with explicit UUIDs (`00000000…`/`ffffffff…`,
+overriding `gen_random_uuid()` on INSERT) force deterministic `business_id ASC` ordering — a FILLER business
+(sorts first) with three `'new'` rss candidates, a TARGET business (sorts last) with exactly one. Calling
+`listBusinessesWithNewCandidates(admin, 2)` (`pageSize=2` against 4 total rows) forces >= 3 `.range()`
+fetches; the target's row lands in the second fetch, never the first. **Demonstrated to redden**: restored
+the pre-D3 file verbatim (`git show HEAD:lib/db/signal-candidates.ts` at the D2 commit) and re-ran this exact
+test — the target business was silently absent (`AssertionError: expected [...] to include
+'ffffffff-…'`), while the pre-existing feed-only cases in the same file stayed green; restored the fix and
+`git diff --stat` confirmed the reversion left no residue. The pre-existing feed-only case the Reviewer
+marked COVERED (`SIGNAL-MR-BUSINESS-ENUMERATION`) stayed green throughout. `lib/db/signal-candidates.test.ts`
+— two new Tier-2 mock-client cases pin the exhaustion fix directly: a 2000-full-page mock sequence throws
+(`/MAX_ENUMERATION_PAGES/`), and a normal short-final-page case still returns correctly and asserts the new
+`business_id ASC` ORDER BY is present. `npx tsc --noEmit --skipLibCheck` clean. Full `npm run test:db`
+(`--no-file-parallelism --retry=2`, all `supabase/__tests__`) — 342/344 passed; the 2 failures
+(`get-user-business-ids-matrix.test.ts`, `rls-policy-lockdown.test.ts`) confirmed byte-for-byte identical at
+the D2 commit via `git stash`/re-run before any D3 change — pre-existing, unrelated to `signal_candidates` or
+this step. `npm run test:app` — 3260/3261 passed, the 3 known pre-existing env-gap file-load failures
+unchanged, plus one confirmed-transient parallel-file race (same as D2's appendix) reproduced and
+re-confirmed non-reproducible on isolation/rerun. `npx eslint` on all three touched files — clean.
+**Commit:** `<pending — filled in by a follow-up commit citing this one's own SHA, per the D1/D2 precedent>`

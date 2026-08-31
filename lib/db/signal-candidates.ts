@@ -139,19 +139,67 @@ export async function listNewCandidatesPoolWithSource(
 // §8.6's connect-time grandfathering applied consistently — there was no
 // plan check in the poller-enumeration path to lose, so this does not
 // weaken §8.1's gating seam.
-const BUSINESS_ENUMERATION_LIMIT = 5000
+//
+// D3 (Session 30-D, MAJOR-2) — the ORIGINAL form here had two compounding
+// defects: no explicit ORDER BY, and a `.limit(5000)` that capped ROWS, not
+// BUSINESSES. A-4 accepted an unbounded 'new' backlog; once that backlog
+// passed 5000 rows, a business whose candidates fell outside an UNORDERED
+// 5000-row window was silently never enumerated and therefore never
+// triaged — no counter, no log line, no error. Fixed by paging through
+// EVERY 'new' row via `.range()`, ordered by the full column list of
+// signal_candidates_feed_idx (business_id, score DESC, occurred_at DESC, id
+// ASC) — the same partial index already serves this scan, and the full
+// column order (not just the leading one) is what makes each page's
+// boundary deterministic across repeated `.range()` calls. The bound is now
+// on ROWS READ PER PAGE (a page size, not a total-rows cap) plus a generous
+// safety-valve page count — never on how many DISTINCT businesses can be
+// returned. PostgREST has no SELECT DISTINCT (ADR §5.5a's own recorded
+// caveat), so exhausting every page and de-duplicating client-side remains
+// the only expressible form of "every business with a 'new' candidate."
+const CANDIDATE_ROW_PAGE_SIZE = 5000
+// Safety valve only, never a business-dropping cap: 2000 pages * 5000 rows
+// = 10,000,000 'new' rows — far beyond any real backlog — bounds the loop
+// against a genuine runaway without silently truncating a plausible one.
+const MAX_ENUMERATION_PAGES = 2000
 
 export async function listBusinessesWithNewCandidates(
   client: SupabaseClient,
-  limit: number = BUSINESS_ENUMERATION_LIMIT,
+  pageSize: number = CANDIDATE_ROW_PAGE_SIZE,
 ): Promise<string[]> {
-  const { data, error } = await client
-    .from('signal_candidates')
-    .select('business_id')
-    .eq('status', 'new')
-    .limit(limit)
-  if (error) throw new Error(getErrorMessage(error))
-  const ids = new Set((data ?? []).map((row) => (row as { business_id: string }).business_id))
+  const ids = new Set<string>()
+  let offset = 0
+  let exhausted = false
+  for (let page = 0; page < MAX_ENUMERATION_PAGES; page++) {
+    const { data, error } = await client
+      .from('signal_candidates')
+      .select('business_id')
+      .eq('status', 'new')
+      .order('business_id', { ascending: true })
+      .order('score', { ascending: false })
+      .order('occurred_at', { ascending: false })
+      .order('id', { ascending: true })
+      .range(offset, offset + pageSize - 1)
+    if (error) throw new Error(getErrorMessage(error))
+    const rows = data ?? []
+    for (const row of rows) ids.add((row as { business_id: string }).business_id)
+    if (rows.length < pageSize) {
+      exhausted = true
+      break
+    }
+    offset += pageSize
+  }
+  // database-reviewer (D3 pass) — MAX_ENUMERATION_PAGES existing only as a
+  // silent cap would reproduce, at a larger scale, the exact "no counter, no
+  // log line, no error" failure this step closes. A backlog that genuinely
+  // exceeds the safety valve must fail LOUDLY, never return a quietly
+  // partial business list.
+  if (!exhausted) {
+    throw new Error(
+      `listBusinessesWithNewCandidates: exceeded MAX_ENUMERATION_PAGES (${MAX_ENUMERATION_PAGES} pages of ` +
+        `${pageSize} rows) without exhausting the 'new' backlog — refusing to return a silently partial ` +
+        `business list. Raise MAX_ENUMERATION_PAGES/pageSize or investigate the backlog size.`,
+    )
+  }
   return Array.from(ids)
 }
 
