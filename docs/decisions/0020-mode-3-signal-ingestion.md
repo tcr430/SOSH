@@ -1563,3 +1563,139 @@ operator-visible counterpart.
 ---
 
 _End ADR 0020._
+
+---
+
+## §17 — Amendment C (Session 30 / Track G, ADR 0023, 2026-08-26) — APPENDED, NOT REWRITTEN
+
+> **Author:** Session 30 Architect (G1a). **Form:** the ADR 0014 Amendment A / ADR 0010 Amendment 2 house
+> form — everything above this heading is ADR 0020 as Session 27 wrote it, and **not one character of §6.5,
+> §7, §8.6 or §14 has been edited in place.** These notes record rulings made in
+> `docs/decisions/0023-market-responsive-signal-source.md`; where a ruling changes a revival condition, the
+> original condition stays visible above and is superseded here, never overwritten.
+>
+> **Occasion:** ADR 0023 introduces Mode 3's second signal source (market-responsive: customer-supplied
+> RSS/Atom feeds). Three of this ADR's deferrals and one of its constraints came due, and each was ruled on
+> against **its own** recorded condition.
+
+### C-1 — §6.5 Embeddings: RE-AFFIRMED as deferred, under a NEW revival condition
+
+§6.5's condition reads: *"a second, **unstructured** signal source (news, RSS, competitor social) **with no
+stable per-item identity**"* (§6.5, above).
+
+**The condition has two clauses, and ADR 0023 met only the first.** RSS/Atom is a second, unstructured
+source — but its items carry a canonical link and usually a `guid`, so dedup remains an **exact key**, never
+a similarity threshold. The clause that actually motivated the deferral is unsatisfied.
+
+**Ruling: embeddings stay deferred**, re-affirmed in §6.5's own terms. §6.5's argument was never "there is
+only one source"; it was the vector extension, the per-signal embedding call, an unjustifiable similarity
+threshold, and — decisively — *"a non-deterministic component inside the one half of Mode 3 that is supposed
+to be exactly testable."* Every clause still holds.
+
+**`SIGNAL-NO-EMBEDDINGS` (Tier 3) is NOT retired.** ADR 0015 §2's requirement that a Tier-3 retirement be a
+*recorded decision* is therefore **not triggered**; the constraint stands unchanged at §12 and §14 above.
+No pgvector migration, no embedding call site and no per-candidate embedding cost exist in Session 30.
+
+**The new revival condition SUPERSEDES the source-count condition above** — a measured rate beats a census:
+
+> **Embeddings are revived when production shows a near-duplicate insight-card rate above an agreed
+> threshold over an agreed window** — the same story arriving from two or more distinct feeds and producing
+> duplicate cards for one business — measured from `content_hash` collisions and human `already_covered`
+> dismissals, both of which the system already records.
+
+It is measurable from data already held, it names the failure mode embeddings would actually fix, and it
+cannot be satisfied merely by counting sources. **Recorded in ADR 0023 §4.1.**
+
+**Related residual, recorded here so it is visible from this ADR too:** if a feed changes an item's `guid`
+*and* canonical link, the derived `external_id` changes and the item lands as a **new row**, bypassing
+`upsert_signal_candidate`'s terminal-status guard — so a dismissed story can reappear under a new identity.
+ADR 0023 §3.4 adopts a `content_hash` near-duplicate window as the proportionate backstop; it is the first
+thing the new revival condition will measure.
+
+### C-2 — §14 Clustering: condition EXAMINED and NOT met; remains deferred
+
+§14's condition reads: *"**Clustering** — §6.5; revived by a second signal kind belonging to one release."*
+
+**A news source is a second *source*, not a second *kind belonging to one release*.** §6.5's clustering rule
+— candidate cardinality is exactly one per raw signal — was deferred because, with commits excluded on
+privacy grounds, there is nothing to cluster. Session 30 ingests no second kind belonging to one release;
+each article remains exactly one candidate.
+
+**Ruling: clustering REMAINS DEFERRED under its original, unchanged condition.**
+
+This note exists specifically so that a future reader cannot read C-1 as covering clustering. The two
+deferrals have **different** conditions, they were ruled on **separately**, and clustering's was **examined
+and found unmet** rather than left unexamined. **Recorded in ADR 0023 §4.2.**
+
+### C-3 — §7 Untrusted ingested text: the MECHANISM is unchanged; its RISK-ACCEPTANCE SCOPE is widened
+
+**No change to `wrapSignalForPrompt`, and no sixth sanitizer.** ADR 0023 §6.1 confirms the wrapper
+(`lib/ai/wrap-evidence.ts:278-293`) is content-agnostic — nothing in `neutralizeWithSentinels` inspects
+authorship — so it neutralizes an article body exactly as it neutralizes a release body.
+`SIGNAL-NO-SIXTH-SANITIZER` is honoured; the five documented weak copies remain accepted debt and are not
+extended to six.
+
+**What is amended is the population §7's residual-risk acceptance was reasoned about.** §7 — and the
+`[sec-LOW-1]` note that true Unicode confusables survive NFKC — accepted its residuals against a GitHub
+threat model: **attacker-influenceable** text, low item velocity, one attacker-adjacent actor per repo the
+customer deliberately installed an app on. Market-responsive content is **attacker-authored**, from a
+publisher the customer never vetted, at a volume the attacker controls.
+
+**Ruling: §7's guarantees are re-affirmed at the mechanism level, and its scope statement is widened** to
+cover an attacker-authored, attacker-volume-controlled adversary population. Inheriting §7's acceptance
+silently would have been inheriting a judgement made about a different threat model.
+
+ADR 0023 §6.5 walks the worst case end to end and states the honest outcome: every **escalation** path is
+structurally closed (no tool mutates state; `TriageDecisionSchema` has no `status` field; citations are
+re-verified against the tool results actually captured; render is plain text), but **judgment-shaping is not
+closed** — injected text can influence whether an item is carded and how it is framed. Two design changes
+were therefore compelled before ADR 0023 was Accepted: **provenance (publisher + canonical link) rendered at
+the human approval gate, threaded structurally and never through the prompt**, and a **per-feed shortlist
+cap**. The remaining residual is recorded as **Tier E — MEASURED, never COVERED**.
+
+### C-4 — §8.6 / `SIGNAL-GATING-SEAM-NAMED`: the seam is EXTRACTED, so "single" stays literally true
+
+§8.6 named `connectGithubAction` as the single plan-gating seam, and `actions.ts:48-50` reserves it: *"A
+future entitlement/plan check goes HERE and nowhere else."*
+
+A customer-supplied feed has **no OAuth install flow**: nothing to redirect to, no state to mint. A
+`connectFeedAction` would therefore create a **second reserved location** — and a "single named seam" that
+becomes two named seams has quietly stopped being the thing the constraint asserts.
+
+**Ruling: the plan/entitlement decision is EXTRACTED into ONE named gate function**, called by both sources'
+connect paths. A second seam is explicitly rejected. `SIGNAL-GATING-SEAM-NAMED`'s **subject** moves from
+`connectGithubAction` to that gate function and its **count** is restated; per **SHARED-FUNCTION CALLERS**,
+every caller must be enumerated with the test that exercises it, and a caller with no listed test is
+`AUTHORED-NOT-EXECUTED` for that caller even when another caller is fully covered. **Recorded in ADR 0023
+§8.1.**
+
+### C-5 — §14's deferral list: what Session 30 did and did not consume
+
+| §14 entry | Status after ADR 0023 |
+|---|---|
+| **All external signal sources** | **Partially consumed** — RSS/Atom only. Sources beyond feeds, and competitor social, remain deferred. |
+| **Embeddings / pgvector** | Still deferred; **condition replaced** (C-1). |
+| **Clustering** | Still deferred; **condition unchanged and unmet** (C-2). |
+| **Webhook ingestion** | Still deferred. The `ingested_via` seam stays unused — no route, no signature verification, no secret. |
+| **Additional signal kinds** (tags, merged PRs, commits, `CHANGELOG.md`) | Still deferred. **Commits remain deferred ON PRIVACY GROUNDS**, and §14's requirement that the rationale be *re-argued, not merely revisited* is untouched — nothing in ADR 0023 re-argues it or weakens it. |
+| **Plan gating** | **Consumed** — seam extracted (C-4). |
+| **The retention reaper** | Still deferred; the §9.5 no-customer-facing-claim condition **re-checked and re-affirmed**, with its priority raised by rss volume (ADR 0023 §7.4). |
+| **Per-repo `weight` tuning** | Still deferred; `watched_feeds.weight` joins `watched_repos.weight` as constant 10 in v1. |
+
+### C-6 — §9's personal-data ruling is NOT inherited by the second source
+
+§9.2 rests its Art. 6(1)(f) balancing on a specific footing: the release body *"is the customer's own
+published announcement about their own product, on their own repository, and SOSH is the **processor** of
+it."* **For a third-party news article every clause of that footing fails** — third-party author,
+third-party publisher, no customer relationship, content the customer did not create.
+
+**ADR 0023 §7 makes its own ruling item by item** and records that SOSH's posture for this source is
+**controller, not processor**, requiring a fresh balancing test. §9's structural controls *do* carry
+(contributor identity absent from the Insert type; body retained verbatim; no regex handle-stripping), and
+§9's refusal of *"it is public data"* as a lawful basis is inherited in full. The lawful basis, the
+copyright/ToS position and the `/privacy` consequence are **escalated to founder/counsel**, not written by
+an Architect. §9.6's launch condition is **extended**, not replaced.
+
+---
+
+_End Amendment C. Nothing above §17 was modified._
