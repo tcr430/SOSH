@@ -654,3 +654,51 @@ scripts/eval/run-triage-eval.test.ts` — 7/7 green (5 pre-existing + 2 new). `n
 lib/validation` — 731/731 green (unaffected by this change; run as the broader regression sweep this
 project's verification loop requires). `npx eslint` on all three touched files — clean.
 **Commit:** `a486d618`
+
+### A-8 (ADJUDICATION REQUEST) — ruling recorded
+
+**Ruling (founder, 2026-08-30, `docs/build-guide/session-30.md` §0.2):** the `parsers.ts` change is
+retroactively IN SCOPE for Session 30, recorded as an ADR 0020 §17 amendment — not left as ADR 0023 §19
+disclosure, since disclosure is not authorisation. Reverting was rejected: it would re-break the live
+triage run the market-responsive corpus depends on. The SHARED-FUNCTION CALLERS rule is satisfied only once
+`runner.ts` and `tool-runner.ts` each carry an executed test for the new balanced-brace-fallback behaviour —
+this step (D2).
+**Fix:** `docs/decisions/0020-mode-3-signal-ingestion.md` §17b — Amendment D, appended (not rewritten),
+recording what changed (`extractJsonBlock`'s balanced-brace fallback), why (the live run's ~75% prose-prefix
+rate), the A-8 ruling verbatim, and a caller-coverage table naming all four callers
+(`safeParseOrAiError`/`runner.ts`/`tool-runner.ts`/the out-of-band eval harness) with their before/after
+status.
+**Test:** N/A for the ruling itself — Tier 3, diff-verified (the amendment is prose). Proof: `git diff --stat
+-- docs/decisions/0020-mode-3-signal-ingestion.md` shows only additive lines below `_End Amendment C_`;
+`grep -c "Amendment D" docs/decisions/0020-mode-3-signal-ingestion.md` is non-zero.
+**Commit:** `<recorded below, same commit as D2 — MAJOR-1>`
+
+### D2 — MAJOR-1
+
+**Fix:** No production change to `lib/ai/parsers.ts` — the balanced-brace fallback A-8 ruled in scope stays
+exactly as G1b.13 shipped it. Two new, executed test cases pin its behaviour per caller: `lib/ai/runner.test.ts`
+(Step 4 describe block) — a prose-prefixed-JSON case (`'Here is the result you asked for:\n\n{"result":"generated"}'`
+resolves to `{result:"generated"}` via `runPrompt`) and a two-concatenated-objects case
+(`'{"result":"first"}{"result":"second"}'` resolves to `{result:"first"}`, pinning WHICH object wins, not
+merely that parsing succeeds). `lib/ai/tool-runner.test.ts` — the identical two cases through `runToolLoop`
+(Stage C triage), via two new fixtures under `lib/signals/__fixtures__/triage/`: `decision-prose-prefixed.json`
+(prose before a `card` decision) and `decision-concatenated-objects.json` (a `card` decision immediately
+followed by a second, different `no_card` decision — asserting the FIRST is the one returned). Both new
+fixtures are schema-valid `TriageDecisionSchema` payloads, matching the existing `decision-card.json`/
+`decision-no-card.json` fixture shape.
+**Test:** Both new cases in both files pass against the real, unmodified `lib/ai/parsers.ts`
+(`npx vitest run lib/ai/runner.test.ts lib/ai/tool-runner.test.ts` — 67/67 green). Demonstrated to REDDEN
+per the step's own instruction: temporarily replaced `extractBalancedJsonObject(trimmed) ?? trimmed` with
+plain `trimmed` in a working-tree copy of `parsers.ts` (removing the balanced-brace fallback) — all four new
+cases (two per file) failed with `invalid_response`, confirming they exercise the fallback and are not
+vacuously true; restored the original file and `git diff --stat -- lib/ai/parsers.ts` confirmed empty before
+committing. `npx tsc --noEmit --skipLibCheck` clean. `npm run test:app` — 3259/3259 tests passed; 3 test
+FILES fail to even load (`lib/config.test.ts`, `components/studio/StudioEditor.test.tsx`,
+`lib/signals/orchestrator.test.ts`) on a pre-existing environment gap (`NEXT_PUBLIC_SUPABASE_URL`/
+`NEXT_PUBLIC_SUPABASE_ANON_KEY`/`NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` missing in this shell) — confirmed
+byte-for-byte identical at the D1 commit via `git stash`/re-run before any D2 change, so this is not a D2
+regression. A fourth, transient failure (`corpus-v2-schema.test.ts`) on the first full run was confirmed to
+be a parallel-file race against `run-triage-eval.test.ts`'s corpus mutation/restore cycle (both touch
+`lib/signals/__fixtures__/eval/corpus.v2.json`), not reproducible on a clean re-run or in isolation — a
+pre-existing test-suite hazard, not introduced by this step's changes (which touch neither file).
+**Commit:** `<pending — filled in by a follow-up commit citing this one's own SHA, per the D1 precedent>`

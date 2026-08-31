@@ -1699,3 +1699,50 @@ an Architect. §9.6's launch condition is **extended**, not replaced.
 ---
 
 _End Amendment C. Nothing above §17 was modified._
+
+## §17b — Amendment D (Session 30-D / D2, A-8 ruling, 2026-09-01) — APPENDED, NOT REWRITTEN
+
+> **Author:** Claude, Session 30-D correction pass (D2). **Occasion:** the founder's A-8 ruling
+> (`docs/build-guide/session-30.md` §0.2), recording that G1b.13's rewrite of the shared JSON parser is
+> retroactively in scope for Session 30, and that disclosure at ADR 0023 §19 is not the same thing as this
+> amendment.
+
+**What changed and where:** `lib/ai/parsers.ts`'s `extractJsonBlock` (production code, unchanged by this
+amendment — Session 30 G1b.13 already shipped it) now falls back to a balanced-brace scan
+(`extractBalancedJsonObject`) when the fence-stripped/trimmed response text is not, on its own, valid JSON.
+This function is shared by every `safeParseOrAiError` caller in the product, not scoped to Mode 3: Mode
+1/2's `runPrompt` (`lib/ai/runner.ts:195`) and Stage C triage's `runToolLoop` (`lib/ai/tool-runner.ts:445`),
+in addition to the eval harness's out-of-band replay (`scripts/eval/run-triage-eval.ts`, not CI-executed).
+
+**Why:** Session 30 G1b.13's live triage run discovered the model prefixing its JSON decision with prose
+despite an explicit "no commentary" instruction in ~75% of calls. The old `extractJsonBlock` treated the
+whole response as required-JSON (fences aside) and hard-failed every one of those as `invalid_response`.
+The fallback tolerates prose before or after a JSON object without weakening `safeParseOrAiError`'s schema
+check that follows — a bad extraction still fails validation rather than failing to parse at all.
+
+**A-8's ruling (binding, 2026-08-30):** retroactively in scope for Session 30, recorded here rather than
+left as ADR 0023 §19 disclosure, precisely because — per CLAUDE.md's SHARED-FUNCTION CALLERS rule —
+disclosure is not the same thing as every caller being test-covered for the new behaviour. Reverting the
+change was rejected: it would re-break the live triage run the market-responsive corpus depends on
+(ADR 0023 §2.4.1/§18).
+
+**Caller coverage, enumerated per SHARED-FUNCTION CALLERS (closed by D2):**
+
+| Caller | Test file | Status before D2 | Status after D2 |
+|---|---|---|---|
+| `safeParseOrAiError` itself | `lib/ai/parsers.test.ts` | COVERED (8 cases, added with the G1b.13 change) | unchanged, still COVERED |
+| `runPrompt` (`lib/ai/runner.ts:195`) — every Mode 1/2 post generation | `lib/ai/runner.test.ts` | `AUTHORED-NOT-EXECUTED` for the new fallback behaviour | COVERED — two new cases pin prose-prefixed output parsing and a two-concatenated-object input resolving to the FIRST object |
+| `runToolLoop` (`lib/ai/tool-runner.ts:445`) — Stage C triage | `lib/ai/tool-runner.test.ts` | `AUTHORED-NOT-EXECUTED` for the new fallback behaviour | COVERED — the same two cases, via two new fixtures (`decision-prose-prefixed.json`, `decision-concatenated-objects.json`) |
+| `scripts/eval/run-triage-eval.ts` (out-of-band replay) | N/A | Not CI-executed, out-of-band by design (ADR 0021 §10.4) | Unchanged — this amendment does not bring it into CI |
+
+**Both new callers' cases were demonstrated to redden** (D2's own verification): with the balanced-brace
+fallback temporarily removed from `extractJsonBlock`, all four new cases (two per caller) fail with
+`invalid_response`; restored, all four pass, and `git diff --stat -- lib/ai/parsers.ts` is empty afterward —
+proof this is a real behavioural pin, not an assertion that happens to already hold.
+
+**No production change to `lib/ai/parsers.ts` in this amendment.** The parser change itself is G1b.13's; A-8
+rules on its *scope*, and D2 closes the *coverage* gap the ruling left open.
+
+---
+
+_End Amendment D. Nothing above §17b was modified._
