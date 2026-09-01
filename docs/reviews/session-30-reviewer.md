@@ -844,4 +844,4 @@ file and `git diff --stat -- lib/signals/` confirmed empty before the real chang
 failures unchanged, plus the same confirmed-transient `corpus-v2-schema.test.ts` parallel-file race from
 D2/D4's appendices, reproduced and re-confirmed passing in isolation). `npx eslint` on all three touched
 files — clean.
-**Commit:** `<pending — filled in by a follow-up commit citing this one's own SHA, per the D1–D4 precedent>`
+**Commit:** `8e72a881`
