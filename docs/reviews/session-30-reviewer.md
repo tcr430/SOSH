@@ -845,3 +845,35 @@ failures unchanged, plus the same confirmed-transient `corpus-v2-schema.test.ts`
 D2/D4's appendices, reproduced and re-confirmed passing in isolation). `npx eslint` on all three touched
 files — clean.
 **Commit:** `8e72a881`
+
+### D6 — NIT-5 (fixed), MINOR-9 (deferred), NIT-4 (deferred), NIT-3 (deferred) · no code, no migration
+
+**Fix:** Documentation-only, per this step's own rule (no code, no migration). `docs/decisions/0023-market-responsive-signal-source.md`
+gains `## 20. Amendment 3` (appended, not rewritten), covering three items: **(NIT-5, FIXED)** §3.4's
+self-contradicting "one poll per active feed per daily tick" is corrected — `orchestrator.ts:378` runs
+`pollWatchedFeeds` on the existing signals-poll cron, which is HOURLY (`0 * * * *`), not daily; the amendment
+states the corrected cadence and cross-references why the 24x multiplier is load-bearing for A-4's
+backlog-growth arithmetic (§5.5b) and D3's business-bounded enumeration fix — the unbounded backlog A-4
+accepted grows toward any given size sooner than "daily" implied, not later. **(MINOR-9, DEFERRED)** §8.4
+gains a note that `rate_limited_until` is READ-ONLY/SEEDED-ONLY — the column, the query that honours it, the
+renderer and its i18n keys all exist, but no production code path (`recordWatchedFeedPollOutcome`,
+`WatchedFeedPollOutcome`) ever SETS it, so the state is currently unreachable in production and its passing
+render test proves the renderer, not the state's occurrence. Named un-deferring condition: the first observed
+HTTP 429 from a real feed, or the session that adds feed-health surfacing. **(NIT-4 + NIT-3, DEFERRED, ONE
+amendment per this step's instruction)** §3.1 gains a combined note: NIT-4 — only the `ETag` half of
+conditional-GET is live (`rss-client.ts:110`/`rss-orchestrator.ts:195` never pass `lastModified`), so a
+`Last-Modified`-only feed is re-fetched in full every tick (a cost, not a dedup failure — §3.4's
+content-hash backstop still prevents a duplicate row); un-deferring condition: the next migration touching
+`watched_feeds`. NIT-3 (found in D5) — body decoding is unconditionally UTF-8 with `fatal: false`,
+**empirically confirmed to fail SILENTLY** (D5's own transcript: `new TextDecoder().decode(Buffer.from([0xff,0xfe,0x41,0x42]))`
+→ `"��AB"`, no throw), so a non-UTF-8 feed mojibakes into `signals.title`/`body` with no error, log line, or
+counter; un-deferring condition: the first customer-added feed confirmed non-UTF-8. `docs/current-phase.md`
+gains a bullet in the Session 30 entry stating the hourly cadence and the seeded-only state in the same
+words, so a reader does not have to open the ADR to learn either fact.
+**Test:** N/A — Tier 3, diff-verified, per this step's own instruction (a documentation correction pass has
+no runtime behaviour to test). Proof: `git status`/`git diff --stat` show exactly two files changed
+(`docs/current-phase.md`, `docs/decisions/0023-market-responsive-signal-source.md`), zero `.ts`/`.tsx`/`.sql`
+files, no new migration file. `npm run test:app` re-run to prove the doc edit touched no fixture path —
+3268/3268 tests passed (same 3 known pre-existing env-gap file-load failures, unchanged; the
+`corpus-v2-schema.test.ts` parallel-file race did not recur on this run).
+**Commit:** `<pending — filled in by a follow-up commit citing this one's own SHA, per the D1–D5 precedent>`

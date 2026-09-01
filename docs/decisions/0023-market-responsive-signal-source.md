@@ -1664,3 +1664,89 @@ constraint, and the founder-approval gate on every drafted input.
 [33259652831](https://github.com/tcr430/SOSH/actions/runs/33259652831); eval github
 precision=1.000/recall=1.000/dismiss-match=1.000, market_responsive
 precision=0.000/recall=0.000/dismiss-match=0.563 over corpus v2.**
+
+---
+
+## 20. Amendment 3 (Session 30-D / D6, 2026-09-01) — three items from the Reviewer's report, none of them code
+
+> **Author:** Claude, Session 30-D correction pass (D6). **Form:** APPENDED, not rewritten — nothing above
+> this heading is edited. One item resolves to a correction (NIT-5); two resolve to recorded deferrals with
+> named un-deferring conditions (MINOR-9, and NIT-4 combined with NIT-3, found in D5). No code and no
+> migration in this step, per the correction pass's own rule 7.
+
+### 20.1 §3.4 corrected — ingestion runs HOURLY, not "one poll per active feed per daily tick" (NIT-5, FIXED)
+
+§3.4 (above) states: *"one poll per active feed per **daily** tick, aligned to the existing signals-poll
+cron."* That sentence is **self-contradicting as shipped**: `lib/signals/orchestrator.ts:378` runs
+`pollWatchedFeeds` inside `runSignalsTick`, and the existing signals-poll cron this ADR says to align to is
+**hourly** (`0 * * * *`), not daily. The Builder followed "aligned to the existing cron" — the correct half
+of the sentence — but the actual cadence is **24x** what "daily" states, and that multiplier is load-bearing,
+not cosmetic:
+
+- **A-4's backlog-growth arithmetic (§5.5b)** reasons from "if a feed yields more than 2 relevant items per
+  **day**, candidates accrue faster than the 2-slot share retires them." At an hourly ingestion cadence, a
+  feed reaches that same accrual rate at **1/24th** the per-poll item rate A-4's own framing implicitly
+  assumed for a daily tick — the backlog A-4 accepted as unbounded grows toward any given size **sooner**
+  than "daily" would suggest, not later.
+- **D3's enumeration bound** (`lib/db/signal-candidates.ts`'s `listBusinessesWithNewCandidates`, corrected in
+  Session 30-D's D3 to page on businesses rather than cap on rows) exists precisely because an unbounded,
+  faster-than-assumed-growing backlog is real. This amendment does not change D3's fix; it corrects the
+  premise D3's own defect description was reasoning from — the backlog D3 protects against was always going
+  to arrive on an hourly clock, not a daily one.
+
+**Corrected statement, superseding §3.4's "daily" clause:** ingestion runs on the existing signals-poll cron,
+which is **HOURLY**. "Daily" in §3.4 above is superseded by this sentence and must not be read as the
+production cadence.
+
+### 20.2 §8.4 amended — `rate_limited_until` is READ-ONLY / SEEDED-ONLY until a later session (MINOR-9, DEFERRED)
+
+§8.4 (above) lists **"rate-limited / 304-unchanged"** among the states a watched feed's UI must render, and
+the surface does: the column exists (migration, `:44`), `listActiveWatchedFeedsReadyForPoll`
+(`watched-feeds.ts:120`) honours it in its query, the renderer shows "Rate limited" in all three locales,
+and that renderer has an executed test. **No code path anywhere ever SETS the column.**
+`WatchedFeedPollOutcome` has no field for it, and `recordWatchedFeedPollOutcome` (`:150-160`) never writes
+one — `watched-feeds.ts:106-109` discloses this honestly in its own comments. The consequence: one of §8.4's
+"states, all required" is currently **unreachable in production**, and its passing render test proves the
+renderer renders the string correctly — it proves nothing about whether the state ever occurs.
+
+**Ruling: `rate_limited_until` is READ-ONLY / SEEDED-ONLY** (settable only by direct seed/manual DB write,
+never by production code) **until a later session wires a real setter.** The UI, the column, and the i18n
+keys all STAY — removing them now would be a larger change than the deferral itself, and the surface is
+honest about every OTHER state it renders. The un-deferring condition, named: **the first observed HTTP 429
+from a real feed, or the session that adds feed-health surfacing** to the RSS poller, whichever comes first.
+Until then, this executed render test is understood to cover the RENDERER, not the STATE's occurrence.
+
+### 20.3 §3.1 amended — the conditional-GET contract is half-live (NIT-4), and body decoding is UTF-8-only (NIT-3, found in D5) — BOTH deferred, one amendment
+
+§3.1's table (above) names the rate-limiting mechanism as **"conditional GET (`ETag` / `If-Modified-Since`)"**
+— both halves, as one mechanism. In the shipped code, only the `ETag` half is live:
+`rss-client.ts:110` sends `If-Modified-Since` **only when the caller passes `lastModified`**, and
+`rss-orchestrator.ts:195` passes `{ etag }` alone — there is no `lastModified` outcome field anywhere, and no
+column to carry one. A feed that only ever supplies `Last-Modified` (no `ETag`) is therefore **re-fetched in
+full on every tick**, never receiving a `304`, contrary to what §3.1's "both halves" framing implies.
+
+**Ruling (NIT-4): DEFERRED.** The `ETag` half fully satisfies §3.1's dedup/idempotency purpose on its own for
+any feed that supplies one; `Last-Modified`-only feeds are a real but narrower gap, not a correctness defect
+(a full re-fetch still ingests correctly — it is a cost/redundancy cost, not a dedup failure, since
+`external_id`'s content-hash backstop, §3.4, still prevents a duplicate `signals` row). **Un-deferring
+condition:** the next migration that touches `watched_feeds`, which should add the `lastModified` column and
+outcome-field plumbing alongside whatever else that migration does, rather than opening a migration solely
+for this.
+
+**Ruling (NIT-3, found during D5): DEFERRED.** `rss-egress-guard.ts`'s body decode
+(`new TextDecoder().decode(...)`) is unconditionally UTF-8, with the default `fatal: false` — D5 verified
+empirically (`new TextDecoder().decode(Buffer.from([0xff,0xfe,0x41,0x42]))` → `"��AB"`) that
+**undecodable bytes fail SILENTLY**, substituted with U+FFFD replacement characters, never thrown. An
+ISO-8859-1 / Windows-1252 feed therefore mojibakes into `signals.title`/`body` — text a human then reads at
+the approval gate — with no error, no log line, and no counter. **Un-deferring condition:** the first
+customer-added feed that is confirmed non-UTF-8 (charset sniffing from the `Content-Type` header or a BOM
+check would be the fix's shape, deferred alongside the trigger rather than speculatively built now).
+
+**Both items share this amendment, per this step's own instruction, rather than being written twice** — NIT-4
+is a partially-implemented contract; NIT-3 is a silent-failure mode found auditing a neighbouring control
+during D5. Neither is code-changed by this amendment; both are recorded decisions, per ADR 0015 §2's Tier-3
+discipline that "no test, by decision" must be an explicit choice, never an oversight.
+
+---
+
+_End Amendment 3. Nothing above §20 was modified._

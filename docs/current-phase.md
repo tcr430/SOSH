@@ -165,6 +165,12 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
     `/lib/ai/`) were found and fixed before `app-tests` went green.
   - **Reviewer session (§3, G1c) NOT YET RUN** — PR #9 is open, unmerged; `PROC-REVIEW-AT-COMMIT` requires
     the Reviewer to name the exact commit range it reads, which cannot happen before the range is final.
+  - **Session 30-D, D6 correction (ADR 0023 §20 Amendment 3):** the market-responsive ingestion cadence is
+    **HOURLY**, not the "daily tick" §3.4 originally stated — `runSignalsTick`'s existing signals-poll cron
+    is `0 * * * *`, and A-4's backlog-growth arithmetic (and D3's business-bounded enumeration fix) both
+    assume this real cadence, not the daily one. **`rate_limited_until` is READ-ONLY / SEEDED-ONLY** — no
+    production code path sets it yet (un-deferring condition: the first observed HTTP 429 from a real feed,
+    or the session that adds feed-health surfacing); the UI/column/i18n keys all stay.
 
 - **Session 28 — Mode 3 Part 2: Triage, Insight Cards, Opportunity Feed (ADR 0021), E5.1–E5.12 CLOSED:**
   Builds on Session 27's ingestion pipeline. Stage C (a bounded, tool-using triage loop —
