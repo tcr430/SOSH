@@ -1065,6 +1065,6 @@ first commit after it in this correction pass — every citation above this appe
 shows additions strictly BELOW the `## CORRECTION PASS (Session 30-D)` marker and nothing else — the
 mechanical proof that nothing above the appendix was touched by any D-step, satisfying REVIEWER-REPORT
 APPEND-ONLY across the whole pass.
-**Commit:** `<pending — filled in by a follow-up commit citing this one's own SHA, per the D1–D8 precedent>`
+**Commit:** `6f93499f`
 
 **Session 30 Track G — CLOSED (correction pass complete).**
