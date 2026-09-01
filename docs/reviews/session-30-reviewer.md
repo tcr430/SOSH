@@ -912,4 +912,4 @@ own row-repair cites as evidence. `scripts/apply-migrations.ts` read directly (n
 **filename** alone (`readdirSync(...).filter(f => f.endsWith('.sql'))`), never a content hash/checksum — a
 comment-only edit inside an already-applied file therefore cannot disturb its tracked-applied state, since
 the filename is unchanged. `npx tsc --noEmit --skipLibCheck` clean (no `.ts` file touched by this step).
-**Commit:** `<pending — filled in by a follow-up commit citing this one's own SHA, per the D1–D6 precedent>`
+**Commit:** `6c007ebd`
