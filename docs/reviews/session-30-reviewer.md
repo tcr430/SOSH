@@ -787,3 +787,61 @@ full suite again and risking further rate-limiting, the specific Tier-1 file thi
 (`market-responsive-signal-ingestion.test.ts`) was run in isolation and passed 6/6 clean. `npx eslint` on all
 four touched files — clean.
 **Commit:** `bf1b117a`
+
+### D5 — MINOR-6 + MINOR-7 + MINOR-8 (+ NIT-3 determined, deferred to D6)
+
+**Fix:** `lib/signals/rss-egress-guard.ts` — (MINOR-8) ONE `deadline = Date.now() +
+RSS_FEED_FETCH_TIMEOUT_MS` computed BEFORE the redirect `while` loop, replacing a fresh
+`AbortSignal.timeout(RSS_FEED_FETCH_TIMEOUT_MS)` constructed per hop. Each hop now computes
+`remainingMs = deadline - Date.now()` and passes THAT to `AbortSignal.timeout(remainingMs)`; a
+`remainingMs <= 0` short-circuits to a `timeout` result before that hop's DNS/fetch work even starts. §8.3
+clause 7's "TOTAL per-fetch budget" is now genuinely total across the whole redirect chain — a hostile
+server can no longer hold one fetch for `(MAX_REDIRECTS+1) x RSS_FEED_FETCH_TIMEOUT_MS` by responding just
+under the timeout on every hop. (MINOR-7) the pinned-IP `new Agent(...)` dispatcher, previously never
+destroyed, is now disposed via `try { ... } finally { await dispatcher.close() }` wrapping every return path
+from the point the Agent is constructed through success/redirect-continue/304/size-cap/fetch-error — exactly
+one Agent's lifecycle scoped to one hop, never leaked. Clause 4's pinning hook (construction, placement,
+`connect.lookup` logic) is completely UNCHANGED — only its disposal timing moved. `lib/signals/source-scans.test.ts`
+— (MINOR-6) a parallel `toHaveLength(1)` scan arm for `sax`, matching the `xml2js` arm's shape exactly
+(same per-root vacuity guards); the stale comment claiming sax was "deliberately NOT scanned" is corrected
+to describe the new arm instead of arguing against one. NIT-3 determined empirically (`node -e
+"new TextDecoder().decode(Buffer.from([0xff,0xfe,0x41,0x42]))"` → `"��AB"`): `TextDecoder()`'s
+default `fatal: false` SILENTLY substitutes U+FFFD replacement characters for undecodable bytes — it never
+throws. An ISO-8859-1/Windows-1252 feed therefore mojibakes into `signals.title`/`body` silently, not
+loudly. This finding is DEFERRED, per the step's own instruction — recorded here for D6's ADR §3.1 amendment
+to cite, not fixed in this step, and no code changed for it.
+Invoked `security-reviewer` once, per this step's own instruction (four edits inside the module the Reviewer
+called the session's strongest work). Verdict: **sound, no BLOCKER/MAJOR.** Confirmed the `try/finally`
+ordering cannot race `dispatcher.close()` against an in-flight body read (JS's `finally`-runs-after-try-value
+guarantee, plus undici's `close()` being the graceful, wait-for-in-flight-requests variant, not the forceful
+`destroy()`); confirmed the `remainingMs <= 0` short-circuit never pre-empts a hop that would otherwise have
+produced `too_many_redirects` (the two checks never interleave — the redirect count is only ever incremented
+after a response is actually received within the same iteration); confirmed clause 4's pin is untouched; found
+no bypass path where `dispatcher` is constructed but a return happens from outside the `try`. Two NITs noted,
+not acted on (out of this step's scope and not blocking): the redirect branch's `continue` closes the
+dispatcher without draining `response.body` first (pre-existing shape — 3xx responses are typically
+bodiless/tiny, and there was no `close()` at all before this step, so this is not a new leak); `await
+dispatcher.close()` itself is unwrapped (undici's `close()` is documented not to reject under normal
+operation, so this is cosmetic).
+**Test:** `lib/signals/rss-egress-guard.test.ts` — **all eight §8.3 clauses re-verified green, BY CLAUSE
+NUMBER**, per this step's own risk framing (regression, not omission): clause 1 (`clause 1 — https-only
+(initial request)`, `clause 1 — re-checked per redirect hop`) — 8/8; clause 2 (`clause 2 — canonical IP
+normalization via the real URL parser`) — 5/5; clause 3 (`clause 3 — deny loopback, private, link-local,
+ULA, cloud-metadata ranges`) — green; clause 4 (`clause 4 — pin the validated IP, never re-resolve at connect
+time`) — 1/1, UNCHANGED assertion, still green; clause 5 (`clause 5 — re-validated on every poll`) — 1/1;
+clause 6 (`clause 6 — size cap enforced against bytes actually read`) — 3/3; clause 7 (`clause 7 — per-fetch
+timeout`) — 2/2, PLUS two new D5 cases (below); clause 8 (`clause 8 — XXE-hardened parsing`) — green. Total
+46/46 (42 pre-existing + 4 new). New cases: (1) `D5 — clause 7 is a TOTAL per-fetch budget across the whole
+redirect chain, not per hop` — spies `AbortSignal.timeout` and `Date.now`, asserts hop 1 receives the full
+8000ms and hop 2 (after 5000ms simulated elapsed) receives 3000ms, not a fresh 8000ms; a second case asserts
+an already-spent budget fails `timeout` WITHOUT calling `fetch` at all. (2) `D5 — the pinned-IP dispatcher is
+disposed, never leaked` — asserts `close()` is called exactly once per constructed `Agent` instance
+(`MockAgent.mock.instances`), both on the happy path (2 hops, 2 closes) and when the fetch itself errors (1
+hop, 1 close). **Demonstrated to redden (MINOR-6)**: added a second `import sax from 'sax'` in a scratch
+file under `lib/signals/`, re-ran the new scan arm, observed `expected 1, received 2`; deleted the scratch
+file and `git diff --stat -- lib/signals/` confirmed empty before the real change. `npx tsc --noEmit
+--skipLibCheck` clean. `npm run test:app` — 3267/3268 passed (3 known pre-existing env-gap file-load
+failures unchanged, plus the same confirmed-transient `corpus-v2-schema.test.ts` parallel-file race from
+D2/D4's appendices, reproduced and re-confirmed passing in isolation). `npx eslint` on all three touched
+files — clean.
+**Commit:** `<pending — filled in by a follow-up commit citing this one's own SHA, per the D1–D4 precedent>`

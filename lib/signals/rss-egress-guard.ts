@@ -178,6 +178,16 @@ export async function fetchWithEgressGuard(
 ): Promise<EgressFetchResult> {
   let currentUrl = url
   let redirectCount = 0
+  // D5 (Session 30-D, MINOR-8) — ONE deadline computed BEFORE the redirect
+  // loop, not a fresh AbortSignal.timeout(...) per hop. §8.3 clause 7 names
+  // "TOTAL per-fetch budget" — the previous per-hop timer let a hostile
+  // server holding every hop just under the timeout consume
+  // MAX_REDIRECTS+1 full timeouts (4 x 8s = 32s) against a single fetch,
+  // which is a per-HOP budget wearing a per-FETCH name. The tick-level
+  // budget (RSS_FEED_POLL_TICK_BUDGET_MS, enforced by the caller) bounded
+  // the blast radius to "one hostile feed starves the tick", but that is
+  // not what clause 7 promises for a SINGLE fetch.
+  const deadline = Date.now() + config.server.RSS_FEED_FETCH_TIMEOUT_MS
 
   while (true) {
     const validated = validateUrl(currentUrl)
@@ -194,102 +204,125 @@ export async function fetchWithEgressGuard(
       return { ok: false, errorCode: blocked ? 'address_blocked' : 'dns_resolution_failed', message: `could not safely resolve ${validated.hostname}` }
     }
 
+    // The TOTAL per-fetch budget may already be spent by DNS/validation work
+    // across prior hops — fail the same way a slow fetch itself would,
+    // rather than starting a hop AbortSignal.timeout(...) can't meaningfully
+    // bound (a non-positive or negative timeout).
+    const remainingMs = deadline - Date.now()
+    if (remainingMs <= 0) {
+      return { ok: false, errorCode: 'timeout', message: `fetch of ${url} exceeded ${config.server.RSS_FEED_FETCH_TIMEOUT_MS}ms across ${redirectCount} redirect(s)` }
+    }
+
     // Clause 4 — THE HIGHEST-RISK ITEM. Pin the validated address via
     // undici's connect.lookup hook: the request URL (and therefore the Host
     // header AND the TLS SNI/certificate check) still target the real
     // hostname, but the actual TCP connect is forced to the literal IP we
     // just validated — "validate then let fetch re-resolve" is exactly the
-    // DNS-rebinding window this closes.
+    // DNS-rebinding window this closes. UNCHANGED by D5 — same pinning
+    // shape, same connect.lookup hook, per hop (a fresh Agent per hop is
+    // required here since each hop can resolve to a different address).
     const { address, family } = addresses[0]
     const dispatcher = new Agent({
       connect: { lookup: (_hostname, _opts, cb) => cb(null, address, family) },
     })
 
-    let response
     try {
-      response = await undiciFetch(currentUrl, {
-        dispatcher,
-        // Clause 7 (per-fetch half) — the per-tick half is the caller's
-        // (G1b.5's ingestion loop) responsibility via
-        // RSS_FEED_POLL_TICK_BUDGET_MS; this bounds ONE hop's wait.
-        signal: AbortSignal.timeout(config.server.RSS_FEED_FETCH_TIMEOUT_MS),
-        headers: { 'User-Agent': 'SOSH-SignalsRSS/1.0', ...options.headers },
-        redirect: 'manual',
-      })
-    } catch (err) {
-      if (err instanceof Error && err.name === 'TimeoutError') {
-        return { ok: false, errorCode: 'timeout', message: `fetch of ${currentUrl} exceeded ${config.server.RSS_FEED_FETCH_TIMEOUT_MS}ms` }
+      let response
+      try {
+        response = await undiciFetch(currentUrl, {
+          dispatcher,
+          // Clause 7 (per-fetch half) — bounds the TOTAL remaining budget
+          // across the whole redirect chain, not a fresh per-hop window
+          // (D5, MINOR-8). The per-tick half is the caller's (G1b.5's
+          // ingestion loop) responsibility via RSS_FEED_POLL_TICK_BUDGET_MS.
+          signal: AbortSignal.timeout(remainingMs),
+          headers: { 'User-Agent': 'SOSH-SignalsRSS/1.0', ...options.headers },
+          redirect: 'manual',
+        })
+      } catch (err) {
+        if (err instanceof Error && err.name === 'TimeoutError') {
+          return { ok: false, errorCode: 'timeout', message: `fetch of ${url} exceeded ${config.server.RSS_FEED_FETCH_TIMEOUT_MS}ms across ${redirectCount} redirect(s)` }
+        }
+        return { ok: false, errorCode: 'fetch_failed', message: err instanceof Error ? err.message : String(err) }
       }
-      return { ok: false, errorCode: 'fetch_failed', message: err instanceof Error ? err.message : String(err) }
-    }
 
-    // 304 Not Modified is in the 3xx range but is NOT a redirect — it has
-    // no Location header and no body. Bug found integrating G1b.4's
-    // conditional-GET caller: excluding it here is required, or a 304
-    // falls into the redirect branch below and fails with
-    // 'redirect_invalid' (no Location header) instead of surfacing as the
-    // successful "unchanged" outcome the caller (rss-client.ts) expects.
-    if (response.status === 304) {
+      // 304 Not Modified is in the 3xx range but is NOT a redirect — it has
+      // no Location header and no body. Bug found integrating G1b.4's
+      // conditional-GET caller: excluding it here is required, or a 304
+      // falls into the redirect branch below and fails with
+      // 'redirect_invalid' (no Location header) instead of surfacing as the
+      // successful "unchanged" outcome the caller (rss-client.ts) expects.
+      if (response.status === 304) {
+        return {
+          ok: true,
+          status: 304,
+          body: '',
+          headers: { etag: response.headers.get('etag'), lastModified: response.headers.get('last-modified') },
+        }
+      }
+
+      if (response.status >= 300 && response.status < 400) {
+        redirectCount += 1
+        if (redirectCount > MAX_REDIRECTS) {
+          return { ok: false, errorCode: 'too_many_redirects', message: `exceeded ${MAX_REDIRECTS} redirects` }
+        }
+        const location = response.headers.get('location')
+        if (!location) return { ok: false, errorCode: 'redirect_invalid', message: 'redirect with no Location header' }
+
+        let redirectUrl: URL
+        try {
+          redirectUrl = new URL(location, currentUrl)
+        } catch {
+          return { ok: false, errorCode: 'redirect_invalid', message: `invalid redirect target: ${location}` }
+        }
+        // Clause 1, re-checked per hop: an https -> http downgrade is
+        // REJECTED, not followed, even though `new URL(location, base)`
+        // would happily resolve it — the loop's top re-runs validateUrl()
+        // against this new URL next iteration.
+        currentUrl = redirectUrl.href
+        continue
+      }
+
+      // §8.3 clause 6 — size cap enforced against bytes ACTUALLY READ,
+      // aborting mid-stream. Content-Length is attacker-controlled and may
+      // be absent or false; a check against the header alone is not the
+      // control.
+      const reader = response.body?.getReader()
+      if (!reader) return { ok: false, errorCode: 'fetch_failed', message: 'response had no readable body' }
+
+      const maxBytes = config.server.RSS_FEED_MAX_BODY_BYTES
+      let received = 0
+      const chunks: Uint8Array[] = []
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        received += value?.length ?? 0
+        if (received > maxBytes) {
+          reader.cancel()
+          return { ok: false, errorCode: 'body_too_large', message: `body exceeded ${maxBytes} bytes` }
+        }
+        if (value) chunks.push(value)
+      }
+
+      const body = new TextDecoder().decode(Buffer.concat(chunks))
       return {
         ok: true,
-        status: 304,
-        body: '',
-        headers: { etag: response.headers.get('etag'), lastModified: response.headers.get('last-modified') },
+        status: response.status,
+        body,
+        headers: {
+          etag: response.headers.get('etag'),
+          lastModified: response.headers.get('last-modified'),
+        },
       }
-    }
-
-    if (response.status >= 300 && response.status < 400) {
-      redirectCount += 1
-      if (redirectCount > MAX_REDIRECTS) {
-        return { ok: false, errorCode: 'too_many_redirects', message: `exceeded ${MAX_REDIRECTS} redirects` }
-      }
-      const location = response.headers.get('location')
-      if (!location) return { ok: false, errorCode: 'redirect_invalid', message: 'redirect with no Location header' }
-
-      let redirectUrl: URL
-      try {
-        redirectUrl = new URL(location, currentUrl)
-      } catch {
-        return { ok: false, errorCode: 'redirect_invalid', message: `invalid redirect target: ${location}` }
-      }
-      // Clause 1, re-checked per hop: an https -> http downgrade is
-      // REJECTED, not followed, even though `new URL(location, base)`
-      // would happily resolve it — the loop's top re-runs validateUrl()
-      // against this new URL next iteration.
-      currentUrl = redirectUrl.href
-      continue
-    }
-
-    // §8.3 clause 6 — size cap enforced against bytes ACTUALLY READ,
-    // aborting mid-stream. Content-Length is attacker-controlled and may be
-    // absent or false; a check against the header alone is not the control.
-    const reader = response.body?.getReader()
-    if (!reader) return { ok: false, errorCode: 'fetch_failed', message: 'response had no readable body' }
-
-    const maxBytes = config.server.RSS_FEED_MAX_BODY_BYTES
-    let received = 0
-    const chunks: Uint8Array[] = []
-
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      received += value?.length ?? 0
-      if (received > maxBytes) {
-        reader.cancel()
-        return { ok: false, errorCode: 'body_too_large', message: `body exceeded ${maxBytes} bytes` }
-      }
-      if (value) chunks.push(value)
-    }
-
-    const body = new TextDecoder().decode(Buffer.concat(chunks))
-    return {
-      ok: true,
-      status: response.status,
-      body,
-      headers: {
-        etag: response.headers.get('etag'),
-        lastModified: response.headers.get('last-modified'),
-      },
+    } finally {
+      // D5 (Session 30-D, MINOR-7) — the pinned-IP dispatcher was never
+      // destroyed: up to MAX_REDIRECTS+1 Agents leaked per feed, per tick,
+      // hourly, in a long-lived worker (100 feeds/tick x 4 Agents x 24
+      // ticks/day). Disposed on every exit from this hop's try block —
+      // success, redirect-continue, or any error return above — so exactly
+      // one Agent is ever live per hop.
+      await dispatcher.close()
     }
   }
 }

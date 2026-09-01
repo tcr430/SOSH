@@ -264,10 +264,11 @@ describe('SIGNAL-NO-PROVIDER-COUPLING (D-8, ADR §11.3 scan #2)', () => {
   // the RSS parser package, founder-confirmed as xml2js direct (G1b.3's
   // dependency gate). Same toHaveLength(1) shape as the @octokit/ scan
   // above. `sax` (also a direct dependency, imported by
-  // rss-egress-guard.ts for the XXE DOCTYPE check, G1b.3) is deliberately
-  // NOT scanned here — the build guide names "the RSS parser package"
-  // (singular, xml2js), and sax's import there is a security-guard
-  // concern, not the feed-parsing coupling this scan exists to police.
+  // rss-egress-guard.ts for the XXE DOCTYPE check, G1b.3) gets its OWN
+  // parallel scan arm below (D5, Session 30-D, MINOR-6) — it was left
+  // unscanned here through Session 30's original build, and "a test-file
+  // comment records the exclusion" is the Reviewer's named LOSER option:
+  // three lines of scan beats a comment that is not a bound.
   it('xml2js is imported in exactly one file, and it is under lib/signals/**', () => {
     for (const root of SCAN_ROOTS) {
       expect(collectTsFiles(root).length, `${root} contributed zero files to the scan`).toBeGreaterThan(0)
@@ -280,6 +281,29 @@ describe('SIGNAL-NO-PROVIDER-COUPLING (D-8, ADR §11.3 scan #2)', () => {
     for (const file of files) {
       const source = stripLineComments(fs.readFileSync(file, 'utf8'))
       if (/from\s+['"]xml2js['"]/.test(source)) importers.push(path.relative(ROOT, file))
+    }
+
+    expect(importers).toHaveLength(1)
+    expect(importers[0]!.replace(/\\/g, '/')).toMatch(/^lib\/signals\//)
+  })
+
+  // D5 (Session 30-D, MINOR-6) — `sax` is a second, direct XML-parser
+  // dependency (rss-egress-guard.ts's XXE DOCTYPE check, clause 8), and
+  // until this arm existed, a second file could `import sax` unnoticed —
+  // the exact per-root vacuity-guard shape the xml2js scan above already
+  // uses, applied to the other parser package this source pulls in.
+  it('sax is imported in exactly one file, and it is under lib/signals/**', () => {
+    for (const root of SCAN_ROOTS) {
+      expect(collectTsFiles(root).length, `${root} contributed zero files to the scan`).toBeGreaterThan(0)
+    }
+
+    const files = SCAN_ROOTS.flatMap((root) => collectTsFiles(root))
+    expect(files.length).toBeGreaterThan(0)
+
+    const importers: string[] = []
+    for (const file of files) {
+      const source = stripLineComments(fs.readFileSync(file, 'utf8'))
+      if (/from\s+['"]sax['"]/.test(source)) importers.push(path.relative(ROOT, file))
     }
 
     expect(importers).toHaveLength(1)

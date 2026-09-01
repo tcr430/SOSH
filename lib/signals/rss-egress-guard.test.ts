@@ -11,7 +11,10 @@ vi.mock('undici', () => ({
   Agent: vi.fn().mockImplementation(function (this: object, opts: unknown) {
     // Preserve the passed options (incl. connect.lookup) so tests can invoke
     // the pinned lookup directly — see the DNS-rebinding describe block.
-    Object.assign(this, { __opts: opts })
+    // D5 (Session 30-D, MINOR-7) — `close` is a real undici Agent method;
+    // the mock needs it so fetchWithEgressGuard's finally-block disposal
+    // has something to call and tests can assert it was.
+    Object.assign(this, { __opts: opts, close: vi.fn().mockResolvedValue(undefined) })
   }),
 }))
 
@@ -355,6 +358,88 @@ describe('clause 7 — per-fetch timeout (a server that never closes)', () => {
     await fetchWithEgressGuard('https://example.com/feed.xml')
     const fetchOpts = mockFetch.mock.calls[0]![1] as { signal: AbortSignal }
     expect(fetchOpts.signal).toBeInstanceOf(AbortSignal)
+  })
+})
+
+// ── D5 (Session 30-D, MINOR-8): the TOTAL budget carries across redirects ──
+
+describe('D5 — clause 7 is a TOTAL per-fetch budget across the whole redirect chain, not per hop', () => {
+  it('the second hop receives a SMALLER remaining timeout, not a fresh 8s window (a hostile server can no longer consume 4x8s = 32s against one fetch)', async () => {
+    const timeoutSpy = vi.spyOn(AbortSignal, 'timeout')
+    const nowSpy = vi.spyOn(Date, 'now')
+    // deadline = 1_000 + 8_000 = 9_000. Hop 1's remaining budget is the full
+    // 8_000ms; hop 2 is called after 5_000ms have elapsed (simulating a slow
+    // first hop), so its remaining budget must be ~3_000ms, NOT a fresh 8_000.
+    nowSpy.mockReturnValueOnce(1_000) // deadline computation
+    nowSpy.mockReturnValueOnce(1_000) // hop 1's remainingMs check
+    nowSpy.mockReturnValueOnce(6_000) // hop 2's remainingMs check
+
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 302,
+        headers: { get: (h: string) => (h === 'location' ? 'https://example.com/next' : null) },
+      } as never)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: { get: () => null },
+        body: makeBodyStream('<rss></rss>'),
+      } as never)
+
+    const result = await fetchWithEgressGuard('https://example.com/feed.xml')
+    expect(result.ok).toBe(true)
+    expect(timeoutSpy).toHaveBeenCalledTimes(2)
+    expect(timeoutSpy.mock.calls[0]![0]).toBe(8_000)
+    expect(timeoutSpy.mock.calls[1]![0]).toBe(3_000)
+  })
+
+  it('fails with timeout, without attempting a fetch, when the budget is already spent before a hop starts', async () => {
+    const nowSpy = vi.spyOn(Date, 'now')
+    nowSpy.mockReturnValueOnce(1_000) // deadline = 9_000
+    nowSpy.mockReturnValueOnce(9_500) // remainingMs = 9_000 - 9_500 = -500, already spent
+
+    const result = await fetchWithEgressGuard('https://example.com/feed.xml')
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.errorCode).toBe('timeout')
+    expect(mockFetch).not.toHaveBeenCalled()
+  })
+})
+
+// ── D5 (Session 30-D, MINOR-7): the pinned-IP dispatcher is disposed ───────
+
+describe('D5 — the pinned-IP dispatcher is disposed, never leaked', () => {
+  it('close() is called exactly once per hop (one Agent per hop, none left open)', async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 302,
+        headers: { get: (h: string) => (h === 'location' ? 'https://example.com/next' : null) },
+      } as never)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: { get: () => null },
+        body: makeBodyStream('<rss></rss>'),
+      } as never)
+
+    const result = await fetchWithEgressGuard('https://example.com/feed.xml')
+    expect(result.ok).toBe(true)
+    expect(MockAgent).toHaveBeenCalledTimes(2)
+    const instances = MockAgent.mock.instances as unknown as Array<{ close: ReturnType<typeof vi.fn> }>
+    expect(instances).toHaveLength(2)
+    for (const instance of instances) {
+      expect(instance.close).toHaveBeenCalledTimes(1)
+    }
+  })
+
+  it('close() is called even when the fetch itself errors (dispatcher disposal on every exit path)', async () => {
+    mockFetch.mockRejectedValue(new Error('connection reset'))
+    const result = await fetchWithEgressGuard('https://example.com/feed.xml')
+    expect(result.ok).toBe(false)
+    const instances = MockAgent.mock.instances as unknown as Array<{ close: ReturnType<typeof vi.fn> }>
+    expect(instances).toHaveLength(1)
+    expect(instances[0]!.close).toHaveBeenCalledTimes(1)
   })
 })
 
