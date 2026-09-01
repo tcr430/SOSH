@@ -4,8 +4,9 @@
 **Goal:** First paying customer
 **Status:** **Session 30 (Track G, market-responsive signal source, ADR 0023, G1b.1–G1b.14) BUILDER
 COMPLETE, PR #9 open, not yet merged.** A second Mode-3 signal source (customer-supplied RSS/Atom feeds)
-ships alongside GitHub releases, gated behind ADR 0021 §12's second-source override (ADR 0023 §17
-Amendment 1 — does not travel to a third source). Two real production bugs were found and fixed along the
+ships alongside GitHub releases, gated behind ADR 0021 §12's second-source override (ADR 0023 §2.9 + ADR
+0021 §16 Amendment A — corrected citation, Session 30-D D8 NIT-1; does not travel to a third source). Two
+real production bugs were found and fixed along the
 way: the triage prompt was hardcoded to GitHub-release framing for every candidate including RSS articles,
 and `lib/ai/parsers.ts#extractJsonBlock` could not tolerate the model prefacing its JSON decision with
 prose (a real risk on any `runPrompt`/`runToolLoop` call, not eval-only). **27 constraints total** (ADR
@@ -14,9 +15,12 @@ prose (a real risk on any `runPrompt`/`runToolLoop` call, not eval-only). **27 c
 and are **MEASURED**, never COVERED. **The live model-authored cassette run (G1b.13) is honest, not
 flattering:** corpusVersion 2 — github precision 1.000 (24/24), recall 1.000 (24/24), dismissMatch 1.000
 (16/16), unchanged v1 bootstrap; **market_responsive precision 0/0, recall 0/24, dismissMatch 9/16** — the
-live model scored zero of the 24 founder-labelled `card` examples as `card`, citing the total absence of
-audience/brand/campaign memory (the corpus's universal `stubMemory: {}` condition) as the reason it could
-not confirm relevance. **`SIGNAL-MR-QUALITY-LOWER-CONFIDENCE`, updated for the post-live-run state (§2.8's
+live model scored zero of the 24 founder-labelled `card` examples as `card`. Every `no_card` reason cited
+the total absence of audience/brand/campaign memory (the corpus's universal `stubMemory: {}` condition) —
+**stated here as a HYPOTHESIS the model's own text suggests, not a confirmed cause** (A-7, Session 30-D D8):
+the corpus's universal zero-memory condition is a genuine confound never isolated from the prompt/model
+combination itself, and no re-run with populated stub memory has yet been attempted to test it (D9 attempts
+one). **`SIGNAL-MR-QUALITY-LOWER-CONFIDENCE`, updated for the post-live-run state (§2.8's
 own instruction — reciting the pre-live-run sentence would now be false):** the market-responsive source is
 no longer merely lower-confidence for lack of measurement — it **has been measured**, and the measured
 result is currently poor; market-responsive floors remain reported-but-advisory until graduation (§2.6),
@@ -128,7 +132,12 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
     unchanged v1 bootstrap, not itself re-run live yet); **market_responsive precision 0/0 (the model
     predicted zero cards) recall 0/24 (every founder-labelled `card` example scored `no_card`) dismissMatch
     9/16.** Every `no_card` reason cited the total absence of audience/brand/campaign memory — the corpus's
-    universal `stubMemory: {}` condition — as the reason it could not confirm relevance. The sabotage
+    universal `stubMemory: {}` condition — **stated here as a HYPOTHESIS the model's own reason text
+    suggests, not a confirmed cause of the 0/24 result** (A-7, Session 30-D D8): the zero-memory condition
+    has not been isolated from the prompt/model combination by any controlled re-run as of this entry — D9
+    attempts the one out-of-band live re-run with populated stub memory that would test it, and either
+    cites that result or records the attempt as blocked, in which case this hypothesis framing stands as
+    the final word. The sabotage
     experiment (`lib/signals/__fixtures__/eval/sabotage-run.json`) ran the same 40 signals through a
     deliberately degraded ("always decide card") prompt: 6/40 flipped to card vs 0/40 clean — proving the
     prompt demonstrably CAN move the output at this out-of-band live-run point (the honest form of ADR
@@ -171,6 +180,13 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
     assume this real cadence, not the daily one. **`rate_limited_until` is READ-ONLY / SEEDED-ONLY** — no
     production code path sets it yet (un-deferring condition: the first observed HTTP 429 from a real feed,
     or the session that adds feed-health surfacing); the UI/column/i18n keys all stay.
+  - **Session 30-D, D8 (A-6 ruling) — the corpus's 24 `card` examples cite unverified real-company figures:**
+    ADR 0023 §18 Amendment 2's real-company/event figures (used to construct the 24 `card` examples) were
+    "pulled from search-result summaries, not verified against primary sources," and that spot-check has
+    **not** been performed. **Any future session citing a specific number from those 24 examples must
+    re-verify it against a primary source first** — this obligation is recorded here (so it is not lost
+    inside the ADR alone), in ADR 0023 §18, and in `docs/build-guide/session-30.md`'s §3b reconciliation
+    note.
 
 - **Session 28 — Mode 3 Part 2: Triage, Insight Cards, Opportunity Feed (ADR 0021), E5.1–E5.12 CLOSED:**
   Builds on Session 27's ingestion pipeline. Stage C (a bounded, tool-using triage loop —

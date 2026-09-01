@@ -643,8 +643,20 @@ Pure score order. L-11 removes that option: a high-scoring news flood would take
    adds `signals.source` to the existing join select-list.
 2. Partition in application code: at most **2** `rss`, at most **1 per distinct feed**, remainder `github`,
    to a total of **5**.
-3. **Backfill:** if either source has fewer candidates than its share, the other takes the free slots. A cap
-   that wastes a slot on an empty source is its own bug.
+3. **Backfill is ONE-DIRECTIONAL** (CORRECTED, Session 30-D D8, A-5 ruling — this clause originally read "if
+   either source has fewer candidates than its share, the other takes the free slots," which contradicted
+   §2.5's own "strict minority; 3 would be the majority L-11 forbids"): if `rss` has fewer than its 2-slot
+   share (including the empty case), `github` takes the freed slots. **The reverse is NOT true** — if
+   `github` is short, `rss` does NOT grow past its fixed 2-slot ceiling to compensate. Bidirectional
+   backfill would hand `rss` all 5 of 5 slots on a quiet `github` day, which is exactly the majority L-11
+   exists to prevent; the one-directional form keeps `rss`'s cap a genuine ceiling, never a share that
+   grows. When BOTH sources are short, the returned shortlist is simply smaller than the target size — the
+   existing, already-accepted behaviour for a thin backlog, not new. **The code (`lib/signals/triage/
+   allocate-shortlist.ts:1-18`) already implements this correctly and states the asymmetry in its own header
+   comment; this amendment brings the ADR's binding text into agreement with it, per the founder's A-5
+   ruling** ("keep the code; amend §5.3" — the named loser, "make the code match §5.3," would ship a path
+   where a single quiet github day hands the entire shortlist to a source this ADR itself calls a strict
+   minority).
 
 **No new column, and the denormalization precedent does not transfer.** `occurred_at` was denormalized onto
 `signal_candidates` because it is a **member of the composite ORDER BY index**, and Postgres cannot build an
@@ -1640,13 +1652,25 @@ constraint, and the founder-approval gate on every drafted input.
   `SIGNAL-MR-CORPUS-EXTENDED`, `-MODEL-AUTHORED`, `-BLIND-LABELLED`, `-QUALITY-LOWER-CONFIDENCE`).
   `SIGNAL-MR-CORPUS-DISCRIMINATIVE` is confirmed Tier 2 everywhere it is cited — a test of
   `scripts/eval/run-triage-eval.ts`'s own arithmetic, never described as a corpus-discrimination proof.
-- **§13's amendment notes confirmed landed:** ADR 0020 §6.5/§14/§7/§8.6 and ADR 0021 §16 Amendment A (the
-  §12 override) are all present at this head — verified by direct grep, not assumed from §13's own
-  narration.
+- **§13's amendment notes confirmed landed** (CORRECTED, Session 30-D D8 — BLOCKER-2 part 2): ADR 0020
+  §6.5/§14/§7/§8.6 and ADR 0021 §16 Amendment A (the §12 override) were verified present by direct grep of
+  the **working tree at G1b.14's close-out**, not of `e036f6f5` (this section's own named head) — the
+  verification method used here could not distinguish the two, and as originally worded this sentence was
+  **false at the head it names**: `git cat-file -e e036f6f5:docs/decisions/0023-market-responsive-signal-source.md`
+  fails, because this ADR itself did not enter git until Session 30-D's **D0** (commit `943ad622`), five
+  commits and a correction pass later. What was actually true at close-out: the amendment text existed in
+  the G1b.14 working tree, greppable there, and is now genuinely committed and grep-able at `943ad622`
+  onward. The correction is the record — this sentence is not deleted, only made accurate about what was
+  verified and where.
 - **The live model run (G1b.13) is the honest result, not a flattering one:** market_responsive scored
   precision 0/0, recall 0/24, dismissMatch 9/16 under the corpus's universal `stubMemory: {}` (zero-memory)
   condition — every `no_card` cited the absence of audience/brand/campaign context as the reason it could
-  not confirm relevance. github is unchanged at 1.000/1.000/1.000 (still the v1 hand-authored bootstrap).
+  not confirm relevance. **This attribution is a HYPOTHESIS the model's own reason text suggests, not a
+  confirmed cause of the 0/24 result** (A-7, Session 30-D D8) — the zero-memory condition is a genuine
+  confound never isolated from the prompt/model combination by any controlled re-run at the time this ADR
+  was authored; D9 attempts the one out-of-band live re-run with populated stub memory that would test it,
+  and either cites that result or records the attempt as blocked, in which case this hypothesis framing
+  stands as final. github is unchanged at 1.000/1.000/1.000 (still the v1 hand-authored bootstrap).
   Two real production bugs were found and fixed en route: the triage prompt's GitHub-only framing
   (`lib/signals/triage/orchestrator.ts`), and `lib/ai/parsers.ts#extractJsonBlock`'s inability to tolerate
   prose around the model's JSON decision (~75% failure rate on the first attempt, before the fix).

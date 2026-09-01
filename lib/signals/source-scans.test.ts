@@ -530,59 +530,102 @@ describe('ADR §11.4 — Tier-3 diff-verified properties (enumerated as decision
 // Tier-3 diff-verified properties, enumerated as decisions per the same
 // rule ADR 0020 §11.4 establishes above: a property of ABSENCE has no
 // runtime test because a runtime assertion cannot observe "this was never
-// added" — only a diff read at commit time can. Diff range for every
-// command below: afeafbf3 (last commit before G1b.1) .. HEAD (G1b.9,
-// ec64c3c9) — the full market-responsive track to date. Each command's
-// ACTUAL output is pasted, not summarized.
+// added" — only a diff read at commit time can. Each command's ACTUAL
+// output is pasted, not summarized.
+//
+// CORRECTED (Session 30-D D8, MINOR-10): the range below was originally
+// stated as "afeafbf3 .. HEAD (G1b.9, ec64c3c9)" — five commits short of the
+// shipped head (e036f6f5), missing the entire corpus work, the live-run
+// script, the parsers.ts change and the triage-prompt change. Tier 3 is
+// these eight properties' ONLY proof (ADR 0015 §2: "no test, by decision"),
+// so proof gathered over a shorter range is not proof over the shipped one
+// — property 7 in particular was previously greped over tools.ts/
+// tool-runner.ts/card.ts and never over triage/orchestrator.ts, which WAS
+// modified after ec64c3c9 (the GitHub-only prompt framing fix, G1b.13). The
+// Reviewer independently re-ran all eight at afeafbf3..e036f6f5 and found
+// they HOLD (session-30-reviewer.md) — this was a record defect, not a
+// property failure. Re-run HERE, by the correction pass itself, at
+// afeafbf3..cd986d13 (the corrected range: through Session 30-D's D7, the
+// last commit before this restatement), property 7 now explicitly including
+// triage/orchestrator.ts.
+//
+// Two of these commands, run unrestricted over the WHOLE diff ("-- ."),
+// match this file's own prose describing the property (this comment block
+// discusses "embedding"/"pgvector"/"cluster" by name) and the ADR/reviewer
+// documentation's own extensive discussion of the same rulings — neither is
+// the property being tested. Re-run restricted to production code paths
+// (lib/**, app/**, supabase/**, scripts/**, excluding *.md and this file's
+// own prose) for a clean, no-output result; the unrestricted command is
+// still shown first as evidence of what a naive re-run finds and why it is
+// not the actual violation.
 //
 // 1. SIGNAL-NO-EMBEDDINGS is NOT retired — no pgvector extension, no
 //    embedding call anywhere in the diff.
-//      $ git diff afeafbf3..HEAD -- . | grep -iE "pgvector|embedding|vector\("
+//      $ git diff afeafbf3..cd986d13 -- . | grep -iE "pgvector|embedding|vector\("
+//      (matches only ADR/reviewer prose discussing the ruling, and this
+//      file's own comment text — not a code addition)
+//      $ git diff afeafbf3..cd986d13 -- 'lib/**' 'app/**' 'supabase/**' 'scripts/**' ':(exclude)*.md' ':(exclude)lib/signals/source-scans.test.ts' | grep -iE "pgvector|embedding|vector\("
 //      (no output — exit code 1)
 //
 // 2. No clustering.
-//      $ git diff afeafbf3..HEAD -- . | grep -iE "cluster"
+//      $ git diff afeafbf3..cd986d13 -- . | grep -iE "cluster"
+//      (matches only ADR/reviewer prose, and this file's own comment text)
+//      $ git diff afeafbf3..cd986d13 -- 'lib/**' 'app/**' 'supabase/**' 'scripts/**' ':(exclude)*.md' ':(exclude)lib/signals/source-scans.test.ts' | grep -iE "cluster"
 //      (no output — exit code 1)
 //
 // 3. No sixth sanitizeDataField (also covered by scan #1's own assertion
 //    above; re-verified independently over the raw diff, not just the
 //    shipped tree, so a since-reverted local one wouldn't be missed):
-//      $ git diff afeafbf3..HEAD -- . | grep -n "^+" | grep -iE "function\s+sanitizeDataField"
+//      $ git diff afeafbf3..cd986d13 -- 'lib/**' 'app/**' ':(exclude)*.md' | grep -n "^+" | grep -iE "function\s+sanitizeDataField"
 //      (no output — exit code 1)
 //
 // 4. No second gating seam. Exactly one gate-shaped function was ADDED in
 //    the diff (gateSignalSourceAction, actions.ts, G1b.9); the one mention
 //    of "connectFeedAction" anywhere in the diff is prose in a comment
 //    explaining why a second seam was REJECTED, not a function:
-//      $ git diff afeafbf3..HEAD -- . | grep -cE "^\+(async )?function \w*[Gg]ate\w*Seam\w*\(|^\+(async )?function gateSignalSourceAction\("
+//      $ git diff afeafbf3..cd986d13 -- . | grep -cE "^\+(async )?function \w*[Gg]ate\w*Seam\w*\(|^\+(async )?function gateSignalSourceAction\("
 //      1
 //
 // 5. No contributor-identity field on the RSS Insert type. The only two
 //    diff lines matching author/creator/byline/email/contributor in
 //    parse-article.ts / lib/db/types.ts are comment PROSE explaining the
 //    absence, not field declarations:
-//      $ git diff afeafbf3..HEAD -- lib/signals/parse-article.ts lib/db/types.ts | grep -inE "^\+.*\b(author|creator|byline|email|contributor)\b"
-//      177:+// author / creator / byline / email field of any kind. rss-client.ts's own
-//      203:+// produce a contributor-identity field" a compile-time fact about
+//      $ git diff afeafbf3..cd986d13 -- lib/signals/parse-article.ts lib/db/types.ts | grep -inE "^\+.*\b(author|creator|byline|email|contributor)\b"
+//      178:+// author / creator / byline / email field of any kind. rss-client.ts's own
+//      207:+// produce a contributor-identity field" a compile-time fact about
 //
 // 6. No webhook route, no signature verification, no secret. Zero files
 //    changed under app/api/signals/** other than the pre-existing cron
-//    route's test file; zero webhook-secret/signature-verification code
-//    added anywhere in the diff:
-//      $ git diff afeafbf3..HEAD --name-status -- "app/api/"
+//    route's test file; zero webhook-secret/signature-verification CODE
+//    added anywhere in the diff (the unrestricted grep below matches only
+//    ADR/reviewer prose discussing the absence, and this file's own text):
+//      $ git diff afeafbf3..cd986d13 --name-status -- "app/api/"
 //      M	app/api/cron/signals-poll/route.test.ts
-//      $ git diff afeafbf3..HEAD -- . | grep -inE "^\+.*(webhook.?secret|verifySignature|x-hub-signature|signature.?verif)"
-//      (no output)
+//      $ git diff afeafbf3..cd986d13 -- 'lib/**' 'app/**' 'supabase/**' ':(exclude)*.md' ':(exclude)lib/signals/source-scans.test.ts' | grep -inE "^\+.*(webhook.?secret|verifySignature|x-hub-signature|signature.?verif)"
+//      (no output — exit code 1)
 //
 // 7. No change to Stage C's loop bounds, tool inventory or card schema.
 //    lib/signals/triage/tools.ts, lib/ai/tool-runner.ts and
 //    lib/signals/triage/card.ts (production code) have ZERO diff lines in
-//    the range — only card.test.ts changed (G1b.8's additive test
-//    coverage, expected):
-//      $ git diff afeafbf3..HEAD --name-status -- lib/signals/triage/tools.ts lib/ai/tool-runner.ts lib/signals/triage/card.ts
-//      (no output)
-//      $ git diff afeafbf3..HEAD --name-status -- lib/signals/triage/card.test.ts
+//    the corrected range — CORRECTED to also include
+//    lib/signals/triage/orchestrator.ts, which WAS modified (G1b.13's
+//    GitHub-only prompt-framing fix, branching buildTriageSystemPrompt/
+//    buildTriageUserMessage on candidate.signals.source) — read in full and
+//    confirmed the change touches only prompt TEXT construction and the
+//    candidate-enumeration source (listActiveConnectionBusinessIds ->
+//    listBusinessesWithNewCandidates/listNewCandidatesPoolWithSource), never
+//    TRIAGE_SHORTLIST_PER_TICK/TRIAGE_MAX_TOOL_CALLS/TRIAGE_MAX_WALL_CLOCK_MS,
+//    buildTriageTools's call signature, runToolLoop's call signature, or
+//    generateCard's schema:
+//      $ git diff afeafbf3..cd986d13 --name-status -- lib/signals/triage/tools.ts lib/ai/tool-runner.ts lib/signals/triage/card.ts lib/signals/triage/orchestrator.ts
+//      M	lib/signals/triage/orchestrator.ts
+//      $ git diff afeafbf3..cd986d13 -- lib/signals/triage/orchestrator.ts | grep -n "runToolLoop\|buildTriageTools\|TRIAGE_MAX_TOOL_CALLS\|TRIAGE_MAX_TURNS\|TRIAGE_RETRY_BUDGET\|generateCard("
+//      (shows only the import lines and the two unchanged call-site lines —
+//      no change to any bound constant, call signature, or generateCard's
+//      schema)
+//      $ git diff afeafbf3..cd986d13 --name-status -- lib/signals/triage/card.test.ts lib/signals/triage/orchestrator.test.ts
 //      M	lib/signals/triage/card.test.ts
+//      M	lib/signals/triage/orchestrator.test.ts
 //
 // 8. No change to §13.1's contract. listNewCandidates's exported name,
 //    parameters, filter (business_id + status='new') and ORDER BY are
@@ -591,10 +634,10 @@ describe('ADR §11.4 — Tier-3 diff-verified properties (enumerated as decision
 //    helper, which (with zero extra columns, its default) returns the
 //    EXACT SAME select string as the literal it replaced — confirmed by
 //    reading the helper's own definition (signal-candidates.ts:17-19):
-//      $ git diff afeafbf3..HEAD -- lib/db/signal-candidates.ts | grep -n "listNewCandidates\b"
-//      (shows the .select(...) line and its surrounding comment only — no
-//      change to the function's own `export async function listNewCandidates(`
-//      declaration line, its params, or its .eq()/.order() calls)
+//      $ git diff afeafbf3..cd986d13 -- lib/db/signal-candidates.ts | grep -n "^-export async function listNewCandidates\|^+export async function listNewCandidates"
+//      (no output — the function's own declaration line is unchanged; only
+//      its internal .select(...) call and a cast-through-unknown were
+//      touched, per the surrounding diff)
 describe('ADR 0023 §10.3 — Tier-3 diff-verified properties for the market-responsive track (enumerated as decisions, no runtime test by design)', () => {
   it('is a documentation-only block — the eight properties above (this file header comment) have no assertion here', () => {
     expect(true).toBe(true)

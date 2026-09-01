@@ -1833,6 +1833,27 @@ ADJUDICATION REQUEST, not a finding — the ADR is binding until the founder cha
 table (constraint -> tier -> CI job -> verdict) and a one-line summary naming the count per tier.
 ```
 
+> **Reconciliation note (Session 30-D, D8, A-6 ruling, 2026-09-01) — APPENDED, §3b above NOT amended in
+> place.** §3b's item B (READ HARDEST, "THE CORPUS AUTHORSHIP ORDERING") instructs the Reviewer to verify
+> "the 40 news signal inputs are **HAND-AUTHORED and not model-generated**." That instruction was written
+> 2026-08-26. **ADR 0023 §17 Amendment 1 (2026-08-29) REVERSES it** — Claude-drafted signal inputs are
+> permitted under founder review — and **§18 Amendment 2 (2026-08-29) narrows Amendment 1 further** for the
+> `card` slice specifically. §3b was never reconciled with either amendment before the Reviewer session ran.
+>
+> **The Reviewer correctly reviewed against the AMENDED ADR, not against this stale prompt text.**
+> `docs/reviews/session-30-reviewer.md`'s own item B verification confirms the corpus's actual authorship
+> shape (founder-authored inputs, model-authored cassettes, in that order) against §17/§18 as they stand,
+> not against §3b's superseded "hand-authored" framing — so no re-review is required here; this note exists
+> so a future reader does not read §3b's item B as still-binding text.
+>
+> **§18's residual is carried forward EXPLICITLY as still OPEN, not closed by this reconciliation:** the
+> real-company figures used in the 24 `card` examples were, in §18's own words, *"pulled from search-result
+> summaries, not verified against primary sources."* That spot-check has **not** happened as of this note.
+> Any future session that cites a specific figure from those 24 examples **must re-verify it against a
+> primary source first** — this obligation is recorded here, in ADR 0023 §18 itself, and in
+> `docs/current-phase.md` (Session 30-D, D8), so it survives in all three places a future reader might look,
+> rather than only inside the ADR where it could be missed.
+
 ---
 
 ## §4 — Correction pass (Session 30-D)  ·  (paste into Claude Code · Opus)

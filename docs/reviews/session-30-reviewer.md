@@ -913,3 +913,99 @@ own row-repair cites as evidence. `scripts/apply-migrations.ts` read directly (n
 comment-only edit inside an already-applied file therefore cannot disturb its tracked-applied state, since
 the filename is unchanged. `npx tsc --noEmit --skipLibCheck` clean (no `.ts` file touched by this step).
 **Commit:** `6c007ebd`
+
+### D8 — documentation truth: BLOCKER-2 (part 2), MINOR-1 + A-5, MINOR-10, A-6, A-7, NIT-1, NIT-2
+
+**BLOCKER-2 part 2 — fix:** ADR 0023 §19's sentence *"§13's amendment notes confirmed landed: … present at
+this head — verified by direct grep, not assumed"* is corrected in place (append-style, marked CORRECTED,
+not silently reworded) to state what was actually verified — the working tree at G1b.14's close-out, not
+`e036f6f5` (the head this sentence names) — and to record that the documents entered git only at Session
+30-D's **D0** (`943ad622`), since `git cat-file -e e036f6f5:docs/decisions/0023-market-responsive-signal-source.md`
+fails. The correction is the record; the sentence is not deleted.
+
+**MINOR-1 + A-5 — fix:** ADR 0023 §5.3's clause 3 ("Backfill") is amended: the original text ("if either
+source has fewer candidates than its share, the other takes the free slots") is corrected to state the
+backfill is **one-directional** — `rss` short backfills to `github`, but `github` short does NOT let `rss`
+grow past its 2-slot ceiling — matching what `lib/signals/triage/allocate-shortlist.ts:1-18`'s own header
+comment already states and implements. **THE CODE DOES NOT CHANGE** — the amendment brings the ADR's binding
+text into agreement with code the Reviewer already agreed was the L-11-safe reading, per the founder's A-5
+ruling ("keep the code; amend §5.3").
+
+**MINOR-10 — fix:** `lib/signals/source-scans.test.ts`'s Tier-3 diff-verified-properties comment block
+(eight properties, ADR 0023 §10.3) restated at the corrected range `afeafbf3..cd986d13` (D7's own commit —
+the last commit before this restatement), not the stale `afeafbf3..ec64c3c9` the block previously named.
+**All eight commands re-run for real by this correction pass, actual output pasted below** (not the file's
+own paraphrase — the exact transcript):
+```
+$ git diff afeafbf3..cd986d13 -- 'lib/**' 'app/**' 'supabase/**' 'scripts/**' ':(exclude)*.md' ':(exclude)lib/signals/source-scans.test.ts' | grep -iE "pgvector|embedding|vector\("
+(no output, exit 1)                                                                     — property 1 HOLDS
+$ git diff afeafbf3..cd986d13 -- 'lib/**' 'app/**' 'supabase/**' 'scripts/**' ':(exclude)*.md' ':(exclude)lib/signals/source-scans.test.ts' | grep -iE "cluster"
+(no output, exit 1)                                                                     — property 2 HOLDS
+$ git diff afeafbf3..cd986d13 -- 'lib/**' 'app/**' ':(exclude)*.md' | grep -n "^+" | grep -iE "function\s+sanitizeDataField"
+(no output, exit 1)                                                                     — property 3 HOLDS
+$ git diff afeafbf3..cd986d13 -- . | grep -cE "^\+(async )?function \w*[Gg]ate\w*Seam\w*\(|^\+(async )?function gateSignalSourceAction\("
+1                                                                                        — property 4 HOLDS
+$ git diff afeafbf3..cd986d13 -- lib/signals/parse-article.ts lib/db/types.ts | grep -inE "^\+.*\b(author|creator|byline|email|contributor)\b"
+178:+// author / creator / byline / email field of any kind. rss-client.ts's own
+207:+// produce a contributor-identity field" a compile-time fact about           — property 5 HOLDS (prose only, no field)
+$ git diff afeafbf3..cd986d13 --name-status -- "app/api/"
+M	app/api/cron/signals-poll/route.test.ts
+$ git diff afeafbf3..cd986d13 -- 'lib/**' 'app/**' 'supabase/**' ':(exclude)*.md' ':(exclude)lib/signals/source-scans.test.ts' | grep -inE "^\+.*(webhook.?secret|verifySignature|x-hub-signature|signature.?verif)"
+(no output, exit 1)                                                                     — property 6 HOLDS
+$ git diff afeafbf3..cd986d13 --name-status -- lib/signals/triage/tools.ts lib/ai/tool-runner.ts lib/signals/triage/card.ts lib/signals/triage/orchestrator.ts
+M	lib/signals/triage/orchestrator.ts                                                    — CORRECTED to include this file, per MINOR-10's own finding
+$ git diff afeafbf3..cd986d13 -- lib/signals/triage/orchestrator.ts | grep -n "runToolLoop\|buildTriageTools\|TRIAGE_MAX_TOOL_CALLS\|TRIAGE_MAX_TURNS\|TRIAGE_RETRY_BUDGET\|generateCard("
+(shows only import lines + two unchanged call sites — no bound/signature/schema change) — property 7 HOLDS
+$ git diff afeafbf3..cd986d13 -- lib/db/signal-candidates.ts | grep -n "^-export async function listNewCandidates\|^+export async function listNewCandidates"
+(no output — declaration line unchanged)                                                — property 8 HOLDS
+```
+All eight properties re-verified HOLD at the corrected range. Property 7's original gap (never grepping
+`triage/orchestrator.ts`, which WAS modified for G1b.13's GitHub-only prompt-framing fix) is now closed —
+that file's actual diff was read in full and confirmed to touch only prompt-text construction and the
+candidate-enumeration source, never Stage C's loop bounds, tool inventory, or card schema.
+
+**A-6 — fix:** a dated reconciliation note APPENDED (not amending §3b in place, which A-6 forbids) to
+`docs/build-guide/session-30.md` immediately after §3b's closing fence, recording that ADR 0023 §17
+Amendment 1 reverses and §18 Amendment 2 further narrows §3b's item B ("hand-authored, not model-generated"
+instruction, written before either amendment existed), that the Reviewer correctly reviewed against the
+amended ADR rather than the stale prompt text, and that §18's real-company-figures residual is carried
+forward EXPLICITLY as still OPEN — copied verbatim in spirit into `docs/current-phase.md` too, so the
+obligation survives in three places (the ADR, the build guide, current-phase.md) rather than only the ADR
+where a future reader could miss it.
+
+**A-7 — fix:** both `docs/current-phase.md` (two locations: the top Status/summary paragraph and the
+detailed Session 30 entry) and ADR 0023 §19 are reworded so the `stubMemory: {}` (zero-memory) attribution
+for the 0/24 recall result reads explicitly as a **HYPOTHESIS the model's own reason text suggests**, never
+a confirmed cause — the zero-memory condition has not been isolated from the prompt/model combination by
+any controlled re-run as of this step. D9 is named as the step that attempts the one out-of-band live
+re-run with populated stub memory that would test the hypothesis, either citing that result or recording
+the attempt as blocked (credits/rate limits), in which case the hypothesis framing stands as final. No
+untested explanation is left stated as a cause.
+
+**NIT-1 — fix:** `docs/current-phase.md`'s top Status paragraph's mis-citation ("ADR 0023 §17 Amendment 1")
+for the ADR 0021 §12 override is corrected to the real citation (ADR 0023 §2.9 + ADR 0021 §16 Amendment A)
+— the paragraph further down that already cited it correctly is untouched; only the Status paragraph's
+mis-citation was fixed.
+
+**NIT-2 — fix (deferred, recorded in the SAME amendment D2 opened, not a second one):** ADR 0020 §17b
+Amendment D gains an appended paragraph recording that the `as unknown as <RowType>[]` double casts at
+`lib/db/signal-candidates.ts:68`/`:114` and `lib/db/insight-cards.ts:83`/`:107` remove the compiler's
+structural check at the two `UntrustedText`-minting read boundaries, that this follows the existing
+`lib/signals/score.ts` "cast through unknown" house idiom (required once a `.select()` string comes from a
+shared helper function rather than a literal, per `GenericStringError`), and that the un-deferring condition
+is a future session touching `lib/db`'s shared select helpers directly, or one of the four casts being found
+to mask a real shape mismatch.
+
+**Test:** N/A for the documentation corrections themselves — Tier 3, diff-verified, per every item's own
+nature (a citation fix, an ADR text amendment, a re-stated evidence block, an appended note, a reworded
+hypothesis framing). Proof: `git status`/`git diff --stat` show exactly five files changed
+(`docs/build-guide/session-30.md`, `docs/current-phase.md`, `docs/decisions/0020-mode-3-signal-ingestion.md`,
+`docs/decisions/0023-market-responsive-signal-source.md`, `lib/signals/source-scans.test.ts`); `git diff --
+lib/signals/source-scans.test.ts | grep -E "^\+|^-" | grep -viE "^\+\+\+|^---" | grep -viE "^[+-] *//"`
+returned EMPTY — mechanical proof every changed line in that file is a comment, no assertion logic touched.
+`npx tsc --noEmit --skipLibCheck` clean. `npm run test:app` — 3267/3268 tests passed on the full sweep (the
+3 known pre-existing env-gap file-load failures unchanged; the one additional failure,
+`corpus-v2-schema.test.ts`, is the same confirmed-transient parallel-file race recorded in D2/D3/D5/D6's
+appendices — re-confirmed passing 5/5 in isolation on this run, and the same 3-failure baseline re-confirmed
+on a second full-sweep run with no additional flake).
+**Commit:** `<pending — filled in by a follow-up commit citing this one's own SHA, per the D1–D7 precedent>`

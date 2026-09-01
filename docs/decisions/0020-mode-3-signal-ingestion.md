@@ -1743,6 +1743,26 @@ proof this is a real behavioural pin, not an assertion that happens to already h
 **No production change to `lib/ai/parsers.ts` in this amendment.** The parser change itself is G1b.13's; A-8
 rules on its *scope*, and D2 closes the *coverage* gap the ruling left open.
 
+**NIT-2 (Session 30-D, D8) — a second, unrelated deferral recorded in this SAME amendment, per D8's own
+instruction not to open a second one.** `lib/db/signal-candidates.ts:68`/`:114` and
+`lib/db/insight-cards.ts:83`/`:107` each read `(data as unknown as <RowType>[]) ?? []` — a double cast
+through `unknown` rather than a direct `as <RowType>[]`. This removes the TypeScript compiler's structural
+check at the two boundaries that mint `UntrustedText` (the read boundary where a joined Supabase row becomes
+a branded row type): a direct cast would have the compiler verify some structural overlap between the
+Supabase client's inferred return shape and the target type, where a cast-through-`unknown` accepts any
+shape silently. **This follows an existing house idiom**, not a new pattern introduced by Session 30 —
+`lib/signals/score.ts` already uses the identical "cast through `unknown`" idiom for an analogous
+shape-widening cast, and the two D3/G1b.7-era sites here needed it for the same mechanical reason: once a
+`.select()` call is built from a shared helper function (`signalsJoinSelect()`) rather than a literal string
+at the call site, supabase-js's generic overload resolution can no longer infer a row shape from it
+(`GenericStringError`), leaving cast-through-`unknown` as the only way to assign the result a concrete type
+at all. **Deferred, not fixed** — the four sites are correct as far as any test currently proves, and
+tightening this would mean either abandoning the shared-select-string helper (re-introducing the duplication
+it exists to remove) or writing a runtime-validated parser at each boundary, neither of which this pass's
+scope authorizes. **Un-deferring condition:** a future session that touches `lib/db`'s shared select helpers
+directly, or the first time one of these four casts is found to be masking a real shape mismatch (a
+production bug traced to a field the compiler would have caught with a direct cast).
+
 ---
 
 _End Amendment D. Nothing above §17b was modified._
