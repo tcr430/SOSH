@@ -1008,4 +1008,4 @@ returned EMPTY — mechanical proof every changed line in that file is a comment
 `corpus-v2-schema.test.ts`, is the same confirmed-transient parallel-file race recorded in D2/D3/D5/D6's
 appendices — re-confirmed passing 5/5 in isolation on this run, and the same 3-failure baseline re-confirmed
 on a second full-sweep run with no additional flake).
-**Commit:** `<pending — filled in by a follow-up commit citing this one's own SHA, per the D1–D7 precedent>`
+**Commit:** `4820fa37`
