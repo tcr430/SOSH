@@ -83,6 +83,7 @@ function makeArticle(overrides: Partial<ParsedArticle> = {}): ParsedArticle {
     html_url: 'https://competitor.example.com/launch',
     occurred_at: '2026-08-01T09:00:00Z',
     link: 'https://competitor.example.com/launch',
+    guid: null,
     ...overrides,
   }
 }
@@ -276,6 +277,41 @@ describe('the returned summary carries every named counter (§9.4 clause 4)', ()
 
     expect(summary.rssDuplicates).toBe(1)
     expect(summary.rssItemsIngested).toBe(0)
+  })
+})
+
+// ── D4 (Session 30-D, MAJOR-3) — the guid dedup fallback ADR §3.4
+// specifies, wired at the call site ──────────────────────────────────────────
+
+describe('D4 — the guid dedup fallback (ADR §3.4)', () => {
+  it('an item with a guid and NO link INGESTS via the guid fallback, computing external_id = rss:sha256(guid) — not a guard rejection', async () => {
+    const feed = makeFeed()
+    mockList.mockResolvedValue([feed])
+    const guidOnlyArticle = makeArticle({ link: null, html_url: null, guid: 'urn:uuid:guid-only-item' })
+    mockFetchAndParse.mockResolvedValue({ status: 'ok', articles: [guidOnlyArticle], malformedCount: 0, etag: null, lastModified: null })
+
+    const summary = await pollWatchedFeeds(NOW)
+
+    expect(summary.rssItemsIngested).toBe(1)
+    expect(summary.rssGuardRejected).toBe(0)
+    expect(summary.rssMissingDedupKey).toBe(0)
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ external_id: computeRssExternalId(null, 'urn:uuid:guid-only-item') }),
+    )
+  })
+
+  it('an item with NEITHER link NOR guid is the genuine residual: counted as rssMissingDedupKey, never rssGuardRejected', async () => {
+    const feed = makeFeed()
+    mockList.mockResolvedValue([feed])
+    const identitylessArticle = makeArticle({ link: null, html_url: null, guid: null })
+    mockFetchAndParse.mockResolvedValue({ status: 'ok', articles: [identitylessArticle], malformedCount: 0, etag: null, lastModified: null })
+
+    const summary = await pollWatchedFeeds(NOW)
+
+    expect(summary.rssMissingDedupKey).toBe(1)
+    expect(summary.rssGuardRejected).toBe(0)
+    expect(summary.rssItemsIngested).toBe(0)
+    expect(mockInsert).not.toHaveBeenCalled()
   })
 })
 

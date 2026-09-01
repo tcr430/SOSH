@@ -100,6 +100,7 @@ const tickSummary = {
   rssItemsIngested: 0,
   rssDuplicates: 0,
   rssGuardRejected: 0,
+  rssMissingDedupKey: 0,
   rssCandidatesUpserted: 0,
 }
 

@@ -748,3 +748,42 @@ this step. `npm run test:app` — 3260/3261 passed, the 3 known pre-existing env
 unchanged, plus one confirmed-transient parallel-file race (same as D2's appendix) reproduced and
 re-confirmed non-reproducible on isolation/rerun. `npx eslint` on all three touched files — clean.
 **Commit:** `801c8f3b`
+
+### D4 — MAJOR-3
+
+**Fix:** `lib/signals/parse-article.ts` — `ParsedArticle` gains a `guid: string | null` field (carried from
+`RawFeedItem.guid`, already extracted by `rss-client.ts:82`/`:96`, previously dead-ended), populated in
+`parseArticleItem` (`guid: item.guid ?? null`). The stale `:30-33` comment on `RawFeedItem.guid` claiming it
+was already "carried through" is corrected to describe the real state (now genuinely wired at the
+`rss-orchestrator.ts` call site). `lib/signals/rss-orchestrator.ts:118` (`ingestParsedArticle`) — the
+hardcoded `computeRssExternalId(article.link, null)` becomes `computeRssExternalId(article.link,
+article.guid)`, so §3.4's specified fallback is live: a link-less item (Atom feeds with only `rel="self"`,
+podcast-style feeds) now ingests via its `guid` instead of being silently discarded. The residual null-
+externalId branch (genuinely NEITHER link NOR guid) is kept, per this step's own instruction, but no longer
+double-counted under `rssGuardRejected` — a new field, `rssMissingDedupKey` (`RssTickSummary`), counts it
+honestly, since a missing-identity item is not a security-guard rejection. `SignalsTickSummary` (which
+`extends RssTickSummary`) and the canonical tick log line (`console.log(JSON.stringify({...summary}))`, a
+plain spread) pick the new field up automatically — no other call site needed a change. Two test fixtures
+(`rss-orchestrator.test.ts`'s `makeArticle`, `app/api/cron/signals-poll/route.test.ts`'s summary literal)
+were completed with the new required field to keep `tsc` green.
+**Test:** `lib/signals/rss-orchestrator.test.ts` — new describe block `D4 — the guid dedup fallback (ADR
+§3.4)`: (1) a `link: null, guid: 'urn:uuid:guid-only-item'` article INGESTS
+(`rssItemsIngested: 1, rssGuardRejected: 0, rssMissingDedupKey: 0`), and `insertSignal` is asserted called
+with `external_id` equal to `computeRssExternalId(null, 'urn:uuid:guid-only-item')` — the guid-fallback hash,
+not a discard; (2) an article with `link: null, guid: null` (the genuine residual) is counted as
+`rssMissingDedupKey: 1`, `rssGuardRejected: 0`, and never reaches `insertSignal`. **Demonstrated to redden**:
+reverted `:118` to the hardcoded `computeRssExternalId(article.link, null)` in a working-tree copy and
+re-ran — case (1) failed (`rssItemsIngested` 0, not 1 — the guid-only item was silently discarded exactly as
+MAJOR-3 describes); restored and `git diff --stat -- lib/signals/rss-orchestrator.ts` matched the intended
+fix exactly. SIGNAL-MR-DEDUP-STABLE's existing content-hash window tests (`rss-orchestrator.test.ts`'s own
+case, and the Tier-1 `supabase/__tests__/market-responsive-signal-ingestion.test.ts` — 6/6 green, live
+Postgres) stayed green throughout, unmoved from the Reviewer's COVERED mark. `npx tsc --noEmit --skipLibCheck`
+clean. `npm run test:app` — 3263/3263 tests passed (3 known pre-existing env-gap file-load failures
+unchanged). Full `npm run test:db` in this same session hit Supabase auth rate-limiting from repeated runs
+against the shared hosted project (`AuthApiError: Request rate limit reached` in two unrelated files,
+`posts-approval-boundary.test.ts` and `studio-drafts.test.ts` — neither touches signals/RSS) plus the same
+pre-existing `rls-policy-lockdown.test.ts` failure confirmed identical at D2/D3; rather than re-running the
+full suite again and risking further rate-limiting, the specific Tier-1 file this step's own change touches
+(`market-responsive-signal-ingestion.test.ts`) was run in isolation and passed 6/6 clean. `npx eslint` on all
+four touched files — clean.
+**Commit:** `<pending — filled in by a follow-up commit citing this one's own SHA, per the D1/D2/D3 precedent>`

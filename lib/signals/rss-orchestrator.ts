@@ -29,6 +29,13 @@ export interface RssTickSummary {
   rssItemsIngested: number
   rssDuplicates: number
   rssGuardRejected: number
+  // D4 (Session 30-D, MAJOR-3) — an item with NEITHER a canonical link NOR a
+  // guid/id: genuinely has no possible dedup key, distinct from a security
+  // guard rejection (XXE, malformed XML, egress guard). Was previously
+  // folded into rssGuardRejected, mis-describing a missing-identity item as
+  // a guard rejection — its own counter now, never widening a security
+  // counter's meaning to cover it.
+  rssMissingDedupKey: number
   rssCandidatesUpserted: number
 }
 
@@ -41,6 +48,7 @@ export function emptyRssTickSummary(): RssTickSummary {
     rssItemsIngested: 0,
     rssDuplicates: 0,
     rssGuardRejected: 0,
+    rssMissingDedupKey: 0,
     rssCandidatesUpserted: 0,
   }
 }
@@ -115,14 +123,20 @@ async function ingestParsedArticle(
   now: Date,
   summary: RssTickSummary,
 ): Promise<void> {
-  const externalId = computeRssExternalId(article.link, null)
+  // D4 (Session 30-D, MAJOR-3) — guid is now genuinely carried through from
+  // parse-article.ts, closing ADR §3.4's specified fallback. Previously
+  // hardcoded `null` here, so a link-less item (common in Atom feeds
+  // carrying only rel="self", and podcast-style feeds) always computed a
+  // null externalId and was discarded even when a perfectly usable guid was
+  // available — miscounted, too, under a security-guard-named counter.
+  const externalId = computeRssExternalId(article.link, article.guid)
   if (!externalId) {
-    // Neither link nor guid survived parse-article.ts's validation to reach
-    // here with a usable value — parse-article.ts already requires `link`
-    // OR falls through with null; a null externalId means BOTH were absent,
-    // which is itself a malformed item. Counted the same as any other
-    // ingestion-blocking condition for this feed, not a crash.
-    summary.rssGuardRejected++
+    // The genuine residual: NEITHER link NOR guid exists on this item.
+    // parse-article.ts's schema does not require either field (only
+    // `title` is mandatory), so this is real, not a validation gap — and it
+    // is NOT a security guard rejection, so it gets its own counter rather
+    // than rssGuardRejected.
+    summary.rssMissingDedupKey++
     return
   }
 

@@ -27,9 +27,12 @@ export interface RawFeedItem {
   // Canonical link, best-effort (RSS <link> text or Atom rel="alternate"
   // href) — undefined if the item has none.
   link: string | undefined
-  // <guid> (RSS) or <id> (Atom) — carried through for G1b.5's dedup-key
-  // fallback (external_id = 'rss:' || sha256(canonical_link), falling back
-  // to guid ONLY when no link exists, ADR §3.4). Never used by this file.
+  // <guid> (RSS) or <id> (Atom) — carried through onto ParsedArticle.guid
+  // below for computeRssExternalId's dedup-key fallback
+  // (external_id = 'rss:' || sha256(canonical_link), falling back to guid
+  // ONLY when no link exists, ADR §3.4; wired at rss-orchestrator.ts's
+  // ingestParsedArticle call site, D3/D4 Session 30-D). Never used by this
+  // file directly — only passed through.
   guid: string | undefined
   // Raw date string (RFC 2822 for RSS <pubDate>, ISO 8601 for Atom
   // <published>/<updated>) — `new Date()` parses both natively.
@@ -80,6 +83,11 @@ export type ParsedArticle = Omit<
   // column of its own. null, not undefined, matching html_url's own
   // nullability on SignalRow/SignalInsert.
   link: string | null
+  // NOT an Insert field — D4 (Session 30-D, MAJOR-3). computeRssExternalId's
+  // §3.4 fallback ('rss:' || sha256(link ?? guid)), used ONLY when `link` is
+  // null — never stored verbatim in a column of its own, same treatment as
+  // `link` above.
+  guid: string | null
 }
 
 export type ParseArticleResult =
@@ -140,6 +148,7 @@ export function parseArticleItem(raw: RawFeedItem): ParseArticleResult {
     html_url: item.link ?? null,
     occurred_at: toUtcIso(occurredAtDate),
     link: item.link ?? null,
+    guid: item.guid ?? null,
   }
   return { status: 'ok', article }
 }
