@@ -876,4 +876,4 @@ no runtime behaviour to test). Proof: `git status`/`git diff --stat` show exactl
 files, no new migration file. `npm run test:app` re-run to prove the doc edit touched no fixture path —
 3268/3268 tests passed (same 3 known pre-existing env-gap file-load failures, unchanged; the
 `corpus-v2-schema.test.ts` parallel-file race did not recur on this run).
-**Commit:** `<pending — filled in by a follow-up commit citing this one's own SHA, per the D1–D5 precedent>`
+**Commit:** `8d290f9d`
