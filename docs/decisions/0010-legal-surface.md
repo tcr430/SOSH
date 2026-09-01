@@ -1083,7 +1083,7 @@ GRANT EXECUTE ON FUNCTION public.purge_business(uuid) TO service_role;
 | signal_candidates | yes (business_id + signal_id) | CASCADE (both) | yes | none — cascade = erasure |
 | insight_cards | yes (business_id) | CASCADE | yes | none — cascade = erasure (quotes third-party-authored release text; contributor identity is never stored, ADR 0020 §5.3) |
 | signal_triage_budget | yes (business_id) | CASCADE | yes | none — cascade = erasure (holds only a per-day cent counter) |
-| public.watched_feeds | business_id -> businesses(id) ON DELETE CASCADE | Cascades. No explicit purge_business statement required; erasure is exercised by the root DELETE FROM public.businesses. Market-responsive feed configuration (ADR 0023 §3.2). |
+| watched_feeds | yes (business_id) | CASCADE | yes | none — cascade = erasure, exercised by `purge_business`'s root `DELETE FROM public.businesses` (no explicit per-table statement in the function body); holds the customer's own subscribed feed URL/label, ADR 0023 §3.2 |
 
 Only `business_deletion_requests` (NO ACTION) would have blocked the root delete; D2.1 resolves it. Every other business-scoped table either cascades or is deliberately retained.
 

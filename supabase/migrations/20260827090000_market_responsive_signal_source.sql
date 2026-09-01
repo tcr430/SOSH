@@ -58,11 +58,18 @@ FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 -- ─── signals: widen source/kind (§3.2) ──────────────────────────────────────
 --
 -- NOT VALID + VALIDATE two-step (20260807110000_mode3_triage_state.sql:24-33
--- precedent): `signals` is a live, hourly-written table by the time this
--- ships, so holding an ACCESS EXCLUSIVE lock for a full validation scan
--- matters more here than for a naive single-statement rewrite. Backfill:
--- NONE — every existing row has source='github', which trivially satisfies
--- the widened CHECK without needing to change.
+-- precedent), retained for PATTERN CONSISTENCY and future-migration safety —
+-- corrected (Session 30-D D7, MINOR-4): both statements run in the SAME
+-- transaction here, so the ADD's ACCESS EXCLUSIVE lock is held to commit and
+-- VALIDATE's weaker SHARE UPDATE EXCLUSIVE never actually gets a window in
+-- THIS migration. Harmless as executed (backfill is genuinely NONE, table
+-- small at ship time) — but to obtain the weaker lock's real benefit, the
+-- VALIDATE step must run in a SEPARATE transaction (a follow-on migration),
+-- not merely as a second statement in the same one. Do not copy this
+-- migration's two-step onto a table where the lock window actually matters
+-- without splitting it across transactions. Backfill: NONE — every existing
+-- row has source='github', which trivially satisfies the widened CHECK
+-- without needing to change.
 
 ALTER TABLE public.signals
   DROP CONSTRAINT IF EXISTS signals_source_check;
@@ -95,8 +102,11 @@ ALTER TABLE public.signals
 -- NOT NULL, still populated) watched_repo_id and a necessarily-null
 -- watched_feed_id (the column did not exist until the ADD COLUMN above), so
 -- every existing row already satisfies this CHECK without modification
--- (L-10). NOT VALID + VALIDATE for the same live-table reason as the two
--- CHECKs above.
+-- (L-10). NOT VALID + VALIDATE, same two-step as the two CHECKs above and the
+-- same correction applies (Session 30-D D7, MINOR-4): both statements share
+-- this migration's one transaction, so this does not actually obtain a
+-- weaker lock window here either — retained for pattern consistency, real
+-- benefit requires a separate-transaction VALIDATE in a follow-on migration.
 ALTER TABLE public.signals
   ADD CONSTRAINT signals_exactly_one_parent_check
     CHECK (

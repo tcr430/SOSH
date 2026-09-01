@@ -877,3 +877,39 @@ files, no new migration file. `npm run test:app` re-run to prove the doc edit to
 3268/3268 tests passed (same 3 known pre-existing env-gap file-load failures, unchanged; the
 `corpus-v2-schema.test.ts` parallel-file race did not recur on this run).
 **Commit:** `8d290f9d`
+
+### D7 — MINOR-3 + MINOR-4 · no migration
+
+**Fix:** `docs/decisions/0010-legal-surface.md` §D2.5 — the `watched_feeds` cascade row repaired from 3
+cells to the table's real 5-column shape (`Table | Business-scoped? | FK→businesses ON DELETE | Cascades? |
+Action on purge`). The "in purge_business?"/"Cascades?" and "Action on purge" cells (previously blank/
+merged into one prose cell) are now filled from what the Tier-1 test at
+`supabase/__tests__/market-responsive-signal-source-schema.test.ts:339-358` actually proves — that test
+calls `admin.rpc('purge_business', ...)` directly and asserts zero `watched_feeds`/`signals` rows remain —
+confirming `Cascades? = yes`, exercised by `purge_business`'s root `DELETE FROM public.businesses` with no
+explicit per-table statement in the function body (read from `purge_business`'s own SQL, `0010:990-1034`).
+No surrounding rows were reworded. `docs/decisions/0023-market-responsive-signal-source.md` §7.6 gains a
+one-paragraph appended note: any future row text this ADR dictates for §D2.5 must match the table's real
+column count at time of writing, so the next signal source does not repeat MINOR-3.
+`supabase/migrations/20260827090000_market_responsive_signal_source.sql`'s two NOT VALID/VALIDATE comment
+blocks (lines ~58-65 and ~94-99, MINOR-4) are corrected IN PLACE — the DDL itself is byte-identical
+(confirmed by `git diff` showing only comment lines changed). Both comments now state plainly that the
+two-step is retained for pattern consistency and future-migration safety, that both statements share this
+migration's ONE transaction so the ADD's ACCESS EXCLUSIVE lock is held to commit and VALIDATE's weaker
+SHARE UPDATE EXCLUSIVE never gets a window here, and that obtaining the weaker lock's real benefit requires
+the VALIDATE to run in a SEPARATE transaction (a follow-on migration) — a warning against copying this
+migration's shape onto a table where the lock window actually matters. The two-step itself is NOT removed —
+the SQL is correct as executed; changing an applied migration's semantics is out of scope.
+**Test:** N/A for the doc/comment corrections themselves — Tier 3, diff-verified. Proof: `git status`/`git
+diff --stat` show exactly three files changed (`docs/decisions/0010-legal-surface.md`,
+`docs/decisions/0023-market-responsive-signal-source.md`, the one migration file), no new migration file
+created. `git diff -- supabase/migrations/20260827090000_market_responsive_signal_source.sql | grep -E
+"^\+|^-" | grep -viE "^\+? *--"` returned EMPTY (after excluding diff-header lines) — mechanical proof the
+DDL itself is unchanged, only comment lines moved. `supabase/__tests__/market-responsive-signal-source-schema.test.ts`
+re-run against live Postgres — 18/18 green, including both `SIGNAL-MR-CASCADE-COMPLETE` cases this step's
+own row-repair cites as evidence. `scripts/apply-migrations.ts` read directly (not assumed): its
+`schema_migrations` tracking table keys on `version TEXT PRIMARY KEY` populated from the migration
+**filename** alone (`readdirSync(...).filter(f => f.endsWith('.sql'))`), never a content hash/checksum — a
+comment-only edit inside an already-applied file therefore cannot disturb its tracked-applied state, since
+the filename is unchanged. `npx tsc --noEmit --skipLibCheck` clean (no `.ts` file touched by this step).
+**Commit:** `<pending — filled in by a follow-up commit citing this one's own SHA, per the D1–D6 precedent>`

@@ -1002,6 +1002,13 @@ copy-paste `RESTRICT` would silently break erasure, so this is a **required migr
 line** *[advisory]*, and `SIGNAL-MR-CASCADE-COMPLETE` proves it against live Postgres rather than by
 analogy.
 
+**Correction (Session 30-D D7, MINOR-3):** the row dictated verbatim above was 3 cells against §D2.5's real
+5-column table (`Table | Business-scoped? | FK→businesses ON DELETE | Cascades? | Action on purge`) —
+this ADR's own dictation never checked the destination table's shape, so it rendered misaligned with the
+"Action on purge" column (the one a GDPR auditor reads) blank. **Any row text this ADR dictates for §D2.5
+in the future must match §D2.5's actual column count at the time of writing** — do not dictate a row shape
+from memory; read the live table header first.
+
 ### 7.7 ToS and copyright — FLAGGED, not written
 
 RSS feeds carry **no uniform licence**. Publishing a feed is an invitation to fetch; it is not a grant to
