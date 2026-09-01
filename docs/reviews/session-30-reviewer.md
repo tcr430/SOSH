@@ -786,4 +786,4 @@ pre-existing `rls-policy-lockdown.test.ts` failure confirmed identical at D2/D3;
 full suite again and risking further rate-limiting, the specific Tier-1 file this step's own change touches
 (`market-responsive-signal-ingestion.test.ts`) was run in isolation and passed 6/6 clean. `npx eslint` on all
 four touched files — clean.
-**Commit:** `<pending — filled in by a follow-up commit citing this one's own SHA, per the D1/D2/D3 precedent>`
+**Commit:** `bf1b117a`
