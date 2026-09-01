@@ -187,6 +187,42 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
     re-verify it against a primary source first** — this obligation is recorded here (so it is not lost
     inside the ADR alone), in ADR 0023 §18, and in `docs/build-guide/session-30.md`'s §3b reconciliation
     note.
+  - **Session 30-D, D9 CLOSE-OUT (2026-09-01) — Session 30 Track G's correction pass is CLOSED.** D0–D8
+    (BLOCKER-1/2, MAJOR-1/2/3, MINOR-1/3/4/6/7/8/9/10, NIT-1/2/3/4/5, A-5/A-6/A-7/A-8 — 19 fixed, 4 deferred
+    with named conditions) pushed to `session-30-track-g-market-responsive-signal-source` (PR #9), head
+    `98a91a56`. **All three required workflows green at the corrected head**, `pull_request`-event (not
+    `master` — the `db-tests` promotion tally below is therefore unaffected by this run):
+    `app-tests` [run 33541129699](https://github.com/tcr430/SOSH/actions/runs/33541129699)
+    (`skip-guard: 232 file(s) under [app, lib, components] all visible, zero failures — green. (3326/3326
+    tests passed)`, quoted verbatim from the log line); `db-tests`
+    [run 33541129826](https://github.com/tcr430/SOSH/actions/runs/33541129826)
+    (`skip-guard: 38 file(s) under [supabase/__tests__] all visible, zero failures — green. (344/344 tests
+    passed)`, quoted verbatim); `eval-reported`/`eval-threshold`
+    [run 33541129684](https://github.com/tcr430/SOSH/actions/runs/33541129684) —
+    `assert-eval-executed: eval-reported green — corpusVersion=2 executed=80/80` (D1's fix: this now means
+    what it says, `pendingCount` would hard-fail if any example were unscored) and
+    `assert-eval-executed (threshold): … corpusVersion=2 github[precision=1.000 (24/24) recall=1.000 (24/24)
+    dismissMatch=1.000 (16/16)] market_responsive[precision=undefined (0/0) recall=0.000 (0/24)
+    dismissMatch=0.563 (9/16)]` — **precision reported as the UNDEFINED metric D1 made it (denominator 0),
+    never `0.000`**, per source, never blended (L-11). market_responsive remains MEASURED at **lower
+    confidence** than github until its graduation label count (160 presented cards, §2.6) is reached. The
+    corpus's D1 redden demonstration: stripping every cassette from `corpus.v2.json` now flips
+    `eval-reported` from green to a hard failure (`executed 0/80`, every example named `PENDING`) — proof
+    the false-green D1 closed is gone, not merely asserted.
+  - **A-7's re-run (D9): ONE out-of-band live re-run with POPULATED stub memory, `npm run
+    eval:live-triage-populated`.** Result: **recall moved from 0/24 (clean, zero-memory) to 11/24** with
+    populated stub audience/brand/evidence/campaign memory; precision 11/11 (was 0/0 — the run now predicts
+    `card` at all). Cost: $0.66. **This MOVES the hypothesis from untested to partially supported**: the
+    zero-memory condition is not the sole driver of the 0/24 result (13 of 24 genuinely-relevant examples
+    still scored `no_card` even with populated memory — real judgment-calibration headroom remains beyond
+    the memory confound), but populating memory demonstrably recovers real recall the zero-memory condition
+    was suppressing. `corpus.v2.json` was **not** modified by this run — the artefact
+    (`lib/signals/__fixtures__/eval/populated-memory-run.json`) is evidence, not a new cassette commit, per
+    A-1's ban on treating an ad hoc live run as a corpus source.
+  - **`db-tests` promotion tally: unchanged by this pass** — D9's runs are `pull_request`-event against PR
+    #9, not pushes to `master`; the three-consecutive-green-on-master tally that gates `db-tests` promotion
+    (ADR 0015 §5) advances only on a `master` push, which this correction pass does not make (merging PR #9
+    is the founder's call, per session-30.md §5's "Next" line).
 
 - **Session 28 — Mode 3 Part 2: Triage, Insight Cards, Opportunity Feed (ADR 0021), E5.1–E5.12 CLOSED:**
   Builds on Session 27's ingestion pipeline. Stage C (a bounded, tool-using triage loop —

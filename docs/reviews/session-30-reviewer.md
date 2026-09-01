@@ -1009,3 +1009,62 @@ returned EMPTY — mechanical proof every changed line in that file is a comment
 appendices — re-confirmed passing 5/5 in isolation on this run, and the same 3-failure baseline re-confirmed
 on a second full-sweep run with no additional flake).
 **Commit:** `4820fa37`
+
+### D9 — corrected range green; CLOSING BLOCK
+
+**Fix:** Pushed D0–D8 to `session-30-track-g-market-responsive-signal-source` (PR #9); all three required
+CI workflows re-ran and went green at the corrected head `98a91a56` — `app-tests`
+[run 33541129699](https://github.com/tcr430/SOSH/actions/runs/33541129699) (3326/3326 tests, 232 files
+visible), `db-tests` [run 33541129826](https://github.com/tcr430/SOSH/actions/runs/33541129826) (344/344
+tests, 38 files visible, skip-guard clean), `eval-reported`/`eval-threshold`
+[run 33541129684](https://github.com/tcr430/SOSH/actions/runs/33541129684) (`eval-reported`:
+`executed=80/80`; `eval-threshold`: `market_responsive[precision=undefined (0/0) recall=0.000 (0/24)
+dismissMatch=0.563 (9/16)]` — precision correctly `undefined`, per D1's fix, never `0.000`). A-7's live
+re-run (`npm run eval:live-triage-populated`) executed: recall moved from 0/24 (clean) to **11/24** with
+populated stub memory, precision 11/11 — `corpus.v2.json` untouched (confirmed via `git status`), the
+artefact (`lib/signals/__fixtures__/eval/populated-memory-run.json`) is evidence, not a new cassette.
+`docs/current-phase.md` and `docs/build-guide/session-30.md` §5 both close out with this evidence, per-source
+and never blended. Full disposition table below.
+
+**CLOSING BLOCK — every ID from this report, exactly once:**
+
+| ID | Tier | Disposition | Test/Evidence | Commit |
+|---|---|---|---|---|
+| BLOCKER-1 | BLOCKER | FIXED | `run-triage-eval.test.ts` — Reviewer's cassette-stripping demonstration now exits non-zero on both guard modes | `a486d618` |
+| BLOCKER-2 | BLOCKER | FIXED (two parts) | Part 1: five governing docs committed unmodified, byte-identity verified. Part 2: §19's false "verified by direct grep" claim corrected to name what was verified and where | `943ad622` (D0), `4820fa37` (D8) |
+| MAJOR-1 | MAJOR | FIXED | `runner.test.ts`/`tool-runner.test.ts` — two new cases per caller, redden-demonstrated against the fallback removed | `28710b58` |
+| MAJOR-2 | MAJOR | FIXED | `market-responsive-business-enumeration.test.ts` — Tier-1 pagination test, redden-demonstrated against the row-cap form | `801c8f3b` |
+| MAJOR-3 | MAJOR | FIXED | `rss-orchestrator.test.ts` — guid-only fixture, redden-demonstrated against the hardcoded null | `bf1b117a` |
+| MINOR-1 | MINOR | FIXED (doc; A-5 ruling) | ADR §5.3 amended to state the one-directional backfill; code unchanged, already correct | `4820fa37` |
+| MINOR-2 | MINOR | FIXED | `run-triage-eval.ts` header amended to distinguish the model-authored slice | `a486d618` |
+| MINOR-3 | MINOR | FIXED | ADR 0010 §D2.5 `watched_feeds` row repaired to five cells from what the Tier-1 test proves | `6c007ebd` |
+| MINOR-4 | MINOR | FIXED | Migration comment corrected in place; DDL byte-identical (confirmed via `git diff`) | `6c007ebd` |
+| MINOR-5 | MINOR | FIXED | `run-triage-eval.test.ts` — new case pins `value: null` on a zero denominator | `a486d618` |
+| MINOR-6 | MINOR | FIXED | `source-scans.test.ts` — new `sax` scan arm, redden-demonstrated via a scratch second import | `8e72a881` |
+| MINOR-7 | MINOR | FIXED | `rss-egress-guard.test.ts` — dispatcher `close()` call-count assertions, both hops and error path | `8e72a881` |
+| MINOR-8 | MINOR | FIXED | `rss-egress-guard.test.ts` — total-budget-across-redirects assertions via `AbortSignal.timeout`/`Date.now` spies | `8e72a881` |
+| MINOR-9 | MINOR | DEFERRED (condition: first observed HTTP 429, or feed-health surfacing session) | ADR §20 Amendment 3 (§8.4): `rate_limited_until` stated READ-ONLY/SEEDED-ONLY | `8d290f9d` |
+| MINOR-10 | MINOR | FIXED | `source-scans.test.ts` Tier-3 block restated at `afeafbf3..cd986d13`, all 8 greps re-run for real, property 7 now includes `triage/orchestrator.ts` | `4820fa37` |
+| NIT-1 | NIT | FIXED | `current-phase.md` Status paragraph's §12-override citation corrected | `4820fa37` |
+| NIT-2 | NIT | DEFERRED (condition: a session touching `lib/db`'s select helpers, or a cast found masking a real mismatch) | ADR 0020 §17b Amendment D extended (not a second amendment) | `4820fa37` |
+| NIT-3 | NIT | DEFERRED (found in D5; condition: first non-UTF-8 feed added) | ADR §20 Amendment 3 (§3.1): UTF-8-only decoding stated, empirically confirmed silent | `8e72a881` (found), `8d290f9d` (recorded) |
+| NIT-4 | NIT | DEFERRED (condition: next migration touching `watched_feeds`) | ADR §20 Amendment 3 (§3.1): If-Modified-Since half-live stated | `8d290f9d` |
+| NIT-5 | NIT | FIXED | ADR §20 Amendment 3 (§3.4): hourly cadence corrected, A-4/D3 consequence stated | `8d290f9d` |
+| AR-1 (A-5) | ADJUDICATION | RESOLVED — ruling: keep the code, amend §5.3 | Same as MINOR-1 above | `4820fa37` |
+| AR-2 (A-6) | ADJUDICATION | RESOLVED — ruling: append reconciliation note, §18 residual carried forward OPEN | `session-30.md` §3b reconciliation note; `current-phase.md` bullet | `4820fa37` |
+| AR-3 (A-7) | ADJUDICATION | RESOLVED — ruling: attempt one live re-run, hypothesis-frame the attribution meanwhile | `current-phase.md`/ADR §19 hypothesis framing (D8, `4820fa37`); live re-run executed (D9): recall 0/24 → 11/24 with populated memory | `4820fa37` (framing), `98a91a56` (re-run, working-tree evidence — no corpus commit) |
+| A-8 | ADJUDICATION | RESOLVED — ruling: retroactively in scope, recorded as ADR amendment | ADR 0020 §17b Amendment D; caller coverage closed (same as MAJOR-1) | `28710b58` |
+
+**Tally: 19 FIXED, 4 DEFERRED with named conditions — all 23 findings plus A-5…A-8 accounted for, each
+exactly once.** `e036f6f5` is the head this Reviewer's report was written against; `943ad622` (D0) is the
+first commit after it in this correction pass — every citation above this appendix marker remains valid at
+`e036f6f5` and is unaffected by anything below.
+
+**Test:** N/A for this closing summary itself — it is an index over work already tested and cited above.
+`git diff 943ad622..98a91a56 -- docs/reviews/session-30-reviewer.md` (D0's SHA through this step's own head)
+shows additions strictly BELOW the `## CORRECTION PASS (Session 30-D)` marker and nothing else — the
+mechanical proof that nothing above the appendix was touched by any D-step, satisfying REVIEWER-REPORT
+APPEND-ONLY across the whole pass.
+**Commit:** `<pending — filled in by a follow-up commit citing this one's own SHA, per the D1–D8 precedent>`
+
+**Session 30 Track G — CLOSED (correction pass complete).**

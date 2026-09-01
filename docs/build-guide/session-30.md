@@ -2550,31 +2550,44 @@ A-5…A-8, and the diff proves nothing above the appendix was touched. Session 3
 
 ## §5 — Docs to update at close-out (Track G done)
 
-- [ ] `docs/current-phase.md` — the Session 30 entry closing Track G; the `db-tests` promotion tally with
-      run URLs and the skip-guard's file/test counts **quoted verbatim from the log line**; and the eval
-      result recorded **as a number** per ADR 0015 Amendment B(c) — **per source, never blended** (L-11),
-      with the new source explicitly stated to be MEASURED at **lower confidence** than the old until its
-      graduation label count is reached, and the corpus's redden demonstration cited.
-- [ ] `docs/decisions/0023-market-responsive-signal-source.md` — status / close-out block, amended by the
-      correction pass if it changed anything the ADR asserts.
-- [ ] `docs/decisions/0020-mode-3-signal-ingestion.md` — the appended amendment notes recording the §6.5
-      embeddings ruling and the §14 clustering finding. **Appended, never rewritten in place.**
-- [ ] `docs/decisions/0015-test-execution-and-ci-gates.md` — **only if** Q3 un-deferred embeddings, in
-      which case the Tier-3 `SIGNAL-NO-EMBEDDINGS` retirement is recorded as the decision ADR 0015 §2
-      requires. If embeddings were re-affirmed, **no change** — say so explicitly rather than leaving it
-      ambiguous.
-- [ ] `docs/decisions/0010-legal-surface.md` Amendment 2 §D2.5 — a cascade row for any new business-scoped
-      table, or an explicit note that the change was a column on an already-covered table (the Session
-      28-D D7 precedent).
-- [ ] `docs/evidence/0010-legal-evidence.md` / `content/legal/*.mdx` — **only if** Q6 surfaced a
-      customer-facing legal claim. Per CLAUDE.md, drift between code reality and legal prose is a
-      counsel-grade failure mode: either confirm `evidenceRef` still matches, or bump it. **Do not
-      substitute `[LEGAL ENTITY]` placeholders** — that is gated on counsel ratification.
-- [ ] `docs/brainstorm/plan-vs-implemented-gap-analysis.md` — refreshed or superseded. Market-responsive is
-      now built; **evergreen-strategic is not**, and remains the one intelligence-doc opportunity type with
-      no session behind it.
-- [ ] `.wolf/anatomy.md`, `.wolf/memory.md`, `.wolf/cerebrum.md` — updated per the OpenWolf protocol.
-- [ ] **Next:** with Tracks F and G closed, the remaining gap-analysis items are all condition-blocked —
-      `relationship_memory` (needs the Phase-2 engagement inbox), evergreen-strategic opportunity types,
-      the skip-review fast path (ADR 0017 L-11), and Phase-2 media generation. **None is a drift; each is a
-      recorded deferral with a named condition.** The next session is a product decision, not a gap-fill.
+**Session 30-D, D9 close-out (2026-09-01) — checked off below, each with what was actually done:**
+
+- [x] `docs/current-phase.md` — the Session 30 entry closes Track G with the D9 close-out block (below);
+      `db-tests` promotion tally NOT advanced this pass (D9's runs are `pull_request`-event, not `master`
+      pushes — the tally counts master runs only, per its own rule); the eval result recorded per source,
+      never blended, market_responsive precision reported as `undefined` (denominator 0), never `0.000`; the
+      corpus's D1 redden demonstration cited.
+- [x] `docs/decisions/0023-market-responsive-signal-source.md` — §19 amended (BLOCKER-2 part 2, A-7) at D8;
+      §5.3 amended (A-5) at D8; §18 already carried the primary-source residual as OPEN, reconciled at D8;
+      §20 Amendment 3 appended at D6 (hourly cadence, rate-limit deferral). No further close-out-specific
+      change needed in this step beyond what D6/D8 already landed.
+- [x] `docs/decisions/0020-mode-3-signal-ingestion.md` — §17/§17b amendment notes (C-1 embeddings, C-2
+      clustering, from the original Architect pass; §17b Amendment D from D2/A-8; NIT-2 from D8) all
+      **appended, never rewritten in place** — confirmed by re-reading the file: nothing above any `_End
+      Amendment_` marker was touched by this correction pass.
+- [x] `docs/decisions/0015-test-execution-and-ci-gates.md` — **NO CHANGE**, stated explicitly rather than
+      left ambiguous: Q3 (ADR 0023 §4.1) **RE-AFFIRMED embeddings as deferred**, it did **not** un-defer
+      them — `SIGNAL-NO-EMBEDDINGS` (Tier 3) is not retired, so ADR 0015 §2's retirement-recording
+      requirement is never triggered. Confirmed: `git diff` for this correction pass touches zero lines of
+      `docs/decisions/0015-test-execution-and-ci-gates.md`.
+- [x] `docs/decisions/0010-legal-surface.md` Amendment 2 §D2.5 — the `watched_feeds` cascade row repaired
+      to five cells at **D7** (MINOR-3); no new business-scoped table was added by this correction pass, so
+      no additional row is owed.
+- [x] `docs/evidence/0010-legal-evidence.md` / `content/legal/*.mdx` — **NO CHANGE**, and none owed: Q6's
+      launch-blocking counsel items (article licensing/ToS, the Art. 6(1)(f) balancing test, the `/privacy`
+      extension) remain **FLAGGED, not written** (ADR 0023 §7.7/A-2) — this correction pass surfaced no new
+      customer-facing legal claim, so `evidenceRef` needs no bump. Confirmed: `git diff` for this correction
+      pass touches zero files under `docs/evidence/` or `content/legal/`.
+- [ ] `docs/brainstorm/plan-vs-implemented-gap-analysis.md` — **out of this correction pass's scope**
+      (session-30.md §4's rule 7/primer scopes this pass to the Reviewer's 23 findings only); left for a
+      future session, as this file already records market-responsive as built (G1b.14 close-out) — no
+      correction-pass finding touches this file.
+- [x] `.wolf/anatomy.md`, `.wolf/memory.md`, `.wolf/cerebrum.md`, `.wolf/buglog.json` — updated per the
+      OpenWolf protocol as part of this same D9 step (see the session's own working-tree state for the
+      entries this pass appended).
+- [ ] **Next:** unchanged from the original close-out — the remaining gap-analysis items
+      (`relationship_memory`, evergreen-strategic, the skip-review fast path, Phase-2 media generation) are
+      all condition-blocked, not a drift. This correction pass's own "next" is: merge PR #9 once the founder
+      reviews this close-out, then the Reviewer's `PROC-REVIEW-AT-COMMIT` gate opens for a genuinely final
+      range if a future session wants an independent re-review (not required by this pass, per §4.0's rule 1
+      — there is no independent re-review pass this session, mirroring 23-D…28-D).
