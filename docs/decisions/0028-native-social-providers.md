@@ -464,6 +464,25 @@ Native providers are tested against **recorded fixtures**; no Tier-2 test touche
 
 ---
 
+### 13.1 Builder verification (N2.1, 2026-09-04)
+
+**Full findings: `docs/reviews/session-30-5-platform-verification.md`.** Summary, per item, against vendor documentation only (Microsoft Learn's LinkedIn API docs and `docs.x.com`):
+
+1. **LinkedIn authorize/token URLs — CONFIRMED.** `GET https://www.linkedin.com/oauth/v2/authorization`, `POST https://www.linkedin.com/oauth/v2/accessToken` (form-urlencoded). 60-day access-token life independently reconfirmed.
+2. **LinkedIn PKCE — CONFIRMED not required/not available for SOSH's flow.** The standard confidential-client (web) flow has no PKCE; PKCE exists only on a separate native/loopback-client flow requiring manual LinkedIn enablement. §3.1 unaffected — the STOP-AND-REPORT condition on differing Posts API contract was checked directly and **not triggered** (headers, 201+`x-restli-id`, author URN forms, and permalink shape all confirmed exactly as §3.1 states).
+3. **Revocation endpoints — X CONFIRMED** (`POST oauth2/invalidate_token`); **LinkedIn STILL-UNKNOWN**, and functionally appears not to exist for third-party apps at all — revocation is member-initiated via LinkedIn account settings, not a developer-callable endpoint. Fallback: `revokeAccessToken` for LinkedIn returns early with no network call, same as X's best-effort-never-throws shape but with nothing to call.
+4. **Client authentication — CONFIRMED, and the platforms differ.** LinkedIn: `client_id`/`client_secret` in the POST body. X: HTTP Basic (base64 `client_id:client_secret`) for confidential clients, which SOSH is.
+5. **X refresh-token rotation — STILL-UNKNOWN.** Official docs describe how to use a refresh token but not rotation/invalidation behaviour. Community sources describe "rotating, single-use" tokens but this is not authoritative. Confirmable empirically once credentials exist (Stage 1): two sequential refresh attempts against the same original token. A-4/`30.5-X-REFRESH-ROTATION`'s accepted-for-MVP decision is unchanged either way.
+6. **X tweet creation — CONFIRMED** (`POST https://api.x.com/2/tweets`, id at `data.id`, 280-char limit). **Permalink shape STILL-UNKNOWN as a documented response field** — `https://x.com/{username}/status/{id}` is confirmed only as external convention, not part of the `/2/tweets` schema itself. No change to §3.2, which already treats the URL as constructed/nullable.
+7. **X rate-limit headers — CONFIRMED.** `x-rate-limit-limit`/`-remaining`/`-reset` (Unix epoch seconds); no `Retry-After`. `retryAfterSeconds = max(reset - now, 0)`.
+7a. **X billing for a new Sept-2026 account — CONFIRMED: pay-per-usage credits only.** Legacy Basic/Pro subscriptions are closed to new signups; existing Basic subscribers were being migrated onto pay-per-use as of mid-2026. This resolves §14.2's residual uncertainty. Per-request pricing corroborates §14.3's figures. One source cites a 2M-post-read/month pay-per-use cap versus §14.3's stated 3M — unresolved minor discrepancy, re-check against the live billing console once an account exists. Reported per this item's instruction; the founder adjudication in §14.3 is unchanged.
+8. **§6 metrics capability table — CONFIRMED for both platforms**, full table in the verification log. **Drift finding:** LinkedIn's richer metrics (`saves`, `clicks`, `reach`, `impressions`) all require the scope `r_member_postAnalytics`, which is **not** in `platforms/config.ts:14`'s current LinkedIn scope list — as designed today those four fields are permanently null for LinkedIn, not because the platform withholds them but because SOSH hasn't requested the scope, and adding it later forces re-authorisation of every connected account (§14.1's own reasoning). This is an open decision for N2.7's author or the Architect, not resolved here. X: all seven fields resolvable except `reach`, which is **permanently unavailable** on X (no such field exists in the API) — Session 33 must exclude it from any minimum-n floor, per §6's own instruction for permanently-null fields.
+9. **`Linkedin-Version` to pin — CONFIRMED as of 2026-09-04: `202608`.** `202508`'s sunset date (2026-08-17) has passed, confirming this ADR's note. This value drifts monthly; N2.7 should re-verify at build time rather than copy this document's value if implementation lands later.
+
+**Net: 7 of 9 items confirmed, 2 still-unknown** (item 5 fully; item 6's permalink field as a documented API guarantee). No unverified endpoint was written from memory in this step, and none is written in N2.1 — this step produced no production code.
+
+---
+
 ## 14. Manual verification log (the compensating control for §9.3)
 
 The Builder records one live connect-and-publish per platform per identity type. Empty until then; **an empty table is the honest state, not a formality to backfill.**
