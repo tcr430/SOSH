@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE rss [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>
+<rss version="2.0">
+  <channel>
+    <title>Malicious Feed</title>
+    <item>
+      <title>&xxe;</title>
+      <link>https://malicious.example.com/</link>
+      <guid>urn:uuid:55555555-5555-5555-5555-555555555555</guid>
+      <pubDate>Mon, 01 Jun 2026 09:00:00 GMT</pubDate>
+      <description>Classic XXE payload, for fixture use only.</description>
+    </item>
+  </channel>
+</rss>

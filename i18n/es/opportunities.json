@@ -20,7 +20,8 @@
     "confidence": "Confianza",
     "novelty": "Novedad",
     "freshness": "Actualidad",
-    "sourceLink": "Ver el lanzamiento"
+    "publisher": "Fuente",
+    "sourceLink": "Ver original"
   },
   "sensitivity": {
     "warning": "Este lanzamiento toca un tema sensible (seguridad, descontinuación o legal). Revisa con cuidado antes de aprobar.",

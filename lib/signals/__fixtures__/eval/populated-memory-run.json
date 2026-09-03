@@ -1,0 +1,275 @@
+{
+  "generatedAt": "2026-09-01T18:18:42.948Z",
+  "note": "ADR 0023 §19 / Session 30-D D9 (A-7 ruling) — the ONE out-of-band live re-run testing whether the stubMemory: {} (zero-memory) attribution for G1b.13's 0/24 recall result is a genuine cause. corpus.v2.json was NOT modified by this run — this artefact is evidence, not a new cassette commit.",
+  "exampleCount": 40,
+  "errorCount": 0,
+  "recall": {
+    "hits": 11,
+    "denominator": 24
+  },
+  "precision": {
+    "hits": 11,
+    "denominator": 11
+  },
+  "priorCleanRunCardCount": 0,
+  "populatedRunCardCount": 11,
+  "costCents": 66,
+  "results": [
+    {
+      "id": "mr-c01-github-copilot-usage-credits",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-c02-eu-instant-payments-verification",
+      "expectedVerdict": "card",
+      "actualVerdict": "card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-c03-meta-reach-metric-retired",
+      "expectedVerdict": "card",
+      "actualVerdict": "card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-c04-workday-layoffs-ai-shift",
+      "expectedVerdict": "card",
+      "actualVerdict": "card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-c05-eu-ai-act-article-50",
+      "expectedVerdict": "card",
+      "actualVerdict": "card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-c06-elation-health-acquires-aster",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-c07-legalon-contract-review-report",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-c08-shopify-checkout-outage",
+      "expectedVerdict": "card",
+      "actualVerdict": "card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-c09-model-pricing-war-cuts",
+      "expectedVerdict": "card",
+      "actualVerdict": "card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-c10-state-privacy-coppa-update",
+      "expectedVerdict": "card",
+      "actualVerdict": "card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-c11-atlassian-rovo-cross-app-agents",
+      "expectedVerdict": "card",
+      "actualVerdict": "card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-c12-cloud-gpu-pricing-gap",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-c13-salesforce-agentforce-support-cuts",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-c14-iconiq-hybrid-pricing-nrr",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-c15-workforce-pell-grants",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-c16-fed-rate-cut-proptech",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-c17-tariff-supply-chain-shock",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-c18-meta-marketing-api-deprecation",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-c19-minimax-relicense-backlash",
+      "expectedVerdict": "card",
+      "actualVerdict": "card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-c20-figure-technology-breach",
+      "expectedVerdict": "card",
+      "actualVerdict": "card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-c21-right-to-disconnect-us-states",
+      "expectedVerdict": "card",
+      "actualVerdict": "card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-c22-self-hosting-open-source-shift",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-c23-zillow-preferred-success-fee",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-c24-gartner-saaspocalypse",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-n01-acquisition-rumor",
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "weak_evidence",
+      "actualVerdict": "no_card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-n02-generic-listicle",
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "actualVerdict": "no_card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-n03-executive-change",
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "actualVerdict": "no_card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-n04-conference-recap",
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "already_covered",
+      "actualVerdict": "no_card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-n05-vague-threat-trend",
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "weak_evidence",
+      "actualVerdict": "no_card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-n06-local-market-story",
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "actualVerdict": "no_card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-n07-celebrity-ai-mention",
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "actualVerdict": "no_card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-n08-changelog-as-news",
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "already_covered",
+      "actualVerdict": "no_card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-n09-holiday-puff-piece",
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "actualVerdict": "no_card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-n10-opinion-no-data",
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "weak_evidence",
+      "actualVerdict": "no_card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-n11-meme-roundup",
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "actualVerdict": "no_card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-n12-stale-story",
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "wrong_timing",
+      "actualVerdict": "no_card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-n13-stock-fluctuation",
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "actualVerdict": "no_card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-n14-realty-gossip",
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "actualVerdict": "no_card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-n15-awards-announcement",
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "actualVerdict": "no_card",
+      "outcome": "decision"
+    },
+    {
+      "id": "mr-n16-marginal-stretch-tiein",
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "weak_evidence",
+      "actualVerdict": "no_card",
+      "outcome": "decision"
+    }
+  ]
+}

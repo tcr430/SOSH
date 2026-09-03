@@ -12,6 +12,14 @@
 //   (iii) ANY example whose status is 'error' — a THIRD, job-failing state,
 //         never coerced into a verdict (an all-erroring run must not report
 //         plausible-looking numbers while measuring nothing).
+//   (iv)  D1 (Session 30-D, BLOCKER-1) — ANY example whose status is
+//         'pending' (no cassette yet, ADR 0023 §2.4.1). executedCount no
+//         longer counts 'pending' as executed (run-triage-eval.ts), so (ii)
+//         already catches this on its own; this check exists to name the
+//         shortfall explicitly, exactly as (iii) names 'error' explicitly,
+//         rather than relying solely on the generic count-mismatch message.
+//         The interim label-before-cassette state must never be expressed
+//         by inflating the number this false-green guard reads.
 // No `|| true` anywhere in this script or its caller.
 //
 // Session 28-D, D4 (MAJOR-4 closed, ADR 0021 §10.4 / Amendment B3, B3.1) —
@@ -114,6 +122,23 @@ function checkArtefactHard() {
   }
 
   const outcomes = Array.isArray(artefact.outcomes) ? artefact.outcomes : []
+
+  // D1 (Session 30-D, BLOCKER-1) — a non-zero pending count is a SHORTFALL
+  // against declaredCorpusCount, hard-failed exactly like 'error'. Read from
+  // outcomes[] directly (not the artefact's top-level pendingCount field)
+  // so this check keeps working even against an older artefact shape that
+  // never wrote that field.
+  const pending = outcomes.filter((o) => o.status === 'pending')
+  if (pending.length > 0) {
+    console.error(
+      `::error::assert-eval-executed: ${pending.length} example(s) are 'pending' (no cassette yet, ADR 0023 §2.4.1) — a shortfall against the declared corpus count, exactly like an error; the interim label-before-cassette state must never be expressed by inflating executedCount`,
+    )
+    for (const o of pending) {
+      console.error(`::error::  PENDING: ${o.id}`)
+    }
+    failed = true
+  }
+
   const errored = outcomes.filter((o) => o.status === 'error')
   if (errored.length > 0) {
     console.error(
@@ -157,12 +182,18 @@ function checkThreshold() {
     return
   }
 
-  const m = artefact.metrics ?? {}
+  // ADR 0023 §2.8/§10.5 (Session 30 G1b.12) — the blended `metrics` object
+  // is REMOVED, not merely supplemented, replaced by `metricsBySource`
+  // (one entry per source, each carrying its own numerator/denominator/
+  // floor/sigma). This function stays advisory-only either way.
+  const bySource = artefact.metricsBySource ?? {}
+  const sourceSummary = (name, m) =>
+    `${name}[precision=${m?.cardPrecision?.value?.toFixed?.(3)} (${m?.cardPrecision?.numerator}/${m?.cardPrecision?.denominator}) ` +
+    `recall=${m?.cardRecall?.value?.toFixed?.(3)} (${m?.cardRecall?.numerator}/${m?.cardRecall?.denominator}) ` +
+    `dismissMatch=${m?.dismissReasonMatch?.value?.toFixed?.(3)} (${m?.dismissReasonMatch?.numerator}/${m?.dismissReasonMatch?.denominator})]`
   const summary =
     `corpusVersion=${artefact.corpusVersion} ` +
-    `precision=${m.cardPrecision?.value?.toFixed?.(3)} (${m.cardPrecision?.numerator}/${m.cardPrecision?.denominator}) ` +
-    `recall=${m.cardRecall?.value?.toFixed?.(3)} (${m.cardRecall?.numerator}/${m.cardRecall?.denominator}) ` +
-    `dismissMatch=${m.dismissReasonMatch?.value?.toFixed?.(3)} (${m.dismissReasonMatch?.numerator}/${m.dismissReasonMatch?.denominator}) ` +
+    `${sourceSummary('github', bySource.github)} ${sourceSummary('market_responsive', bySource.market_responsive)} ` +
     `run=${artefact.runUrl}`
 
   if (artefact.metricsPass !== true) {

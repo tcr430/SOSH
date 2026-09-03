@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Acme Competitor Blog</title>
+    <link>https://competitor.example.com/blog</link>
+    <description>Fictional competitor blog, for fixture use only.</description>
+    <item>
+      <title>Acme Corp launches new pricing tier</title>
+      <link>https://competitor.example.com/blog/new-pricing-tier</link>
+      <guid isPermaLink="false">urn:uuid:11111111-1111-1111-1111-111111111111</guid>
+      <pubDate>Mon, 01 Jun 2026 09:00:00 GMT</pubDate>
+      <content:encoded><![CDATA[<p>Acme Corp today announced a new pricing tier aimed at mid-market teams.</p>]]></content:encoded>
+      <description>Acme Corp today announced a new pricing tier.</description>
+    </item>
+    <item>
+      <title>Acme Corp hires new VP of Engineering</title>
+      <link>https://competitor.example.com/blog/new-vp-engineering</link>
+      <guid isPermaLink="false">urn:uuid:22222222-2222-2222-2222-222222222222</guid>
+      <pubDate>Tue, 02 Jun 2026 10:30:00 GMT</pubDate>
+      <description>Acme Corp announced a new VP of Engineering hire.</description>
+    </item>
+  </channel>
+</rss>

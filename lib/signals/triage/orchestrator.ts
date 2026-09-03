@@ -19,8 +19,14 @@
 
 import * as Sentry from '@sentry/nextjs'
 import { formatISO, subDays } from 'date-fns'
-import { listNewCandidates, claimCandidateForTriage, reclaimStaleTriagingCandidates, setCandidateTriageOutcome, ageGateCandidate } from '@/lib/db/signal-candidates'
-import { listActiveConnectionBusinessIds } from '@/lib/db/github-connections'
+import {
+  claimCandidateForTriage,
+  reclaimStaleTriagingCandidates,
+  setCandidateTriageOutcome,
+  ageGateCandidate,
+  listNewCandidatesPoolWithSource,
+  listBusinessesWithNewCandidates,
+} from '@/lib/db/signal-candidates'
 import { reserveTriageBudget, reconcileTriageBudget } from '@/lib/db/signal-triage-budget'
 import { buildCustomerContext } from '@/lib/ai/context'
 import { runToolLoop, TRIAGE_MAX_WALL_CLOCK_MS } from '@/lib/ai/tool-runner'
@@ -28,12 +34,20 @@ import { wrapSignalForPrompt } from '@/lib/ai/wrap-evidence'
 import { buildTriageTools } from './tools'
 import { generateCard } from './card'
 import { createCardCitableContext } from './verify'
-import type { SignalCandidateWithSignal } from '@/lib/db/types'
+import { allocateReservedShortlist } from './allocate-shortlist'
+import type { SignalCandidateWithSourceAndFeed } from '@/lib/db/signal-candidates'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 // §3.1 — the shortlist bound. Never the full 50-row listNewCandidates bound
 // — judgment is deliberately narrower than the poller's own scoring pass.
 export const TRIAGE_SHORTLIST_PER_TICK = 5
+// ADR 0023 §5.3 (Session 30 G1b.7) — the pool listNewCandidatesPoolWith
+// Source reads before allocate-shortlist.ts partitions it. See that
+// function's own default-limit comment for the "why 30" reasoning; kept as
+// a distinct named constant here (not re-derived from the DB function's
+// own default) so a future reader sees the pool size at the same call site
+// as the shortlist size it exists to protect.
+const TRIAGE_POOL_SIZE = 30
 // §2.10 — matches ADR 0020 §6.1's recency term, which already reaches zero
 // at exactly this many days (floor(40 × max(0, 1 − ageDays / 14))).
 export const CARD_TTL_DAYS = 14
@@ -62,25 +76,48 @@ export interface TriageTickSummary {
   deadlineDeferred: number
 }
 
-function buildTriageSystemPrompt(): string {
+// ADR 0023 §10.5/§18 (Session 30 G1b.13) — pre-existing gap closed here:
+// this prompt pair was hardcoded to GitHub-release framing regardless of
+// signal.kind, even though listNewCandidatesPoolWithSource has enumerated
+// BOTH sources since G1b.7 — a market-responsive (rss/article) candidate
+// was being triaged with a prompt telling the model it was reading a
+// GitHub release. Branches on candidate.signals.source only (never on
+// signal.kind's value in the prompt TEXT — SIGNAL-MR-METADATA-NOT-PROMPTED
+// still governs everything actually sent to the model: publisher, byline,
+// feed URL, and the literal word "rss" never appear below).
+// Exported (Session 30 G1b.13) so scripts/eval/live-triage-run.ts can reuse
+// the EXACT production prompt logic for the out-of-band live corpus run,
+// rather than risking drift from a duplicated copy.
+export function buildTriageSystemPrompt(candidate: SignalCandidateWithSourceAndFeed): string {
+  const isArticle = candidate.signals.source === 'rss'
+  const subject = isArticle
+    ? "a market-responsive news article or industry signal (not authored by this business) to decide whether it is worth surfacing to the product's marketing team as a reactive content opportunity"
+    : "a software product's GitHub release to decide whether it is worth surfacing to the product's marketing team as a content opportunity"
+  const judgment = isArticle
+    ? 'Decide "card" only if the article describes a genuinely relevant market development for this audience: a competitor move, a regulatory or compliance change, a funding/M&A event, a platform shift, or a citable industry trend this business could credibly react to. Decide "no_card" for generic industry chatter, rumor-tier reporting, stale news, or anything with no plausible tie-in for this audience.'
+    : 'Decide "card" only if the release is genuinely noteworthy for this audience: a new capability, integration, or meaningfully improved workflow. Decide "no_card" for patch releases, internal refactors, security-only fixes with no external audience relevance, or anything you cannot substantiate.'
   return [
-    "You are triaging a software product's GitHub release to decide whether it is worth surfacing to the product's marketing team as a content opportunity.",
+    `You are triaging ${subject}.`,
     'You have four read-only tools available — list_evidence, list_audience_notes, list_brand_claims, list_recent_campaigns — to check supporting context before deciding. Use any that would change your judgment; you are not required to call all four, or any of them.',
-    'Decide "card" only if the release is genuinely noteworthy for this audience: a new capability, integration, or meaningfully improved workflow. Decide "no_card" for patch releases, internal refactors, security-only fixes with no external audience relevance, or anything you cannot substantiate.',
+    judgment,
     'Respond with EXACTLY this JSON object and nothing else — no markdown fence, no commentary:',
     '{"verdict": "card" | "no_card", "reason": string, "citableEvidenceIds": string[], "citableBrandIds": string[], "audienceNote": string}',
   ].join('\n\n')
 }
 
-function buildTriageUserMessage(candidate: SignalCandidateWithSignal): string {
+export function buildTriageUserMessage(candidate: SignalCandidateWithSourceAndFeed): string {
   const rendered = wrapSignalForPrompt({ title: candidate.signals.title, body: candidate.signals.body })
-  return `A GitHub release was published on a repository this business watches. Decide whether it is worth surfacing.\n\n${rendered}`
+  const intro =
+    candidate.signals.source === 'rss'
+      ? 'A market-responsive news article relevant to this business was ingested from a subscribed feed. Decide whether it is worth surfacing.'
+      : 'A GitHub release was published on a repository this business watches. Decide whether it is worth surfacing.'
+  return `${intro}\n\n${rendered}`
 }
 
 async function triageOneCandidate(
   client: SupabaseClient,
   businessId: string,
-  candidate: SignalCandidateWithSignal,
+  candidate: SignalCandidateWithSourceAndFeed,
   claimedAtIso: string,
   summary: TriageTickSummary,
 ): Promise<void> {
@@ -90,7 +127,7 @@ async function triageOneCandidate(
     const tools = buildTriageTools(client, businessId, citable)
     const result = await runToolLoop({
       context,
-      systemPrompt: buildTriageSystemPrompt(),
+      systemPrompt: buildTriageSystemPrompt(candidate),
       userMessage: buildTriageUserMessage(candidate),
       tools,
     })
@@ -176,14 +213,27 @@ export async function runSignalsTriageTick(opts: { triggeredBy: 'qstash' | 'secr
         const staleBefore = formatISO(new Date(Date.now() - TRIAGE_CLAIM_STALE_MINUTES * 60 * 1000))
         summary.staleReclaimed = await reclaimStaleTriagingCandidates(client, staleBefore)
 
-        const businessIds = await listActiveConnectionBusinessIds(client)
+        // ADR 0023 §5.5a (Session 30 G1b.7) — was listActiveConnectionBusinessIds
+        // (github_connections alone), a source-coupled enumeration that would
+        // never triage a feed-only business. See allocate-shortlist.ts's header
+        // and this function's own commit message for the recorded semantics
+        // change (a deactivated GitHub connection's already-ingested backlog is
+        // now drained, where it was previously stranded).
+        const businessIds = await listBusinessesWithNewCandidates(client)
         summary.businessesConsidered = businessIds.length
 
         const ageCutoffMs = subDays(now, CARD_TTL_DAYS).getTime()
         let deadlineHit = false
 
         for (const businessId of businessIds) {
-          const candidates = await listNewCandidates(client, businessId, TRIAGE_SHORTLIST_PER_TICK)
+          // ADR 0023 §5.3 (Session 30 G1b.7) — the reserved split: a pool
+          // read (score-ordered, larger than the shortlist), then a pure
+          // partition (at most 2 rss/1-per-feed, remainder github) —
+          // replacing the plain listNewCandidates(..., TRIAGE_SHORTLIST_
+          // PER_TICK) read that would let a high-scoring rss flood take all
+          // five slots (L-11).
+          const pool = await listNewCandidatesPoolWithSource(client, businessId, TRIAGE_POOL_SIZE)
+          const candidates = allocateReservedShortlist(pool, TRIAGE_SHORTLIST_PER_TICK)
           let businessCapped = false
 
           for (const candidate of candidates) {

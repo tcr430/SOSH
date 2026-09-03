@@ -189,6 +189,49 @@ describe('runToolLoop (ADR 0021 §2, Session 28 E5.4)', () => {
     expect(result).toEqual({ outcome: 'failed', reason: 'invalid_response', costCents: expect.any(Number) })
   })
 
+  // D2 (Session 30-D, MAJOR-1 + A-8) — safeParseOrAiError's extractJsonBlock
+  // fallback (lib/ai/parsers.ts) changed for EVERY caller in G1b.13, but this
+  // caller (runToolLoop, Stage C triage) had no test pinning the new
+  // behaviour — AUTHORED-NOT-EXECUTED per the Reviewer. These two cases close
+  // that: prose the model prefixes despite the "no commentary" instruction
+  // now parses instead of hard-failing, and two concatenated decision objects
+  // resolve to the FIRST one, never silently to the second.
+  it('D2 — a decision text prefixed with prose (despite "no commentary") now parses via the balanced-brace fallback, not invalid_response', async () => {
+    mockCreate.mockResolvedValueOnce(loadFixture('decision-prose-prefixed'))
+
+    const result = await runToolLoop(baseInput())
+
+    expect(result).toEqual({
+      outcome: 'decision',
+      decision: {
+        verdict: 'card',
+        reason: 'Notable SSO release, prose-prefixed (D2 regression pin).',
+        citableEvidenceIds: ['ev-1'],
+        citableBrandIds: [],
+        audienceNote: 'Enterprise IT buyers.',
+      },
+      costCents: expect.any(Number),
+    })
+  })
+
+  it('D2 — two concatenated decision objects resolve to the FIRST object, the second is silently discarded', async () => {
+    mockCreate.mockResolvedValueOnce(loadFixture('decision-concatenated-objects'))
+
+    const result = await runToolLoop(baseInput())
+
+    expect(result).toEqual({
+      outcome: 'decision',
+      decision: {
+        verdict: 'card',
+        reason: 'FIRST decision (D2 regression pin) - this one must win.',
+        citableEvidenceIds: ['ev-1'],
+        citableBrandIds: [],
+        audienceNote: 'Enterprise IT buyers.',
+      },
+      costCents: expect.any(Number),
+    })
+  })
+
   it('TRIAGE_MAX_TURNS: fails closed with max_turns_exceeded when every turn is spent on tool calls with no decision', async () => {
     for (let i = 0; i < 6; i++) mockCreate.mockResolvedValueOnce(loadFixture('tool-use-list-evidence'))
 

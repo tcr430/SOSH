@@ -66,5 +66,48 @@
   },
   "success": {
     "connected": "GitHub ligado com sucesso."
+  },
+  "market_responsive": {
+    "heading": "Feeds sensíveis ao mercado",
+    "subtitle": "Adicione feeds RSS ou Atom de publicações do setor. A SOSH triagem novos artigos junto com os seus próprios lançamentos de produto.",
+    "disclosure_lower_confidence": "Os cartões de feeds de notícias são triados com menos confiança do que os cartões dos seus próprios lançamentos de produto, até esta fonte ter um histórico mais longo.",
+    "disclosure_standing_slot": "Se observar apenas um feed, esse feed tem garantida uma vaga em cada execução de triagem. Observar um segundo feed remove essa garantia.",
+    "at_cap": {
+      "title": "Lista de feeds cheia",
+      "body": "Está a observar 20 feeds, o máximo permitido. Remova um antes de adicionar outro."
+    },
+    "add": {
+      "heading": "Adicionar um feed",
+      "url_label": "URL do feed",
+      "url_placeholder": "https://exemplo.com/feed.xml",
+      "label_label": "Etiqueta",
+      "label_placeholder": "ex.: TechCrunch",
+      "submit_cta": "Adicionar feed",
+      "adding": "A adicionar…"
+    },
+    "feed_list": {
+      "heading": "Feeds observados",
+      "empty": "Ainda não está a observar nenhum feed.",
+      "pause": "Pausar",
+      "resume": "Retomar",
+      "remove": "Remover",
+      "status_active": "Ativo",
+      "status_paused": "Pausado",
+      "status_rate_limited": "Limite atingido",
+      "status_fetch_failing": "Inacessível",
+      "status_not_modified": "Sem itens novos",
+      "last_error": "Último erro: {code}",
+      "last_success": "última captação com sucesso {date}",
+      "announce_added": "Feed adicionado.",
+      "announce_removed": "Feed removido.",
+      "announce_paused": "Feed pausado.",
+      "announce_resumed": "Feed retomado."
+    },
+    "errors": {
+      "invalid_url": "Introduza um URL de feed https:// válido.",
+      "feed_cap_reached": "Já está a observar 20 feeds, o máximo permitido.",
+      "feed_add_failed": "Não foi possível adicionar esse feed. Tente novamente.",
+      "invalid_feed": "Essa seleção de feed não era válida."
+    }
   }
 }

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Widgets Inc Changelog</title>
+  <link href="https://widgetsinc.example.com/changelog" rel="alternate"/>
+  <link href="https://widgetsinc.example.com/changelog/atom.xml" rel="self"/>
+  <id>urn:uuid:33333333-3333-3333-3333-333333333333</id>
+  <updated>2026-06-03T12:00:00Z</updated>
+  <entry>
+    <title>Widgets Inc ships real-time collaboration</title>
+    <link href="https://widgetsinc.example.com/changelog/realtime-collab" rel="alternate"/>
+    <link href="https://widgetsinc.example.com/changelog/atom.xml" rel="self"/>
+    <id>urn:uuid:44444444-4444-4444-4444-444444444444</id>
+    <published>2026-06-03T12:00:00Z</published>
+    <updated>2026-06-03T12:00:00Z</updated>
+    <summary>Widgets Inc announced real-time collaboration features today.</summary>
+  </entry>
+</feed>

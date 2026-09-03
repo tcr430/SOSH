@@ -1,0 +1,1880 @@
+{
+  "corpusVersion": 2,
+  "note": "ADR 0023 §10.5/§17/§18 (Session 30 G1b.12/G1b.13, amended Session 30-G 2026-08-29). corpusVersion 2: every example carries a source discriminator (github | market_responsive). 80 examples total (SIGNAL-MR-CORPUS-EXTENDED): the 40 github examples are unchanged from v1 aside from the added source field — still the v1 hand-authored bootstrap cassettes, not yet re-run live themselves. The 40 market_responsive examples were merged from corpus.v2.market-responsive.template.json after founder approval (2026-08-29) — per §18 Amendment 2, the 24 card examples use REAL companies/events (paraphrased, not quoted, from web search results; figures NOT yet verified against primary sources — see §18 residual risk), and the 16 no_card examples remain fictional per the original v1/§17 convention. Every market_responsive cassette is a real, live Anthropic response (SIGNAL-MR-CORPUS-MODEL-AUTHORED) from scripts/eval/live-triage-run.ts, generated AFTER labelCommitSha's commit — the founder never saw a model verdict before writing that example's label (SIGNAL-MR-CORPUS-BLIND-LABELLED). Measured result (Tier E): market_responsive scored precision 0/0, recall 0/24, dismissMatch 9/16 — every 'no_card' cited the total absence of audience/brand/campaign memory (this corpus's universal stubMemory: {} condition) as the reason it could not confirm relevance. Reported honestly, not smoothed over.",
+  "labelCommitSha": "7bfe1c7ccad983ac4da87c9d2e3d1bcc22261225",
+  "cassetteCommitSha": "cd1b7203522614ed3303bc09940194c70d44b8aa",
+  "examples": [
+    {
+      "id": "c01-sso-saml",
+      "source": "github",
+      "signal": {
+        "title": "v3.2.0 — SAML SSO for Enterprise",
+        "html_url": "https://github.com/acme-eng/acme-app/releases/tag/v3.2.0",
+        "occurred_at": "2026-03-04T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Adds SAML 2.0 single sign-on with Okta, Azure AD, and Google Workspace as identity providers. Enterprise admins can now enforce SSO org-wide and manage seat provisioning centrally."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "New enterprise SSO capability directly addresses a top procurement blocker for larger accounts.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Enterprise IT/security buyers evaluating vendor consolidation."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c02-slack-integration",
+      "source": "github",
+      "signal": {
+        "title": "v2.9.0 — Two-way Slack sync",
+        "html_url": "https://github.com/nimbus-labs/nimbus-core/releases/tag/v2.9.0",
+        "occurred_at": "2026-02-11T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Ships a bidirectional Slack integration: comments made in Slack now sync back into the app, and mentions trigger notifications in both directions."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "A genuinely two-way integration (not just outbound notifications) is a meaningful workflow improvement for teams already living in Slack.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Ops and support teams coordinating across Slack and the product."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c03-public-api-v2",
+      "source": "github",
+      "signal": {
+        "title": "v4.0.0 — Public API v2 with webhooks",
+        "html_url": "https://github.com/vela-systems/vela/releases/tag/v4.0.0",
+        "occurred_at": "2026-01-20T14:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Launches a redesigned public REST API (v2) with a stable versioning policy and outbound webhooks for the first time, replacing the internal-only v1 surface."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "First stable public API plus webhooks opens the platform to integrations customers have been asking for.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Developer/technical buyers and integration partners."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c04-soc2",
+      "source": "github",
+      "signal": {
+        "title": "SOC 2 Type II report available",
+        "html_url": "https://github.com/acme-eng/acme-app/releases/tag/v3.3.0",
+        "occurred_at": "2026-04-02T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "We have completed our SOC 2 Type II audit. The report is now available to customers under NDA via the trust center."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "A completed compliance certification is a concrete trust signal that removes a common security-review blocker.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Security and procurement reviewers at prospective enterprise accounts."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c05-ai-analytics",
+      "source": "github",
+      "signal": {
+        "title": "v5.1.0 — AI-powered insights dashboard",
+        "html_url": "https://github.com/nimbus-labs/nimbus-core/releases/tag/v5.1.0",
+        "occurred_at": "2026-03-18T11:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "New dashboard automatically surfaces anomalies and trend summaries in plain language, no manual report-building required."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "Automated insight surfacing is a real capability upgrade over manual dashboards, not a cosmetic change.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Data-driven ops and growth teams who currently build reports by hand."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c06-eu-region",
+      "source": "github",
+      "signal": {
+        "title": "v3.4.0 — EU data residency (Frankfurt region)",
+        "html_url": "https://github.com/acme-eng/acme-app/releases/tag/v3.4.0",
+        "occurred_at": "2026-04-15T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Customers can now choose to host all data exclusively in our new Frankfurt region, satisfying EU data-residency requirements."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "EU data residency is a hard requirement for many European enterprise deals and directly unblocks them.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "European enterprise buyers with data-residency mandates."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c07-enterprise-tier",
+      "source": "github",
+      "signal": {
+        "title": "Introducing the Enterprise plan",
+        "html_url": "https://github.com/vela-systems/vela/releases/tag/v4.1.0",
+        "occurred_at": "2026-02-28T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "New Enterprise tier bundles SSO, a dedicated SLA, and a named customer success contact for larger accounts."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "A new packaging tier signals the product is scaling upmarket — relevant to how we position against enterprise competitors.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Enterprise buying committees comparing vendor SLAs."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c08-ios-app",
+      "source": "github",
+      "signal": {
+        "title": "v1.0.0 — Native iOS app launch",
+        "html_url": "https://github.com/nimbus-labs/nimbus-core/releases/tag/mobile-v1.0.0",
+        "occurred_at": "2026-01-08T12:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "The first native iOS app is now live on the App Store, with push notifications and offline read access."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "A first native mobile app is a meaningful platform expansion, not an incremental release.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Field teams and on-the-go users who previously had no mobile option."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c09-zapier",
+      "source": "github",
+      "signal": {
+        "title": "v3.5.0 — Zapier integration",
+        "html_url": "https://github.com/acme-eng/acme-app/releases/tag/v3.5.0",
+        "occurred_at": "2026-05-01T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Official Zapier app published, supporting 12 triggers and 8 actions for connecting to 5,000+ other tools."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "A published Zapier app materially widens who can integrate without engineering effort, a common no-code buyer ask.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Ops-heavy teams without dedicated engineering resources."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c10-realtime-collab",
+      "source": "github",
+      "signal": {
+        "title": "v5.2.0 — Real-time multiplayer editing",
+        "html_url": "https://github.com/nimbus-labs/nimbus-core/releases/tag/v5.2.0",
+        "occurred_at": "2026-04-22T13:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Multiple users can now edit the same document simultaneously with live cursors, matching the collaborative editing experience of modern docs tools."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "Real-time multiplayer is a headline collaboration capability that changes how teams can use the product together.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Teams evaluating collaborative-editing tools as a category."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c11-hipaa",
+      "source": "github",
+      "signal": {
+        "title": "HIPAA compliance now available",
+        "html_url": "https://github.com/vela-systems/vela/releases/tag/v4.2.0",
+        "occurred_at": "2026-03-10T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "We now offer signed BAAs and HIPAA-eligible infrastructure for healthcare customers handling PHI."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "HIPAA eligibility opens an entire regulated vertical that was previously closed to us.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Healthcare and health-tech buyers requiring BAAs."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c12-salesforce-sync",
+      "source": "github",
+      "signal": {
+        "title": "v3.6.0 — Salesforce two-way sync",
+        "html_url": "https://github.com/acme-eng/acme-app/releases/tag/v3.6.0",
+        "occurred_at": "2026-05-20T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Native, bidirectional Salesforce sync for contacts, deals, and custom objects — no middleware required."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "Native Salesforce sync removes a common integration-tax objection for sales-led buyers.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "RevOps and sales teams standardized on Salesforce."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c13-rbac",
+      "source": "github",
+      "signal": {
+        "title": "v5.3.0 — Advanced role-based access control",
+        "html_url": "https://github.com/nimbus-labs/nimbus-core/releases/tag/v5.3.0",
+        "occurred_at": "2026-05-05T11:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Custom roles with field-level permissions, replacing the previous fixed admin/member/viewer model."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "Granular custom roles is a common enterprise governance requirement that the previous fixed-role model blocked.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "IT/security admins at larger, more structured organizations."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c14-audit-log",
+      "source": "github",
+      "signal": {
+        "title": "v4.3.0 — Exportable audit logs",
+        "html_url": "https://github.com/vela-systems/vela/releases/tag/v4.3.0",
+        "occurred_at": "2026-04-08T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Full audit trail of every account action, exportable to CSV or streamed to a SIEM via webhook."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "SIEM-streamable audit logs is exactly the kind of concrete evidence security reviewers ask for during procurement.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Compliance and security teams running vendor audits."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c15-white-label",
+      "source": "github",
+      "signal": {
+        "title": "v3.7.0 — Custom branding / white-label mode",
+        "html_url": "https://github.com/acme-eng/acme-app/releases/tag/v3.7.0",
+        "occurred_at": "2026-06-02T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Agencies and resellers can now fully white-label the customer-facing portal with their own logo, domain, and color scheme."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "White-labeling unlocks an entire reseller/agency go-to-market motion that wasn't previously possible.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Agencies and resellers considering reselling the product under their own brand."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c16-graphql",
+      "source": "github",
+      "signal": {
+        "title": "v5.4.0 — GraphQL API launch",
+        "html_url": "https://github.com/nimbus-labs/nimbus-core/releases/tag/v5.4.0",
+        "occurred_at": "2026-06-14T12:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "A GraphQL API is now available alongside the existing REST API, letting clients fetch exactly the fields they need in one round trip."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "A GraphQL option is a real developer-experience upgrade for integration partners doing complex, nested queries.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Technical integration partners and platform engineers."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c17-data-warehouse-sync",
+      "source": "github",
+      "signal": {
+        "title": "v4.4.0 — Snowflake and BigQuery sync",
+        "html_url": "https://github.com/vela-systems/vela/releases/tag/v4.4.0",
+        "occurred_at": "2026-05-29T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Native connectors now stream account data directly into Snowflake or BigQuery on a configurable schedule."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "Native warehouse sync removes a common data-team objection about vendor lock-in and manual exports.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Data engineering teams who currently build custom ETL to get this data out."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c18-scim",
+      "source": "github",
+      "signal": {
+        "title": "v3.8.0 — SCIM provisioning",
+        "html_url": "https://github.com/acme-eng/acme-app/releases/tag/v3.8.0",
+        "occurred_at": "2026-06-20T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "SCIM 2.0 support means user provisioning and deprovisioning now happens automatically from the customer's identity provider."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "Automated SCIM provisioning pairs with the earlier SSO launch and removes a manual offboarding risk enterprise security teams specifically flag.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "IT admins responsible for offboarding and access hygiene."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c19-workflow-builder",
+      "source": "github",
+      "signal": {
+        "title": "v5.5.0 — No-code workflow automation builder",
+        "html_url": "https://github.com/nimbus-labs/nimbus-core/releases/tag/v5.5.0",
+        "occurred_at": "2026-07-01T11:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "A visual, no-code builder lets customers create multi-step automations without writing scripts or filing engineering tickets."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "A no-code automation builder is a headline capability that expands who at a customer can configure the product.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Ops and business teams without engineering support."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c20-performance-overhaul",
+      "source": "github",
+      "signal": {
+        "title": "v4.5.0 — 10x faster report generation",
+        "html_url": "https://github.com/vela-systems/vela/releases/tag/v4.5.0",
+        "occurred_at": "2026-06-10T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "A rewritten query engine cuts large-report generation time from minutes to seconds for accounts with high data volume."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "A concrete, large performance improvement directly addresses a named pain point for power users, worth surfacing with the specific number.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "High-volume accounts who have previously complained about report speed."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c21-status-page",
+      "source": "github",
+      "signal": {
+        "title": "v3.9.0 — Public status page product",
+        "html_url": "https://github.com/acme-eng/acme-app/releases/tag/v3.9.0",
+        "occurred_at": "2026-07-08T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Customers can now stand up their own branded, public status page powered by our uptime monitoring, for their own downstream users."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "A net-new customer-facing product line is a genuine expansion of what the platform does for its customers.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Customers who currently run a separate status-page tool."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c22-teams-integration",
+      "source": "github",
+      "signal": {
+        "title": "v5.6.0 — Native Microsoft Teams app",
+        "html_url": "https://github.com/nimbus-labs/nimbus-core/releases/tag/v5.6.0",
+        "occurred_at": "2026-07-15T12:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "A native Teams app brings notifications, approvals, and quick actions directly into Microsoft Teams channels."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "First-class Teams support opens the large segment of enterprise buyers standardized on Microsoft 365 rather than Slack.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Microsoft-365-standardized enterprise accounts."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c23-usage-billing",
+      "source": "github",
+      "signal": {
+        "title": "v4.6.0 — Usage-based billing support",
+        "html_url": "https://github.com/vela-systems/vela/releases/tag/v4.6.0",
+        "occurred_at": "2026-07-22T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Customers can now switch to a usage-based pricing model with real-time consumption dashboards, alongside the existing flat-rate plans."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "A new billing model is a structural product change that changes how prospects evaluate cost, worth surfacing on its own.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Cost-sensitive prospects who previously found flat-rate pricing a mismatch for variable usage."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "c24-embedded-analytics",
+      "source": "github",
+      "signal": {
+        "title": "v5.7.0 — Embeddable analytics for your own product",
+        "html_url": "https://github.com/nimbus-labs/nimbus-core/releases/tag/v5.7.0",
+        "occurred_at": "2026-07-29T11:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "A new embeddable SDK lets customers surface our analytics inside their own product's UI, white-labeled, via a single script tag."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "card",
+          "reason": "An embeddable, white-labeled SDK is a new integration surface that turns the product into infrastructure for customers' own products.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Customers building their own product who want analytics without building it themselves."
+        }
+      ],
+      "expectedVerdict": "card"
+    },
+    {
+      "id": "n01-cve-patch",
+      "source": "github",
+      "signal": {
+        "title": "v3.2.1 — Security patch",
+        "html_url": "https://github.com/acme-eng/acme-app/releases/tag/v3.2.1",
+        "occurred_at": "2026-03-06T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Patches CVE-2026-11223, a vulnerability in the SAML assertion parser that could allow signature bypass under specific conditions."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "This is a security vulnerability patch (CVE-2026-11223) — publicizing a security fix as a marketing card risks drawing attention to the underlying exposure rather than building trust.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": ""
+        }
+      ],
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "too_sensitive"
+    },
+    {
+      "id": "n02-data-exposure",
+      "source": "github",
+      "signal": {
+        "title": "v2.9.1 — Fix for data exposure bug",
+        "html_url": "https://github.com/nimbus-labs/nimbus-core/releases/tag/v2.9.1",
+        "occurred_at": "2026-02-13T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Fixes a bug that could expose one workspace's data to another under a narrow race condition. All affected customers have been notified directly."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "This describes a cross-tenant data exposure incident — highly security-sensitive content that must never be surfaced as a content opportunity.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": ""
+        }
+      ],
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "too_sensitive"
+    },
+    {
+      "id": "n03-dependency-vuln",
+      "source": "github",
+      "signal": {
+        "title": "v4.0.1 — Dependency security update",
+        "html_url": "https://github.com/vela-systems/vela/releases/tag/v4.0.1",
+        "occurred_at": "2026-01-22T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Bumps a transitive dependency to patch a known vulnerability rated CVSS 7.5."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "A CVSS-rated vulnerability patch is security-sensitive content, not a product story to surface publicly.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": ""
+        }
+      ],
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "too_sensitive"
+    },
+    {
+      "id": "n04-incident-postmortem",
+      "source": "github",
+      "signal": {
+        "title": "Postmortem: March 14 outage",
+        "html_url": "https://github.com/acme-eng/acme-app/releases/tag/incident-2026-03-14",
+        "occurred_at": "2026-03-15T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "A detailed writeup of the root cause behind the March 14 outage and the remediation steps taken."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "An incident postmortem discusses a security/reliability failure — sensitive content that should not be repurposed as marketing.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": ""
+        }
+      ],
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "too_sensitive"
+    },
+    {
+      "id": "n05-sso-bugfix",
+      "source": "github",
+      "signal": {
+        "title": "v3.2.2 — SSO login bugfix",
+        "html_url": "https://github.com/acme-eng/acme-app/releases/tag/v3.2.2",
+        "occurred_at": "2026-03-10T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Fixes an edge case where SSO login failed for users with unusual characters in their email address."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "This is a minor bugfix to the SSO feature that was already announced and carded in v3.2.0 — already covered, nothing new to say.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": ""
+        }
+      ],
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "already_covered"
+    },
+    {
+      "id": "n06-ai-dashboard-iteration",
+      "source": "github",
+      "signal": {
+        "title": "v5.1.1 — AI dashboard minor iteration",
+        "html_url": "https://github.com/nimbus-labs/nimbus-core/releases/tag/v5.1.1",
+        "occurred_at": "2026-03-25T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Small tuning to the anomaly-detection thresholds introduced in v5.1.0's AI insights dashboard."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "A minor tuning pass on the AI dashboard already announced in v5.1.0 — already covered, not a new story.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": ""
+        }
+      ],
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "already_covered"
+    },
+    {
+      "id": "n07-api-docs-update",
+      "source": "github",
+      "signal": {
+        "title": "v4.0.1-docs — API v2 documentation refresh",
+        "html_url": "https://github.com/vela-systems/vela/releases/tag/v4.0.1-docs",
+        "occurred_at": "2026-01-25T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Updates the public API v2 reference docs with clearer examples, following the v4.0.0 launch."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "A documentation refresh for the API v2 already announced in v4.0.0 — already covered, no new capability.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": ""
+        }
+      ],
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "already_covered"
+    },
+    {
+      "id": "n08-vague-changelog",
+      "source": "github",
+      "signal": {
+        "title": "v3.9.1",
+        "html_url": "https://github.com/acme-eng/acme-app/releases/tag/v3.9.1",
+        "occurred_at": "2026-07-10T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Misc bug fixes and performance improvements."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "The release notes are vague with no concrete specifics — there is insufficient detail here to substantiate any claim worth surfacing.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": ""
+        }
+      ],
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "weak_evidence"
+    },
+    {
+      "id": "n09-internal-refactor",
+      "source": "github",
+      "signal": {
+        "title": "v5.7.1",
+        "html_url": "https://github.com/nimbus-labs/nimbus-core/releases/tag/v5.7.1",
+        "occurred_at": "2026-07-30T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Internal refactor of the build pipeline for faster CI runs."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "This is a vague, internal-facing changelog entry with no concrete customer-relevant detail to substantiate a card.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": ""
+        }
+      ],
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "weak_evidence"
+    },
+    {
+      "id": "n10-ui-polish",
+      "source": "github",
+      "signal": {
+        "title": "v4.6.1",
+        "html_url": "https://github.com/vela-systems/vela/releases/tag/v4.6.1",
+        "occurred_at": "2026-07-24T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Various UI polish across settings screens."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "\"Various UI polish\" is too vague and unclear to substantiate any specific claim — insufficient detail to write a credible card.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": ""
+        }
+      ],
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "weak_evidence"
+    },
+    {
+      "id": "n11-dependency-bumps",
+      "source": "github",
+      "signal": {
+        "title": "v3.8.1",
+        "html_url": "https://github.com/acme-eng/acme-app/releases/tag/v3.8.1",
+        "occurred_at": "2026-06-25T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Dependency bumps and minor tweaks."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "Vague dependency-bump changelog with no concrete customer-facing detail — not enough evidence to substantiate a card.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": ""
+        }
+      ],
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "weak_evidence"
+    },
+    {
+      "id": "n12-beta-opt-in",
+      "source": "github",
+      "signal": {
+        "title": "v5.8.0-beta — Experimental workflow templates",
+        "html_url": "https://github.com/nimbus-labs/nimbus-core/releases/tag/v5.8.0-beta",
+        "occurred_at": "2026-08-01T08:00:00Z",
+        "is_prerelease": true,
+        "author_is_bot": false,
+        "body": "An experimental, opt-in-only preview of workflow templates. Not yet stable and may change significantly before general availability."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "This is an experimental, opt-in-only beta preview — too premature to surface broadly before it's stable enough for a general audience.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": ""
+        }
+      ],
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "wrong_timing"
+    },
+    {
+      "id": "n13-alpha-announcement",
+      "source": "github",
+      "signal": {
+        "title": "v4.7.0-alpha — Early look at usage forecasting",
+        "html_url": "https://github.com/vela-systems/vela/releases/tag/v4.7.0-alpha",
+        "occurred_at": "2026-08-05T08:00:00Z",
+        "is_prerelease": true,
+        "author_is_bot": false,
+        "body": "A very early alpha of usage forecasting, shared with a handful of design-partner customers. No stable release date yet."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "An early alpha with no stable release date is too premature and not yet ready for a broad audience — the timing is wrong to surface this now.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": ""
+        }
+      ],
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "wrong_timing"
+    },
+    {
+      "id": "n14-ci-tooling",
+      "source": "github",
+      "signal": {
+        "title": "v3.9.2",
+        "html_url": "https://github.com/acme-eng/acme-app/releases/tag/v3.9.2",
+        "occurred_at": "2026-07-12T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": true,
+        "body": "Updates the contributor CI workflow to cache dependencies for faster open-source PR checks."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "This is internal contributor tooling with no external customer audience — not relevant to marketing content.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": ""
+        }
+      ],
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "not_relevant"
+    },
+    {
+      "id": "n15-locale-update",
+      "source": "github",
+      "signal": {
+        "title": "v5.8.1",
+        "html_url": "https://github.com/nimbus-labs/nimbus-core/releases/tag/v5.8.1",
+        "occurred_at": "2026-08-03T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": true,
+        "body": "Updates translation files for the Portuguese and Spanish locales."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "A translation-file update has no external customer audience worth surfacing — not relevant as a content opportunity.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": ""
+        }
+      ],
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "not_relevant"
+    },
+    {
+      "id": "n16-community-housekeeping",
+      "source": "github",
+      "signal": {
+        "title": "v4.7.1",
+        "html_url": "https://github.com/vela-systems/vela/releases/tag/v4.7.1",
+        "occurred_at": "2026-08-06T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Renames the #contributors Discord channel to #community and updates the CONTRIBUTING.md link accordingly."
+      },
+      "stubMemory": {},
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "Community housekeeping with no external customer audience — not relevant to surface as a content opportunity.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": ""
+        }
+      ],
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-c01-github-copilot-usage-credits",
+      "source": "market_responsive",
+      "signal": {
+        "title": "GitHub moves Copilot to usage-based AI Credits, cuts included allowance from September",
+        "html_url": "https://devtoolsreview.com/pricing/copilot-ai-credits-september-2026/",
+        "occurred_at": "2026-06-01T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "GitHub replaced Copilot's premium-request model with usage-based AI Credits on June 1, 2026, and gave organizations elevated included credits for the first three months as a transition buffer. From September 1, Business plans drop from $30 to $19 of included credits per seat and Enterprise from $70 to $39, with the subscription price itself unchanged — only the included usage shrinks."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "No audience notes or recent campaigns exist in memory to establish a plausible tie-in. Without knowing this business's audience (e.g., developer-tooling buyers, CTOs, AI/coding productivity users) or any adjacent positioning, the GitHub Copilot Credits pricing change — while a real, concrete platform shift — cannot be assessed as relevant or actionable for this team. The signal itself is credible and citable, but the system lacks the context needed to confirm audience fit or a reactive content angle.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "If this business targets software development teams, engineering leaders, or AI productivity buyers, this article should be re-evaluated: GitHub's move to usage-based AI Credits with a meaningful reduction in included allowances (Business: $30→$19/seat, Enterprise: $70→$39/seat from Sept 1) is a genuine competitor/platform-shift signal that could support cost-comparison or value messaging. Populate audience notes and re-triage."
+        }
+      ]
+    },
+    {
+      "id": "mr-c02-eu-instant-payments-verification",
+      "source": "market_responsive",
+      "signal": {
+        "title": "EU's Instant Payments Regulation pushes banks toward mandatory real-time payee verification",
+        "html_url": "https://www.sidley.com/en/insights/newsupdates/2026/01/payments-and-fintech-regulation-2026-whats-on-the-horizon-in-the-uk-and-eu",
+        "occurred_at": "2026-01-14T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "The EU's Instant Payments Regulation is driving banks toward always-on, real-time payments with mandatory payee-name verification aimed at cutting authorized-push-payment fraud, as part of a broader 2026 push to strengthen consumer protections in payments. Smaller fintechs are expected to lean on third-party verification APIs rather than build the capability in-house."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "No audience notes, evidence, or brand context could be retrieved to establish a plausible tie-in for this business. While the EU Instant Payments Regulation is a legitimate, dateable regulatory development — not rumor or chatter — there is no signal that this business serves EU banks, fintechs, payee-verification use cases, or APP fraud prevention. Without that grounding, the article is a relevant industry trend in the abstract but not a credible reactive content opportunity for this specific product and audience.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "If this business serves EU-facing fintechs, payment processors, or fraud/compliance teams, this verdict should be revisited once audience notes and evidence are populated — the article's 2026 deadline, the mandatory nature of the regulation, and the explicit call-out of third-party verification APIs as the likely solution path for smaller fintechs create a strong hook for a timely, reactive piece."
+        }
+      ]
+    },
+    {
+      "id": "mr-c03-meta-reach-metric-retired",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Meta retires legacy Facebook Reach metric, replaces it with unified Page Viewer count",
+        "html_url": "https://support.sproutsocial.com/hc/en-us/articles/45863997056397-Facebook-Metric-Deprecations-June-2026",
+        "occurred_at": "2026-06-15T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Meta deprecated its long-standing Facebook Reach metric from the API starting June 15, 2026, replacing it with a Page Viewer metric meant to unify measurement across Facebook and Instagram content. Marketing teams relying on historical reach benchmarks in dashboards or automated reports need to rebuild that reporting before the old field disappears entirely."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "There are no audience notes indicating this business's customers rely on Facebook Reach as a reporting metric, and no recent campaigns touching Meta platform analytics or social media reporting workflows. Without a confirmed audience segment that uses Meta API-driven dashboards or tracks Facebook Reach benchmarks, this deprecation — while a real platform shift — has no plausible tie-in for this business's marketing team to react to credibly.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "No audience data on file connects this business's customers to Meta API reporting or Facebook Reach metrics. If this business serves social media managers, marketing analysts, or martech tooling customers, re-triage with that audience context provided."
+        }
+      ]
+    },
+    {
+      "id": "mr-c04-workday-layoffs-ai-shift",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Workday cuts 8.5% of workforce, concentrated in customer operations, as it redirects spend to AI",
+        "html_url": "https://www.kore1.com/workday-layoffs-2026/",
+        "occurred_at": "2026-02-01T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "HR and finance SaaS vendor Workday laid off 8.5% of its workforce, with the cuts falling almost entirely inside Global Customer Operations — the group covering Customer Success, Adoption Services, and Customer Support — as the company shifts investment toward AI products and international expansion."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "Without any stored audience, brand, or campaign context, there is no basis to establish a credible tie-in for this business. More critically, the signal itself — while a legitimate enterprise-tech news event — is only actionable for a narrow set of businesses: direct Workday competitors, HR/finance tech vendors whose ICP overlaps with Workday customers, or consultancies serving Workday's customer-operations function. The layoff is concentrated in Customer Success and Support roles, which is a meaningful signal about AI displacing human-led post-sale services, but that thesis requires confirming this business has something credible to say about Workday customers, AI in customer operations, or workforce displacement before a reactive content card is justified. Recommend re-triaging once audience memory, brand claims, and campaign history are populated.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "If this business targets HR/finance SaaS buyers, Workday customers, or sells into post-sale customer-success or support workflows, this signal becomes high-priority: the layoff is a concrete, citable proof point that AI is actively displacing human customer-operations headcount at scale, and Workday's framing of the cuts as an AI reinvestment provides a reactive narrative hook."
+        }
+      ]
+    },
+    {
+      "id": "mr-c05-eu-ai-act-article-50",
+      "source": "market_responsive",
+      "signal": {
+        "title": "EU AI Act's Article 50 transparency obligations become enforceable for vendors selling into the bloc",
+        "html_url": "https://www.insideprivacy.com/european-union-2/what-to-watch-in-2026-key-eu-privacy-cybersecurity-developments/",
+        "occurred_at": "2026-08-02T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "The European Commission's final guidance on the EU AI Act's Article 50 transparency obligations applies from August 2, 2026, requiring AI-powered features marketed to enterprise buyers in the EU to meet defined disclosure standards. Vendors without documentation in place risk being excluded from regulated-industry and public-sector procurement shortlists."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "No audience notes or brand claims are on file connecting this business to EU enterprise buyers, regulated-industry procurement, or public-sector sales. Without evidence that the product is marketed into the EU or that EU AI Act compliance is a credible talking point for this business, Article 50's enforcement date is not a reactive content opportunity — it is general industry news with no confirmed tie-in. If the business does sell AI-powered features to EU enterprise or public-sector customers, this signal should be re-evaluated once that audience context is recorded.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Card eligibility would flip immediately if this business markets AI features to EU enterprise, regulated-industry (e.g. finance, healthcare), or public-sector buyers. Capturing that audience scope in memory is the prerequisite before reacting to EU AI Act enforcement milestones."
+        }
+      ]
+    },
+    {
+      "id": "mr-c06-elation-health-acquires-aster",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Elation Health acquires women's-health EHR platform Aster",
+        "html_url": "https://xtalks.com/healthcare-ma-in-2026-a-roundup-of-deals-4615/",
+        "occurred_at": "2026-06-10T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Primary-care EHR vendor Elation Health acquired Aster, an EHR platform focused on women's clinical care, in June 2026 as part of a broader wave of healthcare-SaaS consolidation. The deal folds Aster's specialty workflows directly into Elation's core primary-care record system."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "While this is a real, dated M&A event (Elation Health acquiring Aster in June 2026) in healthcare SaaS, there is no stored audience, campaign, or brand context to establish a plausible tie-in for this business. Without knowing whether this business competes with Elation or Aster, serves women's-health or primary-care clinicians, or has existing positioning around EHR consolidation, the signal cannot be credibly reacted to. The article describes a genuine competitor/consolidation move, but relevance to this specific business and its audience is unverifiable — making a 'card' verdict unjustifiable under the triage standard.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "No audience notes are on file. If this business targets independent primary-care practices, women's-health clinics, or competes in the clinical-workflow or EHR-adjacent SaaS space, this acquisition would likely warrant a 'card' — please populate audience and brand memory and re-run triage."
+        }
+      ]
+    },
+    {
+      "id": "mr-c07-legalon-contract-review-report",
+      "source": "market_responsive",
+      "signal": {
+        "title": "LegalOn report: AI adoption in contract review doubles year-over-year",
+        "html_url": "https://www.businesswire.com/news/home/20260112080673/en/LegalOn-Report-Finds-AI-Adoption-in-Contract-Review-Doubles-Year-Over-Year",
+        "occurred_at": "2026-01-12T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "A report from LegalOn finds the share of in-house legal teams actively using AI in contract review has doubled year-over-year and nearly quadrupled since 2024, with more than half of teams now using or evaluating the technology. Separate industry data cited alongside the report puts AI-assisted review time savings as high as 85% versus manual first-pass review."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "No audience notes, evidence, or brand claims are stored for this business, making it impossible to establish a credible tie-in. The article itself describes a genuine, citable industry trend (AI adoption in contract review doubling YoY, 85% time savings claim from a named source), which could be reactive-content-worthy for a legal tech, CLM, or in-house legal tooling product — but without any context confirming this business operates in or adjacent to that space, surfacing it would be speculative. Re-evaluate if audience or product context is loaded.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "If this business serves in-house legal teams, law firms, or sells contract/CLM tooling, this article is high-value: a named third-party report (LegalOn) with a sharp YoY doubling stat and an 85% time-savings figure are both citable proof points for reactive content. Reload audience notes and re-triage."
+        }
+      ]
+    },
+    {
+      "id": "mr-c08-shopify-checkout-outage",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Shopify outage takes down checkout, admin, and POS for roughly two hours",
+        "html_url": "https://www.digitalapplied.com/blog/ecommerce-platform-outage-resilience-2026-incident-readiness-playbook",
+        "occurred_at": "2026-06-03T15:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "A Shopify outage on June 3, 2026 knocked out checkout, admin, storefront, and point-of-sale functionality for roughly two hours, disrupting an unknown number of merchant storefronts during the incident window. Industry data on payment outages generally shows businesses losing over a billion dollars in sales for every minute an outage runs past the eight-to-thirteen-minute mark."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "The Shopify outage is a concrete, citable platform-reliability event, but neither the audience notes nor recent campaigns contain any data connecting this business to Shopify merchants, ecommerce platform reliability, or payment uptime. Without a confirmed tie-in — e.g., the business sells redundancy tooling, serves Shopify merchants, or competes on uptime — there is no credible reactive angle to surface. If the business does operate in one of those spaces, audience and campaign memory should be populated first so future signals like this can be properly evaluated.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "No audience notes on file. If this business serves Shopify merchants or sells reliability/uptime solutions, that context should be added to memory so platform-outage signals can be triaged accurately in future."
+        }
+      ]
+    },
+    {
+      "id": "mr-c09-model-pricing-war-cuts",
+      "source": "market_responsive",
+      "signal": {
+        "title": "OpenAI, Anthropic, and Google slash flagship model API pricing amid enterprise AI price war",
+        "html_url": "https://www.scmp.com/tech/tech-trends/article/3363549/enterprise-ai-costs-hit-2026-low-driven-price-wars-chinese-open-source-models-research",
+        "occurred_at": "2026-08-10T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Enterprise AI inference costs hit a 2026 low as OpenAI cut GPT-5.6 series pricing by up to 80%, Anthropic cut Claude Opus 4.5 pricing by 67%, and Google priced Gemini 3 Pro aggressively at $2/$12 per million tokens — average inference prices across providers now sit between $1.16 and $1.18 per million tokens."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "No audience notes, brand claims, or recent campaigns are on file for this business, making it impossible to establish a credible tie-in between this AI pricing story and a specific audience or positioning angle. The news itself — while a genuine, citable market development (an enterprise AI inference price war with concrete figures from OpenAI, Anthropic, and Google) — cannot be responsibly triaged without knowing whether this business sells AI-adjacent tooling, targets enterprise AI buyers, or has any stated claim about cost efficiency or model access. Without that context, surfacing it risks misdirecting the marketing team toward a reactive piece with no strategic grounding. Once business context is loaded into memory, this signal should be re-evaluated — it contains strong, citable specifics that could support a compelling reactive angle for the right product.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Audience is unknown. If this business serves enterprise software buyers, AI infrastructure teams, or cost-conscious ML practitioners, this article would likely qualify as a card — the pricing figures are concrete, the trend is durable, and the competitive dynamic is citable. Re-triage once audience and brand context are available."
+        }
+      ]
+    },
+    {
+      "id": "mr-c10-state-privacy-coppa-update",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Three more US states' comprehensive privacy laws take effect alongside updated COPPA rule",
+        "html_url": "https://www.omm.com/insights/alerts-publications/2026-data-security-and-privacy-compliance-checklist-key-us-state-law-updates-ai-rules-coppa-changes-and-global-data-protection-risks/",
+        "occurred_at": "2026-04-22T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Indiana, Kentucky, and Rhode Island's comprehensive state privacy laws took effect in 2026, bringing the US total to 20 states with such laws, while the updated COPPA rule's April 22, 2026 compliance deadline adds new consent, retention, and disclosure requirements. SaaS vendors serving US customers now face a wider, unevenly-timed patchwork of state-level obligations."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "No audience notes or brand claims are on record for this business, so there is no confirmed tie-in between the Indiana/Kentucky/Rhode Island privacy laws and COPPA update and this business's known audience or messaging. The news is a genuine regulatory development (not rumor or stale), but without evidence that this business serves SaaS buyers, privacy-adjacent buyers, or has staked a compliance/trust position, surfacing it risks irrelevant reactive content. If audience or brand context is added to memory confirming a compliance angle, this signal should be re-evaluated.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "No audience profile on record. If this business serves SaaS vendors, data processors, or buyers with US privacy compliance obligations, this article becomes a strong card — 20-state patchwork and COPPA's April 22, 2026 deadline are concrete, citable hooks."
+        }
+      ]
+    },
+    {
+      "id": "mr-c11-atlassian-rovo-cross-app-agents",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Atlassian's Rovo AI adds cross-app agents that can act on work items, not just search them",
+        "html_url": "https://monday.com/blog/rnd/software-development-collaboration-tools/",
+        "occurred_at": "2026-03-11T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Atlassian's Rovo AI now offers configurable agents that reason over and update work items across connected apps, moving beyond natural-language search into acting on tickets, docs, and tasks directly. It's part of a broader 2026 shift in collaboration tooling from passive search assistants toward agents that read context and report back on outcomes."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "No audience notes or recent campaigns are on record, making it impossible to establish a credible tie-in between this business and the Atlassian Rovo AI agent announcement. Without knowing who this product serves and whether Atlassian/collaboration tooling is part of their competitive or integration landscape, the signal cannot be meaningfully acted on. Additionally, while the Atlassian move is a genuine competitor/platform shift story, it is only actionable if this business overlaps with project management, ticketing, or AI-assisted workflow tooling — context that is entirely absent from memory. Surface this again once audience and brand context is populated.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "No audience notes found. If this product targets teams using Jira, Confluence, or similar collaboration stacks, this Atlassian agent expansion would be a strong reactive opportunity worth revisiting."
+        }
+      ]
+    },
+    {
+      "id": "mr-c12-cloud-gpu-pricing-gap",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Google Cloud undercuts Azure on H100 GPU pricing by roughly 4x in 2026 comparisons",
+        "html_url": "https://tech-insider.org/aws-vs-azure-vs-google-cloud-gpu-pricing-2026/",
+        "occurred_at": "2026-05-15T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "2026 cloud-pricing surveys show Google Cloud's A3 series offering on-demand H100 GPU instances as low as $3.00-$3.50/hour, while Azure's ND H100 v5 series consistently prices at $12.25-$14.50/hour — a roughly four-fold gap that's reshaping where AI-heavy SaaS vendors choose to run training workloads."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "The article describes a cloud GPU pricing gap between Google Cloud and Azure for H100 instances. However, there are no audience notes indicating this business serves a segment that makes cloud infrastructure or AI training decisions, and no brand claims tying this business to cloud cost positioning. Without a credible audience or messaging tie-in, this is a market data point relevant to cloud vendors and AI-heavy SaaS buyers — not a reactive content opportunity for this business.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "No audience segment on file cares about H100 GPU pricing or cloud training infrastructure costs. If this business serves AI/ML engineers or SaaS platform teams, that audience profile should be added to unlock future opportunities like this."
+        }
+      ]
+    },
+    {
+      "id": "mr-c13-salesforce-agentforce-support-cuts",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Salesforce shrinks customer-support headcount from 9,000 to 5,000 as Agentforce absorbs tickets",
+        "html_url": "https://www.kore1.com/salesforce-layoffs-2026/",
+        "occurred_at": "2026-02-05T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Salesforce cut under 1,000 roles and redeployed roughly 4,000 more in February 2026, reducing its own customer-support workforce from about 9,000 to around 5,000 as its Agentforce and Einstein Copilot AI products absorb a growing share of Tier 1 and Tier 2 support work."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "No audience notes, brand claims, or campaign history are available in memory to establish a plausible tie-in for this business. The Salesforce headcount reduction driven by Agentforce is a legitimately citable industry signal (real workforce impact from AI in customer support), but without knowing whether this business targets CX leaders, competes with or integrates with Salesforce, or has existing positioning around AI-driven support automation, there is no basis to confirm a credible reactive content angle. Re-evaluate once audience and brand context is loaded into memory.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "If this business serves customer-support teams, CX/service operations leaders, or buyers evaluating AI support tooling, this article becomes a strong card — Salesforce cutting 4,000 support roles via AI is a citable, concrete industry proof point. Re-triage with audience context populated."
+        }
+      ]
+    },
+    {
+      "id": "mr-c14-iconiq-hybrid-pricing-nrr",
+      "source": "market_responsive",
+      "signal": {
+        "title": "ICONIQ Growth report: hybrid-pricing SaaS companies show 13-point NRR edge over seat-based rivals",
+        "html_url": "https://thesaaslibrary.com/b2b-saas-trends-in-2026whats-actually-changing-and-what-isnt/",
+        "occurred_at": "2026-01-20T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "ICONIQ Growth's 2026 State of Go-to-Market report finds 48% of B2B SaaS companies now run hybrid usage-plus-seat pricing as their primary model, and that hybrid pricing carries roughly a 13-point net-revenue-retention advantage over pure seat-based pricing."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "The ICONIQ report is a credible, data-rich industry signal, but without any audience notes or campaign history on file it is impossible to establish a plausible tie-in for this business. The finding — that hybrid usage-plus-seat pricing carries a ~13-point NRR advantage — is only reactive-content-worthy if this business (a) sells to SaaS operators who set pricing strategy, (b) itself offers a usage or hybrid pricing model it could validate against this benchmark, or (c) has previously made brand claims about pricing philosophy it could now reinforce. None of those conditions can be confirmed from available context, and assuming them without evidence risks producing a reactive piece that feels forced or off-brand. If the marketing team can confirm that their audience includes SaaS founders, RevOps leaders, or CFOs who own pricing decisions — or that the product's own pricing model aligns with the hybrid trend — this article should be re-triaged as a card.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Verdict is contingent on audience identity. The signal is highly actionable for a business serving SaaS go-to-market, finance, or pricing personas, or for one that itself uses hybrid pricing and wants to validate that model choice with third-party data. Re-submit with audience and brand context populated for a reliable ruling."
+        }
+      ]
+    },
+    {
+      "id": "mr-c15-workforce-pell-grants",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Workforce Pell Grants open federal aid to short-term job-training programs starting July 2026",
+        "html_url": "https://www.ed.gov/about/news/press-release/us-department-of-education-issues-final-rule-create-new-workforce-pell-grant-program",
+        "occurred_at": "2026-07-01T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Starting July 1, 2026, the US Department of Education's new Workforce Pell Grant program extends federal financial aid to 8-15 week job-training programs in fields like IT, healthcare, and skilled trades — a first-of-its-kind expansion of Pell eligibility beyond traditional degree programs, opening a new funding channel for SaaS-based training platforms that can plug into it."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "The Workforce Pell Grant expansion is a meaningful regulatory development for SaaS-based training platforms operating in job-readiness or credentialing markets, but the memory store returned no audience notes or brand claims connecting this business to workforce training, federal aid, upskilling, or short-term credential programs. Without an established tie-in, there is no credible reactive content angle — surfacing this would risk forcing an irrelevant or opportunistic narrative.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "No matching audience profile found. If this business serves L&D buyers, training platforms, community colleges, or workforce development organizations, re-run triage after updating audience memory accordingly."
+        }
+      ]
+    },
+    {
+      "id": "mr-c16-fed-rate-cut-proptech",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Fed's December rate cut to 3.5%-3.75% resets outlook for proptech and CRE software spending",
+        "html_url": "https://ts2.tech/en/real-estate-stocks-outlook-for-2026-reits-homebuilders-and-proptech-reset-after-december-rate-cuts/",
+        "occurred_at": "2026-01-05T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Following the Federal Reserve's December cut of the federal funds rate to a 3.5%-3.75% range, investors are reassessing REIT dividend durability, housing demand, and refinancing risk — and commercial real estate firms are reopening software budgets frozen during two years of higher borrowing costs."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "No audience notes exist in memory connecting this business's target buyers to CRE software, proptech, REIT dividend analysis, or commercial real estate refinancing decisions. The rate-cut article describes a plausible reactive opportunity only if the business serves CRE operators, proptech buyers, or rate-sensitive real estate investors — and there is no evidence in memory that it does. Without that audience tie-in, this is generic macro/industry chatter for an adjacent vertical, not a credible reactive content opportunity for this team.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "No stored audience segments map to CRE software buyers, proptech decision-makers, or REIT investors. If the business does serve these segments, audience notes should be added to memory so future signals like this can be evaluated properly."
+        }
+      ]
+    },
+    {
+      "id": "mr-c17-tariff-supply-chain-shock",
+      "source": "market_responsive",
+      "signal": {
+        "title": "New 10% baseline US tariffs force supply-chain teams into active sourcing overhaul",
+        "html_url": "https://www.freightwaves.com/news/smbs-ditch-wait-and-see-as-tariffs-force-supply-chain-overhaul",
+        "occurred_at": "2026-02-24T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "New US tariffs imposing a 10% baseline on imports from virtually every country took effect February 24, 2026, and a February survey of 225 senior trade professionals found 72% now name tariff volatility as the year's most impactful regulatory change, up sharply from 41% in 2025. Companies are shifting from cautious observation to active supplier diversification, leaning more on scenario-planning software."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "The article describes a genuine, well-evidenced regulatory/market development (new US tariff regime with fresh survey data) that would be a strong reactive content opportunity for a business serving supply-chain, procurement, or trade-compliance audiences. However, no audience notes, brand claims, recent campaigns, or evidence records exist in memory for this business, making it impossible to confirm a plausible tie-in. Without that grounding, surfacing the card risks sending the marketing team an irrelevant signal. Recommend the team first populate audience and brand memory so future triage can be decisive.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "No audience profile is stored. If this business serves supply-chain planners, procurement leaders, trade-compliance teams, or vendors of scenario-planning/sourcing software, this article would almost certainly qualify as a card — the 72% tariff-volatility figure and the pivot to active sourcing overhaul are highly citable. Re-triage once audience memory is loaded."
+        }
+      ]
+    },
+    {
+      "id": "mr-c18-meta-marketing-api-deprecation",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Meta sets hard cutoff for legacy Advantage+ Shopping and App campaigns on the Marketing API",
+        "html_url": "https://www.socialmediatoday.com/news/meta-updates-marketing-api-to-align-with-latest-ad-shifts/812648/",
+        "occurred_at": "2026-09-01T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Meta's phased deprecation of legacy Marketing API campaign types reaches its final stage in version 26: remaining Advantage+ Shopping and App campaigns will be paused entirely, with no further extensions after earlier 2025-2026 milestones already blocked new campaign creation on the old endpoints. Agencies running automated bidding tools on the legacy API face a hard migration deadline."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "The article describes a technical API deprecation (Meta Marketing API v26 legacy endpoint sunset) that affects agencies and AdTech vendors running programmatic bidding tools directly against Meta's API. With no audience notes indicating this business serves paid media agencies, API integrators, or automated campaign management tooling — and no recent campaigns or brand claims tying this business to Meta advertising infrastructure — there is no credible reactive content angle here. The signal is real and operationally significant for the right audience, but there is no evidence this audience is that audience.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "No audience records exist linking this business's customers or prospects to Meta Marketing API dependency or Advantage+ campaign management. If this business later onboards agency or AdTech customers, this signal category should be re-evaluated."
+        }
+      ]
+    },
+    {
+      "id": "mr-c19-minimax-relicense-backlash",
+      "source": "market_responsive",
+      "signal": {
+        "title": "MiniMax relicenses its M2.7 model from MIT to a non-commercial license, sparking developer backlash",
+        "html_url": "https://dasroot.net/posts/2026/05/navigating-ai-model-licensing-shift/",
+        "occurred_at": "2026-05-20T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "AI company MiniMax shifted its M2.7 model's license from the permissive MIT license to a non-commercial license in 2026, prompting immediate backlash from developers who had built commercial products on top of the earlier terms. It's part of a broader pattern this year of open-source and open-weight projects tightening licenses once cloud providers begin monetizing them at scale."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "While the MiniMax M2.7 relicensing is a real and notable event, it is a narrowly scoped developer-community story about a single model's license change. With no audience notes on file, there is no confirmed segment of this business's audience (e.g., developers building on open-weight models) that would make this directly actionable. The broader pattern of open-weight license tightening is worth monitoring, but this specific signal lacks a clear, credible tie-in for a reactive content play without more context about the business's audience and positioning.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "No audience notes are stored for this business. If the audience includes developers or ML engineers who build commercial products on open-weight models, this signal could be re-evaluated as a 'card' — it speaks directly to risks of relying on permissively licensed open-source AI that may retroactively tighten terms."
+        }
+      ]
+    },
+    {
+      "id": "mr-c20-figure-technology-breach",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Fintech lender Figure discloses breach exposing personal data for nearly 1 million accounts",
+        "html_url": "https://www.cpomagazine.com/cyber-security/data-breach-at-fintech-company-figure-technology-solutions-impacts-nearly-1-million-people/",
+        "occurred_at": "2026-06-20T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Fintech lender Figure Technology Solutions disclosed a breach exposing personal information — names, emails, phone numbers, home addresses, and dates of birth — for roughly 967,200 accounts, traced to a social-engineering attack in which an employee was tricked into authenticating the attacker."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "No audience notes or brand claims are stored, making it impossible to confirm a credible tie-in between this business and the Figure Technology Solutions breach. Even setting that aside, the article describes a single company's internal security incident (a social-engineering attack on one employee) rather than a regulatory change, platform shift, competitor move, industry-wide trend, or funding/M&A event. It is an isolated breach disclosure with no broader market signal this business could credibly react to without appearing opportunistic or off-brand.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "No audience profile is on record. If this business serves fintech security, identity verification, or employee security-awareness training markets, re-evaluate: the social-engineering vector and scale (~967 K accounts) could support a reactive thought-leadership post. Store audience notes to enable accurate triage in future."
+        }
+      ]
+    },
+    {
+      "id": "mr-c21-right-to-disconnect-us-states",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Four US states roll out right-to-disconnect protections for after-hours work messages in 2026",
+        "html_url": "https://attorneys.media/the-right-to-disconnect-laws-coming-to-4-new-states-in-2026/",
+        "occurred_at": "2026-01-01T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Four US states, including California and New York, began implementing right-to-disconnect laws in 2026 that let employees ignore after-hours work emails, calls, and texts without retaliation, joining at least 17 countries worldwide with similar legislation. HR platforms serving employers in the affected states are being asked to add automated after-hours message holds."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "The memory system returned no audience notes or brand claims connecting this business to HR platforms, workplace communication tools, employee compliance, or after-hours messaging policy. Without any established tie-in — such as a product that manages communications scheduling, an HR-adjacent audience, or prior brand positioning around compliance — this regulatory development has no plausible reactive content angle for this business. The signal itself is credible and citable, but relevance to this specific product's marketing team cannot be established from available context.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "No audience profile on file connects to HR buyers, compliance officers, or employers managing after-hours communication obligations in the affected states. If this business serves that segment, audience notes should be added so future regulatory signals like this can be properly evaluated."
+        }
+      ]
+    },
+    {
+      "id": "mr-c22-self-hosting-open-source-shift",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Enterprises shift to self-hosted open-source models as API price war squeezes margins",
+        "html_url": "https://www.cloudzero.com/blog/llm-api-pricing-comparison/",
+        "occurred_at": "2026-07-25T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "As the AI pricing war collapses API costs 90-97% for equivalent intelligence, enterprises processing millions of monthly requests are increasingly self-hosting open-source models on dedicated infrastructure — reported to be 50-80% cheaper than API pricing even at 2026's already-reduced rates — while still negotiating 10-30% volume discounts with API providers as a fallback."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "While the trend described (enterprises self-hosting open-source models to avoid API costs) is a real and meaningful market shift, the memory store returns no audience notes, brand claims, or recent campaigns for this business. Without any established context showing this business serves enterprise infrastructure buyers, has a credible point of view on AI cost optimization, or has prior content to build a reactive angle from, there is no plausible tie-in to surface. The article would be generic industry chatter for this business until audience and brand context is populated.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "No audience notes on file. If this business targets enterprise ML/AI infrastructure teams, platform engineers, or FinOps personas, this signal would likely upgrade to a card — re-triage once audience memory is populated."
+        }
+      ]
+    },
+    {
+      "id": "mr-c23-zillow-preferred-success-fee",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Zillow Preferred's post-pay success-fee model can hit 40% in some markets, adjustable on 15 days' notice",
+        "html_url": "https://theclose.com/zillow-preferred/",
+        "occurred_at": "2026-02-20T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Zillow Preferred, the successor to Zillow Flex, charges agents a post-pay success fee — up to 40% in some markets — only after a lead closes, and Zillow can change that fee at any time with 15 days' notice on its pricing page. A 2026 Consumer Policy Center report flags referral fees at this level, from Zillow and rivals alike, as reinforcing high overall commissions."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "No audience notes or campaign history are on file, making it impossible to establish a plausible tie-in between this business and the Zillow Preferred fee-structure story. The article describes a genuine, citable market development (a named platform's up-to-40% post-pay success fee with 15-day-notice change terms, corroborated by a 2026 Consumer Policy Center report), but without knowing who this business serves — agents, brokers, consumers, or proptech buyers — and what value proposition it holds, there is no basis to judge relevance. If audience and brand context is loaded into memory, this signal should be re-triaged: it is substantive enough to support reactive content if the business competes with or comments on lead-generation cost models.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Audience identity is unknown. If this business serves real estate agents or brokers who use Zillow Preferred or comparable referral-fee programs, this is a strong reactive opportunity. If it serves consumers or operates in an unrelated vertical, it is not."
+        }
+      ]
+    },
+    {
+      "id": "mr-c24-gartner-saaspocalypse",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Gartner: $234B in enterprise application software spend at risk as agentic AI reshapes the SaaS category",
+        "html_url": "https://www.gartner.com/en/newsroom/press-releases/2026-07-01-gartner-says-us-dollars-234-billion-in-enterprise-application-software-spend-is-at-risk-from-agentic-artificial-intelligence",
+        "occurred_at": "2026-07-01T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Gartner projects $234 billion in enterprise application software spend is at risk from agentic AI, with analyst George Brocklehurst describing a coming 'Saaspocalypse' — a disaggregation of the legacy per-seat SaaS market as agentic AI reshapes how software is built, priced, and consumed. The framing is broad enough to fit almost any SaaS vendor's narrative, which is exactly what makes it a harder call than the sharper stories above."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "card",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "The Gartner 'Saaspocalypse' framing is a macro-level narrative that fits virtually every SaaS vendor equally, making it low-differentiation as a reactive content hook. There are no stored audience notes to confirm that this business's specific buyers are actively wrestling with agentic AI disruption to their software stack, and no recent campaigns to check against for redundancy. Without a sharper, audience-specific angle — e.g., this business's category being explicitly named, a competitor being called out, or a compliance/pricing change that directly affects buyers — the article reads as broad industry chatter rather than a citable market development this team could credibly and distinctively react to. Recommend re-evaluating if a follow-on report names this business's specific vertical or a direct competitor by name.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "No audience notes on file. If this business sells into a SaaS-heavy buyer segment (e.g., IT/finance leaders renegotiating vendor contracts), the story could be revisited with that context confirmed."
+        }
+      ]
+    },
+    {
+      "id": "mr-n01-acquisition-rumor",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Sources: Ironvale DevOps 'in talks' with unnamed buyer, deal unconfirmed",
+        "html_url": "https://techfeed.test/ironvale-acquisition-rumor",
+        "occurred_at": "2026-04-02T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "An anonymously sourced report claims DevOps platform Ironvale is 'in talks' with an unnamed acquirer, citing a single unnamed insider. Ironvale has not commented, and no financial terms, buyer identity, or timeline are mentioned anywhere in the piece."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "weak_evidence",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "This is rumor-tier reporting at its weakest: a single unnamed source, no buyer identified, no financial terms, no timeline, and zero confirmation from Ironvale itself. There is no actionable or citable market development here — just unverified chatter. Surfacing a reactive content piece against this would risk associating the brand with speculation that may never materialize, or that could be contradicted within days.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "No audience relevance established; the signal carries insufficient factual substance to connect meaningfully to any audience segment."
+        }
+      ]
+    },
+    {
+      "id": "mr-n02-generic-listicle",
+      "source": "market_responsive",
+      "signal": {
+        "title": "5 tips to improve your team's productivity in 2026",
+        "html_url": "https://growthwire.test/5-productivity-tips-2026",
+        "occurred_at": "2026-03-09T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "A general productivity listicle offers five broad tips — take breaks, batch meetings, set clear goals, limit notifications, and celebrate wins — with no reference to any specific company, product, or industry event."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "This is a generic productivity listicle with no reference to a specific competitor move, regulatory change, funding/M&A event, platform shift, or citable industry trend. It offers no reactive content hook that this business could credibly and distinctively respond to.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "No audience-specific angle exists; the tips are universal and untargeted, making them irrelevant as a reactive content opportunity regardless of this business's audience profile."
+        }
+      ]
+    },
+    {
+      "id": "mr-n03-executive-change",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Cinder Payments names new VP of Marketing",
+        "html_url": "https://fintechline.test/cinder-payments-vp-marketing",
+        "occurred_at": "2026-02-14T08:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Cinder Payments announced a new VP of Marketing hire, a routine personnel update with a short executive bio and no mention of any strategic shift, product change, or market event."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "This is a routine personnel announcement — a competitor naming a new VP of Marketing — with no accompanying strategic shift, product change, funding event, regulatory development, or citable industry trend. It presents no reactive content opportunity for this business's marketing team.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "No audience segment for this business is meaningfully affected by a competitor's internal marketing hire."
+        }
+      ]
+    },
+    {
+      "id": "mr-n04-conference-recap",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Recap: what we saw at this year's SaaS Growth Summit",
+        "html_url": "https://saastribune.test/saas-growth-summit-recap",
+        "occurred_at": "2026-05-03T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "A conference recap summarizes panel topics already widely covered in the weeks leading up to the event — pricing trends, AI agents, and vertical SaaS — without adding any new data, quotes, or announcements beyond what attendees already knew."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "already_covered",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "This is a post-event conference recap that adds no new data, quotes, or announcements beyond pre-existing coverage. It summarizes broadly discussed themes (pricing trends, AI agents, vertical SaaS) without introducing a citable market development — no competitor move, regulatory change, funding/M&A event, or platform shift that this business could credibly react to. It qualifies as generic industry chatter.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "No audience-relevant signal identified; the recap contains only repackaged conventional wisdom already present in the market discourse."
+        }
+      ]
+    },
+    {
+      "id": "mr-n05-vague-threat-trend",
+      "source": "market_responsive",
+      "signal": {
+        "title": "The cybersecurity threat landscape continues to evolve, experts say",
+        "html_url": "https://industrybrief.test/threat-landscape-evolving",
+        "occurred_at": "2026-01-28T10:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "An industry piece asserts that 'the threat landscape continues to evolve' and that 'organizations must stay vigilant,' without citing a specific incident, vendor, statistic, or new regulation."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "weak_evidence",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "The article is pure generic industry chatter — 'threat landscape evolves' and 'stay vigilant' are boilerplate assertions with no citable incident, competitor move, regulation, statistic, funding event, or platform shift attached. There is no concrete hook this business could credibly react to, and no tool lookup is needed because the signal itself carries zero specificity.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "No audience segment is meaningfully served by reacting to an article this vague; any content derived from it would appear opportunistic and add no informational value."
+        }
+      ]
+    },
+    {
+      "id": "mr-n06-local-market-story",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Local co-working space in small town adds new meeting rooms",
+        "html_url": "https://b2bpulse.test/local-coworking-meeting-rooms",
+        "occurred_at": "2026-06-19T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "A small-town co-working space announced it added three new meeting rooms to its facility, a local real-estate update with no relevance to software buyers or any broader industry trend."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "This is a hyper-local real-estate update about a single co-working space adding meeting rooms. It does not represent a competitor move, regulatory change, funding/M&A event, platform shift, or broader industry trend. There is no reactive content opportunity here for any software or technology-oriented audience.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "No audience segment for a software business would find this operationally or strategically relevant."
+        }
+      ]
+    },
+    {
+      "id": "mr-n07-celebrity-ai-mention",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Pop star says AI 'is the future' in red-carpet interview",
+        "html_url": "https://techfeed.test/celebrity-ai-red-carpet",
+        "occurred_at": "2026-04-25T20:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "A musician made a passing comment that AI 'is the future' during a red-carpet interview about an unrelated album release, with no connection to any product, vendor, or industry development."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "A celebrity making a vague, off-the-cuff comment that AI 'is the future' during a red-carpet interview is not a market development. It describes no competitor move, regulatory change, funding/M&A event, platform shift, or citable industry trend. There is no substantive tie-in for any B2B or B2C product marketing team to credibly react to.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "No audience segment would derive actionable insight or engagement value from a reactive post anchored to this signal. It carries no authority, specificity, or newsworthy substance beyond generic AI enthusiasm."
+        }
+      ]
+    },
+    {
+      "id": "mr-n08-changelog-as-news",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Ironvale DevOps ships minor bug fix release v4.2.1",
+        "html_url": "https://devnews.test/ironvale-v4-2-1-changelog",
+        "occurred_at": "2026-02-06T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "A routine patch release fixes a rendering bug in the Ironvale dashboard and updates two dependency versions, reported in full as if it were a feature announcement."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "already_covered",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "This is a routine bug-fix and dependency-update patch release from a competitor (Ironvale DevOps v4.2.1). It describes no strategic market development — no new feature, pricing move, funding event, regulatory change, or platform shift — that this business could credibly react to. The article itself is reported as if it were a feature announcement, which signals low editorial signal-to-noise. There is no plausible reactive content opportunity here.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "No audience segment has a meaningful reason to care about a competitor's rendering bug fix or routine dependency bumps."
+        }
+      ]
+    },
+    {
+      "id": "mr-n09-holiday-puff-piece",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Getting ready for the holiday shopping rush: a seasonal checklist",
+        "html_url": "https://growthwire.test/holiday-shopping-checklist",
+        "occurred_at": "2026-07-08T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "A seasonal listicle offers generic holiday-shopping-season tips — decorate your storefront, plan email campaigns, check inventory — with no specific vendor, statistic, or news event attached."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "This is a generic seasonal checklist with no specific news event, competitor move, regulatory change, funding/M&A signal, or citable statistic. It contains no market development this business could credibly react to — it is evergreen filler content that any business in any industry could have written. There is no reactive content opportunity here.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "No audience-specific relevance identified; the article's advice (decorate storefront, plan email campaigns, check inventory) is universally generic and not tied to any meaningful market signal."
+        }
+      ]
+    },
+    {
+      "id": "mr-n10-opinion-no-data",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Opinion: why sales teams need to 'think differently' about pipeline",
+        "html_url": "https://salesfloor.test/think-differently-pipeline-opinion",
+        "occurred_at": "2026-03-14T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "An opinion column argues sales teams should 'think differently' about pipeline management, offering the author's personal philosophy without citing any survey, company, product, or verifiable data point."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "weak_evidence",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "This is a generic opinion column with no verifiable data, no competitor moves, no regulatory changes, no funding/M&A events, and no citable industry trend. It is purely one author's personal philosophy on pipeline management, offering no concrete hook for reactive content.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "No audience-specific relevance identified; the piece lacks the substance needed to credibly tie into any targeted messaging or campaign."
+        }
+      ]
+    },
+    {
+      "id": "mr-n11-meme-roundup",
+      "source": "market_responsive",
+      "signal": {
+        "title": "The funniest tech memes of the week",
+        "html_url": "https://techfeed.test/funniest-tech-memes-roundup",
+        "occurred_at": "2026-05-30T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "A roundup compiles screenshots of viral social-media jokes about remote work and standup meetings, with no product, company, or news event referenced."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "This is a meme roundup with no substantive market development — no competitor move, regulatory change, funding event, platform shift, or citable industry trend. It references no specific product, company, or news event that this business could credibly react to. Pure entertainment/generic chatter with zero reactive content value.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "No audience segment would benefit from a reactive content play based on a viral meme compilation."
+        }
+      ]
+    },
+    {
+      "id": "mr-n12-stale-story",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Recap: the AI pricing war that reshaped the market earlier this year",
+        "html_url": "https://aiwatch.test/ai-pricing-war-recap-stale",
+        "occurred_at": "2026-08-20T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "A retrospective piece revisits the model-provider price cuts from earlier in the year, restating coverage that ran extensively in Q1 and Q2 with no new pricing move, provider statement, or data point added."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "wrong_timing",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "This is a retrospective recap piece that restates AI pricing war coverage from Q1/Q2 with no new pricing move, provider statement, or original data point added. It is stale-news commentary, not a fresh market development. There is no new competitor action, regulatory change, funding event, or citable industry signal for this business to credibly react to.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "No audience segment benefits from reactive content tied to a retrospective with zero new information."
+        }
+      ]
+    },
+    {
+      "id": "mr-n13-stock-fluctuation",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Cinder Payments shares up 1.2% in light Tuesday trading",
+        "html_url": "https://fintechline.test/cinder-payments-stock-tuesday",
+        "occurred_at": "2026-06-09T16:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Cinder Payments' publicly traded shares closed up 1.2% on light Tuesday trading volume, with no company announcement, analyst note, or market event cited as a driver."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "A 1.2% share price move on light volume with no cited catalyst (no earnings, no analyst note, no announcement, no market event) is noise, not a market development. There is no competitor move, regulatory change, funding/M&A event, platform shift, or citable industry trend here that this business could credibly react to.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "No audience relevance — a minor, unexplained equity price tick for a single company has no actionable implications for any segment."
+        }
+      ]
+    },
+    {
+      "id": "mr-n14-realty-gossip",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Rumor mill: which proptech founder just bought a beach house?",
+        "html_url": "https://proptechdaily.test/founder-beach-house-gossip",
+        "occurred_at": "2026-07-21T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "A gossip item speculates about an unnamed proptech founder's recent real-estate purchase, with no business, product, or market relevance beyond idle speculation about personal spending."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "This is pure personal-lifestyle gossip about an unnamed founder's private real-estate purchase. It contains no competitor move, regulatory change, funding/M&A event, platform shift, or citable industry trend. There is no plausible reactive content angle for any marketing team.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "No audience segment would benefit from or be informed by this item in any professional or product context."
+        }
+      ]
+    },
+    {
+      "id": "mr-n15-awards-announcement",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Kettlebrook EdTech named to 'Best Places to Work' regional list",
+        "html_url": "https://edtechwire.test/kettlebrook-best-places-to-work",
+        "occurred_at": "2026-04-17T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "Kettlebrook EdTech was named to a regional 'Best Places to Work' awards list, an internal-culture recognition with no product update, market event, or customer-facing change involved."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "This is a purely internal-culture recognition with no product update, competitor move, regulatory change, funding/M&A event, platform shift, or citable industry trend. It has no customer-facing dimension and presents no reactive content opportunity for the marketing team.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "No audience is meaningfully reached or affected by a third-party employer-ranking award for a competitor or peer company. There is no relevant hook for this business to react to."
+        }
+      ]
+    },
+    {
+      "id": "mr-n16-marginal-stretch-tiein",
+      "source": "market_responsive",
+      "signal": {
+        "title": "Survey: 55% of knowledge workers say they 'multitask during meetings'",
+        "html_url": "https://growthwire.test/multitasking-meetings-survey",
+        "occurred_at": "2026-05-08T09:00:00Z",
+        "is_prerelease": false,
+        "author_is_bot": false,
+        "body": "A workplace-habits survey finds 55% of knowledge workers admit to multitasking during video meetings, a plausible enough data point that it's tempting to tie to any collaboration-software pitch — but the survey names no vendor, tool, or specific workflow change, leaving the audience tie-in speculative."
+      },
+      "stubMemory": {},
+      "expectedVerdict": "no_card",
+      "expectedDismissReason": "weak_evidence",
+      "cassette": [
+        {
+          "verdict": "no_card",
+          "reason": "The 55% multitasking statistic is generic workplace-habits data with no named vendor, platform shift, regulatory change, competitor move, or actionable market development attached. The audience tie-in to any specific collaboration or productivity product would be purely speculative, and the survey lacks the specificity needed to credibly anchor a reactive content moment.",
+          "citableEvidenceIds": [],
+          "citableBrandIds": [],
+          "audienceNote": "Without knowing which audience segment this business targets, no meaningful tie-in can be constructed — but even with that context, a vendor-agnostic survey stat about multitasking behavior is too thin to justify a reactive campaign."
+        }
+      ]
+    }
+  ]
+}

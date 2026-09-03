@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { formatISO } from 'date-fns'
-import type { InsightCardRow, InsightCardInsert, InsightCardUpdate, InsightCardStatus } from './types'
+import type { InsightCardRow, InsightCardInsert, InsightCardUpdate, InsightCardStatus, InsightCardWithProvenance } from './types'
 import { getErrorMessage } from './utils'
 
 // ADR 0021 §10.1 (Session 28 E5.3) — the ONLY module that touches
@@ -10,19 +10,68 @@ import { getErrorMessage } from './utils'
 
 const PENDING_CARDS_DEFAULT_LIMIT = 50
 
+// ADR 0023 §6.5 (Session 30 G1b.8) — the two-hop join both feed queries
+// below share, extracted once. `signal_candidates(signals(html_url))` reads
+// through the EXISTING FKs (insight_cards.signal_candidate_id ->
+// signal_candidates.signal_id -> signals.id) — no new column anywhere.
+const PROVENANCE_JOIN_SELECT = '*, signal_candidates(signals(html_url))'
+
+interface RawCardWithJoin extends InsightCardRow {
+  signal_candidates: { signals: { html_url: string | null } | null } | null
+}
+
+// publisher is DERIVED from the canonical link's hostname, never a stored
+// value (see the CardProvenance comment in lib/db/types.ts for why this
+// works identically for both sources). A malformed/missing link yields
+// null for both fields — never thrown, since a card with no reachable
+// provenance must still render, just without it.
+//
+// Session 30 G1b.8 security-review finding — signals.html_url has NO
+// scheme constraint upstream (lib/signals/parse-article.ts's rawFeedItemSchema
+// validates `link` as a bare optional string; the DB column carries no CHECK
+// either), so a subscribed feed's raw <link>/href reaches here verbatim. This
+// value is rendered as a real `<a href>` in OpportunityFeed.tsx — an
+// attribute, not text content, so React's JSX escaping (which protects every
+// OTHER field on this card) does not apply: a `javascript:`/`data:` scheme
+// would execute on click. The http(s)-only check below is the single choke
+// point closing that gap, matching the "derived, never stored" posture
+// already used for `publisher`.
+const ALLOWED_LINK_PROTOCOLS = new Set(['http:', 'https:'])
+
+function deriveProvenance(canonicalLink: string | null): { publisher: string | null; canonicalLink: string | null } {
+  if (!canonicalLink) return { publisher: null, canonicalLink: null }
+  try {
+    const url = new URL(canonicalLink)
+    if (!ALLOWED_LINK_PROTOCOLS.has(url.protocol)) return { publisher: null, canonicalLink: null }
+    return { publisher: url.hostname, canonicalLink }
+  } catch {
+    return { publisher: null, canonicalLink: null }
+  }
+}
+
+function withProvenance(rows: RawCardWithJoin[]): InsightCardWithProvenance[] {
+  return rows.map((row) => {
+    const { signal_candidates, ...card } = row
+    const canonicalLink = signal_candidates?.signals?.html_url ?? null
+    return { ...(card as InsightCardRow), provenance: deriveProvenance(canonicalLink) }
+  })
+}
+
 // §5.7's exact predicate and ORDER BY — matching insight_cards_feed_idx
 // (business_id, score DESC, occurred_at DESC, id ASC) INCLUDE (expires_at)
 // WHERE status = 'pending' EXACTLY. If this query and that index ever
 // disagree, the index is wrong, not this function (E5.1's migration is the
-// authority on the index shape).
+// authority on the index shape). The provenance join adds no predicate and
+// no sort key, so it does not affect index-servability (ADR §6.5's own
+// argument for why this needed no new index either).
 export async function listPendingCardsForBusiness(
   client: SupabaseClient,
   businessId: string,
   limit: number = PENDING_CARDS_DEFAULT_LIMIT,
-): Promise<InsightCardRow[]> {
+): Promise<InsightCardWithProvenance[]> {
   const { data, error } = await client
     .from('insight_cards')
-    .select('*')
+    .select(PROVENANCE_JOIN_SELECT)
     .eq('business_id', businessId)
     .eq('status', 'pending')
     .or(`expires_at.is.null,expires_at.gt.${formatISO(new Date())}`)
@@ -31,7 +80,7 @@ export async function listPendingCardsForBusiness(
     .order('id', { ascending: true })
     .limit(limit)
   if (error) throw new Error(getErrorMessage(error))
-  return (data as InsightCardRow[]) ?? []
+  return withProvenance((data as unknown as RawCardWithJoin[]) ?? [])
 }
 
 // §9.2 "Expired" state — not in the default feed (listPendingCardsForBusiness
@@ -43,10 +92,10 @@ export async function listExpiredCardsForBusiness(
   client: SupabaseClient,
   businessId: string,
   limit: number = PENDING_CARDS_DEFAULT_LIMIT,
-): Promise<InsightCardRow[]> {
+): Promise<InsightCardWithProvenance[]> {
   const { data, error } = await client
     .from('insight_cards')
-    .select('*')
+    .select(PROVENANCE_JOIN_SELECT)
     .eq('business_id', businessId)
     .eq('status', 'pending')
     .lt('expires_at', formatISO(new Date()))
@@ -55,7 +104,7 @@ export async function listExpiredCardsForBusiness(
     .order('id', { ascending: true })
     .limit(limit)
   if (error) throw new Error(getErrorMessage(error))
-  return (data as InsightCardRow[]) ?? []
+  return withProvenance((data as unknown as RawCardWithJoin[]) ?? [])
 }
 
 export async function getCardForBusiness(

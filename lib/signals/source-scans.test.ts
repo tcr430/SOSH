@@ -13,6 +13,43 @@ import path from 'node:path'
 // temporarily introduced, the test file was re-run and observed to fail for
 // the intended reason, then the violation was reverted. See the E2.10
 // commit message for the four transcripts.
+//
+// Session 30 G1b.10 (ADR 0023 §10.3/§10.4, SIGNAL-MR-SCANS-EXTENDED final) —
+// re-confirmed all six describe blocks below at the shipped tree. Table:
+//
+// | # | Constraint                  | Asserts now (both arms where 2 exist)                                    | Extended at | Per-root vacuity guard | Redden transcript SHA |
+// |---|------------------------------|---------------------------------------------------------------------------|-------------|------------------------|------------------------|
+// | 1 | SIGNAL-NO-LLM-IN-STAGE-AB    | no lib/ai/*|@anthropic-ai/sdk import under lib/signals/**|poller route beyond 6 sanctioned patterns; the 6-pattern allowlist itself still exercised; wrapSignalForPrompt has exactly 2 callers; no local sanitizeDataField | G1b.2 (scope decision: no new root added — collectTsFiles already walks lib/signals/** recursively) | Yes, both SCAN_ROOTS (lib/signals/, poller route dir) | 805234e7 (original 4-scan redden pass, E2.10) |
+// | 2 | SIGNAL-NO-PROVIDER-COUPLING  | @octokit/* in exactly 1 file (github-client.ts); xml2js in exactly 1 file (rss-client.ts) — sax deliberately NOT scanned here (a security-guard concern, not feed-parsing coupling) | G1b.4 (xml2js arm added) | Yes, both SCAN_ROOTS (lib/, app/) | 805234e7 (@octokit/ arm); f197033f (xml2js arm) |
+// | 3 | SIGNAL-CONFIG-ONLY-ENV       | no process.env.GITHUB* outside lib/config.ts | Not extended — no RSS-specific process.env prefix exists (Zod defaults, no env override), recorded as the reason at G1b.2 | Yes, both SCAN_ROOTS | 805234e7 |
+// | 4 | SIGNAL-PROMPT-SINK-NARROWED  | no `as UntrustedText`/`as RenderedSignalText` cast outside 4 allowed minting files (parse-release.ts, orchestrator.ts, wrap-evidence.ts, parse-article.ts); allowlist files still exist and still mint | G1b.4 (parse-article.ts added as 4th file, security-relevant widening, argued in that commit) | Yes, both SCAN_ROOTS | 805234e7 (original 3-file form); f197033f (4th-file widening) |
+// | 5 | SIGNAL-NO-TOKEN-AT-REST      | github_connections CREATE TABLE has no token-shaped column; watched_feeds CREATE TABLE has no token-shaped column (§3.1: rss has no credential at all — must hold TRIVIALLY) | 5b5bbb9f (github_connections arm, E2.11); G1b.2 (watched_feeds arm) | N/A — single-file migration-text scans, not a multi-root directory walk | G1b.10 (this step) demonstrated the github_connections arm's previously-unrecorded transcript (see below); 2380b150 (watched_feeds arm) |
+// | 6 | SIGNAL-WEBHOOK-SEAM-CLEAN    | signals CREATE TABLE has no poller-specific column beyond ingested_via; the market-responsive migration's ALTER TABLE statements add none either — the ONLY proof §15 "webhook seam stays unused" | 5b5bbb9f (signals arm, E2.11); G1b.2 (market-responsive ALTER arm) | N/A — single-file migration-text scans | G1b.10 (this step) demonstrated the signals arm's previously-unrecorded transcript (see below); 2380b150 (market-responsive arm) |
+//
+// GAP FOUND AND CLOSED at G1b.10: 5b5bbb9f (E2.11) added scan #5's and #6's
+// ORIGINAL (github_connections / signals) halves without pasting a redden
+// transcript into that commit's message — a real evidence gap under this
+// ADR's own "without a recorded redden transcript, is not evidence" rule,
+// not a re-litigation of E2.11's decision to add the scans. Demonstrated
+// now, both reverted via `git checkout --` immediately after (confirmed
+// byte-identical via `git diff --stat`, zero lines):
+//
+// 1) Injected `access_token text,` into github_connections' CREATE TABLE
+//    block (supabase/migrations/20260731090000_signal_ingestion.sql):
+//      FAIL  SIGNAL-NO-TOKEN-AT-REST > the github_connections CREATE TABLE
+//      block in the migration defines no token-shaped column
+//      AssertionError: expected true to be false
+//        ❯ lib/signals/source-scans.test.ts:368:46
+//
+// 2) Injected `webhook_secret text,` into signals' CREATE TABLE block (same
+//    migration file):
+//      FAIL  SIGNAL-WEBHOOK-SEAM-CLEAN > the signals CREATE TABLE block
+//      defines no poller-specific column beyond the writer-agnostic
+//      ingested_via seam
+//      AssertionError: expected true to be false
+//        ❯ lib/signals/source-scans.test.ts:414:49
+//
+// Full suite re-run green (14/14) after each revert.
 
 const EXCLUDED_DIR_NAMES = new Set(['node_modules', '__fixtures__', '.next'])
 
@@ -57,6 +94,24 @@ const LIB_DIR = path.join(ROOT, 'lib')
 const APP_DIR = path.join(ROOT, 'app')
 
 describe('SIGNAL-NO-LLM-IN-STAGE-AB (L-1, ADR §11.3 scan #1)', () => {
+  // Session 30 G1b.2 (ADR 0023 §10.4, SIGNAL-MR-SCANS-EXTENDED part 1): ADR
+  // 0023's own table records "a new poller root must be added, with its own
+  // vacuity guard" as what a second source generically requires. As of
+  // G1b.2, no such root is added, and this is a decision, not an oversight:
+  // G1b.3's egress-guard validator and G1b.4's RSS client both land "behind
+  // /lib/signals/" / "under /lib/signals/" (ADR §8.3, §3.1) — i.e. as new
+  // FILES inside the EXISTING lib/signals/ root, which collectTsFiles()
+  // already walks recursively into any subdirectory — and G1b.5's ingestion
+  // path runs "on the daily signals-poll cadence" (ADR §3.4), reusing the
+  // EXISTING app/api/cron/signals-poll route rather than adding a new one.
+  // Neither of ADR 0020's two current roots needs a sibling. A literal new
+  // root also CANNOT be added yet without breaking this test: collectTsFiles
+  // calls fs.readdirSync on each root eagerly, which throws ENOENT for a
+  // directory that does not exist, and no RSS-specific directory exists
+  // before G1b.3/G1b.4 land. If a FUTURE step introduces code at a location
+  // genuinely outside both existing roots (e.g. a dedicated new cron route),
+  // SCAN_ROOTS must be extended at that step, with its own vacuity guard,
+  // before that step's code lands — not after.
   const SCAN_ROOTS = [LIB_SIGNALS_DIR, POLLER_ROUTE_DIR]
 
   // ADR 0021 §2.1 (Session 28 E5.4-E5.7) narrows this Session-27 rule by a
@@ -161,6 +216,11 @@ describe('SIGNAL-NO-LLM-IN-STAGE-AB (L-1, ADR §11.3 scan #1)', () => {
   // proves this at E2.4-authored scope; this assertion is the same check,
   // living in the session's central enforcement file so a reader finds all
   // four-plus-one constraints in one place.
+  //
+  // Session 30 G1b.2 confirmation: collectTsFiles(LIB_SIGNALS_DIR) already
+  // walks every subdirectory recursively, so G1b.3's validator and G1b.4's
+  // RSS client — both landing directly under lib/signals/ — are covered by
+  // this assertion the moment they exist, with no edit required here.
   it('SIGNAL-NO-SIXTH-SANITIZER: lib/signals/** defines no local sanitizeDataField', () => {
     const files = collectTsFiles(LIB_SIGNALS_DIR)
     expect(files.length).toBeGreaterThan(0)
@@ -198,9 +258,70 @@ describe('SIGNAL-NO-PROVIDER-COUPLING (D-8, ADR §11.3 scan #2)', () => {
     expect(importers).toHaveLength(1)
     expect(importers[0]!.replace(/\\/g, '/')).toMatch(/^lib\/signals\//)
   })
+
+  // Session 30 G1b.4 (ADR 0023 §10.4 table row #2, deferred from G1b.2 —
+  // "CANNOT pass before the parser import exists"): the parallel scan for
+  // the RSS parser package, founder-confirmed as xml2js direct (G1b.3's
+  // dependency gate). Same toHaveLength(1) shape as the @octokit/ scan
+  // above. `sax` (also a direct dependency, imported by
+  // rss-egress-guard.ts for the XXE DOCTYPE check, G1b.3) gets its OWN
+  // parallel scan arm below (D5, Session 30-D, MINOR-6) — it was left
+  // unscanned here through Session 30's original build, and "a test-file
+  // comment records the exclusion" is the Reviewer's named LOSER option:
+  // three lines of scan beats a comment that is not a bound.
+  it('xml2js is imported in exactly one file, and it is under lib/signals/**', () => {
+    for (const root of SCAN_ROOTS) {
+      expect(collectTsFiles(root).length, `${root} contributed zero files to the scan`).toBeGreaterThan(0)
+    }
+
+    const files = SCAN_ROOTS.flatMap((root) => collectTsFiles(root))
+    expect(files.length).toBeGreaterThan(0)
+
+    const importers: string[] = []
+    for (const file of files) {
+      const source = stripLineComments(fs.readFileSync(file, 'utf8'))
+      if (/from\s+['"]xml2js['"]/.test(source)) importers.push(path.relative(ROOT, file))
+    }
+
+    expect(importers).toHaveLength(1)
+    expect(importers[0]!.replace(/\\/g, '/')).toMatch(/^lib\/signals\//)
+  })
+
+  // D5 (Session 30-D, MINOR-6) — `sax` is a second, direct XML-parser
+  // dependency (rss-egress-guard.ts's XXE DOCTYPE check, clause 8), and
+  // until this arm existed, a second file could `import sax` unnoticed —
+  // the exact per-root vacuity-guard shape the xml2js scan above already
+  // uses, applied to the other parser package this source pulls in.
+  it('sax is imported in exactly one file, and it is under lib/signals/**', () => {
+    for (const root of SCAN_ROOTS) {
+      expect(collectTsFiles(root).length, `${root} contributed zero files to the scan`).toBeGreaterThan(0)
+    }
+
+    const files = SCAN_ROOTS.flatMap((root) => collectTsFiles(root))
+    expect(files.length).toBeGreaterThan(0)
+
+    const importers: string[] = []
+    for (const file of files) {
+      const source = stripLineComments(fs.readFileSync(file, 'utf8'))
+      if (/from\s+['"]sax['"]/.test(source)) importers.push(path.relative(ROOT, file))
+    }
+
+    expect(importers).toHaveLength(1)
+    expect(importers[0]!.replace(/\\/g, '/')).toMatch(/^lib\/signals\//)
+  })
 })
 
 describe('SIGNAL-CONFIG-ONLY-ENV (ADR §11.3 scan #3)', () => {
+  // Session 30 G1b.2: ADR 0023 §16's four RSS constants (per-fetch timeout,
+  // per-tick budget, max body bytes, plus whatever G1b.3 names) land in
+  // lib/config.ts at G1b.3, not this step — G1b.2 is scoped to "everything
+  // that does not require the rss client to exist." No RSS-specific
+  // process.env prefix exists in the repo yet, so this pattern is NOT
+  // extended now; recorded here as the reason, per the build guide's own
+  // "if a later step adds none, record that as the reason no extension was
+  // made" allowance. G1b.3 must extend this pattern if and when it actually
+  // introduces a new process.env prefix (it may not — Zod defaults with no
+  // env override at all would need none).
   const SCAN_ROOTS = [LIB_DIR, APP_DIR]
   const CONFIG_FILE = path.join(ROOT, 'lib', 'config.ts')
 
@@ -232,11 +353,25 @@ describe('SIGNAL-PROMPT-SINK-NARROWED (ADR §11.3 scan #4)', () => {
   // RenderedSignalText via wrapSignalForPrompt(). Any OTHER file performing
   // this cast is a new, unreviewed sink — exactly what this scan exists to
   // catch.
+  //
+  // Session 30 G1b.4 (ADR 0023 §10.4 table row #4) — SECURITY-RELEVANT
+  // WIDENING, argued here and in the commit message per the ADR's explicit
+  // requirement, not slipped in: lib/signals/parse-article.ts joins this
+  // set as the market-responsive source's exact structural counterpart to
+  // parse-release.ts — the ONLY place a raw RSS/Atom item becomes
+  // UntrustedText (title/body), for the identical reason parse-release.ts
+  // is already here (ADR §7.1 draws this parallel explicitly). No other
+  // file needed to be added: rss-client.ts (the xml2js-importing file, per
+  // the new scan #2 above) does XML tree navigation only and produces
+  // plain, UNBRANDED strings — parse-article.ts remains the sole minting
+  // boundary on the RSS write path, exactly mirroring the split between
+  // github-client.ts (fetch) and parse-release.ts (mint) on the GitHub side.
   const ALLOWED_MINTING_FILES = new Set(
     [
       path.join(ROOT, 'lib', 'signals', 'parse-release.ts'),
       path.join(ROOT, 'lib', 'signals', 'orchestrator.ts'),
       path.join(ROOT, 'lib', 'ai', 'wrap-evidence.ts'),
+      path.join(ROOT, 'lib', 'signals', 'parse-article.ts'),
     ],
   )
 
@@ -293,6 +428,26 @@ describe('SIGNAL-NO-TOKEN-AT-REST (ADR §12 — E2.11 close-out finding)', () =>
     const block = source.slice(start, end)
     expect(TOKEN_SHAPED_PATTERN.test(block)).toBe(false)
   })
+
+  // Session 30 G1b.2 (ADR 0023 §10.4, table row #5): "must hold TRIVIALLY,
+  // and that is the point — ADR §3.1 rules rss has no credential at all, so
+  // this scan is what keeps 'no auth, nothing to revoke' true rather than
+  // merely asserted." watched_feeds (20260827090000_market_responsive_
+  // signal_source.sql) is the market-responsive source's connection-
+  // equivalent table — the one row per feed a customer configures — and
+  // deliberately carries no vault_*_id, no OAuth state, nothing to revoke.
+  it("watched_feeds' CREATE TABLE block defines no token-shaped column (ADR 0023 §3.1: rss has no credential at all)", () => {
+    const mrMigrationFile = path.join(ROOT, 'supabase', 'migrations', '20260827090000_market_responsive_signal_source.sql')
+    const source = fs.readFileSync(mrMigrationFile, 'utf8')
+    const startMarker = 'CREATE TABLE public.watched_feeds'
+    const start = source.indexOf(startMarker)
+    expect(start, 'watched_feeds CREATE TABLE not found — migration file moved or renamed').toBeGreaterThanOrEqual(0)
+    const end = source.indexOf(');', start)
+    expect(end, 'closing ); not found for watched_feeds CREATE TABLE').toBeGreaterThan(start)
+
+    const block = source.slice(start, end)
+    expect(TOKEN_SHAPED_PATTERN.test(block)).toBe(false)
+  })
 })
 
 describe('SIGNAL-WEBHOOK-SEAM-CLEAN (ADR §12 — E2.11 close-out finding)', () => {
@@ -318,6 +473,22 @@ describe('SIGNAL-WEBHOOK-SEAM-CLEAN (ADR §12 — E2.11 close-out finding)', () 
     const block = source.slice(start, end)
     expect(block).toContain('ingested_via')
     expect(POLLER_SPECIFIC_PATTERN.test(block)).toBe(false)
+  })
+
+  // Session 30 G1b.2 (ADR 0023 §10.4, table row #6): "load-bearing for §15,
+  // which asserts the webhook seam 'stays unused' — this scan is the only
+  // thing that proves it. It must still pass once the poller root is added,
+  // and the RSS poller must not reach for that seam." The ORIGINAL CREATE
+  // TABLE block above cannot see columns added by a LATER migration's ALTER
+  // statements, so this re-confirms the market-responsive migration's own
+  // ALTER TABLE public.signals statements (nullable watched_repo_id, new
+  // watched_feed_id FK, the exactly-one-parent CHECK) introduce no
+  // poller/webhook-specific column of their own — ingested_via remains the
+  // sole writer-related seam even after the second source.
+  it('the market-responsive migration widens signals with no poller/webhook-specific column beyond the existing ingested_via seam', () => {
+    const mrMigrationFile = path.join(ROOT, 'supabase', 'migrations', '20260827090000_market_responsive_signal_source.sql')
+    const source = stripLineComments(fs.readFileSync(mrMigrationFile, 'utf8'))
+    expect(POLLER_SPECIFIC_PATTERN.test(source)).toBe(false)
   })
 })
 
@@ -351,6 +522,124 @@ describe('SIGNAL-WEBHOOK-SEAM-CLEAN (ADR §12 — E2.11 close-out finding)', () 
 //      in the repo.)
 describe('ADR §11.4 — Tier-3 diff-verified properties (enumerated as decisions, no runtime test by design)', () => {
   it('is a documentation-only block — the six properties above have no assertion here', () => {
+    expect(true).toBe(true)
+  })
+})
+
+// ADR 0023 §10.3 (Session 30 G1b.10) — the market-responsive track's OWN
+// Tier-3 diff-verified properties, enumerated as decisions per the same
+// rule ADR 0020 §11.4 establishes above: a property of ABSENCE has no
+// runtime test because a runtime assertion cannot observe "this was never
+// added" — only a diff read at commit time can. Each command's ACTUAL
+// output is pasted, not summarized.
+//
+// CORRECTED (Session 30-D D8, MINOR-10): the range below was originally
+// stated as "afeafbf3 .. HEAD (G1b.9, ec64c3c9)" — five commits short of the
+// shipped head (e036f6f5), missing the entire corpus work, the live-run
+// script, the parsers.ts change and the triage-prompt change. Tier 3 is
+// these eight properties' ONLY proof (ADR 0015 §2: "no test, by decision"),
+// so proof gathered over a shorter range is not proof over the shipped one
+// — property 7 in particular was previously greped over tools.ts/
+// tool-runner.ts/card.ts and never over triage/orchestrator.ts, which WAS
+// modified after ec64c3c9 (the GitHub-only prompt framing fix, G1b.13). The
+// Reviewer independently re-ran all eight at afeafbf3..e036f6f5 and found
+// they HOLD (session-30-reviewer.md) — this was a record defect, not a
+// property failure. Re-run HERE, by the correction pass itself, at
+// afeafbf3..cd986d13 (the corrected range: through Session 30-D's D7, the
+// last commit before this restatement), property 7 now explicitly including
+// triage/orchestrator.ts.
+//
+// Two of these commands, run unrestricted over the WHOLE diff ("-- ."),
+// match this file's own prose describing the property (this comment block
+// discusses "embedding"/"pgvector"/"cluster" by name) and the ADR/reviewer
+// documentation's own extensive discussion of the same rulings — neither is
+// the property being tested. Re-run restricted to production code paths
+// (lib/**, app/**, supabase/**, scripts/**, excluding *.md and this file's
+// own prose) for a clean, no-output result; the unrestricted command is
+// still shown first as evidence of what a naive re-run finds and why it is
+// not the actual violation.
+//
+// 1. SIGNAL-NO-EMBEDDINGS is NOT retired — no pgvector extension, no
+//    embedding call anywhere in the diff.
+//      $ git diff afeafbf3..cd986d13 -- . | grep -iE "pgvector|embedding|vector\("
+//      (matches only ADR/reviewer prose discussing the ruling, and this
+//      file's own comment text — not a code addition)
+//      $ git diff afeafbf3..cd986d13 -- 'lib/**' 'app/**' 'supabase/**' 'scripts/**' ':(exclude)*.md' ':(exclude)lib/signals/source-scans.test.ts' | grep -iE "pgvector|embedding|vector\("
+//      (no output — exit code 1)
+//
+// 2. No clustering.
+//      $ git diff afeafbf3..cd986d13 -- . | grep -iE "cluster"
+//      (matches only ADR/reviewer prose, and this file's own comment text)
+//      $ git diff afeafbf3..cd986d13 -- 'lib/**' 'app/**' 'supabase/**' 'scripts/**' ':(exclude)*.md' ':(exclude)lib/signals/source-scans.test.ts' | grep -iE "cluster"
+//      (no output — exit code 1)
+//
+// 3. No sixth sanitizeDataField (also covered by scan #1's own assertion
+//    above; re-verified independently over the raw diff, not just the
+//    shipped tree, so a since-reverted local one wouldn't be missed):
+//      $ git diff afeafbf3..cd986d13 -- 'lib/**' 'app/**' ':(exclude)*.md' | grep -n "^+" | grep -iE "function\s+sanitizeDataField"
+//      (no output — exit code 1)
+//
+// 4. No second gating seam. Exactly one gate-shaped function was ADDED in
+//    the diff (gateSignalSourceAction, actions.ts, G1b.9); the one mention
+//    of "connectFeedAction" anywhere in the diff is prose in a comment
+//    explaining why a second seam was REJECTED, not a function:
+//      $ git diff afeafbf3..cd986d13 -- . | grep -cE "^\+(async )?function \w*[Gg]ate\w*Seam\w*\(|^\+(async )?function gateSignalSourceAction\("
+//      1
+//
+// 5. No contributor-identity field on the RSS Insert type. The only two
+//    diff lines matching author/creator/byline/email/contributor in
+//    parse-article.ts / lib/db/types.ts are comment PROSE explaining the
+//    absence, not field declarations:
+//      $ git diff afeafbf3..cd986d13 -- lib/signals/parse-article.ts lib/db/types.ts | grep -inE "^\+.*\b(author|creator|byline|email|contributor)\b"
+//      178:+// author / creator / byline / email field of any kind. rss-client.ts's own
+//      207:+// produce a contributor-identity field" a compile-time fact about
+//
+// 6. No webhook route, no signature verification, no secret. Zero files
+//    changed under app/api/signals/** other than the pre-existing cron
+//    route's test file; zero webhook-secret/signature-verification CODE
+//    added anywhere in the diff (the unrestricted grep below matches only
+//    ADR/reviewer prose discussing the absence, and this file's own text):
+//      $ git diff afeafbf3..cd986d13 --name-status -- "app/api/"
+//      M	app/api/cron/signals-poll/route.test.ts
+//      $ git diff afeafbf3..cd986d13 -- 'lib/**' 'app/**' 'supabase/**' ':(exclude)*.md' ':(exclude)lib/signals/source-scans.test.ts' | grep -inE "^\+.*(webhook.?secret|verifySignature|x-hub-signature|signature.?verif)"
+//      (no output — exit code 1)
+//
+// 7. No change to Stage C's loop bounds, tool inventory or card schema.
+//    lib/signals/triage/tools.ts, lib/ai/tool-runner.ts and
+//    lib/signals/triage/card.ts (production code) have ZERO diff lines in
+//    the corrected range — CORRECTED to also include
+//    lib/signals/triage/orchestrator.ts, which WAS modified (G1b.13's
+//    GitHub-only prompt-framing fix, branching buildTriageSystemPrompt/
+//    buildTriageUserMessage on candidate.signals.source) — read in full and
+//    confirmed the change touches only prompt TEXT construction and the
+//    candidate-enumeration source (listActiveConnectionBusinessIds ->
+//    listBusinessesWithNewCandidates/listNewCandidatesPoolWithSource), never
+//    TRIAGE_SHORTLIST_PER_TICK/TRIAGE_MAX_TOOL_CALLS/TRIAGE_MAX_WALL_CLOCK_MS,
+//    buildTriageTools's call signature, runToolLoop's call signature, or
+//    generateCard's schema:
+//      $ git diff afeafbf3..cd986d13 --name-status -- lib/signals/triage/tools.ts lib/ai/tool-runner.ts lib/signals/triage/card.ts lib/signals/triage/orchestrator.ts
+//      M	lib/signals/triage/orchestrator.ts
+//      $ git diff afeafbf3..cd986d13 -- lib/signals/triage/orchestrator.ts | grep -n "runToolLoop\|buildTriageTools\|TRIAGE_MAX_TOOL_CALLS\|TRIAGE_MAX_TURNS\|TRIAGE_RETRY_BUDGET\|generateCard("
+//      (shows only the import lines and the two unchanged call-site lines —
+//      no change to any bound constant, call signature, or generateCard's
+//      schema)
+//      $ git diff afeafbf3..cd986d13 --name-status -- lib/signals/triage/card.test.ts lib/signals/triage/orchestrator.test.ts
+//      M	lib/signals/triage/card.test.ts
+//      M	lib/signals/triage/orchestrator.test.ts
+//
+// 8. No change to §13.1's contract. listNewCandidates's exported name,
+//    parameters, filter (business_id + status='new') and ORDER BY are
+//    byte-identical; the only change touching this function is an internal
+//    refactor of its .select() call to use the new signalsJoinSelect()
+//    helper, which (with zero extra columns, its default) returns the
+//    EXACT SAME select string as the literal it replaced — confirmed by
+//    reading the helper's own definition (signal-candidates.ts:17-19):
+//      $ git diff afeafbf3..cd986d13 -- lib/db/signal-candidates.ts | grep -n "^-export async function listNewCandidates\|^+export async function listNewCandidates"
+//      (no output — the function's own declaration line is unchanged; only
+//      its internal .select(...) call and a cast-through-unknown were
+//      touched, per the surrounding diff)
+describe('ADR 0023 §10.3 — Tier-3 diff-verified properties for the market-responsive track (enumerated as decisions, no runtime test by design)', () => {
+  it('is a documentation-only block — the eight properties above (this file header comment) have no assertion here', () => {
     expect(true).toBe(true)
   })
 })

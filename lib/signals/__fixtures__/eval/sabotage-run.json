@@ -1,0 +1,291 @@
+{
+  "generatedAt": "2026-08-29T14:01:40.918Z",
+  "exampleCount": 40,
+  "cleanCardCount": 0,
+  "degradedCardCount": 6,
+  "disagreementCount": 6,
+  "costCents": 81,
+  "note": "L-11's mitigation #1, run honestly: 6/40 decisions became 'card' under the degraded (always-card-override) prompt, vs 0/40 under the clean prompt (expected true-card count in the corpus: 24). 6 example(s) disagreed between clean and degraded. This demonstrates the prompt DOES influence the output at this out-of-band live-run point — the exact honest form of the sabotage experiment, distinct from the deterministic replay harness (run-triage-eval.ts) which cannot be moved by any prompt change.",
+  "comparison": [
+    {
+      "id": "mr-c01-github-copilot-usage-credits",
+      "expectedVerdict": "card",
+      "clean": "no_card",
+      "degraded": "no_card",
+      "agreed": true
+    },
+    {
+      "id": "mr-c02-eu-instant-payments-verification",
+      "expectedVerdict": "card",
+      "clean": "no_card",
+      "degraded": "no_card",
+      "agreed": true
+    },
+    {
+      "id": "mr-c03-meta-reach-metric-retired",
+      "expectedVerdict": "card",
+      "clean": "no_card",
+      "degraded": "card",
+      "agreed": false
+    },
+    {
+      "id": "mr-c04-workday-layoffs-ai-shift",
+      "expectedVerdict": "card",
+      "clean": "no_card",
+      "degraded": "no_card",
+      "agreed": true
+    },
+    {
+      "id": "mr-c05-eu-ai-act-article-50",
+      "expectedVerdict": "card",
+      "clean": "no_card",
+      "degraded": "no_card",
+      "agreed": true
+    },
+    {
+      "id": "mr-c06-elation-health-acquires-aster",
+      "expectedVerdict": "card",
+      "clean": "no_card",
+      "degraded": "no_card",
+      "agreed": true
+    },
+    {
+      "id": "mr-c07-legalon-contract-review-report",
+      "expectedVerdict": "card",
+      "clean": "no_card",
+      "degraded": "no_card",
+      "agreed": true
+    },
+    {
+      "id": "mr-c08-shopify-checkout-outage",
+      "expectedVerdict": "card",
+      "clean": "no_card",
+      "degraded": "card",
+      "agreed": false
+    },
+    {
+      "id": "mr-c09-model-pricing-war-cuts",
+      "expectedVerdict": "card",
+      "clean": "no_card",
+      "degraded": "no_card",
+      "agreed": true
+    },
+    {
+      "id": "mr-c10-state-privacy-coppa-update",
+      "expectedVerdict": "card",
+      "clean": "no_card",
+      "degraded": "no_card",
+      "agreed": true
+    },
+    {
+      "id": "mr-c11-atlassian-rovo-cross-app-agents",
+      "expectedVerdict": "card",
+      "clean": "no_card",
+      "degraded": "card",
+      "agreed": false
+    },
+    {
+      "id": "mr-c12-cloud-gpu-pricing-gap",
+      "expectedVerdict": "card",
+      "clean": "no_card",
+      "degraded": "no_card",
+      "agreed": true
+    },
+    {
+      "id": "mr-c13-salesforce-agentforce-support-cuts",
+      "expectedVerdict": "card",
+      "clean": "no_card",
+      "degraded": "card",
+      "agreed": false
+    },
+    {
+      "id": "mr-c14-iconiq-hybrid-pricing-nrr",
+      "expectedVerdict": "card",
+      "clean": "no_card",
+      "degraded": "no_card",
+      "agreed": true
+    },
+    {
+      "id": "mr-c15-workforce-pell-grants",
+      "expectedVerdict": "card",
+      "clean": "no_card",
+      "degraded": "card",
+      "agreed": false
+    },
+    {
+      "id": "mr-c16-fed-rate-cut-proptech",
+      "expectedVerdict": "card",
+      "clean": "no_card",
+      "degraded": "no_card",
+      "agreed": true
+    },
+    {
+      "id": "mr-c17-tariff-supply-chain-shock",
+      "expectedVerdict": "card",
+      "clean": "no_card",
+      "degraded": "no_card",
+      "agreed": true
+    },
+    {
+      "id": "mr-c18-meta-marketing-api-deprecation",
+      "expectedVerdict": "card",
+      "clean": "no_card",
+      "degraded": "card",
+      "agreed": false
+    },
+    {
+      "id": "mr-c19-minimax-relicense-backlash",
+      "expectedVerdict": "card",
+      "clean": "no_card",
+      "degraded": "no_card",
+      "agreed": true
+    },
+    {
+      "id": "mr-c20-figure-technology-breach",
+      "expectedVerdict": "card",
+      "clean": "no_card",
+      "degraded": "no_card",
+      "agreed": true
+    },
+    {
+      "id": "mr-c21-right-to-disconnect-us-states",
+      "expectedVerdict": "card",
+      "clean": "no_card",
+      "degraded": "no_card",
+      "agreed": true
+    },
+    {
+      "id": "mr-c22-self-hosting-open-source-shift",
+      "expectedVerdict": "card",
+      "clean": "no_card",
+      "degraded": "no_card",
+      "agreed": true
+    },
+    {
+      "id": "mr-c23-zillow-preferred-success-fee",
+      "expectedVerdict": "card",
+      "clean": "no_card",
+      "degraded": "no_card",
+      "agreed": true
+    },
+    {
+      "id": "mr-c24-gartner-saaspocalypse",
+      "expectedVerdict": "card",
+      "clean": "no_card",
+      "degraded": "no_card",
+      "agreed": true
+    },
+    {
+      "id": "mr-n01-acquisition-rumor",
+      "expectedVerdict": "no_card",
+      "clean": "no_card",
+      "degraded": "no_card",
+      "agreed": true
+    },
+    {
+      "id": "mr-n02-generic-listicle",
+      "expectedVerdict": "no_card",
+      "clean": "no_card",
+      "degraded": "no_card",
+      "agreed": true
+    },
+    {
+      "id": "mr-n03-executive-change",
+      "expectedVerdict": "no_card",
+      "clean": "no_card",
+      "degraded": "no_card",
+      "agreed": true
+    },
+    {
+      "id": "mr-n04-conference-recap",
+      "expectedVerdict": "no_card",
+      "clean": "no_card",
+      "degraded": "no_card",
+      "agreed": true
+    },
+    {
+      "id": "mr-n05-vague-threat-trend",
+      "expectedVerdict": "no_card",
+      "clean": "no_card",
+      "degraded": "no_card",
+      "agreed": true
+    },
+    {
+      "id": "mr-n06-local-market-story",
+      "expectedVerdict": "no_card",
+      "clean": "no_card",
+      "degraded": "no_card",
+      "agreed": true
+    },
+    {
+      "id": "mr-n07-celebrity-ai-mention",
+      "expectedVerdict": "no_card",
+      "clean": "no_card",
+      "degraded": "no_card",
+      "agreed": true
+    },
+    {
+      "id": "mr-n08-changelog-as-news",
+      "expectedVerdict": "no_card",
+      "clean": "no_card",
+      "degraded": "no_card",
+      "agreed": true
+    },
+    {
+      "id": "mr-n09-holiday-puff-piece",
+      "expectedVerdict": "no_card",
+      "clean": "no_card",
+      "degraded": "no_card",
+      "agreed": true
+    },
+    {
+      "id": "mr-n10-opinion-no-data",
+      "expectedVerdict": "no_card",
+      "clean": "no_card",
+      "degraded": "no_card",
+      "agreed": true
+    },
+    {
+      "id": "mr-n11-meme-roundup",
+      "expectedVerdict": "no_card",
+      "clean": "no_card",
+      "degraded": "no_card",
+      "agreed": true
+    },
+    {
+      "id": "mr-n12-stale-story",
+      "expectedVerdict": "no_card",
+      "clean": "no_card",
+      "degraded": "no_card",
+      "agreed": true
+    },
+    {
+      "id": "mr-n13-stock-fluctuation",
+      "expectedVerdict": "no_card",
+      "clean": "no_card",
+      "degraded": "no_card",
+      "agreed": true
+    },
+    {
+      "id": "mr-n14-realty-gossip",
+      "expectedVerdict": "no_card",
+      "clean": "no_card",
+      "degraded": "no_card",
+      "agreed": true
+    },
+    {
+      "id": "mr-n15-awards-announcement",
+      "expectedVerdict": "no_card",
+      "clean": "no_card",
+      "degraded": "no_card",
+      "agreed": true
+    },
+    {
+      "id": "mr-n16-marginal-stretch-tiein",
+      "expectedVerdict": "no_card",
+      "clean": "no_card",
+      "degraded": "no_card",
+      "agreed": true
+    }
+  ]
+}

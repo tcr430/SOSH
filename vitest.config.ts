@@ -20,6 +20,12 @@ export default defineConfig({
       'lib/**/*.test.{ts,tsx}',
       'components/**/*.test.{ts,tsx}',
       'supabase/__tests__/**/*.test.ts',
+      // ADR 0023 §2.4.2 (Session 30 G1b.11) — SIGNAL-MR-CORPUS-DISCRIMINATIVE
+      // is Tier 2 (a test OF scripts/eval/, never a corpus-discrimination
+      // proof). Without this line, run-triage-eval.test.ts would be
+      // AUTHORED-NOT-EXECUTED — package.json's test:app script also needs
+      // 'scripts/eval' added to its positional filter for the same reason.
+      'scripts/eval/**/*.test.ts',
     ],
     // Session 22-D (MAJOR-1) — the four real-network __integration__ suites
     // (postiz-provider, purge-business, email round-trip, marketing route

@@ -260,6 +260,29 @@ describe('Step 4 — SDK call and retry', () => {
     })
     expect(mockCreate).toHaveBeenCalledTimes(1)
   })
+
+  // D2 (Session 30-D, MAJOR-1 + A-8) — extractJsonBlock's balanced-brace
+  // fallback (lib/ai/parsers.ts, G1b.13) changed safeParseOrAiError's
+  // behaviour for EVERY runPrompt caller — Mode 1/2 post generation among
+  // them — but this caller had no test pinning the new semantics
+  // (AUTHORED-NOT-EXECUTED per the Reviewer). These two cases close that.
+  it('D2 — prose-prefixed output now parses via the balanced-brace fallback, not invalid_response', async () => {
+    mockCreate.mockResolvedValue({
+      ...validSdkResponse,
+      content: [{ type: 'text', text: 'Here is the result you asked for:\n\n{"result":"generated"}' }],
+    })
+    const result = await runPrompt(mockPrompt, mockContext, { text: 'hello' })
+    expect(result).toEqual(validOutput)
+  })
+
+  it('D2 — two concatenated JSON objects resolve to the FIRST object, the second is silently discarded', async () => {
+    mockCreate.mockResolvedValue({
+      ...validSdkResponse,
+      content: [{ type: 'text', text: '{"result":"first"}{"result":"second"}' }],
+    })
+    const result = await runPrompt(mockPrompt, mockContext, { text: 'hello' })
+    expect(result).toEqual({ result: 'first' })
+  })
 })
 
 // ── ai_usage (Step 7) ─────────────────────────────────────────────────────

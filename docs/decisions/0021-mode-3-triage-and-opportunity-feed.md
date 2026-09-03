@@ -1664,3 +1664,57 @@ as a closed loop.
 ---
 
 _End ADR 0021._
+
+---
+
+## §16 — Amendment A (Session 30 / Track G, ADR 0023, 2026-08-26) — APPENDED, NOT REWRITTEN
+
+> **Author:** Session 30 Architect (G1a). **Form:** the ADR 0014 Amendment A / ADR 0010 Amendment 2 house
+> form — everything above this heading is ADR 0021 as Session 28 wrote it, and **not one character of §12
+> has been edited in place.** This note records a ruling made in
+> `docs/decisions/0023-market-responsive-signal-source.md` §2.9.
+>
+> **Occasion:** ADR 0023 introduces Mode 3's second signal source (market-responsive: customer-supplied
+> RSS/Atom feeds) — the exact thing §12 gates.
+
+### A-1 — §12's second-source gate is OVERRIDDEN for the market-responsive source, not satisfied
+
+**§12's gate, as written above, has two clauses:**
+
+> ...until the harness has **proven itself**, which §10.4 defines concretely as a **true-`card` count >= 40
+> and a recorded run history**. A second source before that is a decision to scale a component whose only
+> quality signal cannot yet detect a regression in it.
+
+**Neither clause is met, and ADR 0023 ships the source anyway. That is an override, and it is recorded here
+as one rather than left to be inferred from a merged PR.**
+
+- **Clause 1 - true-`card` >= 40 - NOT met, per source.** Corpus v2 carries 24 true-`card` for GitHub and
+  24 for market-responsive. The *aggregate* of 48 does cross 40, but ADR 0023 §2.7 rules that the aggregate
+  "is dominated by the already-passing GitHub 24 and says almost nothing about whether the news slice is
+  trustworthy" - so the aggregate may not be cited as clearing this gate. It does not clear it.
+- **Clause 2 - a recorded run history - NOT met.** `.github/workflows/eval-triage.yml` exists, but the
+  corpus has been scored at `corpusVersion=1` only, and §10.4's own harness header records that this first
+  run "scores close to 1.0 by construction." There is no history from which to read a trend.
+
+**What stands in the gate's place.** The founder ruled to ship (ADR 0023 §12, "Recorded as not escalated"),
+against three mitigations that ADR 0023 makes binding on its Builder:
+
+1. **Blind-labelled, model-authored cassettes** (ADR 0023 §2.4.1) - the corpus is re-authored so that
+   cassette and label stop sharing an author, with the label committed *before* the cassette exists. This
+   attacks §12's underlying worry - a metric that measures self-consistency - at its root.
+2. **Per-source floors and per-source metrics** (ADR 0023 §2.7) - no blended number spanning both sources
+   may be published; the news floors are reported-but-advisory until graduation.
+3. **A minority allocation cap** - at most 2 of `TRIAGE_SHORTLIST_PER_TICK = 5` slots to the new source,
+   and at most 1 per feed (ADR 0023 §2.5, §5.3), lifting only on a defined precision graduation (§2.6).
+
+**This override does NOT travel, and citing it as precedent is a Reviewer finding.** It covers the
+market-responsive source only. A **third** signal source re-tests §12 from scratch, against a corpus that
+by then must carry a genuine **per-source** true-`card` >= 40 **and** a real recorded run history. §12's
+text above is unchanged and remains the standing rule for every source after this one.
+
+**Clause 2 is deferred, not waived.** ADR 0023 makes retention of the per-run artefact a Builder
+deliverable specifically so the run-history clause can eventually be *met* rather than re-waived.
+
+---
+
+_End Amendment A._

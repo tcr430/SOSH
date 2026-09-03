@@ -1083,8 +1083,19 @@ GRANT EXECUTE ON FUNCTION public.purge_business(uuid) TO service_role;
 | signal_candidates | yes (business_id + signal_id) | CASCADE (both) | yes | none — cascade = erasure |
 | insight_cards | yes (business_id) | CASCADE | yes | none — cascade = erasure (quotes third-party-authored release text; contributor identity is never stored, ADR 0020 §5.3) |
 | signal_triage_budget | yes (business_id) | CASCADE | yes | none — cascade = erasure (holds only a per-day cent counter) |
+| watched_feeds | yes (business_id) | CASCADE | yes | none — cascade = erasure, exercised by `purge_business`'s root `DELETE FROM public.businesses` (no explicit per-table statement in the function body); holds the customer's own subscribed feed URL/label, ADR 0023 §3.2 |
 
 Only `business_deletion_requests` (NO ACTION) would have blocked the root delete; D2.1 resolves it. Every other business-scoped table either cascades or is deliberately retained.
+
+**Session 30-G1b.1 note (2026-08-27):** the `watched_feeds` row above — ADR 0023's market-responsive
+signal source (Mode 3's second source) — added in the same PR as its migration
+(`20260827090000_market_responsive_signal_source.sql`), per this file's own mandatory rule, CLAUDE.md's
+erasure-cascade rule, and ADR 0023 §7.6's binding obligation on the Builder. No `purge_business` edit is
+required: `business_id` is a genuine `ON DELETE CASCADE` FK (not a copy-paste `RESTRICT`), verified against
+the live migration rather than assumed, and `SIGNAL-MR-CASCADE-COMPLETE`
+(`supabase/__tests__/market-responsive-signal-source-schema.test.ts`) exercises the root
+`DELETE FROM public.businesses` and `purge_business` RPC directly against a seeded `watched_feeds` row and
+its `rss` signal, both against live Postgres.
 
 **Session 27-E2.1 note (2026-07-31):** the four ADR 0020 (Mode 3 signal ingestion) rows above —
 `github_connections`, `watched_repos`, `signals`, `signal_candidates` — added in the same PR as their

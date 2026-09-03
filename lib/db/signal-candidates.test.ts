@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { createMockClient } from './__test-utils__/mock-client'
+import { createMockClient, createSequentialMockClient } from './__test-utils__/mock-client'
 
 vi.mock('@/lib/supabase/service', () => ({
   createServiceRoleClient: vi.fn(),
 }))
 
 import { createServiceRoleClient } from '@/lib/supabase/service'
-import { listNewCandidates, upsertSignalCandidate } from './signal-candidates'
+import { listNewCandidates, upsertSignalCandidate, listBusinessesWithNewCandidates } from './signal-candidates'
 import type { SignalCandidateInsert } from './types'
 
 const mockCreateServiceRoleClient = vi.mocked(createServiceRoleClient)
@@ -78,5 +78,28 @@ describe('lib/db/signal-candidates.ts (ADR 0020 §13.1)', () => {
     const result = await upsertSignalCandidate(insert)
 
     expect(result).toBeNull()
+  })
+
+  // D3 (Session 30-D, MAJOR-2) — database-reviewer's finding on the fix
+  // itself: MAX_ENUMERATION_PAGES existing only as a silent cap would
+  // reproduce, at a larger scale, the exact "no counter, no log line, no
+  // error" failure this step closes. Pins that exhausting the safety valve
+  // without a short final page throws LOUDLY rather than returning a
+  // quietly partial business list.
+  it('listBusinessesWithNewCandidates throws when the safety valve is exhausted without a short final page (never a silent partial result)', async () => {
+    // Every one of MAX_ENUMERATION_PAGES (2000) pages returns a FULL page
+    // (length === pageSize), so the loop never sees a short page and must
+    // hit the safety valve. pageSize=2 keeps this cheap to construct.
+    const fullPage = { data: [{ business_id: 'b1' }, { business_id: 'b2' }], error: null }
+    const { client } = createSequentialMockClient(Array.from({ length: 2000 }, () => fullPage))
+
+    await expect(listBusinessesWithNewCandidates(client, 2)).rejects.toThrow(/MAX_ENUMERATION_PAGES/)
+  })
+
+  it('listBusinessesWithNewCandidates returns normally when the final page is short (the ordinary exhaustion path)', async () => {
+    const { client, builder } = createMockClient([{ business_id: 'b1' }], null)
+    const ids = await listBusinessesWithNewCandidates(client, 50)
+    expect(ids).toEqual(['b1'])
+    expect(builder.order).toHaveBeenCalledWith('business_id', { ascending: true })
   })
 })

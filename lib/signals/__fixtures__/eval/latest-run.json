@@ -1,178 +1,244 @@
 {
-  "corpusVersion": 1,
+  "corpusVersion": 2,
+  "labelCommitSha": "7bfe1c7ccad983ac4da87c9d2e3d1bcc22261225",
+  "cassetteCommitSha": "cd1b7203522614ed3303bc09940194c70d44b8aa",
   "runUrl": "local (no GITHUB_RUN_ID in env)",
-  "generatedAt": "2026-08-10T15:17:37.489Z",
-  "declaredCorpusCount": 40,
-  "executedCount": 40,
+  "generatedAt": "2026-08-31T22:37:10.510Z",
+  "declaredCorpusCount": 80,
+  "executedCount": 80,
+  "pendingCount": 0,
   "errorCount": 0,
-  "metrics": {
-    "cardPrecision": {
-      "value": 1,
-      "numerator": 24,
-      "denominator": 24,
-      "floor": 0.75
+  "metricsBySource": {
+    "github": {
+      "declaredCount": 40,
+      "executedCount": 40,
+      "pendingCount": 0,
+      "errorCount": 0,
+      "cardPrecision": {
+        "value": 1,
+        "numerator": 24,
+        "denominator": 24,
+        "floor": 0.75,
+        "sigma": 0.08838834764831845
+      },
+      "cardRecall": {
+        "value": 1,
+        "numerator": 24,
+        "denominator": 24,
+        "floor": 0.7,
+        "sigma": 0.09354143466934854
+      },
+      "dismissReasonMatch": {
+        "value": 1,
+        "numerator": 16,
+        "denominator": 16,
+        "floor": 0.6,
+        "sigma": 0.1224744871391589
+      },
+      "pass": true
     },
-    "cardRecall": {
-      "value": 1,
-      "numerator": 24,
-      "denominator": 24,
-      "floor": 0.7
-    },
-    "dismissReasonMatch": {
-      "value": 1,
-      "numerator": 16,
-      "denominator": 16,
-      "floor": 0.6
+    "market_responsive": {
+      "declaredCount": 40,
+      "executedCount": 40,
+      "pendingCount": 0,
+      "errorCount": 0,
+      "cardPrecision": {
+        "value": null,
+        "numerator": 0,
+        "denominator": 0,
+        "floor": 0.75,
+        "sigma": null
+      },
+      "cardRecall": {
+        "value": 0,
+        "numerator": 0,
+        "denominator": 24,
+        "floor": 0.7,
+        "sigma": 0.09354143466934854
+      },
+      "dismissReasonMatch": {
+        "value": 0.5625,
+        "numerator": 9,
+        "denominator": 16,
+        "floor": 0.6,
+        "sigma": 0.1224744871391589
+      },
+      "pass": false
     }
   },
-  "metricsPass": true,
+  "metricsPass": false,
   "outcomes": [
     {
       "id": "c01-sso-saml",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "card",
       "actualVerdict": "card"
     },
     {
       "id": "c02-slack-integration",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "card",
       "actualVerdict": "card"
     },
     {
       "id": "c03-public-api-v2",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "card",
       "actualVerdict": "card"
     },
     {
       "id": "c04-soc2",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "card",
       "actualVerdict": "card"
     },
     {
       "id": "c05-ai-analytics",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "card",
       "actualVerdict": "card"
     },
     {
       "id": "c06-eu-region",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "card",
       "actualVerdict": "card"
     },
     {
       "id": "c07-enterprise-tier",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "card",
       "actualVerdict": "card"
     },
     {
       "id": "c08-ios-app",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "card",
       "actualVerdict": "card"
     },
     {
       "id": "c09-zapier",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "card",
       "actualVerdict": "card"
     },
     {
       "id": "c10-realtime-collab",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "card",
       "actualVerdict": "card"
     },
     {
       "id": "c11-hipaa",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "card",
       "actualVerdict": "card"
     },
     {
       "id": "c12-salesforce-sync",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "card",
       "actualVerdict": "card"
     },
     {
       "id": "c13-rbac",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "card",
       "actualVerdict": "card"
     },
     {
       "id": "c14-audit-log",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "card",
       "actualVerdict": "card"
     },
     {
       "id": "c15-white-label",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "card",
       "actualVerdict": "card"
     },
     {
       "id": "c16-graphql",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "card",
       "actualVerdict": "card"
     },
     {
       "id": "c17-data-warehouse-sync",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "card",
       "actualVerdict": "card"
     },
     {
       "id": "c18-scim",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "card",
       "actualVerdict": "card"
     },
     {
       "id": "c19-workflow-builder",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "card",
       "actualVerdict": "card"
     },
     {
       "id": "c20-performance-overhaul",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "card",
       "actualVerdict": "card"
     },
     {
       "id": "c21-status-page",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "card",
       "actualVerdict": "card"
     },
     {
       "id": "c22-teams-integration",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "card",
       "actualVerdict": "card"
     },
     {
       "id": "c23-usage-billing",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "card",
       "actualVerdict": "card"
     },
     {
       "id": "c24-embedded-analytics",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "card",
       "actualVerdict": "card"
     },
     {
       "id": "n01-cve-patch",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "no_card",
       "actualVerdict": "no_card",
@@ -181,6 +247,7 @@
     },
     {
       "id": "n02-data-exposure",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "no_card",
       "actualVerdict": "no_card",
@@ -189,6 +256,7 @@
     },
     {
       "id": "n03-dependency-vuln",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "no_card",
       "actualVerdict": "no_card",
@@ -197,6 +265,7 @@
     },
     {
       "id": "n04-incident-postmortem",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "no_card",
       "actualVerdict": "no_card",
@@ -205,6 +274,7 @@
     },
     {
       "id": "n05-sso-bugfix",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "no_card",
       "actualVerdict": "no_card",
@@ -213,6 +283,7 @@
     },
     {
       "id": "n06-ai-dashboard-iteration",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "no_card",
       "actualVerdict": "no_card",
@@ -221,6 +292,7 @@
     },
     {
       "id": "n07-api-docs-update",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "no_card",
       "actualVerdict": "no_card",
@@ -229,6 +301,7 @@
     },
     {
       "id": "n08-vague-changelog",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "no_card",
       "actualVerdict": "no_card",
@@ -237,6 +310,7 @@
     },
     {
       "id": "n09-internal-refactor",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "no_card",
       "actualVerdict": "no_card",
@@ -245,6 +319,7 @@
     },
     {
       "id": "n10-ui-polish",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "no_card",
       "actualVerdict": "no_card",
@@ -253,6 +328,7 @@
     },
     {
       "id": "n11-dependency-bumps",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "no_card",
       "actualVerdict": "no_card",
@@ -261,6 +337,7 @@
     },
     {
       "id": "n12-beta-opt-in",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "no_card",
       "actualVerdict": "no_card",
@@ -269,6 +346,7 @@
     },
     {
       "id": "n13-alpha-announcement",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "no_card",
       "actualVerdict": "no_card",
@@ -277,6 +355,7 @@
     },
     {
       "id": "n14-ci-tooling",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "no_card",
       "actualVerdict": "no_card",
@@ -285,6 +364,7 @@
     },
     {
       "id": "n15-locale-update",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "no_card",
       "actualVerdict": "no_card",
@@ -293,10 +373,347 @@
     },
     {
       "id": "n16-community-housekeeping",
+      "source": "github",
       "status": "ok",
       "expectedVerdict": "no_card",
       "actualVerdict": "no_card",
       "expectedDismissReason": "not_relevant",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-c01-github-copilot-usage-credits",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-c02-eu-instant-payments-verification",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-c03-meta-reach-metric-retired",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-c04-workday-layoffs-ai-shift",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-c05-eu-ai-act-article-50",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-c06-elation-health-acquires-aster",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-c07-legalon-contract-review-report",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-c08-shopify-checkout-outage",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-c09-model-pricing-war-cuts",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-c10-state-privacy-coppa-update",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-c11-atlassian-rovo-cross-app-agents",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-c12-cloud-gpu-pricing-gap",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-c13-salesforce-agentforce-support-cuts",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-c14-iconiq-hybrid-pricing-nrr",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-c15-workforce-pell-grants",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-c16-fed-rate-cut-proptech",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-c17-tariff-supply-chain-shock",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-c18-meta-marketing-api-deprecation",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-c19-minimax-relicense-backlash",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-c20-figure-technology-breach",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "too_sensitive"
+    },
+    {
+      "id": "mr-c21-right-to-disconnect-us-states",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-c22-self-hosting-open-source-shift",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-c23-zillow-preferred-success-fee",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-c24-gartner-saaspocalypse",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "card",
+      "actualVerdict": "no_card",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-n01-acquisition-rumor",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "no_card",
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "weak_evidence",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-n02-generic-listicle",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "no_card",
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-n03-executive-change",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "no_card",
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-n04-conference-recap",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "no_card",
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "already_covered",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-n05-vague-threat-trend",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "no_card",
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "weak_evidence",
+      "actualDismissReason": "too_sensitive"
+    },
+    {
+      "id": "mr-n06-local-market-story",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "no_card",
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-n07-celebrity-ai-mention",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "no_card",
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "actualDismissReason": "weak_evidence"
+    },
+    {
+      "id": "mr-n08-changelog-as-news",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "no_card",
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "already_covered",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-n09-holiday-puff-piece",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "no_card",
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-n10-opinion-no-data",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "no_card",
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "weak_evidence",
+      "actualDismissReason": "weak_evidence"
+    },
+    {
+      "id": "mr-n11-meme-roundup",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "no_card",
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-n12-stale-story",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "no_card",
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "wrong_timing",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-n13-stock-fluctuation",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "no_card",
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-n14-realty-gossip",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "no_card",
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-n15-awards-announcement",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "no_card",
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "not_relevant",
+      "actualDismissReason": "not_relevant"
+    },
+    {
+      "id": "mr-n16-marginal-stretch-tiein",
+      "source": "market_responsive",
+      "status": "ok",
+      "expectedVerdict": "no_card",
+      "actualVerdict": "no_card",
+      "expectedDismissReason": "weak_evidence",
       "actualDismissReason": "not_relevant"
     }
   ]

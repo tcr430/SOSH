@@ -25,8 +25,14 @@ import type { GithubConnectionRow, SignalRow, SignalInsert, UntrustedText } from
 import { mintInstallationToken, getReleases, GithubClientError } from './github-client'
 import { parseRelease, type ParsedSignal } from './parse-release'
 import { scoreSignal, upsertScoredCandidate } from './score'
+import { pollWatchedFeeds, emptyRssTickSummary, type RssTickSummary } from './rss-orchestrator'
 
-export interface SignalsTickSummary {
+// ADR 0023 §3.4/§9.4 (Session 30 G1b.5) — RssTickSummary's fields are
+// spread into this interface (not nested under a sub-key) so every counter
+// — GitHub and RSS alike — lands in the SAME flat JSON tick line (§9.4
+// clause 4), one canonical structured log line per invocation, per
+// CLAUDE.md's worker carve-out.
+export interface SignalsTickSummary extends RssTickSummary {
   tick: string
   triggeredBy: 'qstash' | 'secret'
   durationMs: number
@@ -82,6 +88,7 @@ async function scoreAndUpsertCandidate(
       bodyLen: signal.body.length,
       isBot: signal.author_is_bot,
       repoWeight,
+      kind: 'release',
     },
     now,
   )
@@ -317,6 +324,7 @@ export async function runSignalsTick(opts: { triggeredBy: 'qstash' | 'secret' })
     failed: 0,
     skippedDraft: 0,
     skippedPreCutoff: 0,
+    ...emptyRssTickSummary(),
   }
 
   try {
@@ -352,6 +360,23 @@ export async function runSignalsTick(opts: { triggeredBy: 'qstash' | 'secret' })
             summary.failed++
             Sentry.captureException(err, { tags: { business_id: claimed.business_id, phase: 'signals-poll' } })
           }
+        }
+
+        // ADR 0023 §3.4/§9 (Session 30 G1b.5) — the market-responsive
+        // source, sharing this SAME tick, monitor and cron route (§3.4:
+        // "one poll per active feed per daily tick, aligned to the
+        // existing signals-poll cron" — not a second cadence, not a second
+        // route). Per-feed isolation is internal to pollWatchedFeeds; this
+        // try/catch is one layer further out, guarding against a failure
+        // before that function's own per-feed loop even starts (e.g. the
+        // candidate-list query itself failing) — mirrors the GitHub loop's
+        // own outer/inner isolation shape exactly.
+        try {
+          const rssSummary = await pollWatchedFeeds(now)
+          Object.assign(summary, rssSummary)
+        } catch (err) {
+          summary.rssFeedsFailed++
+          Sentry.captureException(err, { tags: { phase: 'signals-rss-poll' } })
         }
       },
       {

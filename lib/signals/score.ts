@@ -15,8 +15,21 @@ const RECENCY_WINDOW_DAYS = 14
 const RECENCY_MAX = 40
 const SUBSTANCE_TARGET_CHARS = 1200
 const SUBSTANCE_MAX = 30
-const HUMAN_AUTHORED_BONUS = 5
 const MS_PER_DAY = 1000 * 60 * 60 * 24
+
+// ADR 0023 §5.1.1 (Session 30 G1b.6) — §6.6's own precedent applied a
+// second time: humanAuthored becomes table-driven by kind, exactly the way
+// KIND_WEIGHT was already written as a named term rather than folded into
+// the base formula, anticipating this. 'release' keeps its original
+// isBot-gated bonus; 'article' is a CONSTANT 0 — there is no reliable
+// bot-authorship signal for third-party news prose (unlike a GitHub
+// release's author.type), and author_is_bot stays false on every rss row
+// regardless (see the comment on ScorableSignal.kind below for why setting
+// it true is rejected).
+const HUMAN_AUTHORED_BONUS: Record<'release' | 'article', number> = {
+  release: 5,
+  article: 0,
+}
 
 export interface ScoreInputs {
   recency: number
@@ -35,6 +48,16 @@ export interface ScorableSignal {
   // caller, never read from a table by this file: this module has no DB
   // dependency of its own for the pure scoring half.
   repoWeight: number
+  // ADR 0023 §5.1.1 (Session 30 G1b.6) — selects the HUMAN_AUTHORED_BONUS
+  // row. 'article' rows (rss) MUST keep isBot=false regardless of this
+  // field's value — author_is_bot is a named deterministic input to Stage
+  // D's sensitivity rule (ADR 0021 §4.4) and is joined for exactly that
+  // purpose (lib/db/signal-candidates.ts:41). Setting it true to force
+  // humanAuthored to zero locally would corrupt a SHARED column for a
+  // local scoring effect — precisely the coupling ADR 0020 §6.3's
+  // determinism guarantee exists to prevent. kind is the correct, isolated
+  // lever for this; isBot is not.
+  kind: 'release' | 'article'
 }
 
 export interface ScoredSignal extends ScorableSignal {
@@ -50,9 +73,21 @@ function clamp01(value: number): number {
 //   score = recency + substance + kindWeight + repoWeight + humanAuthored
 //   recency       = floor(40 × max(0, 1 − ageDays / 14))
 //   substance     = floor(30 × clamp(bodyLen / 1200, 0, 1))
-//   kindWeight    = 15
-//   repoWeight    = watched_repos.weight
-//   humanAuthored = author_is_bot ? 0 : 5
+//   kindWeight    = 15 — FIXED for both kinds (ADR 0023 §5.1.1: do not
+//                   tune it per kind; it is inert by construction, since
+//                   github and rss are scored and ranked within their own
+//                   reserved shortlist slots — G1b.7 — so a constant
+//                   shared across kinds cancels out of every comparison
+//                   actually made)
+//   repoWeight    = watched_repos.weight / watched_feeds.weight, same 0..10
+//                   range for both sources
+//   humanAuthored = HUMAN_AUTHORED_BONUS[kind], gated by isBot for
+//                   'release' only — see HUMAN_AUTHORED_BONUS above
+//
+// Ceilings (ADR §5.1.1): 100 for release (40+30+15+10+5), 95 for article
+// (40+30+15+10+0) — a 5-point gap that is DELIBERATE and PERMANENT. An
+// article can never outrank an otherwise-identical human-cut release.
+// score.test.ts asserts this explicitly.
 //
 // `now` is a PARAMETER, never read inside this function — a `Date.now()`
 // call here would make the same fixture score differently depending on
@@ -66,11 +101,13 @@ export function scoreSignal(input: ScorableSignal, now: Date): ScoredSignal {
   const substance = Math.floor(SUBSTANCE_MAX * clamp01(input.bodyLen / SUBSTANCE_TARGET_CHARS))
   const kindWeight = KIND_WEIGHT
   const repoWeight = input.repoWeight
-  // §6.2 — bots are scored DOWN, never filtered out: a release cut by
-  // automation for a real version is still a real ship. humanAuthored is
-  // the only term that distinguishes a bot release, and it never zeroes
-  // the total score by itself.
-  const humanAuthored = input.isBot ? 0 : HUMAN_AUTHORED_BONUS
+  // §6.2 / ADR 0023 §5.1.1 — bots are scored DOWN, never filtered out: a
+  // release cut by automation for a real version is still a real ship.
+  // humanAuthored is the only term that distinguishes a bot release, and
+  // it never zeroes the total score by itself. For 'article', isBot is
+  // never consulted at all — the bonus is a flat 0 regardless of its
+  // value, per HUMAN_AUTHORED_BONUS.article above.
+  const humanAuthored = input.kind === 'release' ? (input.isBot ? 0 : HUMAN_AUTHORED_BONUS.release) : HUMAN_AUTHORED_BONUS.article
 
   const scoreInputs: ScoreInputs = { recency, substance, kindWeight, repoWeight, humanAuthored }
   const score = recency + substance + kindWeight + repoWeight + humanAuthored
