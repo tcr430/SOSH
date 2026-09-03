@@ -240,7 +240,8 @@ CLAUDE.md sells "LinkedIn (Business and Founder)". A client connects **both** a 
 
 **No existing test covers the multi-row case** — all three suites mock a single account or `null` (`metrics/orchestrator.test.ts:119,194`; `publishing/orchestrator.test.ts:169,415`). Every one of the three is **`AUTHORED-NOT-EXECUTED` for two-identity behaviour** until this session closes it, *even though each is otherwise fully covered.*
 
-- **Scopes.** LinkedIn requests member **and** organization permissions: `w_member_social` for the founder profile, `w_organization_social` for the page. This is a **correction**, not a widening — the shipped list (`platforms/config.ts:14`) supports only half of what the product is sold as.
+- **Scopes — REVISED by A-8.** LinkedIn requests **`w_member_social` only**. `w_organization_social` is deferred with the Community Management API application, which needs a registered legal entity that does not yet exist. An app cannot request an ungranted scope, so adding it now would break the authorize URL rather than future-proof it.
+- **Why the dual-identity model survives A-8 (A-8a).** Its original justification was LinkedIn's founder + business pair, which A-8 defers. It stands on **X** instead: CLAUDE.md's locked platforms include "X (Business and Founder)", and two X connections are just two OAuth flows against two accounts — no elevated tier, no approval. **A business can hold two active X rows today**, so `.maybeSingle()` throws for X exactly as it would have for LinkedIn. The schema and resolver work is immediately load-bearing, not speculative.
 
 ### 5.4 The organization access gate (A-5)
 
@@ -487,6 +488,16 @@ merged with no platform account in existence.
 | App creation + `w_member_social` (founder profile) | an associated **LinkedIn Page**, creatable without a registered entity; **"Share on LinkedIn" / "Sign In with LinkedIn" are auto-enabled on app creation, with no review** | **No** |
 | `w_organization_social` (business page) | Community Management API: company-page **verification**, legal name, registered address, privacy policy, a screencast per use case | **Yes** |
 
+> **SUPERSEDED IN PART by A-8 (2026-09-03).** The founder clarified that the blocker is **a registered
+> legal entity with a company number**, not the LinkedIn Page, and ruled: **defer LinkedIn organization
+> posting.** LinkedIn ships **member-only**. Stage 2 below is therefore **not a pre-launch stage** and has
+> no date. Stages 0 and 1 stand exactly as written. **The "get the scopes right now to avoid
+> re-authorisation" argument below is WITHDRAWN as inapplicable** — an app cannot request a scope it has
+> not been granted, so `w_organization_social` would fail in the authorize URL until the Community
+> Management API is approved; re-authorisation when that access lands is unavoidable and cannot be
+> pre-empted by scoping early. The rest of the Stage-1 argument (that §14 is the sole compensating control
+> for zero real-network CI coverage) is unaffected and still holds.
+
 **The three stages, in order:**
 
 1. **Stage 0 — now, no credentials.** Everything in §9.2. This is the whole Builder session.
@@ -568,10 +579,11 @@ cycle**, which constrains Session 32's read path and the metrics worker's cadenc
 
 ## 16. Stated-open items
 
-1. **A-5-prime: the access request is not an engineering task, cannot be started yet, and can fail.** It is blocked on SOSH having a registered legal entity (§14.1), and once submitted it can still be refused. If Community Management API access is refused or delayed, **LinkedIn ships member-only** and the business-page half of "LinkedIn (Business and Founder)" does not exist at launch. That is a product decision, not a Builder decision — and because it is external and unbounded in time, **it should be treated as the most likely long pole in the whole pre-launch plan.**
+1. **A-8: LinkedIn ships MEMBER-ONLY, and this contradicts a locked strategic decision.** CLAUDE.md's locked launch platforms read **"LinkedIn (Business and Founder)"**. With organization posting deferred behind a legal entity that does not yet exist, **launch delivers the Founder half only.** That is a change to a locked decision and needs an explicit founder ruling on one of: launch with LinkedIn Founder-only and say so in customer-facing copy; hold launch for the entity and the Community Management API approval; or amend the locked platform list. **`docs/pre-launch-scope.md` and `docs/product-status.md` must not claim business-page posting until it exists.** *(Superseded context: A-5-prime: the access request is not an engineering task, cannot be started yet, and can fail.)* It is blocked on SOSH having a registered legal entity (§14.1), and once submitted it can still be refused. If Community Management API access is refused or delayed, **LinkedIn ships member-only** and the business-page half of "LinkedIn (Business and Founder)" does not exist at launch. That is a product decision, not a Builder decision — and because it is external and unbounded in time, **it should be treated as the most likely long pole in the whole pre-launch plan.**
 2. **`Linkedin-Version` requires periodic review.** Versions sunset; `202508` already has. No mechanism currently reminds anyone.
 3. **Organic carousel posts are not supported by LinkedIn** — carousels are sponsored-only. CLAUDE.md treats template-rendered carousels as in-scope pre-launch and ADR 0022 shipped a carousel format family. **Outside this session's scope**, flagged because it was found during verification and would otherwise surface as a publish failure.
 4. **Existing connections cannot be migrated** (D-γ). Every connected account must be re-authorised. Whoever owns launch communications needs to know.
 5. **A failed platform revocation leaves a live token at the platform** whose local record is gone (§4.4). Accepted and recorded.
 6. **X's per-post cost versus "unlimited posts" on the Pro plan is an open pricing question** (§14.3), and a founder adjudication. $0.200 per linked post against a €125 plan with no stated ceiling is an unbounded liability; at 10 linked posts/day it consumes roughly half the plan price on one platform alone.
+8. **Re-authorisation is unavoidable when organization access eventually lands** (A-8). Every LinkedIn user connected under member-only scopes must re-authorise to grant `w_organization_social`. This cannot be engineered away and should be planned as a customer-communication task, not discovered as a support surprise.
 7. **§14 may be empty at merge, and that is a stated risk rather than an oversight** (§14.1). A launch-checklist row must require **at least the founder-profile row of §14 filled before launch**; shipping publishing that has never once succeeded against the real API is not a defensible launch state, regardless of how green CI is.
