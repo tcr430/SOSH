@@ -455,6 +455,7 @@ Native providers are tested against **recorded fixtures**; no Tier-2 test touche
 5. **X's refresh-token rotation semantics** — whether the previous refresh token is invalidated, and the penalty for presenting a consumed one. Undocumented; determines whether A-4's acceptance holds.
 6. X's tweet-creation path, response id field, permalink shape and character limit.
 7. X's rate-limit headers and how `retryAfterSeconds` is derived from them.
+7a. **Which X billing model applies to a newly created account** — pay-per-usage credits, or a Basic/Pro subscription (§14.2). This changes both the cost model and the daily post ceiling.
 8. **The entire §6 metrics capability table**, per platform and per field — the largest unverified surface here.
 9. The pinned `Linkedin-Version` value at implementation time.
 
@@ -508,9 +509,46 @@ work for business pages. The scopes, the URN plumbing, the dual-identity schema 
 built and tested either way — only the *grant* is missing — so nothing has to be rebuilt when access
 arrives. That is the point of doing the scope correction now (§5.3) rather than later.
 
-⚠️ **X's own prerequisites are unverified** (§13) — a developer account, and whether write access requires
-a paid tier. If X turns out to have an entity-shaped prerequisite of its own, Stage 1 may cover LinkedIn
-only, and §14 would then have no live row at all until that is resolved.
+### 14.2 X's prerequisites — rechecked 2026-09-03
+
+**X is NOT blocked by the missing legal entity.** Its pricing documentation states **no business-entity,
+company-detail or review requirement**. It has moved to **pay-per-usage with prepaid credits** — credits
+are bought in the Developer Console and deducted per request — and the pricing page documents **no free
+tier**. For Stage 1 this makes X *easier* than LinkedIn: a developer account plus a few dollars of credit
+buys a live connect-and-publish immediately, with no application and no waiting.
+
+⚠️ **Residual uncertainty, deliberately not resolved by guessing.** Community announcements still describe
+**Basic (~$200/month, ~100 posts/day)** and **Pro (~$5,000/month)** alongside pay-per-use, and legacy Free
+users being migrated onto credits. The pricing page itself documents only pay-per-use. **Which model
+applies to a newly created account in September 2026 is unconfirmed** and is a minutes-long check in the
+Developer Console once one exists.
+
+### 14.3 A cost finding that is a PRICING decision, not an engineering one — FOUNDER ADJUDICATION REQUIRED
+
+Verified per-request write costs: **$0.015 to create a post, and $0.200 to create a post containing a
+URL** — a **13× multiplier for links**. For a B2B SaaS product whose core use case is driving traffic to a
+product page, a blog or a launch announcement, linked posts are the norm rather than the exception.
+
+Against CLAUDE.md's locked pricing (€79 Plus, €125 Pro with **"unlimited posts"**):
+
+| Volume of linked posts | X cost / month | Share of the €125 Pro plan |
+|---|---|---|
+| 2/day (60/mo) | $12 | ~10% |
+| 5/day (150/mo) | $30 | ~24% |
+| 10/day (300/mo) | **$60** | **~48%, on one platform, before AI costs** |
+
+**"Unlimited posts" against uncapped per-post billing is an unbounded liability on a fixed-price plan**,
+and the exposure is entirely X-shaped — LinkedIn's publishing API carries no per-post fee.
+
+**This ADR does not decide it.** Pricing is a locked strategic decision in CLAUDE.md and unit economics is
+a founder call. It is recorded here because it is cheaper to decide before launch than to discover after,
+and because it was found while verifying an endpoint — nothing else in the pre-launch plan would have
+surfaced it. The obvious levers are a fair-use ceiling scoped to X, pricing linked posts into the plan, or
+treating link-bearing posts differently at generation time; each has product consequences outside this
+session's scope.
+
+**Also bounding later sessions:** pay-per-usage is capped at **3 million post reads per monthly billing
+cycle**, which constrains Session 32's read path and the metrics worker's cadence (§6).
 
 ---
 
@@ -535,4 +573,5 @@ only, and §14 would then have no live row at all until that is resolved.
 3. **Organic carousel posts are not supported by LinkedIn** — carousels are sponsored-only. CLAUDE.md treats template-rendered carousels as in-scope pre-launch and ADR 0022 shipped a carousel format family. **Outside this session's scope**, flagged because it was found during verification and would otherwise surface as a publish failure.
 4. **Existing connections cannot be migrated** (D-γ). Every connected account must be re-authorised. Whoever owns launch communications needs to know.
 5. **A failed platform revocation leaves a live token at the platform** whose local record is gone (§4.4). Accepted and recorded.
-6. **§14 may be empty at merge, and that is a stated risk rather than an oversight** (§14.1). A launch-checklist row must require **at least the founder-profile row of §14 filled before launch**; shipping publishing that has never once succeeded against the real API is not a defensible launch state, regardless of how green CI is.
+6. **X's per-post cost versus "unlimited posts" on the Pro plan is an open pricing question** (§14.3), and a founder adjudication. $0.200 per linked post against a €125 plan with no stated ceiling is an unbounded liability; at 10 linked posts/day it consumes roughly half the plan price on one platform alone.
+7. **§14 may be empty at merge, and that is a stated risk rather than an oversight** (§14.1). A launch-checklist row must require **at least the founder-profile row of §14 filled before launch**; shipping publishing that has never once succeeded against the real API is not a defensible launch state, regardless of how green CI is.
