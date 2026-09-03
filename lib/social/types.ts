@@ -118,7 +118,7 @@ export interface EngagementItem {
 export interface SocialProvider {
   readonly platform: import('@/lib/db/types').Platform | 'multi'
 
-  getOAuthAuthorizeUrl(input: OAuthAuthorizeInput): string
+  getOAuthAuthorizeUrl(input: OAuthAuthorizeInput): Promise<string>
 
   exchangeOAuthCode(input: ExchangeCodeInput): Promise<TokenSet>
 

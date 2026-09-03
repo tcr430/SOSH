@@ -62,7 +62,7 @@ describe('getRegistry', () => {
 
     const customProvider: SocialProvider = {
       platform: 'linkedin' as const,
-      getOAuthAuthorizeUrl: () => 'custom-url',
+      getOAuthAuthorizeUrl: async () => 'custom-url',
       exchangeOAuthCode: async () => ({
         accessToken: 'tok',
         refreshToken: null,

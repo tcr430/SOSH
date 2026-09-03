@@ -61,8 +61,8 @@ describe('PostizProvider', () => {
   })
 
   describe('getOAuthAuthorizeUrl', () => {
-    it('builds the correct Postiz authorize URL', () => {
-      const url = provider.getOAuthAuthorizeUrl({
+    it('resolves to the correct Postiz authorize URL', async () => {
+      const url = await provider.getOAuthAuthorizeUrl({
         platform: 'linkedin',
         businessId: 'biz-1',
         redirectUri: 'https://app.test/callback',
@@ -75,9 +75,9 @@ describe('PostizProvider', () => {
       )
     })
 
-    it('strips trailing slash from baseUrl', () => {
+    it('strips trailing slash from baseUrl', async () => {
       const p = new PostizProvider({ baseUrl: `${BASE_URL}/`, apiKey: API_KEY })
-      const url = p.getOAuthAuthorizeUrl({
+      const url = await p.getOAuthAuthorizeUrl({
         platform: 'twitter',
         businessId: 'biz-1',
         redirectUri: 'https://app.test/cb',
