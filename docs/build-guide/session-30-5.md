@@ -363,23 +363,31 @@ contradict a §0 Locked decision; if it needs to, it **STOPS and flags for found
 
 ## §0.2 — Founder adjudications
 
-> **NOT YET WRITTEN — authored after the Architect (N1) has produced its eight §0.1 answers and flagged
-> whatever needs a ruling.** This section is the Builder's gate: **N2 does not start without it**, even if
-> its content turns out to be the single line *"no adjudications were required."*
->
-> It will take the house form — a table of `| # | Question | Decision | Where encoded |`, opening with its
-> author and date, `A-1 … A-n`, with **the Architect's original recommendation preserved wherever a ruling
-> went against it**, and closing by naming any constraints the adjudications added. A revised ruling gets a
-> prime (`A-4` → `A-4′`) and both are shown.
->
-> **Anticipated escalations, from §0 and §0.1** — listed so the founder is not surprised, not to pre-empt
-> the answer: (a) a **new `SocialProviderErrorCode`**, which L-7 makes a retry-behaviour change in a worker
-> this session cannot touch; (b) a **`social_accounts` migration** from Q4, and with it T1-E's identity
-> model arriving earlier than planned; (c) **native media upload** landing in Q2 rather than deferring,
-> which would widen the session materially; (d) the **X refresh-token rotation** question in Q3, if the
-> answer makes ADR 0002 §8's accepted concurrent-refresh race materially worse; and (e) **anything that
-> requires a platform review process** whose calendar time this session cannot control — that is a launch
-> gate, not an engineering step, and it belongs in `launch-checklist.md` the day it is known.
+> **AUTHORED 2026-09-03 by the founder, recorded by the Architect (N1) after producing the eight §0.1
+> answers.** The placeholder that stood here (its anticipated-escalation list a–e) is superseded; four of
+> the five it anticipated were in fact raised, and two further ones it did not anticipate were.
+> **This section is the Builder's gate: N2 does not start without it.** Where a ruling went against the
+> Architect's recommendation, the recommendation is preserved verbatim below, as the house form requires.
+
+| # | Question | Decision | Where encoded |
+|---|---|---|---|
+| **A-1** | Meta-family (Instagram / Facebook / Threads) OAuth **connect** dies with the broker. §0 D-3 settled *publishing*, never *connecting*, so the removal silently regresses a path that works today. | **Native for the platforms we already have — LinkedIn and X only.** Founder: *"we haven't put meta in yet, so ignore."* The three Meta platforms stay in the `Platform` enum with `publishingAvailable: false`; **no provider is registered for them**, `get('instagram')` throws `PROVIDER_NOT_CONFIGURED`, connect is gated, and they render `coming_soon`. | ADR 0028 Q1/Q7; `SOCIAL-META-NOT-REGISTERED` |
+| **A-2** | A **migration is required**, but not the one anticipated: `public.vault_update_secret` **does not exist in any migration**, yet `postiz-provider.ts:255,262` calls `client.rpc('vault.update_secret')` — an undefined, dotted, non-exposed name — and never checks `error`, so it **fails silently** and then bumps `token_expires_at` and returns a success `TokenSet`. Token refresh has therefore never worked. | **Accepted.** A new migration adds `public.vault_update_secret` with service-role-only `EXECUTE`, plus a Tier-1 live-Postgres test, plus error-checking at every call site. Hard prerequisite: X rotates its refresh token, so without this native X publishing cannot survive its first rotation. | ADR 0028 Q3; Tier 1; `bug-912` |
+| **A-3** | Native media upload in Q2 — land it now, or defer with a guard? | **Deferred: a dedicated media-integration session owns it.** A post with non-empty `mediaUrls` fails `PLATFORM_REJECTED` rather than publishing text-only, because shipping a different post than the user approved is the worst outcome for a human-in-the-loop product. | ADR 0028 Q2; backlog `30.5-MEDIA-UPLOAD` |
+| **A-4** | X's refresh-token **rotation** makes ADR 0002 §8's *accepted* concurrent-refresh race worse than the race §8 reasoned about — §8 accepted a wasted retry; rotation risks an **account disconnect**. | **Accepted for MVP, and filed.** Traffic is scheduled, low-volume, one business per account, so genuine concurrency is rare. Founder: *"add to backlog that this may be an issue later."* ADR 0002 §8's own remedy (a `pg_advisory_xact_lock` keyed on `socialAccountId`) is named with an un-defer trigger. **⚠️ X's docs do not state reuse behaviour** — the Builder must confirm it empirically. | ADR 0028 Q3; backlog `30.5-X-REFRESH-ROTATION` |
+| **A-5** | LinkedIn's shipped scopes are **member-only** (`w_member_social`), but CLAUDE.md sells "LinkedIn (Business and Founder)". Organization posting needs `w_organization_social`, which sits behind LinkedIn's **Community Management API** access process. | **We need both.** Founder: *"since we'll have both personal founder account and business account per client we need both."* Scopes are corrected to request member **and** organization permissions, and **the Community Management API access request is a launch gate opened now**, not an engineering step. | ADR 0028 Q1/Q4; `launch-checklist.md` §16a |
+| **A-6** | A-5's consequence: supporting **both** identities per client requires more than a scope change. `posts` has **no `social_account_id`** (`20260430120010_posts.sql`, *"one row per (campaign, platform)"*), and `getActiveByBusinessAndPlatform` uses `.maybeSingle()` (`social-accounts.ts:137`) and **throws** on two active rows — breaking publishing, metrics and disconnect. §0 L-1 lists T1-E as explicitly **out of scope**. | **T1-E is pulled INTO Session 30.5**, overriding L-1. Founder: *"add to the session."* This materially widens the session: an additive `posts.social_account_id` migration, replacement of the single-account resolver across its **three** production callers, and an identity picker. **Architect's recommendation, preserved because the ruling went against it:** *split it — 30.5 does the irreversible half (scopes + URN plumbing, one active account per platform), a dedicated T1-E session does `posts.social_account_id` + the picker before launch.* The Architect's reasoning was that scopes are baked into the token at authorisation, so only the scope correction is genuinely urgent; the founder's reasoning is that a half-delivered identity model is not shippable to a client who has both accounts. | ADR 0028 Q4; Tier 1 + Tier 2; `SOCIAL-DUAL-IDENTITY-*` |
+| **A-7** | ADR 0005 §5's error matrix claims *"The eight codes are the ADR 0002 §3 taxonomy"* but names two codes that **do not exist** (`BAD_REQUEST`, `NOT_CONFIGURED`) and omits two that do (`NOT_IMPLEMENTED`, `PROVIDER_NOT_CONFIGURED`). The **code is correct** (`publishing/orchestrator.ts:208-305`); only the ADR prose is wrong. L-1 puts ADR 0005 out of scope. | **Fixed by the Builder in this session, not deferred to an amendment nobody actions.** Founder: *"add that fix to builder, if we just make an amendment to an old adr it won't get fixed."* **Architect's recommendation, preserved because the ruling went against it:** *a follow-on ADR 0005 amendment, since L-1 puts ADR 0005 out of scope.* The founder's reasoning — that a deferred documentation fix is a fix that never happens — is recorded as the override. It lands as a numbered Builder step with its own constraint id, appended in ADR 0005's house amendment form (it already carries an "Amendment 1"); **no code changes**. | ADR 0028 Q6; `SOCIAL-ERR-MATRIX-TRUE` |
+
+**Constraints these adjudications add**, beyond ADR 0028's own set: `SOCIAL-META-NOT-REGISTERED` (Tier 2),
+`SOCIAL-VAULT-UPDATE-SECRET` (Tier 1), `SOCIAL-MEDIA-GUARD` (Tier 2), `SOCIAL-DUAL-IDENTITY-SCHEMA`
+(Tier 1), `SOCIAL-DUAL-IDENTITY-RESOLVER` (Tier 2, **`SHARED-FUNCTION CALLERS` applies — three production
+callers**: `disconnect/route.ts:41`, `metrics/orchestrator.ts:64`, `publishing/orchestrator.ts:104`, none
+of which currently tests the multi-row case), and `SOCIAL-ERR-MATRIX-TRUE` (Tier 3).
+
+**Two §0 Locked decisions are overridden by the founder and must be read as amended:** **L-1**'s
+out-of-scope list no longer excludes T1-E (A-6) or ADR 0005 (A-7, documentation only — L-1's bar on
+changing ADR 0005's *status machine, retry policy and idempotency model* **still stands in full**).
 
 ---
 
