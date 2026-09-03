@@ -470,6 +470,48 @@ The Builder records one live connect-and-publish per platform per identity type.
 |---|---|---|---|---|
 | — | — | — | — | — |
 
+### 14.1 Credentials arrive late, and verification is therefore STAGED (A-5-prime)
+
+SOSH has no registered legal entity yet, so the Community Management API application — which requires a
+legal name, a registered address and a privacy policy — cannot be submitted. **The Builder proceeds
+without credentials.** Nothing in §9.2's Tier-1 or Tier-2 plan needs them: all six credentials are
+`z.string().default('')`, §8.2's absence behaviour is **per-platform** rather than app-wide, and every
+Tier-2 test runs offline under `SOCIAL_PROVIDER_MODE=mock`. Native providers can be written, tested and
+merged with no platform account in existence.
+
+**But the LinkedIn gate splits in two, and only one half is blocked.** Verified 2026-09-03:
+
+| Capability | Prerequisite | Blocked by the missing entity? |
+|---|---|---|
+| App creation + `w_member_social` (founder profile) | an associated **LinkedIn Page**, creatable without a registered entity; **"Share on LinkedIn" / "Sign In with LinkedIn" are auto-enabled on app creation, with no review** | **No** |
+| `w_organization_social` (business page) | Community Management API: company-page **verification**, legal name, registered address, privacy policy, a screencast per use case | **Yes** |
+
+**The three stages, in order:**
+
+1. **Stage 0 — now, no credentials.** Everything in §9.2. This is the whole Builder session.
+2. **Stage 1 — as soon as a LinkedIn Page and app exist (no entity required).** The founder-profile row of
+   §14 is filled: a real connect, a real publish, a real revoke. **This is the stage that de-risks the
+   session**, and it costs about an hour.
+3. **Stage 2 — once the entity is registered.** The Community Management API application, then the
+   organization row of §14.
+
+**Why Stage 1 should not wait for Stage 2.** §9.3 states that no CI job runs any real-network test, which
+makes this table the *sole* compensating control. Merging with it entirely empty means the native providers
+have never touched the real API. That is worse here than it would normally be, because **OAuth scopes are
+baked into a token at authorisation**: a scope discovered to be wrong *after* users have connected forces
+every one of them to re-authorise. Stage 1 converts "nothing verified" into "one half verified" for an
+hour's work, and it is the cheapest insurance available against the one class of error that is expensive
+to correct later.
+
+**What ships if Stage 2 never completes before launch:** LinkedIn works for founder profiles and does not
+work for business pages. The scopes, the URN plumbing, the dual-identity schema and the resolver are all
+built and tested either way — only the *grant* is missing — so nothing has to be rebuilt when access
+arrives. That is the point of doing the scope correction now (§5.3) rather than later.
+
+⚠️ **X's own prerequisites are unverified** (§13) — a developer account, and whether write access requires
+a paid tier. If X turns out to have an entity-shaped prerequisite of its own, Stage 1 may cover LinkedIn
+only, and §14 would then have no live row at all until that is resolved.
+
 ---
 
 ## 15. Explicitly deferred (each a decision, per ADR 0015 §2 Tier-3 discipline)
@@ -488,8 +530,9 @@ The Builder records one live connect-and-publish per platform per identity type.
 
 ## 16. Stated-open items
 
-1. **A-5's access request is not an engineering task and can fail.** If Community Management API access is refused or delayed, LinkedIn ships member-only and the business-page half of "LinkedIn (Business and Founder)" does not exist at launch. That is a product decision, not a Builder decision.
+1. **A-5-prime: the access request is not an engineering task, cannot be started yet, and can fail.** It is blocked on SOSH having a registered legal entity (§14.1), and once submitted it can still be refused. If Community Management API access is refused or delayed, **LinkedIn ships member-only** and the business-page half of "LinkedIn (Business and Founder)" does not exist at launch. That is a product decision, not a Builder decision — and because it is external and unbounded in time, **it should be treated as the most likely long pole in the whole pre-launch plan.**
 2. **`Linkedin-Version` requires periodic review.** Versions sunset; `202508` already has. No mechanism currently reminds anyone.
 3. **Organic carousel posts are not supported by LinkedIn** — carousels are sponsored-only. CLAUDE.md treats template-rendered carousels as in-scope pre-launch and ADR 0022 shipped a carousel format family. **Outside this session's scope**, flagged because it was found during verification and would otherwise surface as a publish failure.
 4. **Existing connections cannot be migrated** (D-γ). Every connected account must be re-authorised. Whoever owns launch communications needs to know.
 5. **A failed platform revocation leaves a live token at the platform** whose local record is gone (§4.4). Accepted and recorded.
+6. **§14 may be empty at merge, and that is a stated risk rather than an oversight** (§14.1). A launch-checklist row must require **at least the founder-profile row of §14 filled before launch**; shipping publishing that has never once succeeded against the real API is not a defensible launch state, regardless of how green CI is.
