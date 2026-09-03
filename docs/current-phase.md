@@ -1,9 +1,14 @@
-﻿# Current Phase
+# Current Phase
 
 **Phase:** 1 — MVP
 **Goal:** First paying customer
-**Status:** **Session 30 (Track G, market-responsive signal source, ADR 0023, G1b.1–G1b.14) BUILDER
-COMPLETE, PR #9 open, not yet merged.** A second Mode-3 signal source (customer-supplied RSS/Atom feeds)
+**Status:** **Session 30 (Track G, market-responsive signal source, ADR 0023, G1b.1–G1b.14) CLOSED and
+MERGED (2026-09-03).** All four sessions ran: Architect (ADR 0023) → Builder (G1b.1–G1b.14) → Reviewer
+(G1c, `docs/reviews/session-30-reviewer.md`, scope `afeafbf3..e036f6f5`, 23 findings) → Correction pass
+(Session 30-D, D0–D9, CLOSED: 19 fixed, 4 deferred with named conditions). **PR #9 merged to `master` as
+merge commit `2a67041a`** — a **merge commit, not a squash**, deliberately: the 30-D appendix self-cites
+individual SHAs (`943ad622`, `4820fa37`, `6f93499f`, `98a91a56`, `b297a4a8`), all verified reachable from
+`master` after the merge. This unblocks Session 30.5 (Track N, ADR 0028). A second Mode-3 signal source (customer-supplied RSS/Atom feeds)
 ships alongside GitHub releases, gated behind ADR 0021 §12's second-source override (ADR 0023 §2.9 + ADR
 0021 §16 Amendment A — corrected citation, Session 30-D D8 NIT-1; does not travel to a third source). Two
 real production bugs were found and fixed along the
@@ -172,8 +177,17 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
     `parse-article.ts`, `require()`-style imports in two RSS test files) plus one this session introduced
     (`live-triage-run.ts` importing `@anthropic-ai/sdk` directly, banned by ADR 0003 C-2 outside
     `/lib/ai/`) were found and fixed before `app-tests` went green.
-  - **Reviewer session (§3, G1c) NOT YET RUN** — PR #9 is open, unmerged; `PROC-REVIEW-AT-COMMIT` requires
-    the Reviewer to name the exact commit range it reads, which cannot happen before the range is final.
+  - **Reviewer session (§3, G1c) RAN — `docs/reviews/session-30-reviewer.md`** (corrected 2026-09-03; the
+    line previously here read *"NOT YET RUN"* and was never updated by D0–D9, though the correction pass
+    it describes answers that report's own numbered findings). **Scope reviewed: `afeafbf3..e036f6f5`**
+    (20 commits, `G1b.1` → `G1b.14`), named in the report's opening line per `PROC-REVIEW-AT-COMMIT`.
+    The Reviewer proceeded with PR #9 still open, reasoning that `e036f6f5` was the head proposed for
+    merge and *"a review that waits for merge reviews nothing that can still be changed"* — recording the
+    caveat that a later commit on the branch makes its range stale. D0–D9 are exactly those later commits,
+    which is the designed Reviewer → Correction-pass order, and the 30-D appendix re-cites each fix at its
+    own SHA. **Local `master` was stale at `17d36e1f` — inside the Track G series — so `git diff
+    master..HEAD` showed 21 of the 39 commits; the Reviewer refused it as a base and used `afeafbf3`
+    (tip of `origin/master`). That stale ref was corrected on 2026-09-03 at merge.**
   - **Session 30-D, D6 correction (ADR 0023 §20 Amendment 3):** the market-responsive ingestion cadence is
     **HOURLY**, not the "daily tick" §3.4 originally stated — `runSignalsTick`'s existing signals-poll cron
     is `0 * * * *`, and A-4's backlog-growth arithmetic (and D3's business-bounded enumeration fix) both
@@ -246,7 +260,15 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
     score is expected by construction, not earned. **corpusVersion=1, precision=1.000 (24/24), recall=1.000
     (24/24), dismissMatch=1.000 (16/16), executed=40/40.** `eval-reported` promotes to required the same
     way `db-tests` does — three consecutive green `master` runs — and is currently at **0 of 3** (no
-    `master` run yet).
+    `master` run yet). **DEFECT, found 2026-09-03 at the PR #9 merge and NOT yet fixed: this tally cannot
+    ever advance as written.** `.github/workflows/eval-triage.yml` declares `on: pull_request` +
+    `workflow_dispatch` and **has no `push` trigger at all**, so no `master` push event can produce an
+    `eval-reported` run — the merge of PR #9 to `master` fired `app-tests` and `db-tests` and, correctly
+    per that trigger list, no eval run. The promotion rule and the workflow's trigger set are therefore
+    contradictory, and "0 of 3" understates the problem: the counter is not merely at zero, it is
+    unreachable. **Fixing it is a CI-gate change and the founder's call** (add `push: branches:
+    [master]`, or restate the promotion rule for this workflow in ADR 0015 §5) — recorded here rather
+    than changed silently, and deliberately not bundled into the Session 30 close-out.
   - **Final, current CI citation (Session 28-D, D9, the corrected range `632a4b5e`..`87a4dfc8`):**
     `app-tests` [run 31846312604](https://github.com/tcr430/SOSH/actions/runs/31846312604)
     (`212 file(s), 2848/2848 tests`); `db-tests`
@@ -384,7 +406,7 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
     consecutive full-green `db-tests` runs on genuine **`master` push events** — `pull_request` runs never
     move this tally, however green, and every session's own PR-event CI runs are recorded in that
     session's build guide / reviewer appendix instead of here. **Threshold met 2026-07-27 (run 3); current
-    streak: 6, unbroken** (last `master` red was `e2812ec8`, 2026-07-14, before the current topology).
+    streak: 7, unbroken** (last `master` red was `e2812ec8`, 2026-07-14, before the current topology).
     Reconciled 2026-08-22 after four weeks of only logging PR-event runs here and never querying
     `--event push --branch master` directly — every row below is confirmed non-vacuous (the skip-guard
     step itself reported `success`, not merely the overall check).
@@ -397,6 +419,7 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
     | 4 | 2026-07-29 | `51264772` | [30436667567](https://github.com/tcr430/SOSH/actions/runs/30436667567) | `22 file(s) … green` |
     | 5 | 2026-08-21 | `e69e5c41` | [32493839443](https://github.com/tcr430/SOSH/actions/runs/32493839443) | `30 file(s) / 282 tests` — Sessions 26–28 (PR #5) merged |
     | 6 | 2026-08-25 | `2e6d3915` | [32893410504](https://github.com/tcr430/SOSH/actions/runs/32893410504) | `35 file(s) / 316 tests` — Session 29 Track F, ADR 0022 (PR #6) merged; `app-tests` also green ([32893410518](https://github.com/tcr430/SOSH/actions/runs/32893410518), 226 file(s) / 3129 tests) |
+    | 7 | 2026-09-03 | `2a67041a` | [33747169517](https://github.com/tcr430/SOSH/actions/runs/33747169517) | `38 file(s) under [supabase/__tests__] all visible, zero failures — green. (344/344 tests passed)` — Session 30 Track G, ADR 0023 (PR #9) merged; `app-tests` also green ([33747169515](https://github.com/tcr430/SOSH/actions/runs/33747169515), `232 file(s) … (3326/3326 tests passed)`) |
 
     **Promoting `db-tests` from advisory to Required is a branch-protection change and the founder's
     call, not a documentation update** — recorded as met-and-pending, not auto-applied. Two defects worth
@@ -1468,8 +1491,13 @@ resolved by W2 A1. What remains, in priority order:
    Anthropic DPF verification; cookie inventory in staging; Svix client-verify confirm.
 3. **Perf/CWV gates (launch-checklist §11):** first-load JS ≤ 90 KB gz + LCP/CLS/INP lab check, blocked on
    the pre-existing `npm run build` ECC Remotion TS-check failure.
-4. **`db-tests` promotion watch (ADR 0015 §5):** track the three-green tally (currently 0/3, see the
-   Session 22 entry above) toward promoting `db-tests` from advisory to a required merge gate.
+4. **`db-tests` promotion — THRESHOLD MET, awaiting the founder's branch-protection change.** (Corrected
+   2026-09-03: this item read *"currently 0/3"*, which has been stale since the 2026-08-22 reconciliation
+   recorded the threshold as met on 2026-07-27.) The tally stands at **7 consecutive green `master` runs**,
+   the latest being the PR #9 merge at `2a67041a`. What remains is not tracking but a decision: updating
+   ruleset `master-app-tests` (id `19038239`) to add `db-tests`, which ADR 0015 §5 makes the founder's
+   call, not a documentation update. **Separately, `eval-reported`'s own 0/3 tally is unreachable until
+   `eval-triage.yml` gains a `push` trigger — see the defect recorded in the Session 28 entry above.**
 5. Lower priority: `21C-pagination` (real cursor pagination past the 200-row Approvals cap — see the
    un-defer trigger filed in `backlog.md`; `21C-dead-params` is resolved by the same A2 server-side
    filtering work), `21B-n4` (request-level memo of `getBusinessForUser`), and the open 19D-5 voice-model

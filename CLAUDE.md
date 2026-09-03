@@ -9,19 +9,38 @@ This project uses OpenWolf for context management. Read and follow .wolf/OPENWOL
 This project uses Claude-Mem for optimization, leverage this to improve quality and token usage.
 
 
-# SOSH — Project Constitution for Claude Code
+# Jemip — Project Constitution for Claude Code
 
 > This file is read by Claude Code at the start of every session. It contains the permanent context, decisions, and conventions for this project. Do not delete or rename this file. Update it deliberately — any change here affects every future session.
+
+**Naming:** the product is **Jemip**. It was previously called SOSH, and the codebase, ADRs, build guides and migrations still use SOSH throughout — that is the legacy internal name. **Do not rename code, tables, ADRs or file paths opportunistically**; a rename is its own tracked piece of work. New user-facing copy says Jemip.
+
+**Companion documents — read the one that matches the question:**
+
+| Question | Document |
+|---|---|
+| Why are we building this? (non-technical) | `docs/product-vision.md` |
+| What is the product **today**, from a customer's view? | `docs/product-status.md` |
+| What must exist **before launch**? | `docs/pre-launch-scope.md` |
+| What is possible but uncommitted? | `docs/ideas.md` |
+| What is the current **development** state? | `docs/current-phase.md` |
+| Is it operationally safe to turn on? | `docs/launch-checklist.md` |
+| What deferred debt do we owe? | `docs/backlog.md` |
 
 ---
 
 ## What this project is
 
-SOSH is an AI-powered social media management platform for B2B SaaS founders and marketers. Users define content campaigns with specific objectives, the AI generates platform-specific posts in their brand voice, the user reviews and approves them, then they publish automatically across multiple social platforms. SOSH also provides analytics insights and (in later phases) an engagement agent for replying to comments and DMs.
+Jemip is an AI-powered social media management platform for B2B SaaS/startup founders and marketing teams at startups.
+The objective is create a market-leading alternative to social media management agencies or large internal social media teams so that smaller startups have the same reach and quality communication at a fraction of the price.
+
+Users define content campaigns with specific objectives, the AI generates platform-native posts in their brand voice and based on the memory, the user reviews and approves them, then they publish automatically across multiple social platforms. We also have AI-driven campaigns/posts that automatically propose briefs and campaigns based on internal and external sources.
+
+**Do not read the paragraph above as an inventory of what exists.** It describes the product we are building. What is actually built, and what is promised-but-absent, is in `docs/product-status.md` — check it before assuming a capability is present. As of 2026-09-03 the notable gaps are: **signal sources are GitHub releases and RSS/Atom only** (no Notion, Slack, Linear or transcripts); **there is no analytics surface**; **there is no engagement inbox** (`relationship_memory` is parked); and **publishing still runs through Postiz** behind our provider abstraction, with the native migration open.
 
 **This is not a fire-and-forget tool.** Every post is human-approved before publishing by default. Human-in-the-loop is a feature, not a fallback.
 
-**Long-term vision:** SOSH for B2B SaaS (premium, €99–€199/mo). A future sub-product called Repost by SOSH will serve local service businesses (€19–€29/mo) on shared infrastructure. Build SOSH first, do not pre-build for Repost, but design abstractions cleanly so the future spinoff is feasible.
+**Long-term vision:** Jemip for B2B SaaS (premium, €79–€125/mo). The long term is offering the same quality as a 10-20k a month social media management agency.
 
 ---
 
@@ -29,14 +48,13 @@ SOSH is an AI-powered social media management platform for B2B SaaS founders and
 
 These decisions have been made. Do not revisit them without explicit instruction from the user.
 
-- **ICP:** B2B SaaS founders and marketing teams at tech companies with 1–100 employees
-- **Launch platforms:** LinkedIn, X (Twitter), Instagram, Facebook Pages, Threads
+- **ICP:** B2B SaaS/startup founders and marketing teams at tech companies with 1–100 employees
+- **Launch platforms:** LinkedIn (Business and Founder), X (Business and Founder), Instagram, Facebook Pages, Threads
 - **Excluded platforms:** Reddit (cultural mismatch, brand-damage risk for our customers)
 - **Future platforms (Phase 2+):** Pinterest, TikTok, YouTube Shorts
 - **Languages:** English, Portuguese (PT-PT and PT-BR collapsed to `pt`), Spanish — global website, AI generates natively in all three
-- **Pricing:** €99/mo Plus (1 business, LinkedIn + X, 5 active campaigns, 50 posts/month, basic analytics) and €199/mo Pro (1 business, all platforms, unlimited campaigns, unlimited posts, advanced analytics, engagement inbox)
+- **Pricing:** €79/mo Plus (1 business, LinkedIn + X, 25 active campaigns, 250 posts/month, basic analytics, engagement inbox) and €125/mo Pro (1 business, all platforms, unlimited campaigns, unlimited posts, ai driven posts/campaigns advanced analytics, engagement inbox)
 - **Trial:** 14 days, card required upfront, work email required (block free providers), 1 campaign / 50 generated posts cap during trial, trial clock starts on first social account connection
-- **Agency tier:** Reserved as a `plan` enum value but not implemented at launch. Phase 4.
 
 ---
 
@@ -44,11 +62,11 @@ These decisions have been made. Do not revisit them without explicit instruction
 
 These are non-negotiable. Every implementation follows these.
 
-### The SocialProvider abstraction
+### Native provider implementation
 
-We integrate with social platforms through a single abstraction layer called `SocialProvider`. At launch, the only implementation is `PostizProvider` (using self-hosted Postiz). In the future, individual platforms will get native provider implementations.
+Individual platforms will get native provider implementations.
 
-**Rule:** No code outside `/lib/social/` ever imports `postiz-provider` or `mock-provider` directly. All consumers import from `/lib/social/index.ts`. Business logic talks to `SocialProvider`, never to Postiz.
+**Rule:** No code outside `/lib/social/` ever imports provider directly. All consumers import from `/lib/social/index.ts`.
 
 ### Token storage — Supabase Vault, never raw
 
@@ -61,6 +79,24 @@ On disconnect: set `is_active = false`, null the vault ID columns, delete the va
 All Anthropic SDK calls go through `/lib/ai/`. No direct Anthropic SDK calls anywhere else. Every Claude API call must include a `CustomerContext` object that aggregates the customer's business profile, brand voice, recent campaigns, and recent post performance.
 
 **Rule:** When you find yourself wanting to call `anthropic.messages.create` outside `/lib/ai/`, stop and add a function to `/lib/ai/` instead.
+
+### Governed Memory
+
+Memory is **several governed stores, not one vector blob** (ADR 0016). One undifferentiated store produces contradictions, stale facts and brand risk; typed stores with governance fields do not.
+
+**The stores:** `brand_memory` (approved, stable facts — positioning, claims, competitors), `evidence_memory` (quotes, data, case studies — each with its permission to use publicly), `audience_memory` (problems, objections, recurring questions, customer language), `performance_memory` (probabilistic learnings about what works). **Voice has no table of its own by design** — it reads through the existing `brand_voices` / `brand_voice_variations` stores (`MEM-VOICE-THROUGH-EXISTING`). `relationship_memory` is specified but **parked** until the engagement inbox ships.
+
+**Rule — all memory access goes through `/lib/memory/`.** No code reads a `*_memory` table directly; `/lib/memory/` calls `/lib/db/memory-*`, which calls Supabase. This is `MEM-NO-DIRECT-TABLE-ACCESS` and it is enforced, not conventional.
+
+**Rule — retrieval is scored and capped, never unbounded.** Every read ranks candidates by confidence × recency × scope match and truncates to a per-type cap (`lib/memory/constants.ts`). Recency decays exponentially with a 30-day half-life; a non-finite timestamp throws rather than silently scoring zero.
+
+**Rule — every record carries its governance fields**: source, confidence, `recency_at`, `expires_at`, `status`, and scope (brand / campaign / platform / contact). A record that cannot say where it came from and how confident it is does not belong in memory.
+
+**Rule — patterns are probabilistic claims, never rules.** A performance pattern is rendered with the number of observations behind it (*"based on 7 posts"*), never as an instruction. Promotion requires a minimum-n floor. This is what stops a six-post coincidence becoming a permanent constraint on every future post.
+
+**Rule — provenance survives.** Memory written by import or backfill stays permanently distinguishable from memory earned inside the product. Merging the two destroys attribution for every downstream claim.
+
+**Known state:** memory has many readers and — today — effectively one writer (the ADR 0018 edit-learning loop). `performance_memory` is fed by editing behaviour, not by published results. Both are being addressed; see `docs/brainstorm/ai-quality-track-ideas-and-build-path.md` Part II.
 
 ### The signal-source layer
 
@@ -184,12 +220,14 @@ proxy.ts                 → Next.js 16 middleware (renamed from middleware.ts)
 
 - We don't post to Reddit (excluded by strategic decision)
 - We don't auto-publish without user approval (human-in-the-loop is a feature)
+- We don't auto-reply publicly — every reply is human-approved, permanently, at any plan tier
 - We don't store payment card data (Stripe handles this)
 - We don't store raw OAuth tokens (Vault only)
-- We don't generate images at launch (text-only Phase 1, image generation is Phase 2)
-- We don't support personal social accounts (business accounts only)
 - We don't have a free forever tier (14-day trial only)
 - We don't expose service-role client outside trusted server contexts
+- We don't generate video **at launch** — video generation and editing are explicitly post-launch (founder ruling, 2026-09-02). **Image generation is pre-launch and in scope**; template-rendered carousels (structured text → deck) are a *separate* capability from generative imagery and should not be conflated with it
+- We don't do newsletters, blogs or SEO — social only, stated as a boundary rather than discovered by a customer
+- We don't build enterprise scaffolding — no approval chains, no complex permission trees, no white-labelling
 
 ---
 
@@ -221,9 +259,25 @@ This project uses Everything Claude Code (ECC). Commands are namespaced with `/e
 
 Other ECC agents, skills and commands may be used.
 
-**Session structure for foundational work:** Architect → Builder → Reviewer in three separate Claude Code sessions, with `/exit` between each. The Reviewer typically surfaces issues that need a correction pass (Session N-D, N-E) before the next foundational session starts. Correction passes are normal, not failures.
+**Session structure for foundational work:** Architect → Builder → Reviewer → Correction Pass in four separate Claude Code sessions, with `/exit` between each. The Builder and Reviewer are only created once an ADR is approved (if there's an ADR is the Session). The Reviewer surfaces issues that need a correction pass (Session N-D, N-E) before the next foundational session starts. Correction passes are normal, not failures.
 
 ---
+
+## UI/UX tooling (`/impeccable` and `/taste-skill`)
+
+Design work uses two skills, the way engineering work uses `/ecc:`.
+
+| Skill | Used for |
+|---|---|
+| `/impeccable` | UX review and interface design — visual hierarchy, information architecture, cognitive load, accessibility, responsive behaviour, theming, motion, error and empty states, UX copy, design tokens. The default for improving or auditing an existing surface. |
+| `/taste-skill` | Design direction — making a surface distinctive rather than templated. The default when a surface reads as generic, or when a new surface needs a point of view before it is built. |
+
+**When they run — this is a phase rule, not a preference:**
+
+- **Builder phase only.** The Builder invokes them **against the ADR's UX contract**, which the Architect wrote.
+- **Never in an Architect session.** The Architect **specifies** UX — states, information hierarchy, accessibility floor, the Server/Client split — and does not design it. An Architect that invokes a design skill has stepped outside its role boundary, and its output is discarded like any other Architect-attempted implementation.
+- **One documented exception:** a single read-only `/impeccable` audit to ground a UX contract in already-shipped surfaces (the Session 29 precedent). Read-only, once, no design output.
+- Whatever they produce still obeys everything below: shadcn v4 / Base UI constraints, Tailwind only, i18n in all three locales, and the Server Component default.
 
 ## UI Component patterns (shadcn v4 / Base UI)
 
@@ -369,9 +423,16 @@ Drift between code reality and legal prose is a counsel-grade failure mode. The 
 
 ## Current phase
 
-**Phase 1 — MVP** (in progress)
+**Pre-launch** (in progress).
 
-See `/docs/current-phase.md` for the working state.
+**The phase model changed on 2026-09-02: "Phase 2" no longer means post-launch.** Several capabilities previously scoped as Phase 2 — the engagement inbox, analytics and reporting, visual formats, image generation — are now **pre-launch**. Do not use "Phase 2" as a synonym for "after launch"; the post-launch boundary is defined explicitly in `docs/pre-launch-scope.md` §6.
+
+- **What must ship before launch:** `docs/pre-launch-scope.md` (product scope) — note that several items there are **proposals awaiting a founder ruling**, marked as such.
+- **Whether it is safe to turn on:** `docs/launch-checklist.md` (operational readiness).
+- **Where development actually stands:** `docs/current-phase.md` (sessions, ADRs, CI runs, correction passes).
+- **What the product is today:** `docs/product-status.md`.
+
+**Launch = every row in `launch-checklist.md` is green AND every Tier-1 item in `pre-launch-scope.md` is shipped.**
 
 ---
 
@@ -381,7 +442,7 @@ See `/docs/current-phase.md` for the working state.
 - **Database:** Supabase (Postgres + Auth + Storage + Vault)
 - **Hosting:** Vercel (with Vercel Cron for scheduled jobs)
 - **AI:** Anthropic Claude (Sonnet 4.6 default, Opus 4.7 for architecture/inference, Haiku 4.5 for classification)
-- **Social publishing:** Self-hosted Postiz (behind SocialProvider abstraction)
+- **Social publishing:** Native platform
 - **Payments:** Stripe (subscriptions)
 - **Email:** Resend (transactional)
 - **Styling:** Tailwind CSS + shadcn/ui

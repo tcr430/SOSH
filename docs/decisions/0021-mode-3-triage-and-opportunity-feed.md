@@ -1718,3 +1718,62 @@ deliverable specifically so the run-history clause can eventually be *met* rathe
 ---
 
 _End Amendment A._
+
+---
+
+## §17 — Amendment B (Founder ruling, 2026-09-03) — APPENDED, NOT REWRITTEN
+
+> **Author:** founder ruling, recorded by the 2026-09-03 documentation session and reasoned in
+> `docs/pre-launch-scope.md` §12.7. **Form:** the same house form as §16 Amendment A — **not one
+> character of §12 has been edited in place**, and Amendment A above is likewise untouched.
+>
+> **Occasion:** `docs/ideas.md` §2.2 — memory-driven opportunity cards (`evergreen-strategic`), the
+> **third** signal source — was recorded as `BLOCKED` precisely because §16 Amendment A states that the
+> market-responsive override *"does NOT travel"* and that a third source *"re-tests §12 from scratch."*
+> The founder un-blocked the item. Amendment A was right that its override does not travel; this is a
+> **separate, narrower override**, granted on its own facts and recorded as one.
+
+### B-1 — §12's source gate is OVERRIDDEN for the memory-derived source, not satisfied
+
+**Neither clause of §12's gate is met.** There is no per-source true-`card` >= 40 for a source that does
+not yet exist, and no recorded run history for it. **The ruling ships it anyway once its preconditions
+land. That is an override, stated as one.**
+
+**Why an override is defensible on these facts specifically.** §12's gate protects against *scaling an
+unproven judgment component over untrusted external content* — the failure it names is a metric that
+cannot detect a regression in a harness reading material the customer does not control. **This source
+ingests nothing external.** Its inputs are rows the customer's own product usage produced: unused
+`evidence_memory`, unanswered `audience_memory` objections, `performance_memory` gaps, coverage and
+staleness arithmetic — already governed, already tenant-scoped, already carrying source, confidence and
+`recency_at`. There is no untrusted-content surface, no licensing question and no fresh Art. 6(1)(f)
+balancing test. **Most of the risk §12 was written about is absent by construction**, and the parts that
+remain are about *noise*, which B-2 gates directly.
+
+### B-2 — The four conditions that replace the gate (all binding)
+
+1. **Its own per-source eval slice.** Per-source metrics and floors, **never blended** with the GitHub or
+   market-responsive numbers — ADR 0023 §2.7's rule, inherited verbatim. A blended number would repeat
+   exactly the error §2.7 was written to prevent.
+2. **Its own shortlist allocation cap.** Minority-capped on arrival inside `TRIAGE_SHORTLIST_PER_TICK`,
+   in the ADR 0023 §2.5/§5.3 form, lifting only on a defined precision graduation.
+3. **A memory-population precondition.** It does not ship before Sessions 32 and 33 have landed. Over an
+   empty store it emits thin, obvious observations — **worse than an empty feed**, because it teaches the
+   customer to stop opening the one surface the product's thesis runs through.
+4. **A per-business weekly volume ceiling.** The failure mode of a source that can *always* produce
+   something is a feed nobody reads, at which point the human gate becomes a rubber stamp.
+
+### B-3 — What still does not travel
+
+**This override covers the memory-derived source only.** A **fourth** source re-tests §12 from scratch,
+against a corpus that by then must carry a genuine per-source true-`card` >= 40 **and** a real recorded
+run history. §12's text above is unchanged and remains the standing rule for every source after this one.
+**Citing B-1 as precedent for an externally-sourced signal is a Reviewer finding** — the whole argument
+in B-1 turns on this source reading only the customer's own governed rows, and an external source does
+not inherit it.
+
+**Clause 2 remains deferred, not waived**, on the same terms Amendment A set: per-run artefact retention
+exists so the run-history clause can eventually be *met* rather than re-waived a third time.
+
+---
+
+_End Amendment B. Nothing above §17 was modified._

@@ -1781,3 +1781,40 @@ discipline that "no test, by decision" must be an explicit choice, never an over
 ---
 
 _End Amendment 3. Nothing above §20 was modified._
+
+---
+
+## 21. Amendment 4 (Founder ruling, 2026-09-03) — §4.1's embeddings re-affirmation is SCOPED, and still stands
+
+> **Author:** founder ruling, recorded by the 2026-09-03 documentation session and reasoned in
+> `docs/pre-launch-scope.md` §12.6. **Form:** the house form used by §17, §18 and §20 — **not one
+> character of §4.1 has been edited in place.**
+>
+> **Occasion:** `docs/ideas.md` §2.5 (voice exemplars and similarity retrieval for *generation*) cited
+> §4.1's `RE-AFFIRMED deferred` ruling as its blocker. The founder ruled that citation a category error
+> and un-blocked the item. The companion note is ADR 0020 §17c Amendment E, which is the authoritative
+> statement; this note exists so a reader arriving at §4.1 is not misled.
+
+**§4.1 stands, in full, unweakened.** `SIGNAL-NO-EMBEDDINGS` is **not retired**. Its revival condition —
+*"a near-duplicate card rate above a stated threshold over a stated window,"* measured from
+`content_hash` collisions and human `already_covered` dismissals — is **unchanged** and remains the only
+route to embeddings inside Stage B. No pgvector migration, no embedding call site, and no per-candidate
+embedding cost is authorised by the 2026-09-03 ruling.
+
+**What the ruling clarified:** §4.1's argument is about *Stage B scoring and dedup* — determinism inside
+the one half of Mode 3 that is meant to be exactly testable, the property `SIGNAL-SCORING-DETERMINISTIC`
+and `SIGNAL-DEDUP-STABLE-ON-EDIT` exist to prove. **A similarity retrieval inside `lib/memory/` that
+conditions a generation prompt is a different mechanism, in a different module, with a different failure
+mode**, and §4.1 was never a ruling about it. That use is unblocked; Stage B is not.
+
+**The enforcement that keeps the two apart:** no embedding call anywhere in `lib/signals/`, proven by
+extending the existing source scan rather than asserted in prose (ADR 0020 §17c E-2 condition 1). If that
+scan extension is not written, the scoping is a promise rather than a constraint — and this project does
+not count promises as coverage (ADR 0015 §2).
+
+**§3.4's guid-churn residual is unaffected**, and remains the first thing the near-duplicate measurement
+will surface.
+
+---
+
+_End Amendment 4. Nothing above §21 was modified._

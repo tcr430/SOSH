@@ -1766,3 +1766,67 @@ production bug traced to a field the compiler would have caught with a direct ca
 ---
 
 _End Amendment D. Nothing above §17b was modified._
+
+---
+
+## §17c — Amendment E (Founder ruling, 2026-09-03) — APPENDED, NOT REWRITTEN
+
+> **Author:** founder ruling, recorded by the 2026-09-03 documentation session and reasoned in
+> `docs/pre-launch-scope.md` §12.6. **Form:** the house amendment form used by §17 and §17b — not one
+> character of §6.5, §12 or §14 above has been edited in place.
+>
+> **Occasion:** `docs/ideas.md` §2.5 (voice exemplars and similarity retrieval for *generation*) was
+> recorded as `BLOCKED` on this ADR's `SIGNAL-NO-EMBEDDINGS`. The founder ruled that block a **category
+> error** and un-blocked the item. This note records what the ruling did and — more importantly — what it
+> did **not** do.
+
+### E-1 — `SIGNAL-NO-EMBEDDINGS` is SCOPED, not retired
+
+**It is not retired.** ADR 0015 §2's requirement that retiring a Tier-3 constraint be a recorded decision
+is **not triggered**. The constraint remains listed at `0020:1335` and `0020:1426` exactly as written, and
+its revival condition — as re-sharpened by ADR 0023 §4.1 to *a measured near-duplicate card rate over a
+stated window* — **stands untouched**.
+
+**What the ruling adds is a scope statement that §6.5 always implied but never said in one line:**
+
+> **`SIGNAL-NO-EMBEDDINGS` governs Mode 3's deterministic half — signal scoring and dedup inside
+> `lib/signals/`. It does not govern retrieval inside `lib/memory/`.**
+
+§6.5's own argument is entirely about that half: *"a similarity threshold nobody can justify from one
+source's data, and a non-deterministic component inside the one half of Mode 3 that is supposed to be
+exactly testable"* (`0020:809-812`). Every clause is about scoring candidates. `scoreSignal` takes `now`
+as a parameter rather than calling it (`lib/signals/score.ts:56-61`) precisely so a fixture cannot score
+differently depending on when the test runs — an embedding call would put a network-dependent,
+model-versioned component inside that guarantee. **That reasoning does not reach a retrieval call in
+`lib/memory/` that conditions a generation prompt**: it touches no scorer, no dedup key and no fixture,
+and its failure mode is a weaker draft a human still reviews, not a non-reproducible pipeline.
+
+### E-2 — What is now permitted, and the conditions attached
+
+Permitted: **similarity retrieval inside `lib/memory/` for generation-time conditioning** — voice
+exemplars, "find my similar past posts", repetition detection, few-shot from the edit corpus.
+
+Binding conditions, from `pre-launch-scope.md` §12.6:
+
+1. **No embedding call anywhere in `lib/signals/`** — the source scan (`lib/signals/source-scans.test.ts`)
+   that already enforces the signals boundary should be extended to prove it, so this scoping is a **test
+   rather than a promise**. That extension is the mechanism by which E-1 stays true.
+2. **Retrieval stays scored and capped** (`lib/memory/constants.ts`): similarity becomes one term inside
+   the existing confidence × recency × scope ranking, never a replacement for it.
+3. **Exemplars are performance-weighted and provenance-marked** (Session 32 L-3/L-6).
+4. **Sequenced after Session 32**, which supplies the corpus. The ruling un-blocks; it does not schedule.
+
+### E-3 — What a future session may NOT read this as
+
+- **Not** permission to add pgvector, or any embedding call, to Stage B scoring or dedup. That needs
+  ADR 0023 §4.1's measured revival condition to be met, and this amendment does not weaken it.
+- **Not** a revival of §14's clustering deferral, whose condition is different (*"a second signal kind
+  belonging to one release"*) and independently unmet — the ADR 0023 §17/§17b amendments already warn
+  against exactly this conflation, and it applies here in full.
+- **Not** a precedent for scoping any other Tier-3 constraint by argument. This scoping was available
+  because §6.5's own text is about one named module; a constraint whose reasoning is not module-bound
+  cannot be narrowed this way.
+
+---
+
+_End Amendment E. Nothing above §17c was modified._
