@@ -23,19 +23,21 @@ vi.mock('@/lib/db/businesses', () => ({
 }))
 
 vi.mock('@/lib/db/social-accounts', () => ({
-  getActiveByBusinessAndPlatform: vi.fn(),
+  listActiveByBusinessAndPlatform: vi.fn(),
+  getActiveById: vi.fn(),
   deactivateSocialAccount: vi.fn(),
 }))
 
 import { DELETE } from './route'
 import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
-import { getActiveByBusinessAndPlatform, deactivateSocialAccount } from '@/lib/db/social-accounts'
+import { listActiveByBusinessAndPlatform, getActiveById, deactivateSocialAccount } from '@/lib/db/social-accounts'
 import type { VaultSecretId } from '@/lib/db/types'
 
 const mockCreateClient = vi.mocked(createClient)
 const mockGetBusinessByOwner = vi.mocked(getBusinessForUser)
-const mockGetActiveByBusinessAndPlatform = vi.mocked(getActiveByBusinessAndPlatform)
+const mockListActiveByBusinessAndPlatform = vi.mocked(listActiveByBusinessAndPlatform)
+const mockGetActiveById = vi.mocked(getActiveById)
 const mockDeactivateSocialAccount = vi.mocked(deactivateSocialAccount)
 
 const MOCK_USER = { id: 'user-123' }
@@ -56,10 +58,9 @@ const MOCK_ACCOUNT = {
   updated_at: '2026-04-30T00:00:00Z',
 }
 
-function makeRequest(platform = 'linkedin'): NextRequest {
-  return new NextRequest(`http://localhost:3000/api/social/${platform}/disconnect`, {
-    method: 'DELETE',
-  })
+function makeRequest(platform = 'linkedin', accountId?: string): NextRequest {
+  const url = `http://localhost:3000/api/social/${platform}/disconnect${accountId ? `?accountId=${accountId}` : ''}`
+  return new NextRequest(url, { method: 'DELETE' })
 }
 
 function makeParams(platform = 'linkedin') {
@@ -78,11 +79,14 @@ function makeAuthClient(user: typeof MOCK_USER | null = MOCK_USER, canConnect = 
   }
 }
 
+const SECOND_ACCOUNT = { ...MOCK_ACCOUNT, id: 'sa-999', platform_user_id: 'li-999' }
+
 beforeEach(() => {
   vi.resetAllMocks()
   mockCreateClient.mockResolvedValue(makeAuthClient() as never)
   mockGetBusinessByOwner.mockResolvedValue(MOCK_BUSINESS as never)
-  mockGetActiveByBusinessAndPlatform.mockResolvedValue(MOCK_ACCOUNT)
+  mockListActiveByBusinessAndPlatform.mockResolvedValue([MOCK_ACCOUNT])
+  mockGetActiveById.mockResolvedValue(MOCK_ACCOUNT)
   mockDeactivateSocialAccount.mockResolvedValue(undefined)
 })
 
@@ -112,11 +116,11 @@ describe('DELETE /api/social/[platform]/disconnect', () => {
     mockGetBusinessByOwner.mockResolvedValue(null)
     const response = await DELETE(makeRequest(), makeParams())
     expect(response.status).toBe(404)
-    expect(mockGetActiveByBusinessAndPlatform).not.toHaveBeenCalled()
+    expect(mockListActiveByBusinessAndPlatform).not.toHaveBeenCalled()
   })
 
   it('returns 404 when no active account for platform', async () => {
-    mockGetActiveByBusinessAndPlatform.mockResolvedValue(null)
+    mockListActiveByBusinessAndPlatform.mockResolvedValue([])
     const response = await DELETE(makeRequest(), makeParams())
     expect(response.status).toBe(404)
     expect(mockDeactivateSocialAccount).not.toHaveBeenCalled()
@@ -130,13 +134,53 @@ describe('DELETE /api/social/[platform]/disconnect', () => {
     expect(body).toEqual({ error: 'disconnect_failed' })
   })
 
-  it('passes correct platform and business id to getActiveByBusinessAndPlatform', async () => {
+  it('passes correct platform and business id to listActiveByBusinessAndPlatform', async () => {
     await DELETE(makeRequest('twitter'), makeParams('twitter'))
-    expect(mockGetActiveByBusinessAndPlatform).toHaveBeenCalledWith(
+    expect(mockListActiveByBusinessAndPlatform).toHaveBeenCalledWith(
       expect.anything(),
       MOCK_BUSINESS.id,
       'twitter',
     )
+  })
+})
+
+// ─── SOCIAL-DUAL-IDENTITY-RESOLVER (ADR 0028 §5.3, N2.5) ──────────────────────
+// AUTHORED-NOT-EXECUTED until this suite: the multi-row case, closed here.
+// "disconnects ONE NAMED identity": accountId names it explicitly; without
+// it, more than one active account is refused (409), never guessed at.
+
+describe('DELETE /api/social/[platform]/disconnect — dual-identity resolution (ADR 0028 §5.3)', () => {
+  it('AMBIGUITY CASE: two active accounts, no accountId param -> 409 account_ambiguous, nothing deactivated', async () => {
+    mockListActiveByBusinessAndPlatform.mockResolvedValue([MOCK_ACCOUNT, SECOND_ACCOUNT])
+    const response = await DELETE(makeRequest(), makeParams())
+    expect(response.status).toBe(409)
+    const body = await response.json()
+    expect(body).toEqual({ error: 'account_ambiguous' })
+    expect(mockDeactivateSocialAccount).not.toHaveBeenCalled()
+  })
+
+  it('a named accountId disconnects exactly that identity, even when two active accounts exist', async () => {
+    mockListActiveByBusinessAndPlatform.mockResolvedValue([MOCK_ACCOUNT, SECOND_ACCOUNT])
+    mockGetActiveById.mockResolvedValue(SECOND_ACCOUNT)
+    const response = await DELETE(makeRequest('linkedin', SECOND_ACCOUNT.id), makeParams())
+    expect(response.status).toBe(200)
+    expect(mockDeactivateSocialAccount).toHaveBeenCalledWith(SECOND_ACCOUNT.id)
+    // Named resolution never touches the list-returning path.
+    expect(mockListActiveByBusinessAndPlatform).not.toHaveBeenCalled()
+  })
+
+  it('a named accountId belonging to a different business is refused (404), not deactivated', async () => {
+    mockGetActiveById.mockResolvedValue({ ...MOCK_ACCOUNT, business_id: 'other-biz' })
+    const response = await DELETE(makeRequest('linkedin', MOCK_ACCOUNT.id), makeParams())
+    expect(response.status).toBe(404)
+    expect(mockDeactivateSocialAccount).not.toHaveBeenCalled()
+  })
+
+  it('a named accountId for the wrong platform is refused (404), not deactivated', async () => {
+    mockGetActiveById.mockResolvedValue({ ...MOCK_ACCOUNT, platform: 'twitter' })
+    const response = await DELETE(makeRequest('linkedin', MOCK_ACCOUNT.id), makeParams())
+    expect(response.status).toBe(404)
+    expect(mockDeactivateSocialAccount).not.toHaveBeenCalled()
   })
 })
 
@@ -145,7 +189,7 @@ describe('DELETE /api/social/[platform]/disconnect — app-layer capability gate
     mockCreateClient.mockResolvedValue(makeAuthClient(MOCK_USER, false) as never)
     const response = await DELETE(makeRequest(), makeParams())
     expect(response.status).toBe(403)
-    expect(mockGetActiveByBusinessAndPlatform).not.toHaveBeenCalled()
+    expect(mockListActiveByBusinessAndPlatform).not.toHaveBeenCalled()
     expect(mockDeactivateSocialAccount).not.toHaveBeenCalled()
   })
 

@@ -7,7 +7,9 @@ import {
   createSocialAccount,
   updateSocialAccount,
   deactivateSocialAccount,
-  getActiveByBusinessAndPlatform,
+  getActiveById,
+  listActiveByBusinessAndPlatform,
+  resolvePublishAccount,
   listByBusiness,
 } from './social-accounts'
 import type { SocialAccountRow, SocialAccountInsert, VaultSecretId } from './types'
@@ -159,23 +161,94 @@ describe('deactivateSocialAccount', () => {
   })
 })
 
-describe('getActiveByBusinessAndPlatform', () => {
-  it('returns active account when found', async () => {
+// ADR 0028 §5.3 (N2.5) — getActiveByBusinessAndPlatform's replacement: a
+// by-id resolver, a list-returning resolver, and the shared publish-account
+// resolver built on both.
+
+describe('getActiveById', () => {
+  it('returns the active account when found', async () => {
     const { client } = createMockClient(mockAccount)
-    const result = await getActiveByBusinessAndPlatform(client, 'biz-1', 'linkedin')
+    const result = await getActiveById(client, 'sa-1')
     expect(result).toEqual(mockAccount)
     expect(client.from).toHaveBeenCalledWith('social_accounts')
   })
 
-  it('returns null when no active account found', async () => {
+  it('returns null when not found or inactive', async () => {
     const { client } = createMockClient(null, null)
-    const result = await getActiveByBusinessAndPlatform(client, 'biz-1', 'linkedin')
+    const result = await getActiveById(client, 'sa-1')
     expect(result).toBeNull()
   })
 
   it('throws when supabase returns an error', async () => {
     const { client } = createMockClient(null, { message: 'DB error' })
-    await expect(getActiveByBusinessAndPlatform(client, 'biz-1', 'linkedin')).rejects.toThrow('DB error')
+    await expect(getActiveById(client, 'sa-1')).rejects.toThrow('DB error')
+  })
+})
+
+describe('listActiveByBusinessAndPlatform', () => {
+  const secondAccount: SocialAccountRow = { ...mockAccount, id: 'sa-2', platform_user_id: 'lnk-456' }
+
+  it('returns the multi-row case — the whole point of replacing .maybeSingle()', async () => {
+    const { client } = createMockClient([mockAccount, secondAccount])
+    const result = await listActiveByBusinessAndPlatform(client, 'biz-1', 'linkedin')
+    expect(result).toEqual([mockAccount, secondAccount])
+  })
+
+  it('applies an explicit bounded limit', async () => {
+    const { client, builder } = createMockClient([mockAccount])
+    await listActiveByBusinessAndPlatform(client, 'biz-1', 'linkedin', 5)
+    expect(builder.limit).toHaveBeenCalledWith(5)
+  })
+
+  it('applies an explicit ORDER BY, not implicit ordering', async () => {
+    const { client, builder } = createMockClient([mockAccount])
+    await listActiveByBusinessAndPlatform(client, 'biz-1', 'linkedin')
+    expect(builder.order).toHaveBeenCalledWith('connected_at', { ascending: false })
+  })
+
+  it('returns empty array when none found', async () => {
+    const { client } = createMockClient(null, null)
+    const result = await listActiveByBusinessAndPlatform(client, 'biz-1', 'linkedin')
+    expect(result).toEqual([])
+  })
+
+  it('throws when supabase returns an error', async () => {
+    const { client } = createMockClient(null, { message: 'DB error' })
+    await expect(listActiveByBusinessAndPlatform(client, 'biz-1', 'linkedin')).rejects.toThrow('DB error')
+  })
+})
+
+describe('resolvePublishAccount — SOCIAL-DUAL-IDENTITY-RESOLVER', () => {
+  const secondAccount: SocialAccountRow = { ...mockAccount, id: 'sa-2', platform_user_id: 'lnk-456' }
+
+  it('a pinned social_account_id WINS over the business default', async () => {
+    const { client } = createMockClient(mockAccount)
+    const result = await resolvePublishAccount(client, 'biz-1', 'linkedin', 'sa-1')
+    expect(result).toEqual({ outcome: 'resolved', account: mockAccount })
+  })
+
+  it('a pinned social_account_id that is gone/inactive resolves to none, never a silent substitution', async () => {
+    const { client } = createMockClient(null, null)
+    const result = await resolvePublishAccount(client, 'biz-1', 'linkedin', 'sa-missing')
+    expect(result).toEqual({ outcome: 'none' })
+  })
+
+  it('no pin, exactly one active account: the business default is used', async () => {
+    const { client } = createMockClient([mockAccount])
+    const result = await resolvePublishAccount(client, 'biz-1', 'linkedin', null)
+    expect(result).toEqual({ outcome: 'resolved', account: mockAccount })
+  })
+
+  it('no pin, zero active accounts: none', async () => {
+    const { client } = createMockClient([])
+    const result = await resolvePublishAccount(client, 'biz-1', 'linkedin', null)
+    expect(result).toEqual({ outcome: 'none' })
+  })
+
+  it('AMBIGUITY CASE: no pin, two active accounts: ambiguous — nothing is silently chosen', async () => {
+    const { client } = createMockClient([mockAccount, secondAccount])
+    const result = await resolvePublishAccount(client, 'biz-1', 'linkedin', null)
+    expect(result).toEqual({ outcome: 'ambiguous' })
   })
 })
 
