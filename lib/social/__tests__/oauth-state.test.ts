@@ -86,6 +86,22 @@ describe('signOAuthState / verifyOAuthState', () => {
     await expect(verifyOAuthState(expiredToken)).rejects.toThrow()
   })
 
+  // ADR 0028 §2.3 (N2.6) — SOCIAL-PKCE-NOT-IN-STATE. The state JWT is
+  // signed, not encrypted; its payload is base64-decodable by anyone who
+  // observes the redirect. Publishing the PKCE verifier here would defeat
+  // PKCE entirely, so this decodes a REAL signed state and asserts the
+  // absence directly, rather than trusting that no code path adds it.
+  it('SOCIAL-PKCE-NOT-IN-STATE: a real signed state JWT carries no verifier/code_verifier field of any kind', async () => {
+    const token = await signOAuthState({ businessId: 'biz-1', platform: 'twitter', locale: 'en' })
+    const payloadB64 = token.split('.')[1]!
+    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8')) as Record<string, unknown>
+
+    expect(Object.keys(payload).sort()).toEqual(['businessId', 'exp', 'iat', 'locale', 'nonce', 'platform'])
+    expect(payload['verifier']).toBeUndefined()
+    expect(payload['codeVerifier']).toBeUndefined()
+    expect(payload['code_verifier']).toBeUndefined()
+  })
+
   it('throws when OAUTH_STATE_SECRET is too short', async () => {
     const { config } = await import('@/lib/config')
     vi.mocked(config).server = {

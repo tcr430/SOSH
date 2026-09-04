@@ -19,6 +19,7 @@ export type {
 export { SocialProviderError } from './errors'
 export { signOAuthState, verifyOAuthState } from './oauth/state'
 export type { OAuthStateClaims } from './oauth/state'
+export { getSocialRedirectUri } from './oauth/redirect-uri'
 export { getRegistry } from './registry'
 export type { PlatformOAuthConfig } from './platforms/config'
 export {
