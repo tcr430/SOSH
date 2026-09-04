@@ -4,7 +4,15 @@ export interface PlatformOAuthConfig {
   displayName: string
   scopes: readonly string[]
   supportsRefreshToken: boolean
-  tokenExpiryDays: number | null
+  // ADR 0028 §4.2 (N2.8). Was tokenExpiryDays: number | null — a unit that
+  // CANNOT express X's real 2-hour access-token life. Nothing in lib/social/
+  // currently computes from this field (grepped repo-wide before renaming;
+  // withFreshToken/connection-status.ts both read social_accounts
+  // .token_expires_at directly, which is set from each token response's
+  // authoritative expires_in — postiz-provider.ts:365, both native
+  // providers). This field is informational only today, but an
+  // informational field asserting a falsehood is still a falsehood.
+  tokenExpirySeconds: number | null
   publishingAvailable: boolean
 }
 
@@ -13,14 +21,14 @@ export const PLATFORM_CONFIGS: Record<Platform, PlatformOAuthConfig> = {
     displayName: 'LinkedIn',
     scopes: ['openid', 'profile', 'email', 'w_member_social'],
     supportsRefreshToken: false,
-    tokenExpiryDays: 60,
+    tokenExpirySeconds: 60 * 86400, // 60 days, verified N2.1
     publishingAvailable: true,
   },
   twitter: {
     displayName: 'X (Twitter)',
     scopes: ['tweet.read', 'tweet.write', 'users.read', 'offline.access'],
     supportsRefreshToken: true,
-    tokenExpiryDays: null,
+    tokenExpirySeconds: 2 * 3600, // 2 hours, verified N2.1 — the reason this field was renamed
     publishingAvailable: true,
   },
   instagram: {
@@ -28,7 +36,7 @@ export const PLATFORM_CONFIGS: Record<Platform, PlatformOAuthConfig> = {
     // instagram_content_publish deferred — requires Meta App Review
     scopes: ['instagram_basic', 'pages_show_list'],
     supportsRefreshToken: false,
-    tokenExpiryDays: 60,
+    tokenExpirySeconds: 60 * 86400,
     publishingAvailable: false,
   },
   facebook: {
@@ -36,7 +44,7 @@ export const PLATFORM_CONFIGS: Record<Platform, PlatformOAuthConfig> = {
     // pages_manage_posts deferred — requires Meta App Review
     scopes: ['pages_show_list', 'pages_read_engagement'],
     supportsRefreshToken: false,
-    tokenExpiryDays: 60,
+    tokenExpirySeconds: 60 * 86400,
     publishingAvailable: false,
   },
   threads: {
@@ -44,7 +52,7 @@ export const PLATFORM_CONFIGS: Record<Platform, PlatformOAuthConfig> = {
     // threads_content_publish deferred
     scopes: ['threads_basic'],
     supportsRefreshToken: false,
-    tokenExpiryDays: 60,
+    tokenExpirySeconds: 60 * 86400,
     publishingAvailable: false,
   },
 }

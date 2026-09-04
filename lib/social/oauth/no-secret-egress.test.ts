@@ -37,7 +37,13 @@ const CONFIG_FILE = path.join(ROOT, 'lib', 'config.ts')
 // N2.7 (2026-09-04): LinkedInProvider is the first legitimate reader of
 // LINKEDIN_CLIENT_SECRET, exactly as this file's own header comment
 // anticipated — extended deliberately, in N2.7's own commit.
-const ALLOWED_SECRET_READERS = new Set([path.join(ROOT, 'lib', 'social', 'linkedin-provider.ts')])
+// N2.8 (2026-09-04): TwitterProvider is the first legitimate reader of
+// X_CLIENT_SECRET (Basic-auth token exchange/refresh/revoke) — extended
+// deliberately again, in N2.8's own commit.
+const ALLOWED_SECRET_READERS = new Set([
+  path.join(ROOT, 'lib', 'social', 'linkedin-provider.ts'),
+  path.join(ROOT, 'lib', 'social', 'twitter-provider.ts'),
+])
 
 describe('SOCIAL-NO-SECRET-EGRESS — no client-reachable module imports a client-secret getter (ADR 0028 §2.1)', () => {
   const SCAN_ROOTS = [LIB_DIR, APP_DIR, COMPONENTS_DIR]
