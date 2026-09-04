@@ -127,6 +127,7 @@ const mockPost: PostRow = {
   id: 'post-1',
   campaign_id: 'camp-1',
   business_id: 'biz-1',
+  social_account_id: null,
   platform: 'linkedin',
   content: 'Test content',
   hashtags: [],

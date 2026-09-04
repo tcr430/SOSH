@@ -89,6 +89,7 @@ const MOCK_POST: PostRow = {
   id: POST_ID,
   campaign_id: CAMPAIGN_ID,
   business_id: BIZ_ID,
+  social_account_id: null,
   platform: 'linkedin',
   content: 'Original content',
   hashtags: ['#sosh'],
