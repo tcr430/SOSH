@@ -233,11 +233,46 @@ describe('LinkedInProvider', () => {
       ).rejects.toMatchObject({ code: 'RATE_LIMITED', retryAfterSeconds: 42 })
     })
 
-    it('401/403 -> TOKEN_EXPIRED', async () => {
+    it('SOCIAL-RATE-LIMIT-RETRY-AFTER: a missing Retry-After header falls back to 60', async () => {
+      mockFetch.mockResolvedValueOnce(new Response(null, { status: 429 }))
+      await expect(
+        provider.publish({ socialAccountId: 'sa-1', content: 'hi', hashtags: [], mediaUrls: [] }),
+      ).rejects.toMatchObject({ code: 'RATE_LIMITED', retryAfterSeconds: 60 })
+    })
+
+    it('SOCIAL-RATE-LIMIT-RETRY-AFTER: retryAfterSeconds is undefined on every non-RATE_LIMITED code', async () => {
+      mockFetch.mockResolvedValueOnce(new Response(null, { status: 500 }))
+      let caught: unknown
+      try {
+        await provider.publish({ socialAccountId: 'sa-1', content: 'hi', hashtags: [], mediaUrls: [] })
+      } catch (e) {
+        caught = e
+      }
+      expect((caught as { retryAfterSeconds: number | null }).retryAfterSeconds).toBeNull()
+    })
+
+    // ADR 0028 §7.2 — 401 and 403 are DIFFERENT codes. N2.7 originally
+    // merged both into TOKEN_EXPIRED, a real bug this test previously
+    // never caught because it only exercised 401. Both asserted here.
+    it('401 -> TOKEN_EXPIRED', async () => {
       mockFetch.mockResolvedValueOnce(new Response(null, { status: 401 }))
       await expect(
         provider.publish({ socialAccountId: 'sa-1', content: 'hi', hashtags: [], mediaUrls: [] }),
       ).rejects.toMatchObject({ code: 'TOKEN_EXPIRED' })
+    })
+
+    it('403 -> TOKEN_REVOKED', async () => {
+      mockFetch.mockResolvedValueOnce(new Response(null, { status: 403 }))
+      await expect(
+        provider.publish({ socialAccountId: 'sa-1', content: 'hi', hashtags: [], mediaUrls: [] }),
+      ).rejects.toMatchObject({ code: 'TOKEN_REVOKED' })
+    })
+
+    it('409 -> NETWORK (deliberate — no "retryable conflict" code exists; LinkedIn documents 409 as retry-the-request)', async () => {
+      mockFetch.mockResolvedValueOnce(new Response(null, { status: 409 }))
+      await expect(
+        provider.publish({ socialAccountId: 'sa-1', content: 'hi', hashtags: [], mediaUrls: [] }),
+      ).rejects.toMatchObject({ code: 'NETWORK' })
     })
 
     it('a network error throws NETWORK', async () => {

@@ -18,6 +18,7 @@ import type {
 import { SocialProviderError } from './errors'
 import { withFreshToken } from './vault'
 import { LINKEDIN_VERSION } from './constants'
+import { mapHttpStatusToErrorCode, boundRetryAfterSeconds } from './error-mapping'
 
 // ADR 0028 §3.1/§5.1 (N2.7). Endpoints per N2.1's vendor-doc verification
 // (docs/reviews/session-30-5-platform-verification.md items 1, 9) except
@@ -262,22 +263,14 @@ export class LinkedInProvider implements SocialProvider {
         code: 'RATE_LIMITED',
         message: 'publish: rate limited by LinkedIn',
         platform: 'linkedin',
-        retryAfterSeconds: Number.isFinite(retryAfter) ? retryAfter : 60,
-      })
-    }
-
-    if (resp.status === 401 || resp.status === 403) {
-      throw new SocialProviderError({
-        code: 'TOKEN_EXPIRED',
-        message: `publish: LinkedIn returned ${resp.status}`,
-        platform: 'linkedin',
+        retryAfterSeconds: boundRetryAfterSeconds(retryAfter),
       })
     }
 
     if (resp.status !== 201) {
       const body = await resp.json().catch(() => ({}))
       throw new SocialProviderError({
-        code: resp.status >= 500 ? 'NETWORK' : 'PLATFORM_REJECTED',
+        code: mapHttpStatusToErrorCode(resp.status),
         message: `publish: LinkedIn returned ${resp.status}`,
         platform: 'linkedin',
         details: { platform_message: body },

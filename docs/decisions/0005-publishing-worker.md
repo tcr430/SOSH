@@ -184,6 +184,8 @@ The outer `UPDATE` writes `last_publish_attempt_at = p_now`; this column doubles
 
 ## 5. Error matrix
 
+> **Superseded by Amendment 2 (2026-09-04) — this matrix names two codes that do not exist (`BAD_REQUEST`, `NOT_CONFIGURED`) and omits two that do (`NOT_IMPLEMENTED`, `PROVIDER_NOT_CONFIGURED`). The table below is left as originally written; see Amendment 2 for the corrected matrix and evidence.**
+
 Every error path through `provider.publish(...)` corresponds to exactly one row below. The eight codes are the ADR 0002 §3 taxonomy.
 
 | `SocialProviderErrorCode` | Cause | In-tick action | Next-tick state | `publish_attempts` change | User-visible signal |
@@ -836,3 +838,39 @@ Builder produces (Architect names them here):
 - **`docs/build-guide/runbooks/qstash-setup.md`** — Upstash project + schedule provision, env var population, deploy ordering, smoke test, and the "manual re-trigger = QStash console Run now" note (no curl-with-Bearer in qstash mode).
 - **`docs/build-guide/runbooks/vercel-cron-restore.md`** — reserved `vercel.json` `crons` block + the Pro-tier flip procedure (§10).
 - **`docs/launch-checklist.md` §3 (Cron)** — gains a "Trigger source" sub-header with two parallel sections: **"QStash (active at launch)"** and **"Vercel Cron (reserved)"**. The `CRON_SECRET` row stays in the active section because preview/dev still need it.
+
+---
+
+## Amendment 2 — Error Matrix Correction (2026-09-04)
+
+**Status:** Accepted
+**Date:** 2026-09-04
+**Scope:** §5's error matrix PROSE only. No code changes — `publishing/orchestrator.ts:208-305` already handles the real eight-code union correctly; this amendment corrects the documentation to match the implementation, not the other way around.
+**Reversed by:** _(none)_
+
+### 1. What was wrong
+
+§5's matrix names `BAD_REQUEST` and `NOT_CONFIGURED` — neither exists on `SocialProviderErrorCode` (`lib/social/types.ts:7-15`) — and omits `NOT_IMPLEMENTED` and `PROVIDER_NOT_CONFIGURED`, both of which do. Both counts land on eight, which is how the error survived review (ADR 0028 §7.1 names this finding; Session 30.5's N2.1 platform-verification pass is what surfaced it, though it is a documentation-fact check, not a vendor-endpoint one).
+
+### 2. The real union, evidence-cited
+
+The eight codes are exactly `lib/social/types.ts:7-15`: `TOKEN_EXPIRED`, `TOKEN_REVOKED`, `RATE_LIMITED`, `PLATFORM_REJECTED`, `NETWORK`, `NOT_IMPLEMENTED`, `PROVIDER_NOT_CONFIGURED`, `UNKNOWN`. `publishing/orchestrator.ts:301-305`'s terminal `switch` case already lists `TOKEN_REVOKED`, `PLATFORM_REJECTED`, `NOT_IMPLEMENTED`, `PROVIDER_NOT_CONFIGURED`, `UNKNOWN` together, calling `markPostFailed` with `errorCode: err.code`. The implementation was always correct; §5's table just described a different, nonexistent union. `BAD_REQUEST` and `NOT_CONFIGURED` were grepped repo-wide (`lib/`, `app/`) and found nowhere outside this ADR's own prose — no test, migration, or UI copy ever referenced either string, so nothing besides this document needs correcting.
+
+### 3. Corrected matrix
+
+| `SocialProviderErrorCode` | Cause | In-tick action | Next-tick state | `publish_attempts` change | User-visible signal |
+|---|---|---|---|---|---|
+| `TOKEN_EXPIRED` | Provider claims access token expired or 401-ish equivalent slipped past proactive refresh skew | In-tick refresh+retry (§6) | published, failed, or scheduled | 0 | `last_publish_error = 'TOKEN_REVOKED'` on terminal (unchanged from §5) |
+| `TOKEN_REVOKED` | Refresh token rejected / account disconnected at platform | Mark failed | failed | 0 | `last_publish_error = 'TOKEN_REVOKED'`; UI: "Reconnect account" |
+| `PLATFORM_REJECTED` | Platform-side validation refused the post (length, banned content, duplicate, malformed URN, etc.) | Mark failed | failed | 0 | `last_publish_error = 'PLATFORM_REJECTED'`; UI: "Edit and re-approve" |
+| `RATE_LIMITED` | Platform rate limit; `retryAfterSeconds` provided by the provider | Requeue at `now() + retryAfterSeconds` | approved (future `scheduled_at`) | 0 | `last_publish_error = 'RATE_LIMITED'`; transient |
+| `NETWORK` | TCP/TLS error, DNS, timeout, transient platform 5xx, or a documented-retryable 409 conflict (ADR 0028 §7.2) | Backoff+jitter requeue, or terminal at max | approved or failed | +1 on requeue, 0 on terminal | `last_publish_error = 'NETWORK'`; transient until terminal |
+| `NOT_IMPLEMENTED` | Provider has not implemented the called method for this platform (e.g. `fetchPostMetrics` pre-native, media publish pre-N2.7/N2.8) | Mark failed | failed | 0 | `last_publish_error = 'NOT_IMPLEMENTED'`; surfaces a capability gap, not a transient failure |
+| `PROVIDER_NOT_CONFIGURED` | Worker received a row whose platform has no provider registered (ADR 0028 §8.2: the registry is overrides-only post-Postiz-removal — a missing secret darks exactly that platform, not the whole worker) | Mark failed | failed | 0 | `last_publish_error = 'PROVIDER_NOT_CONFIGURED'`; surfaces a config bug |
+| `UNKNOWN` | Anything the provider couldn't classify into the above | Mark failed | failed | 0 | `last_publish_error = 'UNKNOWN'`; investigate via `publish_error.details` |
+
+`BAD_REQUEST` and `NOT_CONFIGURED` are removed — they never existed on the union.
+
+### 4. Why here, not deferred
+
+Founder ruling (build-guide §0.2, A-7): *"if we just make an amendment to an old adr it won't get fixed."* The Architect's own recommendation was to defer this correction to a documentation-only follow-up session; the founder overruled it specifically to close the amendment while the reasoning is fresh, rather than let it join a backlog. Both positions are recorded here for the record, not just the outcome.

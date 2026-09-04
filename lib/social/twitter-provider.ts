@@ -18,6 +18,7 @@ import type {
 import { SocialProviderError } from './errors'
 import { withFreshToken, readRefreshToken } from './vault'
 import { generatePkceVerifier, generatePkceChallenge, setPkceVerifierCookie, readAndClearPkceVerifierCookie } from './oauth/pkce'
+import { mapHttpStatusToErrorCode, boundRetryAfterSeconds } from './error-mapping'
 
 // ADR 0028 §3.2/§4.2 (N2.8). Endpoints per N2.1's vendor-doc verification
 // (docs/reviews/session-30-5-platform-verification.md items 1/3/4/6/7)
@@ -268,22 +269,14 @@ export class TwitterProvider implements SocialProvider {
         code: 'RATE_LIMITED',
         message: 'publish: rate limited by X',
         platform: 'twitter',
-        retryAfterSeconds: Number.isFinite(retryAfter) ? retryAfter : 60,
-      })
-    }
-
-    if (resp.status === 401 || resp.status === 403) {
-      throw new SocialProviderError({
-        code: 'TOKEN_EXPIRED',
-        message: `publish: X returned ${resp.status}`,
-        platform: 'twitter',
+        retryAfterSeconds: boundRetryAfterSeconds(retryAfter),
       })
     }
 
     if (!resp.ok) {
       const body = await resp.json().catch(() => ({}))
       throw new SocialProviderError({
-        code: resp.status >= 500 ? 'NETWORK' : 'PLATFORM_REJECTED',
+        code: mapHttpStatusToErrorCode(resp.status),
         message: `publish: X returned ${resp.status}`,
         platform: 'twitter',
         details: { platform_message: body },

@@ -203,6 +203,47 @@ describe('TwitterProvider', () => {
         provider.publish({ socialAccountId: 'sa-1', content: 'hi', hashtags: [], mediaUrls: [] }),
       ).rejects.toMatchObject({ code: 'RATE_LIMITED' })
     })
+
+    it('SOCIAL-RATE-LIMIT-RETRY-AFTER: a missing x-rate-limit-reset header falls back to 60', async () => {
+      mockFetch.mockResolvedValueOnce(new Response(null, { status: 429 }))
+      await expect(
+        provider.publish({ socialAccountId: 'sa-1', content: 'hi', hashtags: [], mediaUrls: [] }),
+      ).rejects.toMatchObject({ code: 'RATE_LIMITED', retryAfterSeconds: 60 })
+    })
+
+    it('SOCIAL-RATE-LIMIT-RETRY-AFTER: retryAfterSeconds is undefined on every non-RATE_LIMITED code', async () => {
+      mockFetch.mockResolvedValueOnce(new Response(null, { status: 500 }))
+      let caught: unknown
+      try {
+        await provider.publish({ socialAccountId: 'sa-1', content: 'hi', hashtags: [], mediaUrls: [] })
+      } catch (e) {
+        caught = e
+      }
+      expect((caught as { retryAfterSeconds: number | null }).retryAfterSeconds).toBeNull()
+    })
+
+    // ADR 0028 §7.2 — X's mapping is "as above by analogy" with LinkedIn's:
+    // 401 and 403 are DIFFERENT codes.
+    it('401 -> TOKEN_EXPIRED', async () => {
+      mockFetch.mockResolvedValueOnce(new Response(null, { status: 401 }))
+      await expect(
+        provider.publish({ socialAccountId: 'sa-1', content: 'hi', hashtags: [], mediaUrls: [] }),
+      ).rejects.toMatchObject({ code: 'TOKEN_EXPIRED' })
+    })
+
+    it('403 -> TOKEN_REVOKED', async () => {
+      mockFetch.mockResolvedValueOnce(new Response(null, { status: 403 }))
+      await expect(
+        provider.publish({ socialAccountId: 'sa-1', content: 'hi', hashtags: [], mediaUrls: [] }),
+      ).rejects.toMatchObject({ code: 'TOKEN_REVOKED' })
+    })
+
+    it('409 -> NETWORK (deliberate, by analogy with LinkedIn — no "retryable conflict" code exists)', async () => {
+      mockFetch.mockResolvedValueOnce(new Response(null, { status: 409 }))
+      await expect(
+        provider.publish({ socialAccountId: 'sa-1', content: 'hi', hashtags: [], mediaUrls: [] }),
+      ).rejects.toMatchObject({ code: 'NETWORK' })
+    })
   })
 
   describe('fetchPostMetrics / fetchEngagement', () => {
