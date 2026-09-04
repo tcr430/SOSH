@@ -34,15 +34,21 @@ const APP_DIR = path.join(ROOT, 'app')
 const COMPONENTS_DIR = path.join(ROOT, 'components')
 const CONFIG_FILE = path.join(ROOT, 'lib', 'config.ts')
 
+// N2.7 (2026-09-04): LinkedInProvider is the first legitimate reader of
+// LINKEDIN_CLIENT_SECRET, exactly as this file's own header comment
+// anticipated — extended deliberately, in N2.7's own commit.
+const ALLOWED_SECRET_READERS = new Set([path.join(ROOT, 'lib', 'social', 'linkedin-provider.ts')])
+
 describe('SOCIAL-NO-SECRET-EGRESS — no client-reachable module imports a client-secret getter (ADR 0028 §2.1)', () => {
   const SCAN_ROOTS = [LIB_DIR, APP_DIR, COMPONENTS_DIR]
 
-  it('LINKEDIN_CLIENT_SECRET and X_CLIENT_SECRET are read nowhere but lib/config.ts today', () => {
+  it('LINKEDIN_CLIENT_SECRET and X_CLIENT_SECRET are read nowhere but lib/config.ts and the allowed provider(s) today', () => {
     for (const root of SCAN_ROOTS) {
       expect(collectTsFiles(root).length, `${root} contributed zero files to the scan`).toBeGreaterThan(0)
     }
 
-    const files = SCAN_ROOTS.flatMap((root) => collectTsFiles(root)).filter((f) => f !== CONFIG_FILE)
+    const files = SCAN_ROOTS.flatMap((root) => collectTsFiles(root))
+      .filter((f) => f !== CONFIG_FILE && !ALLOWED_SECRET_READERS.has(f))
     expect(files.length).toBeGreaterThan(0)
 
     const offenders: string[] = []
@@ -59,5 +65,13 @@ describe('SOCIAL-NO-SECRET-EGRESS — no client-reachable module imports a clien
     const source = fs.readFileSync(CONFIG_FILE, 'utf8')
     expect(source).toContain('LINKEDIN_CLIENT_SECRET')
     expect(source).toContain('X_CLIENT_SECRET')
+  })
+
+  it('the allowlisted reader still exists and still actually reads the secret (guards against the allowlist going stale)', () => {
+    for (const file of ALLOWED_SECRET_READERS) {
+      expect(fs.existsSync(file), `${path.relative(ROOT, file)} no longer exists — narrow the allowlist`).toBe(true)
+      const source = fs.readFileSync(file, 'utf8')
+      expect(/LINKEDIN_CLIENT_SECRET|X_CLIENT_SECRET/.test(source), `${path.relative(ROOT, file)} no longer reads a client secret — narrow the allowlist`).toBe(true)
+    }
   })
 })
