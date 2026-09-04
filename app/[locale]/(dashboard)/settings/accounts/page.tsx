@@ -16,7 +16,7 @@ const ERROR_KEYS = [
   'exchange_failed',
   'vault_write_failed',
   'db_write_failed',
-  'postiz_unavailable',
+  'provider_unavailable',
   'connect_failed',
 ] as const
 type ErrorKey = (typeof ERROR_KEYS)[number]

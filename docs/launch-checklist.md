@@ -25,8 +25,6 @@ Verification command (per row): `vercel env ls production | grep <VAR>`
 | `OAUTH_STATE_SECRET` | Generated once: `openssl rand -base64 48` (≥ 32 chars) | ☐ `vercel env ls production \| grep -q '^OAUTH_STATE_SECRET' && echo present \|\| echo MISSING` |
 | `HEALTHCHECK_TOKEN` | Generated once: `openssl rand -base64 32` | ☐ `vercel env ls production \| grep -q '^HEALTHCHECK_TOKEN' && echo present \|\| echo MISSING` |
 | `CRON_SECRET` | Generated once: `openssl rand -base64 48` (≥ 32 chars in prod — config enforces) | ☐ `vercel env ls production \| grep -q '^CRON_SECRET' && echo present \|\| echo MISSING` |
-| `POSTIZ_BASE_URL` | Self-hosted Postiz URL (Hetzner) | ☐ `vercel env ls production \| grep -q '^POSTIZ_BASE_URL' && echo present \|\| echo MISSING` |
-| `POSTIZ_API_KEY` | Postiz admin UI → API Keys | ☐ `vercel env ls production \| grep -q '^POSTIZ_API_KEY' && echo present \|\| echo MISSING` |
 | `STRIPE_SECRET_KEY` | Stripe Dashboard → Developers → API Keys (**live mode**) | ☐ `vercel env ls production \| grep -q '^STRIPE_SECRET_KEY' && echo present \|\| echo MISSING` |
 | `STRIPE_WEBHOOK_SECRET` | Stripe Dashboard → Webhooks → endpoint → Signing secret (**live mode**) | ☐ `vercel env ls production \| grep -q '^STRIPE_WEBHOOK_SECRET' && echo present \|\| echo MISSING` |
 | `STRIPE_PRICE_ID_PLUS` | Stripe Dashboard → Products → Plus → Price ID (**live mode**) | ☐ `vercel env ls production \| grep -q '^STRIPE_PRICE_ID_PLUS' && echo present \|\| echo MISSING` |
@@ -47,7 +45,7 @@ Verification command (per row): `vercel env ls production | grep <VAR>`
 | `CSP_ENFORCE` | `false` at launch; flip to `true` after §5 24h-quiet criterion | ☐ `vercel env ls production \| grep -q '^CSP_ENFORCE' && echo present \|\| echo MISSING` |
 | `AUTH_RATE_LIMIT_ENABLED` | `true` | ☐ `vercel env ls production \| grep -q '^AUTH_RATE_LIMIT_ENABLED' && echo present \|\| echo MISSING` |
 | `AI_PROVIDER` | `anthropic` | ☐ `vercel env ls production \| grep -q '^AI_PROVIDER' && echo present \|\| echo MISSING` |
-| `SOCIAL_PROVIDER_MODE` | unset (defaults to Postiz when `POSTIZ_BASE_URL` is set) | ☐ `vercel env ls production \| grep -q '^SOCIAL_PROVIDER_MODE' && echo present \|\| echo MISSING` |
+| `SOCIAL_PROVIDER_MODE` | unset in production — the registry is per-platform, overrides-only (ADR 0028 §8.2): LinkedIn/X each activate independently once their own client id+secret pair is set; `mock` is a test/dev-only value | ☐ `vercel env ls production \| grep -q '^SOCIAL_PROVIDER_MODE' && echo present \|\| echo MISSING` |
 | `LINKEDIN_CLIENT_ID` / `LINKEDIN_CLIENT_SECRET` | LinkedIn Developer Portal → app | ☐ `vercel env ls production \| grep -q '^LINKEDIN_CLIENT_ID' && echo present \|\| echo MISSING` / `vercel env ls production \| grep -q '^LINKEDIN_CLIENT_SECRET' && echo present \|\| echo MISSING` |
 | `X_CLIENT_ID` / `X_CLIENT_SECRET` | X Developer Portal → app | ☐ `vercel env ls production \| grep -q '^X_CLIENT_ID' && echo present \|\| echo MISSING` / `vercel env ls production \| grep -q '^X_CLIENT_SECRET' && echo present \|\| echo MISSING` |
 | `META_APP_ID` / `META_APP_SECRET` | Meta for Developers → app | ☐ `vercel env ls production \| grep -q '^META_APP_ID' && echo present \|\| echo MISSING` / `vercel env ls production \| grep -q '^META_APP_SECRET' && echo present \|\| echo MISSING` |
@@ -453,15 +451,16 @@ These items are required by ADR 0010 and are not yet in the codebase. Each block
 
 ## 16. Postiz removal
 
-> **Context:** ADR 0010 Amendment A1 (2026-06-13) committed to removing Postiz in favour of direct LinkedIn and X API integrations. These rows track complete removal — a half-removal leaves dead code that future audits read as "we use Postiz."
+> **Context:** ADR 0010 Amendment A1 (2026-06-13) committed to removing Postiz in favour of direct LinkedIn and X API integrations. Session 30.5 (ADR 0028, Track N) executed the removal — these rows track it as **complete in code**, per that session's N2.11 commit. A half-removal leaves dead code that future audits read as "we use Postiz."
 
-- [ ] `lib/social/postiz-provider.ts` deleted from the repo.
-- [ ] `POSTIZ_BASE_URL` and `POSTIZ_API_KEY` removed from `lib/config.ts`, `.env.local.example`, and Vercel/Supabase production env vars.
-- [ ] `lib/social/registry.ts` confirmed to route exclusively to the direct LinkedIn and X providers; no Postiz code path reachable.
-- [ ] ESLint `no-restricted-imports` rule for `postiz-provider` removed (rule is moot once the file is gone).
-- [ ] Integration test `POSTIZ_INTEGRATION_TEST_ENABLED` gate and any associated tests removed (`lib/social/__integration__/postiz-provider.integration.test.ts`, `lib/social/__tests__/postiz-provider.test.ts`).
-- [ ] `current-phase.md` and `CLAUDE.md` references to Postiz archived to "Historical decisions" or removed.
-- [ ] `grep -r postiz` against the repo returns no matches outside `/docs/decisions/` historical ADRs.
+- [x] `lib/social/postiz-provider.ts` deleted from the repo (and its two `__tests__`/`__integration__` files).
+- [x] `POSTIZ_BASE_URL` and `POSTIZ_API_KEY` removed from `lib/config.ts` and `.env.local.example`.
+- [ ] `POSTIZ_BASE_URL` and `POSTIZ_API_KEY` removed from Vercel/Supabase **production** env vars — operator action, not a code change; do before or during the deploy that ships this removal.
+- [x] `lib/social/registry.ts` confirmed to route exclusively to the direct LinkedIn and X providers, per-platform, overrides-only; no Postiz code path reachable (ADR 0028 §8.2).
+- [x] ESLint `no-restricted-imports` rule for `postiz-provider` **replaced** with `linkedin-provider`/`twitter-provider` entries — corrected from this row's own prior "moot once the file is gone" wording, which ADR 0028 §8.3 named as wrong: moot is not the same as replaced, and removing the entry without adding the replacements would have silently reopened the boundary.
+- [x] Integration test `POSTIZ_INTEGRATION_TEST_ENABLED` gate and both associated test files removed.
+- [x] `CLAUDE.md`'s live product-status claim ("publishing still runs through Postiz") corrected. `current-phase.md`'s **historical session-log entries** are left as written (they are immutable record of what was true when each entry was made, same reasoning as `docs/decisions/`/`docs/reviews/`) — a new entry recording this removal is appended, not a rewrite of past entries.
+- [x] `grep -ri postiz` against the repo (excluding `.git`/`.next`/`node_modules`) returns no matches outside `docs/decisions/`, `docs/reviews/`, `docs/build-guide/`, `docs/brainstorm/archive/`, and `supabase/migrations/` — all five are historical/immutable-record exemptions, each stated with its own reason in `lib/social/__tests__/no-postiz.test.ts` (the SOCIAL-NO-POSTIZ scan, demonstrated to redden and revert in that step's commit).
 
 ---
 

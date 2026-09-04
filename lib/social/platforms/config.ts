@@ -8,10 +8,10 @@ export interface PlatformOAuthConfig {
   // CANNOT express X's real 2-hour access-token life. Nothing in lib/social/
   // currently computes from this field (grepped repo-wide before renaming;
   // withFreshToken/connection-status.ts both read social_accounts
-  // .token_expires_at directly, which is set from each token response's
-  // authoritative expires_in — postiz-provider.ts:365, both native
-  // providers). This field is informational only today, but an
-  // informational field asserting a falsehood is still a falsehood.
+  // .token_expires_at directly, which is set from each native provider's
+  // own token response — its authoritative expires_in). This field is
+  // informational only today, but an informational field asserting a
+  // falsehood is still a falsehood.
   tokenExpirySeconds: number | null
   publishingAvailable: boolean
 }

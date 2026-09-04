@@ -143,7 +143,7 @@ describe('SOCIAL_PROVIDER_MODE=mock (SOCIAL-MOCK-MODE-OFFLINE)', () => {
     vi.resetModules()
     vi.doMock('@/lib/config', () => ({
       config: {
-        server: { SOCIAL_PROVIDER_MODE: 'mock', POSTIZ_BASE_URL: '', POSTIZ_API_KEY: '' },
+        server: { SOCIAL_PROVIDER_MODE: 'mock' },
         public: { NODE_ENV: 'test' },
       },
     }))

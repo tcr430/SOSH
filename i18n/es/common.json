@@ -158,7 +158,7 @@
         "exchange_failed": "No pudimos completar la conexión. Por favor, inténtalo de nuevo.",
         "vault_write_failed": "No pudimos guardar tus credenciales de forma segura. Por favor, inténtalo de nuevo.",
         "db_write_failed": "No pudimos guardar la conexión. Por favor, inténtalo de nuevo.",
-        "postiz_unavailable": "El servicio de publicación no está disponible temporalmente. Por favor, inténtalo más tarde.",
+        "provider_unavailable": "El servicio de publicación no está disponible temporalmente. Por favor, inténtalo más tarde.",
         "connect_failed": "Error al conectar. Por favor inténtelo de nuevo."
       },
       "success": {

@@ -64,12 +64,11 @@ export async function proxy(request: NextRequest) {
     .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
   requestHeaders.set('x-nonce', nonce)
 
-  // 6. Build CSP and return response with CSP header.
-  const postizHost = (() => {
-    try { return new URL(appConfig.server.POSTIZ_BASE_URL).host } catch { return undefined }
-  })()
+  // 6. Build CSP and return response with CSP header. Native provider calls
+  // are server-side only, so there is no browser-facing connect-src origin
+  // to add here (a net security improvement over the prior broker era).
   const reportUri = deriveSentryCspReportUri(appConfig.public.SENTRY_DSN)
-  const { headerName, headerValue } = buildCsp(nonce, reportUri, appConfig.server.CSP_ENFORCE, postizHost)
+  const { headerName, headerValue } = buildCsp(nonce, reportUri, appConfig.server.CSP_ENFORCE)
 
   const response = NextResponse.next({ request: { headers: requestHeaders } })
   response.headers.set(headerName, headerValue)

@@ -158,7 +158,7 @@
         "exchange_failed": "We couldn't complete the connection. Please try again.",
         "vault_write_failed": "We couldn't securely store your credentials. Please try again.",
         "db_write_failed": "We couldn't save the connection. Please try again.",
-        "postiz_unavailable": "The publishing service is temporarily unavailable. Please try again later.",
+        "provider_unavailable": "The publishing service is temporarily unavailable. Please try again later.",
         "connect_failed": "Failed to connect. Please try again."
       },
       "success": {

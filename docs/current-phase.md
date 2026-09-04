@@ -1754,3 +1754,24 @@ The two-axis permission model is DB-enforced, not app-layer-only: `user_can(busi
 - **ECC commands use `/ecc:` prefix**, not `/everything-claude-code:`.
 - **`npm run db:migrate` requires `DATABASE_URL`** (Supabase transaction pooler connection string).
 - **B18-030 sweep is pattern-matched, not variable-name-matched:** aliased error vars (`fetchError`, `readError`) are covered. The original 18B-3 sweep matched only the variable name `error` and missed them.
+
+### Session 30.5 N2.11 (2026-09-04)
+
+- **The broker is removed, total and provable.** `lib/social/postiz-provider.ts` and its two test
+  files, `infra/` (docker-compose stack), all env vars, CSP host, npm scripts, and every prose
+  reference are gone in one commit. Proof is executable, not asserted: `lib/social/__tests__/
+  no-postiz.test.ts` (SOCIAL-NO-POSTIZ) case-insensitively scans the real source tree and fails on
+  any stray reference, demonstrated to redden and revert before landing.
+- **Exemptions are named, not silent.** `docs/decisions/`, `docs/reviews/`, `docs/build-guide/`,
+  `docs/brainstorm/archive/`, `docs/evidence/`, `supabase/migrations/`, and a handful of individual
+  test/doc files that must name "postiz" to prove its absence (`csp.test.ts`,
+  `eslint-internals-ban.test.ts`, `accounts-i18n.test.ts`) or that narrate the removal itself
+  (`docs/launch-checklist.md` §16) — each with its own stated reason in the scan file.
+  `docs/current-phase.md`'s own historical session entries above this one are left unedited for the
+  same reason; this entry is appended, not inserted into the record of what already happened.
+- **A false ADR premise was caught before it broke working code.** ADR 0028's instruction to drop
+  `'multi'` from `SocialProvider['platform']` assumed the deleted broker file was its only producer;
+  it wasn't — `MockProvider` legitimately shares one instance across all five platforms in
+  `SOCIAL_PROVIDER_MODE=mock`, asserted directly in this track's own `registry.test.ts`. Founder
+  ruling: keep `'multi'` in the type. `lib/social/types.ts` documents why.
+  `SOCIAL-NO-MULTI-PLATFORM` in `types.test.ts` asserts the corrected reality.

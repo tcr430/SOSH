@@ -311,7 +311,7 @@ export type PostRow = {
   // column existed and for any row not yet resolved to a specific connected
   // account. FK -> social_accounts(id) ON DELETE SET NULL — disconnecting an
   // account must never delete published history. No backfill: existing
-  // platform_user_id values are Postiz integrationIds, meaningless to the
+  // platform_user_id values are the prior broker's own integrationIds, meaningless to the
   // native LinkedIn/X providers (D-gamma). Excluded from PostUpdate below —
   // publish-identity resolution (N2.5) is a service-role concern, not an
   // app-layer authenticated write.

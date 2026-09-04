@@ -218,7 +218,7 @@ describe('GET /api/social/[platform]/callback', () => {
     mockGetRegistry.mockReturnValue({
       get: vi.fn().mockReturnValue(
         makeMockProvider({
-          exchangeOAuthCode: vi.fn().mockRejectedValue(new Error('Postiz network error')),
+          exchangeOAuthCode: vi.fn().mockRejectedValue(new Error('network error')),
         }),
       ),
     } as never)

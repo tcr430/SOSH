@@ -32,8 +32,9 @@ Must be resolved before the first paying customer.
 
 **Also pre-launch, tracked elsewhere — not duplicated here:** the legal gates (counsel ratification →
 `[LEGAL ENTITY]` substitution, Anthropic DPF, cookie inventory, Svix client-verify) live in
-`launch-checklist.md` §9; the Postiz→native migration lives in §16; the `db-tests` promotion tally lives in
-`current-phase.md`.
+`launch-checklist.md` §9; the broker→native publishing migration (complete in code as of Session 30.5,
+ADR 0028 — production OAuth apps not yet registered) is tracked in §16; the `db-tests` promotion tally
+lives in `current-phase.md`.
 
 ---
 
@@ -47,7 +48,7 @@ actioned before its trigger fires, and each *must* be actioned when it does.
 | **21C-pagination** | Real cursor pagination for the Approvals inbox beyond `APPROVALS_POST_LIMIT` (200) | **The first business observed with `total > 200` pending drafts.** `APV-BULK-VISIBLE-ONLY` disables bulk approve whenever the rendered set is incomplete, so overflow degrades a live affordance, not just a count. Act on the signal, not a date. |
 | **22-MINOR-5** | Index covering `(business_id, status, scheduled_at) WHERE deleted_at IS NULL` for the pending-draft predicate | **Same trigger as `21C-pagination`.** Do not create the index before it. |
 | **25D-MINOR-11** | `post-generation.ts:179` / `post-regeneration.ts:147` neutralise `topContent` but do not truncate it | **The first writer that puts a synthesized, unbounded value into `performance_memory.pattern`** must enforce a length bound at write time before it can reach these render sites. Session 33's outcome extractor is a candidate. |
-| **22E-integration-discovery** | Four `__integration__` suites are discovered by no CI job | **First launch-blocking dependency on a real-network path, or first Postiz/Resend defect reaching staging.** Deliberate 22-D trade (absent-and-honest beats present-and-lying); `purge_business` retains Tier-1 coverage via `db-tests`. |
+| **22E-integration-discovery** | Three `__integration__` suites are discovered by no CI job | **First launch-blocking dependency on a real-network path, or first LinkedIn/X/Resend defect reaching staging.** Deliberate 22-D trade (absent-and-honest beats present-and-lying); `purge_business` retains Tier-1 coverage via `db-tests`. |
 | **22D-skipguard-file-floor** | Skip-guard misses a single required suite silently dropping out of collection | **A rename or glob change that alters the collected-file count.** Fix: assert a floor on collected files, or pin a manifest of required suites by name. |
 | **24D-NIT-4-logger** | Three brief Server Actions swallow throws with `catch { return generic }`, marked `// TODO(logger)` | **When a project logger lands.** Same class as `BriefReviewForm.tsx:126`'s `key={i}`. |
 | **`MODE2-REDUNDANCY-UNDEFER`** | Cross-set redundancy — *"these two posts make the same argument"* (ADR 0017 §8 item 4) | **Session 34 Q4 must answer this explicitly** — un-defer it there or leave it deferred, but not silently. It is a question about the *set*, so the campaign planner is its natural home. |
