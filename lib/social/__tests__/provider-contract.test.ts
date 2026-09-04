@@ -1,17 +1,54 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { MockProvider } from '../mock-provider'
+import { LinkedInProvider } from '../linkedin-provider'
+import { TwitterProvider } from '../twitter-provider'
 import { SocialProviderError } from '../errors'
 import type { SocialProvider, SocialProviderErrorCode } from '../types'
 import type { Platform } from '@/lib/db/types'
 
+// N2.10 additions: LinkedInProvider and TwitterProvider are real
+// implementations now exercised by this suite, which needs their
+// dependencies to run offline. config supplies dummy client credentials
+// (only LINKEDIN_CLIENT_ID/SECRET, X_CLIENT_ID/SECRET are ever read by the
+// assertions below — getOAuthAuthorizeUrl and revokeAccessToken); the
+// service-role client is stubbed so TwitterProvider.revokeAccessToken's
+// account lookup resolves to "no vault id" and returns early without any
+// network I/O; PKCE is stubbed so TwitterProvider.getOAuthAuthorizeUrl
+// doesn't need a real Next.js request context (next/headers' cookies()).
+vi.mock('@/lib/config', () => ({
+  config: {
+    server: {
+      LINKEDIN_CLIENT_ID: 'contract-test-linkedin-client-id',
+      LINKEDIN_CLIENT_SECRET: 'contract-test-linkedin-client-secret',
+      X_CLIENT_ID: 'contract-test-x-client-id',
+      X_CLIENT_SECRET: 'contract-test-x-client-secret',
+    },
+    public: { NODE_ENV: 'test' },
+  },
+}))
+
+vi.mock('@/lib/supabase/service', () => ({
+  createServiceRoleClient: () => ({
+    from: () => ({
+      select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: null, error: null }) }) }),
+    }),
+  }),
+}))
+
+vi.mock('../oauth/pkce', () => ({
+  generatePkceVerifier: () => 'contract-test-verifier',
+  generatePkceChallenge: async () => 'contract-test-challenge',
+  setPkceVerifierCookie: async () => {},
+  readAndClearPkceVerifierCookie: async () => null,
+}))
+
 // ADR 0028 §9.1 — the shared contract suite. Every implementation added here
 // must satisfy the same assertions with zero edits below; if adding an
 // implementation requires touching an assertion, it is not a contract suite.
-//
-// N2.10 adds LinkedInProvider and TwitterProvider to this array and nothing
-// else changes.
 const IMPLEMENTATIONS: { name: string; makeProvider: () => SocialProvider }[] = [
   { name: 'MockProvider', makeProvider: () => new MockProvider() },
+  { name: 'LinkedInProvider', makeProvider: () => new LinkedInProvider() },
+  { name: 'TwitterProvider', makeProvider: () => new TwitterProvider() },
 ]
 
 const ALL_ERROR_CODES: readonly SocialProviderErrorCode[] = [

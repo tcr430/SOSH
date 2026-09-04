@@ -6,8 +6,10 @@ import type { SocialProvider } from '../types'
 // Individual tests mutate serverConfig / publicConfig to simulate environments.
 const serverConfig = {
   SOCIAL_PROVIDER_MODE: '',
-  POSTIZ_BASE_URL: '',
-  POSTIZ_API_KEY: '',
+  LINKEDIN_CLIENT_ID: '',
+  LINKEDIN_CLIENT_SECRET: '',
+  X_CLIENT_ID: '',
+  X_CLIENT_SECRET: '',
 }
 
 const publicConfig = {
@@ -26,37 +28,85 @@ describe('getRegistry', () => {
     _resetRegistry()
     vi.unstubAllEnvs()
     serverConfig.SOCIAL_PROVIDER_MODE = ''
-    serverConfig.POSTIZ_BASE_URL = ''
-    serverConfig.POSTIZ_API_KEY = ''
+    serverConfig.LINKEDIN_CLIENT_ID = ''
+    serverConfig.LINKEDIN_CLIENT_SECRET = ''
+    serverConfig.X_CLIENT_ID = ''
+    serverConfig.X_CLIENT_SECRET = ''
     publicConfig.NODE_ENV = 'development'
   })
 
-  it('returns a provider when SOCIAL_PROVIDER_MODE=mock', () => {
-    serverConfig.SOCIAL_PROVIDER_MODE = 'mock'
-    const registry = getRegistry()
-    expect(registry.get('linkedin').platform).toBe('multi')
+  describe('SOCIAL_PROVIDER_MODE=mock (unchanged — L-9)', () => {
+    it('serves MockProvider for all five platforms', () => {
+      serverConfig.SOCIAL_PROVIDER_MODE = 'mock'
+      const registry = getRegistry()
+      for (const platform of ['linkedin', 'twitter', 'instagram', 'facebook', 'threads'] as const) {
+        expect(registry.get(platform).platform).toBe('multi')
+      }
+    })
   })
 
-  it('returns MockProvider as fallback when Postiz config is absent (non-production)', () => {
-    const registry = getRegistry()
-    expect(registry.get('twitter').platform).toBe('multi')
+  // ADR 0028 §8.2 (N2.10) — SOCIAL-REGISTRY-PER-PLATFORM
+  describe('SOCIAL-REGISTRY-PER-PLATFORM — overrides-only, no default', () => {
+    it('registers LinkedInProvider when both LinkedIn credentials are present', () => {
+      serverConfig.LINKEDIN_CLIENT_ID = 'test-id'
+      serverConfig.LINKEDIN_CLIENT_SECRET = 'test-secret'
+      const registry = getRegistry()
+      expect(registry.get('linkedin').platform).toBe('linkedin')
+    })
+
+    it('registers TwitterProvider when both X credentials are present', () => {
+      serverConfig.X_CLIENT_ID = 'test-id'
+      serverConfig.X_CLIENT_SECRET = 'test-secret'
+      const registry = getRegistry()
+      expect(registry.get('twitter').platform).toBe('twitter')
+    })
+
+    it('an unregistered platform throws PROVIDER_NOT_CONFIGURED — no default provider exists', () => {
+      const registry = getRegistry()
+      expect(() => registry.get('linkedin')).toThrow(SocialProviderError)
+      expect(() => registry.get('linkedin')).toThrow(expect.objectContaining({ code: 'PROVIDER_NOT_CONFIGURED' }))
+    })
+
+    it('a partial credential (client id present, secret absent) does not register the provider', () => {
+      serverConfig.LINKEDIN_CLIENT_ID = 'test-id'
+      // secret deliberately left empty
+      const registry = getRegistry()
+      expect(() => registry.get('linkedin')).toThrow(expect.objectContaining({ code: 'PROVIDER_NOT_CONFIGURED' }))
+    })
+
+    it('per-platform absence, DIRECTION 1: LinkedIn configured, X absent — LinkedIn works, get(twitter) throws', () => {
+      serverConfig.LINKEDIN_CLIENT_ID = 'test-id'
+      serverConfig.LINKEDIN_CLIENT_SECRET = 'test-secret'
+      const registry = getRegistry()
+      expect(() => registry.get('linkedin')).not.toThrow()
+      expect(() => registry.get('twitter')).toThrow(expect.objectContaining({ code: 'PROVIDER_NOT_CONFIGURED' }))
+    })
+
+    it('per-platform absence, DIRECTION 2: X configured, LinkedIn absent — X works, get(linkedin) throws', () => {
+      serverConfig.X_CLIENT_ID = 'test-id'
+      serverConfig.X_CLIENT_SECRET = 'test-secret'
+      const registry = getRegistry()
+      expect(() => registry.get('twitter')).not.toThrow()
+      expect(() => registry.get('linkedin')).toThrow(expect.objectContaining({ code: 'PROVIDER_NOT_CONFIGURED' }))
+    })
   })
 
-  it('throws PROVIDER_NOT_CONFIGURED in production without Postiz config', () => {
-    publicConfig.NODE_ENV = 'production'
-    expect(() => getRegistry()).toThrow(SocialProviderError)
-    expect(() => getRegistry()).toThrow(expect.objectContaining({ code: 'PROVIDER_NOT_CONFIGURED' }))
+  // ADR 0028 §8.2/A-1 (N2.10) — SOCIAL-META-NOT-REGISTERED
+  describe('SOCIAL-META-NOT-REGISTERED — the Meta family gets no provider, ever', () => {
+    it.each(['instagram', 'facebook', 'threads'] as const)(
+      'get(%s) throws PROVIDER_NOT_CONFIGURED even when both LinkedIn and X are fully configured',
+      (platform) => {
+        serverConfig.LINKEDIN_CLIENT_ID = 'test-id'
+        serverConfig.LINKEDIN_CLIENT_SECRET = 'test-secret'
+        serverConfig.X_CLIENT_ID = 'test-id'
+        serverConfig.X_CLIENT_SECRET = 'test-secret'
+        const registry = getRegistry()
+        expect(() => registry.get(platform)).toThrow(expect.objectContaining({ code: 'PROVIDER_NOT_CONFIGURED' }))
+      },
+    )
   })
 
-  it('returns PostizProvider when both POSTIZ_API_URL and POSTIZ_API_KEY are set', () => {
-    serverConfig.POSTIZ_BASE_URL = 'https://postiz.test'
-    serverConfig.POSTIZ_API_KEY = 'test-key'
-    const registry = getRegistry()
-    const provider = registry.get('linkedin')
-    expect(provider.platform).toBe('multi')
-  })
-
-  it('register() overrides the default for a specific platform', () => {
+  it('register() overrides the registry for a specific platform', () => {
     serverConfig.SOCIAL_PROVIDER_MODE = 'mock'
     const registry = getRegistry()
 
@@ -88,11 +138,11 @@ describe('getRegistry', () => {
     registry.register('linkedin', customProvider)
 
     expect(registry.get('linkedin')).toBe(customProvider)
-    // Other platforms still return the default
+    // Other platforms still return the mock-mode default.
     expect(registry.get('twitter')).not.toBe(customProvider)
   })
 
-  it('get() returns the same default provider for all unregistered platforms', () => {
+  it('get() returns the same MockProvider instance for all unregistered platforms in mock mode', () => {
     serverConfig.SOCIAL_PROVIDER_MODE = 'mock'
     const registry = getRegistry()
 
