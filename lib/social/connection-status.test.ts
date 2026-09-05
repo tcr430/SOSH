@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { addDays, formatISO } from 'date-fns'
-import { getConnectionStatus } from './connection-status'
+import { getConnectionStatus, pickDefaultAccountId } from './connection-status'
 import type { SocialAccountRow, VaultSecretId } from '@/lib/db/types'
 
 const VAULT_ID = 'vault-test-uuid' as VaultSecretId
@@ -102,5 +102,42 @@ describe('getConnectionStatus', () => {
   it('returns coming_soon for instagram inactive account', () => {
     const account = makeAccount({ platform: 'instagram', is_active: false })
     expect(getConnectionStatus(account, 'instagram')).toBe('coming_soon')
+  })
+})
+
+describe('pickDefaultAccountId — ADR 0028 §5.3/§9.4', () => {
+  it('returns null for an empty list', () => {
+    expect(pickDefaultAccountId([])).toBeNull()
+  })
+
+  it('returns the id of the single active account', () => {
+    expect(pickDefaultAccountId([{ id: 'a1', is_active: true }])).toBe('a1')
+  })
+
+  it('ignores inactive accounts when exactly one active remains', () => {
+    expect(
+      pickDefaultAccountId([
+        { id: 'a1', is_active: false },
+        { id: 'a2', is_active: true },
+      ]),
+    ).toBe('a2')
+  })
+
+  it('returns null when zero accounts are active', () => {
+    expect(
+      pickDefaultAccountId([
+        { id: 'a1', is_active: false },
+        { id: 'a2', is_active: false },
+      ]),
+    ).toBeNull()
+  })
+
+  it('returns null when two accounts are active — no default, resolvePublishAccount would call this ambiguous', () => {
+    expect(
+      pickDefaultAccountId([
+        { id: 'a1', is_active: true },
+        { id: 'a2', is_active: true },
+      ]),
+    ).toBeNull()
   })
 })

@@ -254,6 +254,7 @@ describe('resolvePublishAccount — SOCIAL-DUAL-IDENTITY-RESOLVER', () => {
 
 describe('listByBusiness', () => {
   const publicAccount = {
+    id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     platform: 'linkedin' as const,
     platform_username: 'acme_corp',
     platform_display_name: 'Acme Corp',
@@ -273,7 +274,7 @@ describe('listByBusiness', () => {
     const { client, builder } = createMockClient([publicAccount])
     await listByBusiness(client, 'biz-1')
     expect(builder.select).toHaveBeenCalledWith(
-      'platform, platform_username, platform_display_name, is_active, connected_at, token_expires_at',
+      'id, platform, platform_username, platform_display_name, is_active, connected_at, token_expires_at',
     )
   })
 

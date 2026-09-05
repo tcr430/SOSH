@@ -30,7 +30,8 @@ export {
 } from './platforms/config'
 export { VALID_PLATFORMS, isPlatform } from './platforms/guards'
 export type { ConnectionStatus } from './connection-status'
-export { getConnectionStatus } from './connection-status'
+export { getConnectionStatus, pickDefaultAccountId } from './connection-status'
+export { buildDisconnectUrl } from './disconnect-url'
 export type { SocialAccountPublic } from '@/lib/db/social-accounts'
 
 export {

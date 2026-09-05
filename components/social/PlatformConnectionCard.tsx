@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useTranslations } from 'next-intl'
-import { differenceInCalendarDays } from 'date-fns'
+import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { buttonVariants } from '@/components/ui/button'
 import {
@@ -23,6 +23,7 @@ import { CAPABILITIES } from '@/lib/members/capabilities'
 import type { Platform } from '@/lib/db/types'
 import type { PlatformOAuthConfig } from '@/lib/social'
 import type { ConnectionStatus } from '@/lib/social'
+import { buildDisconnectUrl } from '@/lib/social'
 import type { SocialAccountPublic } from '@/lib/db/social-accounts'
 
 export interface PlatformConnectionCardProps {
@@ -33,6 +34,15 @@ export interface PlatformConnectionCardProps {
   locale: string
   onDisconnect: () => void
   variant: 'settings' | 'onboarding'
+  // ADR 0028 §5.3/§9.4 dual identity — when set, disconnect names this exact
+  // identity (disconnect/route.ts's accountId param) rather than falling back
+  // to the pre-dual-identity single-account-per-platform shape. isDefault
+  // renders the "Default" badge for the identity resolvePublishAccount would
+  // pick when a post names no account (lib/social/connection-status.ts's
+  // pickDefaultAccountId) — absent (not false) when there is honestly no
+  // default to mark.
+  accountId?: string
+  isDefault?: boolean
 }
 
 const STATUS_DOT: Record<ConnectionStatus, string> = {
@@ -51,6 +61,8 @@ export function PlatformConnectionCard({
   locale,
   onDisconnect,
   variant,
+  accountId,
+  isDefault,
 }: PlatformConnectionCardProps) {
   const t = useTranslations('settings.accounts')
   const [isDisconnecting, setIsDisconnecting] = useState(false)
@@ -63,16 +75,16 @@ export function PlatformConnectionCard({
 
   const isActuallyConnected = account !== null && account.is_active
 
-  const daysUntilExpiry =
+  const expiryDate =
     status === 'expiring_soon' && account?.token_expires_at
-      ? differenceInCalendarDays(new Date(account.token_expires_at), new Date())
+      ? format(new Date(account.token_expires_at), 'd MMM yyyy')
       : null
 
   async function handleDisconnect() {
     setIsDisconnecting(true)
     setDisconnectError(null)
     try {
-      const res = await fetch(`/api/social/${platform}/disconnect`, { method: 'DELETE' })
+      const res = await fetch(buildDisconnectUrl(platform, accountId), { method: 'DELETE' })
       if (!res.ok) throw new Error('disconnect_failed')
       onDisconnect()
     } catch {
@@ -100,6 +112,11 @@ export function PlatformConnectionCard({
               <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', STATUS_DOT[status])} />
               <span className="text-xs text-muted-foreground">{t(`status.${status}`)}</span>
             </div>
+            {isDefault && (
+              <span className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                {t('default_badge')}
+              </span>
+            )}
           </div>
 
           {isActuallyConnected && (
@@ -108,9 +125,9 @@ export function PlatformConnectionCard({
             </p>
           )}
 
-          {status === 'expiring_soon' && daysUntilExpiry !== null && (
+          {status === 'expiring_soon' && expiryDate !== null && (
             <p className="text-xs font-medium text-amber-600 dark:text-amber-500">
-              {t('reconnect', { days: daysUntilExpiry })}
+              {t('reconnect_by', { platform: config.displayName, date: expiryDate })}
             </p>
           )}
 

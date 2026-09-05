@@ -4,6 +4,7 @@ import type { Platform, SocialAccountRow, SocialAccountInsert, SocialAccountUpda
 import { getErrorMessage } from './utils'
 
 export type SocialAccountPublic = {
+  id: string
   platform: Platform
   platform_username: string
   platform_display_name: string | null
@@ -197,7 +198,7 @@ export async function listByBusiness(
 ): Promise<SocialAccountPublic[]> {
   const { data, error } = await client
     .from('social_accounts')
-    .select('platform, platform_username, platform_display_name, is_active, connected_at, token_expires_at')
+    .select('id, platform, platform_username, platform_display_name, is_active, connected_at, token_expires_at')
     .eq('business_id', businessId)
     .order('connected_at', { ascending: false })
     .limit(limit)

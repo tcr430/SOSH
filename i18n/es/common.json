@@ -141,9 +141,11 @@
         "coming_soon": "Próximamente"
       },
       "reconnect": "Reconectar — expira en {days} días",
-      "publishing_soon": "Publicación próximamente disponible",
+      "reconnect_by": "El acceso a {platform} expira el {date} y debe renovarse",
+      "publishing_soon": "Pendiente de la revisión de aplicaciones de Meta para publicar",
       "connect": "Conectar",
-      "connect_coming_soon_tooltip": "Conéctate para prepararte para cuando se lance la publicación",
+      "connect_another": "Conectar otra cuenta de {platform}",
+      "connect_coming_soon_tooltip": "La publicación aquí está pendiente del proceso de revisión de aplicaciones de Meta",
       "disconnect": "Desconectar",
       "confirm_disconnect_title": "¿Desconectar {platform}?",
       "confirm_disconnect_body": "Tendrás que reconectarte para reanudar la publicación.",
@@ -151,6 +153,8 @@
       "confirm_disconnect_confirm": "Desconectar",
       "disconnect_error": "Error al desconectar. Por favor, inténtalo de nuevo.",
       "connected_as": "Conectado como @{username}",
+      "default_badge": "Predeterminada",
+      "no_default": "Sin cuenta predeterminada — elige una cuenta para cada publicación",
       "error": {
         "invalid_state": "Sesión inválida. Por favor, intenta conectarte de nuevo.",
         "forbidden": "No tienes permiso para conectar esta cuenta.",
