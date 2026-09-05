@@ -171,10 +171,15 @@ export type AccountResolution =
 // The shared resolver behind ADR 0028 §5.3's resolution order, used by both
 // the publishing and metrics orchestrators: posts.social_account_id when
 // set; otherwise the business's default account for that platform (exactly
-// one active row); otherwise failure. A PINNED identity that is gone or
-// inactive resolves to 'none', never 'ambiguous' and never a silent
-// substitution of a different identity — publishing (or syncing metrics for)
-// the wrong identity is worse than not doing so at all.
+// one active row); otherwise failure. A PINNED identity that is gone,
+// inactive, or belongs to a DIFFERENT business or platform resolves to
+// 'none', never 'ambiguous' and never a silent substitution of a different
+// identity — publishing (or syncing metrics for) the wrong identity is
+// worse than not doing so at all. SOCIAL-PINNED-ACCOUNT-TENANT-CHECKED
+// (Session 30.5-D, D2, MAJOR-2): getActiveById filters only on id +
+// is_active, and both production callers pass a service-role client that
+// bypasses RLS — this function is the only guard point, so it must check
+// business_id and platform itself rather than trust the caller or RLS.
 export async function resolvePublishAccount(
   client: SupabaseClient,
   businessId: string,
@@ -183,7 +188,10 @@ export async function resolvePublishAccount(
 ): Promise<AccountResolution> {
   if (pinnedAccountId) {
     const account = await getActiveById(client, pinnedAccountId)
-    return account ? { outcome: 'resolved', account } : { outcome: 'none' }
+    if (!account || account.business_id !== businessId || account.platform !== platform) {
+      return { outcome: 'none' }
+    }
+    return { outcome: 'resolved', account }
   }
   const candidates = await listActiveByBusinessAndPlatform(client, businessId, platform)
   if (candidates.length === 0) return { outcome: 'none' }

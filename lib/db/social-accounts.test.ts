@@ -250,6 +250,23 @@ describe('resolvePublishAccount — SOCIAL-DUAL-IDENTITY-RESOLVER', () => {
     const result = await resolvePublishAccount(client, 'biz-1', 'linkedin', null)
     expect(result).toEqual({ outcome: 'ambiguous' })
   })
+
+  // MAJOR-2 (Session 30.5-D, D2): the pinned branch called getActiveById,
+  // which filters on id + is_active ONLY — no business_id, no platform check
+  // — under a service-role client that bypasses RLS. A posts row in business
+  // A pointing at an active account in business B resolved to 'resolved'
+  // rather than 'none', which would publish A's content to B's account.
+  it('a pinned social_account_id belonging to ANOTHER BUSINESS resolves to none, never a cross-tenant substitution', async () => {
+    const { client } = createMockClient(mockAccount) // mockAccount.business_id === 'biz-1'
+    const result = await resolvePublishAccount(client, 'biz-OTHER', 'linkedin', 'sa-1')
+    expect(result).toEqual({ outcome: 'none' })
+  })
+
+  it('a pinned social_account_id belonging to ANOTHER PLATFORM resolves to none', async () => {
+    const { client } = createMockClient(mockAccount) // mockAccount.platform === 'linkedin'
+    const result = await resolvePublishAccount(client, 'biz-1', 'twitter', 'sa-1')
+    expect(result).toEqual({ outcome: 'none' })
+  })
 })
 
 describe('listByBusiness', () => {

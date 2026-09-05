@@ -719,6 +719,7 @@ scripts/eval/`) unless marked **db-tests**. `app-tests.yml` runs on every push/P
 | `SOCIAL-REVOKE-NEVER-BLOCKS` | 1+2 | app-tests (2 only — see §17.3) | A provider's `revokeAccessToken` throws instead of resolving |
 | `SOCIAL-DUAL-IDENTITY-SCHEMA` | **1** | **db-tests** | `posts.social_account_id` FK/cascade/RLS regresses |
 | `SOCIAL-DUAL-IDENTITY-RESOLVER` | 2 | app-tests | Any of the three callers' ambiguous-case test regresses (§17.3 Table A) |
+| `SOCIAL-PINNED-ACCOUNT-TENANT-CHECKED` | 2 (Session 30.5-D, D2) | app-tests | `resolvePublishAccount`'s pinned branch resolves an account whose `business_id` or `platform` doesn't match the caller's, instead of returning `'none'` |
 | `SOCIAL-LI-AUTHOR-URN` | 2 | app-tests | Person/organization URN handling regresses |
 | `SOCIAL-LI-POSTID-FROM-HEADER` | 2 | app-tests | `platformPostId` starts reading from the body |
 | `SOCIAL-MEDIA-GUARD` | 2 | app-tests | Non-empty `mediaUrls` stops rejecting before a network call |

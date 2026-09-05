@@ -615,3 +615,8 @@ only adds rows, per REVIEWER-REPORT APPEND-ONLY (CLAUDE.md).
 Files touched by D1: `lib/social/twitter-provider.ts`, `lib/social/linkedin-provider.ts` (comments only —
 no URL value, provider behaviour, or test expectation changed), `docs/reviews/session-30-5-platform-verification.md`
 (new Appendix A), `docs/decisions/0028-native-social-providers.md` (new §13.2, new §16 items 9–10).
+
+| MAJOR-2 | `resolvePublishAccount`'s pinned branch (`lib/db/social-accounts.ts`) now requires `account.business_id === businessId && account.platform === platform`, returning `{outcome:'none'}` otherwise — never `'ambiguous'`, never a silent substitution. `getActiveById` and the non-pinned scan branch are unchanged; neither orchestrator's retry/backoff/error-switch behaviour changed (L-1). New constraint `SOCIAL-PINNED-ACCOUNT-TENANT-CHECKED` added to ADR 0028 §17.4. `database-reviewer` reviewed the fix and test coverage. | `lib/db/social-accounts.test.ts` — two new cases, both demonstrated to REDDEN against the pre-fix code (both returned `{outcome:'resolved', account:...}` instead of `{outcome:'none'}`): a pinned id belonging to another business, and one belonging to another platform. The pre-existing owned-id case (`'a pinned social_account_id WINS over the business default'`) is the regression guard. | (D2, pending) |
+
+Files touched by D2: `lib/db/social-accounts.ts` (the pinned-branch guard), `lib/db/social-accounts.test.ts`
+(two new Tier-2 cases), `docs/decisions/0028-native-social-providers.md` (new §17.4 row).
