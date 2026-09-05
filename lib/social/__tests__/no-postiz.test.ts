@@ -72,6 +72,11 @@ import path from 'node:path'
 //   exemption list — self-referential in the same way this scan file's
 //   own comment is. Its checked-off rows describe what was removed and
 //   necessarily name what was removed to say so.
+// - docs/backlog.md : the 22E-integration-discovery row (N2.13) narrates
+//   that lib/social/__integration__/ does not exist because Postiz's
+//   integration suite was deleted whole and no native replacement was
+//   written — same historical-narration reasoning as launch-checklist.md
+//   §16 immediately above.
 const ROOT = process.cwd()
 const SELF = path.join(__dirname, 'no-postiz.test.ts')
 
@@ -90,6 +95,7 @@ const EXEMPTED_FILES = [
   path.join(ROOT, 'app', '[locale]', '(dashboard)', 'settings', 'accounts', 'accounts-i18n.test.ts'),
   path.join(ROOT, 'docs', 'current-phase.md'),
   path.join(ROOT, 'docs', 'launch-checklist.md'),
+  path.join(ROOT, 'docs', 'backlog.md'),
 ]
 
 function isExempted(filePath: string): boolean {

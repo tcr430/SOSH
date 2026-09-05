@@ -464,6 +464,38 @@ These items are required by ADR 0010 and are not yet in the codebase. Each block
 
 ---
 
+## 16a. LinkedIn Community Management API access — a launch gate (ADR 0028 A-5, §12, §14.1, §16 item 1)
+
+> **This is an external review process, not an engineering task.** It cannot be started until SOSH has a
+> registered legal entity (a company number, a registered address, a privacy policy) — the same
+> prerequisite blocking `[LEGAL ENTITY]` substitution in §9. Once submitted, it can still be refused. It is
+> capable of becoming the single longest pole in the whole pre-launch plan, because its timeline is
+> entirely outside SOSH's control.
+
+**What it gates:** `w_organization_social` (posting to a LinkedIn **business page**). Without it, LinkedIn
+ships **member-only** — the founder-profile half of CLAUDE.md's locked "LinkedIn (Business and Founder)"
+platform list works; the business-page half does not exist. `w_member_social` (founder profile) is **not**
+gated by this — it activates on ordinary LinkedIn app creation, no review required (§14.1 Stage 1).
+
+- [ ] **Founder ruling received** on ADR 0028 §16 item 1: launch with LinkedIn Founder-only and say so in
+      customer-facing copy, hold launch for entity registration + Community Management API approval, or
+      amend the locked platform list. **Not yet received as of this checklist row** — do not silently
+      infer one of the three options.
+- [ ] `docs/pre-launch-scope.md` and `docs/product-status.md` do not claim LinkedIn business-page posting
+      exists until `w_organization_social` is actually granted and a business-page row appears in ADR
+      0028 §14's manual verification log.
+- [ ] SOSH has a registered legal entity (company number, registered address, privacy policy) — the
+      prerequisite for submitting the Community Management API application at all.
+- [ ] Community Management API application submitted (business email, legal name, registered address,
+      website, privacy policy; Standard tier requires a screencast per declared use case).
+- [ ] Community Management API access **granted** — `w_organization_social` requested in the LinkedIn
+      authorize URL only after this is true (an app cannot request an ungranted scope).
+- [ ] Every already-connected LinkedIn founder-profile account is re-authorised to add
+      `w_organization_social` once granted (ADR 0028 §16 item 8) — **unavoidable**, not a bug; plan as a
+      customer-communication task, not a support surprise.
+
+---
+
 ## Cross-reference
 
 This checklist enforces the contracts established in:

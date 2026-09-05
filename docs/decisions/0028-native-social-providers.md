@@ -606,3 +606,154 @@ cycle**, which constrains Session 32's read path and the metrics worker's cadenc
 6. **X's per-post cost versus "unlimited posts" on the Pro plan is an open pricing question** (§14.3), and a founder adjudication. $0.200 per linked post against a €125 plan with no stated ceiling is an unbounded liability; at 10 linked posts/day it consumes roughly half the plan price on one platform alone.
 8. **Re-authorisation is unavoidable when organization access eventually lands** (A-8). Every LinkedIn user connected under member-only scopes must re-authorise to grant `w_organization_social`. This cannot be engineered away and should be planned as a customer-communication task, not discovered as a support surprise.
 7. **§14 may be empty at merge, and that is a stated risk rather than an oversight** (§14.1). A launch-checklist row must require **at least the founder-profile row of §14 filled before launch**; shipping publishing that has never once succeeded against the real API is not a defensible launch state, regardless of how green CI is.
+
+---
+
+## 17. Closure (N2.13, 2026-09-05) — the verification pass, four new tripwires, and §16's status
+
+**Nothing above this section is edited.** This closes out Track N per the build guide's N2.13 step. Read at
+the commit this section is dated to, not at a later HEAD.
+
+### 17.1 Four new scope tripwires (N2.12/N2.13's own coverage does not appear in §10, added here)
+
+| Constraint | Test | Demonstrated to redden |
+|---|---|---|
+| `SOCIAL-WORKER-UNCHANGED` | `lib/publishing/__tests__/worker-unchanged.test.ts` — the retry/status/idempotency machinery in `orchestrator.ts` (the exact 8-case error switch, the exponential backoff formula, the four state-transition primitives, the guard-rejected self-healing log line) is unchanged; `resolvePublishAccount` is the one stated exception | Yes — temporarily linearised the backoff formula, confirmed the exact assertion failed, reverted |
+| `SOCIAL-PROVIDER-BOUNDARY` | `lib/social/__tests__/eslint-internals-ban.test.ts`'s new "all eight fire together" test — the two pre-existing tests covered only 2 of 8 `SOCIAL_INTERNALS_BAN` entries | Yes — removed one banned import from the fixture, confirmed the violation count dropped from 8 to 7, reverted |
+| `SOCIAL-META-STILL-UNAVAILABLE` | `lib/social/platforms/config.test.ts` (new file) — Instagram/Facebook/Threads stay `publishingAvailable: false`; LinkedIn/X stay `true`; exactly five platforms covered | Yes — flipped Instagram's flag to `true`, confirmed two dependent assertions failed, reverted |
+| `SOCIAL-NO-READ-PATH` | `lib/social/__tests__/no-read-path.test.ts` (new file) — no production file under `lib/social/` defines `fetchRecentPosts`/`listRecentPosts` | Yes — added a stub `fetchRecentPosts` method to `SocialProvider`, confirmed the scan named `lib/social/types.ts`, reverted |
+
+None of the four eslint.config.mjs-adjacent scans required editing that file directly (blocked by a
+config-protection hook, confirmed in the N2.12 session) — `SOCIAL-PROVIDER-BOUNDARY`'s redden was
+demonstrated by mutating the test's own fixture instead, which is equivalent from the assertion's
+perspective (an import that produces no violation is indistinguishable whether the cause is a missing
+fixture line or a dropped config entry).
+
+### 17.2 `SOCIAL-INTEGRATION-NOT-EXECUTED` — confirmed, not just asserted
+
+`lib/social/__integration__/` **does not exist in the repository.** Repo-wide, only three
+`__integration__` directories exist (`app/[locale]/(marketing)`, `lib/deletion`, `lib/email`) — none
+under `lib/social/`. Postiz's integration suite was deleted whole in N2.11; no native LinkedIn/X
+replacement was written, because per L-9 writing one would buy zero CI coverage until backlog item
+`22E-integration-discovery` closes (`vitest.config.ts`'s `exclude` still contains `**/__integration__/**`,
+and no CI job's `include`/positional filter reaches that directory even if it existed). `docs/backlog.md`'s
+`22E-integration-discovery` row is updated to say this plainly, correcting a stale "LinkedIn/X" framing
+that implied a suite exists.
+
+### 17.3 SHARED-FUNCTION CALLERS, re-grepped at HEAD
+
+**Table A — the dual-identity resolver's three callers (§5.3):**
+
+| Caller | Function(s) called | Test file | Multi-row/ambiguous case covered? |
+|---|---|---|---|
+| `app/api/social/[platform]/disconnect/route.ts:52,57` | `getActiveById`, `listActiveByBusinessAndPlatform` | `disconnect.test.ts` | Yes — `disconnect.test.ts:153` ("AMBIGUITY CASE... → 409 account_ambiguous") |
+| `lib/metrics/orchestrator.ts:67` | `resolvePublishAccount` | `orchestrator.test.ts` (lib/metrics) | Yes — `:283` mocks `{ outcome: 'ambiguous' }` |
+| `lib/publishing/orchestrator.ts:107` | `resolvePublishAccount` | `orchestrator.test.ts` (lib/publishing) | Yes — `:433` ("AMBIGUITY CASE... → fails account_ambiguous, nothing published") |
+
+All three callers are covered for the multi-row case — this was N2.5's own deliverable, re-verified here
+rather than re-asserted from memory.
+
+**Table B — the provider surface's five consumers (build-guide Reality 6), re-verified at HEAD:**
+
+| Consumer | Calls | Test file |
+|---|---|---|
+| `app/api/social/[platform]/connect/route.ts:56-58` | `getRegistry().get(platform).getOAuthAuthorizeUrl(...)` | `connect.test.ts` |
+| `app/api/social/[platform]/callback/route.ts:86` | `getRegistry().get(platform).exchangeOAuthCode(...)` | `callback.test.ts` |
+| `lib/publishing/orchestrator.ts:126-131,214-222` | `.publish(...)`, `.refreshAccessToken(...)` | `orchestrator.test.ts` (lib/publishing) |
+| `lib/metrics/orchestrator.ts:56-76` | `.fetchPostMetrics(...)` | `orchestrator.test.ts` (lib/metrics) |
+| `app/api/_health/social/route.ts` | per-platform health status | `app/api/_health/social/__tests__/route.test.ts` |
+
+**A sixth interface method, `revokeAccessToken`, has ZERO production callers** — found while re-grepping
+Table B, not previously stated. It is implemented on all three providers (`linkedin-provider.ts:340`,
+`twitter-provider.ts:473`, `mock-provider.ts:141`) and unit-tested in isolation on each (plus the contract
+suite's "never throws" assertion), but neither `disconnect/route.ts` nor `deactivateSocialAccount`
+(`lib/db/social-accounts.ts`) calls it. **`SOCIAL-REVOKE-NEVER-BLOCKS`'s own precondition — that a revoke
+is attempted at all during disconnect — does not occur in production today.** The constraint as tested
+(each provider's `revokeAccessToken` never throws) is true and proven; the constraint as the ADR's prose
+implies (disconnect attempts revocation, and a failure there doesn't block it) describes a wiring that
+does not exist. This is reported as a finding, not fixed here — N2.13 is a verification step, not an
+implementation one. Filed to `docs/backlog.md` alongside this closure.
+
+### 17.4 Constraint-to-CI map
+
+Every constraint below executes in `app-tests.yml` (`npm run test:app` → `vitest run app/ lib/ components/
+scripts/eval/`) unless marked **db-tests**. `app-tests.yml` runs on every push/PR; its own
+`scripts/ci/assert-no-empty-suite.mjs` is the skip-guard for that job. `db-tests.yml` runs
+`npm run test:db` → `vitest run supabase/__tests__` against live Postgres, also skip-guarded.
+
+| Constraint | Tier | CI job | Reddens if broken |
+|---|---|---|---|
+| `SOCIAL-CONTRACT-ALL-PROVIDERS` | 2 | app-tests | Any provider (Mock/LinkedIn/X) fails a shared contract assertion |
+| `SOCIAL-NO-POSTIZ` | 2 | app-tests | Any stray "postiz" string outside stated exemptions |
+| `SOCIAL-INTERNALS-BAN-REPLACED` | 3 | app-tests | A banned internal import is un-banned or a new one un-added |
+| `SOCIAL-NO-MULTI-PLATFORM` | 3 | app-tests | `'multi'` narrows incorrectly in `types.test.ts` |
+| `SOCIAL-AUTHORIZE-ASYNC` | 2 | app-tests | Any provider's `getOAuthAuthorizeUrl` stops returning a Promise |
+| `SOCIAL-PKCE-COOKIE` | 2 | app-tests | Verifier cookie attributes/lifetime/clearing regress |
+| `SOCIAL-PKCE-NOT-IN-STATE` | 3 | app-tests | A verifier field appears in the state JWT claims |
+| `SOCIAL-REDIRECT-URI-MATCH` | 2 | app-tests | Connect/callback derive different `redirectUri`s |
+| `SOCIAL-STATE-BINDS-BUSINESS` | 2 | app-tests | Ownership check removed before a service-role write |
+| `SOCIAL-NO-SECRET-EGRESS` | 2+3 | app-tests | A client secret appears in a bundle/log/`details` payload |
+| `SOCIAL-VAULT-UPDATE-SECRET` | **1** | **db-tests** | `vault_update_secret` missing, wrong grants, or not in-place |
+| `SOCIAL-VAULT-UPDATE-CHECKED` | 2 | app-tests | A `vault_update_secret` call site stops checking `error` |
+| `SOCIAL-LI-EXPIRY-REVOKED` | 2 | app-tests | LinkedIn refresh throws `TOKEN_EXPIRED` instead of `TOKEN_REVOKED` |
+| `SOCIAL-X-EXPIRY-FROM-RESPONSE` | 2 | app-tests | `token_expires_at` stops deriving from `expires_in` |
+| `SOCIAL-REVOKE-NEVER-BLOCKS` | 1+2 | app-tests (2 only — see §17.3) | A provider's `revokeAccessToken` throws instead of resolving |
+| `SOCIAL-DUAL-IDENTITY-SCHEMA` | **1** | **db-tests** | `posts.social_account_id` FK/cascade/RLS regresses |
+| `SOCIAL-DUAL-IDENTITY-RESOLVER` | 2 | app-tests | Any of the three callers' ambiguous-case test regresses (§17.3 Table A) |
+| `SOCIAL-LI-AUTHOR-URN` | 2 | app-tests | Person/organization URN handling regresses |
+| `SOCIAL-LI-POSTID-FROM-HEADER` | 2 | app-tests | `platformPostId` starts reading from the body |
+| `SOCIAL-MEDIA-GUARD` | 2 | app-tests | Non-empty `mediaUrls` stops rejecting before a network call |
+| `SOCIAL-ERROR-MAPPING` | 2 | app-tests | Any §7.2 row's mapping regresses |
+| `SOCIAL-RATE-LIMIT-RETRY-AFTER` | 2 | app-tests | The finite guard or 60s fallback regresses |
+| `SOCIAL-REGISTRY-PER-PLATFORM` | 2 | app-tests | Overrides routing or per-platform absence regresses |
+| `SOCIAL-META-NOT-REGISTERED` | 2 | app-tests | A Meta platform gets a provider or loses its `coming_soon` gate |
+| `SOCIAL-MOCK-MODE-OFFLINE` | 2 | app-tests | Mock mode makes a real network call |
+| `SOCIAL-CSP-NO-POSTIZ-HOST` | 2 | app-tests | `buildCsp` regains a `postizHost`-shaped parameter |
+| `SOCIAL-HEALTH-PER-PLATFORM` | 2 | app-tests | Health route re-names a broker |
+| `SOCIAL-I18N-NO-BROKER-KEY` | 2+3 | app-tests | `postiz_unavailable` key reappears, or its replacement disappears |
+| `SOCIAL-ERR-MATRIX-TRUE` | 3 | N/A — Tier-3 documentation decision, no runtime test (ADR 0005 §5's prose was the defect, not code) | — |
+| `SOCIAL-INTEGRATION-NOT-EXECUTED` | 3 | N/A — Tier-3 decision proven by absence (§17.2); `vitest.config.ts`'s `exclude` is the mechanism, not a test asserting it | — |
+| `SOCIAL-WORKER-UNCHANGED` | 2 (N2.13) | app-tests | The retry/status/idempotency invariants in `orchestrator.ts` change beyond account resolution |
+| `SOCIAL-PROVIDER-BOUNDARY` | 2 (N2.13) | app-tests | Any of the eight `SOCIAL_INTERNALS_BAN` entries stops firing |
+| `SOCIAL-META-STILL-UNAVAILABLE` | 2 (N2.13) | app-tests | Instagram/Facebook/Threads flip to `publishingAvailable: true` without Meta App Review having happened |
+| `SOCIAL-NO-READ-PATH` | 2 (N2.13) | app-tests | `fetchRecentPosts`/`listRecentPosts` is added to `lib/social/` ahead of Session 32 |
+
+**CI run URLs for the commit this section is dated to:** not yet available — this branch had not been
+pushed at the time this section was written. **Superseded by a dated follow-up note appended immediately
+below, added after the push, citing the real run URLs** rather than a plausible-looking placeholder (the
+Session 28 false "29/29 executed green" precedent this ADR's own §17 exists to not repeat).
+
+### 17.5 Tier-3 constraints, enumerated as decisions
+
+- `SOCIAL-INTERNALS-BAN-REPLACED`, `SOCIAL-NO-MULTI-PLATFORM`, `SOCIAL-PKCE-NOT-IN-STATE`,
+  `SOCIAL-I18N-NO-BROKER-KEY` (Tier 2+3) — each **is** a runtime test (see §17.4); Tier 3 here means "an
+  absence/shape property", not "untested".
+- `SOCIAL-ERR-MATRIX-TRUE` — a decision that ADR 0005 §5's *prose* was wrong, corrected by A-7's
+  documentation-only amendment. No code changed, so no runtime test proves it; the amendment text itself
+  is the artefact.
+- `SOCIAL-INTEGRATION-NOT-EXECUTED` — a decision to state absence of coverage honestly rather than fake
+  it with a suite no CI job runs. Proven by `vitest.config.ts`'s `exclude` pattern (a config fact) plus
+  the backlog item recording the un-defer trigger, not by a passing test.
+
+### 17.6 §14 manual verification log
+
+**Empty**, exactly as it was when this ADR was authored. No connect-and-publish cycle was performed
+against a real platform during N2.12 or N2.13 — both were documentation/UI/verification steps with no
+platform credentials in scope. This is the honest state per §14.1, not a formality to backfill before
+merge.
+
+### 17.7 §16 stated-open items — what this closure does and does not resolve
+
+**None of §16's eight items are closed by N2.12 or N2.13.** Specifically:
+
+- **Item 1 (LinkedIn ships member-only) and item 6 (X's per-post link cost vs. "unlimited posts") remain
+  OPEN FOUNDER ADJUDICATIONS.** Neither this session nor any Builder session can resolve them — they are
+  product/pricing decisions requiring an explicit founder ruling, named as such in §16 itself. Saying so
+  here is required, not optional (build guide N2.13's explicit instruction) — a reader must not infer
+  either is closed by omission. `docs/launch-checklist.md` §16a (added this session) makes item 1's
+  three options and its current unresolved status an executable checklist row rather than only ADR prose.
+- **Items 2, 3, 4, 5, 7 and 8 are standing facts/risks recorded for awareness**, not defects with a fix
+  step this session could take — periodic `Linkedin-Version` review (2), LinkedIn's carousel limitation
+  (3), unmigratable existing connections (4), a failed-revocation-leaves-a-live-token acceptance (5), the
+  empty-§14-at-merge risk (7, restated in §17.6 above), and the unavoidable future re-authorisation (8) —
+  none of these are proven false or resolved by N2.13; they remain exactly as stated.
