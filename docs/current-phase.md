@@ -1826,3 +1826,26 @@ The two-axis permission model is DB-enforced, not app-layer-only: `user_can(busi
   regression (the same function's grants were independently confirmed correct against the live linked
   Supabase project). Not a blocker: `db-tests` is not yet a required gate. Filed as
   `30.5-DBTESTS-READINESS-RACE`. Full detail in ADR 0028 §17.4.
+
+### Session 30.5-D (2026-09-05/06) — correction pass, D0-D9
+
+- **All 16 N3-reviewer findings plus 2 founder adjudications fixed or ruled**, one commit per step
+  (`02a93980`..`933a335c`): BLOCKER-1 (three endpoint URLs re-sourced against live vendor docs, none had
+  actually been verified despite a citation claiming so), MAJOR-2 (a latent cross-tenant publish path in
+  `resolvePublishAccount`'s pinned branch, closed with a `business_id`/`platform` check), MAJOR-1 (disconnect
+  now actually attempts platform revocation, with an added network timeout the build guide's own rules
+  required), MAJOR-3/A-11 (`r_member_postAnalytics` verified review-gated, not shipped — the founder's "Yes"
+  authorised the decision, not the fact), A-9′ (ship both LinkedIn account types, no locked-list amendment),
+  A-10 (X's per-post cost recomputed at realistic volume, ruled immaterial), MINOR-3 through MINOR-7 and
+  NIT-1 through NIT-4 (guard names, an i18n key, ADR §16's numbering, an arithmetic sweep that itself found
+  the ADR's own "corrected to seven" claim was wrong — the original "eight" was right).
+- **`app-tests` re-verified GREEN at the corrected head**, [run 33998672886](https://github.com/tcr430/SOSH/actions/runs/33998672886), commit `933a335c`.
+- **`db-tests` — RED a fourth consecutive time, diagnosis sharpened, not resolved.** A memory-tuning fix
+  (`shared_buffers`/`maintenance_work_mem` lowered) was pushed and re-tested — still red, but this time with
+  healthy container memory and an explicit `signal 11: Segmentation fault` in the Postgres log, coinciding
+  with `vault_update_secret` RPC calls across all four reds observed. This is not a resource-exhaustion
+  signature; it points at the `pgsodium`/Vault extension, not memory pressure — the memory fix addressed the
+  wrong theory, and that failure is itself the evidence that sharpened the diagnosis. `SOCIAL-VAULT-UPDATE-
+  SECRET` and `SOCIAL-DUAL-IDENTITY-SCHEMA` are marked `AUTHORED-NOT-EXECUTED` in ADR 0028 §17.4's table.
+  `db-tests` remains not a required gate, so this does not block merge. Filed as `30.5-DBTESTS-READINESS-
+  RACE` (updated) in `docs/backlog.md`, with a new bug entry in `.wolf/buglog.json` (bug-1031).

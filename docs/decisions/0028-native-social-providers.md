@@ -751,12 +751,12 @@ scripts/eval/`) unless marked **db-tests**. `app-tests.yml` runs on every push/P
 | `SOCIAL-REDIRECT-URI-MATCH` | 2 | app-tests | Connect/callback derive different `redirectUri`s |
 | `SOCIAL-STATE-BINDS-BUSINESS` | 2 | app-tests | Ownership check removed before a service-role write |
 | `SOCIAL-NO-SECRET-EGRESS` | 2+3 | app-tests | A client secret appears in a bundle/log/`details` payload |
-| `SOCIAL-VAULT-UPDATE-SECRET` | **1 — AUTHORED-NOT-EXECUTED** (Session 30.5-D, D8: never once run green in CI across three attempts at `608f3839`/`b6580b84`/`be03c917`; cause is infra — see the correction note below this table's section — not a DB-behaviour regression, but ADR 0015 §2 does not distinguish cause when scoring coverage) | **db-tests** | `vault_update_secret` missing, wrong grants, or not in-place |
+| `SOCIAL-VAULT-UPDATE-SECRET` | **1 — AUTHORED-NOT-EXECUTED** (Session 30.5-D, D8/D9: never once run green in CI across **four** attempts at `608f3839`/`b6580b84`/`be03c917`/`933a335c`; cause is infra — a Postgres backend SIGSEGV coinciding with `vault_update_secret` calls, see the correction notes below this table's section — not a DB-behaviour regression, but ADR 0015 §2 does not distinguish cause when scoring coverage) | **db-tests** | `vault_update_secret` missing, wrong grants, or not in-place |
 | `SOCIAL-VAULT-UPDATE-CHECKED` | 2 | app-tests | A `vault_update_secret` call site stops checking `error` |
 | `SOCIAL-LI-EXPIRY-REVOKED` | 2 | app-tests | LinkedIn refresh throws `TOKEN_EXPIRED` instead of `TOKEN_REVOKED` |
 | `SOCIAL-X-EXPIRY-FROM-RESPONSE` | 2 | app-tests | `token_expires_at` stops deriving from `expires_in` |
 | `SOCIAL-REVOKE-NEVER-BLOCKS` | 1+2 | app-tests | A provider's `revokeAccessToken` throws instead of resolving, **or** (Session 30.5-D, D3) `disconnect/route.ts` propagates a revoke failure / unconfigured-provider error instead of completing local cleanup — `disconnect.test.ts`'s two mutation-tested cases |
-| `SOCIAL-DUAL-IDENTITY-SCHEMA` | **1 — AUTHORED-NOT-EXECUTED** (Session 30.5-D, D8: appears to execute — `posts_social_account_id_fkey` violations appear in the failure log, its own negative case — but always inside a job that failed overall, so no green record exists) | **db-tests** | `posts.social_account_id` FK/cascade/RLS regresses |
+| `SOCIAL-DUAL-IDENTITY-SCHEMA` | **1 — AUTHORED-NOT-EXECUTED** (Session 30.5-D, D8/D9: appears to execute — `posts_social_account_id_fkey` violations appear in the failure log, its own negative case — but always inside a job that failed overall across all **four** attempts, so no green record exists) | **db-tests** | `posts.social_account_id` FK/cascade/RLS regresses |
 | `SOCIAL-DUAL-IDENTITY-RESOLVER` | 2 | app-tests | Any of the three callers' ambiguous-case test regresses (§17.3 Table A) |
 | `SOCIAL-PINNED-ACCOUNT-TENANT-CHECKED` | 2 (Session 30.5-D, D2) | app-tests | `resolvePublishAccount`'s pinned branch resolves an account whose `business_id` or `platform` doesn't match the caller's, instead of returning `'none'` |
 | `SOCIAL-LI-AUTHOR-URN` | 2 | app-tests | Person/organization URN handling regresses |
@@ -784,6 +784,9 @@ scripts/eval/`) unless marked **db-tests**. `app-tests.yml` runs on every push/P
   `608f3839` (this closure's own preceding commit) had reddened on an unrelated pre-existing constraint,
   `POSTS-DDL-UNMODIFIED` (ADR 0022 §11.3) — fixed in `b6580b84` per the retirement reasoning in that
   commit's message; not one of this ADR's own `SOCIAL-*` constraints.
+  **Re-verified at the corrected range (Session 30.5-D, D9): GREEN again**,
+  [run 33998672886](https://github.com/tcr430/SOSH/actions/runs/33998672886), commit `933a335c` —
+  every D1-D8 change is covered by this green run.
 - **`db-tests` — RED, three consecutive attempts, and NOT a behaviour regression.**
   `https://github.com/tcr430/SOSH/actions/runs/33970367722` (reran twice at the same commit). Every
   attempt fails identically: `vault-update-secret.test.ts`'s three permission tests (anon-denied,
@@ -823,6 +826,32 @@ scripts/eval/`) unless marked **db-tests**. `app-tests.yml` runs on every push/P
   unconditionally) per database-reviewer's diagnosis that a cgroup kill of a child Postgres backend never
   sets the container's own `OOMKilled` flag. `docs/backlog.md`'s `30.5-DBTESTS-READINESS-RACE` entry is
   updated to match.
+
+  **Further correction (Session 30.5-D, D9, 2026-09-05T23:27-23:29 UTC).** The memory-tuning fix
+  (`shared_buffers`/`maintenance_work_mem` lowered) was pushed and re-tested at `933a335c`:
+  [run 33998672960](https://github.com/tcr430/SOSH/actions/runs/33998672960). **RED a fourth
+  consecutive time — but with sharper evidence that refines, not confirms, the memory-pressure
+  theory.** `docker inspect` on `supabase_db_SOSH` now shows `ExitCode=0` and healthy host memory
+  (`free -h`: 15Gi total, 1.6Gi used, 7.8Gi free) — no OOM-shaped signature this time at all. The
+  container log instead shows: `LOG: server process (PID 362) was terminated by signal 11:
+  Segmentation fault`, immediately followed by `terminating any other active server processes`,
+  `all server processes terminated; reinitializing`, and the same `FATAL: the database system is
+  in recovery mode` / `not accepting connections` sequence, coinciding with `vault_update_secret`
+  RPC calls (the same 503-after-204 pattern as the prior three reds). **A SIGSEGV in a Postgres
+  backend is not a resource-exhaustion signature** — it points at a crash in the backend process
+  itself (plausibly in the `pgsodium`/Vault extension's encryption path, given every crash observed
+  across all four reds coincides with `vault_update_secret` calls specifically), not memory
+  pressure from the surrounding services. The two invisible suites reported in *this* run
+  (`post-ai-originals-latest-per-post`, `signals3-triage-atomic`) differ from the seven reported in
+  the original run this pass investigated — consistent with a crash whose *position* in file-
+  processing order varies run to run, which is itself evidence for non-deterministic infrastructure
+  flakiness rather than a deterministic behavioural regression. **The memory-tuning fix did not
+  resolve the crash** (it may still be a legitimate hardening, but it was not the root cause).
+  `SOCIAL-VAULT-UPDATE-SECRET` and `SOCIAL-DUAL-IDENTITY-SCHEMA` remain `AUTHORED-NOT-EXECUTED` —
+  now with a fourth red data point rather than three. Root-causing a segfault inside a third-party
+  Postgres extension is beyond this correction pass's scope; filed as a sharper `30.5-DBTESTS-
+  READINESS-RACE` update in `docs/backlog.md` (a Postgres/pgsodium version pin or upgrade is the
+  next thing to try, not another resource-limit adjustment).
 
 ### 17.5 Tier-3 constraints, enumerated as decisions
 
