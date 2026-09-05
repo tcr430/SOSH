@@ -162,7 +162,6 @@
         "exchange_failed": "Não foi possível concluir a ligação. Por favor, tente novamente.",
         "vault_write_failed": "Não foi possível guardar as suas credenciais em segurança. Por favor, tente novamente.",
         "db_write_failed": "Não foi possível guardar a ligação. Por favor, tente novamente.",
-        "provider_unavailable": "O serviço de publicação está temporariamente indisponível. Por favor, tente mais tarde.",
         "connect_failed": "Falha ao conectar. Por favor tente novamente."
       },
       "success": {

@@ -4,12 +4,13 @@ import type { Platform } from '@/lib/social'
 // ADR 0028 §9.4 — exactly seven OAuth error-redirect codes, all landing on
 // /{locale}/settings/accounts: invalid_state, forbidden, oauth_denied,
 // exchange_failed, vault_write_failed, db_write_failed (callback/route.ts),
-// connect_failed (connect/route.ts:69). 'provider_unavailable' is NOT one of
-// them — it is a translation key renamed in N2.11 from the prior broker's
-// equivalent (SOCIAL-I18N-NO-BROKER-KEY), but no connect/callback route emits
-// error=provider_unavailable today; grepped both routes to confirm. Kept in
-// the locale files (accounts-i18n.test.ts still asserts its presence) but
-// deliberately absent from ERROR_KEYS, which names only reachable states.
+// connect_failed (connect/route.ts:69). 'provider_unavailable' was NOT one
+// of them — it was a translation key renamed in N2.11 from the prior
+// broker's equivalent (SOCIAL-I18N-NO-BROKER-KEY), but no connect/callback
+// route ever emitted error=provider_unavailable. NIT-1 (Session 30.5-D, D7):
+// removed from all three locale files entirely, rather than kept alive by a
+// test pinning its presence — a translated string no code path can produce
+// is dead weight, not a defensive reserve.
 export const ERROR_KEYS = [
   'invalid_state',
   'forbidden',

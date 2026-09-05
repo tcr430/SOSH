@@ -86,13 +86,15 @@ describe.each(IMPLEMENTATIONS)('SocialProvider contract: $name', ({ name, makePr
 
   // ADR 0028 §9.1 also asserts "platform is a real Platform and never
   // 'multi'". MockProvider is deliberately exempted from this one assertion:
-  // the registry (registry.ts:24-57) still shares one MockProvider instance
-  // across all five platforms until N2.10 makes the registry overrides-only,
-  // so a fixed real-platform identity on MockProvider today would misrepresent
-  // that shared role for four of the five platforms it serves. This assertion
-  // becomes real and enforced the moment N2.10 adds LinkedInProvider and
-  // TwitterProvider, both of which are always bound to exactly one real
-  // platform.
+  // the registry (registry.ts:16-34, overrides-only since N2.10, MockProvider
+  // registered for all five platforms in mock mode at registry.ts:44-54)
+  // still shares one MockProvider instance across all five platforms in mock
+  // mode, so a fixed real-platform identity on MockProvider would misrepresent
+  // that shared role for four of the five platforms it serves. The assertion
+  // IS real and enforced for LinkedInProvider and TwitterProvider — both are
+  // in IMPLEMENTATIONS above and always bound to exactly one real platform.
+  // (Re-tensed Session 30.5-D, D7, MINOR-5: this comment previously read as
+  // describing pending work; N2.10 landed inside the reviewed range.)
   if (name !== 'MockProvider') {
     it("platform is a real Platform, never 'multi'", () => {
       expect(provider.platform).not.toBe('multi')

@@ -25,12 +25,18 @@ describe('accounts i18n — SOCIAL-I18N-NO-BROKER-KEY', () => {
     expect(error).not.toHaveProperty('postiz_unavailable')
   })
 
-  it.each(LOCALES)('%s: settings.accounts.error.provider_unavailable is present with a non-empty message', (locale) => {
+  // NIT-1 (Session 30.5-D, D7): the "provider_unavailable is present" test
+  // that lived here is REMOVED, not just changed — the key itself is deleted
+  // from all three locale files in this commit. No route emits
+  // error=provider_unavailable (it is deliberately absent from
+  // resolve-banner.ts's ERROR_KEYS, confirmed by grep), so pinning the
+  // translated string's presence kept a dead key alive. This is the ONLY
+  // test deletion this correction pass authorises, and it is paired with
+  // removing the string — not with lowering a bar.
+  it.each(LOCALES)('%s: settings.accounts.error has no provider_unavailable key (removed, unemittable — NIT-1)', (locale) => {
     const settings = loaded[locale]!['settings'] as Record<string, unknown>
     const accounts = settings['accounts'] as Record<string, unknown>
     const error = accounts['error'] as Record<string, unknown>
-    expect(typeof error['provider_unavailable']).toBe('string')
-    expect((error['provider_unavailable'] as string).length).toBeGreaterThan(0)
+    expect(error).not.toHaveProperty('provider_unavailable')
   })
-
 })
