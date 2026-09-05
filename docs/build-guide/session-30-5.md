@@ -1920,27 +1920,836 @@ resolution log.
 
 ## §4 — Correction pass (Session 30.5-D) · (paste into Claude Code · Opus)
 
-> **PLACEHOLDER — authored ONLY after the Reviewer has actually run and
-> `docs/reviews/session-30-5-reviewer.md` exists.** A correction pass is a response to findings; there is
-> nothing to order, prioritise or resolve until the findings exist, and inventing them ahead of time
-> produces a fictional resolution log.
+**Authored 2026-09-05, after the Reviewer ran.** `docs/reviews/session-30-5-reviewer.md` is the
+authoritative findings document; this section is the work order derived from it. The reviewed range is
+`54110178..be03c917` (the fifteen Builder commits N2.1 → N2.13-D2); the findings document itself is read
+at **its own** commit, per the Session 22-F / NEW-12 exception — it is **untracked** at the range head,
+which is why D0 exists and runs first. **Ten steps: D0–D9.** Correction passes are normal, not failures
+(constitution). **There is no independent re-review pass this session** (the 23-D…29-D precedent): this
+pass fixes the Reviewer's findings, records its own resolutions in the reviewer's own file, and the
+founder adjudicates close-out.
 
-**What this section will contain when authored:** the founder adjudications the review escalated; a
-summary of what the Reviewer found (with `docs/reviews/session-30-5-reviewer.md` named as authoritative);
-the ordering rationale; where resolutions go; **§4.0** the correction primer; **§4.1** the correction steps
-`D0 … Dn`, one paste block each; **§4.2** the resolution log; and **§4.3** the close-out.
+**The Reviewer's verdict on the track is favourable, and that framing matters for how this pass is read.**
+The two Session-22-class traps the primer was written to catch are genuinely closed: the contract suite
+parameterises over **all three** implementations rather than excluding the real ones, and both shared
+functions were re-grepped per caller with every caller covered. The anti-circularity fixtures the ADR
+asked for exist and are the right shape — the LinkedIn `x-restli-id` **decoy body**, the X expiry
+**disagreement** fixture, the media guard's **zero-fetch** assertion, and D-α's **second** (refresh-token)
+`vault_update_secret` error check. Four scans were demonstrated to redden with the transcript recorded.
+The Builder self-reported two defects (the zero-caller `revokeAccessToken`, the red `db-tests`) that a
+less honest pass would have buried, and §14's manual-verification log is **empty** because no live
+verification was performed — which is the honest state, not a gap.
 
-**`REVIEWER-REPORT APPEND-ONLY` — the four conditions, all load-bearing, all inherited here:**
+**So this pass is not a rescue either. Its findings concentrate in exactly one place, and the ADR named
+that place itself: §13's rule against writing a platform fact from memory.** BLOCKER-1, MINOR-1 and
+MINOR-2 are the same defect at three degrees of honesty — an unsourced URL wearing a citation, a sourced
+URL recorded only in a code comment, and a guess correctly labelled as a guess. MAJOR-3 is the same
+family one level up: a platform fact N2.1 correctly **escalated**, which then fell between N2.1, §13 and
+N2.7 and reached the head as silence.
+
+**The single process lesson of this pass, and it belongs in the ADR rather than in a commit message:**
+*a platform fact is sourced in exactly one place, and a citation is a promise that the cited place
+contains it.* A citation that points at a record which does not contain the claim is worse than no
+citation, because it converts "unverified" into "someone already checked" for every future reader.
+BLOCKER-1 is that sentence.
+
+**Founder direction — every finding is fixed, including the ones the Reviewer graded as deferrable.**
+Per founder direction (as in Sessions 23-E, 24-D, 25-D, 26-D, 27-D, 28-D and 29-D), MINOR-1…7 and
+NIT-1…4 are **resolved in this pass anyway**, each with its own resolution row — **including any that is
+declined, deferred or argued rather than changed**. MINOR-2 is expected to be one of those (the reviewer
+raised it *"only so the correction pass has an ID for it"*), and the two founder adjudications the review
+restated as open get rows recording the ruling even where no code moves. An unexplained gap between
+findings and resolutions is what makes the trail unreadable later; a deferral **with a row** is a
+decision, a deferral **without one** is an omission.
+
+**The tally reconciles, and this pass says so rather than assuming it.** The report's closing line reads
+*"16 findings (2 BLOCKER, 3 MAJOR, 7 MINOR, 4 NIT)"* and the body carries BLOCKER-1…2, MAJOR-1…3,
+MINOR-1…7 and NIT-1…4 — **sixteen IDs, and the arithmetic is right.** Add the two founder adjudications
+restated as open and the resolution log carries **eighteen rows**. That row count is the check that
+nothing was lost between the report and the pass. (Unlike Session 29, there is no miscount to argue in the
+appendix — recorded here so a later reader knows it was checked, not skipped.)
+
+### Adjudications A-9 … A-12 — RAISED HERE, founder rules before D4 and D6 run
+
+The Reviewer correctly refused to choose for us in four places. **§0's L-1…L-12 and §0.2's A-1…A-8 / A-5′
+/ A-8a are NOT reopened by any of them** — in particular A-8 (LinkedIn ships member-only, organization
+posting deferred behind a legal entity) stands exactly as written, which is why A-9 is a *product-copy and
+launch-scope* ruling and **not** a reopening of A-8.
+
+| # | Item | Recommended ruling (founder to confirm) | Named loser | Where it lands |
+|---|---|---|---|---|
+| **A-9** | **Founder adjudication 1, restated open by the Reviewer** — CLAUDE.md's locked launch platforms read **"LinkedIn (Business and Founder)"**; A-8 defers organization posting behind a legal entity that does not exist and a Community Management API approval that can still be refused. **Launch as built delivers the Founder half only.** ADR §16 item 1 calls it *"the most likely long pole in the whole pre-launch plan"* | **Launch member-only, and say so in customer-facing copy.** The locked list is amended **in place with a dated note, not rewritten**: LinkedIn ships as *Founder profile at launch; Company Page when the entity and Community Management API approval land*. Pricing copy, the accounts surface and `pre-launch-scope.md` all state it. The strategic decision is not abandoned — it is **staged**, and the staging is visible to the customer before they pay. | **Silence — shipping member-only while the marketing site still promises Business.** That is a promise the product cannot keep on day one, discovered by the customer rather than disclosed by us, on the exact platform the ICP cares most about. Also rejected: **holding launch for the entity**, which makes an unbounded legal timeline the critical path for the whole product. | `CLAUDE.md` locked-decisions note; `docs/pre-launch-scope.md`; `docs/product-status.md`; `launch-checklist.md` §16a; ADR §16 item 1. **Step D4** records the ruling; no code. **⚠️ SUPERSEDED BY A-9′ — the ruling went against this recommendation, and it is preserved rather than rewritten** |
+| **A-9′** | **Ruled 2026-09-05, superseding A-9.** Founder: *"I want to ship with both account types… just ignore what I said, ship both account types."* The member-only launch framing is **rejected**, and the locked list is **not** amended. **A same-day challenge to A-5′'s premise** (that LinkedIn's review gate covers member posting too, which would have meant LinkedIn could not publish at all) **was raised and then explicitly withdrawn by the founder.** It is recorded here because it was raised, not because it stands: **A-5′ and A-8 are unchanged and unreopened** | **Ship both account types; write no "member-only" copy; amend no locked decision.** Three things make this deliverable rather than aspirational, and the third is the honest part. (1) **The dual-identity model already shipped in this very session** (A-6/A-8a) — `posts.social_account_id`, the resolver, and the two-identity accounts surface are built and tested; nothing further is needed to *support* two account types. (2) **X delivers both fully at launch** — Business and Founder are two OAuth connections against two accounts, needing no elevated tier and no approval. (3) **LinkedIn Company Page posting remains gated externally** on the registered legal entity and Community Management API approval (A-8) — that is not a decision anyone can take, so the ruling cannot make it ship. **Concretely: LinkedIn Company Page renders `coming_soon`** — the pattern A-1 already established for the three Meta platforms — so the capability is visible and honestly stated rather than absent, promised, or silently broken | **Amending the locked platform list, or writing "LinkedIn: Founder profile only" into customer-facing copy** — the A-9 recommendation, rejected. It narrows a strategic decision in response to a timing problem, and bakes a temporary external gate into permanent product prose. **Also rejected: promising Company Page posting on a surface that cannot yet perform it**, which is the failure A-9 was actually trying to prevent and which `coming_soon` prevents instead | **D4** records the ruling; no code — items (1) and (2) already shipped, and (3) is a `coming_soon` state that `lib/social/connection-status.ts` and `PLATFORM_CONFIGS` already express. Touches ADR §16 item 1 and `launch-checklist.md` §16a only |
+| **A-10** | **Founder adjudication 2, restated open by the Reviewer** — §14.3 records **$0.200 per linked X post** against a Pro plan advertising **unlimited posts** at €125/mo. Ten linked posts a day is roughly half the plan price on one platform. N2.1 additionally found an unresolved source discrepancy on the pay-per-use read cap (2M vs §14.3's 3M) | **Record the exposure as a stated-open pricing item with a named ceiling to be set before launch** — this is a pricing decision, not an engineering one, and this pass must not invent a number. What the pass **does** owe: the arithmetic written down where pricing is decided (`pre-launch-scope.md` / `launch-checklist.md`), the 2M/3M discrepancy carried as unresolved rather than silently resolved to either figure, and **no code-level cap introduced** — a throttle nobody adjudicated is worse than a documented exposure. **⚠️ NARROWED BY THE FOUNDER, 2026-09-05 — the ceiling is withdrawn.** The founder rejected the ten-posts-a-day figure as unrealistic — *"that's just noise"* — and is right: 300 linked posts a month is not a content strategy, a human-approval workflow will not produce it, and presenting a worst-case ceiling as a forecast was the error. **Recomputed at a realistic 2–3 linked posts a day: roughly $12–18/month against a €125 plan — under 15%, an ordinary COGS line**, and that is still the high end because not every post carries a link. **Therefore: record the cost model with THAT arithmetic, and no more.** No ceiling to be set, no stated-open pricing decision, and (unchanged) no code-level cap. **The 2M/3M read-cap discrepancy stays open** — that is a factual gap in N2.1's record, not a pricing judgement, and it costs nothing to carry. | **Treating "unlimited" as costless because no customer has connected yet.** The cost is per-post and linear; the first heavy Pro customer discovers it for us. Also rejected: **quietly capping posts in code** to protect margin, which makes the product silently different from what was sold. | `docs/pre-launch-scope.md`; `launch-checklist.md`; ADR §16. **Step D4** records the ruling; no code |
+| **A-11** | **MAJOR-3** — N2.1 escalated the `r_member_postAnalytics` scope; ADR §13 item 8 restated it as *"an open decision for N2.7's author or the Architect"*; N2.7 shipped `PLATFORM_CONFIGS.linkedin.scopes = ['openid','profile','email','w_member_social']` **without it and without a decision**, and §16's eight stated-open items do not include it. Four of seven `PostMetrics` fields are permanently null for LinkedIn as a **SOSH scope choice**, not a platform limit | **Add `r_member_postAnalytics` to `PLATFORM_CONFIGS.linkedin.scopes` now, while it is free.** Scopes are baked into the token at authorisation; **no production LinkedIn OAuth app is registered yet** (§14.1), so today the change costs one line and one test. After first connection it costs a forced re-authorisation of every connected user — and §16 item 8 already plans one of those for `w_organization_social`. **The A-8 withdrawal does not apply here**: `w_organization_social` fails in the authorize URL until the *product* is approved, whereas `r_member_postAnalytics` is a member scope on the same auto-enabled product tier. **Verify that last claim against the vendor doc in-step (§13's rule), and if it turns out to sit behind a review, fall back to the loser below and say so.** **✅ CONFIRMED BY THE FOUNDER, 2026-09-05 — *"Yes."*** The in-step vendor-doc verification is **not** waived by the confirmation: the ruling is *add the scope*, and §13 still requires the scope string itself to arrive with a source and a read-date. A founder "yes" authorises the decision, never the fact. | **Recording it as a §16 stated-open item and shipping without the scope.** Acceptable only if the scope proves to be review-gated; otherwise it permanently degrades LinkedIn analytics on a Pro tier that advertises *"advanced analytics"*, or buys a second forced re-authorisation. **Silence is the one outcome that is not acceptable** — a decision N2.1 correctly escalated has already been lost between three steps once. | `lib/social/platforms/config.ts`; `lib/social/__tests__/` scope test; ADR **§6 / §16 amendment**; step **D4** |
+| **A-12** | **MINOR-6** — `connection-status.ts:26-31` returns `expiring_soon` for **negative** `daysUntilExpiry`, so an account whose 60-day LinkedIn token expired three days ago renders *"expires soon, renew it"* with a past date. The worker behaves correctly (`TOKEN_REVOKED`); the **accounts surface** tells the user their dead connection is fine-for-now. The Reviewer flags that a sixth state is a genuine widening of §9.4's five, so it may be an ADR question | **Route `daysUntilExpiry < 0` to the existing `disconnected` state. Do not add a sixth state.** §9.4's five states are an ADR-level contract; an expired token *is* disconnected in every way the user can act on — the required action is identical (reconnect), and the copy and CTA already exist in all three locales. This is a **boundary correction inside the existing contract**, not a widening of it, so it needs no ADR amendment beyond a one-line §9.4 note that the boundary is `< 0 → disconnected`. **✅ CONFIRMED BY THE FOUNDER, 2026-09-05 — *"OK."*** No sixth state; D6 implements as recommended. | **A sixth `expired` state.** It duplicates `disconnected`'s copy, CTA and handling for a distinction the user cannot act on differently, and it costs three new i18n keys ×3 locales plus an ADR §9.4 amendment. Also rejected: **leaving it**, given LinkedIn's non-refreshable 60-day token makes this the single most common reconnection event the product will generate. | `lib/social/connection-status.ts`; `connection-status.test.ts`; ADR **§9.4 note**; step **D6** |
+
+**Why A-11 is the one a Builder is most likely to get half-right.** Adding the scope string to
+`PLATFORM_CONFIGS.linkedin.scopes` is one line and looks finished. It is not: `SOCIAL-LI-SCOPES` must gain
+a positive assertion that the scope is **present** (today's tests only assert `w_organization_social` is
+**absent**, per A-8), §6's capability table must be re-derived — the four fields stop being permanently
+null and become *available-pending-Session-33* — and §13's own rule applies to the scope string itself,
+which must be read from the vendor doc in-step with a source and a read-date, not typed from memory. A
+scope added without those three is the same defect BLOCKER-1 raises, committed inside the fix for it.
+
+### What the Reviewer found (summary — `session-30-5-reviewer.md` is authoritative)
+
+| ID | Tier | One line | Fixed in |
+|---|---|---|---|
+| — | audit | `docs/reviews/session-30-5-reviewer.md` is **untracked** (`??`) at the range head; every step below amends or cites it | **D0** (first, deliberately) |
+| BLOCKER-1 | BLOCKER | Three shipped endpoint URLs — `X_AUTHORIZE_URL`, `X_TOKEN_URL`, `LINKEDIN_POSTS_URL` — cite N2.1 items that **do not contain them**; every provider test mocks `fetch`, so the first exercise is the first real customer connection. A self-concealing defect of the exact class §13 exists against | **D1** |
+| MINOR-1 | MINOR | `LINKEDIN_USERINFO_URL` / `X_USERINFO_URL` are sourced **honestly but only in a code comment**, outside N2.1's log; and LinkedIn's OIDC `subject_types_supported: ["pairwise"]` question — whether `sub` is the id space `urn:li:person:` expects — is raised **only in that comment**, not in §16 | **D1** |
+| MINOR-2 | MINOR | `X_REVOKE_URL` is *"the standards-compliant best guess, not a confirmed URL"* — **correctly disclosed**, raised only so this pass has an ID for it; untested in both senses because MAJOR-1 means it is never called | **D1** (documented) / **D3** (called) |
+| MAJOR-2 | MAJOR | `resolvePublishAccount`'s pinned branch calls `getActiveById`, which filters on `id` + `is_active` **only** — no `business_id`, no `platform` — under a **service-role client that bypasses RLS**, with both values in hand at the call site. Latent cross-tenant publish; `disconnect/route.ts:52-55` already checks both against the same helper | **D2** |
+| MAJOR-1 | MAJOR | `revokeAccessToken` has **zero production callers**; `SOCIAL-REVOKE-NEVER-BLOCKS` is vacuously satisfied. A founder who disconnects X leaves a **live token at X**, and SOSH has deleted the vault record that could ever revoke it. §16 item 5's accepted risk assumes a revoke is *attempted* | **D3** |
+| MAJOR-3 | MAJOR | `r_member_postAnalytics` was escalated by N2.1, restated as open by §13 item 8, and then **neither shipped nor recorded** — four `PostMetrics` fields permanently null as a SOSH choice, and the window in which the fix is free closes at first customer connection. A-11 | **D4** |
+| — | adjud. | **Founder adjudication 1** — LinkedIn against a locked *"LinkedIn (Business and Founder)"*. **RULED 2026-09-05: ship both account types**, amend no locked decision, write no member-only copy; Company Page renders `coming_soon` while A-8's entity gate holds. A-9 → **A-9′** | **D4** |
+| — | adjud. | **Founder adjudication 2** — X's **$0.200 per linked post** against Pro's *"unlimited posts"*. **RULED 2026-09-05: not material** — recomputed at 2–3 linked posts/day it is ~$12–18/mo, under 15% of a €125 plan; no ceiling, no cap. N2.1's 2M/3M read-cap discrepancy **stays open**. A-10 | **D4** |
+| MINOR-3 | MINOR | `boundRetryAfterSeconds` **bounds nothing** — `Number.isFinite(c) ? c : fallback`. A hostile `Retry-After: 999999999` passes untouched into `SocialProviderError.retryAfterSeconds` and thence into worker scheduling. The `isFinite` guard is right; the **name promises more than it delivers** | **D5** |
+| MINOR-4 | MINOR | `no-postiz.test.ts:107` excludes `__fixtures__` via `EXCLUDED_DIR_NAMES` alongside `node_modules`/`.git`/`.next` — but `__fixtures__` **is** source, in a scan whose own comment block promises fourteen exemptions each with a stated reason. A hole in the guarantee, not a live leak | **D5** |
+| MINOR-6 | MINOR | An **expired** token renders `expiring_soon` — `differenceInCalendarDays <= 7` includes negatives — telling the user to renew something already dead, at the product's single most common reconnection event. A-12 | **D6** |
+| MINOR-7 | MINOR | `resolvePublishAccount`'s `'ambiguous'` outcome surfaces as `errorCode: 'TOKEN_REVOKED'` with `errorDetails.reason: 'account_ambiguous'`. The code is the one L-1 permits; the **UI copy** it maps to says *reconnect* when the correct action is *pick an identity* | **D6** |
+| MINOR-5 | MINOR | `provider-contract.test.ts:87-95`'s exemption comment describes N2.10 as future (*"until N2.10 makes the registry overrides-only"*, *"the moment N2.10 adds…"*); **N2.10 landed at `79408992` inside this range**. Substantively true, tense false — the stale-comment class that made `launch-checklist.md` §16 row 4 wrong | **D7** |
+| NIT-1 | NIT | `provider_unavailable` exists in all three locale files, **no route emits it**, `resolve-banner.ts:5-12` deliberately excludes it from `ERROR_KEYS`, and `accounts-i18n.test.ts` **still asserts its presence** — a translated string no code path can produce, kept alive by a test | **D7** |
+| NIT-2 | NIT | ADR §16's items are numbered 1,2,3,4,5,6,**8,7** — the last two transposed | **D7** |
+| NIT-3 | NIT | The §3a Reviewer primer says *"all six credentials"*; there are **four**. Same class as the build guide's *"eight rows"* for §16's seven and *"four states"* for §9.4's five — **one sweep, not three more piecemeal corrections** | **D7** |
+| BLOCKER-2 | BLOCKER | `SOCIAL-VAULT-UPDATE-SECRET` — the Tier-1 constraint proving D-α — has **never executed green in CI**; `SOCIAL-DUAL-IDENTITY-SCHEMA` has no green record either. Cause is confirmed **infrastructure, not a DB regression** (503 to *every* role incl. `service_role`, after prior 204s, `57P03` in recovery, no OOM kill) — but ADR 0015 §2's *"covered = executed green in CI, never authored"* makes both `AUTHORED-NOT-EXECUTED` regardless of cause | **D8** |
+| NIT-4 | NIT | ADR §17.4's `db-tests` paragraph names **two** invisible suites; the run shows **seven** (`campaigns-social-accounts-role-policies`, `governed-memory-recency-column`, `learning-report-orphans`, `performance-memory-candidates-expiry`, `post-ai-originals-latest-per-post`, `reissue-invite`, `signals3-triage-atomic`). Under-reported blast radius | **D8** (with BLOCKER-2) |
+| — | — | Re-green the corrected range; record both run URLs and the skip-guard's file/test counts **verbatim from the log**; complete the appendix; §5 close-out docs | **D9** |
+
+### Ordering rationale (state it in the resolution log so it does not read as arbitrary)
+
+1. **D0 runs FIRST**, the 25-D…29-D precedent. The reviewer report is untracked at the range head;
+   appending a resolution row to an untracked file produces no diff and no history, and the whole value of
+   `REVIEWER-REPORT APPEND-ONLY` is that the diff proves nothing above the appendix moved.
+2. **D1 (provenance) comes before every code step**, and not by severity alone. BLOCKER-1, MINOR-1 and
+   MINOR-2 are one defect at three degrees, and D3 and D4 both *add* platform facts (a revoke call that
+   uses `X_REVOKE_URL`, a LinkedIn scope string). Fixing the provenance discipline **after** adding two
+   more facts to it would mean auditing the record twice, and would invite the fix for A-11 to commit
+   BLOCKER-1's defect inside it.
+3. **D2 (MAJOR-2) is the first code step** because it is the only finding in the pass with a **cross-tenant
+   publish** as its failure mode. It is latent — nothing in the range writes `posts.social_account_id` —
+   but `PostInsert` exposes the field, the identity picker that populates it is the acknowledged next step,
+   and the guard is three lines. A latent cross-tenant defect is not left for whichever session happens to
+   wire up the writer.
+4. **D3 (MAJOR-1) follows D2** because both touch account resolution and D2's guard changes what a caller
+   can hold when the revoke runs. It also **consumes D1's output**: the revoke call is the first production
+   use of `X_REVOKE_URL`, so MINOR-2's guess stops being untested-in-both-senses at exactly this step.
+5. **D4 groups the three decision items (A-9, A-10, A-11)** because all three are *founder rulings recorded
+   as durable decisions*, two of them with no code at all. Splitting them across three commits would make
+   two documentation-only commits look like fixes and hide the one line of code inside them.
+6. **D5 groups the two "guarantee weaker than its name" findings** (MINOR-3, MINOR-4). Both are the same
+   shape — a guard whose contract is broader than its implementation — and both are contained, low-blast
+   changes to shared helpers that everything after them runs through.
+7. **D6 groups the two user-facing findings** (MINOR-6/A-12, MINOR-7) because they are one surface and one
+   i18n sweep across three locales. Doing them separately means two passes over `en`/`pt`/`es` and two
+   chances to leave a locale behind.
+8. **D7 is the documentation-and-comment truth sweep** (MINOR-5, NIT-1, NIT-2, NIT-3) and it is not
+   cosmetic: NIT-3 is explicitly *"worth one sweep rather than three more corrections"*, and every item
+   here is a statement that was true when written and is false now — the same class as MINOR-5's tense and
+   §16 row 4's "moot once the file is gone".
+9. **D8 (BLOCKER-2) is deliberately late.** Its remedy is either a green `db-tests` run at a commit
+   containing this range, or an honest `AUTHORED-NOT-EXECUTED` marking — and the *first* of those can only
+   be attempted once every migration-touching change in this pass has landed. Running it early would prove
+   a head that no longer exists.
+10. **CI runs LAST (D9)**, and its job is not merely to re-green: it produces the green run **for the
+    corrected range**, which is what makes D8's and D7's re-citations true rather than merely reworded.
+
+### Where resolutions go (CLAUDE.md — `REVIEWER-REPORT APPEND-ONLY`, revised Session 23-D)
+
+Directly into `docs/reviews/session-30-5-reviewer.md`, under a **single appended, attributed**
+`## CORRECTION PASS (Session 30.5-D)` section at the **end** of the file — no separate corrections file.
+The four conditions, all load-bearing, all inherited here:
 
 1. **No in-place edit, ever.** Not one character of the reviewer's text changes — no verdict flipped, no
    status column rewritten, no RESOLVED stamped onto a finding, no finding reworded, deleted or reordered.
-2. **One appended, attributed section** — a single `## CORRECTION PASS (Session 30.5-D)` at the **end** of
-   the reviewer's file, opening with its author, date and the commit range it fixed. A reader must be able
-   to tell, from any line, which of the two wrote it.
+   **This explicitly includes** §1–§12's per-section ✅ verdicts, §10's two caller tables, the *"What I
+   could NOT verify, and why"* section and the closing tally line, which all stand exactly as written even
+   after every finding is closed. The Session 22-D failure — RESOLVED verdicts written *into* the
+   reviewer's finding text — remains prohibited.
+2. **One appended, attributed section** at the **end**, opening with its author, date and the commit range
+   it fixed. A reader must be able to tell, from any line, which of the two wrote it.
 3. **Findings are referenced, never restated as resolved** — cite each by ID and record
    *finding → fix → the test that now proves it → the commit SHA*.
-4. **A disputed or withdrawn finding is argued, not erased** — say why in the appendix and let the reader
-   judge against the reviewer's original text.
+4. **A disputed, declined or deferred finding is argued, not erased** — say why in the appendix and let the
+   reader judge against the reviewer's original text.
+
+**Sixteen finding IDs plus two founder adjudications exist; the appendix carries eighteen rows.**
+
+### Standing rules for every step in this pass
+
+- **§0's L-1…L-12 and §0.2's A-1…A-8 / A-5′ / A-8a still hold.** In particular: **L-1** — no change to
+  `lib/publishing/orchestrator.ts`'s retry, backoff, error-switch or state-transition behaviour, and **no
+  new member of the error-code union** (this is why MINOR-7 is a *copy* fix and not a new code); **A-1** —
+  the three Meta platforms stay unregistered with `publishingAvailable: false`; **A-3** — no media upload;
+  **A-4** — the advisory lock stays deferred; **A-8** — `w_organization_social` stays out of LinkedIn's
+  scopes, which A-11 does **not** change. **`SOCIAL-NO-READ-PATH` is live**: Session 32's engagement-read
+  deliverable is untouched by every step here. A fix that appears to need one of these is a **STOP and
+  report**, not a judgement call. The scans in `lib/scope-scans.test.ts` and `no-postiz.test.ts` enforce
+  several mechanically — treat a red scan as the rule working, never as a test to relax.
+- **§13's rule is the spine of this pass and applies to the pass itself.** No platform fact — endpoint,
+  scope string, header name, status code, limit — is written from memory or from a model's recollection,
+  **including inside a fix for a finding about exactly that.** Every fact lands with a named vendor-doc
+  source and a read-date, in N2.1's log or a dated appendix to it, or it is labelled unverified in
+  `X_REVOKE_URL`'s disclosed form. **There is no third option.**
+- **Never weaken a test to reach green, and never delete a test to tidy code.** NIT-1's fix removes an
+  assertion about a string nothing emits — that is the *only* deletion this pass authorises, and it is
+  paired with removing the string, not with lowering a bar.
+- **New and rewritten tests must be shown to REDDEN against the pre-fix code** — mutate, observe red,
+  revert — and the mutation must be **named in the commit message**. Asserted-green is not proof. This
+  session's own §17.1 set that standard with four demonstrations; this pass meets it.
+- **Each step:** `/ecc:plan` → `/ecc:tdd-workflow` → `/ecc:verification-loop`;
+  `npx tsc --noEmit --skipLibCheck`; scoped `npx vitest run` per CLAUDE.md's invocation notes;
+  `npm run test:db` wherever Tier-1 is touched. **One commit per step.**
+- **ECC budget: ≤1 subagent per step, and only where the step names one** — D2 `database-reviewer` (a
+  tenancy guard on a service-role query path), D3 `security-reviewer` (token revocation and disconnect
+  ordering), D8 `database-reviewer` (the Tier-1 grants and the db-tests readiness race). Nothing anywhere
+  else. Do not re-run §1's advisory reviewers.
+- **The three highest-risk changes in this pass, named so nobody discovers them at D9:** **D2** changes
+  which account the publishing **and** metrics workers resolve (a wrong fix either publishes to the wrong
+  tenant — the exact defect — or makes correctly-pinned posts unpublishable); **D3** adds a **live network
+  call inside the disconnect path** (a wrong fix makes disconnect fail when the platform is down, which is
+  the precise thing `SOCIAL-REVOKE-NEVER-BLOCKS` forbids, and it must be ordered *before*
+  `deactivateSocialAccount` because the vault secret must still exist to read the token); **D4** changes an
+  OAuth **scope**, which is baked into every token issued afterwards and cannot be altered without forcing
+  re-authorisation.
+
+### §4.0 — Correction primer  (paste first · wait for acknowledgement)
+
+```
+Session 30.5-D — Track N: native platform providers and the removal of Postiz (ADR 0028 + ADR 0002
+Amendment A), CORRECTION pass. You are fixing the findings in docs/reviews/session-30-5-reviewer.md
+(reviewed range 54110178..be03c917, N2.1…N2.13-D2). Ten steps, D0…D9, each its own commit.
+
+Read now, before anything else:
+- docs/reviews/session-30-5-reviewer.md — IN FULL. It is your work order AND the file you record
+  resolutions in. Append a single `## CORRECTION PASS (Session 30.5-D)` section at the END; do NOT edit
+  any finding in place, do NOT touch the per-section verdicts, the two caller tables, the "What I could
+  NOT verify" section or the closing tally line, and do NOT create a separate corrections file (CLAUDE.md
+  REVIEWER-REPORT APPEND-ONLY). A finding you DISPUTE, DECLINE or DEFER is argued in the appendix — never
+  erased, never restated as resolved. There are SIXTEEN finding IDs (BLOCKER-1..2, MAJOR-1..3, MINOR-1..7,
+  NIT-1..4) plus TWO founder adjudications restated as open; the appendix carries EIGHTEEN rows. The
+  report's tally line is CORRECT — verify that for yourself, do not assume it.
+- docs/build-guide/session-30-5.md §0 (L-1..L-12), §0.2 (A-1..A-8, A-5-prime, A-8a — still binding, NOT
+  reopened; A-8 in particular is why A-9 is a copy-and-scope ruling and not a reopening) and §4 (this
+  section — the step list, adjudications A-9/A-10/A-11/A-12, and the ordering rationale).
+- docs/decisions/0028-native-social-providers.md — §2 (OAuth ownership), §3.1/§3.2 (the publish contract
+  and the endpoints BLOCKER-1 hits), §4 (token lifecycle, D-alpha), §5.3 (the dual-identity resolver —
+  MAJOR-2), §6 (the metrics capability table — MAJOR-3/A-11 changes it), §7.2 (rate limits — MINOR-3),
+  §9.1 (the contract suite — MINOR-5), §9.4 (the five connection states — MINOR-6/A-12), §13 (the nine
+  unverified platform facts — the spine of this pass), §14.1 (why the first live connection is the
+  riskiest moment), §16 (the stated-open items — NIT-2's numbering, and three findings need rows here) and
+  §17.3/§17.4/§17.5 (the caller tables, the constraint-to-CI map and the Tier-3 decisions — BLOCKER-2 and
+  NIT-4 change §17.4).
+- docs/decisions/0015-test-execution-and-ci-gates.md §1(c), §2 and §5 — "covered = executed green in CI,
+  never authored" is the sentence BLOCKER-2 is an instance of, and §5's merge-gate table is why a
+  correctly-diagnosed infrastructure failure is still an uncovered constraint.
+- docs/reviews/session-30-5-platform-verification.md — N2.1's verification log. D1 appends to it; read
+  what it actually contains BEFORE you believe any citation that points at it.
+
+Binding rules for this pass:
+- L-1..L-12 and A-1..A-8/A-5-prime/A-8a still hold. No change to the publishing worker's retry, backoff,
+  error switch or state transitions; NO new member of the error-code union (that is why MINOR-7 is a copy
+  fix); no Meta provider registered; no media upload; no advisory lock; w_organization_social stays OUT of
+  LinkedIn's scopes. SOCIAL-NO-READ-PATH is live — Session 32's deliverable is untouched. A fix that seems
+  to need one of these is a STOP.
+- ADR 0028 §13 governs this pass ITSELF. Do not write ANY platform fact — endpoint URL, scope string,
+  header, status code, limit — from memory or recollection, INCLUDING inside a fix for a finding about
+  exactly that. Every fact lands with a named vendor-doc source and a read-date in N2.1's log or a dated
+  appendix to it, OR it is labelled unverified in X_REVOKE_URL's disclosed form. There is no third option.
+  If you cannot reach a vendor doc, say so and label the fact unverified — do NOT fill the gap.
+- A-9, A-10, A-11 and A-12 are adjudicated in §4 above. Do NOT re-litigate them. For A-11 specifically:
+  verify in-step that r_member_postAnalytics is available on the same auto-enabled product tier as
+  w_member_social; if it turns out to sit behind a review process, take the named loser (a §16
+  stated-open row) and SAY SO — do not ship a scope that will fail in the authorize URL.
+- NEVER weaken a test to reach green, and never delete a test to tidy code. Every new or rewritten test is
+  demonstrated to REDDEN against the pre-fix code (mutate, observe red, revert) and the mutation is NAMED
+  in the commit message.
+- Each step: /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. npx tsc --noEmit --skipLibCheck;
+  scoped npx vitest run per CLAUDE.md; npm run test:db for Tier-1.
+- ECC: <=1 subagent per step, and only where §4 names one — D2 database-reviewer, D3 security-reviewer,
+  D8 database-reviewer. Nothing anywhere else.
+
+Confirm these grounding facts (a wrong one is a STOP):
+(1) git status — docs/reviews/session-30-5-reviewer.md is UNTRACKED (`??`). That is D0's scope.
+(2) Open docs/reviews/session-30-5-platform-verification.md and confirm for yourself that the literal
+    strings 'https://x.com/i/oauth2/authorize', 'https://api.x.com/2/oauth2/token' and
+    'https://api.linkedin.com/rest/posts' do NOT appear in it, while lib/social/twitter-provider.ts:23-30
+    and lib/social/linkedin-provider.ts:23-32 cite it for them. That is BLOCKER-1.
+(3) lib/db/social-accounts.ts:184-187 — the pinnedAccountId branch calls getActiveById and returns, and
+    getActiveById (:135-146) filters on .eq('id', id) and .eq('is_active', true) ONLY. Quote both. Then
+    read app/api/social/[platform]/disconnect/route.ts:52-55, which checks business_id AND platform
+    against the same helper. That is MAJOR-2.
+(4) `git grep -n revokeAccessToken -- app lib` returns hits ONLY in the three provider implementations,
+    the interface, and test files — nothing in app/api/social/[platform]/disconnect/route.ts, which calls
+    deactivateSocialAccount(account.id) and nothing else at :67. That is MAJOR-1.
+(5) lib/social/platforms/config.ts:22 — linkedin.scopes is exactly ['openid','profile','email',
+    'w_member_social']; r_member_postAnalytics is absent; and ADR 0028 §16's eight stated-open items do
+    not mention it. That is MAJOR-3 / A-11.
+(6) lib/social/error-mapping.ts:35-37 — boundRetryAfterSeconds returns
+    `Number.isFinite(candidateSeconds) ? candidateSeconds : fallbackSeconds` and applies no ceiling. That
+    is MINOR-3.
+(7) lib/social/connection-status.ts:26-31 — `daysUntilExpiry <= EXPIRY_WARNING_DAYS` with no lower bound,
+    so a negative value returns 'expiring_soon'. That is MINOR-6 / A-12.
+(8) lib/social/__tests__/no-postiz.test.ts:107 — EXCLUDED_DIR_NAMES contains '__fixtures__' alongside
+    node_modules/.git/.next, while the comment block at :13-79 promises fourteen exemptions each with a
+    stated reason. That is MINOR-4.
+(9) Open db-tests run 33970947727 at be03c917 and read the skip-guard output: SEVEN suites reported
+    invisible, while ADR 0028 §17.4's db-tests paragraph names TWO. That is BLOCKER-2 / NIT-4.
+Output the sixteen findings plus two adjudications grouped by step (D0…D9), the four adjudications with
+their rulings, and "Ready for D0." Then stop.
+```
+
+### §4.1 — Correction steps
+
+#### D0 — audit trail: land the reviewer report in git, unmodified  ·  FIRST, by design  ·  no code
+
+```
+CORRECTION — Session 30.5-D · D0. No .ts, no .tsx, no .sql. Invoke no specialist — this is audit-trail
+integrity.
+
+THE DEFECT: docs/reviews/session-30-5-reviewer.md is UNTRACKED at the range head (git status shows `??`).
+Every step below either amends it or cites it, and an appended resolution row against an untracked file
+produces no diff — which destroys the one property REVIEWER-REPORT APPEND-ONLY exists to give a later
+reader: proof that nothing above the appendix was touched.
+
+DO — commit these files EXACTLY AS THEY STAND, with no edits in this commit:
+- docs/reviews/session-30-5-reviewer.md   (as the Reviewer left it, before any resolution row)
+- docs/build-guide/session-30-5.md        (it enters this commit WITH §4 already authored — §4 is this
+                                           step's own work order, so it cannot land later. Say so in the
+                                           commit message.)
+
+Do NOT append the CORRECTION PASS section here. Do NOT fix NIT-2's numbering in ADR 0028 here — that is
+D7. Do NOT touch any provider file — that is D1.
+
+VERIFY: `git show --stat HEAD` lists exactly those two paths, and nothing else.
+
+COMMIT: "30.5-D0: land the N3 reviewer report in git, unmodified (audit trail)" — and state in the body
+that §4 of the build guide enters here because it is D0's own work order.
+```
+
+#### D1 — BLOCKER-1 + MINOR-1 + MINOR-2: every platform fact has exactly one home  ·  ADR 0028 §13  ·  no behaviour change
+
+```
+CORRECTION — Session 30.5-D · D1. Invoke no specialist. Read ADR 0028 §13 and §14.1 first, and
+docs/reviews/session-30-5-platform-verification.md IN FULL before you touch anything.
+
+THE DEFECT (BLOCKER-1): three endpoint URLs ship with a citation to a record that does not contain them.
+- lib/social/twitter-provider.ts:27  X_AUTHORIZE_URL   cites "N2.1 items 1/3/4/6/7"; item 1 is LINKEDIN's
+                                                       authorize/token URLs, and NO item records an X
+                                                       authorize URL at all.
+- lib/social/twitter-provider.ts:28  X_TOKEN_URL       cites the same; item 4 records X's token-endpoint
+                                                       AUTH METHOD and its source page, and NO URL.
+- lib/social/linkedin-provider.ts:32 LINKEDIN_POSTS_URL cites "items 1, 9"; item 1 records the authorize
+                                                       and token URLs only. §3.1 confirms the Posts API's
+                                                       headers, its 201 + x-restli-id, its URN forms and
+                                                       its permalink — the BASE URL is never written down.
+
+THE DEFECT (MINOR-1): LINKEDIN_USERINFO_URL (linkedin-provider.ts:31) and X_USERINFO_URL
+(twitter-provider.ts:29) are sourced honestly but ONLY in a code comment — the first casualty of a future
+refactor. The LinkedIn note additionally raises a real open question (OIDC discovery declares
+subject_types_supported: ["pairwise"], so `sub` may not be the id space urn:li:person: construction
+expects) and raises it ONLY in that comment.
+
+THE DEFECT (MINOR-2): X_REVOKE_URL (twitter-provider.ts:31-41) is "the standards-compliant best guess,
+not a confirmed URL". The disclosure is EXACTLY RIGHT and is the model for this whole step — it is here
+only to get a durable §16 row instead of living as a comment.
+
+DO — for EACH of the five endpoint constants, exactly one of two outcomes, and no third:
+  (a) VERIFIED — read the vendor doc NOW, record the URL in a dated appendix to
+      docs/reviews/session-30-5-platform-verification.md ("Appendix A — endpoints verified in Session
+      30.5-D, <date>"), each entry naming the source page and the read-date, numbered so a provider
+      comment can cite a specific item; then update the provider comment to cite THAT item number.
+  (b) UNVERIFIED — rewrite the provider comment in X_REVOKE_URL's exact disclosed form: what IS
+      confirmed, what is NOT, and that the value is a best guess. Then add a §16 stated-open row.
+DO NOT invent, recall, or "sanity-check from memory" any of these URLs. If a vendor doc is unreachable,
+outcome (b) is the correct answer and is not a failure of this step.
+
+DO — additionally:
+- Promote the pairwise-`sub` question from linkedin-provider.ts's comment to an ADR 0028 §16 stated-open
+  item, with the consequence named (a urn:li:person: constructed from a pairwise sub may not address the
+  member the token belongs to).
+- Add a §16 stated-open row for X_REVOKE_URL's unconfirmed value, cross-referencing that D3 makes it a
+  live call path.
+- Append to §13 the process lesson, in the ADR's own voice: a platform fact is sourced in exactly one
+  place, and a citation is a promise that the cited place contains it. A citation that points at a record
+  which does not contain the claim converts "unverified" into "someone already checked".
+
+MUST NOT: change any URL VALUE, any provider behaviour, or any test expectation. This step is provenance
+only. `git diff` on the two provider files must show comments and nothing else — verify that literally.
+
+VERIFY: npx tsc --noEmit --skipLibCheck; npx vitest run lib/social. For every one of the five constants,
+grep the cited appendix item and show it contains the literal URL string.
+
+COMMIT: "30.5-D1: BLOCKER-1/MINOR-1/MINOR-2 - every endpoint sourced or disclosed, none cited to a record
+that lacks it (ADR 0028 §13)"
+```
+
+#### D2 — MAJOR-2: the pinned-identity branch checks tenancy and platform  ·  ADR 0028 §5.3  ·  `database-reviewer`
+
+```
+CORRECTION — Session 30.5-D · D2. ONE specialist: database-reviewer (a tenancy guard on a query path that
+runs under a service-role client bypassing RLS).
+
+THE DEFECT: lib/db/social-accounts.ts:184-187 —
+    if (pinnedAccountId) {
+      const account = await getActiveById(client, pinnedAccountId)
+      return account ? { outcome: 'resolved', account } : { outcome: 'none' }
+    }
+getActiveById (:135-146) filters on .eq('id', id) and .eq('is_active', true) ONLY — not business_id, not
+platform. BOTH production callers pass a SERVICE-ROLE client that bypasses RLS
+(lib/publishing/orchestrator.ts:107, lib/metrics/orchestrator.ts:67) and BOTH already have
+post.business_id and post.platform in hand and pass them — the function simply ignores them on this
+branch. The same file already knows better: disconnect/route.ts:52-55 checks
+`candidate.business_id === business.id && candidate.platform === platform` against the same helper.
+
+FAILURE SCENARIO: a posts row in business A whose social_account_id points at an active account in
+business B resolves to {outcome:'resolved'}; the publishing worker builds PublishInput with that
+socialAccountId; the provider resolves BUSINESS B's vault token and publishes business A's content to
+business B's LinkedIn or X. There is no later check. The metrics worker writes B's metrics onto A's post.
+
+REACHABILITY IS LATENT, NOT LIVE, AND THAT IS NOT A REASON TO DEFER: nothing in the range writes
+posts.social_account_id (PostUpdate excludes it, lib/db/types.ts:360), but PostInsert DOES expose it
+(:342), the identity picker that populates it is the acknowledged next step, and the FK is a plain
+REFERENCES with no cross-column constraint.
+
+DO: resolvePublishAccount accepts the pinned account ONLY when
+`account.business_id === businessId && account.platform === platform`, returning {outcome:'none'}
+otherwise — NEVER 'ambiguous', and NEVER a silent substitution with a scan-resolved account. That matches
+the function's own documented rule at :176-178; re-read it and keep the doc comment true. Name the
+constraint (e.g. SOCIAL-PINNED-ACCOUNT-TENANT-CHECKED) and add it to ADR 0028 §17.4 with its tier and
+executing job.
+
+TESTS (Tier 2, all demonstrated to REDDEN against the pre-fix code):
+- a pinned id belonging to ANOTHER BUSINESS resolves to 'none'
+- a pinned id belonging to ANOTHER PLATFORM resolves to 'none'
+- (regression) a correctly-owned pinned id still resolves to 'resolved' with that exact account
+Optional hardening, only if database-reviewer says it is safe and additive: a Tier-1 composite FK. If it
+requires a migration, that migration lands in THIS commit and D8 re-runs db-tests over it.
+
+MUST NOT: change the non-pinned scan branch, the 'ambiguous' semantics, or either orchestrator's
+behaviour beyond what the resolver returns (L-1).
+
+VERIFY: npx tsc --noEmit --skipLibCheck; npx vitest run lib/db lib/publishing lib/metrics; npm run test:db
+if a migration landed. Name the mutation used to prove each new test reddens.
+
+COMMIT: "30.5-D2: MAJOR-2 - pinned-identity resolution checks business_id and platform (ADR 0028 §5.3)"
+```
+
+#### D3 — MAJOR-1: `revokeAccessToken` is actually called, and still never blocks  ·  ADR 0028 §16 item 5  ·  `security-reviewer`
+
+```
+CORRECTION — Session 30.5-D · D3. ONE specialist: security-reviewer (token revocation, and the ordering of
+a network call against vault deletion).
+
+THE DEFECT: app/api/social/[platform]/disconnect/route.ts:67 calls deactivateSocialAccount(account.id)
+and nothing else. `git grep revokeAccessToken` finds the method on all three providers
+(linkedin-provider.ts:340, twitter-provider.ts:473, mock-provider.ts:141) and called ONLY from tests.
+SOCIAL-REVOKE-NEVER-BLOCKS is therefore VACUOUSLY satisfied: "each provider's revokeAccessToken never
+throws" is true and proven; "a revoke is attempted during disconnect and a failure there does not block
+local cleanup" describes wiring that does not exist. The Builder found and self-reported this in §17.3 —
+it is restated as a finding because a self-reported defect is still a defect and needs an ID.
+
+USER-VISIBLE CONSEQUENCE: a founder who disconnects X still has a LIVE access token sitting at X, and
+SOSH has deleted the vault record that would let it ever be revoked. CLAUDE.md's three-step disconnect is
+satisfied (deactivate, null the ids, delete the secrets), so this is NOT a GDPR-erasure gap on our side —
+it is a live credential we told the user we let go of. §16 item 5's accepted risk ("a failed platform
+revocation leaves a live token at the platform") assumes an attempt is MADE; today none is.
+
+DO: disconnect/route.ts calls the platform's revokeAccessToken BEFORE deactivateSocialAccount — the vault
+secret must still exist to read the token. The revoke's failure MUST NOT prevent the local disconnect
+from completing: catch, do not propagate, and do not change the route's status codes or its 409
+account_ambiguous behaviour.
+
+TESTS (Tier 2, both demonstrated to REDDEN):
+(a) revokeAccessToken IS called, with the right platform and the right account
+(b) a THROWING revoke still results in a completed local disconnect (deactivateSocialAccount called,
+    200 returned) — this is what SOCIAL-REVOKE-NEVER-BLOCKS was always meant to assert
+Update ADR 0028 §17.3's Table B: revokeAccessToken now has a production caller; and §17.4's
+SOCIAL-REVOKE-NEVER-BLOCKS row so its reddens-if-broken column describes the CALL SITE, not only the
+implementations.
+
+NOTE THE COUPLING TO D1: this is the first production use of X_REVOKE_URL. If D1 left it UNVERIFIED, that
+is fine and expected — but say so in the commit body, because the guess now sits on a live path and its
+§16 row must reflect that.
+
+MUST NOT: add a new error code (L-1); block or slow disconnect on a network timeout — bound the call, and
+state the bound; or introduce a retry.
+
+VERIFY: npx tsc --noEmit --skipLibCheck; npx vitest run app/api/social lib/social. Name the mutation used
+for each new test.
+
+COMMIT: "30.5-D3: MAJOR-1 - disconnect attempts platform revocation before local cleanup, and never blocks
+on it (ADR 0028 §16.5)"
+```
+
+#### D4 — MAJOR-3 + the two founder adjudications: three rulings recorded, one line of code  ·  A-9′, A-10, A-11  ·  **all three ruled 2026-09-05**
+
+```
+CORRECTION — Session 30.5-D · D4. Invoke no specialist. THREE decisions land here; two of them change no
+code at all, and that is why they are grouped — so the one code change is not hidden inside two
+documentation commits.
+
+--- A-11 / MAJOR-3 (code + docs) ---
+THE DEFECT: N2.1 escalated the r_member_postAnalytics scope as its single drift finding
+(session-30-5-platform-verification.md:116); ADR 0028 §13 item 8 restated it as "an open decision for
+N2.7's author or the Architect, not resolved here"; N2.7 then shipped
+PLATFORM_CONFIGS.linkedin.scopes = ['openid','profile','email','w_member_social'] with neither the scope
+nor a decision, and §16's eight stated-open items do not include it. Four of seven PostMetrics fields —
+saves, clicks, reach, impressions — are permanently null for LinkedIn as a SOSH SCOPE CHOICE, not a
+platform limit, on a Pro tier advertising "advanced analytics".
+
+WHY NOW: scopes are baked into the token at authorisation. No production LinkedIn OAuth app is registered
+yet (§14.1), so today the change is FREE. After the first customer connection it costs a forced
+re-authorisation of every connected user, on top of the one §16 item 8 already plans for
+w_organization_social.
+
+DO — in this order:
+1. VERIFY IN-STEP, per §13, against the vendor doc, with a source and a read-date recorded in D1's
+   appendix: is r_member_postAnalytics available on the same auto-enabled product tier as w_member_social,
+   or does it sit behind a review process? Do NOT answer this from memory.
+2. IF auto-enabled: add it to PLATFORM_CONFIGS.linkedin.scopes. Then — and this is the half a Builder
+   typically skips — (i) give SOCIAL-LI-SCOPES a POSITIVE assertion that the scope is PRESENT (today's
+   tests only assert w_organization_social is ABSENT, per A-8), (ii) re-derive ADR 0028 §6's capability
+   table so those four fields move from "permanently null" to "available, pending Session 33", and
+   (iii) confirm A-8 still holds — w_organization_social stays OUT.
+3. IF review-gated: take the named loser. Record a §16 stated-open row naming the consequence (four
+   permanently-null fields, and a forced re-authorisation to undo) and SAY SO in the commit body. Do NOT
+   ship a scope that will fail in the authorize URL.
+Either way, §13 item 8 is marked adjudicated with the ruling and the date. Silence is the one outcome that
+is not acceptable.
+
+--- A-9-prime (docs only) — RULED 2026-09-05, and the ruling went AGAINST the A-9 recommendation ---
+Founder: "I want to ship with both account types... just ignore what I said, ship both account types."
+SHIP BOTH ACCOUNT TYPES. Do NOT amend CLAUDE.md's locked platform list. Do NOT write "member-only" or
+"Founder profile only" into any customer-facing copy. The A-9 recommendation (stage it, say member-only)
+is REJECTED and is preserved in §4's table as superseded — do not delete it, and do not implement it.
+
+A same-day founder challenge to A-5-prime's premise — that LinkedIn's review gate covers MEMBER posting
+too, which would have meant LinkedIn could not publish at all — was raised and then EXPLICITLY WITHDRAWN
+by the founder. A-5-prime and A-8 are therefore UNCHANGED and UNREOPENED. Record that the challenge was
+raised and withdrawn (one line, dated); do NOT record its content as a finding, and do NOT go verify it.
+
+DO — three parts, and only the third is new work:
+1. Nothing to build for dual identity: it ALREADY SHIPPED in this session (A-6/A-8a) —
+   posts.social_account_id, resolvePublishAccount, and the two-identity accounts surface. Confirm that by
+   reading them, and say so; do not rebuild.
+2. Nothing to build for X: Business and Founder are two OAuth connections against two accounts, needing
+   no elevated tier and no approval. Already works. Confirm and say so.
+3. LinkedIn Company Page posting stays gated on the legal entity + Community Management API (A-8) — an
+   EXTERNAL gate no ruling can lift. So render LinkedIn Company Page as `coming_soon`, the pattern A-1
+   already established for the three Meta platforms. The capability is then visible and honestly stated
+   rather than absent, promised, or silently broken.
+Record the ruling in ADR 0028 §16 item 1 and launch-checklist.md §16a. That is all — pre-launch-scope.md
+and product-status.md do NOT gain a member-only note, because there is no longer one to write.
+MUST NOT: promise Company Page posting on any surface that cannot yet perform it. `coming_soon` is the
+whole point — it is what makes "ship both account types" true rather than aspirational.
+
+--- A-10 (docs only) — RULED 2026-09-05, NARROWED: the ceiling is withdrawn ---
+§14.3 records $0.200 per linked X post against a Pro plan advertising unlimited posts at €125/mo. The
+build guide's original ten-linked-posts-a-day figure was a WORST-CASE CEILING presented as a forecast,
+and the founder rejected it as unrealistic — "that's just noise". He is right: 300 linked posts a month
+is not a content strategy, and a human-approval workflow will not produce it.
+DO: record the cost model at REALISTIC volume — 2-3 linked posts/day is roughly $12-18/month against a
+€125 plan, under 15%, an ordinary COGS line, and that is the HIGH end because not every post carries a
+link. Put it where pricing is decided (docs/pre-launch-scope.md and/or launch-checklist.md).
+DO: carry N2.1's 2M-vs-3M pay-per-use read-cap discrepancy as UNRESOLVED — that is a factual gap in the
+verification record, not a pricing judgement, and it is cheap to keep open.
+MUST NOT: set a ceiling, open a stated-open pricing decision, or introduce ANY code-level post cap or
+throttle. The founder ruled the exposure immaterial; recording it as an open risk anyway would be
+re-litigating a decision that has been made.
+
+VERIFY: npx tsc --noEmit --skipLibCheck; npx vitest run lib/social. If the scope landed, show the positive
+assertion reddening when the scope is removed from config.ts.
+
+COMMIT: "30.5-D4: MAJOR-3/A-9/A-10/A-11 - LinkedIn analytics scope adjudicated; member-only launch and X
+per-post cost recorded as founder rulings"
+```
+
+#### D5 — MINOR-3 + MINOR-4: two guarantees narrower than their names  ·  ADR 0028 §7.2, §8.4
+
+```
+CORRECTION — Session 30.5-D · D5. Invoke no specialist. Two contained fixes to shared guards; both are
+"the contract is broader than the implementation".
+
+THE DEFECT (MINOR-3): lib/social/error-mapping.ts:35-37 —
+    return Number.isFinite(candidateSeconds) ? candidateSeconds : fallbackSeconds
+The Number.isFinite guard is CORRECT and does the job the ADR asked for (LinkedIn's Retry-After as an
+HTTP-date yields NaN -> 60; a missing x-rate-limit-reset yields 0 -> the caller's 60 fallback). But the
+NAME promises a bound that is never applied: a hostile or buggy `Retry-After: 999999999` passes through
+untouched into SocialProviderError.retryAfterSeconds and thence into the publishing worker's scheduling.
+
+DO — pick ONE and justify it in the commit body:
+  (a) clamp to a stated ceiling — the publishing worker's own max backoff is the natural one; read it,
+      cite it, do not invent a number; or
+  (b) rename to finiteRetryAfterSeconds so it stops promising more than it delivers.
+(a) is preferred IF AND ONLY IF the ceiling can be sourced from the worker's existing constant WITHOUT
+changing worker retry behaviour (L-1). If reading it would couple the modules badly, take (b) — a guard
+that is honestly named is better than one that is quietly re-scoped.
+
+THE DEFECT (MINOR-4): lib/social/__tests__/no-postiz.test.ts:107 excludes '__fixtures__' from the walk via
+EXCLUDED_DIR_NAMES, alongside node_modules, .git and .next. The other three are self-evidently not source;
+__fixtures__ IS source, in a scan whose comment block at :13-79 promises FOURTEEN exemptions each with a
+stated reason. No such directory currently contains a hit, so this is a HOLE IN THE GUARANTEE, not a live
+leak — and the guarantee is the whole point of the scan.
+
+DO — pick ONE:
+  (a) remove '__fixtures__' from EXCLUDED_DIR_NAMES (preferred — the scan should see source), or
+  (b) add it to the DOCUMENTED exemption list at :13-79 with its stated reason.
+If (a) turns the scan red, that is a DISCOVERY, not a regression of this pass: report it, fix the hit, and
+say so in the commit body. Do not re-exclude to reach green.
+
+TESTS: both changes demonstrated to REDDEN. For MINOR-3 (a), a case at ceiling+1; for MINOR-4 (a), a
+temporary fixture-directory hit proving the scan now sees it (removed before commit — say so).
+
+VERIFY: npx tsc --noEmit --skipLibCheck; npx vitest run lib/social.
+
+COMMIT: "30.5-D5: MINOR-3/MINOR-4 - retry-after guard matches its name; no-postiz scan sees __fixtures__"
+```
+
+#### D6 — MINOR-6 + MINOR-7: what the accounts surface tells the user  ·  ADR 0028 §9.4  ·  A-12
+
+```
+CORRECTION — Session 30.5-D · D6. Invoke no specialist. One surface, one i18n sweep across all three
+locales — done together so no locale is left behind twice.
+
+THE DEFECT (MINOR-6 / A-12): lib/social/connection-status.ts:26-31 computes
+differenceInCalendarDays(token_expires_at, now) and returns 'expiring_soon' whenever it is <= 7 —
+INCLUDING NEGATIVE VALUES. A LinkedIn account whose 60-day token expired three days ago shows "expires
+soon, renew it" with a PAST DATE, not "reconnect required". Publishing against it correctly fails
+TOKEN_REVOKED, so the worker is right — the accounts surface is telling the user their connection is
+fine-for-now at the exact moment it stopped working. LinkedIn's non-refreshable 60-day token makes this
+the single most common reconnection event this product will generate.
+
+RULING (A-12, §4 above, do NOT re-litigate): route daysUntilExpiry < 0 to the EXISTING 'disconnected'
+state. Do NOT add a sixth state — the required user action is identical, and the copy and CTA already
+exist in all three locales. Add a one-line note to ADR 0028 §9.4 recording that the boundary is
+`< 0 -> disconnected`, so a later reader sees a decision rather than an accident.
+TEST (Tier 2, demonstrated to REDDEN): an account with token_expires_at three days in the PAST renders
+'disconnected'; and (regression) one three days in the FUTURE still renders 'expiring_soon'. Pin the
+boundary at exactly 0 too, and say which side it falls on.
+
+THE DEFECT (MINOR-7): lib/publishing/orchestrator.ts:108-116 marks the post failed with
+errorCode: 'TOKEN_REVOKED' and errorDetails.reason: 'account_ambiguous'. The reason string is RIGHT and
+the CODE is the one L-1 permits — adding a union member would change worker retry behaviour and is
+FORBIDDEN. But TOKEN_REVOKED is the code the UI maps to "reconnect your account", which is the wrong
+instruction for a user whose two X identities simply need one picked. The correct action is
+disambiguation; the message says reconnect.
+
+DO: the FAILURE-SURFACE COPY branches on errorDetails.reason rather than on errorCode alone, with a new
+i18n key for the ambiguous case added to en, pt AND es simultaneously (CLAUDE.md, i18n from day one). The
+copy must name the action: pick which account this post publishes from.
+MUST NOT: add an error code, change the orchestrator's control flow, or change what is written to the
+posts row (L-1). This is a rendering change only — `git diff lib/publishing/orchestrator.ts` must be
+empty, and verify that literally.
+
+TESTS: a Tier-2 case asserting the ambiguous reason renders the disambiguation copy and NOT the reconnect
+copy; and the existing i18n key-parity test still green across all three locales.
+
+VERIFY: npx tsc --noEmit --skipLibCheck; npx vitest run lib/social lib/publishing app components. Name the
+mutation used for each new test.
+
+COMMIT: "30.5-D6: MINOR-6/MINOR-7 - an expired token reads as disconnected; an ambiguous identity reads as
+'pick one', not 'reconnect' (ADR 0028 §9.4)"
+```
+
+#### D7 — MINOR-5 + NIT-1 + NIT-2 + NIT-3: statements that were true when written  ·  one sweep, not four
+
+```
+CORRECTION — Session 30.5-D · D7. Invoke no specialist. Four items, one theme: each was true when written
+and is false now. NIT-3 is explicitly "worth one sweep rather than three more corrections" — so do the
+sweep, not the three.
+
+MINOR-5: lib/social/__tests__/provider-contract.test.ts:87-95 reads "the registry (registry.ts:24-57)
+still shares one MockProvider instance across all five platforms UNTIL N2.10 makes the registry
+overrides-only" and "This assertion becomes real and enforced THE MOMENT N2.10 ADDS LinkedInProvider and
+TwitterProvider." N2.10 landed at 79408992 INSIDE this range; the registry IS overrides-only at the head
+(registry.ts:16-34) and both providers ARE in the parameterised list. The substantive claim is still true
+(mock mode does still share one instance, registry.ts:44-54) but the TENSE makes a present-tense fact read
+as pending — the same class of defect that made launch-checklist.md §16 row 4 wrong about the internals
+ban. DO: re-tense the comment to state the SHIPPED state, keeping the exemption's justification intact.
+Re-cite the line ranges against the head; do not carry the old ones forward.
+
+NIT-1: 'provider_unavailable' exists in all three locale files, NO route emits it,
+lib/social/resolve-banner.ts:5-12 documents this and deliberately excludes it from ERROR_KEYS, and
+accounts-i18n.test.ts STILL asserts its presence — a translated string no code path can produce, kept
+alive by a test. DO: remove the key from en, pt and es AND remove the assertion that pins it, in the same
+commit. Confirm by grep that no route, action or component can emit it. This is the ONLY test deletion
+this pass authorises, and it is paired with removing the string — not with lowering a bar. If it turns out
+a path CAN emit it, the fix is the opposite: keep the key and add it to ERROR_KEYS. Check before you
+delete.
+
+NIT-2: ADR 0028 §16's items are numbered 1,2,3,4,5,6,8,7 — the last two transposed. DO: renumber, and
+re-point every cross-reference to §16 items 7 and 8 anywhere in the ADR and the build guide. Citations
+inside the reviewer report are NOT edited — that text is immutable; if a citation there becomes stale,
+that is argued in the appendix at D9, never edited in place.
+
+NIT-3 — THE ARITHMETIC SWEEP, and it is the point of this step: §3a's Reviewer primer says "all six
+credentials"; there are FOUR (LINKEDIN_CLIENT_ID/SECRET, X_CLIENT_ID/SECRET). The build guide also says
+"eight rows" for launch-checklist.md §16's SEVEN, and "four states" for §9.4's FIVE — the ADR has been
+correcting these piecemeal. DO: sweep docs/build-guide/session-30-5.md for EVERY counted claim about this
+session — credentials, §16 rows, §9.4 states, constraint counts, step counts, caller counts — verify each
+against the head by grep or by opening the file, and fix all of them in this one commit. List each
+corrected count in the commit body with its evidence. Also fix §5's "all eight rows checked" for §16,
+which is the same miscount in the close-out checklist.
+
+MUST NOT: change any behaviour, any test expectation other than NIT-1's deleted assertion, or anything in
+the reviewer's own text.
+
+VERIFY: npx tsc --noEmit --skipLibCheck; npx vitest run lib/social app. Show the i18n key-parity test
+green across all three locales after NIT-1's removal.
+
+COMMIT: "30.5-D7: MINOR-5/NIT-1/NIT-2/NIT-3 - stale tenses, an unemittable i18n key, §16's numbering, and
+one arithmetic sweep of the build guide"
+```
+
+#### D8 — BLOCKER-2 + NIT-4: a Tier-1 constraint is either executed or it is marked  ·  ADR 0015 §2, §5  ·  `database-reviewer`
+
+```
+CORRECTION — Session 30.5-D · D8. ONE specialist: database-reviewer (Tier-1 grants and the db-tests
+readiness race). Read docs/decisions/0015-test-execution-and-ci-gates.md §2 and §5 BEFORE you start.
+
+THE DEFECT: SOCIAL-VAULT-UPDATE-SECRET is mapped Tier 1 / db-tests in ADR 0028 §17.4 and has NEVER ONCE
+RUN GREEN. It is the constraint proving D-alpha — the defect that meant native token refresh had never
+worked — so it is the single most load-bearing new Tier-1 property in the session.
+SOCIAL-DUAL-IDENTITY-SCHEMA is also Tier 1 / db-tests and appears to have executed
+(posts_social_account_id_fkey violations show in the log) but inside a FAILING job, so no green record
+exists for it either. Three consecutive reds: runs 33970947727 (be03c917), 33970367722 (b6580b84),
+33969704620 (608f3839).
+
+THE CAUSE IS SETTLED AND YOU DO NOT NEED TO RE-DIAGNOSE IT. The Reviewer opened the run and distinguished
+the two causes as ADR 0015 §5's merge-gate table requires: ALL SIX requests return 503 INCLUDING
+service_role's, two identical calls SUCCEEDED with 204 one second earlier, `FATAL: the database system is
+in recovery mode` (57P03) appears in the container log at that timestamp, and docker inspect shows NO OOM
+kill. A grants defect produces 403/404 differentially BY ROLE; a 503 to every role mid-suite after prior
+success is the database going away underneath the suite. It is INFRASTRUCTURE, not a DB-behaviour
+regression. The three "failing" tests tell you nothing about grants.
+
+WHY IT IS STILL A BLOCKER: cause is not consequence. ADR 0015 §2 is unambiguous — "covered = executed
+green in CI, never authored". The Builder's compensating evidence (a live check against project
+phdqfrrkbvuuklvbigoh confirming only postgres and service_role hold EXECUTE) is real, is the right
+instinct, and is NOT a Tier-1 gate. Recording a manual read of one environment as though it substitutes
+for one is how a constraint quietly becomes permanently unexecuted.
+
+DO — attempt (a) FIRST, and fall back to (b) only with the evidence in hand:
+(a) GET ONE GREEN db-tests RUN at a commit containing this range (i.e. at or after D7's head, so it
+    covers D2's migration if one landed). Address the readiness race itself — the stack is being used
+    before it is ready. Cite the run URL, and quote the skip-guard line VERBATIM FROM THE LOG showing a
+    NON-ZERO file count AND a non-zero test count AND ZERO invisible suites. Do NOT infer any of those
+    three numbers; read them.
+(b) IF a green run cannot be reached in this pass: mark SOCIAL-VAULT-UPDATE-SECRET and
+    SOCIAL-DUAL-IDENTITY-SCHEMA as AUTHORED-NOT-EXECUTED in ADR 0028 §17.4's TABLE — explicitly, in the
+    table, not in a paragraph near it — with the three red run URLs and the diagnosed cause. This is a
+    RECORDED DECISION, which ADR 0015 §2 permits; an unqualified listing, which is what the table has
+    today, is not.
+
+DO — either way (NIT-4): amend §17.4's db-tests paragraph and the 30.5-DBTESTS-READINESS-RACE entry to
+name ALL SEVEN invisible suites — campaigns-social-accounts-role-policies, governed-memory-recency-column,
+learning-report-orphans, performance-memory-candidates-expiry, post-ai-originals-latest-per-post,
+reissue-invite, signals3-triage-atomic — not the two currently named. Record the Reviewer's open question
+as open: whether these seven are NEW to this range is UNKNOWN, because the green baseline that would
+establish it does not exist. State it as unknown; do not assume benign.
+
+MUST NOT: retry into a false green; relax the skip-guard; reduce what db-tests collects; or move the
+db-tests three-green promotion tally on anything but genuine `master` runs.
+
+VERIFY: npm run test:db locally if Docker is reachable (the Reviewer's was not — say which applies to
+you). Whatever you run, the evidence of record is the CI log, quoted.
+
+COMMIT: "30.5-D8: BLOCKER-2/NIT-4 - <green db-tests at <sha>> | <SOCIAL-VAULT-UPDATE-SECRET and
+SOCIAL-DUAL-IDENTITY-SCHEMA marked AUTHORED-NOT-EXECUTED>; all seven invisible suites named"
+```
+
+#### D9 — close-out: the appendix, the green range, and §5's docs  ·  LAST
+
+```
+CORRECTION — Session 30.5-D · D9. Invoke no specialist. This step produces the record, and its job is not
+merely to re-green — it produces the green run FOR THE CORRECTED RANGE, which is what makes D7's and D8's
+re-citations true rather than merely reworded.
+
+DO:
+1. Push the corrected range. Run app-tests and db-tests at the corrected head. Record BOTH run URLs, and
+   the skip-guard's file and test counts QUOTED VERBATIM FROM THE LOG — not summarised, not inferred.
+2. Append the single `## CORRECTION PASS (Session 30.5-D)` section to the END of
+   docs/reviews/session-30-5-reviewer.md. It opens with its author, the date, and the commit range it
+   fixed. It carries EIGHTEEN rows — sixteen finding IDs plus the two founder adjudications — each
+   recording finding -> fix -> the test that now proves it -> the commit SHA. A finding DECLINED, DEFERRED
+   or ARGUED gets a row that says so and argues it; MINOR-2 is expected to be one (it is a correctly
+   disclosed guess, and D1 gave it a §16 row rather than a value). Record the ordering rationale too, so
+   the sequence does not read as arbitrary. Any §16 citation inside the reviewer's text that NIT-2's
+   renumbering has made stale is noted HERE, in the appendix — never edited above it.
+   NOT ONE CHARACTER above the appendix changes — including the per-section verdicts, §10's two caller
+   tables, the "What I could NOT verify, and why" section and the closing tally line. Confirm with
+   `git diff` that the ONLY addition to that file is the appended section, and say so in the commit body.
+3. Reconcile the count out loud: the report's tally line says 16 findings (2 BLOCKER, 3 MAJOR, 7 MINOR,
+   4 NIT) and the body carries exactly those sixteen IDs. Unlike Session 29 there is nothing to argue —
+   record that it was CHECKED, so a later reader knows the check happened.
+4. Work §5's close-out checklist, and treat its "all eight rows" for §16 as already corrected by D7.
+5. Update .wolf/anatomy.md, .wolf/memory.md, .wolf/cerebrum.md and .wolf/buglog.json — cerebrum in
+   particular gets D1's process lesson (a citation is a promise that the cited place contains the claim)
+   and D8's (a correctly diagnosed infrastructure failure is still an uncovered constraint), because both
+   are exactly the kind of thing a fresh session re-derives from scratch.
+
+MUST NOT: move the db-tests promotion tally on anything but genuine `master` runs; claim any live platform
+verification that was not performed (§14's manual log stays EMPTY unless a real connection happened);
+declare a constraint covered on the strength of a local run.
+
+COMMIT: "30.5-D9: correction pass close-out - appendix appended (18 rows), CI re-green at <sha>, §5 docs"
+```
+
+### §4.2 — Resolution log (the appendix's index — eighteen rows, one per finding ID plus two adjudications)
+
+The appendix in `docs/reviews/session-30-5-reviewer.md` is the authoritative record; this table is the
+index a reader of the build guide uses to confirm **nothing was lost between the report and the pass**.
+Fill the last two columns as each step lands.
+
+| ID | Step | Fix in one line | Test that now proves it | SHA |
+|---|---|---|---|---|
+| BLOCKER-1 | D1 | Each of `X_AUTHORIZE_URL`, `X_TOKEN_URL`, `LINKEDIN_POSTS_URL` either recorded in N2.1's dated appendix against a named source and read-date with the comment citing that item, **or** disclosed as unverified in `X_REVOKE_URL`'s form | grep of each cited appendix item against the literal URL string — no runtime test (§13 is a provenance rule) | |
+| MINOR-1 | D1 | Both `*_USERINFO_URL` folded into N2.1's log; the pairwise-`sub` question promoted from a code comment to an ADR §16 stated-open item | same — provenance, plus the §16 row | |
+| MINOR-2 | D1 | **Correctly disclosed already** — given a durable ADR §16 row instead of a comment; D3 makes it a live path | none — argued and recorded, not changed | |
+| MAJOR-2 | D2 | `resolvePublishAccount`'s pinned branch requires `business_id` **and** `platform` to match, returning `'none'` otherwise; new constraint named in §17.4 | `lib/db/social-accounts.test.ts` — foreign-business and foreign-platform pinned ids, plus the owned-id regression | |
+| MAJOR-1 | D3 | `disconnect/route.ts` attempts `revokeAccessToken` **before** `deactivateSocialAccount` and never blocks on its failure; §17.3 Table B updated | `app/api/social/[platform]/__tests__/disconnect.test.ts` — called, and throwing-revoke-still-disconnects | |
+| MAJOR-3 | D4 | A-11 — `r_member_postAnalytics` added with a **positive** scope assertion and §6's capability table re-derived, **or** the review-gated fallback recorded in §16 | `lib/social/__tests__/` scope test (positive assertion), or an ADR §16 row if gated | |
+| adjud. 1 | D4 | **A-9′** — ship both account types; locked list unamended, no member-only copy; LinkedIn Company Page renders `coming_soon` while A-8's entity gate holds. A-9's member-only recommendation preserved as superseded | none — founder ruling recorded in ADR §16 item 1 and `launch-checklist.md` §16a; the dual-identity capability itself already shipped (A-6/A-8a) | |
+| adjud. 2 | D4 | **A-10 (narrowed)** — realistic cost model recorded (~$12–18/mo at 2–3 linked posts/day); **no ceiling, no stated-open pricing decision, no code cap**. The 2M/3M read-cap discrepancy carried as **unresolved** | none — founder ruling recorded; the absence of a code change is the deliverable | |
+| MINOR-3 | D5 | `boundRetryAfterSeconds` either clamps to a sourced ceiling or is renamed `finiteRetryAfterSeconds` — the name stops promising more than it delivers | `lib/social/error-mapping.test.ts` — a ceiling+1 case (or the rename, with the existing cases retained) | |
+| MINOR-4 | D5 | `__fixtures__` removed from `EXCLUDED_DIR_NAMES` (or added to the documented exemption list with its reason) | `lib/social/__tests__/no-postiz.test.ts` — a temporary fixture hit proving the scan sees it | |
+| MINOR-6 | D6 | A-12 — `daysUntilExpiry < 0` routes to the existing `disconnected` state; §9.4 gains a one-line boundary note. **No sixth state** | `lib/social/connection-status.test.ts` — past-expiry, future-expiry, and the exact-0 boundary | |
+| MINOR-7 | D6 | Failure-surface copy branches on `errorDetails.reason`; a disambiguation key added to **en, pt and es**. Orchestrator untouched (L-1) | Tier-2 rendering case + the existing i18n key-parity test | |
+| MINOR-5 | D7 | `provider-contract.test.ts`'s exemption comment re-tensed to the shipped state, with line ranges re-cited at the head | none — comment (verified by `grep -n` against `registry.ts`) | |
+| NIT-1 | D7 | `provider_unavailable` removed from all three locales **and** the assertion pinning it removed — after confirming no path can emit it | `accounts-i18n.test.ts` key-parity, green across three locales | |
+| NIT-2 | D7 | ADR §16 renumbered 1…8 in order; every cross-reference to items 7 and 8 re-pointed (the reviewer's own text excepted — argued at D9) | none — documentation | |
+| NIT-3 | D7 | **One arithmetic sweep** of the build guide: "six credentials"→four, "eight rows"→seven (§16, incl. §5's checklist), "four states"→five, and every other counted claim verified at the head | none — each count verified by `grep`/file read, evidence in the commit body | |
+| BLOCKER-2 | D8 | One green `db-tests` run at a commit containing the corrected range with the skip-guard's counts quoted verbatim — **or** `SOCIAL-VAULT-UPDATE-SECRET` and `SOCIAL-DUAL-IDENTITY-SCHEMA` marked `AUTHORED-NOT-EXECUTED` **in §17.4's table** with the three red run URLs and the diagnosed cause | the two Tier-1 suites themselves, executed green — or an explicit recorded non-execution | |
+| NIT-4 | D8 | §17.4 and `30.5-DBTESTS-READINESS-RACE` name **all seven** invisible suites; whether they are new to this range recorded as **unknown**, not benign | none — documentation, quoted from the CI log | |
+
+**Row-count check:** sixteen finding IDs (BLOCKER-1…2, MAJOR-1…3, MINOR-1…7, NIT-1…4) plus two founder
+adjudications = **eighteen rows**, and the appendix carries eighteen. **The report's own tally line is
+correct** — sixteen findings, 2/3/7/4 — so unlike Session 29 there is nothing to argue in the appendix on
+that point. It is stated here so a later reader knows the arithmetic was checked rather than assumed.
+
+### §4.3 — What this pass does NOT do
+
+- **It does not re-review.** There is no independent N4 pass (the 23-D…29-D precedent). D9's evidence and
+  the appendix are what the founder adjudicates.
+- **It does not reopen L-1…L-12 or A-1…A-8 / A-5′ / A-8a.** A-8 in particular is *recorded and staged* by
+  D4/A-9, not reconsidered: `w_organization_social` stays out of LinkedIn's scopes.
+- **It does not widen the provider contract suite.** The Reviewer's scope observation — that the suite
+  asserts five properties and exercises neither `publish`, `exchangeOAuthCode` nor `refreshAccessToken`
+  across implementations — is **explicitly not a defect against the ADR**, which specified exactly those
+  five (§9.1). The Reviewer's own recommendation is Session 32, *"when a third real implementation gives
+  it something to prove"*. Carried as a note, not a step.
+- **It does not attempt any live platform verification.** No production OAuth app exists at either
+  platform (§14.1), so §14's manual verification log stays **empty**. An empty log is the honest state; a
+  populated one would be the first fabricated claim in the session's record.
+- **It does not close the two standing, correctly-declared gaps** — `lib/social/__integration__/` does not
+  exist and no coverage claim rests on it (§17.2), and the `SOCIAL-ERR-MATRIX-TRUE` /
+  `SOCIAL-INTEGRATION-NOT-EXECUTED` Tier-3 constraints remain recorded decisions rather than runtime tests
+  (§17.5). Both were declared by the Builder; neither is a Session 30.5 regression. If the founder wants
+  either closed, it is a named step in the next session, not an unlogged extra here.
+- **It does not move the `db-tests` promotion tally by argument** — only genuine `master` runs move it,
+  and D8 may well leave it exactly where it is.
 
 ---
 
