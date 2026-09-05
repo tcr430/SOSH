@@ -20,14 +20,19 @@ import { withFreshToken } from './vault'
 import { LINKEDIN_VERSION } from './constants'
 import { mapHttpStatusToErrorCode, boundRetryAfterSeconds } from './error-mapping'
 
-// ADR 0028 §3.1/§5.1 (N2.7). Endpoints per N2.1's vendor-doc verification
-// (docs/reviews/session-30-5-platform-verification.md items 1, 9) except
-// the userinfo identity endpoint, verified separately in this step against
-// Microsoft Learn's "Sign In with LinkedIn using OpenID Connect" doc
-// (discovery document at https://www.linkedin.com/oauth/.well-known/
-// openid-configuration, read 2026-09-04).
+// ADR 0028 §3.1/§5.1 (N2.7). LINKEDIN_AUTHORIZE_URL/LINKEDIN_TOKEN_URL are
+// sourced by N2.1 item 1 (docs/reviews/session-30-5-platform-verification.md).
+// LINKEDIN_POSTS_URL was corrected in Session 30.5-D (BLOCKER-1): item 1
+// covers only the authorize/token URLs and item 9 covers the Linkedin-Version
+// header value — neither contains the Posts API base URL. Now sourced in
+// the same file's Appendix A (item 12, read 2026-09-05, Microsoft Learn).
 const LINKEDIN_AUTHORIZE_URL = 'https://www.linkedin.com/oauth/v2/authorization'
 const LINKEDIN_TOKEN_URL = 'https://www.linkedin.com/oauth/v2/accessToken'
+// LINKEDIN_USERINFO_URL: sourced in Appendix A item 13 (read 2026-09-05) —
+// moved out of a code-comment-only citation per MINOR-1. The OIDC discovery
+// document's subject_types_supported is ["pairwise"] (confirmed verbatim);
+// see ADR 0028 §16 item 9 for the open question this raises about whether
+// `sub` matches the urn:li:person: id space constructed elsewhere.
 const LINKEDIN_USERINFO_URL = 'https://api.linkedin.com/v2/userinfo'
 const LINKEDIN_POSTS_URL = 'https://api.linkedin.com/rest/posts'
 

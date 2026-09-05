@@ -596,3 +596,22 @@ the plan price on one platform. N2.1 additionally found a source discrepancy on 
 ---
 
 Session 30.5 review complete - 16 findings (2 BLOCKER, 3 MAJOR, 7 MINOR, 4 NIT) over range 54110178..be03c917.
+
+---
+
+## CORRECTION PASS (Session 30.5-D)
+
+**Author:** Correction pass (Claude Sonnet 5), 2026-09-05, following `docs/build-guide/session-30-5.md`
+§4's D0–D9 step order. **Fixed at commit range:** `02a93980` (D0) onward, appended to as each step lands;
+D9 will supersede this line with the final range. Nothing above this section is edited — this appendix
+only adds rows, per REVIEWER-REPORT APPEND-ONLY (CLAUDE.md).
+
+| ID | Fix | Test | SHA |
+|---|---|---|---|
+| BLOCKER-1 | `X_AUTHORIZE_URL`, `X_TOKEN_URL` (twitter-provider.ts) and `LINKEDIN_POSTS_URL` (linkedin-provider.ts) were independently re-verified against live vendor docs (docs.x.com; Microsoft Learn) on 2026-09-05 and recorded in `docs/reviews/session-30-5-platform-verification.md` Appendix A, items 10/11/12. Both provider files' comments now cite the appendix item that actually contains each URL, replacing the citations to §13.1 items 1/3/4/6/7 and 1/9 that did not. No URL value changed — all three were already correct; only the provenance was false. | None — §13 is a provenance rule, proven by grepping each cited appendix item for the literal URL string, not a runtime test. | (D1, pending) |
+| MINOR-1 | `LINKEDIN_USERINFO_URL` and `X_USERINFO_URL` moved from a code-comment-only citation into Appendix A items 13/14 (verified 2026-09-05). The pairwise-`sub` question (LinkedIn's OIDC discovery document declares `subject_types_supported: ["pairwise"]`, confirmed verbatim) was promoted from a code comment to ADR 0028 §16 item 9. | Same — provenance, plus the new §16 row. | (D1, pending) |
+| MINOR-2 | Not changed — the Reviewer's assessment stands: `X_REVOKE_URL`'s disclosure comment in `twitter-provider.ts` was already the correct, honest form and is the model D1 followed for BLOCKER-1's fix. Given a durable record instead of living only as a comment: ADR 0028 §16 item 10. D3 will make this the first production call site for the value, per the build guide's ordering rationale. | None — argued and recorded, not changed, matching the build guide's own expectation for this finding. | (D1, pending) |
+
+Files touched by D1: `lib/social/twitter-provider.ts`, `lib/social/linkedin-provider.ts` (comments only —
+no URL value, provider behaviour, or test expectation changed), `docs/reviews/session-30-5-platform-verification.md`
+(new Appendix A), `docs/decisions/0028-native-social-providers.md` (new §13.2, new §16 items 9–10).

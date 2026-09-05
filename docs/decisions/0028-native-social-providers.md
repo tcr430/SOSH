@@ -481,6 +481,23 @@ Native providers are tested against **recorded fixtures**; no Tier-2 test touche
 
 **Net: 7 of 9 items confirmed, 2 still-unknown** (item 5 fully; item 6's permalink field as a documented API guarantee). No unverified endpoint was written from memory in this step, and none is written in N2.1 — this step produced no production code.
 
+### 13.2 Session 30.5-D correction (D1, 2026-09-05) — a citation is a promise the cited record contains the claim
+
+The N3 Reviewer's BLOCKER-1 found that `twitter-provider.ts` and `linkedin-provider.ts` shipped
+`X_AUTHORIZE_URL`, `X_TOKEN_URL` and `LINKEDIN_POSTS_URL` citing §13.1 items 1/3/4/6/7 and 1/9 — none of
+which record those three URLs (item 1 is LinkedIn's own authorize/token pair; item 4 records only X's
+token-endpoint *auth method*; items 1/9's cross-check of the Posts API never writes the base URL down).
+All three, plus the two userinfo endpoints MINOR-1 found sourced only in a code comment, are now
+independently verified and recorded in `docs/reviews/session-30-5-platform-verification.md` Appendix A
+(read 2026-09-05), with both provider files' comments corrected to cite the appendix item that actually
+contains each value.
+
+**The process lesson, in this ADR's own voice:** a platform fact is sourced in exactly one place, and a
+citation is a promise that the cited place contains it. A citation that points at a record which does not
+contain the claim is worse than no citation at all — it converts "unverified" into "someone already
+checked" for every future reader, which is precisely how an unsourced fact survives a review meant to
+catch it.
+
 ---
 
 ## 14. Manual verification log (the compensating control for §9.3)
@@ -606,6 +623,8 @@ cycle**, which constrains Session 32's read path and the metrics worker's cadenc
 6. **X's per-post cost versus "unlimited posts" on the Pro plan is an open pricing question** (§14.3), and a founder adjudication. $0.200 per linked post against a €125 plan with no stated ceiling is an unbounded liability; at 10 linked posts/day it consumes roughly half the plan price on one platform alone.
 8. **Re-authorisation is unavoidable when organization access eventually lands** (A-8). Every LinkedIn user connected under member-only scopes must re-authorise to grant `w_organization_social`. This cannot be engineered away and should be planned as a customer-communication task, not discovered as a support surprise.
 7. **§14 may be empty at merge, and that is a stated risk rather than an oversight** (§14.1). A launch-checklist row must require **at least the founder-profile row of §14 filled before launch**; shipping publishing that has never once succeeded against the real API is not a defensible launch state, regardless of how green CI is.
+9. **LinkedIn's OIDC `sub` claim may not match the `urn:li:person:{id}` identifier space used elsewhere in this API** (Session 30.5-D, D1). The discovery document (`https://www.linkedin.com/oauth/.well-known/openid-configuration`) declares `subject_types_supported: ["pairwise"]` — confirmed verbatim, `docs/reviews/session-30-5-platform-verification.md` Appendix A item 13 — meaning `sub` can be a per-client-scoped identifier rather than a stable, portable member id. Author-URN construction elsewhere in this ADR assumes `urn:li:person:{id}` addresses the member; if the userinfo `sub` is pairwise, that construction may be silently wrong. Needs an empirical check once real LinkedIn credentials exist (§14.1): confirm the `sub` returned actually addresses the member the Posts API's author URN expects.
+10. **`X_REVOKE_URL` (`https://api.x.com/2/oauth2/revoke`) remains an unconfirmed best guess, not a documented endpoint** (Session 30.5-D, D1, restating MINOR-2's correct disclosure as a durable row). §13 item 3 confirms only that a revocation endpoint is *referenced* from X's OAuth 2.0 overview page, in an OAuth 1.0a shape that doesn't fit SOSH's flow. Revocation stays best-effort and never throws regardless (`SOCIAL-REVOKE-NEVER-BLOCKS`). Session 30.5-D's D3 makes this the first production call site for the value — confirm it empirically against a real X account (§14.1) before relying on it working.
 
 ---
 

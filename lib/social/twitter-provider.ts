@@ -20,14 +20,19 @@ import { withFreshToken, readRefreshToken } from './vault'
 import { generatePkceVerifier, generatePkceChallenge, setPkceVerifierCookie, readAndClearPkceVerifierCookie } from './oauth/pkce'
 import { mapHttpStatusToErrorCode, boundRetryAfterSeconds } from './error-mapping'
 
-// ADR 0028 §3.2/§4.2 (N2.8). Endpoints per N2.1's vendor-doc verification
-// (docs/reviews/session-30-5-platform-verification.md items 1/3/4/6/7)
-// except the "authenticated user" identity endpoint, verified separately in
-// this step against docs.x.com's user-lookup-me page (read 2026-09-04).
+// ADR 0028 §3.2/§4.2 (N2.8). Corrected in Session 30.5-D (BLOCKER-1):
+// X_AUTHORIZE_URL and X_TOKEN_URL previously cited N2.1 items 1/3/4/6/7,
+// none of which record an X authorize or token URL (item 1 is LinkedIn's
+// endpoints; item 4 records only X's token-endpoint auth method). Both are
+// now sourced in docs/reviews/session-30-5-platform-verification.md
+// Appendix A (items 10/11, read 2026-09-05, docs.x.com). X_TWEETS_URL
+// remains sourced by N2.1 item 6.
 const X_AUTHORIZE_URL = 'https://x.com/i/oauth2/authorize'
 const X_TOKEN_URL = 'https://api.x.com/2/oauth2/token'
+// X_USERINFO_URL: sourced in Appendix A item 14 (read 2026-09-05) — moved
+// out of a code-comment-only citation per MINOR-1.
 const X_USERINFO_URL = 'https://api.x.com/2/users/me'
-const X_TWEETS_URL = 'https://api.x.com/2/tweets'
+const X_TWEETS_URL = 'https://api.x.com/2/tweets' // N2.1 item 6
 // N2.1 (finding 3) confirmed only that a revocation endpoint is REFERENCED
 // from X's OAuth 2.0 overview page — not its exact request shape for a
 // user-context (authorization_code+PKCE) confidential client. A follow-up

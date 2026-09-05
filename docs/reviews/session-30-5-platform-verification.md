@@ -174,3 +174,46 @@ Checked directly against the Posts API documentation (item 1/9's source):
 | 9. `Linkedin-Version` to pin | CONFIRMED as of 2026-09-04 (`202608`); re-verify at build time |
 
 **7 confirmed outright, 2 still-unknown** (item 5 fully, item 6's permalink field partially), **plus one drift finding (LinkedIn metrics scope gap) that is reported, not resolved, in this step.**
+
+---
+
+## Appendix A — endpoints verified in Session 30.5-D, 2026-09-05
+
+**Author:** Correction pass (D1), 2026-09-05. **Reason for this appendix:** the N3 Reviewer's BLOCKER-1
+found that `twitter-provider.ts` and `linkedin-provider.ts` shipped three endpoint URLs
+(`X_AUTHORIZE_URL`, `X_TOKEN_URL`, `LINKEDIN_POSTS_URL`) citing items 1/3/4/6/7 and 1/9 above — none of
+which record those URLs. This appendix independently verifies those three, plus the two identity
+endpoints the Reviewer's MINOR-1 found sourced only in a code comment, against vendor documentation only.
+No value here was written from memory or recollection.
+
+10. **`X_AUTHORIZE_URL` — CONFIRMED.** `https://x.com/i/oauth2/authorize`.
+
+    Source: [How to connect to endpoints using OAuth 2.0 Authorization Code Flow with PKCE — docs.x.com](https://docs.x.com/resources/fundamentals/authentication/oauth-2-0/user-access-token). Read 2026-09-05.
+
+11. **`X_TOKEN_URL` — CONFIRMED.** `https://api.x.com/2/oauth2/token`.
+
+    Source: same page as item 10. Read 2026-09-05.
+
+12. **`LINKEDIN_POSTS_URL` — CONFIRMED.** `POST https://api.linkedin.com/rest/posts` (the "Create a Post"
+    request; also the base path for Update/Delete/Get/Find operations on the same resource).
+
+    Source: [Posts API — LinkedIn | Microsoft Learn](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/posts-api). Read 2026-09-05. Corroborates item 1/9's cross-check of the
+    same document (headers, `201`+`x-restli-id`, URN forms, permalink shape) — this appendix adds the base
+    URL those items never wrote down.
+
+13. **`LINKEDIN_USERINFO_URL` — CONFIRMED.** `https://api.linkedin.com/v2/userinfo`.
+
+    Source: [Sign In with LinkedIn using OpenID Connect — Microsoft Learn](https://learn.microsoft.com/en-us/linkedin/consumer/integrations/self-serve/sign-in-with-linkedin-v2). Read 2026-09-05. The same
+    page's discovery-document sample confirms `subject_types_supported: ["pairwise"]` **verbatim** — the
+    pairwise-`sub` question `linkedin-provider.ts` previously raised only in a comment is real, not
+    speculative, and is now ADR 0028 §16 item 9.
+
+14. **`X_USERINFO_URL` — CONFIRMED.** `https://api.x.com/2/users/me`.
+
+    Source: [User lookup me — docs.x.com](https://docs.x.com/x-api/users/user-lookup-me). Read 2026-09-05.
+
+**Not re-verified here, and correctly still unverified:** `X_REVOKE_URL`
+(`https://api.x.com/2/oauth2/revoke`) — item 3 above already confirms only that a revocation endpoint is
+*referenced* from X's OAuth 2.0 overview page, in an OAuth 1.0a shape that doesn't fit SOSH's flow.
+`twitter-provider.ts`'s existing disclosure comment is the correct, disclosed form (MINOR-2) and is
+unchanged by this appendix; see ADR 0028 §16 item 10.
