@@ -1818,3 +1818,11 @@ The two-axis permission model is DB-enforced, not app-layer-only: `user_can(busi
   "unlimited posts") are explicit founder adjudications neither N2.12 nor N2.13 can resolve. Items 2–5, 7
   and 8 are standing risks/facts, not defects with a fix step. §14's manual verification log is empty —
   stated as the honest state per §14.1, not backfilled.
+- **CI, read at the head this section is dated to (`b6580b84`): `app-tests` GREEN**
+  (`https://github.com/tcr430/SOSH/actions/runs/33970367725`); **`db-tests` RED on three consecutive
+  attempts** (`https://github.com/tcr430/SOSH/actions/runs/33970367722`), reliably at
+  `vault-update-secret.test.ts`'s permission tests with a "database system in recovery mode" signature
+  right after the reset step — distinguished as a `db-tests.yml` readiness race, not a behaviour
+  regression (the same function's grants were independently confirmed correct against the live linked
+  Supabase project). Not a blocker: `db-tests` is not yet a required gate. Filed as
+  `30.5-DBTESTS-READINESS-RACE`. Full detail in ADR 0028 §17.4.

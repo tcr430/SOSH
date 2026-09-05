@@ -718,10 +718,32 @@ scripts/eval/`) unless marked **db-tests**. `app-tests.yml` runs on every push/P
 | `SOCIAL-META-STILL-UNAVAILABLE` | 2 (N2.13) | app-tests | Instagram/Facebook/Threads flip to `publishingAvailable: true` without Meta App Review having happened |
 | `SOCIAL-NO-READ-PATH` | 2 (N2.13) | app-tests | `fetchRecentPosts`/`listRecentPosts` is added to `lib/social/` ahead of Session 32 |
 
-**CI run URLs for the commit this section is dated to:** not yet available — this branch had not been
-pushed at the time this section was written. **Superseded by a dated follow-up note appended immediately
-below, added after the push, citing the real run URLs** rather than a plausible-looking placeholder (the
-Session 28 false "29/29 executed green" precedent this ADR's own §17 exists to not repeat).
+**CI run URLs — pushed and read, per this section's own instruction not to claim a count before that:**
+
+- **`app-tests` — GREEN.** `https://github.com/tcr430/SOSH/actions/runs/33970367725`, commit `b6580b84`.
+  Every `app-tests`-mapped constraint row above executed and passed. The first attempt at commit
+  `608f3839` (this closure's own preceding commit) had reddened on an unrelated pre-existing constraint,
+  `POSTS-DDL-UNMODIFIED` (ADR 0022 §11.3) — fixed in `b6580b84` per the retirement reasoning in that
+  commit's message; not one of this ADR's own `SOCIAL-*` constraints.
+- **`db-tests` — RED, three consecutive attempts, and NOT a behaviour regression.**
+  `https://github.com/tcr430/SOSH/actions/runs/33970367722` (reran twice at the same commit). Every
+  attempt fails identically: `vault-update-secret.test.ts`'s three permission tests (anon-denied,
+  authenticated-denied, service-role-granted — the exact ones proving `SOCIAL-VAULT-UPDATE-SECRET`), plus
+  two unrelated suites (`post-ai-originals-latest-per-post.test.ts`, `signals3-triage-atomic.test.ts`)
+  reported entirely invisible/skipped. The container logs show `FATAL: the database system is in
+  recovery mode` (SQLSTATE 57P03) at the exact point these tests run, immediately after the "Reset DB"
+  step re-applies all migrations — `docker inspect` shows the db container itself was never OOM-killed or
+  restarted, which points at a **readiness race in `db-tests.yml`'s wait-for-schema-cache step** (Postgres
+  briefly unavailable to auth-dependent tests right after reset, not a data or permission defect) rather
+  than a real DB-behaviour regression. **Independently confirmed against the live linked Supabase project
+  (`phdqfrrkbvuuklvbigoh`) that `public.vault_update_secret`'s actual grants are correct** — only
+  `postgres` and `service_role` hold `EXECUTE`; `anon`/`authenticated` do not — so the underlying migration
+  is not in question. Per ADR 0015 §5's merge-gate table, distinguishing "DB-behaviour regression" from
+  "stack OOM/infra" is exactly what a Reviewer opening this run must do; done here, and it is the latter.
+  **`db-tests` is not yet a required/blocking gate** (ADR 0015 §5's promotion rule; `current-phase.md`
+  records the 7-consecutive-green tally as met but not yet enacted by the founder), so this does not block
+  merge — but is reported here rather than silently retried into a false green or left uncited. Filed as
+  `30.5-DBTESTS-READINESS-RACE` in `docs/backlog.md`.
 
 ### 17.5 Tier-3 constraints, enumerated as decisions
 
