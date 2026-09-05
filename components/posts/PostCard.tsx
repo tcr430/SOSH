@@ -182,7 +182,24 @@ export function PostCard({ post, onOptimisticUpdate }: PostCardProps) {
     ? t('card.tooltip.failedAt', { at: format(new Date(post.last_publish_attempt_at), 'dd MMM HH:mm') })
     : null
 
-  function resolveErrorLabel(code: string | null): string {
+  // MINOR-7 (Session 30.5-D, D6): resolvePublishAccount's 'ambiguous' outcome
+  // is marked errorCode: 'TOKEN_REVOKED' (the code L-1 permits — no new
+  // union member) with errorDetails.reason: 'account_ambiguous', stored at
+  // ai_generation_metadata.publish_error.reason by markPostFailed. TOKEN_
+  // REVOKED alone maps to "reconnect", the wrong instruction when the real
+  // problem is two identities needing one picked — branch on the reason.
+  function getPublishErrorReason(metadata: unknown): string | null {
+    if (!metadata || typeof metadata !== 'object') return null
+    const publishError = (metadata as Record<string, unknown>).publish_error
+    if (!publishError || typeof publishError !== 'object') return null
+    const reason = (publishError as Record<string, unknown>).reason
+    return typeof reason === 'string' ? reason : null
+  }
+
+  function resolveErrorLabel(code: string | null, reason: string | null): string {
+    if (code === 'TOKEN_REVOKED' && reason === 'account_ambiguous') {
+      return t('card.error.account_ambiguous')
+    }
     switch (code) {
       case 'TOKEN_EXPIRED': return t('card.error.token_expired')
       case 'TOKEN_REVOKED': return t('card.error.token_revoked')
@@ -195,7 +212,9 @@ export function PostCard({ post, onOptimisticUpdate }: PostCardProps) {
       default: return t('card.error.generic')
     }
   }
-  const errorLabel = post.status === 'failed' ? resolveErrorLabel(post.last_publish_error) : null
+  const errorLabel = post.status === 'failed'
+    ? resolveErrorLabel(post.last_publish_error, getPublishErrorReason(post.ai_generation_metadata))
+    : null
 
   return (
     <article

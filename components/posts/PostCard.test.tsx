@@ -127,3 +127,35 @@ describe('PostCard — capability gate: approver (full access)', () => {
     cleanup()
   })
 })
+
+// MINOR-7 (Session 30.5-D, D6): resolvePublishAccount's 'ambiguous' outcome
+// surfaces as errorCode TOKEN_REVOKED (the code L-1 permits — no new union
+// member) with errorDetails.reason: 'account_ambiguous'. TOKEN_REVOKED alone
+// maps to "reconnect your account", the wrong instruction for a user whose
+// two identities on one platform simply need one picked. The failure-surface
+// copy must branch on the reason, not the code alone.
+describe('PostCard — failure-surface copy branches on errorDetails.reason, not errorCode alone (MINOR-7)', () => {
+  it('renders the disambiguation copy, not the reconnect copy, when TOKEN_REVOKED carries reason account_ambiguous', () => {
+    mockRole('viewer')
+    const { container, cleanup } = renderCard(makePost({
+      status: 'failed',
+      last_publish_error: 'TOKEN_REVOKED',
+      ai_generation_metadata: { publish_error: { reason: 'account_ambiguous' } },
+    }))
+    expect(container.textContent).toContain('card.error.account_ambiguous')
+    expect(container.textContent).not.toContain('card.error.token_revoked')
+    cleanup()
+  })
+
+  it('renders the ordinary reconnect copy for a TOKEN_REVOKED failure with no ambiguous reason (regression)', () => {
+    mockRole('viewer')
+    const { container, cleanup } = renderCard(makePost({
+      status: 'failed',
+      last_publish_error: 'TOKEN_REVOKED',
+      ai_generation_metadata: {},
+    }))
+    expect(container.textContent).toContain('card.error.token_revoked')
+    expect(container.textContent).not.toContain('card.error.account_ambiguous')
+    cleanup()
+  })
+})

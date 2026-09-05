@@ -45,6 +45,7 @@
     "error": {
       "token_expired": "Sessão da conta expirou",
       "token_revoked": "Conta desligada — voltar a ligar",
+      "account_ambiguous": "Duas contas ligadas — escolha a partir de qual esta publicação é feita",
       "rate_limited": "Plataforma limitou a taxa de publicação",
       "platform_rejected": "Plataforma rejeitou a publicação",
       "network": "Erro de rede — será repetido",

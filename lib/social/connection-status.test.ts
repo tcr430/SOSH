@@ -70,6 +70,25 @@ describe('getConnectionStatus', () => {
     expect(getConnectionStatus(account, 'linkedin')).toBe('connected')
   })
 
+  // MINOR-6/A-12 (Session 30.5-D, D6): differenceInCalendarDays <= 7 admitted
+  // NEGATIVE values, so an already-expired token rendered 'expiring_soon'
+  // ("renew it soon") instead of 'disconnected' ("reconnect required") — the
+  // exact moment LinkedIn's non-refreshable 60-day token stops working is
+  // the single most common reconnection event this product will generate.
+  // Ruling (A-12): daysUntilExpiry < 0 routes to the EXISTING 'disconnected'
+  // state — no sixth state.
+  it('returns disconnected (not expiring_soon) for an active account whose token expired 3 days ago', () => {
+    const expiresAt = formatISO(addDays(new Date(), -3))
+    const account = makeAccount({ token_expires_at: expiresAt })
+    expect(getConnectionStatus(account, 'linkedin')).toBe('disconnected')
+  })
+
+  it('boundary: expiring exactly today (daysUntilExpiry === 0) is still expiring_soon, not disconnected', () => {
+    const expiresAt = formatISO(addDays(new Date(), 0))
+    const account = makeAccount({ token_expires_at: expiresAt })
+    expect(getConnectionStatus(account, 'linkedin')).toBe('expiring_soon')
+  })
+
   it('returns coming_soon for instagram with no account', () => {
     expect(getConnectionStatus(null, 'instagram')).toBe('coming_soon')
     expect(getConnectionStatus(undefined, 'instagram')).toBe('coming_soon')

@@ -372,7 +372,7 @@ Native providers are tested against **recorded fixtures**; no Tier-2 test touche
 
 **Specified here, designed by the Builder** using `/impeccable` or `/taste-skill` against this contract — never by the Architect.
 
-- **All five `ConnectionStatus` states** (`connection-status.ts:5`): `connected`, `connected_coming_soon`, `expiring_soon`, `disconnected`, `coming_soon`. *(The build guide's Q8 says four; there are five.)*
+- **All five `ConnectionStatus` states** (`connection-status.ts:5`): `connected`, `connected_coming_soon`, `expiring_soon`, `disconnected`, `coming_soon`. *(The build guide's Q8 says four; there are five.)* **Boundary note (Session 30.5-D, D6, MINOR-6/A-12, founder-confirmed):** an expired token (`daysUntilExpiry < 0`) routes to the existing `disconnected` state, not `expiring_soon` — a boundary correction inside these five states, not a sixth state. `daysUntilExpiry === 0` (expiring today) remains `expiring_soon`.
 - **Dual identity:** the accounts surface lists LinkedIn identities separately (founder profile, business page), each with its own status and disconnect control, and marks which is the default used when a post names no account. Connecting a second LinkedIn identity must be an obvious action, not a re-connect that appears to replace the first.
 - **LinkedIn reconnection:** `expiring_soon` states plainly that LinkedIn access expires and must be renewed, with the date. No new channel (L-6).
 - **Per-platform availability copy** for the three `coming_soon` platforms, truthful about the reason.

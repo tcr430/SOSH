@@ -25,6 +25,14 @@ export function getConnectionStatus(
 
   if (account.token_expires_at !== null) {
     const daysUntilExpiry = differenceInCalendarDays(new Date(account.token_expires_at), new Date())
+    // MINOR-6/A-12 (Session 30.5-D, D6): a NEGATIVE daysUntilExpiry means the
+    // token already expired — that is 'disconnected' (reconnect required),
+    // not 'expiring_soon' (renew it soon). Boundary is exclusive: exactly 0
+    // (expiring today) is still 'expiring_soon'. No sixth state — this
+    // routes into the existing 'disconnected' state (§9.4 note added).
+    if (daysUntilExpiry < 0) {
+      return 'disconnected'
+    }
     if (daysUntilExpiry <= EXPIRY_WARNING_DAYS) {
       return 'expiring_soon'
     }
