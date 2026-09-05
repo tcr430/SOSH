@@ -751,12 +751,12 @@ scripts/eval/`) unless marked **db-tests**. `app-tests.yml` runs on every push/P
 | `SOCIAL-REDIRECT-URI-MATCH` | 2 | app-tests | Connect/callback derive different `redirectUri`s |
 | `SOCIAL-STATE-BINDS-BUSINESS` | 2 | app-tests | Ownership check removed before a service-role write |
 | `SOCIAL-NO-SECRET-EGRESS` | 2+3 | app-tests | A client secret appears in a bundle/log/`details` payload |
-| `SOCIAL-VAULT-UPDATE-SECRET` | **1** | **db-tests** | `vault_update_secret` missing, wrong grants, or not in-place |
+| `SOCIAL-VAULT-UPDATE-SECRET` | **1 — AUTHORED-NOT-EXECUTED** (Session 30.5-D, D8: never once run green in CI across three attempts at `608f3839`/`b6580b84`/`be03c917`; cause is infra — see the correction note below this table's section — not a DB-behaviour regression, but ADR 0015 §2 does not distinguish cause when scoring coverage) | **db-tests** | `vault_update_secret` missing, wrong grants, or not in-place |
 | `SOCIAL-VAULT-UPDATE-CHECKED` | 2 | app-tests | A `vault_update_secret` call site stops checking `error` |
 | `SOCIAL-LI-EXPIRY-REVOKED` | 2 | app-tests | LinkedIn refresh throws `TOKEN_EXPIRED` instead of `TOKEN_REVOKED` |
 | `SOCIAL-X-EXPIRY-FROM-RESPONSE` | 2 | app-tests | `token_expires_at` stops deriving from `expires_in` |
 | `SOCIAL-REVOKE-NEVER-BLOCKS` | 1+2 | app-tests | A provider's `revokeAccessToken` throws instead of resolving, **or** (Session 30.5-D, D3) `disconnect/route.ts` propagates a revoke failure / unconfigured-provider error instead of completing local cleanup — `disconnect.test.ts`'s two mutation-tested cases |
-| `SOCIAL-DUAL-IDENTITY-SCHEMA` | **1** | **db-tests** | `posts.social_account_id` FK/cascade/RLS regresses |
+| `SOCIAL-DUAL-IDENTITY-SCHEMA` | **1 — AUTHORED-NOT-EXECUTED** (Session 30.5-D, D8: appears to execute — `posts_social_account_id_fkey` violations appear in the failure log, its own negative case — but always inside a job that failed overall, so no green record exists) | **db-tests** | `posts.social_account_id` FK/cascade/RLS regresses |
 | `SOCIAL-DUAL-IDENTITY-RESOLVER` | 2 | app-tests | Any of the three callers' ambiguous-case test regresses (§17.3 Table A) |
 | `SOCIAL-PINNED-ACCOUNT-TENANT-CHECKED` | 2 (Session 30.5-D, D2) | app-tests | `resolvePublishAccount`'s pinned branch resolves an account whose `business_id` or `platform` doesn't match the caller's, instead of returning `'none'` |
 | `SOCIAL-LI-AUTHOR-URN` | 2 | app-tests | Person/organization URN handling regresses |
@@ -803,6 +803,26 @@ scripts/eval/`) unless marked **db-tests**. `app-tests.yml` runs on every push/P
   records the 7-consecutive-green tally as met but not yet enacted by the founder), so this does not block
   merge — but is reported here rather than silently retried into a false green or left uncited. Filed as
   `30.5-DBTESTS-READINESS-RACE` in `docs/backlog.md`.
+
+  **Correction (Session 30.5-D, D8, BLOCKER-2/NIT-4).** This paragraph under-reported the blast radius and
+  the diagnosis was refined. **Seven suites reported entirely invisible, not two:**
+  `campaigns-social-accounts-role-policies`, `governed-memory-recency-column`, `learning-report-orphans`,
+  `performance-memory-candidates-expiry`, `post-ai-originals-latest-per-post`, `reissue-invite`,
+  `signals3-triage-atomic`. Whether these seven are **new to this range is UNKNOWN** — no green `db-tests`
+  baseline on this branch exists to establish it; stated as unknown, not assumed benign. The N3 Reviewer
+  independently opened the failure logs and refined the cause beyond "a readiness race in the wait-for-
+  schema-cache step": the PostgREST access log shows two identical calls succeeding with 204 one second
+  before every subsequent call (including `service_role`'s) returned 503, with `57P03 database system is
+  in recovery mode` at that timestamp and `OOMKilled: false`. This is Postgres crashing mid-suite, not a
+  pre-test readiness gap — a 403/404-differentiated-by-role signature would indicate grants; a 503-to-
+  every-role signature after prior success indicates the database itself going away. `SOCIAL-VAULT-UPDATE-
+  SECRET` and `SOCIAL-DUAL-IDENTITY-SCHEMA` are marked `AUTHORED-NOT-EXECUTED` in §17.4's table below,
+  per ADR 0015 §2's "covered = executed green in CI, never authored" — no green record exists for either at
+  any commit in this range. `db-tests.yml`/`supabase/config.toml` are amended in this same step
+  (`shared_buffers` 256MB→128MB, `maintenance_work_mem` 128MB→64MB, a live memory-pressure watch uploaded
+  unconditionally) per database-reviewer's diagnosis that a cgroup kill of a child Postgres backend never
+  sets the container's own `OOMKilled` flag. `docs/backlog.md`'s `30.5-DBTESTS-READINESS-RACE` entry is
+  updated to match.
 
 ### 17.5 Tier-3 constraints, enumerated as decisions
 
