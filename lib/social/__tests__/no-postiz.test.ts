@@ -104,7 +104,11 @@ function isExempted(filePath: string): boolean {
   return EXEMPTED_ROOTS.some((root) => filePath === root || filePath.startsWith(root + path.sep))
 }
 
-const EXCLUDED_DIR_NAMES = new Set(['node_modules', '.git', '.next', '__fixtures__'])
+// MINOR-4 (Session 30.5-D, D5): '__fixtures__' was excluded here alongside
+// node_modules/.git/.next, but unlike those three it IS source — a scan
+// whose own comment above promises "no exemption is silent" had a silent
+// one. Removed: the walk now sees fixture directories like any other.
+const EXCLUDED_DIR_NAMES = new Set(['node_modules', '.git', '.next'])
 
 function collectFiles(dir: string, out: string[] = []): string[] {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {

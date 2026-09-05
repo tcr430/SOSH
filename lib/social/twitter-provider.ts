@@ -18,7 +18,7 @@ import type {
 import { SocialProviderError } from './errors'
 import { withFreshToken, readRefreshToken } from './vault'
 import { generatePkceVerifier, generatePkceChallenge, setPkceVerifierCookie, readAndClearPkceVerifierCookie } from './oauth/pkce'
-import { mapHttpStatusToErrorCode, boundRetryAfterSeconds } from './error-mapping'
+import { mapHttpStatusToErrorCode, finiteRetryAfterSeconds } from './error-mapping'
 
 // ADR 0028 §3.2/§4.2 (N2.8). Corrected in Session 30.5-D (BLOCKER-1):
 // X_AUTHORIZE_URL and X_TOKEN_URL previously cited N2.1 items 1/3/4/6/7,
@@ -279,7 +279,7 @@ export class TwitterProvider implements SocialProvider {
         code: 'RATE_LIMITED',
         message: 'publish: rate limited by X',
         platform: 'twitter',
-        retryAfterSeconds: boundRetryAfterSeconds(retryAfter),
+        retryAfterSeconds: finiteRetryAfterSeconds(retryAfter),
       })
     }
 

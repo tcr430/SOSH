@@ -32,6 +32,15 @@ export function mapHttpStatusToErrorCode(status: number): SocialProviderErrorCod
 // LinkedIn from a Retry-After header, X from an x-rate-limit-reset epoch
 // timestamp (ADR 0028 §7.2, N2.1 finding 7) — this is the shared guard+
 // fallback both apply to that candidate.
-export function boundRetryAfterSeconds(candidateSeconds: number, fallbackSeconds = 60): number {
+//
+// MINOR-3 (Session 30.5-D, D5): named finiteRetryAfterSeconds, not
+// boundRetryAfterSeconds — the Number.isFinite guard is correct, but "bound"
+// promises a ceiling this function never applied. A hostile or buggy
+// `Retry-After: 999999999` passes through untouched. No worker-side
+// duration ceiling exists to clamp against (PUBLISH_MAX_ATTEMPTS is an
+// attempt COUNT, not a time bound) — inventing one would violate ADR 0028
+// §13's "no platform fact from memory", so the guard is honestly named
+// instead of quietly re-scoped.
+export function finiteRetryAfterSeconds(candidateSeconds: number, fallbackSeconds = 60): number {
   return Number.isFinite(candidateSeconds) ? candidateSeconds : fallbackSeconds
 }

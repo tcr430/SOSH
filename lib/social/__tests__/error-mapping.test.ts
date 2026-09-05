@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
-import { mapHttpStatusToErrorCode, boundRetryAfterSeconds } from '../error-mapping'
+import { mapHttpStatusToErrorCode, finiteRetryAfterSeconds } from '../error-mapping'
 import type { SocialProviderErrorCode } from '../types'
 
 // SOCIAL-ERROR-MAPPING (ADR 0028 §7.2, N2.9). Table-driven, ONE CASE PER
@@ -37,25 +37,25 @@ describe('mapHttpStatusToErrorCode — SOCIAL-ERROR-MAPPING', () => {
 // populated ONLY when the code is RATE_LIMITED (ADR 0002 §3) — this guard
 // is what both providers apply to their platform-specific raw candidate
 // (LinkedIn: Retry-After header; X: x-rate-limit-reset epoch math).
-describe('boundRetryAfterSeconds — SOCIAL-RATE-LIMIT-RETRY-AFTER', () => {
+describe('finiteRetryAfterSeconds — SOCIAL-RATE-LIMIT-RETRY-AFTER', () => {
   it('a finite candidate is used as-is', () => {
-    expect(boundRetryAfterSeconds(42)).toBe(42)
+    expect(finiteRetryAfterSeconds(42)).toBe(42)
   })
 
   it('NaN falls back to 60', () => {
-    expect(boundRetryAfterSeconds(NaN)).toBe(60)
+    expect(finiteRetryAfterSeconds(NaN)).toBe(60)
   })
 
   it('Infinity falls back to 60', () => {
-    expect(boundRetryAfterSeconds(Infinity)).toBe(60)
+    expect(finiteRetryAfterSeconds(Infinity)).toBe(60)
   })
 
   it('a caller-supplied fallback overrides the default', () => {
-    expect(boundRetryAfterSeconds(NaN, 30)).toBe(30)
+    expect(finiteRetryAfterSeconds(NaN, 30)).toBe(30)
   })
 
   it('zero is finite and is used as-is, not treated as absent', () => {
-    expect(boundRetryAfterSeconds(0)).toBe(0)
+    expect(finiteRetryAfterSeconds(0)).toBe(0)
   })
 })
 

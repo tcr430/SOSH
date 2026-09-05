@@ -637,3 +637,10 @@ Files touched by D4: `docs/reviews/session-30-5-platform-verification.md` (new A
 `docs/decisions/0028-native-social-providers.md` (§13 item 8 marked adjudicated, §16 items 1/6 gain dated
 notes, new §16 item 11), `docs/launch-checklist.md` (§16a checkbox ticked with the ruling, new §16b). No
 `.ts`/`.tsx`/`.sql` files touched — zero code change in this step, as the build guide anticipated.
+
+| MINOR-3 | No worker-side time ceiling exists to clamp against (`PUBLISH_MAX_ATTEMPTS` is an attempt COUNT, not a duration) — sourcing a ceiling would mean inventing a number, forbidden by ADR §13. Took option (b): renamed `boundRetryAfterSeconds` -> `finiteRetryAfterSeconds` across `error-mapping.ts` and both providers' call sites — the `Number.isFinite` guard was already correct, only the name overpromised. Pure rename, zero logic change. | `error-mapping.test.ts`'s existing five cases (finite passthrough, NaN/Infinity fallback, custom fallback, zero-is-finite) renamed in place and still pass unchanged — a rename doesn't redden by mutation, it reddens by TypeScript failing to compile against the old name, which the full `tsc`/`vitest` run below proves didn't happen. | (D5, pending) |
+| MINOR-4 | `__fixtures__` removed from `no-postiz.test.ts`'s `EXCLUDED_DIR_NAMES` (option (a), preferred) — confirmed first via `grep -ril postiz` against both existing `__fixtures__` directories (`lib/ai`, `lib/signals`) that removing the exemption creates **no live leak** (zero hits). | Demonstrated to REDDEN: a temporary file (`lib/signals/__fixtures__/_temp-minor4-proof.txt`, containing the word "postiz") was added, the scan failed and named the exact path, the file was deleted, the scan passed again — the whole cycle is a DISCOVERY that the hole was real, not a live leak found and left. | (D5, pending) |
+
+Files touched by D5: `lib/social/error-mapping.ts` (rename + comment), `lib/social/twitter-provider.ts` and
+`lib/social/linkedin-provider.ts` (import/call-site rename only), `lib/social/__tests__/error-mapping.test.ts`
+(rename), `lib/social/__tests__/no-postiz.test.ts` (`EXCLUDED_DIR_NAMES` narrowed + comment).

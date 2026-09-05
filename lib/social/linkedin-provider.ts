@@ -18,7 +18,7 @@ import type {
 import { SocialProviderError } from './errors'
 import { withFreshToken } from './vault'
 import { LINKEDIN_VERSION } from './constants'
-import { mapHttpStatusToErrorCode, boundRetryAfterSeconds } from './error-mapping'
+import { mapHttpStatusToErrorCode, finiteRetryAfterSeconds } from './error-mapping'
 
 // ADR 0028 §3.1/§5.1 (N2.7). LINKEDIN_AUTHORIZE_URL/LINKEDIN_TOKEN_URL are
 // sourced by N2.1 item 1 (docs/reviews/session-30-5-platform-verification.md).
@@ -268,7 +268,7 @@ export class LinkedInProvider implements SocialProvider {
         code: 'RATE_LIMITED',
         message: 'publish: rate limited by LinkedIn',
         platform: 'linkedin',
-        retryAfterSeconds: boundRetryAfterSeconds(retryAfter),
+        retryAfterSeconds: finiteRetryAfterSeconds(retryAfter),
       })
     }
 
