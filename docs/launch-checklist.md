@@ -477,10 +477,13 @@ ships **member-only** — the founder-profile half of CLAUDE.md's locked "Linked
 platform list works; the business-page half does not exist. `w_member_social` (founder profile) is **not**
 gated by this — it activates on ordinary LinkedIn app creation, no review required (§14.1 Stage 1).
 
-- [ ] **Founder ruling received** on ADR 0028 §16 item 1: launch with LinkedIn Founder-only and say so in
-      customer-facing copy, hold launch for entity registration + Community Management API approval, or
-      amend the locked platform list. **Not yet received as of this checklist row** — do not silently
-      infer one of the three options.
+- [x] **Founder ruling received 2026-09-05 (ADR 0028 §16 item 1, A-9′):** ship both account types.
+      The locked platform list is **not** amended, and no customer-facing copy says "member-only" or
+      "Founder profile only" — dual identity and X's Business+Founder connections already work; LinkedIn
+      Company Page renders `coming_soon` (the A-1 Meta pattern) while the rows below remain outstanding.
+      This checklist item is satisfied by the ruling itself; the rows below (legal entity, Community
+      Management API application/approval, forced re-authorisation) are unchanged and still gate Company
+      Page posting specifically, not launch as a whole.
 - [ ] `docs/pre-launch-scope.md` and `docs/product-status.md` do not claim LinkedIn business-page posting
       exists until `w_organization_social` is actually granted and a business-page row appears in ADR
       0028 §14's manual verification log.
@@ -493,6 +496,20 @@ gated by this — it activates on ordinary LinkedIn app creation, no review requ
 - [ ] Every already-connected LinkedIn founder-profile account is re-authorised to add
       `w_organization_social` once granted (ADR 0028 §16 item 8) — **unavoidable**, not a bug; plan as a
       customer-communication task, not a support surprise.
+
+---
+
+## 16b. X's per-linked-post cost against "unlimited posts" (ADR 0028 §14.3, §16 item 6, A-10)
+
+**Ruled 2026-09-05 — not a launch gate.** X charges ~$0.200 per post that carries a link (pay-per-usage,
+confirmed the only billing model available to a new Sept-2026 developer account). At a realistic 2–3 linked
+posts/day per business — not the worst-case 10/day figure an earlier draft used — the exposure is **~$12–18
+per business per month against the €125 Pro plan, under 15%: an ordinary COGS line**, and that is the high
+end since not every post carries a link. **No ceiling is set, no code-level post cap or throttle exists, and
+none is planned** — capping something nobody adjudicated would make the product silently different from what
+was sold. N2.1's discrepancy between two sources on X's pay-per-use read cap (2M vs. §14.3's stated 3M) is
+carried forward **unresolved** — a factual gap, re-check against the live Developer Console billing page once
+a real X developer account exists (§14.1 Stage 1).
 
 ---
 

@@ -217,3 +217,21 @@ No value here was written from memory or recollection.
 *referenced* from X's OAuth 2.0 overview page, in an OAuth 1.0a shape that doesn't fit SOSH's flow.
 `twitter-provider.ts`'s existing disclosure comment is the correct, disclosed form (MINOR-2) and is
 unchanged by this appendix; see ADR 0028 §16 item 10.
+
+15. **`r_member_postAnalytics` availability — CONFIRMED REVIEW-GATED, not auto-enabled.** LinkedIn's own
+    "Getting Access to LinkedIn APIs" page defines exactly one tier that requires no special approval —
+    "Open Permissions (Consumer)" — and states it verbatim: *"Most permissions and partner programs require
+    explicit approval from LinkedIn. Open Permissions are the only permissions that are available to all
+    developers without special approval."* That tier lists exactly three permissions: `profile`, `email`,
+    `w_member_social` (all "available to all developers ... via self-service through the LinkedIn Developer
+    Portal"). `r_member_postAnalytics` is not among them, and is not listed under any of the page's other
+    named tiers (Learning, Marketing, Sales, Talent, Compliance) — it is a Community Management API
+    permission requiring LinkedIn's approval, consistent with N2.1 item 8's "free to third parties via an
+    approval form" note (free of charge, but gated on approval, not self-serve).
+
+    Source: [Getting Access to LinkedIn APIs — Microsoft Learn](https://learn.microsoft.com/en-us/linkedin/shared/authentication/getting-access). Read 2026-09-05 (Session 30.5-D, D4, for A-11).
+
+    **Consequence for A-11:** the founder's 2026-09-05 "Yes" authorised *adding the scope if it is
+    auto-enabled*; it is not. Per the build guide's own instruction ("if it turns out to sit behind a
+    review process, take the named loser ... do not ship a scope that will fail in the authorize URL"),
+    `PLATFORM_CONFIGS.linkedin.scopes` is **not** changed in D4. Recorded as ADR 0028 §16 item 11.
