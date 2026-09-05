@@ -681,6 +681,7 @@ rather than re-asserted from memory.
 | `lib/publishing/orchestrator.ts:126-131,214-222` | `.publish(...)`, `.refreshAccessToken(...)` | `orchestrator.test.ts` (lib/publishing) |
 | `lib/metrics/orchestrator.ts:56-76` | `.fetchPostMetrics(...)` | `orchestrator.test.ts` (lib/metrics) |
 | `app/api/_health/social/route.ts` | per-platform health status | `app/api/_health/social/__tests__/route.test.ts` |
+| `app/api/social/[platform]/disconnect/route.ts` (Session 30.5-D, D3) | `getRegistry().get(platform).revokeAccessToken(...)`, before `deactivateSocialAccount` | `disconnect.test.ts` — "attempts revocation on the right platform..." (call proven), "a throwing revoke still results in a completed local disconnect" and "an unconfigured provider... still results in a completed local disconnect" (never-blocks proven, both mutation-tested) |
 
 **A sixth interface method, `revokeAccessToken`, has ZERO production callers** — found while re-grepping
 Table B, not previously stated. It is implemented on all three providers (`linkedin-provider.ts:340`,
@@ -692,6 +693,14 @@ is attempted at all during disconnect — does not occur in production today.** 
 implies (disconnect attempts revocation, and a failure there doesn't block it) describes a wiring that
 does not exist. This is reported as a finding, not fixed here — N2.13 is a verification step, not an
 implementation one. Filed to `docs/backlog.md` alongside this closure.
+
+**Session 30.5-D correction (D3, 2026-09-05):** the paragraph above is now historical. `disconnect/route.ts`
+calls `revokeAccessToken` before `deactivateSocialAccount`, wrapped in a `try/catch` that discards any
+failure (network error or an unconfigured/unregistered provider) — the local disconnect always completes.
+This is the first production call site for X's `X_REVOKE_URL` (D1, Appendix A does not cover it — it
+remains the disclosed best-guess of §16 item 10, now exercised on a live path rather than untested).
+`revokeAccessToken` has one production caller as of this commit; the "ZERO production callers" finding
+above is superseded, not deleted.
 
 ### 17.4 Constraint-to-CI map
 
@@ -716,7 +725,7 @@ scripts/eval/`) unless marked **db-tests**. `app-tests.yml` runs on every push/P
 | `SOCIAL-VAULT-UPDATE-CHECKED` | 2 | app-tests | A `vault_update_secret` call site stops checking `error` |
 | `SOCIAL-LI-EXPIRY-REVOKED` | 2 | app-tests | LinkedIn refresh throws `TOKEN_EXPIRED` instead of `TOKEN_REVOKED` |
 | `SOCIAL-X-EXPIRY-FROM-RESPONSE` | 2 | app-tests | `token_expires_at` stops deriving from `expires_in` |
-| `SOCIAL-REVOKE-NEVER-BLOCKS` | 1+2 | app-tests (2 only — see §17.3) | A provider's `revokeAccessToken` throws instead of resolving |
+| `SOCIAL-REVOKE-NEVER-BLOCKS` | 1+2 | app-tests | A provider's `revokeAccessToken` throws instead of resolving, **or** (Session 30.5-D, D3) `disconnect/route.ts` propagates a revoke failure / unconfigured-provider error instead of completing local cleanup — `disconnect.test.ts`'s two mutation-tested cases |
 | `SOCIAL-DUAL-IDENTITY-SCHEMA` | **1** | **db-tests** | `posts.social_account_id` FK/cascade/RLS regresses |
 | `SOCIAL-DUAL-IDENTITY-RESOLVER` | 2 | app-tests | Any of the three callers' ambiguous-case test regresses (§17.3 Table A) |
 | `SOCIAL-PINNED-ACCOUNT-TENANT-CHECKED` | 2 (Session 30.5-D, D2) | app-tests | `resolvePublishAccount`'s pinned branch resolves an account whose `business_id` or `platform` doesn't match the caller's, instead of returning `'none'` |

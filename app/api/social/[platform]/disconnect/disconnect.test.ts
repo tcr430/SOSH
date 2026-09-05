@@ -28,10 +28,19 @@ vi.mock('@/lib/db/social-accounts', () => ({
   deactivateSocialAccount: vi.fn(),
 }))
 
+// Session 30.5-D, D3 (MAJOR-1): disconnect must attempt platform revocation
+// before local cleanup. Only getRegistry is mocked; every other export
+// (isPlatform, etc.) is the real implementation.
+vi.mock('@/lib/social', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/social')>()
+  return { ...actual, getRegistry: vi.fn() }
+})
+
 import { DELETE } from './route'
 import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
 import { listActiveByBusinessAndPlatform, getActiveById, deactivateSocialAccount } from '@/lib/db/social-accounts'
+import { getRegistry } from '@/lib/social'
 import type { VaultSecretId } from '@/lib/db/types'
 
 const mockCreateClient = vi.mocked(createClient)
@@ -39,6 +48,9 @@ const mockGetBusinessByOwner = vi.mocked(getBusinessForUser)
 const mockListActiveByBusinessAndPlatform = vi.mocked(listActiveByBusinessAndPlatform)
 const mockGetActiveById = vi.mocked(getActiveById)
 const mockDeactivateSocialAccount = vi.mocked(deactivateSocialAccount)
+const mockGetRegistry = vi.mocked(getRegistry)
+const mockRevokeAccessToken = vi.fn()
+const mockRegistryGet = vi.fn()
 
 const MOCK_USER = { id: 'user-123' }
 const MOCK_BUSINESS = { id: 'biz-456', owner_id: 'user-123' }
@@ -88,6 +100,9 @@ beforeEach(() => {
   mockListActiveByBusinessAndPlatform.mockResolvedValue([MOCK_ACCOUNT])
   mockGetActiveById.mockResolvedValue(MOCK_ACCOUNT)
   mockDeactivateSocialAccount.mockResolvedValue(undefined)
+  mockRevokeAccessToken.mockResolvedValue(undefined)
+  mockRegistryGet.mockReturnValue({ revokeAccessToken: mockRevokeAccessToken })
+  mockGetRegistry.mockReturnValue({ get: mockRegistryGet } as never)
 })
 
 describe('DELETE /api/social/[platform]/disconnect', () => {
@@ -181,6 +196,40 @@ describe('DELETE /api/social/[platform]/disconnect — dual-identity resolution 
     const response = await DELETE(makeRequest('linkedin', MOCK_ACCOUNT.id), makeParams())
     expect(response.status).toBe(404)
     expect(mockDeactivateSocialAccount).not.toHaveBeenCalled()
+  })
+})
+
+// MAJOR-1 (Session 30.5-D, D3): revokeAccessToken had zero production
+// callers — SOCIAL-REVOKE-NEVER-BLOCKS was vacuously satisfied. These two
+// cases prove the call happens, and that a throwing revoke still lets local
+// disconnect complete.
+describe('DELETE /api/social/[platform]/disconnect — platform revocation (ADR 0028 §16 item 5, MAJOR-1)', () => {
+  it('attempts revocation on the right platform, for the right account, before local cleanup', async () => {
+    const response = await DELETE(makeRequest('linkedin'), makeParams('linkedin'))
+    expect(response.status).toBe(200)
+    expect(mockRegistryGet).toHaveBeenCalledWith('linkedin')
+    expect(mockRevokeAccessToken).toHaveBeenCalledWith({ socialAccountId: MOCK_ACCOUNT.id })
+    expect(mockRevokeAccessToken.mock.invocationCallOrder[0]).toBeLessThan(
+      mockDeactivateSocialAccount.mock.invocationCallOrder[0],
+    )
+  })
+
+  it('a throwing revoke still results in a completed local disconnect (SOCIAL-REVOKE-NEVER-BLOCKS)', async () => {
+    mockRevokeAccessToken.mockRejectedValue(new Error('platform unreachable'))
+    const response = await DELETE(makeRequest(), makeParams())
+    expect(response.status).toBe(200)
+    const body = await response.json()
+    expect(body).toEqual({ success: true })
+    expect(mockDeactivateSocialAccount).toHaveBeenCalledWith(MOCK_ACCOUNT.id)
+  })
+
+  it('an unconfigured provider (getRegistry().get throws) still results in a completed local disconnect', async () => {
+    mockRegistryGet.mockImplementation(() => {
+      throw new Error('PROVIDER_NOT_CONFIGURED')
+    })
+    const response = await DELETE(makeRequest(), makeParams())
+    expect(response.status).toBe(200)
+    expect(mockDeactivateSocialAccount).toHaveBeenCalledWith(MOCK_ACCOUNT.id)
   })
 })
 

@@ -317,5 +317,19 @@ describe('TwitterProvider', () => {
       await expect(provider.revokeAccessToken({ socialAccountId: 'sa-1' })).resolves.toBeUndefined()
       expect(mockFetch).not.toHaveBeenCalled()
     })
+
+    // Session 30.5-D, D3: a try/catch only discards a THROWN error — it does
+    // not protect against a hanging fetch, which would block the disconnect
+    // route indefinitely. The call must be explicitly bounded.
+    it('bounds the network call with an explicit timeout signal, not just a try/catch', async () => {
+      mockFrom.mockReturnValue(makeAccountQueryStub({ data: { vault_access_token_id: 'vault-1' }, error: null }))
+      mockRpc.mockResolvedValue({ data: 'live-token', error: null })
+      mockFetch.mockResolvedValueOnce(new Response(null, { status: 200 }))
+
+      await provider.revokeAccessToken({ socialAccountId: 'sa-1' })
+
+      const [, init] = mockFetch.mock.calls[0] as [string, RequestInit]
+      expect(init.signal).toBeInstanceOf(AbortSignal)
+    })
   })
 })

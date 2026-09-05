@@ -45,6 +45,11 @@ const X_TWEETS_URL = 'https://api.x.com/2/tweets' // N2.1 item 6
 // already recommends once real credentials exist (ADR 0028 §14.1).
 const X_REVOKE_URL = 'https://api.x.com/2/oauth2/revoke'
 const X_TEXT_MAX_LENGTH = 280 // verified N2.1 item 6
+// Session 30.5-D, D3: the bound stated for the disconnect route's revoke
+// call, per the correction pass's own instruction not to block or slow
+// disconnect on a network timeout. 5s is a deliberately short budget for a
+// best-effort, never-throws call sitting inside a user-facing DELETE route.
+const REVOKE_TIMEOUT_MS = 5000
 
 const XTokenResponseSchema = z.object({
   access_token: z.string(),
@@ -474,7 +479,10 @@ export class TwitterProvider implements SocialProvider {
   }
 
   // SOCIAL-REVOKE-NEVER-BLOCKS: best-effort, NEVER THROWS. Returns early
-  // when there is no vault id; swallows network and non-ok failures.
+  // when there is no vault id; swallows network and non-ok failures. Bound
+  // per Session 30.5-D D3's own instruction: a try/catch alone discards a
+  // THROWN error but not a HUNG request — disconnect must never wait
+  // indefinitely on this call, so the fetch carries an explicit timeout.
   async revokeAccessToken(input: RevokeAccessTokenInput): Promise<void> {
     const { createServiceRoleClient } = await import('@/lib/supabase/service')
     const client = createServiceRoleClient()
@@ -501,10 +509,13 @@ export class TwitterProvider implements SocialProvider {
           Authorization: basicAuthHeader(),
         },
         body: new URLSearchParams({ token, token_type_hint: 'access_token' }),
+        signal: AbortSignal.timeout(REVOKE_TIMEOUT_MS),
       })
     } catch {
-      // Best-effort: network failure on revoke is discarded. Caller still
-      // runs local cleanup via deactivateSocialAccount.
+      // Best-effort: network failure, non-ok status, or the REVOKE_TIMEOUT_MS
+      // bound above firing (AbortSignal.timeout throws a TimeoutError, which
+      // this catch also discards) are all treated the same way — the caller
+      // still runs local cleanup via deactivateSocialAccount regardless.
     }
   }
 }

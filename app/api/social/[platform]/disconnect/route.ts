@@ -2,7 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
 import { getActiveById, listActiveByBusinessAndPlatform, deactivateSocialAccount } from '@/lib/db/social-accounts'
-import { isPlatform } from '@/lib/social'
+import { getRegistry, isPlatform } from '@/lib/social'
 import { CAPABILITIES } from '@/lib/members/capabilities'
 
 export async function DELETE(
@@ -62,6 +62,19 @@ export async function DELETE(
     }
     if (!account) {
       return new NextResponse(null, { status: 404 })
+    }
+
+    // MAJOR-1 (Session 30.5-D, D3): attempt platform revocation BEFORE local
+    // cleanup — the vault secret must still exist for the provider to read
+    // the token. SOCIAL-REVOKE-NEVER-BLOCKS: a throw here (a network
+    // failure, or an unconfigured/unregistered provider) must never prevent
+    // the local disconnect from completing — catch and discard, never
+    // propagate, never retry.
+    try {
+      const provider = getRegistry().get(platform)
+      await provider.revokeAccessToken({ socialAccountId: account.id })
+    } catch {
+      // Best-effort only. See SOCIAL-REVOKE-NEVER-BLOCKS above.
     }
 
     await deactivateSocialAccount(account.id)
