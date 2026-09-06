@@ -307,6 +307,15 @@ export type PostRow = {
   // service-role write path; this Omit-exclusion from PostUpdate below
   // enforces the app-layer authenticated path).
   role: PostRole | null
+  // Publish identity (ADR 0028 §9.2, N2.4). NULL for rows created before this
+  // column existed and for any row not yet resolved to a specific connected
+  // account. FK -> social_accounts(id) ON DELETE SET NULL — disconnecting an
+  // account must never delete published history. No backfill: existing
+  // platform_user_id values are the prior broker's own integrationIds, meaningless to the
+  // native LinkedIn/X providers (D-gamma). Excluded from PostUpdate below —
+  // publish-identity resolution (N2.5) is a service-role concern, not an
+  // app-layer authenticated write.
+  social_account_id: string | null
   rejection_note: string | null
   ai_generation_metadata: Record<string, unknown>
   publish_attempts: number
@@ -329,6 +338,8 @@ export type PostInsert = {
   // on (PostUpdate omits it, and the DB trigger enforces it regardless of
   // caller — ADR 0017 §3.2).
   role?: PostRole | null
+  // See PostRow.social_account_id above (ADR 0028 §9.2, N2.4).
+  social_account_id?: string | null
   hashtags?: string[]
   media_urls?: string[]
   scheduled_at: string
@@ -346,7 +357,7 @@ export type PostInsert = {
   updated_at?: string
 }
 
-export type PostUpdate = Partial<Omit<PostRow, 'id' | 'created_at' | 'business_id' | 'campaign_id' | 'published_at' | 'platform_post_id' | 'platform_url' | 'deleted_at' | 'role'>>
+export type PostUpdate = Partial<Omit<PostRow, 'id' | 'created_at' | 'business_id' | 'campaign_id' | 'published_at' | 'platform_post_id' | 'platform_url' | 'deleted_at' | 'role' | 'social_account_id'>>
 
 // ---------------------------------------------------------------------------
 // 5b. studio_drafts — Mode 1 Studio pre-campaign scratch content (ADR 0019 §2.2)

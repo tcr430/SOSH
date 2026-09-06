@@ -10,7 +10,7 @@ import {
   requeueScheduledPost,
 } from '@/lib/db/posts'
 import { recoverStuckGenerationSessions } from '@/lib/db/post-generation-sessions'
-import { getActiveByBusinessAndPlatform } from '@/lib/db/social-accounts'
+import { resolvePublishAccount } from '@/lib/db/social-accounts'
 import type { PostRow, SocialAccountRow, VaultSecretId, BusinessRow } from '@/lib/db/types'
 
 vi.mock('@/lib/supabase/service', () => ({
@@ -61,7 +61,7 @@ vi.mock('@/lib/db/post-generation-sessions', () => ({
 }))
 
 vi.mock('@/lib/db/social-accounts', () => ({
-  getActiveByBusinessAndPlatform: vi.fn(),
+  resolvePublishAccount: vi.fn(),
 }))
 
 vi.mock('@/lib/social/index', async (importOriginal) => {
@@ -127,6 +127,7 @@ const mockPost: PostRow = {
   id: 'post-1',
   campaign_id: 'camp-1',
   business_id: 'biz-1',
+  social_account_id: null,
   platform: 'linkedin',
   content: 'Test content',
   hashtags: [],
@@ -166,7 +167,7 @@ beforeEach(() => {
   vi.mocked(markPostFailed).mockResolvedValue(undefined as never)
   vi.mocked(requeueScheduledPost).mockResolvedValue(undefined as never)
   vi.mocked(recoverStuckGenerationSessions).mockResolvedValue(0)
-  vi.mocked(getActiveByBusinessAndPlatform).mockResolvedValue(mockAccount)
+  vi.mocked(resolvePublishAccount).mockResolvedValue({ outcome: 'resolved', account: mockAccount })
   mockIncrementBusinessPublishedCount.mockResolvedValue(2)
   mockGetBusinessById.mockResolvedValue(mockBusiness)
   mockEnqueueFirstPostPublished.mockResolvedValue(undefined)
@@ -412,7 +413,7 @@ describe('runPublishTick', () => {
   })
 
   it('account_disconnected: marks failed TOKEN_REVOKED with reason=account_disconnected', async () => {
-    vi.mocked(getActiveByBusinessAndPlatform).mockResolvedValue(null)
+    vi.mocked(resolvePublishAccount).mockResolvedValue({ outcome: 'none' })
     vi.mocked(claimPostsForPublishing).mockResolvedValue([mockPost])
 
     const summary = await runPublishTick({ now: NOW })
@@ -422,6 +423,54 @@ describe('runPublishTick', () => {
     const call = vi.mocked(markPostFailed).mock.calls[0]
     expect(call[2].errorCode).toBe('TOKEN_REVOKED')
     expect((call[2].errorDetails as Record<string, unknown>).reason).toBe('account_disconnected')
+  })
+})
+
+// ─── SOCIAL-DUAL-IDENTITY-RESOLVER (ADR 0028 §5.3, N2.5) ──────────────────────
+// AUTHORED-NOT-EXECUTED until this suite: the multi-row case, closed here.
+
+describe('runPublishTick — dual-identity resolution (ADR 0028 §5.3)', () => {
+  it('AMBIGUITY CASE: two active accounts, no posts.social_account_id, no unambiguous default -> fails account_ambiguous, nothing published', async () => {
+    vi.mocked(resolvePublishAccount).mockResolvedValue({ outcome: 'ambiguous' })
+    vi.mocked(claimPostsForPublishing).mockResolvedValue([mockPost])
+
+    const summary = await runPublishTick({ now: NOW })
+
+    expect(summary.failed).toBe(1)
+    expect(summary.published).toBe(0)
+    expect(mockPublish).not.toHaveBeenCalled()
+    const call = vi.mocked(markPostFailed).mock.calls[0]
+    expect(call[2].errorCode).toBe('TOKEN_REVOKED')
+    expect((call[2].errorDetails as Record<string, unknown>).reason).toBe('account_ambiguous')
+  })
+
+  it('happy path: posts.social_account_id set WINS over the default — resolver is called with the post-pinned id', async () => {
+    const pinnedPost = { ...mockPost, social_account_id: 'acct-pinned' }
+    vi.mocked(claimPostsForPublishing).mockResolvedValue([pinnedPost])
+
+    const summary = await runPublishTick({ now: NOW })
+
+    expect(summary.published).toBe(1)
+    expect(vi.mocked(resolvePublishAccount)).toHaveBeenCalledWith(
+      expect.anything(),
+      pinnedPost.business_id,
+      pinnedPost.platform,
+      'acct-pinned',
+    )
+  })
+
+  it('happy path: the default is used when social_account_id is null and exactly one active account exists', async () => {
+    vi.mocked(claimPostsForPublishing).mockResolvedValue([mockPost])
+
+    const summary = await runPublishTick({ now: NOW })
+
+    expect(summary.published).toBe(1)
+    expect(vi.mocked(resolvePublishAccount)).toHaveBeenCalledWith(
+      expect.anything(),
+      mockPost.business_id,
+      mockPost.platform,
+      null,
+    )
   })
 })
 

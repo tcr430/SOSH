@@ -5,7 +5,7 @@ import { getRegistry, SocialProviderError } from '@/lib/social/index'
 import type { Platform } from '@/lib/social/index'
 import { listPostsForMetricsSync } from '@/lib/db/posts'
 import { upsertPostMetrics } from '@/lib/db/post-metrics'
-import { getActiveByBusinessAndPlatform } from '@/lib/db/social-accounts'
+import { resolvePublishAccount } from '@/lib/db/social-accounts'
 import { markCronSeen } from '@/lib/db/cron-health'
 
 export interface MetricsSyncTickSummary {
@@ -61,11 +61,15 @@ export async function runMetricsSyncTick(opts?: {
       continue
     }
 
-    const account = await getActiveByBusinessAndPlatform(client, post.business_id, post.platform)
-    if (!account) {
+    // ADR 0028 §5.3: resolves via the post's own account when set, else the
+    // business's default for that platform. Both 'none' and 'ambiguous' skip
+    // this post — an ambiguous identity is not a data source to guess at.
+    const resolution = await resolvePublishAccount(client, post.business_id, post.platform, post.social_account_id)
+    if (resolution.outcome !== 'resolved') {
       summary.skippedNoAccount++
       continue
     }
+    const account = resolution.account
 
     try {
       const provider = registry.get(post.platform)

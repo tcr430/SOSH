@@ -19,8 +19,10 @@ export type SocialProviderErrorCode =
 // ---------------------------------------------------------------------------
 
 export interface OAuthAuthorizeInput {
-  // Builder addition (not in ADR §2): PostizProvider needs the platform to
-  // construct its per-platform authorize URL.
+  // Lets the SHARED, platform-agnostic connect route pass through which
+  // platform it is building for, without the route itself knowing
+  // anything about that platform's authorize-URL shape — the provider
+  // reads this to construct its own URL (ADR 0028 §5.5).
   platform: import('@/lib/db/types').Platform
   businessId: string
   redirectUri: string
@@ -116,9 +118,18 @@ export interface EngagementItem {
 // ---------------------------------------------------------------------------
 
 export interface SocialProvider {
+  // 'multi' is NOT a broker-specific concept, despite ADR 0028 §8.3's
+  // premise that a single now-deleted provider file was its only producer
+  // — it wasn't. MockProvider legitimately shares ONE instance across all
+  // five platforms in SOCIAL_PROVIDER_MODE=mock (registry.ts), unrelated
+  // to any broker. 'multi' stays as the honest description of a provider
+  // instance that serves more than one platform; LinkedInProvider and
+  // TwitterProvider are both always bound to exactly one real platform
+  // (asserted in the contract suite), and MockProvider is the sole
+  // remaining, deliberate exception.
   readonly platform: import('@/lib/db/types').Platform | 'multi'
 
-  getOAuthAuthorizeUrl(input: OAuthAuthorizeInput): string
+  getOAuthAuthorizeUrl(input: OAuthAuthorizeInput): Promise<string>
 
   exchangeOAuthCode(input: ExchangeCodeInput): Promise<TokenSet>
 

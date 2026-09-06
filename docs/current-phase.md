@@ -1476,7 +1476,10 @@ Session 19D correction pass is applied. Voice model core is merge-ready. One ope
 ### Open decision — Session 19D-5 (§7 BP9 read path)
 
 Choose one:
-1. **Add `fetchRecentPosts` to `SocialProvider`** — implement in `PostizProvider` + `MockProvider`, wire into `refineFromPostsAction`. Requires ADR 0002 amendment + new Postiz API call.
+1. **Add `fetchRecentPosts` to `SocialProvider`** — ~~implement in `PostizProvider` + `MockProvider`~~
+   **re-pointed 2026-09-05 (Session 30.5 N2.13, ADR 0028 §12): `PostizProvider` no longer exists.**
+   This option is now designed against `LinkedInProvider`/`TwitterProvider` directly and lands as
+   **ADR 0002 Amendment B, owned by Session 32** — not this decision, and not a Postiz API call.
 2. **Amend ADR 0011 §7** — ratify "refine reads local published posts from SOSH DB" as deliberate scope reduction. Update the reviewer finding as accepted deviation.
 
 ### Next up — post-Session 22 (Pre-launch hardening)
@@ -1485,8 +1488,9 @@ Session 21 (Seats & Permissions) and Session 22 (test-execution integrity + appr
 closed — resolved by Session 22 W1 and marked closed in `backlog.md`; `21C-bulk-platform` is
 resolved by W2 A1. What remains, in priority order:
 
-1. **Postiz removal workstream (launch-checklist §16):** migrate `lib/social/` to direct LinkedIn/X APIs —
-   a separate track, unaffected by Sessions 21/22.
+1. ~~**Postiz removal workstream (launch-checklist §16):** migrate `lib/social/` to direct LinkedIn/X APIs —
+   a separate track, unaffected by Sessions 21/22.~~ — ✅ done, Session 30.5 Track N (ADR 0028), code-complete
+   at N2.13 close-out. See the dated entry below. Production OAuth app registration remains open (§14.1).
 2. **Remaining legal gates (launch-checklist §9):** counsel ratification → `[LEGAL ENTITY]` substitution;
    Anthropic DPF verification; cookie inventory in staging; Svix client-verify confirm.
 3. **Perf/CWV gates (launch-checklist §11):** first-load JS ≤ 90 KB gz + LCP/CLS/INP lab check, blocked on
@@ -1506,7 +1510,7 @@ resolved by W2 A1. What remains, in priority order:
 ### Remaining pre-launch work
 
 - **Open legal gates (§9):** counsel ratification → [LEGAL ENTITY] substitution; Anthropic DPF verification at dataprivacyframework.gov; cookie inventory in staging; Svix client-verify confirm
-- **Postiz removal workstream (§16):** migrate `lib/social/` to direct LinkedIn/X APIs (separate track)
+- ~~**Postiz removal workstream (§16):** migrate `lib/social/` to direct LinkedIn/X APIs (separate track)~~ — ✅ done (Session 30.5 Track N, ADR 0028)
 - **Deferred post-launch backlog:** in-app Delete Account flow (B18-014, P2); `auth_rate_limits` TTL purge; `13.5C-log` (cron-auth-failure structured log); ADR reconciliation items G3/C7 (backlog.md)
 - **Open triage items:** B18-089 (full 15-site `formatISO(new Date())` sweep → `toUtcIso`, P2); B18-064 (postcss XSS CVE, awaits Next.js bump); B18-086/087 (P2 signup oracle + confirmation redirect env parity)
 - **Perf/CWV gates (§11, 2 rows):** first-load JS ≤ 90 KB gz + LCP/CLS/INP lab check once `npm run build` ECC Remotion issue is resolved
@@ -1754,3 +1758,94 @@ The two-axis permission model is DB-enforced, not app-layer-only: `user_can(busi
 - **ECC commands use `/ecc:` prefix**, not `/everything-claude-code:`.
 - **`npm run db:migrate` requires `DATABASE_URL`** (Supabase transaction pooler connection string).
 - **B18-030 sweep is pattern-matched, not variable-name-matched:** aliased error vars (`fetchError`, `readError`) are covered. The original 18B-3 sweep matched only the variable name `error` and missed them.
+
+### Session 30.5 N2.11 (2026-09-04)
+
+- **The broker is removed, total and provable.** `lib/social/postiz-provider.ts` and its two test
+  files, `infra/` (docker-compose stack), all env vars, CSP host, npm scripts, and every prose
+  reference are gone in one commit. Proof is executable, not asserted: `lib/social/__tests__/
+  no-postiz.test.ts` (SOCIAL-NO-POSTIZ) case-insensitively scans the real source tree and fails on
+  any stray reference, demonstrated to redden and revert before landing.
+- **Exemptions are named, not silent.** `docs/decisions/`, `docs/reviews/`, `docs/build-guide/`,
+  `docs/brainstorm/archive/`, `docs/evidence/`, `supabase/migrations/`, and a handful of individual
+  test/doc files that must name "postiz" to prove its absence (`csp.test.ts`,
+  `eslint-internals-ban.test.ts`, `accounts-i18n.test.ts`) or that narrate the removal itself
+  (`docs/launch-checklist.md` §16) — each with its own stated reason in the scan file.
+  `docs/current-phase.md`'s own historical session entries above this one are left unedited for the
+  same reason; this entry is appended, not inserted into the record of what already happened.
+- **A false ADR premise was caught before it broke working code.** ADR 0028's instruction to drop
+  `'multi'` from `SocialProvider['platform']` assumed the deleted broker file was its only producer;
+  it wasn't — `MockProvider` legitimately shares one instance across all five platforms in
+  `SOCIAL_PROVIDER_MODE=mock`, asserted directly in this track's own `registry.test.ts`. Founder
+  ruling: keep `'multi'` in the type. `lib/social/types.ts` documents why.
+  `SOCIAL-NO-MULTI-PLATFORM` in `types.test.ts` asserts the corrected reality.
+
+### Session 30.5 N2.12–N2.13 (2026-09-05) — Track N close-out
+
+- **N2.12 — the accounts surface, dual identity.** `app/[locale]/(dashboard)/settings/accounts/` reworked
+  from single-account-per-platform (accounts silently collapsed via `Object.fromEntries`, dropping a
+  second identity) to grouped-by-platform arrays: one row per active identity, a "Default" badge for the
+  identity `resolvePublishAccount` would pick when a post names no account, and an honest "no default"
+  note when two active identities exist (no `is_default` column exists — adding one was judged out of
+  this step's scope). The seven real OAuth error-redirect codes (ADR 0028 §9.4) are now the literal
+  `ERROR_KEYS` list in `resolve-banner.ts`; the eighth key, `provider_unavailable`, was found dead (no
+  route emits it since N2.11's rename) and removed from the reachable-states list while its i18n string
+  stays, since `accounts-i18n.test.ts` still asserts its presence.
+- **N2.13 — four executable scope-scan tripwires, each demonstrated to redden then reverted:**
+  `SOCIAL-WORKER-UNCHANGED` (`lib/publishing/__tests__/worker-unchanged.test.ts` — the retry/status/
+  idempotency machinery in `orchestrator.ts` is unchanged, account resolution is the one permitted
+  addition), `SOCIAL-PROVIDER-BOUNDARY` (extended `eslint-internals-ban.test.ts` to assert all eight
+  `SOCIAL_INTERNALS_BAN` entries fire together, not just two), `SOCIAL-META-STILL-UNAVAILABLE`
+  (`lib/social/platforms/config.test.ts` — Instagram/Facebook/Threads stay `publishingAvailable: false`),
+  and `SOCIAL-NO-READ-PATH` (`lib/social/__tests__/no-read-path.test.ts` — no `fetchRecentPosts`/
+  `listRecentPosts` member exists yet; that is Session 32's, ADR 0002 Amendment B).
+- **`SOCIAL-INTEGRATION-NOT-EXECUTED` confirmed, not just asserted.** `lib/social/__integration__/` does
+  not exist in the repository — Postiz's integration suite was deleted whole in N2.11 and no native
+  replacement was written (writing one would have bought zero CI coverage until backlog item
+  `22E-integration-discovery` closes). `docs/backlog.md`'s row updated to say so plainly rather than
+  leaving a stale "LinkedIn/X" framing that implied a suite exists.
+- **Close-out docs worked per build-guide §5**, evidenced per row: `docs/launch-checklist.md` gained
+  §16a (the LinkedIn Community Management API launch gate, ADR 0028 A-5 — not previously written despite
+  §12's table naming it); the "Postiz removal workstream" Next-up item above is struck; the open 19D-5
+  decision's option 1 is annotated as re-pointed at Session 32/ADR 0002 Amendment B, not rewritten.
+  `docs/product-status.md:95`, `CLAUDE.md`'s tech-stack line, `docs/decisions/0002-social-provider.md`
+  Amendment A, `docs/build-guide/session-32.md`'s dated Reality note, and ADR 0010 Amendment 2's cascade-
+  table treatment of `posts.social_account_id` (no new row required — column addition to an
+  already-cascading table, the Session 28-D D7 precedent) were all found **already done** in earlier
+  N2.x steps — verified by reading each, not assumed from a checklist.
+- **ADR 0028 §16's stated-open items remain open — none are closed by this step.** Items 1 (LinkedIn
+  member-only vs. the locked "Business and Founder" platform list) and 6 (X's per-post link cost vs.
+  "unlimited posts") are explicit founder adjudications neither N2.12 nor N2.13 can resolve. Items 2–5, 7
+  and 8 are standing risks/facts, not defects with a fix step. §14's manual verification log is empty —
+  stated as the honest state per §14.1, not backfilled.
+- **CI, read at the head this section is dated to (`b6580b84`): `app-tests` GREEN**
+  (`https://github.com/tcr430/SOSH/actions/runs/33970367725`); **`db-tests` RED on three consecutive
+  attempts** (`https://github.com/tcr430/SOSH/actions/runs/33970367722`), reliably at
+  `vault-update-secret.test.ts`'s permission tests with a "database system in recovery mode" signature
+  right after the reset step — distinguished as a `db-tests.yml` readiness race, not a behaviour
+  regression (the same function's grants were independently confirmed correct against the live linked
+  Supabase project). Not a blocker: `db-tests` is not yet a required gate. Filed as
+  `30.5-DBTESTS-READINESS-RACE`. Full detail in ADR 0028 §17.4.
+
+### Session 30.5-D (2026-09-05/06) — correction pass, D0-D9
+
+- **All 16 N3-reviewer findings plus 2 founder adjudications fixed or ruled**, one commit per step
+  (`02a93980`..`933a335c`): BLOCKER-1 (three endpoint URLs re-sourced against live vendor docs, none had
+  actually been verified despite a citation claiming so), MAJOR-2 (a latent cross-tenant publish path in
+  `resolvePublishAccount`'s pinned branch, closed with a `business_id`/`platform` check), MAJOR-1 (disconnect
+  now actually attempts platform revocation, with an added network timeout the build guide's own rules
+  required), MAJOR-3/A-11 (`r_member_postAnalytics` verified review-gated, not shipped — the founder's "Yes"
+  authorised the decision, not the fact), A-9′ (ship both LinkedIn account types, no locked-list amendment),
+  A-10 (X's per-post cost recomputed at realistic volume, ruled immaterial), MINOR-3 through MINOR-7 and
+  NIT-1 through NIT-4 (guard names, an i18n key, ADR §16's numbering, an arithmetic sweep that itself found
+  the ADR's own "corrected to seven" claim was wrong — the original "eight" was right).
+- **`app-tests` re-verified GREEN at the corrected head**, [run 33998672886](https://github.com/tcr430/SOSH/actions/runs/33998672886), commit `933a335c`.
+- **`db-tests` — RED a fourth consecutive time, diagnosis sharpened, not resolved.** A memory-tuning fix
+  (`shared_buffers`/`maintenance_work_mem` lowered) was pushed and re-tested — still red, but this time with
+  healthy container memory and an explicit `signal 11: Segmentation fault` in the Postgres log, coinciding
+  with `vault_update_secret` RPC calls across all four reds observed. This is not a resource-exhaustion
+  signature; it points at the `pgsodium`/Vault extension, not memory pressure — the memory fix addressed the
+  wrong theory, and that failure is itself the evidence that sharpened the diagnosis. `SOCIAL-VAULT-UPDATE-
+  SECRET` and `SOCIAL-DUAL-IDENTITY-SCHEMA` are marked `AUTHORED-NOT-EXECUTED` in ADR 0028 §17.4's table.
+  `db-tests` remains not a required gate, so this does not block merge. Filed as `30.5-DBTESTS-READINESS-
+  RACE` (updated) in `docs/backlog.md`, with a new bug entry in `.wolf/buglog.json` (bug-1031).

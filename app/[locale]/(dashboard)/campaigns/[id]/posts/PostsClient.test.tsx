@@ -57,6 +57,7 @@ function makePost(overrides: Partial<PostRow> = {}): PostRow {
     id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     campaign_id: CAMPAIGN.id,
     business_id: CAMPAIGN.business_id,
+    social_account_id: null,
     platform: 'linkedin',
     content: 'Draft content',
     hashtags: [],

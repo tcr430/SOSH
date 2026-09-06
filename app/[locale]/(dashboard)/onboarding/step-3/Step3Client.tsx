@@ -8,7 +8,10 @@ import { cn } from '@/lib/utils'
 import { buttonVariants } from '@/components/ui/button'
 import { PlatformConnectionCard } from '@/components/social/PlatformConnectionCard'
 import { SkipButton } from '@/components/onboarding/SkipButton'
-import { PLATFORM_CONFIGS, getConnectionStatus } from '@/lib/social'
+// Imported directly, not from the '@/lib/social' barrel — see
+// AccountsClient.tsx's comment for why (Vercel build fix, 2026-09-06).
+import { PLATFORM_CONFIGS } from '@/lib/social/platforms/config'
+import { getConnectionStatus } from '@/lib/social/connection-status'
 import { skipOnboardingAction } from '../actions'
 import type { Platform, ConnectionStatus, SocialAccountPublic } from '@/lib/social'
 

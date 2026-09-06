@@ -678,4 +678,45 @@ All 10 §0 inputs were answered before Phase 1 (ADR 0010) was written. Amendment
 | `engagement_inbox` third-party PII | E2 — `author_username` / `content` | ✅ Disclosed in Privacy Policy §6; ingestion not active at launch |
 | `billing_events.payload` contains customer email | E2 — raw Stripe JSON | ✅ Disclosed in Privacy Policy §2 (T8 email webhook events) |
 | `auth_rate_limits.bucket_key` contains IPs + emails | E2 — composite key | ✅ Disclosed in Privacy Policy §2; no expiry job → launch blocker via E6/T4 |
-| Postiz → direct API migration | E10 — WIP | ⚠ Launch blocker (T1): complete before go-live |
+| Postiz → direct API migration | E10 — WIP | ✅ Code-complete (Amendment A2) — see below |
+
+---
+
+## Amendment A2 — Native publishing migration complete in code (2026-09-04)
+
+**Session:** 30.5 (ADR 0028, Track N). **Scope:** E10's migration state only. Nothing else in this
+Evidence Pack, Amendment A1, or the ADR 0010 prose is affected. Amendment A1's text above is left
+unedited — this amendment updates the record forward, per this file's own append-only house form.
+
+**E10 is superseded.** The migration E10 described as "WIP" is now code-complete:
+
+- `lib/social/postiz-provider.ts` — **deleted**, along with its two test files. No file matching that
+  name exists in the repository (`lib/social/__tests__/no-postiz.test.ts` is the executable proof, run in
+  CI on every push).
+- `lib/social/linkedin-provider.ts` and `lib/social/twitter-provider.ts` — **exist and are registered**
+  in `lib/social/registry.ts`, per-platform, independently of each other (ADR 0028 §8.2). No
+  `linkedin-api-client` or `twitter-api-v2` package is used — both providers call each platform's REST
+  API directly via `fetch`, with no SDK dependency to evidence separately.
+- **Production OAuth apps are not yet registered** with either LinkedIn or X (ADR 0028 §14.1). No real
+  customer has connected an account through the native flow yet. This is an operational gap, not a code
+  gap — §631's platform-specific compliance items (V17: LinkedIn/X/Meta/Threads API ToS confirmation)
+  remain **open** and are unaffected by this amendment; they still gate ToS §9 finalisation.
+- The end-state data flows §602 already documented (OAuth token exchange, post publishing, token
+  refresh, token revocation, account-linking-only for the Meta family) are **unchanged** — native
+  providers implement exactly those flows; nothing about what data leaves SOSH or reaches each platform
+  changed with the broker's removal, only who initiates the request (SOSH directly, not an intermediary).
+- Token revocation is confirmed **more clearly best-effort than under the broker**: LinkedIn has no
+  programmatic revocation endpoint for a standard third-party app at all (member-initiated only, via the
+  member's own LinkedIn account settings) — `lib/social/linkedin-provider.ts`'s `revokeAccessToken`
+  returns early with no network call. X's revocation endpoint exists but its exact request shape for
+  SOSH's OAuth2 flow was not conclusively confirmed against vendor documentation (flagged inline in
+  `lib/social/twitter-provider.ts`); it remains best-effort and non-blocking either way (§619's posture is
+  unchanged).
+
+**Not resolved by this amendment, flagged for counsel-aware follow-up:** this Evidence Pack is the
+ground-truth source `content/legal/*.mdx`'s `evidenceRef` frontmatter cites (CLAUDE.md, Legal pages). This
+amendment updates the Evidence Pack itself; it does **not** touch `content/legal/*.mdx` or bump any
+`evidenceRef`. Whoever next edits a legal page citing E10 or V18 should bump `evidenceRef` to a commit
+covering this amendment, per CLAUDE.md's standing rule — not done here because this is a code-removal
+session (N2.11), not a legal-copy session, and `[LEGAL ENTITY]` substitution and legal-copy edits stay
+gated on counsel ratification regardless.

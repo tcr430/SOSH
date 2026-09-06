@@ -2,10 +2,20 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 import { X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PlatformConnectionCard } from '@/components/social/PlatformConnectionCard'
-import { PLATFORM_CONFIGS } from '@/lib/social'
+// Imported directly from their submodules, not the '@/lib/social' barrel:
+// that barrel also re-exports getRegistry (registry.ts), which statically
+// imports both provider classes and — through TwitterProvider — a module
+// that depends on next/headers. A Client Component importing ANYTHING from
+// the barrel pulls that whole graph into the client bundle and fails the
+// production build (Vercel build fix, 2026-09-06). Neither module below is
+// in eslint.config.mjs's SOCIAL_INTERNALS_BAN — only provider/registry
+// internals are banned from direct import, not shared config/status utils.
+import { PLATFORM_CONFIGS, isPublishingPlatform } from '@/lib/social/platforms/config'
+import { getConnectionStatus } from '@/lib/social/connection-status'
 import type { Platform, ConnectionStatus, SocialAccountPublic } from '@/lib/social'
 
 interface Banner {
@@ -15,8 +25,9 @@ interface Banner {
 
 interface AccountsClientProps {
   platforms: readonly Platform[]
-  accounts: Partial<Record<Platform, SocialAccountPublic>>
+  accounts: Record<Platform, SocialAccountPublic[]>
   statuses: Record<Platform, ConnectionStatus>
+  defaultAccountIds: Record<Platform, string | null>
   locale: string
   banner: Banner | null
 }
@@ -25,10 +36,12 @@ export function AccountsClient({
   platforms,
   accounts,
   statuses,
+  defaultAccountIds,
   locale,
   banner: initialBanner,
 }: AccountsClientProps) {
   const router = useRouter()
+  const t = useTranslations('settings.accounts')
   const [banner, setBanner] = useState<Banner | null>(initialBanner)
 
   // Remove search params from URL after banner is shown to prevent re-display on refresh
@@ -64,18 +77,61 @@ export function AccountsClient({
       )}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {platforms.map(platform => (
-          <PlatformConnectionCard
-            key={platform}
-            platform={platform}
-            config={PLATFORM_CONFIGS[platform]}
-            account={accounts[platform] ?? null}
-            status={statuses[platform]}
-            locale={locale}
-            onDisconnect={() => router.refresh()}
-            variant="settings"
-          />
-        ))}
+        {platforms.map(platform => {
+          const platformAccounts = accounts[platform]
+          const activeAccounts = platformAccounts.filter(a => a.is_active)
+          const config = PLATFORM_CONFIGS[platform]
+          const supportsMultipleIdentities = isPublishingPlatform(platform)
+          const defaultAccountId = defaultAccountIds[platform]
+          const hasNoDefault = supportsMultipleIdentities && activeAccounts.length > 1
+
+          if (activeAccounts.length === 0) {
+            return (
+              <PlatformConnectionCard
+                key={platform}
+                platform={platform}
+                config={config}
+                account={null}
+                status={statuses[platform]}
+                locale={locale}
+                onDisconnect={() => router.refresh()}
+                variant="settings"
+              />
+            )
+          }
+
+          return (
+            <div key={platform} className="space-y-2">
+              {activeAccounts.map(account => (
+                <PlatformConnectionCard
+                  key={account.id}
+                  platform={platform}
+                  config={config}
+                  account={account}
+                  status={getConnectionStatus(account, platform)}
+                  locale={locale}
+                  onDisconnect={() => router.refresh()}
+                  variant="settings"
+                  accountId={account.id}
+                  isDefault={account.id === defaultAccountId}
+                />
+              ))}
+
+              {hasNoDefault && (
+                <p className="text-xs text-muted-foreground px-1">{t('no_default')}</p>
+              )}
+
+              {supportsMultipleIdentities && (
+                <a
+                  href={`/api/social/${platform}/connect?locale=${locale}`}
+                  className="inline-block text-xs text-muted-foreground hover:text-foreground underline underline-offset-4 px-1"
+                >
+                  {t('connect_another', { platform: config.displayName })}
+                </a>
+              )}
+            </div>
+          )
+        })}
       </div>
     </div>
   )

@@ -7,7 +7,7 @@ import * as Sentry from '@sentry/nextjs'
 import type { SocialProviderErrorCode } from '@/lib/social/index'
 import { listPostsForMetricsSync } from '@/lib/db/posts'
 import { upsertPostMetrics } from '@/lib/db/post-metrics'
-import { getActiveByBusinessAndPlatform } from '@/lib/db/social-accounts'
+import { resolvePublishAccount } from '@/lib/db/social-accounts'
 import type { PostRow, SocialAccountRow, VaultSecretId } from '@/lib/db/types'
 
 vi.mock('@/lib/supabase/service', () => ({
@@ -33,7 +33,7 @@ vi.mock('@/lib/db/post-metrics', () => ({
 }))
 
 vi.mock('@/lib/db/social-accounts', () => ({
-  getActiveByBusinessAndPlatform: vi.fn(),
+  resolvePublishAccount: vi.fn(),
 }))
 
 vi.mock('@/lib/social/index', async (importOriginal) => {
@@ -59,6 +59,7 @@ function makePost(overrides: Partial<PostRow> = {}): PostRow {
     id: 'post-1',
     campaign_id: 'camp-1',
     business_id: 'biz-1',
+    social_account_id: null,
     platform: 'linkedin',
     content: 'Test content',
     hashtags: [],
@@ -116,7 +117,7 @@ beforeEach(() => {
   } as unknown as ReturnType<typeof getRegistry>)
 
   vi.mocked(listPostsForMetricsSync).mockResolvedValue([])
-  vi.mocked(getActiveByBusinessAndPlatform).mockResolvedValue(mockAccount)
+  vi.mocked(resolvePublishAccount).mockResolvedValue({ outcome: 'resolved', account: mockAccount })
   vi.mocked(upsertPostMetrics).mockResolvedValue({} as never)
 })
 
@@ -191,7 +192,7 @@ describe('runMetricsSyncTick', () => {
 
   it('skippedNoAccount: no active social account — provider not called, skippedNoAccount incremented', async () => {
     vi.mocked(listPostsForMetricsSync).mockResolvedValue([makePost()])
-    vi.mocked(getActiveByBusinessAndPlatform).mockResolvedValue(null)
+    vi.mocked(resolvePublishAccount).mockResolvedValue({ outcome: 'none' })
 
     const summary = await runMetricsSyncTick({ now: NOW })
 
@@ -270,6 +271,58 @@ describe('runMetricsSyncTick', () => {
     expect(summary.tick).toBe(formatISO(NOW))
     expect(typeof summary.durationMs).toBe('number')
     expect(summary.durationMs).toBeGreaterThanOrEqual(0)
+  })
+})
+
+// ─── SOCIAL-DUAL-IDENTITY-RESOLVER (ADR 0028 §5.3, N2.5) ──────────────────────
+// AUTHORED-NOT-EXECUTED until this suite: the multi-row case, closed here.
+
+describe('runMetricsSyncTick — dual-identity resolution (ADR 0028 §5.3)', () => {
+  it('AMBIGUITY CASE: two active accounts, no post.social_account_id -> skipped (skippedNoAccount), provider never called', async () => {
+    vi.mocked(listPostsForMetricsSync).mockResolvedValue([makePost()])
+    vi.mocked(resolvePublishAccount).mockResolvedValue({ outcome: 'ambiguous' })
+
+    const summary = await runMetricsSyncTick({ now: NOW })
+
+    expect(summary.skippedNoAccount).toBe(1)
+    expect(mockFetchPostMetrics).not.toHaveBeenCalled()
+    expect(vi.mocked(upsertPostMetrics)).not.toHaveBeenCalled()
+  })
+
+  it('happy path: resolves via the post\'s own account — resolver is called with the post-pinned id', async () => {
+    const post = makePost({ social_account_id: 'acct-pinned' })
+    vi.mocked(listPostsForMetricsSync).mockResolvedValue([post])
+    mockFetchPostMetrics.mockResolvedValue({
+      likes: 1, comments: 0, shares: 0, saves: 0, clicks: 0, reach: 0, impressions: 0, fetchedAt: formatISO(NOW),
+    })
+
+    const summary = await runMetricsSyncTick({ now: NOW })
+
+    expect(summary.synced).toBe(1)
+    expect(vi.mocked(resolvePublishAccount)).toHaveBeenCalledWith(
+      expect.anything(),
+      post.business_id,
+      post.platform,
+      'acct-pinned',
+    )
+  })
+
+  it('happy path: falls back to the business default when social_account_id is null', async () => {
+    const post = makePost({ social_account_id: null })
+    vi.mocked(listPostsForMetricsSync).mockResolvedValue([post])
+    mockFetchPostMetrics.mockResolvedValue({
+      likes: 1, comments: 0, shares: 0, saves: 0, clicks: 0, reach: 0, impressions: 0, fetchedAt: formatISO(NOW),
+    })
+
+    const summary = await runMetricsSyncTick({ now: NOW })
+
+    expect(summary.synced).toBe(1)
+    expect(vi.mocked(resolvePublishAccount)).toHaveBeenCalledWith(
+      expect.anything(),
+      post.business_id,
+      post.platform,
+      null,
+    )
   })
 })
 

@@ -14,8 +14,6 @@ export const serverSchema = z.object({
   // Direct Postgres connection string — required for migration scripts.
   // Found in: Supabase Dashboard → Project Settings → Database → Connection string (URI).
   DATABASE_URL: z.string().default(""),
-  POSTIZ_BASE_URL: z.string().default(""),
-  POSTIZ_API_KEY: z.string().default(""),
   STRIPE_SECRET_KEY: z.string().min(20).startsWith('sk_'),
   STRIPE_WEBHOOK_SECRET: z.string().min(20).startsWith('whsec_'),
   STRIPE_PRICE_ID_PLUS: z.string().min(10).startsWith('price_'),
@@ -270,8 +268,6 @@ function parseServerEnv() {
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
     DATABASE_URL: process.env.DATABASE_URL,
-    POSTIZ_BASE_URL: process.env.POSTIZ_BASE_URL,
-    POSTIZ_API_KEY: process.env.POSTIZ_API_KEY,
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
     STRIPE_PRICE_ID_PLUS: process.env.STRIPE_PRICE_ID_PLUS,
@@ -380,12 +376,6 @@ export const config = {
     },
     get DATABASE_URL() {
       return serverOnly("DATABASE_URL", () => server().DATABASE_URL);
-    },
-    get POSTIZ_BASE_URL() {
-      return serverOnly("POSTIZ_BASE_URL", () => server().POSTIZ_BASE_URL);
-    },
-    get POSTIZ_API_KEY() {
-      return serverOnly("POSTIZ_API_KEY", () => server().POSTIZ_API_KEY);
     },
     get STRIPE_SECRET_KEY() {
       return serverOnly(

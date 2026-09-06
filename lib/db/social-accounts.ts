@@ -4,6 +4,7 @@ import type { Platform, SocialAccountRow, SocialAccountInsert, SocialAccountUpda
 import { getErrorMessage } from './utils'
 
 export type SocialAccountPublic = {
+  id: string
   platform: Platform
   platform_username: string
   platform_display_name: string | null
@@ -123,20 +124,79 @@ export async function deactivateSocialAccount(id: string): Promise<void> {
   }
 }
 
-export async function getActiveByBusinessAndPlatform(
+// ADR 0028 §5.3 (N2.5) — getActiveByBusinessAndPlatform is REPLACED, not
+// patched: it used .maybeSingle() and threw when two active rows matched,
+// which the dual-identity model (a founder profile + a business page, or two
+// X connections) makes a real, reachable state. A by-id resolver serves the
+// publish path (a specific, named identity); a list-returning resolver
+// serves callers that legitimately want every identity.
+
+export async function getActiveById(
+  client: SupabaseClient,
+  id: string,
+): Promise<SocialAccountRow | null> {
+  const { data, error } = await client
+    .from('social_accounts')
+    .select('*')
+    .eq('id', id)
+    .eq('is_active', true)
+    .maybeSingle()
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as SocialAccountRow | null) ?? null
+}
+
+export async function listActiveByBusinessAndPlatform(
   client: SupabaseClient,
   businessId: string,
   platform: Platform,
-): Promise<SocialAccountRow | null> {
+  limit = 10,
+): Promise<SocialAccountRow[]> {
   const { data, error } = await client
     .from('social_accounts')
     .select('*')
     .eq('business_id', businessId)
     .eq('platform', platform)
     .eq('is_active', true)
-    .maybeSingle()
+    .order('connected_at', { ascending: false })
+    .limit(limit)
   if (error) throw new Error(getErrorMessage(error))
-  return (data as SocialAccountRow | null) ?? null
+  return (data as SocialAccountRow[]) ?? []
+}
+
+export type AccountResolution =
+  | { outcome: 'resolved'; account: SocialAccountRow }
+  | { outcome: 'none' }
+  | { outcome: 'ambiguous' }
+
+// The shared resolver behind ADR 0028 §5.3's resolution order, used by both
+// the publishing and metrics orchestrators: posts.social_account_id when
+// set; otherwise the business's default account for that platform (exactly
+// one active row); otherwise failure. A PINNED identity that is gone,
+// inactive, or belongs to a DIFFERENT business or platform resolves to
+// 'none', never 'ambiguous' and never a silent substitution of a different
+// identity — publishing (or syncing metrics for) the wrong identity is
+// worse than not doing so at all. SOCIAL-PINNED-ACCOUNT-TENANT-CHECKED
+// (Session 30.5-D, D2, MAJOR-2): getActiveById filters only on id +
+// is_active, and both production callers pass a service-role client that
+// bypasses RLS — this function is the only guard point, so it must check
+// business_id and platform itself rather than trust the caller or RLS.
+export async function resolvePublishAccount(
+  client: SupabaseClient,
+  businessId: string,
+  platform: Platform,
+  pinnedAccountId: string | null,
+): Promise<AccountResolution> {
+  if (pinnedAccountId) {
+    const account = await getActiveById(client, pinnedAccountId)
+    if (!account || account.business_id !== businessId || account.platform !== platform) {
+      return { outcome: 'none' }
+    }
+    return { outcome: 'resolved', account }
+  }
+  const candidates = await listActiveByBusinessAndPlatform(client, businessId, platform)
+  if (candidates.length === 0) return { outcome: 'none' }
+  if (candidates.length > 1) return { outcome: 'ambiguous' }
+  return { outcome: 'resolved', account: candidates[0] }
 }
 
 export async function listByBusiness(
@@ -146,7 +206,7 @@ export async function listByBusiness(
 ): Promise<SocialAccountPublic[]> {
   const { data, error } = await client
     .from('social_accounts')
-    .select('platform, platform_username, platform_display_name, is_active, connected_at, token_expires_at')
+    .select('id, platform, platform_username, platform_display_name, is_active, connected_at, token_expires_at')
     .eq('business_id', businessId)
     .order('connected_at', { ascending: false })
     .limit(limit)

@@ -202,7 +202,7 @@ const metric = (i: number): PostMetricsRow => ({
 })
 
 const post = (i: number): PostRow => ({
-  id: `post-${i}`, campaign_id: CAMPAIGN_ID, business_id: BUSINESS_ID,
+  id: `post-${i}`, campaign_id: CAMPAIGN_ID, business_id: BUSINESS_ID, social_account_id: null,
   platform: 'linkedin', content: `PERF-SNIPPET-${i}`, hashtags: [], media_urls: [],
   scheduled_at: '2026-01-01T00:00:00Z', published_at: null,
   platform_post_id: null, platform_url: null, status: 'published',

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { addDays, formatISO } from 'date-fns'
-import { getConnectionStatus } from './connection-status'
+import { getConnectionStatus, pickDefaultAccountId } from './connection-status'
 import type { SocialAccountRow, VaultSecretId } from '@/lib/db/types'
 
 const VAULT_ID = 'vault-test-uuid' as VaultSecretId
@@ -70,6 +70,25 @@ describe('getConnectionStatus', () => {
     expect(getConnectionStatus(account, 'linkedin')).toBe('connected')
   })
 
+  // MINOR-6/A-12 (Session 30.5-D, D6): differenceInCalendarDays <= 7 admitted
+  // NEGATIVE values, so an already-expired token rendered 'expiring_soon'
+  // ("renew it soon") instead of 'disconnected' ("reconnect required") — the
+  // exact moment LinkedIn's non-refreshable 60-day token stops working is
+  // the single most common reconnection event this product will generate.
+  // Ruling (A-12): daysUntilExpiry < 0 routes to the EXISTING 'disconnected'
+  // state — no sixth state.
+  it('returns disconnected (not expiring_soon) for an active account whose token expired 3 days ago', () => {
+    const expiresAt = formatISO(addDays(new Date(), -3))
+    const account = makeAccount({ token_expires_at: expiresAt })
+    expect(getConnectionStatus(account, 'linkedin')).toBe('disconnected')
+  })
+
+  it('boundary: expiring exactly today (daysUntilExpiry === 0) is still expiring_soon, not disconnected', () => {
+    const expiresAt = formatISO(addDays(new Date(), 0))
+    const account = makeAccount({ token_expires_at: expiresAt })
+    expect(getConnectionStatus(account, 'linkedin')).toBe('expiring_soon')
+  })
+
   it('returns coming_soon for instagram with no account', () => {
     expect(getConnectionStatus(null, 'instagram')).toBe('coming_soon')
     expect(getConnectionStatus(undefined, 'instagram')).toBe('coming_soon')
@@ -102,5 +121,42 @@ describe('getConnectionStatus', () => {
   it('returns coming_soon for instagram inactive account', () => {
     const account = makeAccount({ platform: 'instagram', is_active: false })
     expect(getConnectionStatus(account, 'instagram')).toBe('coming_soon')
+  })
+})
+
+describe('pickDefaultAccountId — ADR 0028 §5.3/§9.4', () => {
+  it('returns null for an empty list', () => {
+    expect(pickDefaultAccountId([])).toBeNull()
+  })
+
+  it('returns the id of the single active account', () => {
+    expect(pickDefaultAccountId([{ id: 'a1', is_active: true }])).toBe('a1')
+  })
+
+  it('ignores inactive accounts when exactly one active remains', () => {
+    expect(
+      pickDefaultAccountId([
+        { id: 'a1', is_active: false },
+        { id: 'a2', is_active: true },
+      ]),
+    ).toBe('a2')
+  })
+
+  it('returns null when zero accounts are active', () => {
+    expect(
+      pickDefaultAccountId([
+        { id: 'a1', is_active: false },
+        { id: 'a2', is_active: false },
+      ]),
+    ).toBeNull()
+  })
+
+  it('returns null when two accounts are active — no default, resolvePublishAccount would call this ambiguous', () => {
+    expect(
+      pickDefaultAccountId([
+        { id: 'a1', is_active: true },
+        { id: 'a2', is_active: true },
+      ]),
+    ).toBeNull()
   })
 })

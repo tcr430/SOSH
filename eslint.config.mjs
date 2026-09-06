@@ -12,7 +12,8 @@ const TO_ISO_STRING_BAN = {
 
 const SOCIAL_INTERNALS_BAN = {
   group: [
-    "@/lib/social/postiz-provider",
+    "@/lib/social/linkedin-provider",
+    "@/lib/social/twitter-provider",
     "@/lib/social/mock-provider",
     "@/lib/social/vault",
     "@/lib/social/registry",

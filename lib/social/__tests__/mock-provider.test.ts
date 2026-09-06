@@ -10,8 +10,8 @@ describe('MockProvider', () => {
   })
 
   describe('getOAuthAuthorizeUrl', () => {
-    it('returns a mock authorize URL containing state and platform', () => {
-      const url = mock.getOAuthAuthorizeUrl({
+    it('resolves to a mock authorize URL containing state and platform', async () => {
+      const url = await mock.getOAuthAuthorizeUrl({
         platform: 'linkedin',
         businessId: 'biz-1',
         redirectUri: 'https://app.local/callback',
@@ -23,8 +23,8 @@ describe('MockProvider', () => {
       expect(url).toContain('platform=linkedin')
     })
 
-    it('records the call in calls.getOAuthAuthorizeUrl', () => {
-      mock.getOAuthAuthorizeUrl({
+    it('records the call in calls.getOAuthAuthorizeUrl', async () => {
+      await mock.getOAuthAuthorizeUrl({
         platform: 'twitter',
         businessId: 'biz-1',
         redirectUri: 'https://app.local/callback',

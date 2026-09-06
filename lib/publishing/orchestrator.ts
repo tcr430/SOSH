@@ -17,7 +17,7 @@ import { reapStuckSendingRows } from '@/lib/db/email-outbox'
 import { recoverStuckGenerationSessions } from '@/lib/db/post-generation-sessions'
 import { pruneStaleAuthRateLimits } from '@/lib/db/auth-rate-limits'
 import { markCronSeen } from '@/lib/db/cron-health'
-import { getActiveByBusinessAndPlatform } from '@/lib/db/social-accounts'
+import { resolvePublishAccount } from '@/lib/db/social-accounts'
 import type { PostRow } from '@/lib/db/types'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
@@ -101,16 +101,20 @@ export async function runPublishTick(opts?: {
   const refreshedThisTick = new Set<string>()
 
   async function publishOne(post: PostRow): Promise<void> {
-    const account = await getActiveByBusinessAndPlatform(client, post.business_id, post.platform)
+    // ADR 0028 §5.3 resolution order: post.social_account_id when set;
+    // otherwise the business's default account for that platform; otherwise
+    // fail rather than publish as an arbitrary identity.
+    const resolution = await resolvePublishAccount(client, post.business_id, post.platform, post.social_account_id)
 
-    if (!account) {
+    if (resolution.outcome !== 'resolved') {
       await markPostFailed(client, post.id, {
         errorCode: 'TOKEN_REVOKED',
-        errorDetails: { reason: 'account_disconnected' },
+        errorDetails: { reason: resolution.outcome === 'ambiguous' ? 'account_ambiguous' : 'account_disconnected' },
       })
       summary.failed++
       return
     }
+    const account = resolution.account
 
     const input: PublishInput = {
       socialAccountId: account.id,

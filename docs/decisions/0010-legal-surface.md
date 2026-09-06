@@ -1129,6 +1129,18 @@ added a new Postgres FUNCTION (`get_latest_post_ai_originals`, `SECURITY INVOKER
 — functions carry no PII of their own and need no cascade row. No other table-shaped change landed in
 Session 29 or its correction pass.
 
+**Session 30.5 N2.4 note (2026-09-04):** ADR 0028 (native social providers) added one new **column**,
+`posts.social_account_id` (migration `20260904100000_posts_social_account_id.sql`) — no new table, so
+**no new §D2.5 row is required**; the existing `posts` row above already covers the whole table by its
+`business_id` CASCADE. The new column's own FK (`-> social_accounts(id) ON DELETE SET NULL`, not CASCADE)
+is a *second*, independent reference and is worth stating explicitly rather than assuming table-level
+coverage settles it: disconnecting a social account SETs NULL on any post that referenced it, but never
+deletes the post — so a business erasure still removes every post for that business through the
+unrelated `business_id CASCADE` FK regardless of what `social_account_id` holds at the time, and
+`social_accounts` rows are themselves purged in the same cascade (with `vault_delete_secret` run first,
+per the existing `social_accounts` row above) — no ordering dependency between the two FKs, no orphaned
+row, no erasure gap.
+
 #### D2.6 — Retention & redaction (D1 / D2)
 
 - **Retain `billing_events`** — tax/financial record (10-year retention, §5). `business_id` auto-nulled by its SET NULL FK on root delete; redact `stripe_customer_id` → NULL and `payload` → `{redacted:true,type}` **before** the delete (the SET NULL means the rows can no longer be found by `business_id` afterward). PK `id` retained (pseudonymous Stripe event ref, audit key).

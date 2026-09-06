@@ -141,9 +141,11 @@
         "coming_soon": "Coming soon"
       },
       "reconnect": "Reconnect — expires in {days} days",
-      "publishing_soon": "Publishing coming soon",
+      "reconnect_by": "{platform} access expires {date} and must be renewed",
+      "publishing_soon": "Awaiting Meta's app review for publishing",
       "connect": "Connect",
-      "connect_coming_soon_tooltip": "Connect to prepare for when publishing launches",
+      "connect_another": "Connect another {platform} account",
+      "connect_coming_soon_tooltip": "Publishing here is pending Meta's app review process",
       "disconnect": "Disconnect",
       "confirm_disconnect_title": "Disconnect {platform}?",
       "confirm_disconnect_body": "You'll need to reconnect to resume publishing.",
@@ -151,6 +153,8 @@
       "confirm_disconnect_confirm": "Disconnect",
       "disconnect_error": "Disconnect failed. Please try again.",
       "connected_as": "Connected as @{username}",
+      "default_badge": "Default",
+      "no_default": "No default — choose an account for each post",
       "error": {
         "invalid_state": "Invalid session. Please try connecting again.",
         "forbidden": "You don't have permission to connect this account.",
@@ -158,7 +162,6 @@
         "exchange_failed": "We couldn't complete the connection. Please try again.",
         "vault_write_failed": "We couldn't securely store your credentials. Please try again.",
         "db_write_failed": "We couldn't save the connection. Please try again.",
-        "postiz_unavailable": "The publishing service is temporarily unavailable. Please try again later.",
         "connect_failed": "Failed to connect. Please try again."
       },
       "success": {

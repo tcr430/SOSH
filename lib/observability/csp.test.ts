@@ -3,7 +3,6 @@ import { buildCsp } from './csp'
 
 const NONCE = 'abc123'
 const REPORT_URI = 'https://sentry.example.io/api/123/security/?sentry_key=pub'
-const POSTIZ = 'postiz.example.com'
 
 describe('buildCsp — header name', () => {
   it('returns Content-Security-Policy when enforce is true', () => {
@@ -51,15 +50,26 @@ describe('buildCsp — connect-src', () => {
     expect(connectSrc).toContain('https://vitals.vercel-insights.com')
   })
 
-  it('includes postizHost when provided', () => {
-    const { headerValue } = buildCsp(NONCE, null, false, POSTIZ)
+  // SOCIAL-CSP-NO-POSTIZ-HOST (ADR 0028 §8.3, N2.11). buildCsp no longer
+  // takes a postizHost parameter at all — native provider calls are
+  // server-side only, so there is no browser-facing origin to add. Asserts
+  // the SECOND half explicitly: connect-src's other seven entries survive
+  // the removal unchanged. A CSP "cleanup" that quietly drops a real
+  // origin (not just the Postiz one) would be a regression, not a cleanup.
+  it('SOCIAL-CSP-NO-POSTIZ-HOST: connect-src carries exactly the seven remaining entries, no postiz host, nothing else dropped', () => {
+    const { headerValue } = buildCsp(NONCE, null, false)
     const connectSrc = headerValue.match(/connect-src ([^;]+)/)?.[1] ?? ''
-    expect(connectSrc).toContain(POSTIZ)
-  })
-
-  it('omits postizHost when undefined', () => {
-    const { headerValue } = buildCsp(NONCE, null, false, undefined)
-    const connectSrc = headerValue.match(/connect-src ([^;]+)/)?.[1] ?? ''
+    const tokens = connectSrc.trim().split(/\s+/)
+    expect(tokens).toEqual([
+      "'self'",
+      'https://*.supabase.co',
+      'wss://*.supabase.co',
+      'https://api.stripe.com',
+      'https://*.sentry.io',
+      'https://*.ingest.sentry.io',
+      'https://*.vercel-insights.com',
+      'https://vitals.vercel-insights.com',
+    ])
     expect(connectSrc).not.toContain('postiz')
   })
 })
@@ -78,7 +88,7 @@ describe('buildCsp — report-uri', () => {
 
 describe('buildCsp — safety assertions', () => {
   it('does not contain unsafe-eval anywhere', () => {
-    const { headerValue } = buildCsp(NONCE, REPORT_URI, true, POSTIZ)
+    const { headerValue } = buildCsp(NONCE, REPORT_URI, true)
     expect(headerValue).not.toContain("'unsafe-eval'")
   })
 

@@ -3,27 +3,12 @@ import { getTranslations } from 'next-intl/server'
 import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
 import { listByBusiness } from '@/lib/db/social-accounts'
-import { PLATFORM_CONFIGS, getConnectionStatus } from '@/lib/social'
+import { getConnectionStatus, pickDefaultAccountId } from '@/lib/social'
 import type { Platform, ConnectionStatus, SocialAccountPublic } from '@/lib/social'
 import { AccountsClient } from './AccountsClient'
+import { resolveAccountsBanner } from './resolve-banner'
 
 const PLATFORMS: readonly Platform[] = ['linkedin', 'twitter', 'instagram', 'facebook', 'threads']
-
-const ERROR_KEYS = [
-  'invalid_state',
-  'forbidden',
-  'oauth_denied',
-  'exchange_failed',
-  'vault_write_failed',
-  'db_write_failed',
-  'postiz_unavailable',
-  'connect_failed',
-] as const
-type ErrorKey = (typeof ERROR_KEYS)[number]
-
-function isErrorKey(k: string): k is ErrorKey {
-  return (ERROR_KEYS as readonly string[]).includes(k)
-}
 
 type Props = {
   params: Promise<{ locale: string }>
@@ -32,7 +17,7 @@ type Props = {
 
 export default async function AccountsPage({ params, searchParams }: Props) {
   const { locale } = await params
-  const { connected, error, platform: errorPlatform } = await searchParams
+  const resolvedSearchParams = await searchParams
 
   const t = await getTranslations('settings.accounts')
 
@@ -45,31 +30,27 @@ export default async function AccountsPage({ params, searchParams }: Props) {
 
   const accounts = await listByBusiness(client, business.id)
 
-  const accountsByPlatform = Object.fromEntries(
-    accounts.map(a => [a.platform, a]),
-  ) as Partial<Record<Platform, SocialAccountPublic>>
+  // ADR 0028 §5.3/§9.4 — grouped, never collapsed. The prior
+  // Object.fromEntries(accounts.map(a => [a.platform, a])) kept only the
+  // LAST row per platform, silently dropping a second identity (a founder
+  // profile + a business page, or two X connections).
+  const accountsByPlatform = PLATFORMS.reduce((acc, platform) => {
+    acc[platform] = accounts.filter(a => a.platform === platform)
+    return acc
+  }, {} as Record<Platform, SocialAccountPublic[]>)
 
   const statuses = Object.fromEntries(
-    PLATFORMS.map(p => [p, getConnectionStatus(accountsByPlatform[p] ?? null, p)]),
+    PLATFORMS.map(p => {
+      const active = accountsByPlatform[p].find(a => a.is_active) ?? null
+      return [p, getConnectionStatus(active, p)]
+    }),
   ) as Record<Platform, ConnectionStatus>
 
-  let banner: { type: 'success' | 'error'; message: string } | null = null
-  if (connected) {
-    const config = PLATFORM_CONFIGS[connected as Platform]
-    if (config) {
-      banner = {
-        type: 'success',
-        message: t('success.connected', { platform: config.displayName }),
-      }
-    }
-  } else if (error) {
-    const platformName =
-      PLATFORM_CONFIGS[errorPlatform as Platform]?.displayName ?? errorPlatform ?? ''
-    const message = isErrorKey(error)
-      ? t(`error.${error}`, { platform: platformName })
-      : t('error.exchange_failed')
-    banner = { type: 'error', message }
-  }
+  const defaultAccountIds = Object.fromEntries(
+    PLATFORMS.map(p => [p, pickDefaultAccountId(accountsByPlatform[p])]),
+  ) as Record<Platform, string | null>
+
+  const banner = resolveAccountsBanner(resolvedSearchParams, t)
 
   return (
     <div className="space-y-6">
@@ -82,6 +63,7 @@ export default async function AccountsPage({ params, searchParams }: Props) {
         platforms={PLATFORMS}
         accounts={accountsByPlatform}
         statuses={statuses}
+        defaultAccountIds={defaultAccountIds}
         locale={locale}
         banner={banner}
       />

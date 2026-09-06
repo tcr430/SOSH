@@ -45,6 +45,7 @@
     "error": {
       "token_expired": "Account session expired",
       "token_revoked": "Account disconnected — reconnect",
+      "account_ambiguous": "Two accounts connected — pick which one this post publishes from",
       "rate_limited": "Platform rate-limited the post",
       "platform_rejected": "Platform rejected the post",
       "network": "Network error — will retry",

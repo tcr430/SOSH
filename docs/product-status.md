@@ -92,9 +92,10 @@ voice"* genuinely closes.
 
 ### Partial
 
-- **Publishing runs through Postiz**, behind our own provider abstraction. Native platform integrations
-  are the target and the migration is open work. Customers would not see the difference; it matters for
-  reliability and control.
+- **Publishing runs through native LinkedIn and X providers** (Session 30.5, ADR 0028) — the prior broker
+  is fully removed from the codebase. Production OAuth apps are not yet registered with either platform,
+  so no real customer has connected an account end-to-end yet; this is the remaining gap before the
+  migration is customer-visible-complete, not a code gap.
 - **Carousels** exist as a format in the code but nothing ever selects one, so in practice output is
   text-only.
 - **Founder/personal profiles** are now in the platform list as a decision, but are not implemented.

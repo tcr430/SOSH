@@ -121,50 +121,33 @@ describe('MODE2-CAROUSEL-NO-IMAGE-GEN (ADR 0022 §6.4/L-8 — constitution: no i
 })
 
 // ─────────────────────────────────────────────────────────────────────────
-// POSTS-DDL-UNMODIFIED (ADR 0022 §11.3)
+// POSTS-DDL-UNMODIFIED (ADR 0022 §11.3) — RETIRED N2.13 (Session 30.5)
 // ─────────────────────────────────────────────────────────────────────────
-// `posts` gains no column, constraint, index, policy or trigger anywhere in
-// THIS ADR's work. The baseline is the last migration filed before Session
-// 29's own two migrations — 20260814220000_insight_card_campaign_id.sql —
-// NOT the last migration that legitimately touches `posts` DDL: several
-// pre-Session-29 migrations (e.g. 20260726010000_learning_capture.sql's
-// trg_posts_enqueue_edit_signal trigger, ADR 0018) legitimately add posts
-// DDL and must NOT be scanned — only migrations filed AFTER Session 29
-// began are this ADR's scope. SQL `--` line comments are stripped first so
-// a column comment mentioning "posts" in passing (e.g. studio_drafts.sql's
-// "unlike posts.platform's NOT NULL") never false-positives.
-
-function stripSqlLineComments(source: string): string {
-  return source
-    .split('\n')
-    .map(line => line.replace(/--.*$/, ''))
-    .join('\n')
-}
-
-describe('POSTS-DDL-UNMODIFIED (ADR 0022 §11.3)', () => {
-  const MIGRATIONS_DIR = path.join(ROOT, 'supabase', 'migrations')
-  const BASELINE_FILENAME = '20260814220000_insight_card_campaign_id.sql'
-  // Word-boundary on "posts" so post_ai_originals / post_metrics /
-  // post_edit_signals never false-positive.
-  const POSTS_DDL_PATTERN = /\b(ALTER|CREATE)\s+(TABLE|POLICY|TRIGGER|INDEX)\b[^;]*\bposts\b/i
-
-  it('the baseline migration exists (guards against the reference going stale)', () => {
-    expect(fs.existsSync(path.join(MIGRATIONS_DIR, BASELINE_FILENAME))).toBe(true)
-  })
-
-  it('no migration filed after Session 29 began references posts DDL', () => {
-    const allMigrations = fs.readdirSync(MIGRATIONS_DIR).filter(f => f.endsWith('.sql')).sort()
-    const afterBaseline = allMigrations.filter(f => f > BASELINE_FILENAME)
-    expect(afterBaseline.length, 'no migration was filed after the baseline — the scan has nothing to check').toBeGreaterThan(0)
-
-    const offenders: string[] = []
-    for (const file of afterBaseline) {
-      const source = stripSqlLineComments(fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8'))
-      if (POSTS_DDL_PATTERN.test(source)) offenders.push(file)
-    }
-    expect(offenders).toEqual([])
-  })
-})
+// This tripwire's job was proving that ADR 0022's OWN work (Session 29,
+// Track F) never touched `posts` DDL — a scope boundary for THAT session's
+// track, not a permanent freeze on the `posts` table forever. Exactly the
+// same shape as MODE3-UNTOUCHED immediately below, retired the same way and
+// for the same reason.
+//
+// ADR 0028 (Session 30.5, Track N) is a properly adjudicated, later ADR
+// whose §5.3 explicitly adds `posts.social_account_id` (migration
+// 20260904100000_posts_social_account_id.sql) — reviewed, Tier-1 tested,
+// and cascade-table-reasoned in that ADR, not scope creep this constraint
+// was meant to catch. Discovered when N2.13's own push turned this suite
+// red for the first time since that migration landed (this repo's local
+// vitest scoping convention omits lib/scope-scans.test.ts — a direct file
+// in lib/, matched by no per-directory filter — so this only surfaces once
+// CI runs the real `npm run test:app`). Re-pinning the baseline forward
+// would just break it again at the next legitimately-adjudicated `posts`
+// change, forever, for a constraint this specific never meant to gate.
+// Retired rather than re-pinned or silently patched.
+//
+// The former test asserted: no migration filed after
+// `20260814220000_insight_card_campaign_id.sql` references `posts` DDL
+// (word-boundary ALTER/CREATE TABLE/POLICY/TRIGGER/INDEX referencing
+// `posts`, SQL line comments stripped first). If a future session needs to
+// confirm what that boundary looked like, `git log -p -- lib/scope-scans.test.ts`
+// at this commit recovers the exact pattern and baseline filename.
 
 // ─────────────────────────────────────────────────────────────────────────
 // MODE3-UNTOUCHED (ADR 0022 §11.3, L-12) — RETIRED Session 30 G1b.3

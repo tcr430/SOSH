@@ -141,9 +141,11 @@
         "coming_soon": "Brevemente"
       },
       "reconnect": "Reconectar — expira em {days} dias",
-      "publishing_soon": "Publicação brevemente disponível",
+      "reconnect_by": "O acesso a {platform} expira {date} e tem de ser renovado",
+      "publishing_soon": "A aguardar a revisão de aplicações da Meta para publicação",
       "connect": "Conectar",
-      "connect_coming_soon_tooltip": "Conecte para se preparar para quando a publicação for lançada",
+      "connect_another": "Conectar outra conta {platform}",
+      "connect_coming_soon_tooltip": "A publicação aqui está pendente do processo de revisão de aplicações da Meta",
       "disconnect": "Desconectar",
       "confirm_disconnect_title": "Desconectar {platform}?",
       "confirm_disconnect_body": "Terá de reconectar para retomar a publicação.",
@@ -151,6 +153,8 @@
       "confirm_disconnect_confirm": "Desconectar",
       "disconnect_error": "Falha ao desconectar. Por favor, tente novamente.",
       "connected_as": "Ligado como @{username}",
+      "default_badge": "Predefinida",
+      "no_default": "Sem conta predefinida — escolha uma conta para cada publicação",
       "error": {
         "invalid_state": "Sessão inválida. Por favor, tente ligar novamente.",
         "forbidden": "Não tem permissão para ligar esta conta.",
@@ -158,7 +162,6 @@
         "exchange_failed": "Não foi possível concluir a ligação. Por favor, tente novamente.",
         "vault_write_failed": "Não foi possível guardar as suas credenciais em segurança. Por favor, tente novamente.",
         "db_write_failed": "Não foi possível guardar a ligação. Por favor, tente novamente.",
-        "postiz_unavailable": "O serviço de publicação está temporariamente indisponível. Por favor, tente mais tarde.",
         "connect_failed": "Falha ao conectar. Por favor tente novamente."
       },
       "success": {

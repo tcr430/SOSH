@@ -188,6 +188,7 @@ function makeInsertedRows(count: number): PostRow[] {
     id: `post-${i}`,
     campaign_id: CAMPAIGN_ID,
     business_id: BUSINESS_ID,
+    social_account_id: null,
     platform: (i < 3 ? 'linkedin' : 'twitter') as 'linkedin' | 'twitter',
     content: `Post ${i}`,
     hashtags: [],
