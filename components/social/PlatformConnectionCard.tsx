@@ -23,7 +23,9 @@ import { CAPABILITIES } from '@/lib/members/capabilities'
 import type { Platform } from '@/lib/db/types'
 import type { PlatformOAuthConfig } from '@/lib/social'
 import type { ConnectionStatus } from '@/lib/social'
-import { buildDisconnectUrl } from '@/lib/social'
+// Imported directly, not from the '@/lib/social' barrel — see
+// AccountsClient.tsx's comment for why (Vercel build fix, 2026-09-06).
+import { buildDisconnectUrl } from '@/lib/social/disconnect-url'
 import type { SocialAccountPublic } from '@/lib/db/social-accounts'
 
 export interface PlatformConnectionCardProps {

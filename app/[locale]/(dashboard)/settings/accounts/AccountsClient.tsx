@@ -6,7 +6,16 @@ import { useTranslations } from 'next-intl'
 import { X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PlatformConnectionCard } from '@/components/social/PlatformConnectionCard'
-import { PLATFORM_CONFIGS, getConnectionStatus, isPublishingPlatform } from '@/lib/social'
+// Imported directly from their submodules, not the '@/lib/social' barrel:
+// that barrel also re-exports getRegistry (registry.ts), which statically
+// imports both provider classes and — through TwitterProvider — a module
+// that depends on next/headers. A Client Component importing ANYTHING from
+// the barrel pulls that whole graph into the client bundle and fails the
+// production build (Vercel build fix, 2026-09-06). Neither module below is
+// in eslint.config.mjs's SOCIAL_INTERNALS_BAN — only provider/registry
+// internals are banned from direct import, not shared config/status utils.
+import { PLATFORM_CONFIGS, isPublishingPlatform } from '@/lib/social/platforms/config'
+import { getConnectionStatus } from '@/lib/social/connection-status'
 import type { Platform, ConnectionStatus, SocialAccountPublic } from '@/lib/social'
 
 interface Banner {

@@ -15,24 +15,22 @@ import { cookies } from 'next/headers'
 // must stay platform-agnostic). This module is the shared cookie mechanism
 // N2.8's TwitterProvider calls into — LinkedIn has no PKCE (N2.1, confirmed
 // not required/available for SOSH's flow) and never touches this file.
+//
+// Vercel build fix (2026-09-06): the pure crypto functions
+// (generatePkceVerifier/generatePkceChallenge) moved to ./pkce-crypto,
+// which has no next/headers dependency. This file's top-level `cookies`
+// import makes the WHOLE module unsafe to import statically from anything
+// reachable by a Client Component (Turbopack's Server/Client boundary
+// check flags the import's mere presence, not just its usage) — that is
+// exactly what broke production builds via
+// AccountsClient.tsx -> lib/social (barrel) -> TwitterProvider -> here.
+// twitter-provider.ts now lazy-imports THIS file only at the two call
+// sites that actually run server-side (getOAuthAuthorizeUrl,
+// exchangeOAuthCode), and imports the crypto functions from ./pkce-crypto
+// statically since that module is safe everywhere.
 
 const PKCE_COOKIE_NAME = 'sosh_pkce_verifier'
 const PKCE_COOKIE_MAX_AGE_SECONDS = 600 // matches the state JWT's 10-minute TTL
-
-function base64url(bytes: Uint8Array): string {
-  return Buffer.from(bytes).toString('base64url')
-}
-
-// RFC 7636 §4.1: 43-128 chars of [A-Z a-z 0-9 - . _ ~]. 32 random bytes ->
-// 43-char base64url output, at the minimum-length end of the allowed range.
-export function generatePkceVerifier(): string {
-  return base64url(crypto.getRandomValues(new Uint8Array(32)))
-}
-
-export async function generatePkceChallenge(verifier: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))
-  return base64url(new Uint8Array(digest))
-}
 
 export async function setPkceVerifierCookie(verifier: string): Promise<void> {
   const store = await cookies()

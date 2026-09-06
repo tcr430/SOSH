@@ -29,9 +29,14 @@ const mockGeneratePkceVerifier = vi.fn()
 const mockGeneratePkceChallenge = vi.fn()
 const mockSetPkceVerifierCookie = vi.fn()
 const mockReadAndClearPkceVerifierCookie = vi.fn()
-vi.mock('../oauth/pkce', () => ({
+// Split across two modules (Vercel build fix, 2026-09-06): pkce-crypto.ts
+// (pure, statically imported) and pkce.ts (cookies, lazy-imported at the
+// call site since it depends on next/headers).
+vi.mock('../oauth/pkce-crypto', () => ({
   generatePkceVerifier: (...args: unknown[]) => mockGeneratePkceVerifier(...args),
   generatePkceChallenge: (...args: unknown[]) => mockGeneratePkceChallenge(...args),
+}))
+vi.mock('../oauth/pkce', () => ({
   setPkceVerifierCookie: (...args: unknown[]) => mockSetPkceVerifierCookie(...args),
   readAndClearPkceVerifierCookie: (...args: unknown[]) => mockReadAndClearPkceVerifierCookie(...args),
 }))

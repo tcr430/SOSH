@@ -35,9 +35,13 @@ vi.mock('@/lib/supabase/service', () => ({
   }),
 }))
 
-vi.mock('../oauth/pkce', () => ({
+// Split across two modules (Vercel build fix, 2026-09-06) — see
+// twitter-provider.ts / pkce.ts for why.
+vi.mock('../oauth/pkce-crypto', () => ({
   generatePkceVerifier: () => 'contract-test-verifier',
   generatePkceChallenge: async () => 'contract-test-challenge',
+}))
+vi.mock('../oauth/pkce', () => ({
   setPkceVerifierCookie: async () => {},
   readAndClearPkceVerifierCookie: async () => null,
 }))

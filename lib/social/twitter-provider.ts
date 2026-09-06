@@ -17,7 +17,7 @@ import type {
 } from './types'
 import { SocialProviderError } from './errors'
 import { withFreshToken, readRefreshToken } from './vault'
-import { generatePkceVerifier, generatePkceChallenge, setPkceVerifierCookie, readAndClearPkceVerifierCookie } from './oauth/pkce'
+import { generatePkceVerifier, generatePkceChallenge } from './oauth/pkce-crypto'
 import { mapHttpStatusToErrorCode, finiteRetryAfterSeconds } from './error-mapping'
 
 // ADR 0028 §3.2/§4.2 (N2.8). Corrected in Session 30.5-D (BLOCKER-1):
@@ -88,6 +88,12 @@ export class TwitterProvider implements SocialProvider {
   // this into the shared connect route would leak platform knowledge into
   // the one layer that must stay platform-agnostic.
   async getOAuthAuthorizeUrl(input: OAuthAuthorizeInput): Promise<string> {
+    // Lazy import (Vercel build fix, 2026-09-06): ./oauth/pkce's top-level
+    // `next/headers` import makes it unsafe to import statically anywhere
+    // reachable from a Client Component. This method only ever runs
+    // server-side (the connect route handler), so the dynamic import is
+    // never bundled into client code.
+    const { setPkceVerifierCookie } = await import('./oauth/pkce')
     const verifier = generatePkceVerifier()
     const challenge = await generatePkceChallenge(verifier)
     await setPkceVerifierCookie(verifier)
@@ -105,6 +111,8 @@ export class TwitterProvider implements SocialProvider {
   }
 
   async exchangeOAuthCode(input: ExchangeCodeInput): Promise<TokenSet> {
+    // Lazy import — see getOAuthAuthorizeUrl above for why.
+    const { readAndClearPkceVerifierCookie } = await import('./oauth/pkce')
     // Cleared unconditionally, whether the exchange that follows succeeds
     // or fails (ADR 0028 §2.3).
     const verifier = await readAndClearPkceVerifierCookie()
