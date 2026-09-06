@@ -41,11 +41,26 @@ jobs:
           npm ci
 
       # Pinned to an exact tag: no floating major tag (v1/v2) is published for
-      # this action, so `@v3`/`@v2` are not resolvable refs. Auto-detection via
-      # an omitted `version` input still applies — this only pins the action's
-      # own release, not the supabase CLI version it installs (that comes from
-      # package-lock.json's pinned supabase@^2.97.0).
+      # this action, so `@v3`/`@v2` are not resolvable refs.
+      #
+      # `version: beta` OVERRIDES this action's normal lockfile auto-detection
+      # (which would otherwise install the CLI pinned in package-lock.json,
+      # supabase@2.109.1 — bundling Postgres image 17.6.1.111). That image
+      # range (17.6.1.099-17.6.1.112) ships a broken supautils (3.2.0/3.2.1):
+      # any EXECUTE-permission-denied call to a SECURITY DEFINER function
+      # SIGSEGVs the backend and takes the whole cluster into recovery —
+      # confirmed upstream at supabase/postgres#2367, #2112, #2377, fixed in
+      # supautils 3.2.2 (image 17.6.1.113+). This is what
+      # supabase/__tests__/vault-update-secret.test.ts's anon/authenticated
+      # denial assertions were tripping (Session 30.5-D, misdiagnosed at the
+      # time as OOM/memory pressure — it is not). The `beta` npm dist-tag
+      # (2.117.0-beta.21 as of 2026-09-05) tracks supabase/cli's current
+      # default-versions manifest, already well past the fix. Once a stable
+      # CLI release ships an image >=17.6.1.113, drop this override and let
+      # lockfile auto-detection resume.
       - uses: supabase/setup-cli@v2.1.1
+        with:
+          version: beta
 
       # A `supabase start -x analytics,vector,...` CLI-flag attempt to trim
       # the stack (bug-111) did NOT actually stop those containers -- real
