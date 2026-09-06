@@ -58,11 +58,24 @@ jobs:
       # Pinned to a concrete version, not the bare word "beta": the action
       # release we're on (v2.1.1) predates that dist-tag alias and passes
       # `version` straight to a semver comparison, so the literal string
-      # "beta" fails with "Invalid SemVer: beta". 2.117.0-beta.21 is the npm
-      # `beta` dist-tag's current resolution (2026-09-05) and tracks
-      # supabase/cli's current default-versions manifest, already well past
-      # the fix. Once a stable CLI release ships an image >=17.6.1.113, drop
-      # this override and let lockfile auto-detection resume.
+      # "beta" fails with "Invalid SemVer: beta".
+      #
+      # DOES NOT FIX THE CRASH — verified in CI (run 34027147179): this is
+      # still the newest published 2.x release and it STILL resolves to
+      # Postgres image 17.6.1.111 and still SIGSEGVs. supabase/cli's `main`
+      # branch bumped its embedded Postgres image past the fixed threshold
+      # (17.6.1.167) on 2026-08-31, days before this version was published
+      # (2026-09-05), but empirically that bump isn't in this build — the 2.x
+      # release train doesn't appear to branch from that commit. The only
+      # newer published option is the 3.0.0-beta.x line (different internal
+      # architecture, untested against this workflow — a bigger swing than
+      # this session had budget for). Left pinned here as a no-op placeholder
+      # documenting that this specific avenue is a dead end; db-tests stays
+      # RED on this branch until one of the real fixes lands: (a) a stable
+      # 2.x CLI release ships image >=17.6.1.113, (b) v3 is evaluated and
+      # proven compatible with this workflow, or (c) a CI-only Docker
+      # image-retag workaround is added to shadow the 17.6.1.111 tag with a
+      # verified-clean image (e.g. 17.6.1.156) before `supabase start`.
       - uses: supabase/setup-cli@v2.1.1
         with:
           version: 2.117.0-beta.21
