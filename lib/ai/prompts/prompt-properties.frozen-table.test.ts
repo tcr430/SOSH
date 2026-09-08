@@ -42,10 +42,10 @@ type FrozenRow = {
   maxTokens: number | undefined
 }
 
-// NOTHING declares temperature or thinking in H2.1 — that is H2.2's job.
-// Every row here is therefore byte-identical to "no sampling property set",
-// which is exactly what proves QUAL-SAMPLING-DEFAULT-PRESERVED against a
-// tree unchanged by this step.
+// H2.2 (ADR 0024 §2.4, §3.3/§3.3a) declares the first real values:
+// temperature 1.0 on the three native-generation families (version 2), and
+// thinking 4000 + maxTokens 12_000 on brief-assembly (version 2). Every
+// other row stays "no sampling property set", at version 1.
 const FROZEN_TABLE: Record<string, FrozenRow> = {
   'brand-voice-inference': {
     version: 1,
@@ -55,11 +55,11 @@ const FROZEN_TABLE: Record<string, FrozenRow> = {
     maxTokens: undefined,
   },
   'brief-assembly': {
-    version: 1,
+    version: 2,
     modelKey: 'SONNET_4_6',
     temperature: undefined,
-    thinking: undefined,
-    maxTokens: undefined,
+    thinking: 4000,
+    maxTokens: 12_000,
   },
   'learning-summarizer': {
     version: 1,
@@ -97,23 +97,23 @@ const FROZEN_TABLE: Record<string, FrozenRow> = {
     maxTokens: 12288,
   },
   'native-generation-single': {
-    version: 1,
+    version: 2,
     modelKey: 'SONNET_4_6',
-    temperature: undefined,
+    temperature: 1.0,
     thinking: undefined,
     maxTokens: undefined,
   },
   'native-generation-thread': {
-    version: 1,
+    version: 2,
     modelKey: 'SONNET_4_6',
-    temperature: undefined,
+    temperature: 1.0,
     thinking: undefined,
     maxTokens: undefined,
   },
   'native-generation-carousel': {
-    version: 1,
+    version: 2,
     modelKey: 'SONNET_4_6',
-    temperature: undefined,
+    temperature: 1.0,
     thinking: undefined,
     maxTokens: undefined,
   },

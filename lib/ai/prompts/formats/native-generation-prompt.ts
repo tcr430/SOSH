@@ -130,11 +130,19 @@ Fix it and return ONLY the corrected JSON.`)
   return sections.join('\n\n')
 }
 
+// ADR 0024 §2.4 — temperature 1.0 is the candidate-diversity lever: without
+// it, N=3 (generate.ts, H2.7) returns three near-identical strings and the
+// judge is decorative. Declared ONCE here so all three families inherit it;
+// each family's own version bumps to 2 in the same commit (§3.2's frozen
+// table takes three rows, one per id, even though the value is shared).
+const NATIVE_GENERATION_TEMPERATURE = 1.0
+
 function buildSinglePrompt(): Prompt<NativeGenInput, SinglePostOutput> {
   return {
     id: 'native-generation-single',
-    version: 1,
+    version: 2,
     modelKey: 'SONNET_4_6',
+    temperature: NATIVE_GENERATION_TEMPERATURE,
     outputSchema: SinglePostOutputSchema,
     buildSystemPrompt: buildSystemPrompt('single'),
     buildUserMessage,
@@ -144,8 +152,9 @@ function buildSinglePrompt(): Prompt<NativeGenInput, SinglePostOutput> {
 function buildThreadPrompt(): Prompt<NativeGenInput, ThreadOutput> {
   return {
     id: 'native-generation-thread',
-    version: 1,
+    version: 2,
     modelKey: 'SONNET_4_6',
+    temperature: NATIVE_GENERATION_TEMPERATURE,
     outputSchema: ThreadOutputSchema,
     buildSystemPrompt: buildSystemPrompt('thread'),
     buildUserMessage,
@@ -155,8 +164,9 @@ function buildThreadPrompt(): Prompt<NativeGenInput, ThreadOutput> {
 function buildCarouselPrompt(): Prompt<NativeGenInput, CarouselOutput> {
   return {
     id: 'native-generation-carousel',
-    version: 1,
+    version: 2,
     modelKey: 'SONNET_4_6',
+    temperature: NATIVE_GENERATION_TEMPERATURE,
     outputSchema: CarouselOutputSchema,
     buildSystemPrompt: buildSystemPrompt('carousel'),
     buildUserMessage,

@@ -675,11 +675,10 @@ describe('Step 3 — per-template model input (MEM-RUNNER-CACHE-SPLIT, MAJOR-1a)
 // object leaves maxTokens unset (static); (2) an unset maxTokens resolves
 // to EXACTLY DEFAULT_MAX_TOKENS=4096 at the SDK call site (behavioural).
 describe('STUDIO-RUNNER-DEFAULT-PRESERVED (ADR 0019 §4.5 / A-5)', () => {
-  it('none of the existing prompt objects sets maxTokens — the SHARED-FUNCTION CALLERS table for runPrompt, one row per prompt', async () => {
+  it('none of the OTHER existing prompt objects sets maxTokens — the SHARED-FUNCTION CALLERS table for runPrompt, one row per prompt', async () => {
     const { postGenerationPrompt: pg } = await import('@/lib/ai/prompts/post-generation')
     const { postRegenerationPrompt: pr } = await import('@/lib/ai/prompts/post-regeneration')
     const { rubricPrompt } = await import('@/lib/ai/prompts/rubric')
-    const { briefAssemblyPrompt } = await import('@/lib/ai/prompts/brief')
     const { learningSummarizerPrompt } = await import('@/lib/ai/prompts/learning-summarizer')
     const { brandVoiceInferencePrompt: bv } = await import('@/lib/ai/prompts/brand-voice-inference')
     const { createNativeGenerationPrompt } = await import('@/lib/ai/prompts/formats/native-generation-prompt')
@@ -688,12 +687,14 @@ describe('STUDIO-RUNNER-DEFAULT-PRESERVED (ADR 0019 §4.5 / A-5)', () => {
     //   post-generation.ts (lib/campaigns/generate.ts)
     //   post-regeneration.ts (app/.../posts/actions.ts)
     //   rubric.ts (lib/campaigns/generate.ts, lib/campaigns/brief.ts)
-    //   brief.ts (lib/campaigns/brief.ts)
     //   learning-summarizer.ts (lib/learning/summarize.ts)
     //   brand-voice-inference.ts (onboarding/infer-brand-voice, settings/voice/refine-from-posts)
     //   native-generation-prompt.ts ×2 families (lib/campaigns/generate.ts)
-    const prompts = [pg, pr, rubricPrompt, briefAssemblyPrompt, learningSummarizerPrompt, bv, createNativeGenerationPrompt('single'), createNativeGenerationPrompt('thread')]
-    expect(prompts).toHaveLength(8)
+    // brief-assembly is EXCLUDED here as of ADR 0024 §3.3a (H2.2) — it now
+    // legitimately declares maxTokens: 12_000 alongside its thinking budget.
+    // See QUAL-THINKING-BUDGETED below, which asserts that value directly.
+    const prompts = [pg, pr, rubricPrompt, learningSummarizerPrompt, bv, createNativeGenerationPrompt('single'), createNativeGenerationPrompt('thread')]
+    expect(prompts).toHaveLength(7)
     for (const prompt of prompts) {
       expect(prompt.maxTokens).toBeUndefined()
     }
@@ -710,6 +711,100 @@ describe('STUDIO-RUNNER-DEFAULT-PRESERVED (ADR 0019 §4.5 / A-5)', () => {
     await runPrompt(withMaxTokens, mockContext, { text: 'hi' })
     const callArgs = mockCreate.mock.calls[0][0]
     expect(callArgs.max_tokens).toBe(8192)
+  })
+})
+
+// ── QUAL-THINKING-BUDGETED (ADR 0024 §3.3/§3.3a, H2.2) ─────────────────────
+// Sibling of STUDIO-RUNNER-DEFAULT-PRESERVED immediately above: brief-
+// assembly is the ONE prompt that declares thinking, and it must declare
+// maxTokens: 12_000 in the SAME version bump (a thinking budget is spent
+// OUT OF maxTokens, not additive — §3.3a). Every other id stays undeclared.
+// The two sets (native-generation's temperature, brief-assembly's thinking)
+// are disjoint by construction — asserted here so a future prompt cannot
+// silently acquire both.
+describe('QUAL-THINKING-BUDGETED (ADR 0024 §3.3/§3.3a)', () => {
+  it('brief-assembly declares thinking:4000 AND maxTokens:12_000 at version:2', async () => {
+    const { briefAssemblyPrompt } = await import('@/lib/ai/prompts/brief')
+    expect(briefAssemblyPrompt.version).toBe(2)
+    expect(briefAssemblyPrompt.thinking).toBe(4000)
+    expect(briefAssemblyPrompt.maxTokens).toBe(12_000)
+  })
+
+  it('no other of the ten prompt ids declares thinking', async () => {
+    const { postGenerationPrompt: pg } = await import('@/lib/ai/prompts/post-generation')
+    const { postRegenerationPrompt: pr } = await import('@/lib/ai/prompts/post-regeneration')
+    const { rubricPrompt } = await import('@/lib/ai/prompts/rubric')
+    const { learningSummarizerPrompt } = await import('@/lib/ai/prompts/learning-summarizer')
+    const { brandVoiceInferencePrompt: bv } = await import('@/lib/ai/prompts/brand-voice-inference')
+    const { studioSuggestionPrompt } = await import('@/lib/ai/prompts/studio-suggestion')
+    const { createNativeGenerationPrompt } = await import('@/lib/ai/prompts/formats/native-generation-prompt')
+
+    const others = [
+      pg,
+      pr,
+      rubricPrompt,
+      learningSummarizerPrompt,
+      bv,
+      studioSuggestionPrompt,
+      createNativeGenerationPrompt('single'),
+      createNativeGenerationPrompt('thread'),
+      createNativeGenerationPrompt('carousel'),
+    ]
+    expect(others).toHaveLength(9)
+    for (const prompt of others) {
+      expect(prompt.thinking, `${prompt.id} must not declare thinking`).toBeUndefined()
+    }
+  })
+
+  it('no prompt declares BOTH temperature and thinking — the two sets stay disjoint', async () => {
+    const { briefAssemblyPrompt } = await import('@/lib/ai/prompts/brief')
+    const { postGenerationPrompt: pg } = await import('@/lib/ai/prompts/post-generation')
+    const { postRegenerationPrompt: pr } = await import('@/lib/ai/prompts/post-regeneration')
+    const { rubricPrompt } = await import('@/lib/ai/prompts/rubric')
+    const { learningSummarizerPrompt } = await import('@/lib/ai/prompts/learning-summarizer')
+    const { brandVoiceInferencePrompt: bv } = await import('@/lib/ai/prompts/brand-voice-inference')
+    const { studioSuggestionPrompt } = await import('@/lib/ai/prompts/studio-suggestion')
+    const { createNativeGenerationPrompt } = await import('@/lib/ai/prompts/formats/native-generation-prompt')
+
+    const all = [
+      briefAssemblyPrompt,
+      pg,
+      pr,
+      rubricPrompt,
+      learningSummarizerPrompt,
+      bv,
+      studioSuggestionPrompt,
+      createNativeGenerationPrompt('single'),
+      createNativeGenerationPrompt('thread'),
+      createNativeGenerationPrompt('carousel'),
+    ]
+    expect(all).toHaveLength(10)
+    for (const prompt of all) {
+      const hasBoth = prompt.temperature !== undefined && prompt.thinking !== undefined
+      expect(hasBoth, `${prompt.id} declares both temperature and thinking`).toBe(false)
+    }
+  })
+
+  it('a thinking block followed by a text block parses exactly as a text-only response would', async () => {
+    mockCreate.mockResolvedValue({
+      content: [
+        { type: 'thinking', thinking: 'reasoning about the brief...' },
+        { type: 'text', text: JSON.stringify(validOutput) },
+      ],
+      usage: { input_tokens: 100, output_tokens: 50, cache_read_input_tokens: 0 },
+    })
+    await expect(runPrompt(mockPrompt, mockContext, { text: 'hi' })).resolves.toEqual(validOutput)
+  })
+
+  it('a thinking budget is sent in the SDK thinking-block form, and omitted entirely when unset', async () => {
+    const withThinking: Prompt<MockInput, MockOutput> = { ...mockPrompt, thinking: 4000, maxTokens: 12_000 }
+    await runPrompt(withThinking, mockContext, { text: 'hi' })
+    let callArgs = mockCreate.mock.calls[0][0]
+    expect(callArgs.thinking).toEqual({ type: 'enabled', budget_tokens: 4000 })
+
+    await runPrompt(mockPrompt, mockContext, { text: 'hi' })
+    callArgs = mockCreate.mock.calls[1][0]
+    expect(callArgs).not.toHaveProperty('thinking')
   })
 })
 
