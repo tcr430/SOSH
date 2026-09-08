@@ -149,6 +149,16 @@ export async function runPrompt<TInput, TOutput>(
     max_tokens: prompt.maxTokens ?? DEFAULT_MAX_TOKENS,
     system: systemContent,
     messages,
+    // ADR 0024 §3.1 — sampling as a versioned prompt property. Omitted
+    // entirely (not sent as undefined) when the prompt declares nothing, so
+    // every existing prompt's SDK params stay byte-identical to today
+    // (QUAL-SAMPLING-DEFAULT-PRESERVED, lib/ai/runner.test.ts).
+    ...(prompt.temperature !== undefined ? { temperature: prompt.temperature } : {}),
+    // ADR 0024 §3.3 — thinking budget, sent in the SDK's thinking-block
+    // form. Same omit-when-unset shape.
+    ...(prompt.thinking !== undefined
+      ? { thinking: { type: 'enabled' as const, budget_tokens: prompt.thinking } }
+      : {}),
     // _sosh is stripped by the real Anthropic SDK (unknown fields ignored).
     // MockAnthropicClient reads it to route to per-prompt-id fixtures.
     _sosh: { promptId: prompt.id, input },

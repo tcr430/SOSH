@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
-import crypto from 'node:crypto'
 
 // ADR 0022 §11.3 (Session 29, F1b.11) — the four scope tripwires the F1b.11
 // build step names, EXECUTABLE rather than advisory ("a scope rule that
@@ -33,15 +32,6 @@ function stripLineComments(source: string): string {
     .join('\n')
 }
 
-// No .gitattributes in this repo — Windows checkouts (core.autocrlf=true)
-// normalize LF->CRLF on disk while Linux CI checkouts keep LF, so a raw-byte
-// hash of file content is NOT stable across environments. Every hash-pinned
-// scan below reads through this so the pin is a property of the CONTENT,
-// not of which OS checked it out.
-function readNormalized(filePath: string): string {
-  return fs.readFileSync(filePath, 'utf8').replace(/\r\n/g, '\n')
-}
-
 function collectTsFiles(dir: string, excludeDirNames = new Set(['node_modules', '__fixtures__', '.next'])): string[] {
   const out: string[] = []
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -57,39 +47,30 @@ function collectTsFiles(dir: string, excludeDirNames = new Set(['node_modules', 
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// MODE2-RUNNER-UNTOUCHED (ADR 0022 §6.5, §11.3 "RUNNER-UNMODIFIED")
+// MODE2-RUNNER-UNTOUCHED (ADR 0022 §6.5, §11.3 "RUNNER-UNMODIFIED") — RETIRED
+// H2.1 (Session 31, Track H)
 // ─────────────────────────────────────────────────────────────────────────
-// lib/ai/runner.ts is byte-identical across the whole Session 29 Track F
-// range (`git diff d3e6c27e~1..HEAD -- lib/ai/runner.ts` is empty — verified
-// at F1b.11's own range head). A git-diff-against-a-base-SHA check is not a
-// durable STANDING test (the base SHA is a point in this session's history,
-// not a property of the file going forward) — a frozen content hash is,
-// mirroring MODE2-PROMPT-BYTE-IDENTICAL's frozen-fixture precedent (F1b.7):
-// any future edit reddens this test immediately, from here forward.
-
-describe('MODE2-RUNNER-UNTOUCHED (ADR 0022 §6.5/§11.3 RUNNER-UNMODIFIED)', () => {
-  const RUNNER_PATH = path.join(ROOT, 'lib', 'ai', 'runner.ts')
-  // Frozen at Session 29 F1b.11 (commit range d3e6c27e..a038678d) — the exact
-  // SHA-256 of lib/ai/runner.ts's content, unchanged since before F1b.1.
-  const FROZEN_SHA256 = 'c4cbff947361f23524231a3fb8794b8e2c12f962fac1811213ba506f668cf955'
-
-  it('lib/ai/runner.ts exists and its content hash matches the frozen pin', () => {
-    expect(fs.existsSync(RUNNER_PATH)).toBe(true)
-    const content = readNormalized(RUNNER_PATH)
-    const hash = crypto.createHash('sha256').update(content).digest('hex')
-    expect(hash).toBe(FROZEN_SHA256)
-  })
-
-  it('has exactly the pre-existing prompt-kind predicates — no fourth one added alongside them', () => {
-    const content = readNormalized(RUNNER_PATH)
-    // isBrandVoice / isPostGeneration are the two ADR 0022 names by name;
-    // isScoringOnly predates this ADR (Session 28, ADR 0021 §4.2) and is not
-    // a carousel-work addition — the guarantee is no FOURTH predicate joined
-    // these three during Session 29's format-family work.
-    const predicateNames = Array.from(content.matchAll(/^function (is[A-Z]\w*)\(/gm)).map(m => m[1])
-    expect(predicateNames.sort()).toEqual(['isBrandVoice', 'isPostGeneration', 'isScoringOnly'])
-  })
-})
+// This tripwire's job was proving that ADR 0022's OWN carousel/promote work
+// (Session 29, Track F) never touched lib/ai/runner.ts — a scope boundary
+// for THAT session's track, not a permanent freeze on the runner forever.
+// Exactly the same shape as MODE3-UNTOUCHED and POSTS-DDL-UNMODIFIED below,
+// retired the same way and for the same reason.
+//
+// ADR 0024 (Session 31, Track H) is a properly adjudicated, later ADR whose
+// entire purpose is generation-quality changes inside lib/ai/ — §3.1 adds
+// optional temperature/thinking fields read at runner.ts's SDK-params
+// assembly, §6.4 teaches the parse path tool_use, and §7 places the new
+// budget reservation outside and above runPrompt without reordering its
+// existing guards. H2.1 through H2.10 all touch this file by design.
+// Re-pinning the hash at each step would just break it again at the next
+// one, forever, for a track this constraint was never meant to gate.
+// Retired rather than re-pinned or silently patched, on the
+// POSTS-DDL-UNMODIFIED / MODE3-UNTOUCHED precedent immediately below.
+//
+// The former hash pin ('c4cbff947361f23524231a3fb8794b8e2c12f962fac1811213ba506f668cf955',
+// Session 29 F1b.11) and the "no fourth is[A-Z]\w* predicate" assertion
+// remain recoverable from git history if a future session ever needs to
+// confirm what the runner looked like at Track F's close.
 
 // ─────────────────────────────────────────────────────────────────────────
 // MODE2-CAROUSEL-NO-IMAGE-GEN (ADR 0022 §6.4, L-8, constitution)
