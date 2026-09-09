@@ -913,3 +913,84 @@ describe('response_truncated (ADR 0019 §5.4 [sec-HIGH-7])', () => {
     await expect(runPrompt(mockPrompt, mockContext, { text: 'hi' })).resolves.toEqual({ result: 'ok' })
   })
 })
+
+// ADR 0024 §6 (Session 31, H2.10) — tool_use structured output, migrated for
+// exactly one prompt (learningSummarizerPrompt). `toolPrompt` below stands
+// in for it — same outputSchema/id shape as `mockPrompt`, `useToolOutput`
+// added — so these tests exercise the runner's generic mechanism, not the
+// real prompt's own copy.
+describe('QUAL-STRUCTURED-OUTPUT / QUAL-MALFORMED-TOOL-CALL (ADR 0024 §6, H2.10)', () => {
+  const toolPrompt: Prompt<MockInput, MockOutput> = {
+    ...mockPrompt,
+    id: 'learning-summarizer',
+    useToolOutput: true,
+  }
+
+  it('QUAL-STRUCTURED-OUTPUT — sends a tool derived from the prompt\'s outputSchema, forces it via tool_choice, and parses the tool_use input through Zod', async () => {
+    mockCreate.mockResolvedValue({
+      content: [{ type: 'tool_use', id: 'tu_1', name: 'learning-summarizer_output', input: { result: 'from tool' } }],
+      stop_reason: 'tool_use',
+      usage: { input_tokens: 100, output_tokens: 50, cache_read_input_tokens: 0 },
+    })
+
+    const result = await runPrompt(toolPrompt, mockContext, { text: 'hi' })
+
+    expect(result).toEqual({ result: 'from tool' })
+    const sentParams = mockCreate.mock.calls[0][0]
+    expect(sentParams.tool_choice).toEqual({ type: 'tool', name: 'learning-summarizer_output' })
+    expect(sentParams.tools).toHaveLength(1)
+    expect(sentParams.tools[0]).toMatchObject({ name: 'learning-summarizer_output' })
+    expect(sentParams.tools[0].input_schema).toBeDefined()
+  })
+
+  it('a non-tool prompt never sends tools/tool_choice — the migration is per-prompt, not global', async () => {
+    await runPrompt(mockPrompt, mockContext, { text: 'hi' })
+
+    const sentParams = mockCreate.mock.calls[0][0]
+    expect(sentParams.tools).toBeUndefined()
+    expect(sentParams.tool_choice).toBeUndefined()
+  })
+
+  it('QUAL-MALFORMED-TOOL-CALL — no tool_use block in the response throws invalid_response', async () => {
+    mockCreate.mockResolvedValue({
+      content: [{ type: 'text', text: 'the model ignored the tool' }],
+      stop_reason: 'end_turn',
+      usage: { input_tokens: 100, output_tokens: 50, cache_read_input_tokens: 0 },
+    })
+
+    await expect(runPrompt(toolPrompt, mockContext, { text: 'hi' })).rejects.toMatchObject({
+      code: 'invalid_response',
+    })
+  })
+
+  it('QUAL-MALFORMED-TOOL-CALL — a tool_use block whose input fails Zod throws invalid_response carrying the Zod message', async () => {
+    mockCreate.mockResolvedValue({
+      content: [{ type: 'tool_use', id: 'tu_1', name: 'learning-summarizer_output', input: { result: 42 } }], // wrong type
+      stop_reason: 'tool_use',
+      usage: { input_tokens: 100, output_tokens: 50, cache_read_input_tokens: 0 },
+    })
+
+    await expect(runPrompt(toolPrompt, mockContext, { text: 'hi' })).rejects.toMatchObject({
+      code: 'invalid_response',
+      message: expect.stringContaining('Response schema validation failed'),
+    })
+  })
+
+  it('QUAL-MALFORMED-TOOL-CALL — a response carrying BOTH a text block and a tool_use block: the tool_use block wins, and the mixed case logs', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    mockCreate.mockResolvedValue({
+      content: [
+        { type: 'text', text: JSON.stringify({ result: 'from text — must lose' }) },
+        { type: 'tool_use', id: 'tu_1', name: 'learning-summarizer_output', input: { result: 'from tool — must win' } },
+      ],
+      stop_reason: 'tool_use',
+      usage: { input_tokens: 100, output_tokens: 50, cache_read_input_tokens: 0 },
+    })
+
+    const result = await runPrompt(toolPrompt, mockContext, { text: 'hi' })
+
+    expect(result).toEqual({ result: 'from tool — must win' })
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('runner.mixed_tool_text_response'))
+    logSpy.mockRestore()
+  })
+})

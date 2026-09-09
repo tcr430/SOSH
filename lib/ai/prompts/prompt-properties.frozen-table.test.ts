@@ -40,6 +40,10 @@ type FrozenRow = {
   temperature: number | undefined
   thinking: number | undefined
   maxTokens: number | undefined
+  // ADR 0024 §6.1 (Session 31, H2.10) — a silent toggle changes the wire
+  // contract (forces tool_choice, switches the parse path) exactly as
+  // materially as a modelKey change, so it is gated the same way.
+  useToolOutput: boolean | undefined
 }
 
 // H2.2 (ADR 0024 §2.4, §3.3/§3.3a) declares the first real values:
@@ -53,6 +57,7 @@ const FROZEN_TABLE: Record<string, FrozenRow> = {
     temperature: undefined,
     thinking: undefined,
     maxTokens: undefined,
+    useToolOutput: undefined,
   },
   'brief-assembly': {
     version: 2,
@@ -60,13 +65,17 @@ const FROZEN_TABLE: Record<string, FrozenRow> = {
     temperature: undefined,
     thinking: 4000,
     maxTokens: 12_000,
+    useToolOutput: undefined,
   },
+  // ADR 0024 §6.2 (Session 31, H2.10) — the FIRST and ONLY prompt migrated
+  // to tool_use structured output this session.
   'learning-summarizer': {
     version: 1,
     modelKey: 'HAIKU_4_5',
     temperature: undefined,
     thinking: undefined,
     maxTokens: undefined,
+    useToolOutput: true,
   },
   'post-generation': {
     version: 1,
@@ -74,6 +83,7 @@ const FROZEN_TABLE: Record<string, FrozenRow> = {
     temperature: undefined,
     thinking: undefined,
     maxTokens: undefined,
+    useToolOutput: undefined,
   },
   'post-regeneration': {
     version: 1,
@@ -81,6 +91,7 @@ const FROZEN_TABLE: Record<string, FrozenRow> = {
     temperature: undefined,
     thinking: undefined,
     maxTokens: undefined,
+    useToolOutput: undefined,
   },
   'rubric': {
     version: 1,
@@ -88,6 +99,7 @@ const FROZEN_TABLE: Record<string, FrozenRow> = {
     temperature: undefined,
     thinking: undefined,
     maxTokens: undefined,
+    useToolOutput: undefined,
   },
   'studio-suggestion': {
     version: 1,
@@ -95,6 +107,7 @@ const FROZEN_TABLE: Record<string, FrozenRow> = {
     temperature: undefined,
     thinking: undefined,
     maxTokens: 12288,
+    useToolOutput: undefined,
   },
   'native-generation-single': {
     version: 2,
@@ -102,6 +115,7 @@ const FROZEN_TABLE: Record<string, FrozenRow> = {
     temperature: 1.0,
     thinking: undefined,
     maxTokens: undefined,
+    useToolOutput: undefined,
   },
   'native-generation-thread': {
     version: 2,
@@ -109,6 +123,7 @@ const FROZEN_TABLE: Record<string, FrozenRow> = {
     temperature: 1.0,
     thinking: undefined,
     maxTokens: undefined,
+    useToolOutput: undefined,
   },
   'native-generation-carousel': {
     version: 2,
@@ -116,6 +131,7 @@ const FROZEN_TABLE: Record<string, FrozenRow> = {
     temperature: 1.0,
     thinking: undefined,
     maxTokens: undefined,
+    useToolOutput: undefined,
   },
 }
 
@@ -143,7 +159,7 @@ describe('prompt-properties frozen table (QUAL-SAMPLING-VERSIONED)', () => {
   })
 
   for (const prompt of prompts) {
-    it(`${prompt.id}: version/modelKey/temperature/thinking/maxTokens match the frozen row for its declared version`, () => {
+    it(`${prompt.id}: version/modelKey/temperature/thinking/maxTokens/useToolOutput match the frozen row for its declared version`, () => {
       const row = FROZEN_TABLE[prompt.id]
       expect(row, `no frozen-table row for prompt id "${prompt.id}" — a new prompt/family needs a new row`).toBeDefined()
       expect(prompt.version, `${prompt.id}: version drifted without a matching frozen-table update`).toBe(row.version)
@@ -151,6 +167,7 @@ describe('prompt-properties frozen table (QUAL-SAMPLING-VERSIONED)', () => {
       expect(prompt.temperature).toBe(row.temperature)
       expect(prompt.thinking).toBe(row.thinking)
       expect(prompt.maxTokens).toBe(row.maxTokens)
+      expect(prompt.useToolOutput, `${prompt.id}: useToolOutput drifted without a matching frozen-table update`).toBe(row.useToolOutput)
     })
   }
 })

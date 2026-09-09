@@ -28,4 +28,13 @@ export interface Prompt<TInput, TOutput> {
   // (ADR 0024 §3.3a) — a prompt declaring `thinking` must also declare a
   // `maxTokens` large enough to leave room for visible output.
   readonly thinking?: number
+  // ADR 0024 §6.1 (Session 31, H2.10) — when true, runner.ts derives a
+  // tool_use schema from `outputSchema` at call time
+  // (`z.toJSONSchema(outputSchema)`) and forces the model to call it,
+  // instead of parsing JSON out of a text block. Optional; every existing
+  // prompt (none of which sets this) keeps the text-parsing path,
+  // unchanged. Zod is retained regardless — the tool schema constrains
+  // what the model may emit, Zod still validates what the program accepts
+  // (ADR §6.3): refinements and the `TOutput` type both live only in Zod.
+  readonly useToolOutput?: boolean
 }
