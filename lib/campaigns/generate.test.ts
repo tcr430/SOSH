@@ -32,6 +32,11 @@ vi.mock('@/lib/db/post-ai-originals', () => ({
 
 vi.mock('@/lib/ai/context', () => ({
   buildCustomerContext: vi.fn(),
+  withPostQueryContext: vi.fn(),
+}))
+
+vi.mock('@/lib/db/brand-voices', () => ({
+  getBrandVoice: vi.fn(),
 }))
 
 vi.mock('@/lib/ai/runner', () => ({
@@ -67,7 +72,8 @@ import { getCampaignById, activateCampaign } from '@/lib/db/campaigns'
 import { getBriefByCampaign, markBriefGenerated } from '@/lib/db/campaign-briefs'
 import { listPostsByCampaign, createPosts } from '@/lib/db/posts'
 import { createPostAiOriginal } from '@/lib/db/post-ai-originals'
-import { buildCustomerContext } from '@/lib/ai/context'
+import { buildCustomerContext, withPostQueryContext } from '@/lib/ai/context'
+import { getBrandVoice } from '@/lib/db/brand-voices'
 import { runPrompt } from '@/lib/ai/runner'
 import { generateNativeContent } from '@/lib/ai/generate-native'
 import { incrementPostsGeneratedBy } from '@/lib/db/trial-state'
@@ -288,6 +294,13 @@ beforeEach(() => {
   vi.mocked(getBusinessById).mockResolvedValue(mockBusiness)
   vi.mocked(reserveGenerationPost).mockResolvedValue({} as never)
   vi.mocked(releaseGenerationPost).mockResolvedValue({} as never)
+  vi.mocked(getBrandVoice).mockResolvedValue(null)
+  // ADR 0024 §5.2b (H2.11) — identity passthrough by default: existing
+  // tests assert against `ctx` as generateNativeContent/runPrompt's
+  // received context, so an unmocked identity keeps every prior assertion
+  // valid. Tests that specifically cover withPostQueryContext's wiring
+  // override this.
+  vi.mocked(withPostQueryContext).mockImplementation(async (ctx) => ctx)
 })
 
 // ── Tests ────────────────────────────────────────────────────────────────────
@@ -410,6 +423,59 @@ describe('generatePostsForCampaign — MODE2-BRIEF-FROZEN', () => {
     expect([...narratives][0]).toBe(mockBrief.content.narrative)
     expect(evidenceSets.size).toBe(1)
     expect(JSON.parse([...evidenceSets][0])).toEqual(['ev-1'])
+  })
+})
+
+// ADR 0024 §5.1/§5.4 (Session 31, H2.11) — the campaign-level queryContext.
+describe('generatePostsForCampaign — campaign-level query context (ADR §5.1/§5.4, H2.11)', () => {
+  it('calls buildCustomerContext with {objective, audience, campaignId} — the ONLY caller that passes a queryContext', async () => {
+    vi.mocked(getBrandVoice).mockResolvedValue({
+      id: 'bv-1', business_id: BUSINESS_ID, voice_axes: { formal_casual: 50, expert_peer: 50, serious_playful: 50, reserved_warm: 50, calm_energetic: 50, rational_emotional: 50, exclusive_inclusive: 50 },
+      tone: [], target_audience: 'Engineering leads', keywords: [], avoid_words: [], writing_examples: [], competitors: [],
+      unique_value_prop: '', inferred_from_url: null, created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z',
+    })
+
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+
+    expect(buildCustomerContext).toHaveBeenCalledWith(BUSINESS_ID, mockCampaign.voice_variation_id, {
+      objective: mockCampaign.objective,
+      audience: 'Engineering leads',
+      campaignId: CAMPAIGN_ID,
+    })
+  })
+
+  it('audience is undefined, not null or a thrown error, when no brand voice exists yet', async () => {
+    vi.mocked(getBrandVoice).mockResolvedValue(null)
+
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+
+    expect(buildCustomerContext).toHaveBeenCalledWith(BUSINESS_ID, mockCampaign.voice_variation_id,
+      expect.objectContaining({ audience: undefined }),
+    )
+  })
+})
+
+// ADR 0024 §5.2b (Session 31, H2.11) — per-post refinement wiring.
+describe('generatePostsForCampaign — per-post query context (ADR §5.2b, H2.11)', () => {
+  it('calls withPostQueryContext once per roleSequence entry, with that entry\'s platform and role', async () => {
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+
+    expect(withPostQueryContext).toHaveBeenCalledTimes(6) // 6 roleSequence entries
+    expect(withPostQueryContext).toHaveBeenCalledWith(mockCtx, { platform: 'linkedin', role: 'anchor_thesis' })
+    expect(withPostQueryContext).toHaveBeenCalledWith(mockCtx, { platform: 'twitter', role: 'conversation_starter' })
+  })
+
+  it('uses the per-post refined context for both generation and judging, not the campaign-level ctx', async () => {
+    const refinedCtx = { ...mockCtx, recentPostPerformance: [{ platform: 'linkedin' as const, topContent: 'REFINED' }] }
+    vi.mocked(withPostQueryContext).mockResolvedValue(refinedCtx)
+    vi.mocked(getBriefByCampaign).mockResolvedValue(singleEntryBrief)
+    vi.mocked(schedulePosts).mockReset().mockReturnValue(['2026-06-03T09:00:00.000Z'])
+    vi.mocked(createPosts).mockResolvedValue(makeInsertedRows(1))
+
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+
+    expect(generateNativeContent).toHaveBeenCalledWith(expect.anything(), refinedCtx, expect.anything())
+    expect(runPrompt).toHaveBeenCalledWith(expect.anything(), refinedCtx, expect.anything())
   })
 })
 

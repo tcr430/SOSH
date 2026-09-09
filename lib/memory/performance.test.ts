@@ -255,6 +255,37 @@ describe('provenance discriminant (ADR 0019 §8.2, [type-§6])', () => {
     expect(result[0].provenance).toBe('governed')
   })
 
+  // ADR 0024 §5.1 (Session 31, H2.11) — QUAL-QUERY-CONDITIONED. A test that
+  // only asserts campaignId was PASSED proves plumbing, not conditioning:
+  // these assert the RANKING actually differs based on it.
+  it('QUAL-QUERY-CONDITIONED: a campaign-scoped row matching queryContext.campaignId outranks a higher-confidence non-matching row', async () => {
+    vi.mocked(memoryPerformanceDb.listPerformanceMemoryCandidates).mockResolvedValue([
+      makeGovernedRow({ id: 'pf-other', pattern: 'OTHER-CAMPAIGN-PATTERN', scope: 'campaign', scope_ref: 'camp-OTHER', confidence: 0.9 }),
+      makeGovernedRow({ id: 'pf-this', pattern: 'THIS-CAMPAIGN-PATTERN', scope: 'campaign', scope_ref: 'camp-THIS', confidence: 0.6 }),
+    ])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const client = {} as any
+
+    const result = await retrieveRelevant(client, 'biz-1', { campaignId: 'camp-THIS' })
+
+    expect(result[0].topContent).toBe('THIS-CAMPAIGN-PATTERN')
+    expect(result[1].topContent).toBe('OTHER-CAMPAIGN-PATTERN')
+  })
+
+  it('QUAL-QUERY-CONDITIONED: the SAME two rows reorder to raw-confidence order when campaignId is absent — proving campaignId is what moved them', async () => {
+    vi.mocked(memoryPerformanceDb.listPerformanceMemoryCandidates).mockResolvedValue([
+      makeGovernedRow({ id: 'pf-other', pattern: 'OTHER-CAMPAIGN-PATTERN', scope: 'campaign', scope_ref: 'camp-OTHER', confidence: 0.9 }),
+      makeGovernedRow({ id: 'pf-this', pattern: 'THIS-CAMPAIGN-PATTERN', scope: 'campaign', scope_ref: 'camp-THIS', confidence: 0.6 }),
+    ])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const client = {} as any
+
+    const result = await retrieveRelevant(client, 'biz-1', {})
+
+    expect(result[0].topContent).toBe('OTHER-CAMPAIGN-PATTERN') // higher raw confidence, no scope boost either way
+    expect(result[1].topContent).toBe('THIS-CAMPAIGN-PATTERN')
+  })
+
   it("the post_metrics fallback branch mints provenance: 'derived_from_metrics'", async () => {
     vi.mocked(memoryPerformanceDb.listPerformanceMemoryCandidates).mockResolvedValue([])
     vi.mocked(postMetricsDb.listTopPostMetrics).mockResolvedValue([makeMetricsRow()])

@@ -1,6 +1,7 @@
 import * as Sentry from '@sentry/nextjs'
 import { formatISO } from 'date-fns'
-import { buildCustomerContext } from '@/lib/ai/context'
+import { buildCustomerContext, withPostQueryContext } from '@/lib/ai/context'
+import type { MemoryQueryContext } from '@/lib/memory'
 import { runPrompt } from '@/lib/ai/runner'
 import { rubricPrompt, BRIEF_QUALITY_THRESHOLD } from '@/lib/ai/prompts/rubric'
 import type { RubricOutput } from '@/lib/ai/prompts/rubric'
@@ -11,6 +12,7 @@ import { MODELS } from '@/lib/ai/models'
 import { AiError } from '@/lib/ai/errors'
 import { config } from '@/lib/config'
 import { getBusinessById } from '@/lib/db/businesses'
+import { getBrandVoice } from '@/lib/db/brand-voices'
 import { reserveGenerationPost, releaseGenerationPost } from '@/lib/db/generation-budget'
 import { getCampaignById, activateCampaign } from '@/lib/db/campaigns'
 import { getBriefByCampaign, markBriefGenerated } from '@/lib/db/campaign-briefs'
@@ -195,10 +197,21 @@ export async function generatePostsForCampaign(
     }
 
     // STEP 4 — Build customer context (§4.3: pass variation so descriptor reflects campaign's voice)
-    // ADR 0017 §5.1 (L-10) — BYTE-IDENTICAL to the pre-B2.6 call. Memory
-    // wires into the BRIEF (assembled in Stage A, already frozen above),
-    // never into this context.
-    const ctx = await buildCustomerContext(businessId, campaign.voice_variation_id)
+    // ADR 0024 §5.1/§5.4 (Session 31, H2.11) — the campaign-level
+    // MemoryQueryContext: {objective, audience, campaignId}. `audience`
+    // needs one extra, cheap single-row read here — ctx (and its
+    // brandVoice.target_audience) doesn't exist until buildCustomerContext
+    // RETURNS, so it cannot supply its own queryContext's audience field.
+    // getBrandVoice is the SAME base read retrieveVoice performs internally
+    // (voice variations only override voice_axes, never target_audience),
+    // so this is not a second, drifting copy of voice resolution.
+    const brandVoiceForAudience = await getBrandVoice(client, businessId)
+    const queryContext: MemoryQueryContext = {
+      objective: campaign.objective,
+      audience: brandVoiceForAudience?.target_audience ?? undefined,
+      campaignId,
+    }
+    const ctx = await buildCustomerContext(businessId, campaign.voice_variation_id, queryContext)
 
     // STEP 4b — Business plan (ADR 0024 §7.4/§7.5a, H2.9). CustomerContext
     // does not carry `plan` (context.ts's business Pick omits it), and only
@@ -275,6 +288,14 @@ export async function generatePostsForCampaign(
 
         const input = genInput()
 
+        // ADR 0024 §5.2b (Session 31, H2.11) — per-post refinement: platform
+        // and role are the strongest task discriminators WITHIN one
+        // campaign, and are only known per-entry, not at STEP 4's
+        // campaign-level call. Brand/evidence/audience/voice are NOT
+        // re-read (they cannot vary within one campaign) — only the
+        // performance slot is replaced, one extra lib/memory DB read.
+        const postCtx = await withPostQueryContext(ctx, { platform: entry.platform, role: entry.role })
+
         // STEP 7a-pre — Pro daily post cap (ADR §7.4/§7.5/§7.5a, A-1,
         // QUAL-PRO-DAILY-POST-CAP). ONE reservation of ONE unit, BEFORE the
         // fan-out below — never per candidate, which would reopen the
@@ -307,7 +328,7 @@ export async function generatePostsForCampaign(
         // and the STEP-2 rate-limit overshoot this can cause is capped at
         // N-1 (§2.2, QUAL-RATE-LIMIT-COUNTS-CALLS).
         const candidateResults = await Promise.allSettled(
-          Array.from({ length: N_CANDIDATES }, () => generateNativeContent(client, ctx, input)),
+          Array.from({ length: N_CANDIDATES }, () => generateNativeContent(client, postCtx, input)),
         )
 
         const succeeded: Array<{ index: number; output: SinglePostOutput | ThreadOutput }> = []
@@ -350,7 +371,7 @@ export async function generatePostsForCampaign(
         // [/DATA]-closer defusal) is the stated L-9 posture for that shape.
         const judgeResults = await Promise.allSettled(
           succeeded.map(({ output }) =>
-            runPrompt(rubricPrompt, ctx, {
+            runPrompt(rubricPrompt, postCtx, {
               mode: 'post' as const,
               contentLabel: `${entry.platform} post`,
               content: neutralize(joinContent(output)),
