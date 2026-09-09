@@ -183,6 +183,24 @@ const highOpenerScore: RubricOutput = {
   verdict: 'pass',
 }
 
+// ADR 0024 §2.1/§2.7 (H2.7) — a single-entry brief isolates the N=3 fan-out
+// to exactly 3 generateNativeContent/runPrompt calls per test, so
+// mockResolvedValueOnce sequences map 1:1 onto candidate index without the
+// 6-entry fixture's 18-call noise.
+const singleEntryBrief: CampaignBriefRow = {
+  ...mockBrief,
+  content: {
+    ...mockBrief.content,
+    roleSequence: [
+      { order: 0, role: 'anchor_thesis', platform: 'linkedin', angle: 'the core argument' },
+    ],
+  },
+}
+
+function scoreAt(overall: number): RubricOutput {
+  return { ...highOpenerScore, overall }
+}
+
 function makeInsertedRows(count: number): PostRow[] {
   return Array.from({ length: count }, (_, i) => ({
     id: `post-${i}`,
@@ -341,7 +359,8 @@ describe('generatePostsForCampaign — MODE2-BRIEF-FROZEN', () => {
     await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
 
     const calls = vi.mocked(generateNativeContent).mock.calls
-    expect(calls).toHaveLength(6)
+    // 6 roleSequence entries x N_CANDIDATES=3 (ADR 0024 §2.1, H2.7).
+    expect(calls).toHaveLength(18)
     const narratives = new Set(calls.map((c) => c[2].narrative))
     const evidenceSets = new Set(calls.map((c) => JSON.stringify(c[2].pinnedEvidenceIds)))
     // Every call reads from the identical frozen content — not six different
@@ -435,7 +454,11 @@ describe('generatePostsForCampaign — generateNativeContent failure', () => {
   it('sets session failed, inserts zero posts, does not activate or increment', async () => {
     const { AiError } = await import('@/lib/ai/errors')
     vi.mocked(generateNativeContent).mockReset()
-    vi.mocked(generateNativeContent).mockRejectedValueOnce(new AiError('provider_error', 'SDK error'))
+    // ADR 0024 §2.3 (H2.7) — HARD FAIL requires 0 of N_CANDIDATES=3 to
+    // succeed; a single mockRejectedValueOnce would leave the other 2
+    // concurrent candidates resolving to `undefined` (no implementation
+    // queued), which is not the "0 generated" case this test means to prove.
+    vi.mocked(generateNativeContent).mockRejectedValue(new AiError('provider_error', 'SDK error'))
 
     await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
 
@@ -465,10 +488,10 @@ describe('generatePostsForCampaign — full-rubric judge (ADR 0024 §2.6, QUAL-J
   it('scores the WHOLE candidate content (joinContent), not just the opener', async () => {
     await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
 
-    // 6 roleSequence entries, one judge call each, no regeneration -> exactly
-    // 6 native calls and 6 rubric calls.
-    expect(generateNativeContent).toHaveBeenCalledTimes(6)
-    expect(runPrompt).toHaveBeenCalledTimes(6)
+    // 6 roleSequence entries x N_CANDIDATES=3 (ADR 0024 §2.1, H2.7): 18
+    // native calls, 18 rubric calls (one judge call per succeeded candidate).
+    expect(generateNativeContent).toHaveBeenCalledTimes(18)
+    expect(runPrompt).toHaveBeenCalledTimes(18)
     const rubricCall = vi.mocked(runPrompt).mock.calls[0][2] as { mode: string; content: string }
     expect(rubricCall.mode).toBe('post')
     // makeSingleOutput's body is 'Post N body\nRest of the post' — joinContent
@@ -531,6 +554,164 @@ describe('generatePostsForCampaign — full-rubric judge (ADR 0024 §2.6, QUAL-J
   })
 })
 
+// ── ADR 0024 §2 — the N=3 fan-out with judged argmax (Session 31 H2.7) ────
+describe('generatePostsForCampaign — N=3 fan-out (ADR 0024 §2, H2.7)', () => {
+  it('QUAL-N-CANDIDATE-COUNT — exactly N_CANDIDATES=3 generation calls and 3 judge calls per entry', async () => {
+    vi.mocked(getBriefByCampaign).mockResolvedValue(singleEntryBrief)
+    vi.mocked(schedulePosts).mockReset().mockReturnValue(['2026-06-03T09:00:00.000Z'])
+    vi.mocked(createPosts).mockResolvedValue(makeInsertedRows(1))
+
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+
+    expect(generateNativeContent).toHaveBeenCalledTimes(3)
+    expect(runPrompt).toHaveBeenCalledTimes(3)
+  })
+
+  it('QUAL-ARGMAX-DETERMINISTIC — argmax on `overall` with three distinct scores picks the highest', async () => {
+    vi.mocked(getBriefByCampaign).mockResolvedValue(singleEntryBrief)
+    vi.mocked(schedulePosts).mockReset().mockReturnValue(['2026-06-03T09:00:00.000Z'])
+    vi.mocked(createPosts).mockResolvedValue(makeInsertedRows(1))
+    vi.mocked(runPrompt)
+      .mockResolvedValueOnce(scoreAt(60))
+      .mockResolvedValueOnce(scoreAt(95)) // candidate index 1 — the winner
+      .mockResolvedValueOnce(scoreAt(80))
+
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+
+    const snapshot = vi.mocked(createPostAiOriginal).mock.calls[0][1]
+    expect(snapshot.overall_score).toBe(95)
+    expect(snapshot.candidate_count).toBe(3)
+    expect(snapshot.cleared_quality_threshold).toBe(true)
+  })
+
+  it('QUAL-ARGMAX-DETERMINISTIC — a deliberate tie goes to the LOWEST candidate index, meaningless without distinct candidate content', async () => {
+    vi.mocked(getBriefByCampaign).mockResolvedValue(singleEntryBrief)
+    vi.mocked(schedulePosts).mockReset().mockReturnValue(['2026-06-03T09:00:00.000Z'])
+    vi.mocked(createPosts).mockResolvedValue(makeInsertedRows(1))
+    // Three DISTINCT candidate payloads — without this, every argmax
+    // assertion below would pass on a 3-way tie and prove nothing (ADR
+    // §4.5 blocker 2 / H2.3's own stated purpose).
+    vi.mocked(generateNativeContent)
+      .mockReset()
+      .mockResolvedValueOnce(makeSingleOutput(100))
+      .mockResolvedValueOnce(makeSingleOutput(101))
+      .mockResolvedValueOnce(makeSingleOutput(102))
+    vi.mocked(runPrompt)
+      .mockResolvedValueOnce(scoreAt(90)) // candidate 0 — ties, must win
+      .mockResolvedValueOnce(scoreAt(90)) // candidate 1 — ties, must lose
+      .mockResolvedValueOnce(scoreAt(70)) // candidate 2
+
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+
+    const insertedPost = vi.mocked(createPosts).mock.calls[0][1][0]
+    expect(insertedPost.content).toBe('Post 100 body\nRest of the post')
+  })
+
+  it('QUAL-THREE-OUTCOMES — hard fail when 0 of N candidates generate', async () => {
+    vi.mocked(getBriefByCampaign).mockResolvedValue(singleEntryBrief)
+    vi.mocked(schedulePosts).mockReset().mockReturnValue(['2026-06-03T09:00:00.000Z'])
+    const { AiError } = await import('@/lib/ai/errors')
+    vi.mocked(generateNativeContent).mockReset().mockRejectedValue(new AiError('provider_error', 'all three failed'))
+
+    const result = await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+
+    expect(result.postsCreated).toBe(0)
+    expect(createPosts).not.toHaveBeenCalled()
+    expect(updateGenerationSessionStatus).toHaveBeenCalledWith(
+      expect.anything(), SESSION_ID,
+      expect.objectContaining({ status: 'failed', error_code: 'provider_error' }),
+    )
+  })
+
+  it('QUAL-THREE-OUTCOMES — unscored: every judge call throws, proceeds unscored/ungated and does NOT fail the session', async () => {
+    vi.mocked(getBriefByCampaign).mockResolvedValue(singleEntryBrief)
+    vi.mocked(schedulePosts).mockReset().mockReturnValue(['2026-06-03T09:00:00.000Z'])
+    vi.mocked(createPosts).mockResolvedValue(makeInsertedRows(1))
+    vi.mocked(runPrompt).mockRejectedValue(new Error('judge hiccup'))
+
+    const result = await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+
+    expect(result.postsCreated).toBe(1)
+    const snapshot = vi.mocked(createPostAiOriginal).mock.calls[0][1]
+    expect(snapshot.overall_score).toBeNull()
+    expect(snapshot.dimension_scores).toBeNull()
+    expect(snapshot.candidate_count).toBe(3)
+    // Absent badge must not read as a passing one (ADR §8.3) — null, never
+    // a defaulted false.
+    expect(snapshot.cleared_quality_threshold).toBeNull()
+  })
+
+  it('QUAL-THREE-OUTCOMES — partial generation failure: argmax runs over the surviving candidates only', async () => {
+    vi.mocked(getBriefByCampaign).mockResolvedValue(singleEntryBrief)
+    vi.mocked(schedulePosts).mockReset().mockReturnValue(['2026-06-03T09:00:00.000Z'])
+    vi.mocked(createPosts).mockResolvedValue(makeInsertedRows(1))
+    vi.mocked(generateNativeContent)
+      .mockReset()
+      .mockResolvedValueOnce(makeSingleOutput(1)) // candidate 0 succeeds
+      .mockRejectedValueOnce(new Error('candidate 1 failed'))
+      .mockResolvedValueOnce(makeSingleOutput(3)) // candidate 2 succeeds
+    // Only the two survivors are judged, in candidate-index order (0 then 2).
+    vi.mocked(runPrompt)
+      .mockResolvedValueOnce(scoreAt(70))
+      .mockResolvedValueOnce(scoreAt(95))
+
+    const result = await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+
+    expect(result.postsCreated).toBe(1)
+    expect(runPrompt).toHaveBeenCalledTimes(2)
+    const snapshot = vi.mocked(createPostAiOriginal).mock.calls[0][1]
+    expect(snapshot.candidate_count).toBe(2)
+    expect(snapshot.overall_score).toBe(95)
+    const insertedPost = vi.mocked(createPosts).mock.calls[0][1][0]
+    expect(insertedPost.content).toBe('Post 3 body\nRest of the post')
+  })
+
+  it('QUAL-BELOW-THRESHOLD-SURFACED — all candidates below 70: best of the set is persisted and flagged, session is NOT failed', async () => {
+    vi.mocked(getBriefByCampaign).mockResolvedValue(singleEntryBrief)
+    vi.mocked(schedulePosts).mockReset().mockReturnValue(['2026-06-03T09:00:00.000Z'])
+    vi.mocked(createPosts).mockResolvedValue(makeInsertedRows(1))
+    vi.mocked(runPrompt)
+      .mockResolvedValueOnce(scoreAt(50))
+      .mockResolvedValueOnce(scoreAt(65)) // best of the set, still below 70
+      .mockResolvedValueOnce(scoreAt(40))
+
+    const result = await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+
+    expect(result.postsCreated).toBe(1)
+    expect(updateGenerationSessionStatus).not.toHaveBeenCalledWith(
+      expect.anything(), SESSION_ID,
+      expect.objectContaining({ status: 'failed' }),
+    )
+    const snapshot = vi.mocked(createPostAiOriginal).mock.calls[0][1]
+    expect(snapshot.overall_score).toBe(65)
+    expect(snapshot.cleared_quality_threshold).toBe(false)
+  })
+
+  // Completes the two H2.6 constraints whose generate.ts half was deferred
+  // to this step (docs/build-guide/session-31.md H2.6/H2.7).
+  it('QUAL-TRIAL-UNIT-PER-POST — the N=3 fan-out (18 candidate generations for 6 entries) still consumes exactly 1 trial post per entry, not per candidate', async () => {
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+
+    expect(generateNativeContent).toHaveBeenCalledTimes(18)
+    expect(incrementPostsGeneratedBy).toHaveBeenCalledTimes(1)
+    expect(incrementPostsGeneratedBy).toHaveBeenCalledWith(BUSINESS_ID, 6) // not 18
+  })
+
+  it('QUAL-RATE-LIMIT-COUNTS-CALLS — concurrency per entry never exceeds N_CANDIDATES=3 (the overshoot bound from H2.6)', async () => {
+    vi.mocked(getBriefByCampaign).mockResolvedValue(singleEntryBrief)
+    vi.mocked(schedulePosts).mockReset().mockReturnValue(['2026-06-03T09:00:00.000Z'])
+    vi.mocked(createPosts).mockResolvedValue(makeInsertedRows(1))
+
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+
+    // Bounding the fan-out to exactly N=3 IS the N-1=2 overshoot bound
+    // (ADR §2.2) — proven here as "never more than N calls per entry",
+    // the runner-level rate-limit mechanics themselves live in
+    // lib/ai/runner.test.ts (H2.6).
+    expect(generateNativeContent).toHaveBeenCalledTimes(3)
+  })
+})
+
 // QUAL-HOOK-RETRY-REMOVED (Tier 3, diff-verified — no runtime test): zero
 // remaining references to the removed openingStrength-retry block
 // (extractOpener, the `regenerationCount = 1` branch, the second
@@ -563,7 +744,8 @@ describe('generatePostsForCampaign — trial pre-flight', () => {
   it('does NOT block paid plans even when postsRemaining would be 0', async () => {
     vi.mocked(buildCustomerContext).mockResolvedValue(mockCtxPaid)
     await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
-    expect(generateNativeContent).toHaveBeenCalledTimes(6)
+    // 6 roleSequence entries x N_CANDIDATES=3 (ADR 0024 §2.1, H2.7).
+    expect(generateNativeContent).toHaveBeenCalledTimes(18)
   })
 })
 
@@ -626,8 +808,10 @@ describe('generatePostsForCampaign — platform grouping (from roleSequence, not
   it('calls platforms in canonical order (linkedin before twitter)', async () => {
     await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
     const calls = vi.mocked(generateNativeContent).mock.calls
+    // 3 linkedin entries x N_CANDIDATES=3 = 9 calls before twitter starts
+    // (ADR 0024 §2.1, H2.7).
     expect(calls[0][2].platform).toBe('linkedin')
-    expect(calls[3][2].platform).toBe('twitter')
+    expect(calls[9][2].platform).toBe('twitter')
   })
 
   it('calls schedulePosts once per active platform, sized by that platform\'s roleSequence entries', async () => {

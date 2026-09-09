@@ -2,7 +2,7 @@ import * as Sentry from '@sentry/nextjs'
 import { formatISO } from 'date-fns'
 import { buildCustomerContext } from '@/lib/ai/context'
 import { runPrompt } from '@/lib/ai/runner'
-import { rubricPrompt } from '@/lib/ai/prompts/rubric'
+import { rubricPrompt, BRIEF_QUALITY_THRESHOLD } from '@/lib/ai/prompts/rubric'
 import type { RubricOutput } from '@/lib/ai/prompts/rubric'
 import { PLATFORM_CONSTRAINTS, getPlatformConstraintsVersion } from '@/lib/ai/prompts/post-generation'
 import { generateNativeContent } from '@/lib/ai/generate-native'
@@ -33,6 +33,14 @@ const CANONICAL_PLATFORM_ORDER: Platform[] = [
   'facebook',
   'threads',
 ]
+
+// ADR 0024 §2.1 (Session 31, H2.7) — do not change without reopening the
+// ruling. 6 provider calls/post (3 generations + 3 judge calls) at ≈10¢
+// recorded is the founder-adjudicated point: N=5 would put A-1's Pro daily
+// cap at 58% of revenue (§7.4); N=2 gives the judge a binary choice where
+// one bad draw halves the expected lift. This also IS the concurrency bound
+// (§2.2) — candidates for one post are fired together, never more.
+const N_CANDIDATES = 3
 
 // ADR 0017 §4.3 — selectFormatFamily's `estimatedTweetsWorth` input has no
 // direct signal in CampaignBriefContent (B2.4 flagged this as a Stage-D
@@ -66,13 +74,17 @@ interface GeneratedItem {
   // generation_kind.
   regenerationCount: number
   previousContent: string | null
-  // The judge's full-rubric score of this candidate (neutralize()d
-  // joinContent(output), mode:'post'), or null if the judge call itself
-  // failed (logged, not aborted — L-9). Still N=1 in this step: the score
-  // is computed but not yet used for selection/persistence — that lands
-  // with the fan-out at H2.7 (splitting a new scoring path from the fan-out
-  // keeps a red case bisectable).
+  // The WINNING candidate's full-rubric score (neutralize()d
+  // joinContent(output), mode:'post'), argmax'd on `overall` over the N=3
+  // fan-out (ADR 0024 §2.6/§2.7, H2.7) — or null in the UNSCORED outcome
+  // (every judge call threw for this entry; the pipeline still proceeds,
+  // unscored and ungated, §2.3).
   rubricScore: RubricOutput | null
+  // How many of the N=3 candidates actually generated for this entry (ADR
+  // §2.3's hard-fail/unscored/scored split needs this even when
+  // rubricScore is null; persisted verbatim into post_ai_originals'
+  // candidate_count, §8.2).
+  candidateCount: number
 }
 
 export async function generatePostsForCampaign(
@@ -251,11 +263,32 @@ export async function generatePostsForCampaign(
           estimatedTweetsWorth: estimateTweetsWorth(entry.angle),
         })
 
-        let output: SinglePostOutput | ThreadOutput
-        try {
-          output = await generateNativeContent(client, ctx, genInput())
-        } catch (err: unknown) {
-          const errorCode = err instanceof AiError ? err.code : 'generic'
+        const input = genInput()
+
+        // STEP 7a — N=3 candidates, PARALLEL within this post (ADR 0024
+        // §2.1/§2.2). Posts stay SEQUENTIAL: this whole block is awaited
+        // before the entry loop's next iteration starts, so the fan-out
+        // width (N) IS the concurrency bound — no separate limiter needed,
+        // and the STEP-2 rate-limit overshoot this can cause is capped at
+        // N-1 (§2.2, QUAL-RATE-LIMIT-COUNTS-CALLS).
+        const candidateResults = await Promise.allSettled(
+          Array.from({ length: N_CANDIDATES }, () => generateNativeContent(client, ctx, input)),
+        )
+
+        const succeeded: Array<{ index: number; output: SinglePostOutput | ThreadOutput }> = []
+        candidateResults.forEach((result, index) => {
+          if (result.status === 'fulfilled') succeeded.push({ index, output: result.value })
+        })
+
+        // HARD FAIL (ADR §2.3) — 0 of N candidates generated. Unchanged
+        // from the pre-fan-out path: the whole session fails. Uses the
+        // LAST attempt's error (array position N-1) — deterministic, and
+        // matches "error_code from the last AiError" (§2.3) without
+        // depending on unguaranteed settle-order.
+        if (succeeded.length === 0) {
+          const lastResult = candidateResults[candidateResults.length - 1]
+          const lastError = lastResult.status === 'rejected' ? lastResult.reason : undefined
+          const errorCode = lastError instanceof AiError ? lastError.code : 'generic'
           await updateGenerationSessionStatus(client, sessionId, {
             status: 'failed',
             error_code: errorCode,
@@ -264,53 +297,83 @@ export async function generatePostsForCampaign(
           return { sessionId, postsCreated: 0 }
         }
 
-        // ADR 0024 §2.6, §2.9 (Session 31, H2.5) — the judge REPLACES the
-        // openingStrength retry (ADR 0017's former hook Tier-2 loop,
-        // MODE2-HOOK-STANDALONE — retired). Full-rubric score of the WHOLE
-        // candidate via joinContent, never a single-sentence opener — nine
-        // of the ten dimensions are undefined over one sentence, neutralized
-        // first: the content is the model's own prior output fed back into
-        // a second AI call, the same reused-AI-generated-text shape as
+        // STEP 7b — judge every SUCCEEDED candidate, also in parallel (ADR
+        // §2.6, §2.9 — the judge REPLACES the retired openingStrength
+        // retry, MODE2-HOOK-STANDALONE). Full-rubric score of the WHOLE
+        // candidate via joinContent, never a single sentence — nine of the
+        // ten dimensions are undefined over one sentence. Each candidate is
+        // neutralize()'d first: it is the model's own prior output fed back
+        // into a second AI call, the same reused-AI-generated-text shape as
         // brief.ts's narrative/proofPlan (B2.5 security-reviewer pass) —
         // neutralize() (wrap-evidence.ts, NFKC + Cf-strip + fence/brace/
         // [/DATA]-closer defusal) is the stated L-9 posture for that shape.
-        //
-        // N is still 1 here — the fan-out and its three-outcome contract
-        // (QUAL-N-CANDIDATE-COUNT, QUAL-ARGMAX-DETERMINISTIC,
-        // QUAL-THREE-OUTCOMES, QUAL-BELOW-THRESHOLD-SURFACED) land in H2.7.
-        // A new scoring path AND a fan-out in one diff cannot be bisected
-        // when a case goes red — deliberate split.
-        let rubricScore: RubricOutput | null = null
-        try {
-          rubricScore = await runPrompt(rubricPrompt, ctx, {
-            mode: 'post' as const,
-            contentLabel: `${entry.platform} post`,
-            content: neutralize(joinContent(output)),
-            platform: entry.platform,
-          })
-        } catch (judgeErr: unknown) {
-          // A judge-scoring hiccup (e.g. rate limit) must not abort a
-          // generation that already succeeded — logged, not silently
-          // swallowed. rubricScore stays null; H2.7's fan-out decides what
-          // an unscored candidate means for selection.
+        const judgeResults = await Promise.allSettled(
+          succeeded.map(({ output }) =>
+            runPrompt(rubricPrompt, ctx, {
+              mode: 'post' as const,
+              contentLabel: `${entry.platform} post`,
+              content: neutralize(joinContent(output)),
+              platform: entry.platform,
+            }),
+          ),
+        )
+
+        const scored: Array<{ index: number; output: SinglePostOutput | ThreadOutput; score: RubricOutput }> = []
+        judgeResults.forEach((result, i) => {
+          if (result.status === 'fulfilled') {
+            scored.push({ index: succeeded[i].index, output: succeeded[i].output, score: result.value })
+          }
+        })
+
+        let winningOutput: SinglePostOutput | ThreadOutput
+        let winningScore: RubricOutput | null
+
+        if (scored.length === 0) {
+          // UNSCORED (ADR §2.3) — at least 1 candidate generated, but
+          // EVERY judge call threw. Proceed with the lowest-index
+          // SUCCEEDED candidate, unscored and ungated — the backward-
+          // compatible extension of the pre-H2.7 swallow-and-continue. ONE
+          // structured log line for the outcome, not one per failed judge
+          // call.
           console.log(JSON.stringify({
             kind: 'campaign.generate.judge_scoring_failed',
             level: 'warn',
             campaign_id: campaignId,
             platform: entry.platform,
-            error: judgeErr instanceof Error ? judgeErr.message : String(judgeErr),
+            candidate_count: succeeded.length,
           }))
+          const lowest = succeeded.reduce((min, c) => (c.index < min.index ? c : min))
+          winningOutput = lowest.output
+          winningScore = null
+        } else {
+          // SCORED — argmax on `overall` over the scored subset; unscored
+          // candidates are never eligible to win. Deterministic tie-break:
+          // the lowest candidate index (ADR §2.7) — no hidden preference,
+          // no randomness.
+          const winner = scored.reduce((best, c) => {
+            if (c.score.overall > best.score.overall) return c
+            if (c.score.overall === best.score.overall && c.index < best.index) return c
+            return best
+          })
+          winningOutput = winner.output
+          winningScore = winner.score
         }
 
+        // ADR §2.8 — ALL N below BRIEF_QUALITY_THRESHOLD is not a failure:
+        // the best of the set is surfaced, flagged. No regeneration (§2.8's
+        // named loser: unbounded by construction), no Opus escalation.
+        // §8.1 — losing candidate CONTENT is discarded here: only
+        // winningOutput/winningScore ever reach `generated`.
         generated.push({
           order: entry.order,
           role: entry.role,
           platform: entry.platform,
           scheduledAt,
-          output,
+          output: winningOutput,
           regenerationCount: 0,
           previousContent: null,
-          rubricScore,
+          rubricScore: winningScore,
+          candidateCount: succeeded.length,
         })
       }
     }
@@ -428,6 +491,16 @@ export async function generatePostsForCampaign(
           payload: g.output,
           rendered_content: renderedContent,
           schema_version: AI_ORIGINAL_SCHEMA_VERSION,
+          // ADR 0024 §8.2 (H2.7) — the WINNER's score, persisted alongside
+          // the payload it belongs to. null/null/false when the entry was
+          // UNSCORED (§2.3) — an absent badge must not read as a passing
+          // one (§8.3), so cleared_quality_threshold is null, not a
+          // defaulted false, whenever rubricScore itself is null.
+          overall_score: g.rubricScore?.overall ?? null,
+          dimension_scores: g.rubricScore?.dimensions ?? null,
+          candidate_count: g.candidateCount,
+          cleared_quality_threshold:
+            g.rubricScore !== null ? g.rubricScore.overall >= BRIEF_QUALITY_THRESHOLD : null,
         }),
       ),
     )
