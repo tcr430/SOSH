@@ -794,20 +794,28 @@ export type InsightCardUpdate = Partial<
   Pick<InsightCardRow, 'status' | 'dismiss_reason' | 'expires_at'>
 >
 
-export type SignalTriageBudgetRow = {
+// ADR 0024 §7.5b (Session 31, H2.8) — signal_triage_budget renamed to
+// ai_budget_daily with a MANDATORY purpose discriminator. `reserved_cents`
+// -> `reserved_units`: the unit is named BY purpose (cents for
+// 'triage_cents', posts for 'generation_posts', H2.9), not by the column.
+export type AiBudgetPurpose = 'triage_cents' | 'generation_posts'
+
+export type AiBudgetDailyRow = {
   id: string
   business_id: string
+  purpose: AiBudgetPurpose
   day: string
-  reserved_cents: number
+  reserved_units: number
   created_at: string
   updated_at: string
 }
 
-export type SignalTriageBudgetInsert = {
+export type AiBudgetDailyInsert = {
   id?: string
   business_id: string
+  purpose: AiBudgetPurpose
   day: string
-  reserved_cents?: number
+  reserved_units?: number
   created_at?: string
   updated_at?: string
 }
