@@ -314,6 +314,7 @@
         "timeout": "Todavía trabajando — vuelve pronto.",
         "error": {
           "quota_exceeded": "Has alcanzado el límite de publicaciones de prueba. Mejora tu plan para continuar.",
+          "daily_quota_exceeded": "Has alcanzado tu límite diario de generación — se reinicia a las 00:00 UTC.",
           "rate_limited": "Demasiadas solicitudes. Espera un momento e inténtalo de nuevo.",
           "provider_error": "El proveedor de IA devolvió un error. Por favor, inténtalo de nuevo.",
           "invalid_response": "La IA devolvió una respuesta inesperada. Por favor, inténtalo de nuevo.",

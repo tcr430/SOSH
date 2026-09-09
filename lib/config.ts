@@ -91,6 +91,16 @@ export const serverSchema = z.object({
   // 5 x 22c worst case = 110c, so the full TRIAGE_SHORTLIST_PER_TICK shortlist
   // fits with headroom and the cap binds only on pathology (§3.1).
   TRIAGE_DAILY_CAP_CENTS: z.coerce.number().int().positive().default(125),
+  // ADR 0024 §7.4/§7.5a (Session 31, H2.9) — founder ruling A-1's Pro daily
+  // post-count ceiling. A POST cap, not a cents cap — a 15-post/day limit
+  // IS a ≈150¢/day spend ceiling at ≈10¢/post recorded (§2.1), so §7.4's
+  // €45/mo figure is DERIVED from this constant, never separately enforced.
+  // Plus/trial do NOT reserve against this (§7.4 table: Plus is already
+  // bounded by its 250-posts/month cap; trial by AI_TRIAL_POST_CAP at
+  // runner.ts's STEP 1, a different guard in a different place). The
+  // founder may override the number without reopening the ruling — the ADR
+  // fixes the mechanism, not the constant.
+  AI_PRO_DAILY_POST_CAP: z.coerce.number().int().positive().default(15),
   // ADR 0023 §8.3/§16 (Session 30 G1b.3) — the market-responsive (RSS) egress
   // guard's three Builder-set constants, per-fetch/per-tick/body-size. A
   // recurring poller against a customer-supplied URL, not a one-shot fetch
@@ -321,6 +331,7 @@ function parseServerEnv() {
     LEARNING_SUMMARY_MAX_INPUT_TOKENS: process.env.LEARNING_SUMMARY_MAX_INPUT_TOKENS,
     LEARNING_SUMMARY_MAX_MONTHLY_CALLS_PER_BUSINESS: process.env.LEARNING_SUMMARY_MAX_MONTHLY_CALLS_PER_BUSINESS,
     TRIAGE_DAILY_CAP_CENTS: process.env.TRIAGE_DAILY_CAP_CENTS,
+    AI_PRO_DAILY_POST_CAP: process.env.AI_PRO_DAILY_POST_CAP,
     RSS_FEED_FETCH_TIMEOUT_MS: process.env.RSS_FEED_FETCH_TIMEOUT_MS,
     RSS_FEED_POLL_TICK_BUDGET_MS: process.env.RSS_FEED_POLL_TICK_BUDGET_MS,
     RSS_FEED_MAX_BODY_BYTES: process.env.RSS_FEED_MAX_BODY_BYTES,
@@ -525,6 +536,9 @@ export const config = {
     },
     get TRIAGE_DAILY_CAP_CENTS() {
       return serverOnly("TRIAGE_DAILY_CAP_CENTS", () => server().TRIAGE_DAILY_CAP_CENTS);
+    },
+    get AI_PRO_DAILY_POST_CAP() {
+      return serverOnly("AI_PRO_DAILY_POST_CAP", () => server().AI_PRO_DAILY_POST_CAP);
     },
     get RSS_FEED_FETCH_TIMEOUT_MS() {
       return serverOnly("RSS_FEED_FETCH_TIMEOUT_MS", () => server().RSS_FEED_FETCH_TIMEOUT_MS);

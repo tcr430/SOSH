@@ -66,6 +66,28 @@ describe('lib/config — AI_RATE_LIMIT_POST_GENERATION_PER_MIN (ADR 0024 §7.3)'
   })
 })
 
+// ADR 0024 §7.4/§7.5a (Session 31 H2.9) — the Pro daily post-count ceiling,
+// sibling to TRIAGE_DAILY_CAP_CENTS. A post cap, not a cents cap.
+describe('lib/config — AI_PRO_DAILY_POST_CAP (ADR 0024 §7.4/§7.5a)', () => {
+  it('defaults to 15 (founder ruling A-1)', () => {
+    const result = serverSchema.safeParse(validBaseEnv())
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.AI_PRO_DAILY_POST_CAP).toBe(15)
+    }
+  })
+
+  it('an explicit env override wins over the default, without reopening the ruling', () => {
+    const result = serverSchema.safeParse(
+      validBaseEnv({ AI_PRO_DAILY_POST_CAP: '20' }),
+    )
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.AI_PRO_DAILY_POST_CAP).toBe(20)
+    }
+  })
+})
+
 describe('lib/config — GITHUB_APP_* (ADR 0020 §2.2)', () => {
   it('a valid base64-encoded PEM (RSA header) parses successfully', () => {
     const result = serverSchema.safeParse(

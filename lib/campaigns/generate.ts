@@ -9,6 +9,9 @@ import { generateNativeContent } from '@/lib/ai/generate-native'
 import { neutralize } from '@/lib/ai/wrap-evidence'
 import { MODELS } from '@/lib/ai/models'
 import { AiError } from '@/lib/ai/errors'
+import { config } from '@/lib/config'
+import { getBusinessById } from '@/lib/db/businesses'
+import { reserveGenerationPost, releaseGenerationPost } from '@/lib/db/generation-budget'
 import { getCampaignById, activateCampaign } from '@/lib/db/campaigns'
 import { getBriefByCampaign, markBriefGenerated } from '@/lib/db/campaign-briefs'
 import { freezeBrief, type FrozenBrief } from '@/lib/campaigns/brief'
@@ -197,6 +200,13 @@ export async function generatePostsForCampaign(
     // never into this context.
     const ctx = await buildCustomerContext(businessId, campaign.voice_variation_id)
 
+    // STEP 4b — Business plan (ADR 0024 §7.4/§7.5a, H2.9). CustomerContext
+    // does not carry `plan` (context.ts's business Pick omits it), and only
+    // the Pro tier's fan-out reservation below needs it — a separate,
+    // service-role read, same as checkCampaignCreationAllowed's pattern in
+    // lib/campaigns/enforcement.ts.
+    const business = await getBusinessById(client, businessId)
+
     if (!ctx.brandVoice) {
       await updateGenerationSessionStatus(client, sessionId, {
         status: 'failed',
@@ -265,6 +275,31 @@ export async function generatePostsForCampaign(
 
         const input = genInput()
 
+        // STEP 7a-pre — Pro daily post cap (ADR §7.4/§7.5/§7.5a, A-1,
+        // QUAL-PRO-DAILY-POST-CAP). ONE reservation of ONE unit, BEFORE the
+        // fan-out below — never per candidate, which would reopen the
+        // check-then-call race N-fold inside a single generation (L-6's
+        // named loser). Only Pro reserves: Plus is already bounded by its
+        // 250-posts/month product cap and trial by AI_TRIAL_POST_CAP (STEP
+        // 5 above) — a different guard, in a different place (§7.4 table).
+        // A denied reservation uses its OWN error_code, distinct from the
+        // trial cap's 'quota_exceeded' (STEP 5) — the two cases need
+        // different copy, and reusing one code would show a Pro customer
+        // the trial-limit string.
+        let reservedGenerationBudget = false
+        if (business.plan === 'pro') {
+          const reservation = await reserveGenerationPost(businessId, config.server.AI_PRO_DAILY_POST_CAP)
+          if (reservation === null) {
+            await updateGenerationSessionStatus(client, sessionId, {
+              status: 'failed',
+              error_code: 'daily_quota_exceeded',
+              completed_at: formatISO(new Date()),
+            })
+            return { sessionId, postsCreated: 0 }
+          }
+          reservedGenerationBudget = true
+        }
+
         // STEP 7a — N=3 candidates, PARALLEL within this post (ADR 0024
         // §2.1/§2.2). Posts stay SEQUENTIAL: this whole block is awaited
         // before the entry loop's next iteration starts, so the fan-out
@@ -286,6 +321,12 @@ export async function generatePostsForCampaign(
         // matches "error_code from the last AiError" (§2.3) without
         // depending on unguaranteed settle-order.
         if (succeeded.length === 0) {
+          // ADR §7.5a — a hard-failed generation releases its reserved
+          // unit; a generation that succeeds keeps it regardless of
+          // candidate count, so this is the ONLY release path.
+          if (reservedGenerationBudget) {
+            await releaseGenerationPost(businessId)
+          }
           const lastResult = candidateResults[candidateResults.length - 1]
           const lastError = lastResult.status === 'rejected' ? lastResult.reason : undefined
           const errorCode = lastError instanceof AiError ? lastError.code : 'generic'

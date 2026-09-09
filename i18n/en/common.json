@@ -314,6 +314,7 @@
         "timeout": "Still working — check back soon.",
         "error": {
           "quota_exceeded": "You've reached your trial post limit. Upgrade to continue generating.",
+          "daily_quota_exceeded": "You've reached your daily generation limit — resets at 00:00 UTC.",
           "rate_limited": "Too many requests. Please wait a moment and try again.",
           "provider_error": "The AI provider returned an error. Please try again.",
           "invalid_response": "The AI returned an unexpected response. Please try again.",

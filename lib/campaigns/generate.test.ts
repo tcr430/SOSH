@@ -50,6 +50,15 @@ vi.mock('@/lib/campaigns/schedule', () => ({
   schedulePosts: vi.fn(),
 }))
 
+vi.mock('@/lib/db/businesses', () => ({
+  getBusinessById: vi.fn(),
+}))
+
+vi.mock('@/lib/db/generation-budget', () => ({
+  reserveGenerationPost: vi.fn(),
+  releaseGenerationPost: vi.fn(),
+}))
+
 // ── Imports after mocks ─────────────────────────────────────────────────────
 
 import { generatePostsForCampaign } from './generate'
@@ -63,7 +72,9 @@ import { runPrompt } from '@/lib/ai/runner'
 import { generateNativeContent } from '@/lib/ai/generate-native'
 import { incrementPostsGeneratedBy } from '@/lib/db/trial-state'
 import { schedulePosts } from '@/lib/campaigns/schedule'
-import type { CampaignRow, CampaignBriefRow, PostRow } from '@/lib/db/types'
+import { getBusinessById } from '@/lib/db/businesses'
+import { reserveGenerationPost, releaseGenerationPost } from '@/lib/db/generation-budget'
+import type { CampaignRow, CampaignBriefRow, PostRow, BusinessRow } from '@/lib/db/types'
 import type { CustomerContext } from '@/lib/ai/context'
 import type { RubricOutput } from '@/lib/ai/prompts/rubric'
 import type { SinglePostOutput, ThreadOutput } from '@/lib/ai/prompts/formats/schemas'
@@ -163,6 +174,33 @@ const mockCtx: CustomerContext = {
 
 const mockCtxPaid: CustomerContext = { ...mockCtx, trialState: null }
 
+// ADR 0024 §7.4/§7.5a (H2.9) — CustomerContext carries no `plan`; the Pro
+// daily-cap reservation reads it from a separate getBusinessById call.
+// 'trial' by default to match mockCtx's default trialState above; H2.9's
+// own describe block below overrides with mockBusinessPro/mockBusinessPlus.
+const mockBusiness: BusinessRow = {
+  id: BUSINESS_ID,
+  name: 'Acme SaaS',
+  website: null,
+  industry: 'Software',
+  description: null,
+  logo_url: null,
+  owner_id: 'owner-1',
+  plan: 'trial',
+  stripe_customer_id: null,
+  stripe_subscription_id: null,
+  language: 'en',
+  timezone: 'Europe/London',
+  onboarding_completed: true,
+  total_posts_published: 0,
+  deleted_at: null,
+  created_at: '2026-01-01T00:00:00.000Z',
+  updated_at: '2026-01-01T00:00:00.000Z',
+}
+
+const mockBusinessPro: BusinessRow = { ...mockBusiness, plan: 'pro' }
+const mockBusinessPlus: BusinessRow = { ...mockBusiness, plan: 'plus' }
+
 const linkedinDates = ['2026-06-03T09:00:00.000Z', '2026-06-04T09:00:00.000Z', '2026-06-05T09:00:00.000Z']
 const twitterDates = ['2026-06-03T12:00:00.000Z', '2026-06-04T12:00:00.000Z', '2026-06-05T12:00:00.000Z']
 
@@ -247,6 +285,9 @@ beforeEach(() => {
   vi.mocked(runPrompt).mockResolvedValue(highOpenerScore)
   vi.mocked(createPosts).mockResolvedValue(makeInsertedRows(6))
   vi.mocked(createPostAiOriginal).mockResolvedValue({} as never)
+  vi.mocked(getBusinessById).mockResolvedValue(mockBusiness)
+  vi.mocked(reserveGenerationPost).mockResolvedValue({} as never)
+  vi.mocked(releaseGenerationPost).mockResolvedValue({} as never)
 })
 
 // ── Tests ────────────────────────────────────────────────────────────────────
@@ -724,6 +765,80 @@ describe('generatePostsForCampaign — N=3 fan-out (ADR 0024 §2, H2.7)', () => 
 // RubricOutputSchema byte-unchanged, its §6.1 invariant comment intact. The
 // judge is a NEW caller of the EXISTING rubricPrompt at mode:'post', not a
 // fork of it.
+
+// ADR 0024 §7.4/§7.5/§7.5a — the Pro daily post cap (A-1, H2.9). App-layer
+// half of QUAL-PRO-DAILY-POST-CAP: the reservation happens ONCE per entry,
+// BEFORE the fan-out, never per candidate — the Tier-1 15-post ceiling
+// itself lives in supabase/__tests__.
+describe('generatePostsForCampaign — Pro daily post cap (ADR §7.5a, H2.9)', () => {
+  it('reserves exactly ONE unit before the fan-out for a Pro business — not once per candidate', async () => {
+    vi.mocked(getBusinessById).mockResolvedValue(mockBusinessPro)
+    vi.mocked(getBriefByCampaign).mockResolvedValue(singleEntryBrief)
+    vi.mocked(schedulePosts).mockReset().mockReturnValue(['2026-06-03T09:00:00.000Z'])
+    vi.mocked(createPosts).mockResolvedValue(makeInsertedRows(1))
+
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+
+    expect(reserveGenerationPost).toHaveBeenCalledTimes(1)
+    expect(reserveGenerationPost).toHaveBeenCalledWith(BUSINESS_ID, 15)
+    expect(generateNativeContent).toHaveBeenCalledTimes(3) // N=3 candidates, still ONE reservation
+  })
+
+  it('does NOT reserve for a Plus business — bounded by its own monthly cap instead', async () => {
+    vi.mocked(getBusinessById).mockResolvedValue(mockBusinessPlus)
+
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+
+    expect(reserveGenerationPost).not.toHaveBeenCalled()
+  })
+
+  it('does NOT reserve for a trial business — bounded by AI_TRIAL_POST_CAP at STEP 5 instead', async () => {
+    vi.mocked(getBusinessById).mockResolvedValue(mockBusiness) // plan: 'trial'
+
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+
+    expect(reserveGenerationPost).not.toHaveBeenCalled()
+  })
+
+  it('fails the session with daily_quota_exceeded — a code distinct from the trial cap — when the reservation is refused', async () => {
+    vi.mocked(getBusinessById).mockResolvedValue(mockBusinessPro)
+    vi.mocked(reserveGenerationPost).mockResolvedValue(null)
+
+    const result = await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+
+    expect(result.postsCreated).toBe(0)
+    expect(generateNativeContent).not.toHaveBeenCalled()
+    expect(updateGenerationSessionStatus).toHaveBeenCalledWith(
+      expect.anything(), SESSION_ID,
+      expect.objectContaining({ status: 'failed', error_code: 'daily_quota_exceeded' }),
+    )
+  })
+
+  it('releases the reserved unit when the generation hard-fails (0 of N candidates)', async () => {
+    vi.mocked(getBusinessById).mockResolvedValue(mockBusinessPro)
+    vi.mocked(getBriefByCampaign).mockResolvedValue(singleEntryBrief)
+    vi.mocked(schedulePosts).mockReset().mockReturnValue(['2026-06-03T09:00:00.000Z'])
+    const { AiError } = await import('@/lib/ai/errors')
+    vi.mocked(generateNativeContent).mockReset().mockRejectedValue(new AiError('provider_error', 'all three failed'))
+
+    const result = await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+
+    expect(result.postsCreated).toBe(0)
+    expect(releaseGenerationPost).toHaveBeenCalledTimes(1)
+    expect(releaseGenerationPost).toHaveBeenCalledWith(BUSINESS_ID)
+  })
+
+  it('does NOT release the unit when the generation succeeds — a generation keeps its unit regardless of candidate count', async () => {
+    vi.mocked(getBusinessById).mockResolvedValue(mockBusinessPro)
+    vi.mocked(getBriefByCampaign).mockResolvedValue(singleEntryBrief)
+    vi.mocked(schedulePosts).mockReset().mockReturnValue(['2026-06-03T09:00:00.000Z'])
+    vi.mocked(createPosts).mockResolvedValue(makeInsertedRows(1))
+
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+
+    expect(releaseGenerationPost).not.toHaveBeenCalled()
+  })
+})
 
 describe('generatePostsForCampaign — trial pre-flight', () => {
   it('sets session failed with quota_exceeded when postsRemaining < roleSequence.length', async () => {
