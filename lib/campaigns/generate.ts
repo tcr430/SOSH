@@ -2,7 +2,8 @@ import * as Sentry from '@sentry/nextjs'
 import { formatISO } from 'date-fns'
 import { buildCustomerContext } from '@/lib/ai/context'
 import { runPrompt } from '@/lib/ai/runner'
-import { rubricPrompt, BRIEF_QUALITY_THRESHOLD } from '@/lib/ai/prompts/rubric'
+import { rubricPrompt } from '@/lib/ai/prompts/rubric'
+import type { RubricOutput } from '@/lib/ai/prompts/rubric'
 import { PLATFORM_CONSTRAINTS, getPlatformConstraintsVersion } from '@/lib/ai/prompts/post-generation'
 import { generateNativeContent } from '@/lib/ai/generate-native'
 import { neutralize } from '@/lib/ai/wrap-evidence'
@@ -44,10 +45,6 @@ function estimateTweetsWorth(angle: string): number {
   return 1
 }
 
-function extractOpener(output: SinglePostOutput | ThreadOutput): string {
-  return output.format === 'single' ? (output.body.split('\n')[0] ?? '') : (output.posts[0]?.text ?? '')
-}
-
 function joinContent(output: SinglePostOutput | ThreadOutput): string {
   // Matches the existing flat posts-table convention (post-generation.ts's
   // twitter thread format): no post_variants child table, so a thread is
@@ -61,8 +58,21 @@ interface GeneratedItem {
   platform: Platform
   scheduledAt: string
   output: SinglePostOutput | ThreadOutput
+  // ADR 0024 §2.9 (Session 31, H2.5) — RETAINED, always 0/null at initial
+  // generation now that the judge REPLACES the openingStrength retry that
+  // used to set these. Do NOT repurpose as a candidate counter — conflating
+  // "the user asked for a regeneration" with "the pipeline generated N
+  // candidates" would corrupt ADR 0018's learning signal, which keys on
+  // generation_kind.
   regenerationCount: number
   previousContent: string | null
+  // The judge's full-rubric score of this candidate (neutralize()d
+  // joinContent(output), mode:'post'), or null if the judge call itself
+  // failed (logged, not aborted — L-9). Still N=1 in this step: the score
+  // is computed but not yet used for selection/persistence — that lands
+  // with the fan-out at H2.7 (splitting a new scoring path from the fan-out
+  // keeps a red case bisectable).
+  rubricScore: RubricOutput | null
 }
 
 export async function generatePostsForCampaign(
@@ -254,42 +264,41 @@ export async function generatePostsForCampaign(
           return { sessionId, postsCreated: 0 }
         }
 
-        // ADR §7 — the hook Tier-2 loop. Score the opener against the
-        // rubric's openingStrength dimension (the dimension purpose-built
-        // for this, §6.1); regenerate ONCE if below threshold, no re-score
-        // of the second attempt (bounded — this is the ONLY Tier-2 in the
-        // whole pipeline, no Tier-3 anywhere).
-        let regenerationCount = 0
-        let previousContent: string | null = null
+        // ADR 0024 §2.6, §2.9 (Session 31, H2.5) — the judge REPLACES the
+        // openingStrength retry (ADR 0017's former hook Tier-2 loop,
+        // MODE2-HOOK-STANDALONE — retired). Full-rubric score of the WHOLE
+        // candidate via joinContent, never a single-sentence opener — nine
+        // of the ten dimensions are undefined over one sentence, neutralized
+        // first: the content is the model's own prior output fed back into
+        // a second AI call, the same reused-AI-generated-text shape as
+        // brief.ts's narrative/proofPlan (B2.5 security-reviewer pass) —
+        // neutralize() (wrap-evidence.ts, NFKC + Cf-strip + fence/brace/
+        // [/DATA]-closer defusal) is the stated L-9 posture for that shape.
+        //
+        // N is still 1 here — the fan-out and its three-outcome contract
+        // (QUAL-N-CANDIDATE-COUNT, QUAL-ARGMAX-DETERMINISTIC,
+        // QUAL-THREE-OUTCOMES, QUAL-BELOW-THRESHOLD-SURFACED) land in H2.7.
+        // A new scoring path AND a fan-out in one diff cannot be bisected
+        // when a case goes red — deliberate split.
+        let rubricScore: RubricOutput | null = null
         try {
-          // Session 24-D (MINOR-7 correction) — the opener is the model's OWN
-          // prior output being fed back into a second AI call, same reused-
-          // AI-generated-text shape as brief.ts's narrative/proofPlan
-          // (B2.5 security-reviewer pass) — neutralize() (wrap-evidence.ts,
-          // NFKC + Cf-strip + fence/brace/[/DATA]-closer defusal) is the
-          // stated L-9 posture for that shape, stronger than rubric.ts's own
-          // local ASCII-literal-only sanitizeDataField.
-          const openerScore = await runPrompt(rubricPrompt, ctx, {
+          rubricScore = await runPrompt(rubricPrompt, ctx, {
             mode: 'post' as const,
-            contentLabel: `${entry.platform} post opener`,
-            content: neutralize(extractOpener(output)),
+            contentLabel: `${entry.platform} post`,
+            content: neutralize(joinContent(output)),
             platform: entry.platform,
           })
-          if (openerScore.dimensions.openingStrength.score < BRIEF_QUALITY_THRESHOLD) {
-            previousContent = joinContent(output)
-            output = await generateNativeContent(client, ctx, genInput())
-            regenerationCount = 1
-          }
-        } catch (hookErr: unknown) {
-          // A hook-scoring hiccup (e.g. rate limit) must not abort a
+        } catch (judgeErr: unknown) {
+          // A judge-scoring hiccup (e.g. rate limit) must not abort a
           // generation that already succeeded — logged, not silently
-          // swallowed, and the original content stands unregenerated.
+          // swallowed. rubricScore stays null; H2.7's fan-out decides what
+          // an unscored candidate means for selection.
           console.log(JSON.stringify({
-            kind: 'campaign.generate.hook_loop_scoring_failed',
+            kind: 'campaign.generate.judge_scoring_failed',
             level: 'warn',
             campaign_id: campaignId,
             platform: entry.platform,
-            error: hookErr instanceof Error ? hookErr.message : String(hookErr),
+            error: judgeErr instanceof Error ? judgeErr.message : String(judgeErr),
           }))
         }
 
@@ -299,8 +308,9 @@ export async function generatePostsForCampaign(
           platform: entry.platform,
           scheduledAt,
           output,
-          regenerationCount,
-          previousContent,
+          regenerationCount: 0,
+          previousContent: null,
+          rubricScore,
         })
       }
     }

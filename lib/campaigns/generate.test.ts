@@ -27,7 +27,7 @@ vi.mock('@/lib/db/posts', () => ({
 
 vi.mock('@/lib/db/post-ai-originals', () => ({
   createPostAiOriginal: vi.fn(),
-  AI_ORIGINAL_SCHEMA_VERSION: 1,
+  AI_ORIGINAL_SCHEMA_VERSION: 2,
 }))
 
 vi.mock('@/lib/ai/context', () => ({
@@ -371,7 +371,7 @@ describe('generatePostsForCampaign — post_ai_originals snapshot write (ADR 001
       expect(matchingSnapshot?.rendered_content).toBe(post.content)
       expect(matchingSnapshot?.generation_kind).toBe('initial')
       expect(matchingSnapshot?.revision).toBe(1)
-      expect(matchingSnapshot?.schema_version).toBe(1)
+      expect(matchingSnapshot?.schema_version).toBe(2)
     }
   })
 
@@ -449,50 +449,41 @@ describe('generatePostsForCampaign — generateNativeContent failure', () => {
   })
 })
 
-describe('generatePostsForCampaign — hook Tier-2 loop (ADR §7, MODE2-HOOK-STANDALONE)', () => {
-  it('regenerates EXACTLY ONCE when a single-post opener scores below threshold, then stops (no re-score)', async () => {
-    const weak: RubricOutput = { ...highOpenerScore, dimensions: { ...highOpenerScore.dimensions, openingStrength: { score: 40, note: 'weak' } } }
-    // Weak score for every rubric call would make EVERY post regenerate; to
-    // isolate the ceiling, weaken only the first rubric call.
-    vi.mocked(runPrompt).mockReset()
-    vi.mocked(runPrompt)
-      .mockResolvedValueOnce(weak)
-      .mockResolvedValue(highOpenerScore)
-    vi.mocked(generateNativeContent).mockReset()
-    let nativeCallCount = 0
-    vi.mocked(generateNativeContent).mockImplementation(async () => {
-      nativeCallCount++
-      return makeSingleOutput(nativeCallCount)
-    })
-
+// ADR 0024 §2.9 (Session 31, H2.5) — the judge REPLACES the openingStrength
+// retry (formerly 'generatePostsForCampaign — hook Tier-2 loop (ADR §7,
+// MODE2-HOOK-STANDALONE)', now retired). Every one of that block's five test
+// cases is mapped forward individually, per §4.4, rather than deleted
+// wholesale:
+//   opener-scored-against-rubric      -> QUAL-JUDGE-RUBRIC-UNFORKED (below)
+//   opener-neutralized                -> QUAL-CANDIDATE-NEUTRALIZED (below)
+//   scoring-failure-does-not-abort    -> kept below, renamed for the judge
+//   regeneration-fires-below-threshold -> QUAL-BELOW-THRESHOLD-SURFACED (H2.7 — placeholder only, not yet implemented)
+//   regeneration-fires-at-most-once    -> QUAL-N-CANDIDATE-COUNT (H2.7 — placeholder only, not yet implemented)
+// N is still 1 in this step — regeneration is REMOVED, not replaced by a
+// fan-out yet, so there is no "regenerates once" behavior left to test here.
+describe('generatePostsForCampaign — full-rubric judge (ADR 0024 §2.6, QUAL-JUDGE-RUBRIC-UNFORKED)', () => {
+  it('scores the WHOLE candidate content (joinContent), not just the opener', async () => {
     await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
 
-    // 6 roleSequence entries, one of which regenerates once = 7 native calls.
-    expect(generateNativeContent).toHaveBeenCalledTimes(7)
-    // Session 24-D (MINOR-2 correction) — pins the exact double-count the ADR
-    // worries about: the trial counter must increment by POSTS CREATED (6,
-    // one row per roleSequence entry — createPosts inserts exactly one row
-    // per entry regardless of how many native-generation attempts it took),
-    // never by the native-CALL count (7, which would double-count the single
-    // regenerated post). generate.ts:377 sources this from
-    // `postsCreated = inserted.length` (generate.ts:355), not from a
-    // native-call counter.
-    expect(incrementPostsGeneratedBy).toHaveBeenCalledWith(BUSINESS_ID, 6)
-  })
-
-  it('does NOT regenerate when the opener already scores at/above threshold', async () => {
-    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
-    // 6 roleSequence entries, none regenerate = exactly 6 native calls.
+    // 6 roleSequence entries, one judge call each, no regeneration -> exactly
+    // 6 native calls and 6 rubric calls.
     expect(generateNativeContent).toHaveBeenCalledTimes(6)
+    expect(runPrompt).toHaveBeenCalledTimes(6)
+    const rubricCall = vi.mocked(runPrompt).mock.calls[0][2] as { mode: string; content: string }
+    expect(rubricCall.mode).toBe('post')
+    // makeSingleOutput's body is 'Post N body\nRest of the post' — joinContent
+    // for a 'single' format returns output.body verbatim, so BOTH lines must
+    // reach the judge, not just the first ('Post N body').
+    expect(rubricCall.content).toContain('Rest of the post')
   })
 
-  it('scores a THREAD opener from posts[0].text, not the whole thread', async () => {
+  it('scores a THREAD\'s full joined content, not just posts[0]', async () => {
     const threadOutput: ThreadOutput = {
       format: 'thread',
       posts: [
         { text: 'HOOK-TEXT-MARKER', role: 'hook' },
-        { text: 'quote', role: 'pull_quote' },
-        { text: 'close', role: 'close' },
+        { text: 'BODY-TEXT-MARKER', role: 'pull_quote' },
+        { text: 'CLOSE-TEXT-MARKER', role: 'close' },
       ],
       imageBrief: null,
       scriptBrief: null,
@@ -503,18 +494,19 @@ describe('generatePostsForCampaign — hook Tier-2 loop (ADR §7, MODE2-HOOK-STA
     await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
 
     const rubricCall = vi.mocked(runPrompt).mock.calls[0][2] as { content: string }
-    expect(rubricCall.content).toBe('HOOK-TEXT-MARKER')
+    expect(rubricCall.content).toContain('HOOK-TEXT-MARKER')
+    expect(rubricCall.content).toContain('BODY-TEXT-MARKER')
+    expect(rubricCall.content).toContain('CLOSE-TEXT-MARKER')
   })
 
-  // Session 24-D (MINOR-7 correction) — the opener is the model's own PRIOR
-  // output fed back into a second AI call (the rubric); it now goes through
-  // neutralize() (wrap-evidence.ts) before reaching runPrompt, same L-9
-  // posture as brief.ts's narrative/proofPlan. Proven with content that
-  // neutralize() actually changes (a triple-backtick fence, defused to
-  // avoid inducing the rubric call to treat it as a code block) — the
-  // MARKER-string test above alone can't tell "neutralized" from "untouched"
-  // since plain ASCII text with no special chars passes through unchanged.
-  it('neutralizes the opener before scoring it — a fence in the opener never reaches the rubric raw (MINOR-7)', async () => {
+  // Session 24-D (MINOR-7 correction), carried forward unchanged for the
+  // judge — the candidate is the model's own PRIOR output fed back into a
+  // second AI call (the rubric); it goes through neutralize()
+  // (wrap-evidence.ts) before reaching runPrompt, same L-9 posture as
+  // brief.ts's narrative/proofPlan. Proven with content that neutralize()
+  // actually changes (a triple-backtick fence, defused to avoid inducing the
+  // rubric call to treat it as a code block).
+  it('QUAL-CANDIDATE-NEUTRALIZED: neutralizes the full candidate before scoring it — a fence never reaches the rubric raw', async () => {
     vi.mocked(generateNativeContent).mockReset()
     vi.mocked(generateNativeContent).mockResolvedValue({
       format: 'single',
@@ -529,7 +521,7 @@ describe('generatePostsForCampaign — hook Tier-2 loop (ADR §7, MODE2-HOOK-STA
     expect(rubricCall.content).not.toContain('```')
   })
 
-  it('a hook-scoring failure does not abort generation — original content stands', async () => {
+  it('a judge-scoring failure does not abort generation — original content stands, unscored', async () => {
     vi.mocked(runPrompt).mockRejectedValue(new Error('rubric scoring hiccup'))
 
     const result = await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
@@ -538,6 +530,19 @@ describe('generatePostsForCampaign — hook Tier-2 loop (ADR §7, MODE2-HOOK-STA
     expect(createPosts).toHaveBeenCalled()
   })
 })
+
+// QUAL-HOOK-RETRY-REMOVED (Tier 3, diff-verified — no runtime test): zero
+// remaining references to the removed openingStrength-retry block
+// (extractOpener, the `regenerationCount = 1` branch, the second
+// generateNativeContent call gated on a threshold comparison). Confirmed by
+// `git grep -n "extractOpener\|openingStrength.score <" lib/campaigns/generate.ts`
+// returning no matches as of this commit.
+//
+// QUAL-RUBRIC-UNCHANGED (Tier 3, diff-verified — no runtime test): rubric.ts
+// itself is untouched by H2.5 — ten dimensions, no rename,
+// RubricOutputSchema byte-unchanged, its §6.1 invariant comment intact. The
+// judge is a NEW caller of the EXISTING rubricPrompt at mode:'post', not a
+// fork of it.
 
 describe('generatePostsForCampaign — trial pre-flight', () => {
   it('sets session failed with quota_exceeded when postsRemaining < roleSequence.length', async () => {
