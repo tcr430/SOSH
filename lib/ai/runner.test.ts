@@ -808,6 +808,90 @@ describe('QUAL-THINKING-BUDGETED (ADR 0024 §3.3/§3.3a)', () => {
   })
 })
 
+// ── ADR 0024 §7.1-§7.3 — the guards at N (Session 31 H2.6) ────────────────
+//
+// H2.6 ships no new production mechanism inside runPrompt — only the config
+// default move (lib/config.test.ts) — so these are regression tests over
+// what already holds true "by construction" (ADR §7.2/§7.3), guarding
+// against a future change silently narrowing or reordering any of it.
+describe('ADR 0024 §7.1-§7.3 — guards at N (H2.6)', () => {
+  // QUAL-GUARD-ORDER-PRESERVED — STEP 1 (trial cap) fires strictly before
+  // STEP 2 (rate limit), which fires strictly before STEP 3 (SDK call).
+  // Composed from the two existing skip-on-earlier-failure assertions into
+  // one test that states the ORDER explicitly, not just each pairwise skip.
+  it('QUAL-GUARD-ORDER-PRESERVED — trial cap, then rate limit, then SDK call, in that order', async () => {
+    // Trial cap denies -> neither the rate-limit query nor the SDK is reached.
+    await expect(runPrompt(mockPrompt, trialExhaustedPosts, { text: 'hi' })).rejects.toMatchObject({
+      code: 'quota_exceeded',
+    })
+    expect(countRecentCalls).not.toHaveBeenCalled()
+    expect(mockCreate).not.toHaveBeenCalled()
+
+    vi.clearAllMocks()
+    vi.mocked(getAnthropicClient).mockResolvedValue({ messages: { create: mockCreate } } as never)
+
+    // Trial cap clears, rate limit denies -> the SDK is still not reached.
+    vi.mocked(countRecentCalls).mockResolvedValue(30)
+    await expect(runPrompt(mockPrompt, mockContext, { text: 'hi' })).rejects.toMatchObject({
+      code: 'rate_limited',
+    })
+    expect(countRecentCalls).toHaveBeenCalledTimes(1)
+    expect(mockCreate).not.toHaveBeenCalled()
+  })
+
+  // QUAL-RATE-LIMIT-COUNTS-CALLS — N runPrompt calls issue N separate
+  // countRecentCalls checks (never batched/undercounted as one unit), and
+  // generation vs. judge calls are counted under their OWN prompt id, never
+  // merged into a shared bucket.
+  it('QUAL-RATE-LIMIT-COUNTS-CALLS — three generation calls plus three judge calls are six separately-counted checks', async () => {
+    for (let i = 0; i < 3; i++) {
+      await runPrompt(mockPrompt, mockContext, { text: `gen-${i}` })
+    }
+    for (let i = 0; i < 3; i++) {
+      await runPrompt(rubricScoringPrompt, mockContext, { text: `judge-${i}` })
+    }
+
+    expect(countRecentCalls).toHaveBeenCalledTimes(6)
+    const promptIdsCounted = vi.mocked(countRecentCalls).mock.calls.map((call) => call[3])
+    expect(promptIdsCounted.filter((id) => id === 'post-generation')).toHaveLength(3)
+    expect(promptIdsCounted.filter((id) => id === 'rubric')).toHaveLength(3)
+  })
+
+  // QUAL-TRIAL-UNIT-PER-POST — the negative obligation: isPostGeneration and
+  // isScoringOnly's membership must not be narrowed (every id below must
+  // keep skipping BOTH trial counters), and the predicate set must not be
+  // widened to swallow an unrelated prompt id (the control case below must
+  // keep incrementing).
+  it('QUAL-TRIAL-UNIT-PER-POST — the full skip set is exactly {native-generation-single, native-generation-thread, post-generation, rubric}, no more, no less', async () => {
+    const skippedIds: Array<Prompt<MockInput, MockOutput>> = [
+      mockPrompt, // post-generation
+      nativeGenerationSinglePrompt,
+      nativeGenerationThreadPrompt,
+      rubricScoringPrompt,
+    ]
+    for (const prompt of skippedIds) {
+      vi.clearAllMocks()
+      vi.mocked(getAnthropicClient).mockResolvedValue({ messages: { create: mockCreate } } as never)
+      mockCreate.mockResolvedValue(validSdkResponse)
+      vi.mocked(countRecentCalls).mockResolvedValue(0)
+
+      await runPrompt(prompt, mockContext, { text: 'hi' })
+      expect(incrementPostsGenerated, `${prompt.id} must skip the per-call counter`).not.toHaveBeenCalled()
+      expect(incrementBrandVoiceAttempts, `${prompt.id} must not touch brand-voice quota`).not.toHaveBeenCalled()
+    }
+
+    // Control: an id OUTSIDE the named set must still increment — proves the
+    // predicates are narrow, not "skip everything."
+    vi.clearAllMocks()
+    vi.mocked(getAnthropicClient).mockResolvedValue({ messages: { create: mockCreate } } as never)
+    mockCreate.mockResolvedValue(validSdkResponse)
+    vi.mocked(countRecentCalls).mockResolvedValue(0)
+    const unrelatedPrompt: Prompt<MockInput, MockOutput> = { ...mockPrompt, id: 'some-other-prompt' }
+    await runPrompt(unrelatedPrompt, mockContext, { text: 'hi' })
+    expect(incrementPostsGenerated).toHaveBeenCalledWith('biz-1')
+  })
+})
+
 describe('response_truncated (ADR 0019 §5.4 [sec-HIGH-7])', () => {
   it('stop_reason === "max_tokens" throws response_truncated, distinct from invalid_response, and never reaches the parse step', async () => {
     mockCreate.mockResolvedValue({

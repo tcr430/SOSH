@@ -34,6 +34,38 @@ function validBaseEnv(overrides: Record<string, unknown> = {}) {
   }
 }
 
+// ADR 0024 §7.3 (Session 31 H2.6) — QUAL-RATE-LIMIT-COUNTS-CALLS half that
+// lives in config: the default itself moved 30 -> 100 so a 12-entry
+// campaign's N=3 fan-out (36 generation calls, H2.7) does not die mid-run
+// against a ceiling sized for the pre-fan-out world.
+describe('lib/config — AI_RATE_LIMIT_POST_GENERATION_PER_MIN (ADR 0024 §7.3)', () => {
+  it('defaults to 100, not the pre-H2.6 30', () => {
+    const result = serverSchema.safeParse(validBaseEnv())
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.AI_RATE_LIMIT_POST_GENERATION_PER_MIN).toBe(100)
+    }
+  })
+
+  it('AI_RATE_LIMIT_BRAND_VOICE_PER_MIN is untouched by the H2.6 change (stays 10)', () => {
+    const result = serverSchema.safeParse(validBaseEnv())
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.AI_RATE_LIMIT_BRAND_VOICE_PER_MIN).toBe(10)
+    }
+  })
+
+  it('an explicit env override still wins over the new default', () => {
+    const result = serverSchema.safeParse(
+      validBaseEnv({ AI_RATE_LIMIT_POST_GENERATION_PER_MIN: '250' }),
+    )
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.AI_RATE_LIMIT_POST_GENERATION_PER_MIN).toBe(250)
+    }
+  })
+})
+
 describe('lib/config — GITHUB_APP_* (ADR 0020 §2.2)', () => {
   it('a valid base64-encoded PEM (RSA header) parses successfully', () => {
     const result = serverSchema.safeParse(

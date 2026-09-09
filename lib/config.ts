@@ -34,7 +34,15 @@ export const serverSchema = z.object({
   APP_URL: z.string().url().default("http://localhost:3000"),
   AI_PROVIDER: z.enum(["anthropic", "mock"]).default("anthropic"),
   AI_RATE_LIMIT_BRAND_VOICE_PER_MIN: z.coerce.number().int().positive().default(10),
-  AI_RATE_LIMIT_POST_GENERATION_PER_MIN: z.coerce.number().int().positive().default(30),
+  // ADR 0024 §7.3 (Session 31 H2.6) — raised 30 -> 100. At N=3 (H2.7) a
+  // 12-entry campaign issues 36 generation calls; the rate limit counts
+  // PROVIDER CALLS, so N counts as N (QUAL-RATE-LIMIT-COUNTS-CALLS) and the
+  // old default died mid-run with rate_limited for a reason that has
+  // nothing to do with the fan-out itself. The judge (rubricPrompt) is
+  // counted separately under its own prompt id via
+  // countRecentCalls(..., prompt.id), so this ceiling covers generation
+  // calls only.
+  AI_RATE_LIMIT_POST_GENERATION_PER_MIN: z.coerce.number().int().positive().default(100),
   AI_TRIAL_BRAND_VOICE_ATTEMPTS: z.coerce.number().int().positive().default(3),
   AI_TRIAL_POST_CAP: z.coerce.number().int().positive().default(50),
   AI_TRIAL_CAMPAIGN_CAP: z.coerce.number().int().positive().default(1),
