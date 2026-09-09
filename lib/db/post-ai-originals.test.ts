@@ -22,6 +22,10 @@ const mockRow: PostAiOriginalRow = {
   rendered_content: 'Original content',
   hashtags: [],
   schema_version: AI_ORIGINAL_SCHEMA_VERSION,
+  overall_score: null,
+  dimension_scores: null,
+  candidate_count: null,
+  cleared_quality_threshold: null,
   created_at: '2026-07-26T00:00:00Z',
 }
 
@@ -38,8 +42,63 @@ const insertPayload: PostAiOriginalInsert = {
 }
 
 describe('AI_ORIGINAL_SCHEMA_VERSION', () => {
-  it('is 1', () => {
-    expect(AI_ORIGINAL_SCHEMA_VERSION).toBe(1)
+  it('is 2 (ADR 0024 §8.2, bumped alongside the score columns)', () => {
+    expect(AI_ORIGINAL_SCHEMA_VERSION).toBe(2)
+  })
+})
+
+// ADR 0024 §8.2 (Session 31, H2.4) — QUAL-SCORES-IN-ORIGINALS (Tier 2). The
+// winner's scores are written to post_ai_originals, schema_version is
+// bumped, and NOTHING is written to posts.ai_generation_metadata — asserted
+// explicitly (the negative half) since createPostAiOriginal is a thin
+// passthrough that could silently grow a second write target.
+describe('QUAL-SCORES-IN-ORIGINALS: the winner rubric score is written to post_ai_originals', () => {
+  const mockDimensionScores = {
+    specificity: { score: 80, note: 'concrete' },
+    originality: { score: 75, note: 'fresh angle' },
+    evidenceSufficiency: { score: 70, note: 'cited' },
+    audienceRelevance: { score: 85, note: 'on target' },
+    platformNativeness: { score: 90, note: 'native' },
+    brandVoiceAlignment: { score: 88, note: 'on voice' },
+    openingStrength: { score: 82, note: 'strong hook' },
+    ctaFit: { score: 60, note: 'clear' },
+    unsupportedClaimsRisk: { score: 95, note: 'no risky claims' },
+    redundancy: { score: 92, note: 'no repetition' },
+  }
+
+  const scoredInsert: PostAiOriginalInsert = {
+    ...insertPayload,
+    overall_score: 82,
+    dimension_scores: mockDimensionScores,
+    candidate_count: 3,
+    cleared_quality_threshold: true,
+  }
+
+  it('writes the winner overall_score, dimension_scores, candidate_count, and cleared_quality_threshold with the row', async () => {
+    const scoredRow: PostAiOriginalRow = {
+      ...mockRow,
+      overall_score: 82,
+      dimension_scores: mockDimensionScores,
+      candidate_count: 3,
+      cleared_quality_threshold: true,
+    }
+    const { client, builder } = createMockClient(scoredRow)
+    const result = await createPostAiOriginal(client, scoredInsert)
+    expect(result).toEqual(scoredRow)
+    expect(builder.insert).toHaveBeenCalledWith(scoredInsert)
+  })
+
+  it('schema_version on the insert is AI_ORIGINAL_SCHEMA_VERSION (2)', () => {
+    expect(scoredInsert.schema_version).toBe(AI_ORIGINAL_SCHEMA_VERSION)
+    expect(scoredInsert.schema_version).toBe(2)
+  })
+
+  it('negative half: createPostAiOriginal never targets the posts table — only post_ai_originals', async () => {
+    const { client } = createMockClient({ ...mockRow, ...scoredInsert })
+    await createPostAiOriginal(client, scoredInsert)
+    expect(client.from).toHaveBeenCalledWith('post_ai_originals')
+    expect(client.from).not.toHaveBeenCalledWith('posts')
+    expect(client.from).toHaveBeenCalledTimes(1)
   })
 })
 

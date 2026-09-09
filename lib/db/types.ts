@@ -13,6 +13,7 @@
 
 import type { VoiceAxes } from '@/lib/validation/voice'
 export type { VoiceAxes }
+import type { RubricOutput } from '@/lib/ai/prompts/rubric'
 
 // ---------------------------------------------------------------------------
 // Shared utility types
@@ -1283,6 +1284,14 @@ export type CampaignBriefUpdate = Partial<
 export type PostAiOriginalGenerationKind = 'initial' | 'regeneration' | 'studio_promoted'
 export type PostAiOriginalFormat = 'single' | 'thread'
 
+// ADR 0024 §8.2 (Session 31, H2.4) — the winner's rubric score, on the
+// existing post_ai_originals (20260909100000_post_ai_original_scores.sql).
+// Nullable: rows written before this migration ship carry no score under
+// this contract (see the migration's comment). `PostAiOriginalDimensionScores`
+// is RubricOutput's `dimensions` shape exactly (lib/ai/prompts/rubric.ts:88-99)
+// — not re-declared, so the two can never drift silently.
+export type PostAiOriginalDimensionScores = RubricOutput['dimensions']
+
 export type PostAiOriginalRow = {
   id: string
   business_id: string
@@ -1295,6 +1304,10 @@ export type PostAiOriginalRow = {
   rendered_content: string
   hashtags: string[]
   schema_version: number
+  overall_score: number | null
+  dimension_scores: PostAiOriginalDimensionScores | null
+  candidate_count: number | null
+  cleared_quality_threshold: boolean | null
   created_at: string
 }
 
@@ -1310,6 +1323,10 @@ export type PostAiOriginalInsert = {
   rendered_content: string
   hashtags?: string[]
   schema_version: number
+  overall_score?: number | null
+  dimension_scores?: PostAiOriginalDimensionScores | null
+  candidate_count?: number | null
+  cleared_quality_threshold?: boolean | null
   created_at?: string
 }
 
