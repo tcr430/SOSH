@@ -41,6 +41,12 @@ import { postGenerationPrompt } from '@/lib/ai/prompts/post-generation'
 import { postRegenerationPrompt } from '@/lib/ai/prompts/post-regeneration'
 import { brandVoiceInferencePrompt } from '@/lib/ai/prompts/brand-voice-inference'
 import type { BrandVoiceRow } from '@/lib/db/types'
+// D2/MAJOR-1 — the REAL native-generation factory, not a synthetic prompt
+// with a copied id: the constraint is about the actual generation path
+// sending temperature at the SDK level, and a synthetic prompt would pass
+// even if the factory stopped declaring it.
+import { createNativeGenerationPrompt, type NativeGenInput } from '@/lib/ai/prompts/formats/native-generation-prompt'
+import type { RenderedEvidence } from '@/lib/ai/wrap-evidence'
 
 // ── Fixtures ──────────────────────────────────────────────────────────────
 
@@ -805,6 +811,44 @@ describe('QUAL-THINKING-BUDGETED (ADR 0024 §3.3/§3.3a)', () => {
     await runPrompt(mockPrompt, mockContext, { text: 'hi' })
     callArgs = mockCreate.mock.calls[1][0]
     expect(callArgs).not.toHaveProperty('thinking')
+  })
+})
+
+// ── QUAL-SAMPLING-DEFAULT-PRESERVED, the SDK-params half (ADR 0024 §3.1,
+// Session 31-D D2/MAJOR-1) ──────────────────────────────────────────────
+// Sibling of the maxTokens pair (:703-715) and the thinking pair (:799-808)
+// immediately above, at the SAME level: the prompt-object field (asserted
+// by prompt-properties.frozen-table.test.ts) is not the same claim as "the
+// field arrives in the SDK call" — before this pair, nothing asserted the
+// latter for temperature, so deleting runner.ts's temperature spread left
+// every existing test green.
+describe('QUAL-SAMPLING-DEFAULT-PRESERVED — temperature at the SDK params level (D2/MAJOR-1)', () => {
+  const nativeGenInput: NativeGenInput = {
+    angle: 'Show the churn-reduction proof point',
+    role: 'customer_proof',
+    platform: 'linkedin',
+    narrative: 'We help B2B SaaS teams post consistently.',
+    renderedEvidence: '' as RenderedEvidence,
+    scheduledAt: '2026-08-01T09:00:00.000Z',
+  }
+
+  it('a native-generation prompt (temperature: 1.0) sends temperature 1.0 at the SDK params level', async () => {
+    // The real prompt carries the real SinglePostOutputSchema — the mock
+    // response must satisfy IT, not the generic mockOutputSchema every
+    // other test in this file uses.
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: JSON.stringify({ format: 'single', body: 'post body', imageBrief: null }) }],
+      usage: { input_tokens: 100, output_tokens: 50, cache_read_input_tokens: 0 },
+    })
+    await runPrompt(createNativeGenerationPrompt('single'), mockContext, nativeGenInput)
+    const callArgs = mockCreate.mock.calls[0][0]
+    expect(callArgs.temperature).toBe(1.0)
+  })
+
+  it('a prompt declaring no temperature sends NO temperature key at all — not undefined, absent', async () => {
+    await runPrompt(mockPrompt, mockContext, { text: 'hi' })
+    const callArgs = mockCreate.mock.calls[0][0]
+    expect(callArgs).not.toHaveProperty('temperature')
   })
 })
 
