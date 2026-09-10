@@ -173,6 +173,17 @@ function buildCarouselPrompt(): Prompt<NativeGenInput, CarouselOutput> {
   }
 }
 
+// ADR 0024 §15 (Session 31-D, D1/MAJOR-2) — the SINGLE runtime source of
+// truth for which families the factory below produces. collect-prompts.ts
+// enumerates the factory's output by iterating THIS array, never a literal
+// duplicated in a test file, so a fourth family added here is enumerated by
+// both prompt scans with no test edit. Kept in sync with FormatFamily by
+// hand (a TS union has no runtime form to derive this from) — that hand-sync
+// is the one thing a reviewer must still check when FormatFamily changes,
+// and it is the only remaining manual step, versus three duplicated lists
+// before this change.
+export const NATIVE_GENERATION_FAMILIES: readonly FormatFamily[] = ['single', 'thread', 'carousel']
+
 // ADR 0017 §4.4 [type-1] — the per-family Prompt FACTORY. Prompt<TInput,TOutput>
 // binds ONE concrete outputSchema per Prompt object (lib/ai/prompts/types.ts);
 // a per-call variable schema would break that contract. Overloads give

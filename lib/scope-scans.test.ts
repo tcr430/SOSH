@@ -156,12 +156,17 @@ describe('MODE2-CAROUSEL-NO-IMAGE-GEN (ADR 0022 §6.4/L-8 — constitution: no i
 // configuration anywhere skips the mandatory brief-review gate (L-2).
 
 // ─────────────────────────────────────────────────────────────────────────
-// ADR 0024 (Session 31, Track H, H2.13) — three Tier-3 scans, each
-// demonstrated to redden against a temporary violation and then reverted:
-// - QUAL-NO-NEW-AI-SURFACE: temporarily added an 11th entry to
-//   collectPromptIds()'s import list (a duplicate of learning-summarizer's
-//   id under a fake export), re-ran, observed the length assertion fail,
-//   reverted.
+// ADR 0024 (Session 31, Track H, H2.13), corrected by §15 (Session 31-D,
+// D1/MAJOR-2) — three Tier-3 scans, each demonstrated to redden against a
+// temporary violation and then reverted:
+// - QUAL-NO-NEW-AI-SURFACE: temporarily added an ELEVENTH PROMPT FILE under
+//   lib/ai/prompts/ — a real module structurally satisfying Prompt, with NO
+//   import-list edit anywhere — re-ran, observed BOTH this bijection
+//   assertion AND prompt-properties.frozen-table.test.ts's own assertion go
+//   RED, reverted. The prior demonstration (editing a hand-written import
+//   list) proved only that the list could be edited, not that an unlisted
+//   prompt would be caught — see docs/reviews/session-31-reviewer.md's
+//   CORRECTION PASS (Session 31-D) appendix, MAJOR-2.
 // - QUAL-PARSER-RETAINED: temporarily commented out the
 //   `extractJsonBlock` export in lib/ai/parsers.ts, re-ran, observed the
 //   "still exported" assertion fail (a TS compile error at import time,
@@ -172,29 +177,32 @@ describe('MODE2-CAROUSEL-NO-IMAGE-GEN (ADR 0022 §6.4/L-8 — constitution: no i
 // ─────────────────────────────────────────────────────────────────────────
 
 describe('QUAL-NO-NEW-AI-SURFACE (ADR 0024 §L-8, H2.13)', () => {
-  // Mirrors prompt-properties.frozen-table.test.ts's own ten-id assertion
-  // (the authoritative source for "no eleventh prompt") — restated here as
-  // its own named, standalone constraint per the build guide's own framing,
-  // so QUAL-NO-NEW-AI-SURFACE does not depend on a DIFFERENT file's test
-  // continuing to exist to be considered proven.
-  it('exactly ten live prompt ids exist across lib/ai/prompts/ — no eleventh (new prompt family)', async () => {
-    const { brandVoiceInferencePrompt } = await import('./ai/prompts/brand-voice-inference')
-    const { briefAssemblyPrompt } = await import('./ai/prompts/brief')
-    const { learningSummarizerPrompt } = await import('./ai/prompts/learning-summarizer')
-    const { postGenerationPrompt } = await import('./ai/prompts/post-generation')
-    const { postRegenerationPrompt } = await import('./ai/prompts/post-regeneration')
-    const { rubricPrompt } = await import('./ai/prompts/rubric')
-    const { studioSuggestionPrompt } = await import('./ai/prompts/studio-suggestion')
-    const { createNativeGenerationPrompt } = await import('./ai/prompts/formats/native-generation-prompt')
+  // D1/MAJOR-2: consumes the SAME filesystem-walking collector as
+  // prompt-properties.frozen-table.test.ts (lib/ai/prompts/collect-prompts.ts)
+  // rather than a second, independently hand-maintained import list — a
+  // duplicated enumeration is exactly how MAJOR-2 happened: an eleventh
+  // prompt could be added to disk without touching either list, and both
+  // scans stayed green. The assertion is now a BIJECTION against the same
+  // frozen table prompt-properties.frozen-table.test.ts checks
+  // (lib/ai/prompts/frozen-table.ts) — every enumerated id has a row, and
+  // every row has an enumerated id — which is what "no new AI surface"
+  // actually means; a bare `size === 10` passes even when the ten ids
+  // enumerated are not the ten the frozen table expects.
+  it('every enumerated prompt id has a frozen-table row, and every frozen-table row has an enumerated id — no eleventh (new prompt family)', async () => {
+    const { collectPrompts } = await import('./ai/prompts/collect-prompts')
+    const { FROZEN_TABLE } = await import('./ai/prompts/frozen-table')
 
-    const ids = [
-      brandVoiceInferencePrompt, briefAssemblyPrompt, learningSummarizerPrompt,
-      postGenerationPrompt, postRegenerationPrompt, rubricPrompt, studioSuggestionPrompt,
-      createNativeGenerationPrompt('single'), createNativeGenerationPrompt('thread'),
-      createNativeGenerationPrompt('carousel'),
-    ].map(p => p.id)
+    const prompts = await collectPrompts()
+    const enumeratedIds = new Set(prompts.map((p) => p.id))
+    const frozenIds = new Set(Object.keys(FROZEN_TABLE))
 
-    expect(new Set(ids).size).toBe(10)
+    expect(enumeratedIds.size, 'a duplicate id among enumerated prompts').toBe(prompts.length)
+    for (const id of enumeratedIds) {
+      expect(frozenIds.has(id), `enumerated prompt id "${id}" has no frozen-table row — a new prompt/family shipped unversioned`).toBe(true)
+    }
+    for (const id of frozenIds) {
+      expect(enumeratedIds.has(id), `frozen-table row "${id}" has no enumerated prompt — a stale row, or the walk is missing a file`).toBe(true)
+    }
   })
 
   it('no new user-facing generation entry point: generate-action.ts stays the sole Server Action calling generatePostsForCampaign', () => {
