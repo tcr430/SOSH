@@ -809,3 +809,28 @@ five fixtures and `client.ts:61-67`'s routing branch belong in one later diff.
 ---
 
 Session 31 review complete — 20 findings (2 BLOCKER, 5 MAJOR, 8 MINOR, 5 NIT) over range 05baf1d2..55b421ad; 0/29 QUAL-* constraints verified executed green in CI.
+
+---
+
+## CORRECTION PASS (Session 31-D)
+
+**Author:** Session 31-D correction pass · **Date:** 2026-09-10 · **Range fixed:** `55b421ad..<D10-sha>`
+**Reviewed head:** `55b421ad` — the head the Reviewer read; nothing had landed after it when D0 ran.
+**ADR 0024's own commit:** `5e0f6b09` — the Reviewer's range line could not name it, the ADR having existed
+at no commit when the report was written (BLOCKER-2). This statement is the correction; the range line above
+it is the Reviewer's and is unedited.
+**Everything above this line is the Reviewer's. Everything below it is this pass's.**
+
+### D1 — MAJOR-2
+
+| Field | |
+|---|---|
+| **Finding** | MAJOR-2 |
+| **Fix** | `lib/ai/prompts/collect-prompts.ts` (new) walks `lib/ai/prompts/**` on disk and imports every module, collecting every export that structurally satisfies `Prompt` (`id`/`version`/`modelKey`/`outputSchema`/`buildSystemPrompt`/`buildUserMessage`) — never a hand-written id list. The native-generation factory's three families are driven off its own new runtime array, `NATIVE_GENERATION_FAMILIES` (`lib/ai/prompts/formats/native-generation-prompt.ts`), rather than a literal duplicated in the collector. The frozen table itself moved out of the test file into `lib/ai/prompts/frozen-table.ts` so both scans read the same data instead of one owning it and the other hand-counting "10". `lib/ai/prompts/prompt-properties.frozen-table.test.ts` now calls `collectPrompts()` via top-level `await`. `lib/scope-scans.test.ts`'s `QUAL-NO-NEW-AI-SURFACE` case now calls the same `collectPrompts()` and asserts a **bijection** against `FROZEN_TABLE` (every enumerated id has a row, every row has an enumerated id) instead of `new Set(ids).size === 10`. |
+| **Proof** | `lib/ai/prompts/prompt-properties.frozen-table.test.ts` — "has exactly ten live prompt ids, matching the frozen table one-for-one" and the per-id `it()` loop; `lib/scope-scans.test.ts:195` — "every enumerated prompt id has a frozen-table row, and every frozen-table row has an enumerated id — no eleventh (new prompt family)". |
+| **Reddening** | Two mutations, both performed and reverted. **(1)** Added a temporary file `lib/ai/prompts/__d1-mutation-scratch.ts` exporting a `Prompt`-shaped object (`id: 'd1-mutation-scratch'`) with no frozen-table row and **no edit to any import list anywhere**. Ran both test files: `prompt-properties.frozen-table.test.ts` failed 2 tests ("has exactly ten..." — 11 ≠ 10 — and the new per-id row for `d1-mutation-scratch` — "no frozen-table row"); `scope-scans.test.ts` failed 1 test ("enumerated prompt id \"d1-mutation-scratch\" has no frozen-table row"). Deleted the file; confirmed `git status --porcelain` showed nothing for that path; re-ran both files — 19/19 green. **(2)** Temporarily changed `NATIVE_GENERATION_FAMILIES` in `lib/ai/prompts/formats/native-generation-prompt.ts` to `['single', 'thread', 'carousel', 'd1-mutation-quad' as FormatFamily]` — a fourth family with no frozen-table row and no `createNativeGenerationPrompt` switch case. Ran both test files: both failed with `Error: Unhandled case: "d1-mutation-quad"` thrown from `assertNever` (`lib/utils.ts:22`), via `createNativeGenerationPrompt` → `collectPrompts`. Restored the array to its original three-element literal; confirmed `git diff --stat -- lib/ai/prompts/formats/native-generation-prompt.ts` showed only the 11-line D1 addition (the `NATIVE_GENERATION_FAMILIES` const + its comment), no residue; re-ran `npx tsc --noEmit --skipLibCheck` (clean) and both test files (19/19 green). Also ran the full `test:app` suite (app/ lib/ components/ scripts/eval/) under both a bare shell (`env -i`) and app-tests.yml's CI env block: 3620/3621 passing both times, the one failure (`lib/signals/__fixtures__/eval/corpus-v2-schema.test.ts`) reproduced identically at the pre-D1 `5e0f6b09` HEAD run in isolation and in isolation post-D1 — a pre-existing, order-dependent flake unrelated to this change, not introduced by it. No prompt file imports `lib/config.ts` at module scope (`git grep`-verified before building the walk), so the import-time hazard the Reviewer's bare-shell run hit elsewhere did not recur here — confirmed by the bare-shell run above. |
+| **Commit** | `6db40659` |
+
+**Observation routed to D9 (not a finding, no ID):** ADR 0024 §3.2's sentence *"Changing any of those four without bumping that prompt's version in the same commit fails the test"* over-claims what the frozen table can prove — editing `temperature` `1.0` → `0.8` in the factory AND editing the table row to `0.8` in the same commit, without touching `version`, still passes. The table makes a version-less change *visible in a diff* (the `platform-map.frozen-table.test.ts` precedent's real property); it cannot enforce commit-authorship intent. D9 corrects the ADR sentence.
+
+**What this step did NOT touch:** `runner.ts` (D2's job — `temperature` reaching the SDK is untested by this step), the frozen table's actual values (unchanged, still ten rows, still the values H2.2 declared), and `formats/policy.ts`/`formats/schemas.ts` (confirmed to contribute nothing to the walk, as the Reviewer already found).
