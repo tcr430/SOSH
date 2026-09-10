@@ -1,0 +1,811 @@
+# Session 31 — Track H (ADR 0024, Generation quality core) — Reviewer report (H3)
+
+**Scope reviewed: `05baf1d2..55b421ad`** (13 commits, H2.1 `bdcabf50` → H2.13 `55b421ad`). All citations of
+source, tests, migrations and i18n are `git show <sha>:<path>` / `git diff 05baf1d2..55b421ad` at that
+range, **never at HEAD**.
+
+**Documents audited *against*, read at their own commits — stated separately, per Session 22-F NEW-12:**
+
+| Document | Where I read it | Note |
+|---|---|---|
+| `docs/decisions/0024-generation-quality-core.md` | **working tree only — the file is UNTRACKED (`git status`: `??`) and exists at no commit** | see BLOCKER-2 |
+| `docs/build-guide/session-31.md` | **working tree only** — last commit `0c79d118`, with **1,490 uncommitted added lines** (`git diff --stat`) covering §0.2, §2b and §3 | see BLOCKER-2 |
+| `docs/decisions/0017-mode-2-upgrade.md` | `55b421ad` (Amendment D landed inside the range, at commit `55b421ad`); pre-amendment text at `05baf1d2` | — |
+| `docs/decisions/0015-test-execution-and-ci-gates.md` §2 + Amendment B | `55b421ad` | unchanged in range |
+| `docs/decisions/0010-legal-surface.md` §D2.5 | `55b421ad` (edited in range) | — |
+| `docs/decisions/0022-promote-to-campaign-and-format-families.md` §11.3 | `55b421ad` | unchanged in range — see MAJOR-3 |
+| `CLAUDE.md` test-execution-integrity section | `55b421ad` | unchanged in range |
+
+**Verification I ran myself, not the Builder's report:**
+
+- `npx tsc --noEmit --skipLibCheck` — **clean**.
+- `npm run lint` — **0 errors**, 105 pre-existing warnings.
+- `npm run test:app` with a bare shell — **3 files fail at import** (`lib/config.test.ts`,
+  `lib/campaigns/generate.test.ts`, `lib/signals/orchestrator.test.ts`) on `lib/config.ts:271`'s
+  `publicSchema.parse()`. Re-run with the exact env block `app-tests.yml` supplies:
+  **257 files / 3621 tests, all passing.** An environment difference, not a defect.
+- `npm run test:db` — **42 files failed, 1 test failed, 356 skipped**, every failure at
+  `lib/config.ts:271` / `lib/supabase/service.ts:2`. This is a **stack/environment failure** (no local
+  Supabase stack on this machine, no credentials exported), **not a DB-behaviour regression**, and it is a
+  *different* failure from the known supautils SIGSEGV. I deliberately did **not** run `test:db` with
+  `.env.local` loaded: those suites `createUser` / `insertBusiness` / `delete` against
+  `phdqfrrkbvuuklvbigoh.supabase.co`, the **live linked project**, and `db-tests.yml` states it "never
+  touches the linked remote Supabase project".
+- **Live-project read-only SQL** (in place of the Tier-1 suite I would not run): `ai_budget_daily` exists,
+  `signal_triage_budget` is gone, `ai_budget_daily_business_id_purpose_day_key UNIQUE (business_id,
+  purpose, day)` exists, `reserve_ai_budget` / `reconcile_ai_budget` exist as `SECURITY DEFINER`,
+  `reserve_triage_budget` / `reconcile_triage_budget` are gone, and all four score columns exist on
+  `post_ai_originals`. Both migrations **are applied**.
+- `git grep` of all five shared functions and their callers, at the range.
+- CI: `gh run list --branch session-30-5-adr-0028` — see BLOCKER-1.
+
+---
+
+## Findings
+
+### BLOCKER-1 — 0 of 29 constraints are executed green in CI; the branch was never pushed
+
+**What is wrong.** `git rev-parse origin/session-30-5-adr-0028` = `05baf1d2`; `git rev-list --count
+origin/session-30-5-adr-0028..55b421ad` = **13**. The newest CI runs on this branch are `pull_request`
+runs dated **2026-09-06**, at or before `05baf1d2` — every run predates H2.1. **No `app-tests` run, no
+`db-tests` run and no skip-guard line exists for any commit in this range.** I could not read a skip-guard
+file/test count from a log because there is no log to read.
+
+Under ADR 0015 and CLAUDE.md, *"covered" = executed green in CI, never "authored."* All 29 rows are
+therefore `AUTHORED-NOT-EXECUTED` at the stated head, including the 18 Tier-2 rows that need only a push.
+
+**Why it matters.** This is the exact tier of claim Session 28 shipped falsely and 28-D spent three
+correction steps undoing. **The Builder did not make that mistake** — `docs/current-phase.md` at
+`55b421ad` states it in its own words: *"0/29 are CI-executed-green, because CI has not run."* That is
+compliance, and it is why this is a session-state blocker rather than an integrity finding.
+
+**What would prove it fixed.** Push the range; an `app-tests` run **green at `55b421ad`** with a non-zero
+skip-guard file/test count read from the log and cited by run URL. The four Tier-1 rows
+(`QUAL-COST-CEILING-EXTENDED`, `QUAL-BUDGET-PURPOSE-ISOLATED`, `QUAL-PRO-DAILY-POST-CAP`,
+`QUAL-SCORE-ERASURE`) stay uncovered until `db-tests` itself is green — the promotion tally is at **0/3
+consecutive green `master` push runs**, and `pull_request` runs never move it.
+
+---
+
+### BLOCKER-2 — the ADR the whole session is built against exists at no commit
+
+**What is wrong.** `docs/decisions/0024-generation-quality-core.md` is `??` in `git status` — **untracked,
+never committed**, at `55b421ad` or anywhere in history (`git log --all -- <path>` is empty).
+`docs/build-guide/session-31.md` is `M` with **1,490 uncommitted added lines** against its only commit
+`0c79d118` — which is where §0.2's founder adjudications, §2b's fourteen Builder steps and §3's Reviewer
+prompt live.
+
+ADR 0024 §15 **MINOR-4** states the opposite in writing: *"Status `Accepted` while untracked and
+unregistered → Registered in `docs/current-phase.md`; the ADR and its two companion doc edits are
+committed together."* The `current-phase.md` registration landed; the ADR did not.
+
+**Why it matters.** Thirteen commit messages, four migrations, ~3,500 lines of source and every one of the
+29 constraint names cite `ADR 0024 §N` as their authority. At the range, that authority is a file on one
+machine. PROC-REVIEW-AT-COMMIT is unsatisfiable for any future reader of this range, and A-1/A-2/A-3/A-4 —
+four founder rulings, one of which contradicts a Locked pricing decision — are unrecoverable from git.
+
+**What would prove it fixed.** Both files committed, with the ADR's `Scope reviewed` line and §15 left
+byte-unchanged, and this report's range line amended in the correction-pass appendix to name the ADR's own
+commit.
+
+---
+
+### MAJOR-1 — `temperature` is never asserted to reach the SDK, in either direction
+
+**What is wrong.** `git show 55b421ad:lib/ai/runner.ts:167-168`:
+
+```
+...(prompt.temperature !== undefined ? { temperature: prompt.temperature } : {}),
+```
+
+`git grep -n temperature 55b421ad -- lib app components` returns **five** production hits (the factory
+constant, its three uses, and this spread) and **four** test hits — all four in
+`prompt-properties.frozen-table.test.ts` (which asserts the *prompt object's field*) and
+`runner.test.ts:759-784` (the "declares BOTH" disjointness check, which reads prompt objects, never
+`mockCreate.mock.calls`). **No test anywhere asserts that `temperature: 1.0` appears in the SDK params for
+a native-generation prompt, or that the key is absent for a prompt that declares nothing.**
+
+Contrast the sibling properties, both of which *are* covered at the SDK-params level:
+`runner.test.ts:703-715` (maxTokens 4096 / override) and `runner.test.ts:799-812` (thinking sent and
+omitted).
+
+**Failure scenario.** Delete `runner.ts:167`. Every test in the repo stays green. Production silently
+returns to provider-default sampling, N=3 draws three near-identical strings, the judge becomes decorative,
+and the session's cost doubles for no quality effect — with `QUAL-SAMPLING-VERSIONED`,
+`QUAL-SAMPLING-DEFAULT-PRESERVED` and `QUAL-N-CANDIDATE-COUNT` all still passing.
+
+**Why it matters.** ADR §11 constraint 10 says `QUAL-SAMPLING-DEFAULT-PRESERVED` proves *"a prompt
+declaring nothing produces byte-identical SDK params"* — half of that is unproven. And temperature 1.0 is,
+in the ADR's own words (§2.4), *"the candidate-diversity lever; without it N=3 returns three near-identical
+strings and the judge is decorative."* The single most load-bearing value in the session has no
+end-to-end test.
+
+**What would prove it fixed.** A `runner.test.ts` case in the shape of the thinking one: a prompt with
+`temperature: 1.0` produces `mockCreate.mock.calls[0][0].temperature === 1.0`, and `mockPrompt` produces
+params with **no** `temperature` key (`expect(callArgs).not.toHaveProperty('temperature')`).
+
+---
+
+### MAJOR-2 — the "runtime enumeration" of prompts is a hand-maintained import list, in both scans
+
+**What is wrong.** `lib/ai/prompts/prompt-properties.frozen-table.test.ts:137-150`:
+
+```
+function collectPrompts(): Array<Prompt<unknown, unknown>> {
+  return [ brandVoiceInferencePrompt, briefAssemblyPrompt, learningSummarizerPrompt,
+           postGenerationPrompt, postRegenerationPrompt, rubricPrompt, studioSuggestionPrompt,
+           createNativeGenerationPrompt('single'), createNativeGenerationPrompt('thread'),
+           createNativeGenerationPrompt('carousel') ] as ...
+}
+```
+
+`lib/scope-scans.test.ts`'s `QUAL-NO-NEW-AI-SURFACE` case (added at `55b421ad`) repeats the identical
+ten-import list and asserts `new Set(ids).size === 10`. Neither walks `lib/ai/prompts/` on disk, and
+neither derives the factory's families from the factory's own type.
+
+The ADR asserts the opposite, twice, and makes it the *reason* for the design choice — §3.2: *"The scan
+enumerates prompts by walking the exported `Prompt` objects plus the factory's three families, so **a new
+prompt or a new family with no row fails**, which is the whole point of choosing a runtime scan over a
+diff check."* The test file's own header comment repeats the claim verbatim.
+
+**Failure scenario.** Add `lib/ai/prompts/foo.ts` exporting `fooPrompt` with `temperature: 0.3` and no
+frozen row. `collectPrompts()` does not import it, `prompts` has length 10, every per-id assertion passes,
+and `QUAL-NO-NEW-AI-SURFACE` passes too — an eleventh prompt family with unversioned sampling ships green,
+which is precisely the state both constraints exist to make impossible. A fourth
+`createNativeGenerationPrompt` family behaves identically.
+
+This also invalidates the recorded reddening demonstration for `QUAL-NO-NEW-AI-SURFACE`
+(`scope-scans.test.ts`'s comment: *"temporarily added an 11th entry to `collectPromptIds()`'s import
+list"*) — adding an entry to the list is not the failure mode; adding a prompt **without** touching the
+list is.
+
+**Related, raised as an ADR observation rather than a separate finding:** even for the ten known ids, the
+frozen table does not enforce "bump `version` in the same commit". Editing `temperature: 1.0 → 0.8` in the
+factory *and* editing the table row to `0.8`, without touching `version`, passes. The table makes the
+change **visible in a diff**, which is the `platform-map.frozen-table` precedent's real property — but
+§3.2's sentence *"Changing any of those four without bumping that prompt's `version` in the same commit
+fails the test"* over-claims what any frozen table can do.
+
+**What would prove it fixed.** `collectPrompts()` derived from a filesystem walk of `lib/ai/prompts/**`
+that imports each module and collects every export structurally satisfying `Prompt` (an `id`, a `version`,
+a `modelKey`, an `outputSchema`), plus the factory driven off its own family union — with the
+eleventh-prompt case demonstrated to redden.
+
+---
+
+### MAJOR-3 — an ADR 0022 constraint was retired in code with no ADR 0022 amendment
+
+**What is wrong.** `git diff 05baf1d2..55b421ad -- lib/scope-scans.test.ts` **deletes** the entire
+`MODE2-RUNNER-UNTOUCHED` describe block — the SHA-256 content pin on `lib/ai/runner.ts` and the "no fourth
+`is*` predicate" assertion — replacing it with a comment explaining the retirement. The deletion is
+correct on the merits: ADR 0024 §3.1/§6.4/§7 legitimately modify `runner.ts`.
+
+But `MODE2-RUNNER-UNTOUCHED` is **ADR 0022's** constraint, not ADR 0017's. At `55b421ad`,
+`docs/decisions/0022-promote-to-campaign-and-format-families.md:911` still reads:
+
+```
+| `RUNNER-UNMODIFIED` | 3 → executable scan, `app-tests.yml` (`lib/scope-scans.test.ts`,
+  `MODE2-RUNNER-UNTOUCHED`) | `lib/ai/runner.ts`'s content hash changes, or a fourth `is*(promptId)`
+  predicate joins the three pre-existing ones. |
+```
+
+and `:927` lists it under "executable". `git diff --name-only 05baf1d2..55b421ad -- docs/decisions/`
+returns only `0010-legal-surface.md` and `0017-mode-2-upgrade.md`. **ADR 0022 got no amendment.**
+ADR 0024 §0's "Amends" list names ADR 0017 §7, `MODE2-HOOK-STANDALONE`, ADR 0021 §3.3/§3.4 and ADR 0018
+§2.3 — **not ADR 0022** — so the retirement is also unauthorised by the ADR.
+
+**Why it matters.** ADR 0022 §11.3 now names a test file that no longer contains the test. That is a false
+green of exactly the shape ADR 0024 §4.4 was written to avoid for `MODE2-HOOK-STANDALONE` — *"quietly
+leaving it green in the ADR 0017 table would be a false green."* The cited precedent
+(`POSTS-DDL-UNMODIFIED`) was retired with a dedicated doc commit, `b6580b84` *"N2.13-D1: retire
+POSTS-DDL-UNMODIFIED, superseded by ADR 0028's own posts DDL"*; this one was retired in a code comment
+inside a source commit.
+
+**What would prove it fixed.** An appended amendment on `docs/decisions/0022-...md` marking
+`RUNNER-UNMODIFIED` **retired, superseded by ADR 0024 §3.1/§6.4**, naming the commit that deleted the
+scan (`bdcabf50`), and stating what still guards the "no fourth `is*` predicate" half — which
+`runner.test.ts:865` (`QUAL-TRIAL-UNIT-PER-POST`'s exact-skip-set case) does in fact still cover, and
+which the amendment should say.
+
+---
+
+### MAJOR-4 — `withPostQueryContext` discards the campaign-level query context; `campaignId` reaches no prompt (ADR finding, §5.2b)
+
+**What is wrong.** At `55b421ad`, `lib/campaigns/generate.ts:211-214` builds the campaign-level context:
+
+```
+const queryContext: MemoryQueryContext = { objective, audience, campaignId }
+const ctx = await buildCustomerContext(businessId, campaign.voice_variation_id, queryContext)
+```
+
+then, for **every** entry (`generate.ts:322`):
+
+```
+const postCtx = await withPostQueryContext(ctx, { platform: entry.platform, role: entry.role })
+```
+
+and `lib/ai/context.ts:161-171` re-runs `retrievePerformancePatterns(client, ctx.business.id,
+{ platform, role })` and **replaces** `recentPostPerformance` wholesale. `postCtx` — not `ctx` — is what
+reaches `generateNativeContent` (`:331`) and the judge (`:373`). `ctx.recentPostPerformance` is consumed
+nowhere else: `ctx` is otherwise read only for `.brandVoice`, `.trialState` and `.business.timezone`.
+
+So the campaign-level retrieval is computed and thrown away once per generation, and **`campaignId` never
+influences any prompt's context on the product's main generation path.** `lib/memory/scoring.ts:56-70`'s
+`scopeMatch` is the only consumer of `campaignId`, and it is never called with one from production.
+
+Compounding it: `scopeMatch` has **no `role` branch at all** — `scoring.ts`'s own added comment says so
+(*"threaded through even though no MemoryScope value maps to it yet"*). So per-post conditioning reduces to
+**`platform` alone**, and the two fields §5.1 added contribute, between them, nothing to ranking on the
+generation path.
+
+`QUAL-QUERY-CONDITIONED` does assert a real ranking difference — but its two ranking cases
+(`lib/memory/performance.test.ts:259-286`) call `retrieveRelevant(client, 'biz-1', { campaignId })`
+**directly**, bypassing the seam where the field is dropped. The plumbing case in `lib/ai/context.test.ts`
+proves the third parameter reaches `retrievePerformancePatterns` — from `buildCustomerContext`, the call
+whose result is discarded.
+
+**This is an ADR finding, not a Builder finding.** §5.2b specifies the signature as
+`withPostQueryContext(ctx, { platform, role })`; the Builder implemented it exactly. The defect is that
+§5.2b's narrow signature silently un-does §5.1's stated purpose for `campaignId` — *"makes the existing
+0.2 scope-match weight do work it currently cannot."* **It is a sixth defect in an ADR that already
+carries five self-corrections**, and of the same class as §15's BLOCKER-2: a design that reads correct in
+isolation and is wrong once the two halves are composed.
+
+**What would prove it fixed.** Either (a) `withPostQueryContext` merges rather than replaces —
+`{ ...campaignQueryContext, platform, role }`, threaded from the call site — with a `generate.test.ts`
+case asserting `campaignId` survives to `retrievePerformancePatterns`; or (b) the ADR records explicitly,
+with a reason, that per-post conditioning deliberately narrows to `platform` and that `campaignId`/`role`
+are inert on this path. Either is acceptable; an ADR that claims one while the code does the other is not.
+
+---
+
+### MAJOR-5 — the recreated budget RPCs are EXECUTE-able by `anon` and `authenticated` on the live project
+
+**What is wrong.** `supabase/migrations/20260909110000_ai_budget_daily_rename.sql` drops and recreates both
+RPCs and issues, for each:
+
+```
+REVOKE ALL ON FUNCTION public.reserve_ai_budget(uuid, text, integer, integer) FROM public;
+GRANT EXECUTE ON FUNCTION public.reserve_ai_budget(uuid, text, integer, integer) TO service_role;
+```
+
+with a comment asserting *"a recreated SECURITY DEFINER function with no REVOKE is a privilege
+escalation."* Read from the live linked project:
+
+```
+reserve_ai_budget    prosecdef=t  acl: postgres=X | anon=X | authenticated=X | service_role=X
+reconcile_ai_budget  prosecdef=t  acl: postgres=X | anon=X | authenticated=X | service_role=X
+```
+
+Supabase's `ALTER DEFAULT PRIVILEGES` grants EXECUTE on new functions to `anon` and `authenticated`
+**by name**. `REVOKE … FROM public` does not touch a named grant, so the REVOKE the ADR relies on is a
+no-op against exactly the two roles that matter. `vault_delete_secret` on the same project shows the
+correct end state (`postgres=X | service_role=X`), so the repo already knows how to do this.
+
+**Failure scenario.** Any signed-in customer calls PostgREST `POST /rest/v1/rpc/reserve_ai_budget` with
+`{p_business_id: <another tenant's uuid>, p_purpose: 'generation_posts', p_units: 15, p_cap: 15}`. The
+function is `SECURITY DEFINER` with no caller check, and `ai_budget_daily` has no RLS policy at all, so the
+row is written and that tenant's Pro daily post cap is exhausted for the UTC day. `reconcile_ai_budget`
+lets them zero a competitor's counter instead.
+
+**Scoping this honestly — it is NOT a Session 31 regression.** The superseded
+`reserve_triage_budget` / `reconcile_triage_budget` used the identical `REVOKE … FROM public` pattern
+(`20260807110000_mode3_triage_state.sql:154,189`), and `purge_business`, `upsert_signal_candidate` and
+`get_user_business_ids` all carry the same `anon=X | authenticated=X` ACL today. This is a **pre-existing,
+repo-wide** defect that the range inherited. It is reported here because this range (a) recreated both
+functions, (b) attached a **customer-facing quota** to one of them, and (c) wrote a comment claiming the
+re-issued REVOKE closes an escalation it does not close.
+
+**What would prove it fixed.** `REVOKE ALL ON FUNCTION … FROM PUBLIC, anon, authenticated;` on both, a
+re-read of `proacl` showing `postgres=X | service_role=X` only, and a Tier-1 case asserting an
+`authenticated` client's `rpc('reserve_ai_budget', …)` is denied. The repo-wide sweep (`purge_business`
+first) belongs in its own tracked piece of work, not in a Session 31 correction pass.
+
+---
+
+### MINOR-1 — reserved generation units leak when a mid-campaign reservation is refused
+
+**What is wrong.** `generate.ts:305-320` reserves **one unit per entry, inside the entry loop**, and
+`generate.ts:498` inserts the posts **after** the loop completes. `releaseGenerationPost` is called on
+exactly one path: the 0-of-N hard fail (`generate.ts:344-347`). When entry *k*'s `reserveGenerationPost`
+returns `null`, the function writes `error_code: 'daily_quota_exceeded'` and returns `postsCreated: 0` —
+leaving the *k−1* units already reserved for entries the customer never received.
+
+**Failure scenario.** A Pro business with 5 of 15 units left generates a 12-entry campaign. Entries 1–5
+generate; entry 6's reservation is refused; the session fails with `postsCreated: 0`; 5 daily post units
+are consumed and no post exists.
+
+**Why it matters.** ADR §7.5a defines two outcomes — hard fail releases, success keeps. The mid-loop
+denial is a third case it does not name, and `supabase/__tests__/ai-budget-generation-posts.test.ts` does
+not cover it either.
+
+**What would prove it fixed.** Either release every unit reserved so far on the `daily_quota_exceeded`
+return, or reserve for the whole `roleSequence` up front in one call (`p_units = totalPosts`) — plus a
+`generate.test.ts` case asserting `releaseGenerationPost` is called once per already-reserved entry when
+entry 2 of 3 is refused.
+
+---
+
+### MINOR-2 — `QUAL-CONTEXT-CALLERS-UNCHANGED` is not asserted per call site
+
+**What is wrong.** `git grep -n 'buildCustomerContext(' 55b421ad -- lib app` returns exactly **ten**
+production call sites across **nine** files, with `lib/campaigns/brief.ts` holding two (`:111`, `:160`) —
+the ADR §5.4 count is correct, and exactly one (`generate.ts:214`) passes a `queryContext`. Verified by
+grep at the range, not from the ADR.
+
+But the constraint's stated shape is *"asserts, **per call site**, that the arguments and the resulting
+`CustomerContext` are unchanged for the nine."* Only call site 1 has an argument assertion
+(`generate.context-equivalence.test.ts:291-298`, edited in range):
+
+| # | Call site | Test that covers it | Asserts the args? |
+|---|---|---|---|
+| 1 | `lib/campaigns/generate.ts:214` | `generate.context-equivalence.test.ts:291` | **yes** — the one that passes a context |
+| 2 | `lib/campaigns/brief.ts:111` (Stage A) | `lib/campaigns/brief.test.ts` | no — not distinguished from #3 |
+| 3 | `lib/campaigns/brief.ts:160` (Stage B) | `lib/campaigns/brief.test.ts` | no — not distinguished from #2 |
+| 4 | `lib/learning/summarize.ts:156` | `lib/learning/summarize.test.ts` | no |
+| 5 | `lib/signals/triage/orchestrator.ts:125` | `lib/signals/triage/orchestrator.test.ts` | no |
+| 6 | `…/campaigns/[id]/generate-action.ts:44` | `context-callers.context-equivalence.test.ts:188` ("caller 3") | no — exercises the real builder |
+| 7 | `…/campaigns/[id]/posts/actions.ts:282` | `posts/actions.test.ts` | no |
+| 8 | `…/onboarding/infer-brand-voice/actions.ts:27` | `context-callers.…test.ts:205` ("caller 4") | no |
+| 9 | `…/settings/voice/refine-from-posts-action.ts:42` | `context-callers.…test.ts:223` ("caller 5") | no |
+| 10 | `…/studio/actions.ts:133` | `studio/actions.test.ts` | no |
+
+**Why it matters.** The property *does* hold — `git diff --name-only 05baf1d2..55b421ad` shows **none** of
+those nine files changed, and the third parameter defaults to `{}` — so this is not a false green. But it
+is proven by absence-of-diff, a Tier-3 argument, for a constraint the ADR tiers as 2. And `brief.ts`'s two
+sites being covered by one undifferentiated file is the per-*file* accounting §5.4 itself warns is
+*"exactly how the Session 22 blockers were missed."*
+
+**What would prove it fixed.** A spy-on-args case per row above, or an explicit appendix note re-tiering
+the nine as Tier 3 (diff-verified: "no caller file changed") with `brief.ts`'s two sites enumerated
+individually.
+
+---
+
+### MINOR-3 — H2.3's cassette-queue helper is used by nothing except its own test
+
+**What is wrong.** `git grep -n 'enqueueCassettes\|drainCassetteQueue' 55b421ad -- lib app components`
+returns hits in **`lib/ai/__test-utils__/cassette-queue.ts` and `cassette-queue.test.ts` only**. The tests
+that needed distinct payloads — `generate.test.ts`'s argmax, tie-break, partial-failure and
+below-threshold cases — get them from `vi.mocked(runPrompt).mockResolvedValueOnce(...)` and
+`vi.mocked(generateNativeContent).mockResolvedValueOnce(...)` chains instead, because that file mocks
+`@/lib/ai/runner` and `@/lib/ai/generate-native` wholesale (`generate.test.ts:42-49`).
+
+**Why it matters — and what it is not.** The property ADR §4.5(2) demanded **is met**: the argmax case
+uses three distinct `overall` values (60/95/80) and asserts the winner is 95; the tie case uses three
+distinct candidate bodies (`makeSingleOutput(100|101|102)`) plus a deliberate 90/90/70 tie and asserts the
+inserted content is candidate 0's. **These do not pass on a 3-way tie.** So this is *not* the false green
+the ADR feared. What is wrong is narrower: the named prerequisite deliverable — including
+`drainCassetteQueue`'s loud-failure teardown — guards a queue no Session 31 test touches, so the
+global-FIFO poisoning risk at `lib/ai/client.ts:38-41,:55-56` remains unexercised and unguarded for every
+other file.
+
+**What would prove it fixed.** Either a recorded decision that H2.3 is superseded by the `vi.mock` route
+(helper kept as available infrastructure), or `drainCassetteQueue()` wired into a global `afterEach` in
+the vitest setup so it actually protects every file.
+
+---
+
+### MINOR-4 — A-4's expectation-setting copy was neither shipped nor recorded as already-satisfied
+
+**What is wrong.** ADR §3.4 and build-guide §0.2 A-4 state the obligation in the same words: *"The Builder
+owes a progress state that sets the expectation"* / *"a spinner with no copy is not the contract."*
+`brief-assembly`'s `thinking: 4000` landed at H2.2 (`8ac97dfc`), adding the +8–15s. The only brief progress
+string in the repo is `i18n/en/common.json:229` — *"The brief is still being assembled and critiqued.
+Check back shortly."* — **unchanged in the range**, written before the latency existed.
+`git diff 05baf1d2..55b421ad -- i18n/` shows no brief-progress addition in any of the three locales.
+
+**Why it matters.** A-4 is one of four founder rulings and the only one whose deliverable is purely UX. It
+is not in `docs/backlog.md` as deferred, so it risks being lost between "the ADR said the Builder owed it"
+and "no one recorded whether it shipped."
+
+**What would prove it fixed.** Either the copy in en/pt/es on the brief surface, or a line in the
+correction appendix stating the existing string is judged sufficient for +8–15s, with the founder's
+agreement or a backlog item.
+
+---
+
+### MINOR-5 — ADR 0017 Amendment D's five mapped-forward cases do not name their test files
+
+**What is wrong.** `docs/decisions/0017-mode-2-upgrade.md` at `55b421ad` carries Amendment D with exactly
+**21** rows — verified independently: `git show 55b421ad:… | grep -o "MODE2-[A-Z0-9-]*" | sort -u` returns
+21 distinct names, matching the table one-for-one. `MODE2-HOOK-STANDALONE` is marked **"NO — deliberately
+retired"** with its reason on the record, so no retired constraint is left green in ADR 0017's table. That
+half is right.
+
+The five-case mapping table, however, gives only a target *constraint name* per row
+(`QUAL-JUDGE-RUBRIC-UNFORKED`, `QUAL-BELOW-THRESHOLD-SURFACED`, …) and **no test file**. Every other row of
+the 21-row table names a file; these five do not.
+
+**Why it matters.** A retired constraint's cases are only "mapped forward" if a reader can open the file
+that now runs them. Without a file, the mapping is a rename. (The files do exist —
+`lib/campaigns/generate.test.ts:665-820` and `lib/ai/prompts/rubric.test.ts` — which is why this is MINOR.)
+
+**What would prove it fixed.** A `file:line` in each of the five rows.
+
+---
+
+### MINOR-6 — the new status colours are raw Tailwind palette, not tokens, with no contrast assertion
+
+**What is wrong.** `components/posts/PostJudgmentBadge.tsx` (new at `03eebcb8`) renders the two new status
+states with literal palette classes: `bg-amber-100 … text-amber-800 dark:bg-amber-950/40
+dark:text-amber-300` and `bg-emerald-100 … text-emerald-800 dark:bg-emerald-950/40
+dark:text-emerald-300`. No `globals.css` token is added, and no test reads the shipped token file to
+assert contrast in either theme.
+
+**Why it matters.** ADR §8.5 binds the Builder to the repo's design contract, and the amber state is the
+one carrying a *behavioural* consequence (exclusion from bulk approve), so its legibility in both themes
+is functional, not cosmetic.
+
+**Scoping it honestly:** this is house-consistent — `ApprovalsInbox.tsx`'s pre-existing bulk button is
+`bg-emerald-700 hover:bg-emerald-600 text-white`, also raw palette — so it is a continuation, not a
+regression.
+
+**What would prove it fixed.** Two `--status-*` token pairs in `globals.css`, used by the badge, plus a
+test that reads the shipped token file and asserts a WCAG AA ratio under both `:root` and
+`[data-theme="dark"]`.
+
+---
+
+### MINOR-7 — §D2.5 carries the rename but no explicit "no new row required" record for the score columns
+
+**What is wrong.** `docs/decisions/0010-legal-surface.md` §D2.5 at `55b421ad` correctly renames the row and
+annotates it: *"ai_budget_daily … renamed from signal_triage_budget, ADR 0024 §7.5b, Session 31 H2.8 —
+same row, same FK, same cascade, purpose column added carries no personal data."* That half is right, and
+`purge_business` is cascade-driven (`20260702120700_purge_business_member_delete.sql:59-61` — a root
+`DELETE FROM public.businesses`, no table named), so the rename is safe by construction with no function
+edit owed.
+
+What is missing is the **second** obligation: L-10 / ADR §9's explicit-statement branch, on the Session
+28-D D7 precedent, calls for the *"no new business-scoped table required"* record — covering the
+`post_ai_originals` column addition — to live in §D2.5's own document. It lives in ADR 0024 §9 (untracked,
+see BLOCKER-2) and in the migration header comment, not in the cascade table.
+
+**What would prove it fixed.** One line under §D2.5's table recording that Session 31 introduced no new
+business-scoped table, that `post_ai_originals` gained four columns needing no new row (the ADR 0022
+`studio_drafts` precedent), and that `QUAL-SCORE-ERASURE` proves erasure reaches them.
+
+---
+
+### MINOR-8 — the Tier-1 backfill case ADR §10.1 names does not exist
+
+**What is wrong.** ADR §10.1 requires, under `QUAL-COST-CEILING-EXTENDED`, *"one proving existing rows
+backfilled to `purpose='triage_cents'` with their `reserved_units` value intact."*
+`supabase/__tests__/signals3-triage-state.test.ts` at `55b421ad` has a "NO `signal_triage_budget` table or
+RPC survives the rename" case (`:263`) and a "purpose has no default" case (`:274`) — **no backfill case**.
+
+**Why it matters, and why it is MINOR.** The case is not writable against `db-tests`' fresh-migrate stack:
+there are no pre-rename rows to backfill. The migration's `ADD COLUMN purpose text NOT NULL DEFAULT
+'triage_cents'` followed by `ALTER COLUMN purpose DROP DEFAULT` makes the backfill structurally
+guaranteed, and the live project's rows did migrate. So the property holds — the *record* is what is
+missing, and ADR 0015 §2 is explicit that "no runtime test" must be an enumerated decision, never a gap.
+**The same remedy is owed to `QUAL-NO-SECOND-BUDGET-TABLE`**, which is the one Tier-3 row with no recorded
+statement anywhere in code (it is covered only by the "no `signal_triage_budget` survives" Tier-1 case,
+which is a different property).
+
+**What would prove it fixed.** The backfill half re-tiered to Tier 3 in ADR §10.1/§11 with its
+untestability stated, or a fixture-seeded Tier-1 case; and a one-line Tier-3 record for
+`QUAL-NO-SECOND-BUDGET-TABLE` alongside the other six.
+
+---
+
+### NIT-1 — dead `openingStrength` residue survives `QUAL-HOOK-RETRY-REMOVED`'s own grep
+
+`generate.ts:529-530` still carries an unreachable branch — `previousContent` is hard-coded `null` at
+`:460`, so the ternary's true arm can never run — containing the string
+`rejectionNote: 'weak opener (openingStrength below threshold)'`. The constraint's recorded verification
+(`generate.test.ts:822-828`) greps for `extractOpener\|openingStrength.score <`, which does not match it.
+The retry itself **is** genuinely gone: no second `generateNativeContent` call, no threshold comparison,
+no `regenerationCount` mutation anywhere in the file.
+
+### NIT-2 — `role` is inert
+
+`MemoryQueryContext.role` is added, threaded and present in `scoring.test.ts:56`'s fixture, but
+`scopeMatch` (`scoring.ts:56-70`) has no `role` branch, so it changes no ranking anywhere. Folded into
+MAJOR-4's remedy.
+
+### NIT-3 — old constraint names survive the table rename
+
+Read live: `ai_budget_daily` still carries `signal_triage_budget_pkey`,
+`signal_triage_budget_business_id_fkey` and `signal_triage_budget_reserved_cents_check`. Cosmetic — the
+Tier-1 "no `signal_triage_budget` object survives" case probes the table and the RPCs only, and Postgres
+carries constraint names through a `RENAME`.
+
+### NIT-4 — two new `as any` outside CLAUDE.md's named carve-outs
+
+`lib/memory/performance.test.ts` (`const client = {} as any`, eslint-disabled, two new instances in the
+range). CLAUDE.md names exactly two `any`-adjacent loci: `lib/email/templates/index.ts` and
+`supabase/__tests__/*.test.ts`. This is an app-layer `lib/**` test file. `npm run lint` is 0 errors.
+
+### NIT-5 — `app-tests.yml`'s env comment is now stale
+
+The comment reads *"two files import the REAL `lib/config.ts` unmocked (`lib/config.test.ts` …;
+`lib/signals/orchestrator.test.ts` …)"*. As of this range there are **three** —
+`lib/campaigns/generate.test.ts` now transitively imports `lib/config.ts` via `lib/campaigns/generate.ts`,
+which is what my bare-shell run surfaced. CI still passes (the env block is step-scoped), which is why this
+is a NIT and not a finding against the job.
+
+---
+
+## What I verified as CORRECT — organised by ADR section
+
+### §2 — the N-candidate contract (L-3, D-2)
+
+- **N = 3, declared once.** `generate.ts:48` `const N_CANDIDATES = 3`, used at `:331` only.
+- **Concurrency bounded to N.** `Promise.allSettled(Array.from({length: N_CANDIDATES}, …))` inside the
+  awaited entry loop — the fan-out width *is* the bound, and posts stay sequential across the loop.
+  Asserted at `generate.test.ts:666,808`.
+- **Three outcomes, all three tested.** Hard fail (`generate.test.ts:717`); **unscored** — the one most
+  likely to be missing, and it is present and correct (`:734`: `postsCreated === 1`, `overall_score` null,
+  `dimension_scores` null, `candidate_count` 3, `cleared_quality_threshold` **null, not a defaulted
+  false**); and partial failure with argmax over the two survivors (`:753`, asserting `runPrompt` was
+  called twice, not three times).
+- **Argmax and tie-breaking.** `generate.ts:441-445` reduces over `scored`, which is built in ascending
+  candidate index, so a tie can never satisfy `c.index < best.index` — lowest index wins. Both halves are
+  tested with genuinely distinct payloads (see MINOR-3): distinct scores for the argmax, distinct bodies
+  plus a deliberate tie for the tie-break.
+- **All-N-below-threshold does not fail, regenerate or escalate.** `generate.test.ts:781` asserts
+  `postsCreated === 1`, `overall_score === 65`, `cleared_quality_threshold === false`, and that
+  `updateGenerationSessionStatus` was **never** called with `status: 'failed'`. No Opus reference exists
+  anywhere in the range.
+- **The retry is GONE, not dormant.** `git grep` of `generate.ts` at `55b421ad` finds no `extractOpener`,
+  no threshold comparison, no second `generateNativeContent`, and `regenerationCount`/`previousContent`
+  hard-coded `0`/`null` at `:459-460`. Only NIT-1's dead branch remains.
+- **The judge is the existing `rubricPrompt`, unforked.** `lib/ai/prompts/rubric.ts` is **not in the
+  diff**: ten dimensions, `RubricOutputSchema` byte-unchanged, `rubric.ts:21-24`'s invariant comment
+  intact. Per SHARED-FUNCTION CALLERS, four callers, each with a test:
+
+  | Caller | Mode | Test that exercises it |
+  |---|---|---|
+  | `lib/campaigns/brief.ts:170` | `'brief'` | `lib/campaigns/brief.test.ts` |
+  | `lib/campaigns/generate.ts:374` (**the judge**) | `'post'` | `generate.test.ts:594-663` |
+  | `lib/signals/triage/card.ts:226` | `'card'` | the triage card suite |
+  | the prompt object itself | — | `rubric.test.ts:116-190` |
+
+  No multiplexed 3-output call exists, so the schema `lib/studio/categories.ts` derives from is untouched.
+- **Every candidate is `neutralize()`'d before the judge**, and the assertion is content-based, not
+  call-count-based: `generate.test.ts:640-653` feeds an injection payload and asserts the rubric input is
+  defused — dropping the `neutralize()` call reddens it.
+- **The judge scores `joinContent(output)`, not `extractOpener(output)`.** `generate.ts:376`
+  `content: neutralize(joinContent(output))`; `generate.test.ts:602,621-638` asserts the whole body,
+  including the thread-join case.
+- **Losing candidate content is nowhere persisted.** No `post_candidates` table in either migration; only
+  `winningOutput`/`winningScore` reach `generated` (`generate.ts:453-464`); `AiGenerationMetadata`
+  (`:520-543`) carries no candidate array or rejected-draft field.
+
+### §3 / §3.3a — sampling and thinking as versioned properties (L-2, D-3)
+
+- **`brief-assembly` declares `thinking: 4000` AND `maxTokens: 12_000` in the same declaration at
+  `version: 2`** — `lib/ai/prompts/brief.ts:71-84`, both fields, one commit (`8ac97dfc`). §3.3a's BLOCKER
+  is closed; asserted directly at `runner.test.ts:726`.
+- **No prompt declares both `temperature` and `thinking`**, asserted over all ten ids at
+  `runner.test.ts:759-786`; adding the pair to any one of them reddens it.
+- **A `thinking` block followed by a `text` block parses** (`runner.test.ts:788`), and a thinking budget is
+  sent in SDK form and **omitted entirely when unset** (`:799`).
+- **The frozen table has exactly TEN rows**, one per prompt id. `formats/policy.ts` and
+  `formats/schemas.ts` correctly get **no** row; `native-generation-{single,thread,carousel}` correctly get
+  **three** despite `temperature` being declared once inside the factory
+  (`native-generation-prompt.ts:133-137`). §15 MAJOR-2's 12-row draft is corrected. It reddens
+  independently on `modelKey`, `temperature`, `thinking`, `maxTokens` and `useToolOutput` — but see
+  MAJOR-2 for what it does **not** catch.
+- **Native generation deliberately gets no thinking budget**, recorded as a decision, not an omission.
+
+### §4 — fixtures
+
+- **ZERO fixtures moved.** `git diff --name-only 05baf1d2..55b421ad -- lib/ai/__fixtures__` is **empty**.
+  This is the correct outcome: L-5's premise is false for this harness, and `MockAnthropicClient`
+  (`lib/ai/client.ts:49-88`) routes only on `params.model`, `_sosh.promptId` and
+  `_sosh.input.targetPlatform` — I re-read it and confirm temperature/thinking never touch routing.
+  **No finding is raised for the migration not happening**, and none was warranted for a re-record either.
+- **The post-generation orphan audit is recorded, not acted on.** All five fixtures still present
+  (asserted by the `QUAL-MODE2-FIXTURES-MIGRATED` scan); removal deferred to
+  `31-DEAD-POST-GENERATION-PROMPT` in `docs/backlog.md`, to land in one diff with the prompt and
+  `client.ts:61-67`'s routing branch. Correct per the ADR.
+
+### §5 — task-conditioned retrieval
+
+Correct except MAJOR-4 / MINOR-2 / NIT-2. Specifically verified:
+
+- **`withPostQueryContext` re-runs `retrievePerformancePatterns` ONLY.** `context.ts:161-171` — brand,
+  evidence, audience and voice are not re-read; asserted at `context.test.ts` ("does not re-read
+  brand/evidence/audience/voice or campaigns").
+- **`QUAL-SERVICE-ROLE-UNWIDENED` holds.** No `client` parameter on either function; the only
+  `createServiceRoleClient()` call sites in the diff are both inside `lib/ai/context.ts`, via the
+  lazy-import pattern; asserted at `context.test.ts:686`.
+- **`retrieveVoice`** — two callers (`context.ts:57`, `lib/learning/orchestrator.ts:240`), neither changed,
+  neither passed new fields; `MEM-VOICE-THROUGH-EXISTING` intact, covered by `context.test.ts:394-438` and
+  the learning-orchestrator suite.
+- **`retrievePerformancePatterns`** — callers per §5.5, unchanged shape; `lib/signals/triage/tools.ts`
+  still deliberately not a caller.
+- **Caps unchanged.** `lib/memory/constants.ts` is **not in the diff**: `BRAND_CAP 5`, `EVIDENCE_CAP 5`,
+  `AUDIENCE_CAP 5`, `PERFORMANCE_CAP 3` all stand.
+- **No `lib/memory/` write path added** (L-1) — and it is now an executable scan in
+  `lib/scope-scans.test.ts` ("no `lib/memory/*.ts` calls `.insert`/`.update`/`.upsert`/`.rpc`").
+
+### §6 — structured output (L-7, D-5)
+
+- **The parse path learned `tool_use` in the SAME commit as the first migrated prompt.** `62afe1dd`
+  contains both `lib/ai/runner.ts` and `lib/ai/prompts/learning-summarizer.ts`. **There is no intermediate
+  commit** where a prompt declares a tool against a text-only parser — the ordering hazard §4.5(1) names
+  never existed. `runner.ts:224` finds the `tool_use` block unconditionally, before branching.
+- **Exactly ONE prompt migrated.** `useToolOutput: true` appears once in the repo
+  (`learning-summarizer.ts:93`); the frozen table records `useToolOutput: undefined` for the other nine.
+- **`extractJsonBlock` present AND exercised.** `parsers.test.ts:6-45` exercises it directly; `runner.ts`'s
+  else-branch (`safeParseOrAiError(prompt.outputSchema, rawText)`) still serves the other nine ids;
+  `tool-runner.ts:445` still parses its text decision. `QUAL-PARSER-RETAINED`'s scan asserts all three, not
+  merely presence.
+- **Zod retained behind the tool schema.** `input_schema: z.toJSONSchema(prompt.outputSchema)` — one schema
+  object per prompt, no hand-written second schema. `parseToolInputOrAiError` (`parsers.ts:81-97`) still
+  runs `schema.safeParse` and throws the **identical** `AiError('invalid_response')` shape, so no caller
+  can distinguish the paths. `TOutput` still infers off `prompt.outputSchema`.
+- **All three malformed paths tested** (`runner.test.ts:954,966,979`): no tool block; bad `input`; and
+  mixed text+tool with the `tool_use` block winning and the mixed case logging.
+
+### §7 — cost, trial caps and rate limits at N (L-6, L-9, A-1, A-2)
+
+- **Guard ordering unchanged** — `QUAL-GUARD-ORDER-PRESERVED` at `runner.test.ts:822` (trial cap, then
+  rate limit, then SDK call); the reservation sits outside and above `runPrompt`, in `generate.ts`.
+- **The trial-unit negative obligation was honoured exactly.** `runner.ts:217`'s two skip predicates are
+  **unnarrowed**, the orchestrator still batch-increments once per inserted post, and the Builder added
+  **no new mechanism** — which is the correct reading of §7.2. `QUAL-TRIAL-UNIT-PER-POST` is a pure
+  regression test: `runner.test.ts:865` asserts the skip set is exactly
+  `{native-generation-single, native-generation-thread, post-generation, rubric}`, no more and no less;
+  `generate.test.ts:795` asserts 18 candidate generations produce one
+  `incrementPostsGeneratedBy(BUSINESS_ID, 6)`, not 18.
+- **Rate limit raised 30 → 100 in `lib/config.ts:37`**, not via `process.env`; `AI_PRO_DAILY_POST_CAP = 15`
+  likewise, with a `config.server` getter, read at `generate.ts:307` as
+  `config.server.AI_PRO_DAILY_POST_CAP`.
+- **The reservation reserves POSTS, not cents; ONE unit; BEFORE the fan-out.**
+  `lib/db/generation-budget.ts:22-38` — `p_purpose: 'generation_posts'`, `p_units: 1`, `p_cap: capPosts`.
+  `generate.ts:305-320` sits above `:329`'s `Promise.allSettled`. Asserted at `generate.test.ts:838` (one
+  call, `(BUSINESS_ID, 15)`, with three generations still issued). Release-on-hard-fail via
+  `reconcile_ai_budget(…, 1, 0)` asserted at `:874`, and *not* released on success at `:881`.
+- **Plus and trial take NO `generation_posts` reservation** — asserted separately at
+  `generate.test.ts:851,858`. The unruled pricing change did not happen.
+- **A denied reservation uses a distinct error code**, `daily_quota_exceeded`, not the trial cap's
+  `quota_exceeded` (`generate.ts:311`, asserted at `generate.test.ts:864`), with distinct copy carrying the
+  `00:00 UTC` reset hour in all three locales.
+- **The budget migration is right on all four counts the ADR flags.** `UNIQUE (business_id, purpose, day)`
+  landed and the old `(business_id, day)` key is dropped (verified live); both RPCs **`DROP FUNCTION`**'d
+  and recreated with a re-issued REVOKE/GRANT pair (MAJOR-5 covers why the REVOKE is insufficient);
+  backfill via `ADD COLUMN … DEFAULT 'triage_cents'` then `DROP DEFAULT`; trigger renamed with the table;
+  **no** `signal_triage_budget` table or RPC survives (verified live and at
+  `signals3-triage-state.test.ts:263`).
+- **`QUAL-BUDGET-PURPOSE-ISOLATED` is genuinely BIDIRECTIONAL** — `signals3-triage-state.test.ts:289`
+  (a capped `triage_cents` row does not deny a `generation_posts` reservation) **and** `:311` (the other
+  direction, explicitly labelled as such). A one-directional test would have passed on a shared counter
+  half the time; this one cannot.
+
+### §8 — the UX contract (A-3, A-4)
+
+- **Scores live on `post_ai_originals` as COLUMNS**, written **with** the row at `generate.ts:568-579`'s
+  `createPostAiOriginal` insert — never `UPDATE`d onto it, so the write-once `BEFORE UPDATE` trigger
+  (`learning_capture.sql:67-68`) is respected by construction. `AI_ORIGINAL_SCHEMA_VERSION` bumped 1 → 2
+  in the same migration step.
+- **Nothing was written to `posts.ai_generation_metadata`** — the metadata literal at
+  `generate.ts:520-543` carries no score field, and `post-ai-originals.test.ts` has an explicit negative
+  case ("createPostAiOriginal never targets the posts table — only post_ai_originals").
+- **`QUAL-SCORE-ERASURE` is a real live-Postgres case**, not a structural argument from `ON DELETE
+  CASCADE`: `supabase/__tests__/post-ai-original-scores-erasure.test.ts` writes a row carrying all four new
+  columns, reads them back (`overall_score` 82, `candidate_count` 3, `cleared_quality_threshold` true,
+  `dimension_scores` deep-equal), runs `purge_business`, and asserts zero rows.
+- **All four states render**, with the unscored one explicitly stated rather than badge-absent
+  (`PostJudgmentBadge.tsx:38-42`; `resolvePostJudgment` maps `cleared_quality_threshold: null` →
+  `'judging-failed'`, never a defaulted `false`). Tested in both surfaces (`ApprovalsInbox.test.tsx`,
+  `PostCard.test.tsx`), including the no-original-row case.
+- **Bulk-approve exclusion is covered PER CALLER — the Session 22 shape did not recur.**
+  `bulkApproveDraftPosts` (`lib/db/posts.ts:594`) has exactly two callers via `bulkApprovePostsAction`,
+  found by `git grep` at the range, not from the ADR:
+
+  | Caller | Exclusion site | Test that exercises it | Says why? |
+  |---|---|---|---|
+  | `app/[locale]/(dashboard)/approvals/ApprovalsInbox.tsx:250,302` | `approvableRows` / `excludedRows` | `ApprovalsInbox.test.tsx` — "bulk approve excludes below-threshold ids from the Server Action call", plus the every-post-excluded case | **yes** — asserts `bulk.excludedNotice` renders (`:808`) |
+  | `app/[locale]/(dashboard)/campaigns/[id]/posts/PostsClient.tsx:128,252` | `approvableDraftIds` / `excludedDrafts` | `PostsClient.test.tsx` — exclusion, notice shown, notice not shown, all-excluded, no-original-row | **yes** — `bulkApproveExcludedNotice` |
+
+  Both surfaces **say why** they left drafts behind, per A-3, and neither skips silently. *Residual note,
+  not a finding:* `bulkApproveDraftPosts` itself still carries no quality predicate — ADR §8.4 chose
+  caller-side enforcement deliberately — so a future third caller inherits nothing.
+- **i18n landed in en, pt and es simultaneously.** Programmatic key-parity check across `approvals.json`,
+  `posts.json` and `common.json`: **zero missing, zero extra** in either pt or es. The score badge, the
+  amber below-threshold copy, the bulk-approve explanation, the unscored notice and the
+  `daily_quota_exceeded` string with its `00:00 UTC` reset are all present in all three.
+- **No `asChild` on `Button` or any `DropdownMenu` primitive** anywhere in the changed `.tsx` files
+  (grep returns nothing). **No raw `.toISOString()`** in any changed non-test source. The new page query
+  goes through `lib/db/post-ai-originals.ts`'s existing RPC-backed helper with an empty-input guard.
+
+### §9 — GDPR and tenancy (L-10)
+
+- **No new business-scoped table.** Both migrations are `ALTER TABLE` only; `QUAL-NO-SECOND-BUDGET-TABLE`
+  holds by inspection of both files.
+- **The §D2.5 row moved with the table**, annotated (MINOR-7 covers what is still missing).
+- `purge_business` needs no edit — it is cascade-driven with no table named in its body.
+
+### §10 — the test plan and the honest record
+
+- **Tier counts match the ADR**: 4 Tier 1, 18 Tier 2, 7 Tier 3, **0 Tier E**. I checked specifically for a
+  quietly-added Tier-E row (ADR 0015 Amendment B(b)) — **there is none**, and none of the seven Tier-3 rows
+  is a disguised quality claim.
+- **The eval harness was not run and not claimed.** `eval-triage.yml`'s path filter matches no Session 31
+  file; `docs/current-phase.md` cites this as a *reason the session cannot measure*, and reports no green
+  from it.
+- **The before/after record is honest, and MEASURED-never-COVERED.** `docs/current-phase.md` at `55b421ad`
+  gives a factual mechanism table (1→3 candidates, 2→6 provider calls, ≈4.9¢→≈10¢ recorded) and then
+  states in four numbered points that the session **cannot prove the posts are better**, including the
+  bootstrap-ceiling caveat. **No quality improvement is claimed anywhere in the range.** That is
+  compliance, and I raise no finding.
+- **The interim instrumentation states both halves in the log line itself** (`generate.ts:434-446`:
+  `note: 'proves the judge discriminates candidates; does NOT prove discrimination tracks real post
+  quality'`), so the number cannot be misread later. Logged, not gated, not a constraint.
+- **Tier-3 enumeration**: six of seven are recorded as decisions — three as executable scans in
+  `lib/scope-scans.test.ts` (`QUAL-NO-NEW-AI-SURFACE`, `QUAL-PARSER-RETAINED`,
+  `QUAL-MODE2-FIXTURES-MIGRATED`), `QUAL-SERVICE-ROLE-UNWIDENED` as a runtime case at
+  `context.test.ts:686`, and `QUAL-HOOK-RETRY-REMOVED` / `QUAL-RUBRIC-UNCHANGED` as named diff-verified
+  comments at `generate.test.ts:822-834`. The seventh is MINOR-8's second half.
+
+### §11 — L-1 scope: nothing out-of-scope shipped
+
+`git diff 05baf1d2..55b421ad | grep -iE '^\+.*(embedding|pgvector|cosine|similarity|exemplar|image_gen|generateImage|planner)'`
+returns **empty**. Confirmed absent: voice exemplars; similarity/embedding retrieval; tools for the
+generator (`lib/ai/tool-runner.ts` is untouched apart from being *read* by a scan); claim verification; the
+campaign planner; any `lib/memory/` write path (now an executable scan); cross-type retrieval; any cap
+change (`lib/memory/constants.ts` not in the diff); image generation; and any new AI surface — the only
+`page.tsx` touched is `campaigns/[id]/posts/page.tsx`, which adds a data prop, and the only route-level
+change is an error-code string in `GeneratePostsButton.tsx`.
+
+---
+
+## What I could NOT verify, and why
+
+1. **Any CI result for this range.** No run exists (BLOCKER-1). I therefore could not read a `db-tests`
+   skip-guard line, could not distinguish a DB-behaviour regression from the supautils SIGSEGV *for this
+   range*, and could not confirm a single one of the 29 rows as executed-green. The last four `db-tests`
+   failures on this branch (2026-09-05/06, all `pull_request`, all at or before `05baf1d2`) are the
+   **known stack failure**, per the workflow's own pinned-CLI comment and `05baf1d2`'s commit message.
+2. **Tier-1 execution.** I did not run `supabase/__tests__` against the live linked project — those suites
+   create and delete real users and businesses, and `db-tests.yml` states it never touches the linked
+   remote. I substituted read-only SQL, which confirms both migrations are applied and correctly shaped,
+   but **that is schema verification, not behaviour verification**: concurrency, the UTC day boundary,
+   release-on-hard-fail and purpose isolation remain unexecuted here.
+3. **Reddening demonstrations.** I modify nothing, so I did not mutate source to make a scan go red. I
+   verified reddening **by reading the assertions**. Two of the three H2.13 claims are sound by inspection
+   (`QUAL-PARSER-RETAINED` — removing the export breaks the import; `QUAL-MODE2-FIXTURES-MIGRATED` —
+   deleting a fixture fails `existsSync`). The third, `QUAL-NO-NEW-AI-SURFACE`, is **not** — see MAJOR-2.
+4. **H2.0's grounding pass.** No code, no commit, by design — no artefact exists at the range to audit.
+5. **Whether `/impeccable` and `/taste-skill` were invoked at H2.12** against ADR §8.5, as the §2b step
+   table requires. No artefact records it either way.
+
+---
+
+## Findings index
+
+| ID | Severity | One line |
+|---|---|---|
+| BLOCKER-1 | BLOCKER | Branch unpushed; 0/29 constraints executed green in CI at `55b421ad` |
+| BLOCKER-2 | BLOCKER | ADR 0024 is untracked; the build guide has 1,490 uncommitted lines |
+| MAJOR-1 | MAJOR | `temperature` is never asserted to reach — or be omitted from — the SDK params |
+| MAJOR-2 | MAJOR | Both "runtime" prompt scans are hand-maintained import lists; an 11th prompt passes green |
+| MAJOR-3 | MAJOR | ADR 0022's `RUNNER-UNMODIFIED` scan deleted with no ADR 0022 amendment — a false green |
+| MAJOR-4 | MAJOR (**ADR finding**, §5.2b) | `withPostQueryContext` discards the campaign query context; `campaignId` reaches no prompt |
+| MAJOR-5 | MAJOR (**security**, pre-existing class) | Both recreated `SECURITY DEFINER` budget RPCs are EXECUTE-able by `anon`/`authenticated` |
+| MINOR-1 | MINOR | Reserved generation units leak on a mid-campaign `daily_quota_exceeded` |
+| MINOR-2 | MINOR | `QUAL-CONTEXT-CALLERS-UNCHANGED` not asserted per call site; `brief.ts`'s two sites undistinguished |
+| MINOR-3 | MINOR | H2.3's cassette-queue helper is consumed only by its own test |
+| MINOR-4 | MINOR | A-4's expectation-setting copy neither shipped nor recorded as satisfied |
+| MINOR-5 | MINOR | ADR 0017 Amendment D's five mapped-forward cases name no test file |
+| MINOR-6 | MINOR | New status colours are raw palette, not tokens; no both-themes contrast assertion |
+| MINOR-7 | MINOR | §D2.5 lacks the explicit "no new business-scoped table required" record |
+| MINOR-8 | MINOR | The Tier-1 backfill case ADR §10.1 names does not exist and is not recorded as a decision |
+| NIT-1 | NIT | Dead `openingStrength` residue at `generate.ts:529-530` |
+| NIT-2 | NIT | `MemoryQueryContext.role` is inert — `scopeMatch` has no role branch |
+| NIT-3 | NIT | `signal_triage_budget_*` constraint names survive on `ai_budget_daily` |
+| NIT-4 | NIT | Two new `as any` in `lib/memory/performance.test.ts`, outside CLAUDE.md's carve-outs |
+| NIT-5 | NIT | `app-tests.yml`'s "two files" env comment is now three |
+
+**Still open, and NOT Builder defects** (reported as status, per the Reviewer brief):
+`31-A1-PRICING-COPY` — the A-1 pricing-copy change is a founder task, correctly out of scope for H2 and
+recorded in `docs/backlog.md`. `31-DEAD-POST-GENERATION-PROMPT` — deliberately deferred; the prompt, its
+five fixtures and `client.ts:61-67`'s routing branch belong in one later diff.
+
+---
+
+Session 31 review complete — 20 findings (2 BLOCKER, 5 MAJOR, 8 MINOR, 5 NIT) over range 05baf1d2..55b421ad; 0/29 QUAL-* constraints verified executed green in CI.
