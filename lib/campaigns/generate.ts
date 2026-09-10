@@ -419,6 +419,30 @@ export async function generatePostsForCampaign(
           })
           winningOutput = winner.output
           winningScore = winner.score
+
+          // ADR 0024 §13 (H2.13) — interim instrumentation, LOGGED not
+          // GATED, not a constraint. The judge self-discrimination margin:
+          // winner's overall minus the SCORED subset's median. This proves
+          // the judge discriminates (a measurable margin) — it does NOT
+          // prove that discrimination tracks real quality (ADR 0015
+          // Amendment B's MEASURED-NEVER-COVERED posture; no eval corpus
+          // exists yet to check that, Session 32).
+          const sortedOveralls = scored.map(c => c.score.overall).sort((a, b) => a - b)
+          const mid = Math.floor(sortedOveralls.length / 2)
+          const median = sortedOveralls.length % 2 === 0
+            ? (sortedOveralls[mid - 1] + sortedOveralls[mid]) / 2
+            : sortedOveralls[mid]
+          console.log(JSON.stringify({
+            kind: 'campaign.generate.judge_discrimination_margin',
+            level: 'info',
+            campaign_id: campaignId,
+            platform: entry.platform,
+            candidate_count: scored.length,
+            winner_overall: winner.score.overall,
+            median_overall: median,
+            margin: winner.score.overall - median,
+            note: 'proves the judge discriminates candidates; does NOT prove discrimination tracks real post quality',
+          }))
         }
 
         // ADR §2.8 — ALL N below BRIEF_QUALITY_THRESHOLD is not a failure:

@@ -101,6 +101,23 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
 
 ## What's done
 
+- **Session 31 — Track H: Generation quality core (ADR 0024), H1 ARCHITECT COMPLETE, Builder H2 not
+  started:** `docs/decisions/0024-generation-quality-core.md` is **Accepted** — N=3 candidate generation
+  judged by the existing ten-dimension rubric (replacing the single-dimension `openingStrength` retry),
+  sampling and thinking as versioned `Prompt` properties with the version-bump rule enforced by a
+  frozen-table scan, task-conditioned memory retrieval (`role`/`campaignId`), and the first `tool_use`
+  structured-output migration (`learningSummarizerPrompt`). **29 constraints: 4 Tier 1, 18 Tier 2,
+  7 Tier 3, 0 Tier E.** Founder adjudications A-1..A-4 encoded (A-1's Pro cap of 15 posts/day carries the
+  pricing-copy obligation `31-A1-PRICING-COPY`, `docs/backlog.md` §1).
+  - **Reviewed before any Builder work**, 9 findings, all applied — ADR §15 records finding → change. Two
+    were design reversals: `brief-assembly`'s thinking budget needed `maxTokens: 12_000` or every Stage A
+    call would have returned `response_truncated` (§3.3a); and the renamed budget table needed a `purpose`
+    discriminator plus a **post-unit** (not cents) generation reservation, or triage and generation would
+    have shared one daily counter (§7.5a/b, new Tier-1 `QUAL-BUDGET-PURPOSE-ISOLATED`).
+  - **The load-bearing debt is measurement:** ADR §10.4 states plainly that this session **cannot prove
+    the posts are better** — no generation-quality metric, no hand-labelled corpus. Any future "N=3
+    helped" claim is gated on Session 32 building both.
+
 - **Session 30 — Track G: Market-responsive signal source (ADR 0023), G1b.1–G1b.14 BUILDER COMPLETE, PR #9
   open:** A second Mode-3 signal source — customer-supplied RSS/Atom feeds — alongside the existing GitHub
   releases source. `watched_feeds` migration + RLS + §D2.5 cascade (G1b.1); boundary scans extended ahead
@@ -1849,3 +1866,73 @@ The two-axis permission model is DB-enforced, not app-layer-only: `user_can(busi
   SECRET` and `SOCIAL-DUAL-IDENTITY-SCHEMA` are marked `AUTHORED-NOT-EXECUTED` in ADR 0028 §17.4's table.
   `db-tests` remains not a required gate, so this does not block merge. Filed as `30.5-DBTESTS-READINESS-
   RACE` (updated) in `docs/backlog.md`, with a new bug entry in `.wolf/buglog.json` (bug-1031).
+
+### Session 31 — Track H (ADR 0024, Generation quality core) — H2.1 through H2.13 close-out (2026-09-10)
+
+**H1 (Architect) and H2.1–H2.13 (Builder) are complete.** 13 commits on `session-30-5-adr-0028`
+(`bdcabf50`..the H2.13 commit), one per step, matching the build guide's per-step commit rule. H3
+(Reviewer) and H4 (correction pass, if needed) have **not** run yet.
+
+#### The constraint-to-CI map — honestly incomplete, and stated as such
+
+ADR 0024 §11 names **29 constraints: 4 Tier 1, 18 Tier 2, 7 Tier 3, 0 Tier E.** Every one is implemented and
+its named test file exists and is **green locally** (`npm run test:app`: 257 files / 3621 tests, `npm run
+typecheck` clean, at the H2.13 head). **This branch has not been pushed** (`git status`: ahead of
+`origin/session-30-5-adr-0028` by 13 commits) — **no CI run exists for any of these 29 rows**, Tier 1 or
+Tier 2. Per this ADR's own §10.1 note and the Session 28 false-"29/29 executed green" precedent this repo's
+own ADR 0015 discipline exists to prevent, **a local-green claim is not a CI-green claim, and this document
+does not make one.** The Tier-1 trio (`QUAL-COST-CEILING-EXTENDED`, `QUAL-PRO-DAILY-POST-CAP`,
+`QUAL-BUDGET-PURPOSE-ISOLATED`) plus `QUAL-SCORE-ERASURE` additionally depend on `db-tests`, which is
+**RED and not a required gate** per the Session 30.5 note immediately above this one — those four rows
+cannot be called CI-covered even after a push, until `db-tests` itself is green.
+
+| Tier | CI job it belongs to | Rows | Status |
+|---|---|---|---|
+| 1 | `db-tests.yml` | 4 (`QUAL-COST-CEILING-EXTENDED`, `QUAL-PRO-DAILY-POST-CAP`, `QUAL-BUDGET-PURPOSE-ISOLATED`, `QUAL-SCORE-ERASURE`) | Green locally against the live-linked Supabase project (H2.4, H2.8, H2.9 sessions each confirmed via `apply_migration`/`get_advisors`). **Not CI-executed** — branch unpushed, and `db-tests.yml` itself is currently RED for an unrelated reason (Postgres SIGSEGV, `30.5-DBTESTS-READINESS-RACE`) |
+| 2 | `app-tests.yml` | 18 | Green locally (`npm run test:app`). **Not CI-executed** — branch unpushed |
+| 3 | diff-verified, no runtime CI job by decision (ADR 0015 §2) | 7 | Verified by direct diff/grep inspection during each owning step (H2.1–H2.13); not a CI-gate question by design |
+
+**The count that CAN be stated honestly today: 29/29 constraints implemented, with a named test proving
+each one locally green. 0/29 are CI-executed-green, because CI has not run.** The next concrete action
+before this branch merges is: push, let `app-tests` run for real, and read the actual run — not infer it.
+
+#### The before/after record
+
+| Metric | Before (pre-Session-31) | After (H2.7 onward) |
+|---|---|---|
+| Candidates generated per post | 1 | 3 (`N_CANDIDATES`, ADR §2.1) |
+| Provider calls per post | 2 (1 generation + 1 hook-retry-eligible) | 6 (3 generations + 3 judge calls) |
+| Judging | single-dimension `openingStrength` retry, at most once | full 10-dimension rubric, every succeeded candidate |
+| Winner selection | first successful generation | argmax on `overall`, deterministic lowest-index tie-break |
+| Score persisted | none | `overall_score`, `dimension_scores` (10 dims), `candidate_count`, `cleared_quality_threshold` — all on `post_ai_originals` |
+| Recorded cost/post (≈) | ≈4.9¢ | ≈10¢ (ADR §2.1 arithmetic) |
+| Below-threshold handling | silent (no threshold existed) | surfaced, flagged, excluded from bulk approve (A-3) |
+
+**This session cannot prove the resulting posts are better — stated plainly, per ADR 0024 §10.4, for four
+reasons:**
+
+1. **The eval harness does not apply.** `eval-triage.yml` gates on triage paths (`lib/ai/prompts/triage*`
+   or the eval corpus) — post generation is a different prompt family, outside that workflow's trigger
+   condition entirely.
+2. **The headline metric does not exist.** `lib/learning/diff.ts` is exhaustively structural (word-level
+   diff classification) and carries an explicit ADR 0018 STOP against adding a diff-quality library —
+   there is no single number this session could report as "posts got N% better."
+3. **The corpus does not exist.** A labeled before/after post-quality corpus is a Session 32 deliverable,
+   not something Session 31 had available to measure against.
+4. **The judge-discrimination numbers that DO exist are a bootstrap ceiling, not an external validity
+   proof.** The interim `campaign.generate.judge_discrimination_margin` log line (H2.13, ADR §13) proves
+   the judge's outputs are not a 3-way tie — the cassettes/mock fixtures the harness replays and the labels
+   a human would score against share the same author (this session), so a real margin there proves the
+   mechanism discriminates, never that its discrimination tracks actual post quality.
+
+Per ADR 0015 Amendment B, any number produced by this track is **MEASURED, never COVERED** language.
+**Zero Tier-E constraints this session** — nothing here was scoped as "no deterministic test can express
+this," the four points above are a stated absence of a corpus/metric, not a Tier-E claim.
+
+#### Interim instrumentation (logged, not gated)
+
+`campaign.generate.judge_discrimination_margin` (H2.13, `lib/campaigns/generate.ts`) — one structured log
+line per SCORED outcome, stating both halves per the build guide's own requirement: the winner's `overall`
+minus the scored subset's median (proves the judge discriminates candidates) **and** an explicit note that
+this does **not** prove the discrimination tracks real post quality (the corpus gap above). Not a
+constraint, not gated on any threshold — an operator-observability line only.

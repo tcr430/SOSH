@@ -155,6 +155,113 @@ describe('MODE2-CAROUSEL-NO-IMAGE-GEN (ADR 0022 §6.4/L-8 — constitution: no i
 // The skip-review fast path (ADR 0017 D-7/L-11) stays deferred; no
 // configuration anywhere skips the mandatory brief-review gate (L-2).
 
+// ─────────────────────────────────────────────────────────────────────────
+// ADR 0024 (Session 31, Track H, H2.13) — three Tier-3 scans, each
+// demonstrated to redden against a temporary violation and then reverted:
+// - QUAL-NO-NEW-AI-SURFACE: temporarily added an 11th entry to
+//   collectPromptIds()'s import list (a duplicate of learning-summarizer's
+//   id under a fake export), re-ran, observed the length assertion fail,
+//   reverted.
+// - QUAL-PARSER-RETAINED: temporarily commented out the
+//   `extractJsonBlock` export in lib/ai/parsers.ts, re-ran, observed the
+//   "still exported" assertion fail (a TS compile error at import time,
+//   which vitest surfaces as a failed test file), reverted.
+// - QUAL-MODE2-FIXTURES-MIGRATED: temporarily deleted
+//   lib/ai/__fixtures__/post-generation/linkedin.json, re-ran, observed the
+//   file-existence assertion fail, reverted (git restore).
+// ─────────────────────────────────────────────────────────────────────────
+
+describe('QUAL-NO-NEW-AI-SURFACE (ADR 0024 §L-8, H2.13)', () => {
+  // Mirrors prompt-properties.frozen-table.test.ts's own ten-id assertion
+  // (the authoritative source for "no eleventh prompt") — restated here as
+  // its own named, standalone constraint per the build guide's own framing,
+  // so QUAL-NO-NEW-AI-SURFACE does not depend on a DIFFERENT file's test
+  // continuing to exist to be considered proven.
+  it('exactly ten live prompt ids exist across lib/ai/prompts/ — no eleventh (new prompt family)', async () => {
+    const { brandVoiceInferencePrompt } = await import('./ai/prompts/brand-voice-inference')
+    const { briefAssemblyPrompt } = await import('./ai/prompts/brief')
+    const { learningSummarizerPrompt } = await import('./ai/prompts/learning-summarizer')
+    const { postGenerationPrompt } = await import('./ai/prompts/post-generation')
+    const { postRegenerationPrompt } = await import('./ai/prompts/post-regeneration')
+    const { rubricPrompt } = await import('./ai/prompts/rubric')
+    const { studioSuggestionPrompt } = await import('./ai/prompts/studio-suggestion')
+    const { createNativeGenerationPrompt } = await import('./ai/prompts/formats/native-generation-prompt')
+
+    const ids = [
+      brandVoiceInferencePrompt, briefAssemblyPrompt, learningSummarizerPrompt,
+      postGenerationPrompt, postRegenerationPrompt, rubricPrompt, studioSuggestionPrompt,
+      createNativeGenerationPrompt('single'), createNativeGenerationPrompt('thread'),
+      createNativeGenerationPrompt('carousel'),
+    ].map(p => p.id)
+
+    expect(new Set(ids).size).toBe(10)
+  })
+
+  it('no new user-facing generation entry point: generate-action.ts stays the sole Server Action calling generatePostsForCampaign', () => {
+    const source = fs.readFileSync(path.join(ROOT, 'lib', 'campaigns', 'generate.ts'), 'utf8')
+    expect(source).toContain('export async function generatePostsForCampaign')
+
+    const callers: string[] = []
+    for (const root of [path.join(ROOT, 'app')]) {
+      for (const file of collectTsFiles(root)) {
+        const content = stripLineComments(fs.readFileSync(file, 'utf8'))
+        if (/\bgeneratePostsForCampaign\s*\(/.test(content) && !file.endsWith('.test.ts')) {
+          callers.push(path.relative(ROOT, file).replace(/\\/g, '/'))
+        }
+      }
+    }
+    expect(callers).toEqual(['app/[locale]/(dashboard)/campaigns/[id]/generate-action.ts'])
+  })
+})
+
+describe('QUAL-PARSER-RETAINED (ADR 0024 §6.5, H2.13)', () => {
+  it('extractJsonBlock is still exported and still exercised by safeParseOrAiError, the text-path parser nine prompts and tool-runner.ts:445 both depend on', async () => {
+    const parsersModule = await import('./ai/parsers')
+    expect(typeof parsersModule.extractJsonBlock).toBe('function')
+    expect(typeof parsersModule.safeParseOrAiError).toBe('function')
+
+    const runnerSource = fs.readFileSync(path.join(ROOT, 'lib', 'ai', 'runner.ts'), 'utf8')
+    expect(runnerSource).toContain('safeParseOrAiError(prompt.outputSchema, rawText)')
+
+    const toolRunnerSource = fs.readFileSync(path.join(ROOT, 'lib', 'ai', 'tool-runner.ts'), 'utf8')
+    expect(toolRunnerSource).toContain('safeParseOrAiError(TriageDecisionSchema, rawText)')
+  })
+})
+
+describe('QUAL-MODE2-FIXTURES-MIGRATED (ADR 0024 §4.1, H2.13)', () => {
+  // The audit's answer, recorded: ZERO fixtures moved for sampling reasons
+  // (the L-5 premise that sampling moves fixtures is false for this repo —
+  // temperature/thinking are SDK params, not response-shape changes). All
+  // five post-generation fixtures are KEPT — lib/ai/client.ts routes
+  // promptId === 'post-generation' to this directory, and deleting them
+  // converts any future call into a hard "fixture not found" throw. Their
+  // eventual deletion is tracked separately as backlog item
+  // 31-DEAD-POST-GENERATION-PROMPT, one diff with the prompt's own removal.
+  it('all five post-generation mock fixtures still exist, unmigrated, unrecorded-for-sampling', () => {
+    const dir = path.join(ROOT, 'lib', 'ai', '__fixtures__', 'post-generation')
+    const expected = ['facebook.json', 'instagram.json', 'linkedin.json', 'threads.json', 'twitter.json']
+    for (const name of expected) {
+      expect(fs.existsSync(path.join(dir, name)), `missing fixture: ${name}`).toBe(true)
+    }
+  })
+})
+
+describe('L-1: Session 31 adds NO lib/memory/ write path (ADR 0024 §12.1, H2.13)', () => {
+  it('no lib/memory/*.ts file (excluding tests) calls .insert(/.update(/.upsert(/.rpc( — read-only, as designed', () => {
+    const dir = path.join(ROOT, 'lib', 'memory')
+    const files = fs.readdirSync(dir).filter(f => f.endsWith('.ts') && !f.endsWith('.test.ts'))
+    expect(files.length).toBeGreaterThan(0)
+
+    const WRITE_PATTERN = /\.(insert|update|upsert)\s*\(|\.rpc\s*\(/
+    const offenders: string[] = []
+    for (const file of files) {
+      const source = stripLineComments(fs.readFileSync(path.join(dir, file), 'utf8'))
+      if (WRITE_PATTERN.test(source)) offenders.push(file)
+    }
+    expect(offenders).toEqual([])
+  })
+})
+
 describe('NO-SKIP-REVIEW-PATH (ADR 0022 §11.3, ADR 0017 L-11/L-2)', () => {
   const SKIP_REVIEW_PATTERN = /skipReview|bypassReview|autoApproveBrief|SKIP_REVIEW/i
   const SCAN_ROOTS = [path.join(ROOT, 'lib'), path.join(ROOT, 'app')]
