@@ -24,10 +24,29 @@
   },
   "bulkApprove": "Aprovar todos os rascunhos ({count})",
   "bulkApproveSuccess": "{count} publicações aprovadas",
+  "bulkApproveExcludedNotice": "{count} publicação(ões) abaixo do nível de qualidade foram deixadas como rascunho — reveja-as individualmente.",
   "card": {
     "utcNote": "UTC",
     "regeneratedCount": "Regenerada ×{count}",
     "skippedReason": "Motivo: {note}",
+    "judgment": {
+      "passed": "Pontuação {overall}/100",
+      "passedDetail": "{count} candidatos considerados",
+      "belowThreshold": "Nenhum candidato atingiu o nível de qualidade — reveja com atenção.",
+      "unscored": "Não avaliado — reveja antes de aprovar.",
+      "dimension": {
+        "specificity": "Especificidade",
+        "originality": "Originalidade",
+        "evidenceSufficiency": "Evidência",
+        "audienceRelevance": "Adequação ao público",
+        "platformNativeness": "Adequação à plataforma",
+        "brandVoiceAlignment": "Voz da marca",
+        "openingStrength": "Força da abertura",
+        "ctaFit": "Adequação do CTA",
+        "unsupportedClaimsRisk": "Risco de afirmações",
+        "redundancy": "Redundância"
+      }
+    },
     "status": {
       "draft": "Rascunho",
       "approved": "Aprovada",

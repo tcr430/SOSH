@@ -11,7 +11,8 @@
     "approveAllLabel": "Aprovar {count} publicações em {campaign}",
     "approveAllLabelFiltered": "Aprovar {count} publicações de {platform} em {campaign}",
     "announceApproved": "Aprovou {count} publicação(ões) em {campaign}.",
-    "incompleteSetHint": "Alguns rascunhos pendentes não são mostrados — restrinja por campanha ou plataforma para aprovar em massa."
+    "incompleteSetHint": "Alguns rascunhos pendentes não são mostrados — restrinja por campanha ou plataforma para aprovar em massa.",
+    "excludedNotice": "{count} publicação(ões) abaixo do nível de qualidade foram deixadas como rascunho — reveja-as individualmente."
   },
   "row": {
     "approve": "Aprovar",
@@ -26,6 +27,24 @@
     "confirmNewTime": "Aprovar com nova hora",
     "announceApproved": "Publicação aprovada.",
     "announceSkipped": "Publicação ignorada.",
+    "judgment": {
+      "passed": "Pontuação {overall}/100",
+      "passedDetail": "{count} candidatos considerados",
+      "belowThreshold": "Nenhum candidato atingiu o nível de qualidade — reveja com atenção.",
+      "unscored": "Não avaliado — reveja antes de aprovar.",
+      "dimension": {
+        "specificity": "Especificidade",
+        "originality": "Originalidade",
+        "evidenceSufficiency": "Evidência",
+        "audienceRelevance": "Adequação ao público",
+        "platformNativeness": "Adequação à plataforma",
+        "brandVoiceAlignment": "Voz da marca",
+        "openingStrength": "Força da abertura",
+        "ctaFit": "Adequação do CTA",
+        "unsupportedClaimsRisk": "Risco de afirmações",
+        "redundancy": "Redundância"
+      }
+    },
     "scriptBrief": {
       "heading": "Recomendação de guião",
       "neverPublishedNote": "Uma sugestão para um tratamento em vídeo curto desta publicação — nunca publicado."

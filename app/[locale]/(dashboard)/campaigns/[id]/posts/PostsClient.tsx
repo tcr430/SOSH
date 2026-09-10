@@ -11,8 +11,9 @@ import { PostCard } from '@/components/posts/PostCard'
 import { bulkApprovePostsAction } from '@/app/[locale]/(dashboard)/campaigns/[id]/posts/actions'
 import { useCan } from '@/lib/members/useCan'
 import { CAPABILITIES } from '@/lib/members/capabilities'
+import { isExcludedFromBulkApprove } from '@/lib/posts/judgment'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import type { PostRow, CampaignRow, Platform } from '@/lib/db/types'
+import type { PostRow, CampaignRow, Platform, PostAiOriginalRow } from '@/lib/db/types'
 
 // ---------------------------------------------------------------------------
 // Filter type
@@ -65,13 +66,18 @@ export interface PostsClientProps {
   campaign: CampaignRow
   locale: string
   initialFilter?: FilterValue
+  // ADR 0024 §8.3/§8.4 (Session 31, H2.12) — each rendered post's latest
+  // post_ai_originals snapshot, keyed by post_id. Optional/defaulted, same
+  // pattern as ApprovalsInbox's originalsByPostId prop — every pre-existing
+  // test call site keeps rendering exactly as before.
+  originalsByPostId?: Record<string, PostAiOriginalRow>
 }
 
 // ---------------------------------------------------------------------------
 // PostsClient
 // ---------------------------------------------------------------------------
 
-export function PostsClient({ posts, campaign, locale, initialFilter = 'all' }: PostsClientProps) {
+export function PostsClient({ posts, campaign, locale, initialFilter = 'all', originalsByPostId = {} }: PostsClientProps) {
   const t = useTranslations('posts')
   const [isPending, startTransition] = useTransition()
   const [activeFilter, setActiveFilter] = useState<FilterValue>(initialFilter)
@@ -115,14 +121,19 @@ export function PostsClient({ posts, campaign, locale, initialFilter = 'all' }: 
 
   // Session 22-D (BLOCKER-1/2) — bulk approve targets EXACTLY the drafts
   // rendered under the active filter, never the business-wide draft set.
-  const renderedDraftIds = filtered
-    .filter(p => p.status === 'draft')
+  const renderedDrafts = filtered.filter(p => p.status === 'draft')
+  // ADR 0024 §8.4 (A-3, H2.12) — below-threshold posts are excluded from
+  // bulk approve; bulkApproveDraftPosts itself carries no quality
+  // predicate, so the exclusion is enforced entirely here.
+  const excludedDrafts = renderedDrafts.filter(p => isExcludedFromBulkApprove(originalsByPostId[p.id]))
+  const approvableDraftIds = renderedDrafts
+    .filter(p => !isExcludedFromBulkApprove(originalsByPostId[p.id]))
     .map(p => p.id)
 
   // Bulk approve
   function handleBulkApprove() {
-    if (renderedDraftIds.length === 0) return
-    const idSet = new Set(renderedDraftIds)
+    if (approvableDraftIds.length === 0) return
+    const idSet = new Set(approvableDraftIds)
     const snapshot = localPosts
     setLocalPosts(prev =>
       prev.map(p =>
@@ -130,10 +141,10 @@ export function PostsClient({ posts, campaign, locale, initialFilter = 'all' }: 
       ),
     )
     startTransition(async () => {
-      const result = await bulkApprovePostsAction(campaign.id, renderedDraftIds)
+      const result = await bulkApprovePostsAction(campaign.id, approvableDraftIds)
       if (result.success) {
         // Session 22 P2 (NEW-1) — announce the DB row count the write
-        // actually flipped, not renderedDraftIds.length: under concurrency
+        // actually flipped, not approvableDraftIds.length: under concurrency
         // another approver may have flipped a rendered draft between render
         // and write, .eq('status','draft') correctly drops it, and count
         // comes back lower. Announcing the rendered length would overstate
@@ -208,18 +219,18 @@ export function PostsClient({ posts, campaign, locale, initialFilter = 'all' }: 
             )}
           </div>
 
-          {renderedDraftIds.length > 0 && canApprove && (
+          {approvableDraftIds.length > 0 && canApprove && (
             <button
               type="button"
               onClick={handleBulkApprove}
               disabled={isPending}
               className="inline-flex items-center rounded-md bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 text-xs font-medium transition-colors disabled:pointer-events-none disabled:opacity-50"
             >
-              ✓ {t('bulkApprove', { count: renderedDraftIds.length })}
+              ✓ {t('bulkApprove', { count: approvableDraftIds.length })}
             </button>
           )}
 
-          {renderedDraftIds.length > 0 && !canApprove && canAuthor && (
+          {approvableDraftIds.length > 0 && !canApprove && canAuthor && (
             <Tooltip>
               <TooltipTrigger
                 type="button"
@@ -228,12 +239,21 @@ export function PostsClient({ posts, campaign, locale, initialFilter = 'all' }: 
                 onClick={e => e.preventDefault()}
                 className="inline-flex items-center rounded-md bg-muted text-muted-foreground px-3 py-1.5 text-xs font-medium cursor-not-allowed"
               >
-                ✓ {t('bulkApprove', { count: renderedDraftIds.length })}
+                ✓ {t('bulkApprove', { count: approvableDraftIds.length })}
               </TooltipTrigger>
               <TooltipContent>{t('card.actions.approve_disabled_tooltip')}</TooltipContent>
             </Tooltip>
           )}
         </div>
+        {/* ADR 0024 §8.4 (A-3, H2.12) — the founder-accepted, customer-
+            observable behaviour change: a bulk approve now leaves
+            below-threshold drafts behind, and the surface says why rather
+            than silently skipping them. */}
+        {excludedDrafts.length > 0 && (
+          <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+            {t('bulkApproveExcludedNotice', { count: excludedDrafts.length })}
+          </p>
+        )}
       </div>
 
       {/* Post list with date dividers */}
@@ -254,7 +274,7 @@ export function PostsClient({ posts, campaign, locale, initialFilter = 'all' }: 
                   {dividerLabel}
                 </p>
               )}
-              <PostCard post={post} onOptimisticUpdate={handleOptimisticUpdate} />
+              <PostCard post={post} original={originalsByPostId[post.id]} onOptimisticUpdate={handleOptimisticUpdate} />
             </div>
           )
         })}

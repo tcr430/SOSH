@@ -7,6 +7,7 @@ import { ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { RegenerateDialog } from '@/components/posts/RegenerateDialog'
+import { PostJudgmentBadge } from '@/components/posts/PostJudgmentBadge'
 import {
   approvePostAction,
   unapprovePostAction,
@@ -14,7 +15,7 @@ import {
   unskipPostAction,
   updatePostContentAction,
 } from '@/app/[locale]/(dashboard)/campaigns/[id]/posts/actions'
-import type { PostRow, Platform, AiGenerationMetadata } from '@/lib/db/types'
+import type { PostRow, Platform, AiGenerationMetadata, PostAiOriginalRow } from '@/lib/db/types'
 import { parseAiGenerationMetadata } from '@/lib/db/utils'
 import { useCan } from '@/lib/members/useCan'
 import { CAPABILITIES } from '@/lib/members/capabilities'
@@ -52,11 +53,16 @@ const STATUS_PILL_CLASS: Record<string, string> = {
 
 interface PostCardProps {
   post: PostRow
+  // ADR 0024 §8.3 (Session 31, H2.12) — optional/defaulted so every
+  // pre-existing call site (none of which knows about post judgment) keeps
+  // rendering exactly as before; a judgment-less post simply renders no badge.
+  original?: PostAiOriginalRow
   onOptimisticUpdate: (postId: string, patch: Partial<PostRow>) => void
 }
 
-export function PostCard({ post, onOptimisticUpdate }: PostCardProps) {
+export function PostCard({ post, original, onOptimisticUpdate }: PostCardProps) {
   const t = useTranslations('posts')
+  const tJudgment = useTranslations('posts.card.judgment')
   const [isPending, startTransition] = useTransition()
 
   // ADR 0014 §6 — capability-gate echo (UX only, DB is the boundary — L-3).
@@ -278,6 +284,8 @@ export function PostCard({ post, onOptimisticUpdate }: PostCardProps) {
             {scheduledLabel}
           </span>
         </div>
+
+        <PostJudgmentBadge original={original} t={tJudgment} />
 
         {/* Content — edit mode or read mode */}
         {isEditMode ? (
