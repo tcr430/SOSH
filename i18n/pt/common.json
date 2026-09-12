@@ -226,7 +226,7 @@
       "role_sequence_label": "Posts planeados",
       "critique_label": "Crítica",
       "score_label": "Pontuação: {score}/100",
-      "pending": "O brief ainda está a ser preparado e avaliado. Volte a verificar em breve.",
+      "pending": "O brief ainda está a ser preparado e avaliado — isto pode demorar até 20 segundos. Volte a verificar em breve.",
       "already_approved": "Este brief já foi aprovado.",
       "approve": "Aprovar",
       "reject": "Devolver",

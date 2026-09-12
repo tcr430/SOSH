@@ -226,7 +226,7 @@
       "role_sequence_label": "Publicaciones planificadas",
       "critique_label": "Crítica",
       "score_label": "Puntuación: {score}/100",
-      "pending": "El brief todavía se está preparando y evaluando. Vuelve a comprobarlo pronto.",
+      "pending": "El brief todavía se está preparando y evaluando — esto puede tardar hasta 20 segundos. Vuelve a comprobarlo pronto.",
       "already_approved": "Este brief ya ha sido aprobado.",
       "approve": "Aprobar",
       "reject": "Devolver",

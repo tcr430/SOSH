@@ -226,7 +226,7 @@
       "role_sequence_label": "Planned posts",
       "critique_label": "Critique",
       "score_label": "Score: {score}/100",
-      "pending": "The brief is still being assembled and critiqued. Check back shortly.",
+      "pending": "The brief is still being assembled and critiqued — this can take up to 20 seconds. Check back shortly.",
       "already_approved": "This brief has already been approved.",
       "approve": "Approve",
       "reject": "Send back",

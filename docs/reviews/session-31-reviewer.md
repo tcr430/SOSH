@@ -930,3 +930,15 @@ it is the Reviewer's and is unedited.
 | **Commit** | `c6bda7ab` |
 
 **What this step did NOT touch:** the frozen table itself (`lib/ai/prompts/frozen-table.ts`) or `prompt-properties.frozen-table.test.ts` — both unchanged, this is a documentation-accuracy fix about what they already prove, not a change to what they prove; `QUAL-SAMPLING-VERSIONED`'s Tier-2 status or its test coverage — unaffected, the constraint's real property (drift visibility) is restated as holding, not weakened.
+
+### D10 — MINOR-4
+
+| Field | |
+|---|---|
+| **Finding** | MINOR-4 |
+| **Fix** | Option (a) from the Reviewer's own two acceptable fixes: shipped the copy. `i18n/en/common.json`, `i18n/pt/common.json` and `i18n/es/common.json`'s `campaigns.brief.pending` key (all at line 229) each gain an expectation-setting clause — EN: *"...this can take up to 20 seconds. Check back shortly."*; PT and ES translated equivalently. All three locales edited in the same commit, per CLAUDE.md's i18n rule. No component change — `BriefReviewForm.tsx:72`'s `{t('pending')}` already renders this key for the `'draft'` status branch; only the string content changes. |
+| **Proof** | The three JSON files parse (`node -e "JSON.parse(...)"` on all three: "all valid JSON"); `BriefReviewForm.test.tsx` and `page.test.tsx` (7 files, 46 tests) pass unchanged — neither hardcodes the old copy string, so no test needed updating. |
+| **Reddening** | N/A — a copy-only change with no behavioral assertion to redden; the "finding" was an absence (no expectation-setting copy existed), not a broken test. Verified instead by confirming the OLD string genuinely lacked any time expectation (re-read pre-edit: *"...Check back shortly."*, no duration) and the NEW string states one, closing the gap the Reviewer described. `npx tsc --noEmit --skipLibCheck`: clean. |
+| **Commit** | *(pending — recorded once this step is committed)* |
+
+**What this step did NOT touch:** `BriefReviewForm.tsx` — unchanged, no new component or spinner added, since A-4's obligation was specifically about copy ("a spinner with no copy is not the contract" — the copy was the missing half, not a new loading indicator); `docs/backlog.md` — no entry needed, since the copy is now shipped rather than deferred; the founder was not separately asked to ratify a specific duration figure — "up to 20 seconds" is derived directly from the Reviewer's own recorded latency figure (+8-15s added by `thinking: 4000`) rounded up, not a new commitment invented here.
