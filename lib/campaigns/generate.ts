@@ -294,7 +294,14 @@ export async function generatePostsForCampaign(
         // campaign-level call. Brand/evidence/audience/voice are NOT
         // re-read (they cannot vary within one campaign) — only the
         // performance slot is replaced, one extra lib/memory DB read.
-        const postCtx = await withPostQueryContext(ctx, { platform: entry.platform, role: entry.role })
+        //
+        // Session 31-D, D4 (MAJOR-4): spreads STEP 4's campaign-level
+        // queryContext ({objective, audience, campaignId}) in ALONGSIDE
+        // platform/role, rather than passing platform/role alone. Before
+        // this fix, campaignId never reached retrievePerformancePatterns on
+        // this path — computed once at STEP 4, then thrown away every time
+        // withPostQueryContext replaced it with a platform/role-only query.
+        const postCtx = await withPostQueryContext(ctx, { ...queryContext, platform: entry.platform, role: entry.role })
 
         // STEP 7a-pre — Pro daily post cap (ADR §7.4/§7.5/§7.5a, A-1,
         // QUAL-PRO-DAILY-POST-CAP). ONE reservation of ONE unit, BEFORE the

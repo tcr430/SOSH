@@ -461,8 +461,34 @@ describe('generatePostsForCampaign — per-post query context (ADR §5.2b, H2.11
     await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
 
     expect(withPostQueryContext).toHaveBeenCalledTimes(6) // 6 roleSequence entries
-    expect(withPostQueryContext).toHaveBeenCalledWith(mockCtx, { platform: 'linkedin', role: 'anchor_thesis' })
-    expect(withPostQueryContext).toHaveBeenCalledWith(mockCtx, { platform: 'twitter', role: 'conversation_starter' })
+    // Session 31-D, D4 (MAJOR-4): postContext now carries STEP 4's
+    // campaign-level queryContext (objective, campaignId — audience is
+    // undefined here since getBrandVoice is mocked to null) spread in
+    // alongside platform/role, not platform/role alone.
+    expect(withPostQueryContext).toHaveBeenCalledWith(mockCtx, {
+      objective: mockCampaign.objective,
+      campaignId: CAMPAIGN_ID,
+      platform: 'linkedin',
+      role: 'anchor_thesis',
+    })
+    expect(withPostQueryContext).toHaveBeenCalledWith(mockCtx, {
+      objective: mockCampaign.objective,
+      campaignId: CAMPAIGN_ID,
+      platform: 'twitter',
+      role: 'conversation_starter',
+    })
+  })
+
+  // Session 31-D, D4 (MAJOR-4). Closing the finding itself: campaignId must
+  // actually reach the per-post seam, not just platform/role.
+  it('MAJOR-4: campaignId from STEP 4\'s campaign-level queryContext reaches withPostQueryContext for every entry', async () => {
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+
+    const calls = vi.mocked(withPostQueryContext).mock.calls
+    expect(calls.length).toBeGreaterThan(0)
+    for (const [, postContext] of calls) {
+      expect(postContext.campaignId).toBe(CAMPAIGN_ID)
+    }
   })
 
   it('uses the per-post refined context for both generation and judging, not the campaign-level ctx', async () => {

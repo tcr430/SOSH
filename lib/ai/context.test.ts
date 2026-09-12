@@ -690,6 +690,33 @@ describe('withPostQueryContext', () => {
     // authenticated client into this service-role-only read path.
     expect(withPostQueryContext.length).toBe(2)
   })
+
+  // Session 31-D, D4 (MAJOR-4). Before this fix, postContext carried ONLY
+  // {platform, role} — campaignId (and objective/audience) computed at the
+  // campaign level never reached this seam at all, so §5.1's stated purpose
+  // for campaignId was inert on the one production call path that matters.
+  // Mirrors QUAL-QUERY-CONDITIONED's own proof shape (ranking changes, not
+  // just "the argument was accepted") but through withPostQueryContext
+  // specifically, not buildCustomerContext.
+  it('MAJOR-4 fix: campaignId spread into postContext reaches retrievePerformancePatterns and changes ranking', async () => {
+    vi.mocked(listPerformanceMemoryCandidates).mockResolvedValue([
+      makeGovernedPerfRow({ id: 'pf-other', pattern: 'OTHER-CAMPAIGN-PATTERN', scope: 'campaign', scope_ref: 'camp-OTHER', confidence: 0.9 }),
+      makeGovernedPerfRow({ id: 'pf-this', pattern: 'THIS-CAMPAIGN-PATTERN', scope: 'campaign', scope_ref: 'camp-THIS', confidence: 0.6 }),
+    ])
+    const ctx = await buildCustomerContext('biz-1')
+
+    const { withPostQueryContext } = await import('./context')
+    const withoutCampaignId = await withPostQueryContext(ctx, { platform: 'linkedin', role: 'anchor_thesis' })
+    const withCampaignId = await withPostQueryContext(ctx, { campaignId: 'camp-THIS', platform: 'linkedin', role: 'anchor_thesis' })
+
+    // Same underlying rows, same ctx — only the spread-in campaignId
+    // differs. Without it, raw confidence decides (0.9 wins). With it, the
+    // matching campaign's lower-confidence row outranks it — proving
+    // campaignId reaches retrievePerformancePatterns THROUGH this seam, not
+    // just through buildCustomerContext's separate call.
+    expect(withoutCampaignId.recentPostPerformance[0].topContent).toBe('OTHER-CAMPAIGN-PATTERN')
+    expect(withCampaignId.recentPostPerformance[0].topContent).toBe('THIS-CAMPAIGN-PATTERN')
+  })
 })
 
 // ADR 0017 §5.1 (L-10) — B2.5 wires memory into the BRIEF assembly input

@@ -147,21 +147,31 @@ export async function buildCustomerContext(
 // loser). Cost: one extra lib/memory DATABASE read per post — no extra AI
 // call — bounded by PERFORMANCE_CAP.
 //
+// Session 31-D, D4 (MAJOR-4): `postContext` now MERGES onto the
+// campaign-level MemoryQueryContext instead of replacing it outright.
+// Before this fix, this function only ever received {platform, role} and
+// built a query with THOSE TWO FIELDS ALONE — the campaign-level
+// {objective, audience, campaignId} STEP 4 in lib/campaigns/generate.ts
+// spent a whole retrieval computing was discarded, unused, every single
+// time. That silently undid §5.1's stated purpose for `campaignId` ("makes
+// the existing 0.2 scope-match weight do work it currently cannot") on the
+// product's only production call path. The caller now spreads its own
+// campaign-level MemoryQueryContext into postContext (`{ ...queryContext,
+// platform, role }`) so campaignId/objective/audience survive alongside
+// the per-post platform/role — see lib/campaigns/generate.ts:297.
+//
 // Takes NO client parameter, exactly like buildCustomerContext (§5.3):
 // acquires its own service-role client via the lazy-import pattern. Adding
 // a client parameter would let a caller pass an authenticated client into a
 // service-role read path and get silent permission failures.
 export async function withPostQueryContext(
   ctx: CustomerContext,
-  postContext: { platform: Platform; role: string },
+  postContext: MemoryQueryContext & { platform: Platform; role: string },
 ): Promise<CustomerContext> {
   const { createServiceRoleClient } = await import('@/lib/supabase/service')
   const client = createServiceRoleClient()
 
-  const recentPostPerformance = await retrievePerformancePatterns(client, ctx.business.id, {
-    platform: postContext.platform,
-    role: postContext.role,
-  })
+  const recentPostPerformance = await retrievePerformancePatterns(client, ctx.business.id, postContext)
 
   return {
     ...ctx,
