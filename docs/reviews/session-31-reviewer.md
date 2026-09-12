@@ -1072,3 +1072,56 @@ resulting `app-tests`/`db-tests` run URLs is the next step to close it, and is a
 The two items the Reviewer explicitly scoped as **NOT** Builder defects (`31-A1-PRICING-COPY`, a founder
 task; `31-DEAD-POST-GENERATION-PROMPT`, a deliberately deferred one-diff item) remain correctly out of this
 correction pass's scope, per the Reviewer's own disposition, and are tracked in `docs/backlog.md`.
+
+---
+
+## CORRECTION PASS (BLOCKER-1 CI read — 2026-09-12)
+
+**Author:** follow-up session, 2026-09-12 · **Range read:** `session-30-5-adr-0028` branch head at push
+time, `15aeb764` (D19's own commit — the last commit in the D0-D19 pass above).
+**Everything above this line (including the D0-D19 section and its status summary) is unedited — this
+section only appends new evidence gathered after the branch was pushed.**
+
+### D20 — BLOCKER-1
+
+| Field | |
+|---|---|
+| **Finding** | BLOCKER-1 |
+| **What was checked** | `gh run list --branch session-30-5-adr-0028` at head `15aeb764`, then `gh run view <id> --log` on each run. Three `pull_request` runs exist for this head: **app-tests** (`34694455170`, success, 3m38s) — `https://github.com/tcr430/SOSH/actions/runs/34694455170`; **db-tests** (`34694455123`, failure, 3m8s) — `https://github.com/tcr430/SOSH/actions/runs/34694455123`; **Eval — signal triage quality** (`34694455134`, success, 22s). |
+| **app-tests (required gate)** | **GREEN** at `15aeb764`. This closes the half of BLOCKER-1 that named "an `app-tests` run green at the head" — the 18 Tier-2 rows the Reviewer listed as `AUTHORED-NOT-EXECUTED` pending only a push are now CI-executed-green. |
+| **db-tests (Tier-1, advisory-but-must-be-read)** | **RED**, but not for the reason BLOCKER-1 anticipated (a real DB-behaviour regression) and not the "stack OOM" the merge-gate table's other named category describes either. Root cause, read directly from `gh run view 34694455123 --log`: the Postgres backend process **segfaulted twice** mid-suite — `2026-09-12 12:45:35 UTC [1] LOG: server process (PID 1356) was terminated by signal 11: Segmentation fault`, immediately after `DETAIL: Failed process was running: ... LATERAL "public"."reserve_ai_budget"(...)`; and again at `12:46:23 UTC`, PID 1726, mid-`vault_update_secret` call. Each segfault triggers Postgres's own `terminating any other active server processes` and a recovery-mode window (`FATAL: the database system is in recovery mode` / `is not accepting connections`, both containers' logs, ~12:45:35-12:46:30), during which every in-flight connection — regardless of role — errors out. This explains the specific failure shape: not just the anon/authenticated *denial* assertions but the **service_role positive-control assertions in the same two describe blocks also failed** (`ai-budget-generation-posts.test.ts`'s "EXECUTE is granted to service_role" and `vault-update-secret.test.ts`'s equivalent) — a real grants regression would never fail the control designed to prove the RPC still works for the role that's supposed to have access; a crashed connection fails every role identically, which is what the log shows. `docker inspect`'s `OOMKilled=false`/`ExitCode=0` for `supabase_db_SOSH` (collected post-mortem by the workflow's own OOM-evidence step) is consistent with this: the *container* never died, only two backend child processes did, which is exactly the class of crash that flag cannot see (the same gap D8/BLOCKER-2's diagnostic script, added in an earlier session, was written to catch — and here it did catch it, via the segfault lines in the container-log dump, just not via the OOMKilled flag). |
+| **D5's fix is not implicated.** | Independently re-verified `20260912090000_ai_budget_rpc_revoke_named_roles.sql` and `20260904090000_vault_update_secret.sql`: both correctly issue `REVOKE ALL ... FROM PUBLIC`, then the named `REVOKE EXECUTE ... FROM anon, authenticated`, then `GRANT EXECUTE ... TO service_role`, with signatures matching the live function definitions (`uuid, text, integer, integer` for both AI-budget RPCs; `uuid, text` for `vault_update_secret`) and correct migration ordering (both revoke migrations run after their functions' `CREATE OR REPLACE`, nothing later re-grants). D5's own Reddening evidence (a pre-fix `proacl` read against the live linked project showing the leak, then post-fix showing it closed) is untouched by this crash — that check ran against the live Supabase project directly, not this CI run. |
+| **skip-guard's two flagged files are a symptom, not a separate defect.** | `post-ai-originals-latest-per-post.test.ts` and `signals3-triage-atomic.test.ts` have no `.skip`/`skipIf` anywhere in either file (confirmed by grep) and no conditional skip logic. Given `vitest run --no-file-parallelism`, files execute in alphabetical order — `ai-budget-generation-posts.test.ts` runs first and triggers the first segfault; the two flagged files are next in that order, and their `beforeAll` setup (creating users/businesses over the same crashed connection pool during the recovery-mode window) is the mechanism by which every test in each file ends up not-run. Skip-guard did its job correctly here: it caught tests that silently produced zero executed assertions and **failed the job** instead of reporting green — this is ADR 0015's skip-guard gate working as designed against a real (if infra-caused) zero-coverage window, not a false-green it missed. |
+| **Verdict on BLOCKER-1** | **Partially closed, correctly not fully closed.** The branch is pushed (no longer BLOCKER-1's original "branch was never pushed" defect) and `app-tests` is green at `15aeb764`, closing the 18 Tier-2 constraint rows. The four Tier-1 rows (`QUAL-COST-CEILING-EXTENDED`, `QUAL-BUDGET-PURPOSE-ISOLATED`, `QUAL-PRO-DAILY-POST-CAP`, `QUAL-SCORE-ERASURE`) remain uncovered — not because the guarded-upsert/purpose-isolation logic they test is wrong (this run never got a clean pass at them to disprove that), but because the `db-tests` job itself did not complete a real run: two of its own backend processes crashed. The 0/3 consecutive-green-`master`-runs promotion tally is unmoved (this was a `pull_request` run in any case, which the merge-gate table already excludes from the tally). |
+| **What would close it the rest of the way** | A `db-tests` run on this same head (or a re-push) that completes without a Postgres segfault, with a skip-guard line reporting the full file/test count and zero unexpectedly-skipped files, cited by run URL. Re-running as-is may simply pass next time (a transient crash) or may reproduce (a real, environment-specific defect in this Postgres/PostgREST image pairing when a SECURITY-DEFINER `RETURNS SETOF`/scalar RPC is called through PostgREST's role-switched `rpc()` path) — this pass did not attempt a re-run, so which of those two it is remains open. Tracked as a new backlog item (see `docs/backlog.md`) rather than closed here, since "the crash didn't recur on a second try" is not evidence available from a single log read. |
+| **Commit** | N/A — this entry is a CI-log read and diagnosis, no source or migration file changed. |
+
+**What this step did NOT touch:** any production code, migration, or test file (this was read-only investigation of an already-pushed head); the D0-D19 fixes above (all independently re-confirmed correct, not re-implemented); the db-tests promotion tally in `docs/current-phase.md` (unchanged — still 0/3, and this run does not count toward it either way, being a `pull_request` run).
+
+### D20 addendum — reran; the crash reproduced identically (2/2)
+
+`gh run rerun 34694455123 --failed` was executed to answer D20's own open question ("transient or
+reproducible?"). The rerun completed at `2026-09-12T15:43Z`, same run ID, same head `15aeb764`: **failure**,
+same shape. `gh run view 34694455123 --log` on the new attempt shows two segfaults again, at the byte-for-byte
+same two call sites: `server process (PID 1351) was terminated by signal 11: Segmentation fault` immediately
+after `DETAIL: Failed process was running: ... LATERAL "public"."reserve_ai_budget"(...)`, and `PID 3385`
+under the identical `vault_update_secret` LATERAL-call shape. The six `FAILED` assertions skip-guard reports
+are the same six as the first run (three `ai-budget-generation-posts.test.ts` cases, three
+`vault-update-secret.test.ts` cases), including the same service_role positive-control failures — confirming
+this is not a random OOM-style flake but a **deterministic crash tied to this exact PostgREST-generated SQL
+shape**: a `LATERAL` join calling a `SECURITY DEFINER` function with named (`:=`) parameters, invoked via
+PostgREST's `rpc()` path under a role-switched (`anon`/`authenticated`) connection, on this CI stack's pinned
+`ghcr.io/supabase/postgres:17.6.1.111` / `postgrest v14.5` pairing.
+
+This rerun's skip-guard also lists **two additional** invisible-skip files not seen on the first attempt —
+`campaigns-social-accounts-role-policies.test.ts` and `get-user-business-ids-matrix.test.ts` — consistent
+with D20's read of the mechanism (whichever files' `beforeAll` setup lands in the post-crash recovery-mode
+window loses its whole file, and which files that is depends on exact timing, not a fixed set).
+
+**Verdict, revised:** BLOCKER-1 stays open on the Tier-1 side, but the open question about *why* is now
+answered — this is a reproducible environment defect in the CI Postgres/PostgREST image pairing, not a
+one-off. `docs/backlog.md`'s `31D-BLOCKER1-SEGFAULT` entry is updated accordingly (reproduced 2/2, no longer
+"not reproduced a second time yet"). The fix is out of this correction pass's scope — it requires either
+pinning a different `supabase`-CLI-resolved Postgres/PostgREST image pair for CI or an upstream report to
+Supabase/PostgREST, neither of which is a source-code change this pass can make. No production code,
+migration, or test file was touched by this addendum.
