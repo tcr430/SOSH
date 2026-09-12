@@ -1262,3 +1262,56 @@ rules, the three outcomes, the retrieval design (§5), the choice of `learningSu
 tool-use migration, the UX contract (§8), and §10.4's refusal to claim a quality lift all survived review
 without a finding. §10.4 in particular is unchanged: **this session still cannot prove the posts are
 better**, and no correction above alters that.
+
+## 16. Session 31-D correction pass — post-Builder findings
+
+§15 recorded the H1 review, taken **before** any Builder work began. This section records findings raised
+by the Session 31 **post-Builder** review (`docs/reviews/session-31-reviewer.md`, range
+`05baf1d2..55b421ad`) that land as ADR corrections rather than code changes — each names its own commit and
+review finding ID, additive to everything above exactly as §15 already established the pattern.
+
+### 16.1 D7 — MINOR-2: `QUAL-CONTEXT-CALLERS-UNCHANGED` re-tiered for nine of its ten call sites
+
+**§5.4's table and row 14 of §11 are not edited — this section corrects them additively.**
+
+The Reviewer found the property row 14 claims (Tier 2 — "asserts, per call site, that the arguments and the
+resulting `CustomerContext` are unchanged") **does hold** for all nine no-`queryContext` call sites — verified
+independently at the range (`git diff --name-only 05baf1d2..55b421ad` touches none of the nine files, and
+`buildCustomerContext`'s third parameter defaults to `{}`, so an unchanged caller produces an identical call
+by construction) — but is **proven by absence-of-diff**, a Tier-3-shaped argument, not by the per-call-site
+spy assertion Tier 2 implies. Only call site 1 (`lib/campaigns/generate.ts`, the one call site that DOES
+pass a `queryContext`) has a genuine argument-level assertion
+(`generate.context-equivalence.test.ts:279-345`).
+
+**Disposition — re-tiered, not re-implemented:** `QUAL-CONTEXT-CALLERS-UNCHANGED` splits into two proof
+obligations from this point forward, rather than one Tier-2 line covering ten rows:
+
+- **Call site 1 (`lib/campaigns/generate.ts:214`) stays Tier 2** — it already carries a real
+  argument-and-result assertion, and it is the one site whose `queryContext` argument can actually vary
+  (§5.1/§5.2a), so a diff-absence argument would prove nothing useful here even if it held.
+- **Call sites 2–10 (the nine no-`queryContext` callers) are Tier 3, diff-verified**, in the same sense §10.3
+  already defines for `QUAL-SERVICE-ROLE-UNWIDENED` and `QUAL-NO-NEW-AI-SURFACE`: the property is "no caller
+  file changed, and the parameter defaults to `{}`" — a `git diff --name-only <base>..<head>` check, not a
+  spy-on-args unit test. §5.4's own table already enumerates the nine individually (rows 2–10); this section
+  is the tier correction, not a re-enumeration.
+
+**`brief.ts`'s two sites, named individually (the Reviewer's specific ask):** `lib/campaigns/brief.ts:111`
+(Stage A assembly) and `lib/campaigns/brief.ts:160` (Stage B critique) are **two separate call sites**, not
+one. Both are covered by the same file, `lib/campaigns/brief.test.ts`, which is why they were not
+distinguished in the Reviewer's table — that remains true and is not a defect: `brief.test.ts` exercises
+both call paths (Stage A's assembly prompt and Stage B's critique prompt each call `buildCustomerContext`
+independently), and the Tier-3 diff-verified property ("this file didn't change in range") applies
+identically and independently to each of the two lines it contains. Re-tiering both to Tier 3 removes the
+need to distinguish them by a separate spy assertion — the diff check is line-blind by nature.
+
+**Constraint 14 in §11's table is corrected going forward as:** `QUAL-CONTEXT-CALLERS-UNCHANGED` — Tier 2
+for call site 1 only; Tier 3 (diff-verified, nine call sites, §5.4's own table) for call sites 2–10.
+
+**Why this is the right fix, not a downgrade of rigor:** demanding a spy-on-args unit test at each of nine
+call sites across nine files, for a property that already holds by construction (an unchanged file calling
+a function whose new parameter defaults to nothing), would be nine tests asserting "this file's diff is
+empty" — restated as vitest assertions instead of a `git diff` command. That is exactly the distinction
+§10.3 draws for Tier 3. The Reviewer's own "why it matters" paragraph reaches the same conclusion: *"the
+property DOES hold... this is not a false green"* — the defect was the TIER label, not the coverage.
+
+**Reference:** `docs/reviews/session-31-reviewer.md`, MINOR-2, closed by this section (D7).
