@@ -1125,3 +1125,38 @@ one-off. `docs/backlog.md`'s `31D-BLOCKER1-SEGFAULT` entry is updated accordingl
 pinning a different `supabase`-CLI-resolved Postgres/PostgREST image pair for CI or an upstream report to
 Supabase/PostgREST, neither of which is a source-code change this pass can make. No production code,
 migration, or test file was touched by this addendum.
+
+### D20 correction — this is the already-known, already-named `supautils` SIGSEGV; not a fresh discovery
+
+D20 and its addendum above characterized this crash as newly discovered and filed a new backlog row for
+it (`31D-BLOCKER1-SEGFAULT`) without first checking for existing tracking. Both omissions are corrected here
+— the original text above is unedited; this is the correction.
+
+**It was already tracked, more precisely than D20 stated.** `docs/backlog.md`'s `30.5-DBTESTS-READINESS-RACE`
+(filed Session 30.5-D, after four earlier reds on this same branch) already names this crash class. More
+importantly, **`.github/workflows/db-tests.yml:43-78`'s own comment already carries the exact root cause**:
+Postgres image range `17.6.1.099-17.6.1.112` ships a broken `supautils` 3.2.0/3.2.1 — any EXECUTE-permission-
+**denied** call to a `SECURITY DEFINER` function SIGSEGVs the backend, confirmed upstream at
+`supabase/postgres#2367`, `#2112`, `#2377`, fixed in supautils 3.2.2 (image `17.6.1.113+`). Both of D20's
+crashes fit this exactly — `reserve_ai_budget` and `vault_update_secret` are both `SECURITY DEFINER`, and
+both crashes hit on the anon/authenticated **denial** path, which is precisely the trigger condition the
+comment names. The same comment also already records a prior fix attempt (pinning `supabase/setup-cli@v2.1.1`
+to `version: 2.117.0-beta.21`) that was tried and **confirmed not to work** (still resolves to image
+`17.6.1.111`, verified in CI run `34027147179`) — so "pin/downgrade the CI Postgres/PostgREST image pair,"
+D20's suggested next step, had already been tried and had already failed before D20 ran. The three fixes
+that remain (a stable 2.x CLI release with image ≥`17.6.1.113`, evaluating the 3.0.0-beta.x CLI line, or a
+CI-only image-retag workaround) are named in that same comment, not invented here.
+
+**`docs/backlog.md` has been corrected**: the duplicate `31D-BLOCKER1-SEGFAULT` row is removed, and
+`30.5-DBTESTS-READINESS-RACE` is updated in place with today's two additional reproductions and the
+`supautils` root cause, superseding that entry's earlier `pgsodium`/Vault-extension hypothesis.
+
+**The "0/3 tally" language in BLOCKER-1's original text and in D20/D20-addendum above is also stale**, though
+neither this correction nor D20 may edit it — `docs/current-phase.md` (§ "Remaining pre-launch work", item 4)
+records a 2026-09-03 correction: the tally reached **7 consecutive green `master` runs**, threshold met since
+2026-07-27, awaiting only a founder decision to flip branch protection to Required. This has no bearing on
+whether today's crash matters — a `pull_request` run never moves the tally either way — but "currently 0/3"
+should not be read as current fact anywhere above; it was already corrected in `current-phase.md` before this
+pass began, and this pass did not check that file before repeating the stale figure.
+
+**Commit:** `<this-commit-sha>` — doc-only, `docs/backlog.md` and this file.
