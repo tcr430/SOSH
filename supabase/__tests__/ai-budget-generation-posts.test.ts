@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { createClient } from '@supabase/supabase-js'
 
 // ADR 0024 §7.4/§7.5/§7.5a (Session 31, H2.9) — QUAL-PRO-DAILY-POST-CAP
 // (Tier 1). The RPC mechanics themselves (guarded upsert, atomicity) are
@@ -150,5 +151,123 @@ describe('ai_budget_daily — generation_posts (ADR 0024 §7.5a, H2.9, QUAL-PRO-
     })
     expect(after.error).toBeNull()
     expect(after.data ?? []).toHaveLength(1)
+  })
+})
+
+// Session 31-D, D5 (MAJOR-5). 20260909110000_ai_budget_daily_rename.sql's
+// `REVOKE ALL ... FROM public` did NOT reach the NAMED anon/authenticated
+// grants Supabase's ALTER DEFAULT PRIVILEGES issues at CREATE FUNCTION time
+// — a permission test that only proves the happy path (the describe block
+// above) proves nothing about this. 20260912090000_ai_budget_rpc_revoke_
+// named_roles.sql adds the missing named REVOKE; this suite is the
+// compensating proof, mirroring vault-update-secret.test.ts's exact shape
+// (anon-denied / authenticated-denied / service-role-granted-as-control).
+describe('reserve_ai_budget / reconcile_ai_budget — EXECUTE denied to anon/authenticated (Session 31-D, D5, MAJOR-5)', () => {
+  const PASSWORD = 'TestPass123!'
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let admin: any
+  let userId: string
+  let userEmail: string
+  let businessId: string
+
+  async function signInAsUser() {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    if (!url || !anonKey) throw new Error('NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY are required')
+    const client = createClient(url, anonKey)
+    const { error } = await client.auth.signInWithPassword({ email: userEmail, password: PASSWORD })
+    if (error) throw error
+    return client
+  }
+
+  beforeAll(async () => {
+    const { createServiceRoleClient } = await import('@/lib/supabase/service')
+    admin = createServiceRoleClient()
+
+    userEmail = `ai-budget-perm-${Date.now()}-${Math.random().toString(36).slice(2)}@integration.test`
+    const { data: user, error: userErr } = await admin.auth.admin.createUser({
+      email: userEmail,
+      password: PASSWORD,
+      email_confirm: true,
+    })
+    if (userErr) throw userErr
+    userId = user.user.id as string
+
+    const { data: biz, error: bizErr } = await admin
+      .from('businesses')
+      .insert({ name: 'D5 Permission Test Business', owner_id: userId, plan: 'pro' })
+      .select('id')
+      .single()
+    if (bizErr) throw bizErr
+    businessId = biz.id as string
+  })
+
+  afterAll(async () => {
+    if (admin && businessId) await admin.from('businesses').delete().eq('id', businessId)
+    if (admin && userId) await admin.auth.admin.deleteUser(userId)
+  })
+
+  it('EXECUTE on reserve_ai_budget is denied to anon — the failure scenario the finding names', async () => {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    if (!url || !anonKey) throw new Error('Supabase env vars required')
+    const anon = createClient(url, anonKey)
+    const { error, data } = await anon.rpc('reserve_ai_budget', {
+      p_business_id: businessId, p_purpose: 'generation_posts', p_units: 15, p_cap: 15,
+    })
+    expect(error).not.toBeNull()
+    expect(data).toBeNull()
+
+    // Confirm the denial actually held — no row was written for this call.
+    const { data: rows } = await admin.from('ai_budget_daily').select('reserved_units').eq('business_id', businessId)
+    expect(rows ?? []).toHaveLength(0)
+  })
+
+  it('EXECUTE on reserve_ai_budget is denied to authenticated — a signed-in customer targeting ANOTHER tenant\'s business_id', async () => {
+    const client = await signInAsUser()
+    const { error, data } = await client.rpc('reserve_ai_budget', {
+      p_business_id: businessId, p_purpose: 'generation_posts', p_units: 15, p_cap: 15,
+    })
+    expect(error).not.toBeNull()
+    expect(data).toBeNull()
+
+    const { data: rows } = await admin.from('ai_budget_daily').select('reserved_units').eq('business_id', businessId)
+    expect(rows ?? []).toHaveLength(0)
+  })
+
+  it('EXECUTE on reconcile_ai_budget is denied to authenticated — a signed-in customer cannot zero another tenant\'s counter', async () => {
+    const seeded = await admin.rpc('reserve_ai_budget', {
+      p_business_id: businessId, p_purpose: 'generation_posts', p_units: 5, p_cap: 15,
+    })
+    expect(seeded.error).toBeNull()
+
+    const client = await signInAsUser()
+    const { error, data } = await client.rpc('reconcile_ai_budget', {
+      p_business_id: businessId, p_purpose: 'generation_posts', p_reserved_units: 5, p_actual_units: 0,
+    })
+    expect(error).not.toBeNull()
+    expect(data).toBeNull()
+
+    // The reservation must be unchanged — the "competitor zeroes your
+    // counter" scenario the finding describes did not happen.
+    const { data: row } = await admin
+      .from('ai_budget_daily')
+      .select('reserved_units')
+      .eq('business_id', businessId)
+      .eq('purpose', 'generation_posts')
+      .single()
+    expect(Number(row.reserved_units)).toBe(5)
+  })
+
+  it('EXECUTE is granted to service_role on both RPCs (positive control for the three denials above)', async () => {
+    const reserved = await admin.rpc('reserve_ai_budget', {
+      p_business_id: businessId, p_purpose: 'generation_posts', p_units: 1, p_cap: 15,
+    })
+    expect(reserved.error).toBeNull()
+
+    const reconciled = await admin.rpc('reconcile_ai_budget', {
+      p_business_id: businessId, p_purpose: 'generation_posts', p_reserved_units: 1, p_actual_units: 0,
+    })
+    expect(reconciled.error).toBeNull()
   })
 })
