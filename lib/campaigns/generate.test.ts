@@ -241,6 +241,21 @@ const singleEntryBrief: CampaignBriefRow = {
   },
 }
 
+// Session 31-D, D6 (MINOR-1) — three same-platform entries so
+// reserveGenerationPost's mockResolvedValueOnce chain maps 1:1 onto entry
+// order, isolated from the 6-entry fixture's cross-platform noise.
+const threeEntryBrief: CampaignBriefRow = {
+  ...mockBrief,
+  content: {
+    ...mockBrief.content,
+    roleSequence: [
+      { order: 0, role: 'anchor_thesis', platform: 'linkedin', angle: 'the core argument' },
+      { order: 1, role: 'customer_proof', platform: 'linkedin', angle: 'social proof' },
+      { order: 2, role: 'objection_response', platform: 'linkedin', angle: 'address the objection' },
+    ],
+  },
+}
+
 function scoreAt(overall: number): RubricOutput {
   return { ...highOpenerScore, overall }
 }
@@ -929,6 +944,36 @@ describe('generatePostsForCampaign — Pro daily post cap (ADR §7.5a, H2.9)', (
     await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
 
     expect(releaseGenerationPost).not.toHaveBeenCalled()
+  })
+
+  // Session 31-D, D6 (MINOR-1). Before this fix, a mid-campaign reservation
+  // refusal left every EARLIER entry's already-reserved unit stranded: the
+  // whole session fails with postsCreated: 0 (no posts are ever inserted —
+  // STEP 8's createPosts runs only after the entry loop completes), but
+  // those units stayed consumed against the day's cap forever.
+  it('MINOR-1: releases every unit reserved by earlier entries when entry 2 of 3 is refused mid-campaign', async () => {
+    vi.mocked(getBusinessById).mockResolvedValue(mockBusinessPro)
+    vi.mocked(getBriefByCampaign).mockResolvedValue(threeEntryBrief)
+    vi.mocked(schedulePosts).mockReset().mockReturnValue(['2026-06-03T09:00:00.000Z', '2026-06-04T09:00:00.000Z', '2026-06-05T09:00:00.000Z'])
+    // Entry 1 reserves successfully; entry 2's reservation is refused.
+    vi.mocked(reserveGenerationPost)
+      .mockResolvedValueOnce({} as never)
+      .mockResolvedValueOnce(null)
+
+    const result = await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+
+    expect(result.postsCreated).toBe(0)
+    // Entry 1's unit is released; entry 2's own reservation never succeeded,
+    // so there is nothing of its own to release — exactly ONE release call,
+    // not zero (the pre-fix behaviour) and not two.
+    expect(releaseGenerationPost).toHaveBeenCalledTimes(1)
+    expect(releaseGenerationPost).toHaveBeenCalledWith(BUSINESS_ID)
+    // Entry 3 is never reached — the session fails at entry 2.
+    expect(generateNativeContent).toHaveBeenCalledTimes(3) // entry 1's N=3 fan-out only
+    expect(updateGenerationSessionStatus).toHaveBeenCalledWith(
+      expect.anything(), SESSION_ID,
+      expect.objectContaining({ status: 'failed', error_code: 'daily_quota_exceeded' }),
+    )
   })
 })
 

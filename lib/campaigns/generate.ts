@@ -264,6 +264,16 @@ export async function generatePostsForCampaign(
     // frozen brief (ADR §5, MODE2-BRIEF-FROZEN) — not one joint call.
     const generated: GeneratedItem[] = []
 
+    // Session 31-D, D6 (MINOR-1). ADR §7.5a names two outcomes for a
+    // reserved unit — hard fail releases, success keeps — but did not name
+    // a third: a MID-CAMPAIGN reservation refusal, which left every EARLIER
+    // entry's already-reserved unit stranded (the whole session fails with
+    // postsCreated: 0, so those posts never exist, but their units stayed
+    // consumed against the day's cap). Tracks how many units this SESSION
+    // has successfully reserved so far, across platforms, so a refusal can
+    // release all of them rather than none.
+    let reservedUnitsSoFar = 0
+
     for (const platform of activePlatforms) {
       const entriesForPlatform = frozenBrief.content.roleSequence.filter((r) => r.platform === platform)
       const dates = scheduleMap.get(platform)!
@@ -318,6 +328,13 @@ export async function generatePostsForCampaign(
         if (business.plan === 'pro') {
           const reservation = await reserveGenerationPost(businessId, config.server.AI_PRO_DAILY_POST_CAP)
           if (reservation === null) {
+            // Session 31-D, D6 (MINOR-1) — release every unit reserved by
+            // THIS session's earlier entries before failing. Without this,
+            // a 12-entry campaign that fails on entry 6 leaves entries 1-5's
+            // units consumed against the day's cap for zero posts created.
+            for (let released = 0; released < reservedUnitsSoFar; released++) {
+              await releaseGenerationPost(businessId)
+            }
             await updateGenerationSessionStatus(client, sessionId, {
               status: 'failed',
               error_code: 'daily_quota_exceeded',
@@ -326,6 +343,7 @@ export async function generatePostsForCampaign(
             return { sessionId, postsCreated: 0 }
           }
           reservedGenerationBudget = true
+          reservedUnitsSoFar++
         }
 
         // STEP 7a — N=3 candidates, PARALLEL within this post (ADR 0024
