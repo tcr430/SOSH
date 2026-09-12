@@ -918,3 +918,15 @@ it is the Reviewer's and is unedited.
 | **Commit** | `704caa98` |
 
 **What this step did NOT touch:** `cassette-queue.ts` itself (`enqueueCassettes`/`drainCassetteQueue`/`makeCassetteMessage`) — unchanged, both functions already existed and already did exactly what §16.1's header comment describes; `cassette-queue.test.ts` — unchanged, its own manual `drainCassetteQueue()` calls inside test bodies are unaffected by (and compatible with) the new global teardown running afterward; no env-loading or dotenv behavior added to `vitest.setup.ts` — this file does exactly one thing (register the lifecycle hook), consistent with the project's existing pattern of loading env vars at invocation time rather than through vitest's setup mechanism.
+
+### D9 — routed observation (D1 appendix, not a numbered finding)
+
+| Field | |
+|---|---|
+| **Finding** | None — an observation D1's own appendix (line 834 above) routed forward: *"ADR 0024 §3.2's sentence 'Changing any of those four without bumping that prompt's version in the same commit fails the test' over-claims what the frozen table can prove."* D1's text is not edited by this entry; this is the promised follow-up. |
+| **Fix** | Doc-only. `docs/decisions/0024-generation-quality-core.md` §16.2 (new, additive — §3.2 itself is unedited) states the over-claim precisely (the test compares live value vs. frozen row, not "was version bumped") and gives the corrected sentence: changing the factory value and the table row TOGETHER, to the same new value, without bumping `version`, still passes — only a one-sided drift (factory value changes but the row doesn't, or vice versa) fails. §3.2's real, load-bearing property — an untracked drift between deployed sampling behaviour and the frozen table fails the test — is unaffected and restated as still holding. |
+| **Proof** | `docs/decisions/0024-generation-quality-core.md` §16.2, present in the working tree; §3.2 (lines 314-336) confirmed byte-unchanged. |
+| **Reddening** | N/A — this corrects a sentence's claim about test behavior; the underlying behavior was already demonstrated (by D1's own two-mutation reddening, and independently reconfirmed by re-reading `prompt-properties.frozen-table.test.ts`'s comparison logic: it asserts live-vs-frozen-row equality per id, with no reference to `version` having changed since a prior commit — there is no git-history read anywhere in the test). No new mutation performed here; the claim being corrected is about what the EXISTING test does, not new behavior to prove. |
+| **Commit** | *(pending — recorded once this step is committed)* |
+
+**What this step did NOT touch:** the frozen table itself (`lib/ai/prompts/frozen-table.ts`) or `prompt-properties.frozen-table.test.ts` — both unchanged, this is a documentation-accuracy fix about what they already prove, not a change to what they prove; `QUAL-SAMPLING-VERSIONED`'s Tier-2 status or its test coverage — unaffected, the constraint's real property (drift visibility) is restated as holding, not weakened.

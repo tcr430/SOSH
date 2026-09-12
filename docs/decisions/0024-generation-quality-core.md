@@ -1315,3 +1315,44 @@ empty" — restated as vitest assertions instead of a `git diff` command. That i
 property DOES hold... this is not a false green"* — the defect was the TIER label, not the coverage.
 
 **Reference:** `docs/reviews/session-31-reviewer.md`, MINOR-2, closed by this section (D7).
+
+### 16.2 D9 — §3.2's "fails the test" sentence over-claims what the frozen table can prove
+
+**§3.2 is not edited — this section corrects it additively.** The sentence stands above exactly as
+written; this section states what it should have said.
+
+**The over-claim.** §3.2 says: *"Changing any of those four without bumping that prompt's `version` in the
+same commit **fails the test**."* This is not what `prompt-properties.frozen-table.test.ts` actually checks.
+The test compares each live prompt's `{modelKey, temperature, thinking, maxTokens}` against its frozen-table
+row keyed by `{id, version}` — it fails when the LIVE VALUE and the TABLE ROW disagree. It has no way to see
+whether `version` itself was bumped, because a commit that changes `temperature` in the factory AND updates
+the table row's `temperature` to match, **in the same commit, without touching `version`**, produces two
+identical, agreeing values — the test passes. Observed directly during D1's own reddening work (Session
+31-D): flagged there as an observation routed to D9, not re-verified as a fresh finding here, since D1
+already demonstrated it.
+
+**What the table actually proves, correctly stated:** a DRIFT between the live factory value and its frozen
+row — i.e. changing ONE side only (the factory value, or the table row, but not both together) — fails the
+test and is visible in the diff. This is the exact property `platform-map.frozen-table.test.ts` already
+established as its precedent (§3.2's own citation): the table makes an unattributed change *visible*, it
+does not — and structurally cannot — enforce that a human also bumped an unrelated integer field as an act
+of authorial intent. Enforcing "you must have MEANT to change this" is not something a value-equality
+comparison can express; only a git hook, a required PR-description field, or a second independent oracle
+(neither of which exists here) could do that.
+
+**Corrected sentence, for future readers of §3.2:** *"Changing any of those four ALONE — i.e. only the
+factory value, or only the table row, without updating the other in the same commit — fails the test.
+Changing both together to the same new value, without bumping `version`, does NOT fail the test; the table
+proves the live value and its recorded baseline agree, not that a version bump accompanied the change of
+either."*
+
+**Why this is a MINOR/documentation-only correction, not a design gap:** `QUAL-SAMPLING-VERSIONED`'s real,
+provable job — stopping an UNTRACKED drift between the deployed sampling behaviour and what the table
+claims it is — still holds exactly as the reddening in H2.1 and D1 demonstrated (adding an eleventh id with
+no row, or a fourth native-generation family with no row, both go red). What does not hold is the stronger
+claim that the mechanism enforces version-bump AUTHORSHIP — nothing in this ADR relies on that stronger
+claim anywhere else (§3.2's own conclusion, "Adding a prompt requires a new row," is unaffected — that part
+is true and unchanged).
+
+**Reference:** `docs/reviews/session-31-reviewer.md`'s D1 appendix ("Observation routed to D9"), closed by
+this section (D9).
