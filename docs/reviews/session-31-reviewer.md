@@ -1159,4 +1159,4 @@ whether today's crash matters — a `pull_request` run never moves the tally eit
 should not be read as current fact anywhere above; it was already corrected in `current-phase.md` before this
 pass began, and this pass did not check that file before repeating the stale figure.
 
-**Commit:** `<this-commit-sha>` — doc-only, `docs/backlog.md` and this file.
+**Commit:** `794f6479` — doc-only, `docs/backlog.md` and this file.
