@@ -1,6 +1,7 @@
 import { vi, describe, it, expect, beforeEach } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { retrieveRelevant, retrieveStudioPerformancePatterns } from './performance'
 import * as memoryPerformanceDb from '@/lib/db/memory-performance'
 import * as postMetricsDb from '@/lib/db/post-metrics'
@@ -99,8 +100,7 @@ function makePostRow(overrides: Partial<PostRow> = {}): PostRow {
 describe('retrieveRelevant (performance) — governed rows preferred', () => {
   it('prefers scored performance_memory rows when any exist, and does not touch post_metrics', async () => {
     vi.mocked(memoryPerformanceDb.listPerformanceMemoryCandidates).mockResolvedValue([makeGovernedRow()])
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const client = {} as any
+        const client = {} as unknown as SupabaseClient
 
     const result = await retrieveRelevant(client, 'biz-1', {})
 
@@ -124,8 +124,7 @@ describe('retrieveRelevant (performance) — governed rows preferred', () => {
       makeGovernedRow({ id: 'pf-no-platform', pattern: 'cross-platform pattern', platform: null, confidence: 0.9 }),
       makeGovernedRow({ id: 'pf-linkedin', pattern: 'linkedin pattern', platform: 'linkedin', confidence: 0.1 }),
     ])
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const client = {} as any
+        const client = {} as unknown as SupabaseClient
 
     const result = await retrieveRelevant(client, 'biz-1', {})
 
@@ -143,8 +142,7 @@ describe('retrieveRelevant (performance) — governed rows preferred', () => {
       makeGovernedRow({ id: `pf-${i}`, confidence: (i + 1) / 10, pattern: `pattern-${i}` }),
     )
     vi.mocked(memoryPerformanceDb.listPerformanceMemoryCandidates).mockResolvedValue(candidates)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const client = {} as any
+        const client = {} as unknown as SupabaseClient
 
     const result = await retrieveRelevant(client, 'biz-1', {})
 
@@ -157,8 +155,7 @@ describe('retrieveRelevant (performance) — post_metrics fallback (Track A empt
     vi.mocked(memoryPerformanceDb.listPerformanceMemoryCandidates).mockResolvedValue([])
     vi.mocked(postMetricsDb.listTopPostMetrics).mockResolvedValue([makeMetricsRow()])
     vi.mocked(postsDb.listPostsByIds).mockResolvedValue([makePostRow()])
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const client = {} as any
+        const client = {} as unknown as SupabaseClient
 
     const result = await retrieveRelevant(client, 'biz-1', {})
 
@@ -177,8 +174,7 @@ describe('retrieveRelevant (performance) — post_metrics fallback (Track A empt
     vi.mocked(memoryPerformanceDb.listPerformanceMemoryCandidates).mockResolvedValue([])
     vi.mocked(postMetricsDb.listTopPostMetrics).mockResolvedValue([])
     vi.mocked(postsDb.listPostsByIds).mockResolvedValue([])
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const client = {} as any
+        const client = {} as unknown as SupabaseClient
 
     await retrieveRelevant(client, 'biz-1', {})
 
@@ -198,8 +194,7 @@ describe('retrieveRelevant (performance) — post_metrics fallback (Track A empt
     vi.mocked(memoryPerformanceDb.listPerformanceMemoryCandidates).mockResolvedValue([])
     vi.mocked(postMetricsDb.listTopPostMetrics).mockResolvedValue(overflowMetrics)
     vi.mocked(postsDb.listPostsByIds).mockResolvedValue(overflowPosts)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const client = {} as any
+        const client = {} as unknown as SupabaseClient
 
     const result = await retrieveRelevant(client, 'biz-1', {})
 
@@ -210,8 +205,7 @@ describe('retrieveRelevant (performance) — post_metrics fallback (Track A empt
     vi.mocked(memoryPerformanceDb.listPerformanceMemoryCandidates).mockResolvedValue([])
     vi.mocked(postMetricsDb.listTopPostMetrics).mockResolvedValue([makeMetricsRow({ likes: null, impressions: null })])
     vi.mocked(postsDb.listPostsByIds).mockResolvedValue([makePostRow()])
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const client = {} as any
+        const client = {} as unknown as SupabaseClient
 
     const result = await retrieveRelevant(client, 'biz-1', {})
 
@@ -223,8 +217,7 @@ describe('retrieveRelevant (performance) — post_metrics fallback (Track A empt
     vi.mocked(memoryPerformanceDb.listPerformanceMemoryCandidates).mockResolvedValue([])
     vi.mocked(postMetricsDb.listTopPostMetrics).mockResolvedValue([makeMetricsRow({ post_id: 'missing-post' })])
     vi.mocked(postsDb.listPostsByIds).mockResolvedValue([]) // post not found (e.g. soft-deleted)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const client = {} as any
+        const client = {} as unknown as SupabaseClient
 
     const result = await retrieveRelevant(client, 'biz-1', {})
 
@@ -234,8 +227,7 @@ describe('retrieveRelevant (performance) — post_metrics fallback (Track A empt
   it('returns empty immediately when there are no post_metrics rows at all', async () => {
     vi.mocked(memoryPerformanceDb.listPerformanceMemoryCandidates).mockResolvedValue([])
     vi.mocked(postMetricsDb.listTopPostMetrics).mockResolvedValue([])
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const client = {} as any
+        const client = {} as unknown as SupabaseClient
 
     const result = await retrieveRelevant(client, 'biz-1', {})
 
@@ -247,8 +239,7 @@ describe('retrieveRelevant (performance) — post_metrics fallback (Track A empt
 describe('provenance discriminant (ADR 0019 §8.2, [type-§6])', () => {
   it("the governed branch mints provenance: 'governed'", async () => {
     vi.mocked(memoryPerformanceDb.listPerformanceMemoryCandidates).mockResolvedValue([makeGovernedRow()])
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const client = {} as any
+        const client = {} as unknown as SupabaseClient
 
     const result = await retrieveRelevant(client, 'biz-1', {})
 
@@ -263,8 +254,7 @@ describe('provenance discriminant (ADR 0019 §8.2, [type-§6])', () => {
       makeGovernedRow({ id: 'pf-other', pattern: 'OTHER-CAMPAIGN-PATTERN', scope: 'campaign', scope_ref: 'camp-OTHER', confidence: 0.9 }),
       makeGovernedRow({ id: 'pf-this', pattern: 'THIS-CAMPAIGN-PATTERN', scope: 'campaign', scope_ref: 'camp-THIS', confidence: 0.6 }),
     ])
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const client = {} as any
+        const client = {} as unknown as SupabaseClient
 
     const result = await retrieveRelevant(client, 'biz-1', { campaignId: 'camp-THIS' })
 
@@ -277,8 +267,7 @@ describe('provenance discriminant (ADR 0019 §8.2, [type-§6])', () => {
       makeGovernedRow({ id: 'pf-other', pattern: 'OTHER-CAMPAIGN-PATTERN', scope: 'campaign', scope_ref: 'camp-OTHER', confidence: 0.9 }),
       makeGovernedRow({ id: 'pf-this', pattern: 'THIS-CAMPAIGN-PATTERN', scope: 'campaign', scope_ref: 'camp-THIS', confidence: 0.6 }),
     ])
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const client = {} as any
+        const client = {} as unknown as SupabaseClient
 
     const result = await retrieveRelevant(client, 'biz-1', {})
 
@@ -290,8 +279,7 @@ describe('provenance discriminant (ADR 0019 §8.2, [type-§6])', () => {
     vi.mocked(memoryPerformanceDb.listPerformanceMemoryCandidates).mockResolvedValue([])
     vi.mocked(postMetricsDb.listTopPostMetrics).mockResolvedValue([makeMetricsRow()])
     vi.mocked(postsDb.listPostsByIds).mockResolvedValue([makePostRow()])
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const client = {} as any
+        const client = {} as unknown as SupabaseClient
 
     const result = await retrieveRelevant(client, 'biz-1', {})
 
@@ -305,8 +293,7 @@ describe('retrieveStudioPerformancePatterns — governed-only, no fallback (ADR 
       makeGovernedRow({ id: 'pf-linkedin', platform: 'linkedin', scope: 'platform', scope_ref: 'linkedin' }),
       makeGovernedRow({ id: 'pf-2', platform: 'twitter', scope: 'platform', scope_ref: 'twitter', confidence: 0.2 }),
     ])
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const client = {} as any
+        const client = {} as unknown as SupabaseClient
 
     const result = await retrieveStudioPerformancePatterns(client, 'biz-1', { platform: 'linkedin' })
 
@@ -326,8 +313,7 @@ describe('retrieveStudioPerformancePatterns — governed-only, no fallback (ADR 
 
   it('NEVER falls back to post_metrics — performance_memory empty means an empty result, not derived_from_metrics rows', async () => {
     vi.mocked(memoryPerformanceDb.listPerformanceMemoryCandidates).mockResolvedValue([])
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const client = {} as any
+        const client = {} as unknown as SupabaseClient
 
     const result = await retrieveStudioPerformancePatterns(client, 'biz-1', { platform: 'linkedin' })
 
@@ -337,8 +323,7 @@ describe('retrieveStudioPerformancePatterns — governed-only, no fallback (ADR 
 
   it('every returned row carries a rowId (uuid), never a synthetic/derived identifier', async () => {
     vi.mocked(memoryPerformanceDb.listPerformanceMemoryCandidates).mockResolvedValue([makeGovernedRow({ id: 'pf-abc' })])
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const client = {} as any
+        const client = {} as unknown as SupabaseClient
 
     const result = await retrieveStudioPerformancePatterns(client, 'biz-1', {})
 
@@ -347,8 +332,7 @@ describe('retrieveStudioPerformancePatterns — governed-only, no fallback (ADR 
 
   it('routes ONLY through listPerformanceMemoryCandidates (the active-filtered reader), never listDistilledPatternsForSummary (the unfiltered summarizer reader)', async () => {
     vi.mocked(memoryPerformanceDb.listPerformanceMemoryCandidates).mockResolvedValue([makeGovernedRow()])
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const client = {} as any
+        const client = {} as unknown as SupabaseClient
 
     await retrieveStudioPerformancePatterns(client, 'biz-1', {})
 
