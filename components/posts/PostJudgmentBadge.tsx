@@ -41,25 +41,32 @@ export function PostJudgmentBadge({ original, t }: PostJudgmentBadgeProps) {
   }
 
   // ALL-BELOW-THRESHOLD — amber flag, excluded from bulk approve elsewhere.
+  // Session 31-D, D12 (MINOR-6) — --warning/--warning-foreground, the SAME
+  // tokens OpportunityFeed.tsx and StudioEditor.tsx already use (Session
+  // 28-D, D5), pre-verified >=5.69:1 AA contrast in both themes. Raw
+  // amber-*/dark: palette classes replaced, not re-invented — no new token
+  // pair added for this surface.
   if (judgment.state === 'all-below-threshold') {
     return (
-      <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
-        <span className="size-1.5 rounded-full bg-amber-500" aria-hidden="true" />
+      <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-warning px-2 py-0.5 text-xs font-medium text-warning-foreground">
+        <span className="size-1.5 rounded-full bg-warning-foreground" aria-hidden="true" />
         {t('belowThreshold')}
       </p>
     )
   }
 
-  // JUDGED-AND-PASSED — score badge, expandable to the ten-dimension breakdown.
+  // JUDGED-AND-PASSED — score badge, expandable to the ten-dimension
+  // breakdown. Session 31-D, D12 (MINOR-6) — --success/--success-foreground,
+  // same precedent as above.
   return (
     <div className="mt-1.5">
       <button
         type="button"
         onClick={() => setExpanded(v => !v)}
         aria-expanded={expanded}
-        className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:hover:bg-emerald-950/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        className="inline-flex items-center gap-1.5 rounded-full bg-success px-2 py-0.5 text-xs font-medium text-success-foreground hover:bg-success/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       >
-        <span className="size-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
+        <span className="size-1.5 rounded-full bg-success-foreground" aria-hidden="true" />
         {t('passed', { overall: judgment.overall })}
         <span className="opacity-70">· {t('passedDetail', { count: judgment.candidateCount })}</span>
       </button>

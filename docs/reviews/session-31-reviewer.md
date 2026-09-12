@@ -954,3 +954,15 @@ it is the Reviewer's and is unedited.
 | **Commit** | `75a5c2f9` |
 
 **What this step did NOT touch:** the two existing columns of the five-row table (case description, target constraint) — unedited; the 21-row table above it (§Amendment D's main table, already citing file:line per row) — unaffected; the five test cases themselves — unchanged, still exactly where they already were, still passing.
+
+### D12 — MINOR-6
+
+| Field | |
+|---|---|
+| **Finding** | MINOR-6 |
+| **Fix** | `components/posts/PostJudgmentBadge.tsx`'s two status states swap raw Tailwind palette classes (`bg-amber-100`/`text-amber-800`/`dark:bg-amber-950/40`/`dark:text-amber-300`, and the emerald equivalents) for the EXISTING `--warning`/`--warning-foreground` and `--success`/`--success-foreground` design tokens in `app/globals.css` — no new token pair invented. These are the SAME tokens `OpportunityFeed.tsx` and `StudioEditor.tsx` already use (Session 28-D, D5's own MINOR-6 fix for a different surface), pre-verified ≥5.69:1 AA contrast in both themes at that time. The decorative dot indicators switch from raw `bg-amber-500`/`bg-emerald-500` to `bg-warning-foreground`/`bg-success-foreground`. The interactive button's hover state uses `hover:bg-success/70` (Tailwind's opacity modifier over the registered `--color-success` token) since no hover variant of the token existed to reuse. |
+| **Proof** | New `components/posts/PostJudgmentBadge.test.tsx` — four cases, mirroring `StudioEditor.test.tsx`'s exact contrast-test mechanism (parses the SHIPPED `app/globals.css` at test time, computes WCAG relative luminance and contrast ratio): `warning-foreground` on `warning` and `success-foreground` on `success`, each asserted ≥4.5:1 in both `:root` and `.dark`. All four pass. `npx tsc --noEmit --skipLibCheck`: clean. Existing consumers (`ApprovalsInbox`, `PostsClient`, the campaigns/posts suites — 12 files, 169 tests) pass unchanged — none hardcoded the old amber/emerald classes. |
+| **Reddening** | Temporarily mutated `app/globals.css`'s `--warning-foreground` from `#92400e` to a lower-contrast `#d4a017` (`cp` backup taken first). Re-ran the new test: 1/4 failed — `expected 2.29... to be greater than or equal to 4.5`. Restored `app/globals.css` from the backup; `git diff --stat -- app/globals.css` confirmed empty (byte-identical restore). Re-ran: 4/4 green again. |
+| **Commit** | *(pending — recorded once this step is committed)* |
+
+**What this step did NOT touch:** `app/globals.css` itself — no new tokens added, the `--warning`/`--success` pairs already existed and were already proven compliant by Session 28-D's own D5 fix; `ApprovalsInbox.tsx`'s pre-existing bulk-approve button (`bg-emerald-700 hover:bg-emerald-600 text-white`) — the Reviewer explicitly scoped this as "house-consistent, a continuation not a regression" and out of this finding's remit; the badge's overall layout, sizing, or the ten-dimension breakdown `<dl>` — unchanged, only the two colored-state class strings and their dot indicators changed.
