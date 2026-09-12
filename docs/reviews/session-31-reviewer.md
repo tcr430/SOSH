@@ -1047,7 +1047,7 @@ it is the Reviewer's and is unedited.
 | **Fix** | `.github/workflows/app-tests.yml`'s env-block comment updated from "two files import the REAL `lib/config.ts` unmocked" to name all three: `lib/config.test.ts`, `lib/signals/orchestrator.test.ts`, and `lib/campaigns/generate.test.ts` (the one the Reviewer's own bare-shell run surfaced — it transitively imports `lib/config.ts` via `lib/campaigns/generate.ts` and does not mock `'@/lib/config'`). Comment-only; the `env:` block's actual dummy values were already correct and unaffected (CI was already green under the step-scoped env, per the Reviewer's own note that this is a NIT and not a finding against the job). |
 | **Proof** | `grep -n "vi.mock('@/lib/config'"` against all three named files: zero matches in any, confirming none of the three mocks `lib/config` and all three genuinely need the real (dummy-valued) env block. `node -e "yaml.load(...)"`: "valid YAML" — the comment edit did not break the workflow file's syntax. |
 | **Reddening** | N/A — a stale comment with no behavior attached to redden; the job's actual `env:` values are unchanged. Verified by confirming the count claim itself (three files, not two) via direct grep rather than trusting the Reviewer's citation unverified. |
-| **Commit** | *(pending — recorded once this step is committed)* |
+| **Commit** | `92774ef3` |
 
 **What this step did NOT touch:** the `env:` block's actual dummy values (`ANTHROPIC_API_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, etc.) — unchanged, all still correct; the job's `run:` step or its skip-guard logic — unaffected; `lib/config.test.ts`/`lib/signals/orchestrator.test.ts`'s own reasons for needing the real config — unchanged, only the count and the third file's name were added.
 
