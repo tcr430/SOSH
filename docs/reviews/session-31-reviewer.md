@@ -990,3 +990,15 @@ it is the Reviewer's and is unedited.
 | **Commit** | `432cc325` |
 
 **What this step did NOT touch:** the two Tier-1 case shapes that remain correctly Tier 1 (two-concurrent-reservations, no-old-table-survives) — unedited, still covered by existing tests; `signals3-triage-state.test.ts:263`'s own test body — unedited, only a comment added above it; `QUAL-NO-SECOND-BUDGET-TABLE`'s existing §10.3 row — unedited, it was already correct, only missing a code-level echo.
+
+### D15 — NIT-1
+
+| Field | |
+|---|---|
+| **Finding** | NIT-1 |
+| **Fix** | `lib/campaigns/generate.ts`'s `previousVersions` construction (the metadata-assembly step) drops the dead `g.previousContent !== null ? [...] : []` ternary — `g.previousContent` is hard-coded `null` at this file's own construction site, so the true arm (carrying the stale `'weak opener (openingStrength below threshold)'` string, a residue of the retired hook retry) could never execute. Replaced with the constant `[]`, which is exactly what the ternary always evaluated to at runtime — a byte-identical output, not a behavior change. `regenerationCount`/`previousContent` themselves are RETAINED on `GeneratedItem` unchanged, per ADR §2.9's own instruction not to repurpose them — this step removes only the dead consumption, not the retained fields, and `previousVersions` stays a real, reusable array (`actions.ts`'s live regenerate flow appends its own user-supplied `rejectionNote` to it, unaffected). |
+| **Proof** | `npx tsc --noEmit --skipLibCheck`: clean. `npx eslint lib/campaigns/generate.ts`: no new warnings. `generate.test.ts` + `generate.context-equivalence.test.ts`: 58/58 green, unchanged — confirming no test relied on the old ternary's shape or the removed string (`grep` for the removed string across both test files: no matches). |
+| **Reddening** | N/A — this is dead-code removal with a provably identical runtime result (the ternary's condition was always false, so `[]` was always the actual output before this change too); there is no behavior to redden because there was no behavior difference to protect. Verified by re-reading the pre-edit code: `g.previousContent` has exactly one assignment site in the file (`:485`, hard-coded `null`) and the removed branch was its only consumer. |
+| **Commit** | *(pending — recorded once this step is committed)* |
+
+**What this step did NOT touch:** `GeneratedItem.regenerationCount`/`.previousContent` (the interface fields, lines 80-81) — unchanged, still retained per §2.9; `actions.ts`'s regenerate flow and its own `previousVersions`/`rejectionNote` handling — completely separate code path, untouched; `AiGenerationMetadata`'s declared type — unchanged, `previousVersions` is still `Array<{content, rejectionNote, regeneratedAt}>`, just constructed as an empty-array literal here instead of a dead ternary.

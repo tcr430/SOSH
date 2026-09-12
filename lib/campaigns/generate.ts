@@ -550,10 +550,15 @@ export async function generatePostsForCampaign(
         platformConstraintsVersion: getPlatformConstraintsVersion(),
         rationale: frozenBrief.content.roleSequence.find((r) => r.order === g.order)?.angle ?? '',
         regenerationCount: g.regenerationCount,
-        previousVersions:
-          g.previousContent !== null
-            ? [{ content: g.previousContent, rejectionNote: 'weak opener (openingStrength below threshold)', regeneratedAt: generatedAt }]
-            : [],
+        // Session 31-D, D15 (NIT-1). `g.previousContent` is hard-coded `null`
+        // at this file's own construction (:485) — the ternary this replaced
+        // was dead residue from the retired openingStrength hook retry (ADR
+        // 0024 §2.9), which was the only path that ever set it non-null, and
+        // whose stale rejectionNote string ("weak opener...") no longer
+        // describes anything the judge-based pipeline does. `previousVersions`
+        // itself stays a real, reusable array — actions.ts's regenerate flow
+        // appends its own, user-supplied rejectionNote to it.
+        previousVersions: [],
         generatedAt,
       }
       return {
