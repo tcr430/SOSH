@@ -1011,6 +1011,6 @@ it is the Reviewer's and is unedited.
 | **Fix** | None taken independently — the Reviewer's own text says *"Folded into MAJOR-4's remedy."* D4's appendix entry above already records the disposition: `scopeMatch` (`lib/memory/scoring.ts:56-70`) gains no `role` branch as part of this correction pass — adding one would be a new, un-adjudicated memory-scope decision, out of MAJOR-4's own scope (making `campaignId` reach the seam at all). `role` remains threaded through `MemoryQueryContext` and exercised in `scoring.test.ts:56`'s fixture, but contributes nothing to ranking, exactly as the Reviewer found. |
 | **Proof** | D4's own appendix entry above, "What this step did NOT touch": *"`scopeMatch`... unchanged; `role` still has no `MemoryScope` branch... this step does not attempt to fix that."* No new evidence needed — this closes NIT-2 by cross-reference rather than duplicating D4's reasoning. |
 | **Reddening** | N/A — no code changed by this entry. |
-| **Commit** | *(pending — recorded once this step is committed)* |
+| **Commit** | `adb3d48d` |
 
 **What this step did NOT touch:** everything — `role`'s inert status in `scopeMatch` stands as a recorded, deliberate scope boundary (D4), not a defect awaiting a future fix.
