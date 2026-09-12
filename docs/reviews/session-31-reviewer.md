@@ -978,3 +978,15 @@ it is the Reviewer's and is unedited.
 | **Commit** | `f089573b` |
 
 **What this step did NOT touch:** the `post_ai_originals` cascade row itself (line 1071) — unedited, it already correctly states CASCADE on all three FKs; the `ai_budget_daily` row (line 1085) — unedited, it already correctly records the rename; ADR 0024 §9 (where this same "no new table" statement already lives, per the Reviewer's own read) — unaffected, this step adds the record to §D2.5's own document as the finding required, it does not remove or alter the ADR 0024 copy.
+
+### D14 — MINOR-8
+
+| Field | |
+|---|---|
+| **Finding** | MINOR-8 |
+| **Fix** | Both remedies from the Reviewer's own list. (1) ADR 0024 §16.3 (new, additive — §10.1's table and §11 row 22 are unedited) re-tiers `QUAL-COST-CEILING-EXTENDED`'s backfill sub-case to Tier 3, diff-verified by decision: the property is structurally guaranteed by Postgres's own `ADD COLUMN ... DEFAULT` semantics (a column added with a default cannot leave a pre-existing row NULL), not something `db-tests.yml`'s fresh-migrate stack (no pre-rename rows ever exist there) can independently re-verify — exactly ADR 0015 §2's "no runtime test must be an enumerated decision" rule. (2) `supabase/__tests__/signals3-triage-state.test.ts` gains a one-line-plus-comment record directly above the ":263" case, naming `QUAL-NO-SECOND-BUDGET-TABLE` explicitly and distinguishing it from that case's own different property — closing the "recorded only in the ADR, not in code, unlike six of its seven Tier-3 siblings" gap. |
+| **Proof** | `docs/decisions/0024-generation-quality-core.md` §16.3, present in the working tree; §10.1/§11 confirmed byte-unchanged. `supabase/__tests__/signals3-triage-state.test.ts`'s new comment, present above the existing `:263` case (now shifted a few lines down by the comment; the case itself unedited). |
+| **Reddening** | N/A for both halves — (1) is a Tier re-classification with no code to mutate (the property was already correctly implemented via `ADD COLUMN ... DEFAULT`; only the test-plan's tier label for its verification was wrong), and I additionally checked the live linked project directly rather than assert unverified: `ai_budget_daily` currently holds ZERO rows (no reservations have landed since the rename), so no empirical backfill read was possible either way — the ADR text was corrected mid-step to state this honestly rather than claim a live-data confirmation that doesn't exist. (2) is a comment-only addition to an existing, already-passing test file. `npx tsc --noEmit --skipLibCheck`: clean. |
+| **Commit** | *(pending — recorded once this step is committed)* |
+
+**What this step did NOT touch:** the two Tier-1 case shapes that remain correctly Tier 1 (two-concurrent-reservations, no-old-table-survives) — unedited, still covered by existing tests; `signals3-triage-state.test.ts:263`'s own test body — unedited, only a comment added above it; `QUAL-NO-SECOND-BUDGET-TABLE`'s existing §10.3 row — unedited, it was already correct, only missing a code-level echo.

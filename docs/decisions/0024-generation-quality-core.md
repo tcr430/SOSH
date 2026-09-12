@@ -1356,3 +1356,37 @@ is true and unchanged).
 
 **Reference:** `docs/reviews/session-31-reviewer.md`'s D1 appendix ("Observation routed to D9"), closed by
 this section (D9).
+
+### 16.3 D14 — MINOR-8: the backfill case re-tiered; `QUAL-NO-SECOND-BUDGET-TABLE` recorded in code
+
+**§10.1's table and §11 row 22 are not edited — this section corrects them additively.**
+
+**The backfill half, re-tiered.** §10.1's `QUAL-COST-CEILING-EXTENDED` row lists three case shapes,
+including *"one proving existing rows backfilled to `purpose='triage_cents'` with their `reserved_units`
+value intact."* No such case exists in `supabase/__tests__/signals3-triage-state.test.ts`, and none CAN
+exist against `db-tests.yml`'s fresh-migrate stack: that stack applies every migration in sequence to an
+empty database, so there are never any pre-rename rows for a backfill case to act on — the `ADD COLUMN
+purpose text NOT NULL DEFAULT 'triage_cents'` then `ALTER COLUMN purpose DROP DEFAULT` sequence
+(`20260909110000_ai_budget_daily_rename.sql`) makes the backfill **structurally guaranteed by Postgres's own
+`ADD COLUMN ... DEFAULT` semantics**, not something this repo's test harness can independently re-verify.
+(Checked directly against the live linked project during this step: `ai_budget_daily` currently holds zero
+rows — the table has not yet accumulated any reservations since the rename, so there is no live data to
+read a backfill result FROM either; the claim rests on Postgres's own `ADD COLUMN ... DEFAULT` guarantee,
+not on an empirical read.) **The backfill sub-case of `QUAL-COST-CEILING-EXTENDED` is
+re-tiered to Tier 3, diff-verified by decision**, per ADR 0015 §2's rule that "no runtime test" must be an
+enumerated decision, not a silent gap: the property is proven by the migration's own SQL structure (an `ADD
+COLUMN ... DEFAULT` cannot leave a pre-existing row with a NULL value, by Postgres's own guarantee), not by a
+`supabase/__tests__` case. The other two case shapes in the same row — the two-concurrent-reservations case
+and the no-old-table-survives case — remain Tier 1 and remain correctly covered
+(`supabase/__tests__/ai-budget-generation-posts.test.ts`, `signals3-triage-state.test.ts:263`).
+
+**`QUAL-NO-SECOND-BUDGET-TABLE`, recorded in code.** This constraint already had a Tier-3 row in §10.3
+(unedited) — what it lacked was a recorded statement anywhere in the CODE itself, unlike six of its seven
+Tier-3 siblings (three as executable scans in `lib/scope-scans.test.ts`, three as an explicit "Tier 3,
+diff-verified — no runtime test" comment in `generate.test.ts`/`context.test.ts`). D14 adds that comment
+directly above `signals3-triage-state.test.ts:263`'s "no `signal_triage_budget` survives" case, naming
+`QUAL-NO-SECOND-BUDGET-TABLE` explicitly and distinguishing it from that case's own, different property (the
+OLD table/RPCs being gone, not the absence of a NEW second table) — closing the exact conflation risk the
+Reviewer named.
+
+**Reference:** `docs/reviews/session-31-reviewer.md`, MINOR-8, closed by this section (D14).

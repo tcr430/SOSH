@@ -260,6 +260,14 @@ describe('triage state + cost ceiling (ADR 0021 §2.9, §2.11, §3.3)', () => {
     expect(Number(reconciled[0].reserved_units)).toBe(8)
   })
 
+  // Session 31-D, D14 (MINOR-8). `QUAL-NO-SECOND-BUDGET-TABLE` (Tier 3,
+  // ADR 0024 §9/§10.3, constraint 24) is diff-verified BY DECISION — the
+  // migration renames `signal_triage_budget` to `ai_budget_daily` in place;
+  // a second budget mechanism would need its own `CREATE TABLE`, which fails
+  // that check. The case immediately below is a DIFFERENT property (the OLD
+  // table/RPCs are gone), not a stand-in for "no second table was created" —
+  // recorded here, in code, rather than only in the ADR, so the two are not
+  // conflated.
   it('QUAL-COST-CEILING-EXTENDED: NO signal_triage_budget table or RPC survives the rename', async () => {
     const tableProbe = await admin.from('signal_triage_budget').select('id').limit(1)
     expect(tableProbe.error).not.toBeNull()
