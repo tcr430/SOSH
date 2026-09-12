@@ -1160,3 +1160,81 @@ should not be read as current fact anywhere above; it was already corrected in `
 pass began, and this pass did not check that file before repeating the stale figure.
 
 **Commit:** `794f6479` — doc-only, `docs/backlog.md` and this file.
+
+---
+
+## Closing block — all 20 findings, disposition, test, commit
+
+**Count check:** 20 rows below, 20 distinct IDs, every ID from the Reviewer's original 20-row index
+(BLOCKER-1, BLOCKER-2, MAJOR-1…5, MINOR-1…8, NIT-1…5) present exactly once. **Nothing was deferred** — every
+row has a disposition and a commit; the two rows that are not ordinary fixes are called out where they sit:
+**MINOR-8** is the pass's one recorded-decision closure (no test can express it; the ADR section carries the
+record), and **NIT-2** is a closure-with-guard (`role` stays inert by decision; `scoring.test.ts` reddens if
+that ever changes). D9 (the observation routed from D1's appendix) is not one of the 20 — it is a correction
+to ADR 0024 §3.2's own prose, not a Reviewer finding, and is not counted here or in the total.
+
+| ID | Disposition | Test that proves it | Commit |
+|---|---|---|---|
+| BLOCKER-1 | **Explained, not code-closeable.** `app-tests` CI-green at `15aeb764` closes the 18 Tier-2 rows. `db-tests` is red on a confirmed pre-existing environment defect (the `supautils` SIGSEGV, `30.5-DBTESTS-READINESS-RACE`), not a code regression — reproduced 2/2 on rerun. The four Tier-1 rows stay CI-uncovered until that environment bug is fixed (three named remedies, none yet attempted; not a Builder-fixable defect). | N/A — CI-log diagnosis, not a code fix | `249e3193`, `794f6479`, `31b735f2` |
+| BLOCKER-2 | Fixed — ADR 0024 and the build guide committed | N/A — file existence at a named commit | `5e0f6b09` |
+| MAJOR-1 | Fixed | `lib/ai/runner.test.ts` — SDK-params-level temperature pair | `f3940352` |
+| MAJOR-2 | Fixed | `lib/ai/prompts/prompt-properties.frozen-table.test.ts`; `lib/scope-scans.test.ts:195` | `6db40659` |
+| MAJOR-3 | Fixed (doc — retirement recorded) | `docs/decisions/0022-promote-to-campaign-and-format-families.md` §21 | `0655dbaf` |
+| MAJOR-4 | Fixed | `lib/ai/context.test.ts`; `lib/campaigns/generate.test.ts` | `f70bd204` |
+| MAJOR-5 | Fixed | `supabase/__tests__/ai-budget-generation-posts.test.ts` | `0dd5ac52` |
+| MINOR-1 | Fixed | `lib/campaigns/generate.test.ts` (`threeEntryBrief` case) | `90b48ec0` |
+| MINOR-2 | Fixed (doc — re-tiered to Tier 3) | `docs/decisions/0024-generation-quality-core.md` §16.1 | `cb162e5c` |
+| MINOR-3 | Fixed | `vitest.setup.ts` global `afterEach` cassette-drain guard | `704caa98` |
+| MINOR-4 | Fixed | `i18n/{en,pt,es}/common.json` `campaigns.brief.pending` | `5aa7e365` |
+| MINOR-5 | Fixed (doc verification) | `docs/decisions/0017-mode-2-upgrade.md` five-row table | `75a5c2f9` |
+| MINOR-6 | Fixed | `components/posts/PostJudgmentBadge.test.tsx` (WCAG contrast) | `915276c9` |
+| MINOR-7 | Fixed (doc note) | `docs/decisions/0010-legal-surface.md` | `f089573b` |
+| MINOR-8 | **Recorded-decision closure** — no test can express it; the fresh-migrate stack has no pre-rename rows to assert against | `docs/decisions/0024-generation-quality-core.md` §16.3 (record) | `432cc325` |
+| NIT-1 | Fixed | `lib/campaigns/generate.test.ts` + `generate.context-equivalence.test.ts` (58/58, unchanged) | `f12bcf0b` |
+| NIT-2 | **Closure-with-guard** — `role` stays inert by decision | `lib/memory/scoring.test.ts` (reddens if a `role` branch appears) | `adb3d48d` |
+| NIT-3 | Fixed (live-DB constraint rename) | `supabase/__tests__/ai-budget-generation-posts.test.ts` + `signals3-triage-state.test.ts` (25/25 green against live project) | `4638adef` |
+| NIT-4 | Fixed | `lib/memory/performance.test.ts` (type-cast cleanup) | `ee279e52` |
+| NIT-5 | Fixed (doc/comment) | `.github/workflows/app-tests.yml` env-block comment | `92774ef3` |
+
+**The Reviewer's five "could NOT verify" items, answered on the record:**
+
+1. **Any CI result for this range.** Now exists: `app-tests` run
+   [`34694455170`](https://github.com/tcr430/SOSH/actions/runs/34694455170) — **green**, 255 files / 3630
+   tests passed, at `15aeb764`. `db-tests` run
+   [`34694455123`](https://github.com/tcr430/SOSH/actions/runs/34694455123) — **red**, both its first
+   attempt and its `gh run rerun --failed` retry, on the confirmed `supautils` SIGSEGV (D20/D20-addendum),
+   not a DB-behaviour regression.
+2. **Tier-1 execution.** Still not CI-executed. `db-tests` never completed a clean pass at either attempt —
+   the crash killed the connections mid-suite both times. The four Tier-1 rows remain schema-verified
+   against the live linked project (D5, D17's live `proacl`/`pg_constraint` reads) but not behaviour-verified
+   in CI. Say plainly: this is not fixed by this pass, and is not fixable by this pass — it needs a CI
+   Postgres/PostgREST image change, tracked as `30.5-DBTESTS-READINESS-RACE`.
+3. **Reddening demonstrations.** Performed for every code-fixing step (D1-D8, D10-D19); MAJOR-3, MINOR-2,
+   MINOR-5, MINOR-7, NIT-5 were doc-only fixes with no assertion to redden, and each row's own appendix entry
+   says so. D20 (BLOCKER-1) is a CI-log diagnosis, not a fix — there is nothing to redden.
+4. **H2.0's grounding pass.** Still no artefact. Not created by this pass, and not claimed to exist.
+5. **Whether `/impeccable` ran at H2.12.** It did **not** — the WCAG contrast failure MINOR-6 found
+   (`PostJudgmentBadge.tsx`'s amber/emerald classes, D12) is exactly the class of defect a design-review pass
+   would have caught before commit. Recorded plainly, not left unanswered.
+
+**Which of the Reviewer's "What I verified as CORRECT" entries have since changed:** none of that section's
+text is edited (immutable, per rule 1). What has changed since it was written: the db-tests promotion
+tally the Reviewer's own BLOCKER-1 cited as "0/3" was already stale when the report was written — the real
+figure, per `docs/current-phase.md`, is 7/3 (threshold met since 2026-07-27), unaffected by this pass either
+way since none of this pass's CI runs are `master`-push events.
+
+**db-tests promotion tally, stated per run with its event type:** unchanged by every run in this pass.
+`34694455170` (app-tests) and `34694455123` (db-tests, ×2) are all `pull_request`-event runs against
+`session-30-5-adr-0028` — none is a `master` push, so none moves the tally regardless of colour. The tally
+itself (see `docs/current-phase.md`, "Remaining pre-launch work" item 4) already reached 7/3 before this
+session and awaits only a founder decision on branch protection, wholly independent of today's crash.
+
+**Quality claim:** unchanged and still MEASURED, never COVERED, per `docs/current-phase.md`'s existing
+Session 31 entry — this pass fixed test coverage and documentation gaps, closed no quality question, and
+makes no claim that the generated posts are better than before.
+
+**Nothing was deferred.** All 20 findings above carry a disposition and a commit. `docs/backlog.md` gained
+no new row for any of the 20 (the one backlog edit this pass made, `30.5-DBTESTS-READINESS-RACE`, updates an
+already-existing item that predates this review and was never one of its 20 findings).
+
+Session 31 Track H closed.

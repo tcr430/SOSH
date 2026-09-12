@@ -1936,3 +1936,58 @@ line per SCORED outcome, stating both halves per the build guide's own requireme
 minus the scored subset's median (proves the judge discriminates candidates) **and** an explicit note that
 this does **not** prove the discrimination tracks real post quality (the corpus gap above). Not a
 constraint, not gated on any threshold — an operator-observability line only.
+
+### Session 31-D — correction pass and BLOCKER-1 CI read, close-out (2026-09-12)
+
+**Session 31-D (D0-D19) closed 19 of the Reviewer's 20 findings** (all fixes, dispositions, tests and
+commit SHAs are recorded in `docs/reviews/session-31-reviewer.md`'s append-only correction-pass section — not
+restated here to avoid a second copy drifting out of sync). **BLOCKER-1 (D20/addendum/correction) is
+explained, not code-closed** — see below.
+
+**CI results, read from the logs, not inferred:**
+
+- `app-tests` — [run `34694455170`](https://github.com/tcr430/SOSH/actions/runs/34694455170), **green** at
+  `15aeb764`: `skip-guard: 255 file(s) under [app, lib, components] all visible, zero failures — green.
+  (3630/3630 tests passed)`, quoted verbatim from the log. This CI-executes-green all **18 Tier-2** rows —
+  the count that was "0/29 CI-executed-green, because CI has not run" in the pre-push entry above is now
+  **18/29 CI-executed-green (Tier 2), 0/29 for Tier 1**, not 0/29 across the board.
+- `db-tests` — [run `34694455123`](https://github.com/tcr430/SOSH/actions/runs/34694455123), **red**, on
+  both its first attempt and a `gh run rerun --failed` retry (reproduced identically both times). Skip-guard,
+  quoted verbatim from the rerun log: four invisible-skip files (`campaigns-social-accounts-role-policies.
+  test.ts`, `get-user-business-ids-matrix.test.ts`, `post-ai-originals-latest-per-post.test.ts`,
+  `signals3-triage-atomic.test.ts`) and `skip-guard: 6 failing test(s) — a RED suite must fail the job,
+  never be swallowed`. **This is a DB-behaviour regression NOT distinguished from a stack failure — it IS
+  the stack failure**: both runs' container logs show `server process ... was terminated by signal 11:
+  Segmentation fault` while executing `reserve_ai_budget` and `vault_update_secret` (both `SECURITY
+  DEFINER`), on the anon/authenticated **denial** path — exactly the trigger condition
+  `.github/workflows/db-tests.yml:43-78`'s own comment already names: Postgres image `17.6.1.099-17.6.1.112`
+  ships a broken `supautils` 3.2.0/3.2.1, confirmed upstream at `supabase/postgres#2367`/`#2112`/`#2377`,
+  fixed in supautils 3.2.2 (image `17.6.1.113+`). Tracked as `30.5-DBTESTS-READINESS-RACE` in
+  `docs/backlog.md`, updated today with this reproduction. **Not a code defect in D5's or ADR 0028's
+  permission fixes** — both independently re-verified correct (D20).
+
+**Per-tier constraint status, at `15aeb764`, stated per this pass's own CI reads (superseding the pre-push
+table above, which is left unedited as a dated historical record):**
+
+| Tier | Rows | Status at `15aeb764` |
+|---|---|---|
+| 1 | 4 (`QUAL-COST-CEILING-EXTENDED`, `QUAL-PRO-DAILY-POST-CAP`, `QUAL-BUDGET-PURPOSE-ISOLATED`, `QUAL-SCORE-ERASURE`) | Still schema-verified against the live linked project only (unchanged since H2.4/H2.8/H2.9). **Still not CI-executed** — `db-tests` has never completed a clean run at this head; blocked on the `supautils` environment bug, not on missing test authorship. |
+| 2 | 18 | **CI-executed-green** — `app-tests` run `34694455170`. |
+| 3 | 7 | Unchanged — diff-verified by design, no runtime CI job (ADR 0015 §2). |
+
+**db-tests promotion tally, stated per run with its event type:** unaffected by any run in this section.
+`34694455170` and `34694455123` (×2) are all `pull_request`-event runs against `session-30-5-adr-0028`; the
+tally only moves on `master`-push events. Separately — and this correction matters, because the wrong figure
+was repeated through Session 31's own review — **the tally itself already reached 7 consecutive green
+`master` runs** (see "Remaining pre-launch work" item 4 above, corrected 2026-09-03), not the "0/3" this
+review and its correction pass initially repeated. The two facts are independent: the tally was already at
+threshold before this session, and today's crash — being a `pull_request` run — could not have moved it
+either way even if it were still building toward 3/3.
+
+**Quality claim: unchanged.** This section fixes test coverage, documentation accuracy, and a CI diagnosis —
+it closes no quality question and makes no claim the generated posts are better than before. MEASURED, never
+COVERED, stands exactly as recorded above.
+
+**Session 31 Track H is closed.** BLOCKER-1's Tier-1 CI gap is not this session's to close — it is an
+environment defect (`30.5-DBTESTS-READINESS-RACE`) with three named, unattempted remedies, tracked
+separately from Track H's own scope.

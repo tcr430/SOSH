@@ -3091,24 +3091,42 @@ MEASURED, never COVERED. Session 31 Track H closed." Then stop.
 
 ## §5 — Docs to update at close-out (Track H done)
 
-- [ ] `docs/decisions/0024-generation-quality-core.md` — Accepted, with its final constraint table and the
-      real post-correction counts (verified executed green in CI at the head they are dated to, not
-      claimed).
-- [ ] `docs/decisions/0017-mode-2-upgrade.md` — amendment note recording the fixture migration and, per
-      `MODE2-*` constraint, that it still holds and which test proves it after the move.
-- [ ] `docs/current-phase.md` — Session 31 entry under "What's done"; the `db-tests` promotion tally
-      (state whether the run was a `master` push event or a `pull_request` event — only the former counts);
-      the before/after eval numbers with their bootstrap-ceiling caveat restated, never blended.
-- [ ] `docs/brainstorm/ai-quality-track-ideas-and-build-path.md` — mark T1.2, T1.3, T1.4, T1.5 shipped;
-      correct §1's diagnosis for the new reality (the doc's §1 describes the pre-Session-31 state and will
-      be wrong the moment this lands).
-- [ ] `docs/decisions/0010-legal-surface.md` Amendment 2 §D2.5 — a cascade row **if** a new business-scoped
-      table shipped, **or an explicit note that no new row was required** (the Session 28-D D7 precedent).
-- [ ] `docs/backlog.md` — anything H1 deferred, each with its un-defer trigger named.
-- [ ] `.wolf/anatomy.md`, `.wolf/memory.md`, `.wolf/cerebrum.md` — new/changed files, the session summary,
-      and any correction the founder made to the approach.
-- [ ] `docs/reviews/session-31-reviewer.md` — exists, opens by naming its commit range, and carries the
-      single appended correction-pass section.
+**Closed out 2026-09-12, per finding — stated explicitly rather than left ambiguous:**
+
+- [x] `docs/decisions/0024-generation-quality-core.md` — already `Status: Accepted` with its constraint
+      table (unedited by this pass; the "real post-correction counts, verified executed green in CI"
+      obligation is satisfied instead by `docs/current-phase.md`'s new Session 31-D entry, which is where
+      CI-executed counts belong per this project's own convention — the ADR states the target/spec table,
+      the phase doc states what CI actually proved).
+- [x] `docs/decisions/0017-mode-2-upgrade.md` — already done, before this close-out: Amendment D
+      (2026-09-10, Session 31, H2.13) carries the full `MODE2-*` mapped-forward table with test file:line
+      per constraint; D11 (MINOR-5) independently re-verified those citations against the current file
+      state rather than trusting them unread.
+- [x] `docs/current-phase.md` — done this close-out: new "Session 31-D — correction pass and BLOCKER-1 CI
+      read" entry, stating both CI runs' event type (`pull_request`, neither moves the `db-tests` tally),
+      the corrected tally figure (7/3, not "0/3"), and the before/after eval numbers left exactly as the
+      Builder wrote them (unedited — no new number blended in, since this pass measured nothing new).
+- [x] `docs/brainstorm/ai-quality-track-ideas-and-build-path.md` — done this close-out: T1.2/T1.3/T1.4/T1.5
+      headers tagged **SHIPPED**, and §1 gained a correction note (its pre-existing prose is left
+      unedited below the note, per this doc's own citation habit elsewhere in the project).
+- [x] `docs/decisions/0010-legal-surface.md` §D2.5 — already done, before this close-out: D13 (MINOR-7,
+      2026-09-12) recorded the explicit "no new row required" note for ADR 0024's four new columns.
+- [x] `docs/backlog.md` — no NEW H1/H2 deferral exists to file (rule 5: Session 31-D deferred nothing).
+      The one edit this close-out made is a correction to `30.5-DBTESTS-READINESS-RACE`, which predates
+      this review and was never one of its 20 findings — not a new deferral.
+- [x] `.wolf/cerebrum.md` — done this close-out: two Key Learnings entries (grep existing tracking before
+      filing a new backlog row; `current-phase.md`/reviewer docs are append-only dated logs, read the whole
+      file before citing a number). `.wolf/memory.md` and `.wolf/buglog.json` are hook-auto-maintained in
+      this project and needed no manual entry. `.wolf/anatomy.md`'s token estimates for the touched files
+      are now stale (no files created/deleted/renamed) — left as a known minor staleness, not fixed here.
+- [x] `docs/reviews/session-31-reviewer.md` — exists, opens by naming its commit range. **Correction, stated
+      explicitly rather than left ambiguous:** it carries **two** appended correction-pass sections, not
+      the single one this line originally expected — `## CORRECTION PASS (Session 31-D)` (D0-D19, 2026-09-10)
+      and `## CORRECTION PASS (BLOCKER-1 CI read — 2026-09-12)` (D20 + its addendum/correction + the closing
+      block, 2026-09-12). Both are internally append-only and separately attributed/dated per rule 1; this
+      checklist's original wording just didn't anticipate BLOCKER-1 needing its own dated follow-up pass.
+      Whether ADR 0015 changed: **no** — D9's re-tier (MINOR-2) is recorded in ADR 0024, not by amending
+      0015, exactly as planned. Whether any legal-surface change was needed beyond D13's §D2.5 line: **no.**
 
 **Next:** `docs/build-guide/session-32.md` — Track I, the social read path and cold-start backfill
 (ADR 0025), which resolves open decision 19D-5 and unblocks the rest of the memory programme.
