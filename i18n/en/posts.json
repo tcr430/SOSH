@@ -24,10 +24,29 @@
   },
   "bulkApprove": "Approve all drafts ({count})",
   "bulkApproveSuccess": "Approved {count} posts",
+  "bulkApproveExcludedNotice": "{count} post(s) below the quality bar were left as drafts — review them individually.",
   "card": {
     "utcNote": "UTC",
     "regeneratedCount": "Regenerated ×{count}",
     "skippedReason": "Reason: {note}",
+    "judgment": {
+      "passed": "Scored {overall}/100",
+      "passedDetail": "{count} candidates considered",
+      "belowThreshold": "No candidate cleared the quality bar — review carefully.",
+      "unscored": "Not scored — review before approving.",
+      "dimension": {
+        "specificity": "Specificity",
+        "originality": "Originality",
+        "evidenceSufficiency": "Evidence",
+        "audienceRelevance": "Audience fit",
+        "platformNativeness": "Platform fit",
+        "brandVoiceAlignment": "Brand voice",
+        "openingStrength": "Opening strength",
+        "ctaFit": "CTA fit",
+        "unsupportedClaimsRisk": "Claims risk",
+        "redundancy": "Redundancy"
+      }
+    },
     "status": {
       "draft": "Draft",
       "approved": "Approved",
@@ -45,6 +64,7 @@
     "error": {
       "token_expired": "Account session expired",
       "token_revoked": "Account disconnected — reconnect",
+      "account_ambiguous": "Two accounts connected — pick which one this post publishes from",
       "rate_limited": "Platform rate-limited the post",
       "platform_rejected": "Platform rejected the post",
       "network": "Network error — will retry",

@@ -12,6 +12,7 @@ vi.mock('@/lib/social', () => ({
   verifyOAuthState: vi.fn(),
   getRegistry: vi.fn(),
   isPlatform: vi.fn(),
+  getSocialRedirectUri: vi.fn((platform: string) => `http://localhost:3000/api/social/${platform}/callback`),
 }))
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -217,7 +218,7 @@ describe('GET /api/social/[platform]/callback', () => {
     mockGetRegistry.mockReturnValue({
       get: vi.fn().mockReturnValue(
         makeMockProvider({
-          exchangeOAuthCode: vi.fn().mockRejectedValue(new Error('Postiz network error')),
+          exchangeOAuthCode: vi.fn().mockRejectedValue(new Error('network error')),
         }),
       ),
     } as never)
@@ -294,5 +295,37 @@ describe('GET /api/social/[platform]/callback', () => {
     expect(serviceClient.rpc).toHaveBeenCalledWith('vault_delete_secret', {
       secret_id: 'old-vault-refresh',
     })
+  })
+})
+
+// ADR 0028 §2.4-§2.5 (N2.6) — SOCIAL-REDIRECT-URI-MATCH and SOCIAL-STATE-BINDS-BUSINESS.
+describe('GET /api/social/[platform]/callback — N2.6 additions', () => {
+  it('SOCIAL-REDIRECT-URI-MATCH: exchangeOAuthCode receives the SAME redirectUri connect.test.ts asserts for the same platform/config', async () => {
+    const mockExchange = vi.fn().mockResolvedValue(MOCK_TOKEN_SET)
+    mockGetRegistry.mockReturnValue({
+      get: vi.fn().mockReturnValue(makeMockProvider({ exchangeOAuthCode: mockExchange })),
+    } as never)
+
+    await GET(makeRequest(), routeParams())
+
+    expect(mockExchange).toHaveBeenCalledWith(
+      expect.objectContaining({ redirectUri: 'http://localhost:3000/api/social/linkedin/callback' }),
+    )
+  })
+
+  it('SOCIAL-STATE-BINDS-BUSINESS: ownership is re-verified through the RLS-enforced client BEFORE any service-role work begins (ordering, not just presence)', async () => {
+    await GET(makeRequest(), routeParams())
+
+    const businessCheckOrder = mockGetBusinessById.mock.invocationCallOrder[0]
+    const serviceRoleOrder = mockCreateServiceRoleClient.mock.invocationCallOrder[0]
+    expect(mockGetBusinessById).toHaveBeenCalled()
+    expect(mockCreateServiceRoleClient).toHaveBeenCalled()
+    expect(businessCheckOrder).toBeLessThan(serviceRoleOrder!)
+  })
+
+  it('SOCIAL-STATE-BINDS-BUSINESS: a forbidden ownership check never reaches service-role work at all', async () => {
+    mockGetBusinessById.mockRejectedValue(new Error('RLS: not found'))
+    await GET(makeRequest(), routeParams())
+    expect(mockCreateServiceRoleClient).not.toHaveBeenCalled()
   })
 })

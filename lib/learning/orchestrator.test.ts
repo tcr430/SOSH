@@ -115,6 +115,10 @@ const aiOriginalRow: PostAiOriginalRow = {
   rendered_content: 'Original AI content here.',
   hashtags: [],
   schema_version: 1,
+  overall_score: null,
+  dimension_scores: null,
+  candidate_count: null,
+  cleared_quality_threshold: null,
   created_at: '2026-07-27T08:00:00Z',
 }
 

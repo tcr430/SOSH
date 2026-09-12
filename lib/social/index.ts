@@ -19,6 +19,7 @@ export type {
 export { SocialProviderError } from './errors'
 export { signOAuthState, verifyOAuthState } from './oauth/state'
 export type { OAuthStateClaims } from './oauth/state'
+export { getSocialRedirectUri } from './oauth/redirect-uri'
 export { getRegistry } from './registry'
 export type { PlatformOAuthConfig } from './platforms/config'
 export {
@@ -29,7 +30,8 @@ export {
 } from './platforms/config'
 export { VALID_PLATFORMS, isPlatform } from './platforms/guards'
 export type { ConnectionStatus } from './connection-status'
-export { getConnectionStatus } from './connection-status'
+export { getConnectionStatus, pickDefaultAccountId } from './connection-status'
+export { buildDisconnectUrl } from './disconnect-url'
 export type { SocialAccountPublic } from '@/lib/db/social-accounts'
 
 export {

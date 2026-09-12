@@ -101,6 +101,23 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
 
 ## What's done
 
+- **Session 31 — Track H: Generation quality core (ADR 0024), H1 ARCHITECT COMPLETE, Builder H2 not
+  started:** `docs/decisions/0024-generation-quality-core.md` is **Accepted** — N=3 candidate generation
+  judged by the existing ten-dimension rubric (replacing the single-dimension `openingStrength` retry),
+  sampling and thinking as versioned `Prompt` properties with the version-bump rule enforced by a
+  frozen-table scan, task-conditioned memory retrieval (`role`/`campaignId`), and the first `tool_use`
+  structured-output migration (`learningSummarizerPrompt`). **29 constraints: 4 Tier 1, 18 Tier 2,
+  7 Tier 3, 0 Tier E.** Founder adjudications A-1..A-4 encoded (A-1's Pro cap of 15 posts/day carries the
+  pricing-copy obligation `31-A1-PRICING-COPY`, `docs/backlog.md` §1).
+  - **Reviewed before any Builder work**, 9 findings, all applied — ADR §15 records finding → change. Two
+    were design reversals: `brief-assembly`'s thinking budget needed `maxTokens: 12_000` or every Stage A
+    call would have returned `response_truncated` (§3.3a); and the renamed budget table needed a `purpose`
+    discriminator plus a **post-unit** (not cents) generation reservation, or triage and generation would
+    have shared one daily counter (§7.5a/b, new Tier-1 `QUAL-BUDGET-PURPOSE-ISOLATED`).
+  - **The load-bearing debt is measurement:** ADR §10.4 states plainly that this session **cannot prove
+    the posts are better** — no generation-quality metric, no hand-labelled corpus. Any future "N=3
+    helped" claim is gated on Session 32 building both.
+
 - **Session 30 — Track G: Market-responsive signal source (ADR 0023), G1b.1–G1b.14 BUILDER COMPLETE, PR #9
   open:** A second Mode-3 signal source — customer-supplied RSS/Atom feeds — alongside the existing GitHub
   releases source. `watched_feeds` migration + RLS + §D2.5 cascade (G1b.1); boundary scans extended ahead
@@ -1476,7 +1493,10 @@ Session 19D correction pass is applied. Voice model core is merge-ready. One ope
 ### Open decision — Session 19D-5 (§7 BP9 read path)
 
 Choose one:
-1. **Add `fetchRecentPosts` to `SocialProvider`** — implement in `PostizProvider` + `MockProvider`, wire into `refineFromPostsAction`. Requires ADR 0002 amendment + new Postiz API call.
+1. **Add `fetchRecentPosts` to `SocialProvider`** — ~~implement in `PostizProvider` + `MockProvider`~~
+   **re-pointed 2026-09-05 (Session 30.5 N2.13, ADR 0028 §12): `PostizProvider` no longer exists.**
+   This option is now designed against `LinkedInProvider`/`TwitterProvider` directly and lands as
+   **ADR 0002 Amendment B, owned by Session 32** — not this decision, and not a Postiz API call.
 2. **Amend ADR 0011 §7** — ratify "refine reads local published posts from SOSH DB" as deliberate scope reduction. Update the reviewer finding as accepted deviation.
 
 ### Next up — post-Session 22 (Pre-launch hardening)
@@ -1485,8 +1505,9 @@ Session 21 (Seats & Permissions) and Session 22 (test-execution integrity + appr
 closed — resolved by Session 22 W1 and marked closed in `backlog.md`; `21C-bulk-platform` is
 resolved by W2 A1. What remains, in priority order:
 
-1. **Postiz removal workstream (launch-checklist §16):** migrate `lib/social/` to direct LinkedIn/X APIs —
-   a separate track, unaffected by Sessions 21/22.
+1. ~~**Postiz removal workstream (launch-checklist §16):** migrate `lib/social/` to direct LinkedIn/X APIs —
+   a separate track, unaffected by Sessions 21/22.~~ — ✅ done, Session 30.5 Track N (ADR 0028), code-complete
+   at N2.13 close-out. See the dated entry below. Production OAuth app registration remains open (§14.1).
 2. **Remaining legal gates (launch-checklist §9):** counsel ratification → `[LEGAL ENTITY]` substitution;
    Anthropic DPF verification; cookie inventory in staging; Svix client-verify confirm.
 3. **Perf/CWV gates (launch-checklist §11):** first-load JS ≤ 90 KB gz + LCP/CLS/INP lab check, blocked on
@@ -1506,7 +1527,7 @@ resolved by W2 A1. What remains, in priority order:
 ### Remaining pre-launch work
 
 - **Open legal gates (§9):** counsel ratification → [LEGAL ENTITY] substitution; Anthropic DPF verification at dataprivacyframework.gov; cookie inventory in staging; Svix client-verify confirm
-- **Postiz removal workstream (§16):** migrate `lib/social/` to direct LinkedIn/X APIs (separate track)
+- ~~**Postiz removal workstream (§16):** migrate `lib/social/` to direct LinkedIn/X APIs (separate track)~~ — ✅ done (Session 30.5 Track N, ADR 0028)
 - **Deferred post-launch backlog:** in-app Delete Account flow (B18-014, P2); `auth_rate_limits` TTL purge; `13.5C-log` (cron-auth-failure structured log); ADR reconciliation items G3/C7 (backlog.md)
 - **Open triage items:** B18-089 (full 15-site `formatISO(new Date())` sweep → `toUtcIso`, P2); B18-064 (postcss XSS CVE, awaits Next.js bump); B18-086/087 (P2 signup oracle + confirmation redirect env parity)
 - **Perf/CWV gates (§11, 2 rows):** first-load JS ≤ 90 KB gz + LCP/CLS/INP lab check once `npm run build` ECC Remotion issue is resolved
@@ -1754,3 +1775,219 @@ The two-axis permission model is DB-enforced, not app-layer-only: `user_can(busi
 - **ECC commands use `/ecc:` prefix**, not `/everything-claude-code:`.
 - **`npm run db:migrate` requires `DATABASE_URL`** (Supabase transaction pooler connection string).
 - **B18-030 sweep is pattern-matched, not variable-name-matched:** aliased error vars (`fetchError`, `readError`) are covered. The original 18B-3 sweep matched only the variable name `error` and missed them.
+
+### Session 30.5 N2.11 (2026-09-04)
+
+- **The broker is removed, total and provable.** `lib/social/postiz-provider.ts` and its two test
+  files, `infra/` (docker-compose stack), all env vars, CSP host, npm scripts, and every prose
+  reference are gone in one commit. Proof is executable, not asserted: `lib/social/__tests__/
+  no-postiz.test.ts` (SOCIAL-NO-POSTIZ) case-insensitively scans the real source tree and fails on
+  any stray reference, demonstrated to redden and revert before landing.
+- **Exemptions are named, not silent.** `docs/decisions/`, `docs/reviews/`, `docs/build-guide/`,
+  `docs/brainstorm/archive/`, `docs/evidence/`, `supabase/migrations/`, and a handful of individual
+  test/doc files that must name "postiz" to prove its absence (`csp.test.ts`,
+  `eslint-internals-ban.test.ts`, `accounts-i18n.test.ts`) or that narrate the removal itself
+  (`docs/launch-checklist.md` §16) — each with its own stated reason in the scan file.
+  `docs/current-phase.md`'s own historical session entries above this one are left unedited for the
+  same reason; this entry is appended, not inserted into the record of what already happened.
+- **A false ADR premise was caught before it broke working code.** ADR 0028's instruction to drop
+  `'multi'` from `SocialProvider['platform']` assumed the deleted broker file was its only producer;
+  it wasn't — `MockProvider` legitimately shares one instance across all five platforms in
+  `SOCIAL_PROVIDER_MODE=mock`, asserted directly in this track's own `registry.test.ts`. Founder
+  ruling: keep `'multi'` in the type. `lib/social/types.ts` documents why.
+  `SOCIAL-NO-MULTI-PLATFORM` in `types.test.ts` asserts the corrected reality.
+
+### Session 30.5 N2.12–N2.13 (2026-09-05) — Track N close-out
+
+- **N2.12 — the accounts surface, dual identity.** `app/[locale]/(dashboard)/settings/accounts/` reworked
+  from single-account-per-platform (accounts silently collapsed via `Object.fromEntries`, dropping a
+  second identity) to grouped-by-platform arrays: one row per active identity, a "Default" badge for the
+  identity `resolvePublishAccount` would pick when a post names no account, and an honest "no default"
+  note when two active identities exist (no `is_default` column exists — adding one was judged out of
+  this step's scope). The seven real OAuth error-redirect codes (ADR 0028 §9.4) are now the literal
+  `ERROR_KEYS` list in `resolve-banner.ts`; the eighth key, `provider_unavailable`, was found dead (no
+  route emits it since N2.11's rename) and removed from the reachable-states list while its i18n string
+  stays, since `accounts-i18n.test.ts` still asserts its presence.
+- **N2.13 — four executable scope-scan tripwires, each demonstrated to redden then reverted:**
+  `SOCIAL-WORKER-UNCHANGED` (`lib/publishing/__tests__/worker-unchanged.test.ts` — the retry/status/
+  idempotency machinery in `orchestrator.ts` is unchanged, account resolution is the one permitted
+  addition), `SOCIAL-PROVIDER-BOUNDARY` (extended `eslint-internals-ban.test.ts` to assert all eight
+  `SOCIAL_INTERNALS_BAN` entries fire together, not just two), `SOCIAL-META-STILL-UNAVAILABLE`
+  (`lib/social/platforms/config.test.ts` — Instagram/Facebook/Threads stay `publishingAvailable: false`),
+  and `SOCIAL-NO-READ-PATH` (`lib/social/__tests__/no-read-path.test.ts` — no `fetchRecentPosts`/
+  `listRecentPosts` member exists yet; that is Session 32's, ADR 0002 Amendment B).
+- **`SOCIAL-INTEGRATION-NOT-EXECUTED` confirmed, not just asserted.** `lib/social/__integration__/` does
+  not exist in the repository — Postiz's integration suite was deleted whole in N2.11 and no native
+  replacement was written (writing one would have bought zero CI coverage until backlog item
+  `22E-integration-discovery` closes). `docs/backlog.md`'s row updated to say so plainly rather than
+  leaving a stale "LinkedIn/X" framing that implied a suite exists.
+- **Close-out docs worked per build-guide §5**, evidenced per row: `docs/launch-checklist.md` gained
+  §16a (the LinkedIn Community Management API launch gate, ADR 0028 A-5 — not previously written despite
+  §12's table naming it); the "Postiz removal workstream" Next-up item above is struck; the open 19D-5
+  decision's option 1 is annotated as re-pointed at Session 32/ADR 0002 Amendment B, not rewritten.
+  `docs/product-status.md:95`, `CLAUDE.md`'s tech-stack line, `docs/decisions/0002-social-provider.md`
+  Amendment A, `docs/build-guide/session-32.md`'s dated Reality note, and ADR 0010 Amendment 2's cascade-
+  table treatment of `posts.social_account_id` (no new row required — column addition to an
+  already-cascading table, the Session 28-D D7 precedent) were all found **already done** in earlier
+  N2.x steps — verified by reading each, not assumed from a checklist.
+- **ADR 0028 §16's stated-open items remain open — none are closed by this step.** Items 1 (LinkedIn
+  member-only vs. the locked "Business and Founder" platform list) and 6 (X's per-post link cost vs.
+  "unlimited posts") are explicit founder adjudications neither N2.12 nor N2.13 can resolve. Items 2–5, 7
+  and 8 are standing risks/facts, not defects with a fix step. §14's manual verification log is empty —
+  stated as the honest state per §14.1, not backfilled.
+- **CI, read at the head this section is dated to (`b6580b84`): `app-tests` GREEN**
+  (`https://github.com/tcr430/SOSH/actions/runs/33970367725`); **`db-tests` RED on three consecutive
+  attempts** (`https://github.com/tcr430/SOSH/actions/runs/33970367722`), reliably at
+  `vault-update-secret.test.ts`'s permission tests with a "database system in recovery mode" signature
+  right after the reset step — distinguished as a `db-tests.yml` readiness race, not a behaviour
+  regression (the same function's grants were independently confirmed correct against the live linked
+  Supabase project). Not a blocker: `db-tests` is not yet a required gate. Filed as
+  `30.5-DBTESTS-READINESS-RACE`. Full detail in ADR 0028 §17.4.
+
+### Session 30.5-D (2026-09-05/06) — correction pass, D0-D9
+
+- **All 16 N3-reviewer findings plus 2 founder adjudications fixed or ruled**, one commit per step
+  (`02a93980`..`933a335c`): BLOCKER-1 (three endpoint URLs re-sourced against live vendor docs, none had
+  actually been verified despite a citation claiming so), MAJOR-2 (a latent cross-tenant publish path in
+  `resolvePublishAccount`'s pinned branch, closed with a `business_id`/`platform` check), MAJOR-1 (disconnect
+  now actually attempts platform revocation, with an added network timeout the build guide's own rules
+  required), MAJOR-3/A-11 (`r_member_postAnalytics` verified review-gated, not shipped — the founder's "Yes"
+  authorised the decision, not the fact), A-9′ (ship both LinkedIn account types, no locked-list amendment),
+  A-10 (X's per-post cost recomputed at realistic volume, ruled immaterial), MINOR-3 through MINOR-7 and
+  NIT-1 through NIT-4 (guard names, an i18n key, ADR §16's numbering, an arithmetic sweep that itself found
+  the ADR's own "corrected to seven" claim was wrong — the original "eight" was right).
+- **`app-tests` re-verified GREEN at the corrected head**, [run 33998672886](https://github.com/tcr430/SOSH/actions/runs/33998672886), commit `933a335c`.
+- **`db-tests` — RED a fourth consecutive time, diagnosis sharpened, not resolved.** A memory-tuning fix
+  (`shared_buffers`/`maintenance_work_mem` lowered) was pushed and re-tested — still red, but this time with
+  healthy container memory and an explicit `signal 11: Segmentation fault` in the Postgres log, coinciding
+  with `vault_update_secret` RPC calls across all four reds observed. This is not a resource-exhaustion
+  signature; it points at the `pgsodium`/Vault extension, not memory pressure — the memory fix addressed the
+  wrong theory, and that failure is itself the evidence that sharpened the diagnosis. `SOCIAL-VAULT-UPDATE-
+  SECRET` and `SOCIAL-DUAL-IDENTITY-SCHEMA` are marked `AUTHORED-NOT-EXECUTED` in ADR 0028 §17.4's table.
+  `db-tests` remains not a required gate, so this does not block merge. Filed as `30.5-DBTESTS-READINESS-
+  RACE` (updated) in `docs/backlog.md`, with a new bug entry in `.wolf/buglog.json` (bug-1031).
+
+### Session 31 — Track H (ADR 0024, Generation quality core) — H2.1 through H2.13 close-out (2026-09-10)
+
+**H1 (Architect) and H2.1–H2.13 (Builder) are complete.** 13 commits on `session-30-5-adr-0028`
+(`bdcabf50`..the H2.13 commit), one per step, matching the build guide's per-step commit rule. H3
+(Reviewer) and H4 (correction pass, if needed) have **not** run yet.
+
+#### The constraint-to-CI map — honestly incomplete, and stated as such
+
+ADR 0024 §11 names **29 constraints: 4 Tier 1, 18 Tier 2, 7 Tier 3, 0 Tier E.** Every one is implemented and
+its named test file exists and is **green locally** (`npm run test:app`: 257 files / 3621 tests, `npm run
+typecheck` clean, at the H2.13 head). **This branch has not been pushed** (`git status`: ahead of
+`origin/session-30-5-adr-0028` by 13 commits) — **no CI run exists for any of these 29 rows**, Tier 1 or
+Tier 2. Per this ADR's own §10.1 note and the Session 28 false-"29/29 executed green" precedent this repo's
+own ADR 0015 discipline exists to prevent, **a local-green claim is not a CI-green claim, and this document
+does not make one.** The Tier-1 trio (`QUAL-COST-CEILING-EXTENDED`, `QUAL-PRO-DAILY-POST-CAP`,
+`QUAL-BUDGET-PURPOSE-ISOLATED`) plus `QUAL-SCORE-ERASURE` additionally depend on `db-tests`, which is
+**RED and not a required gate** per the Session 30.5 note immediately above this one — those four rows
+cannot be called CI-covered even after a push, until `db-tests` itself is green.
+
+| Tier | CI job it belongs to | Rows | Status |
+|---|---|---|---|
+| 1 | `db-tests.yml` | 4 (`QUAL-COST-CEILING-EXTENDED`, `QUAL-PRO-DAILY-POST-CAP`, `QUAL-BUDGET-PURPOSE-ISOLATED`, `QUAL-SCORE-ERASURE`) | Green locally against the live-linked Supabase project (H2.4, H2.8, H2.9 sessions each confirmed via `apply_migration`/`get_advisors`). **Not CI-executed** — branch unpushed, and `db-tests.yml` itself is currently RED for an unrelated reason (Postgres SIGSEGV, `30.5-DBTESTS-READINESS-RACE`) |
+| 2 | `app-tests.yml` | 18 | Green locally (`npm run test:app`). **Not CI-executed** — branch unpushed |
+| 3 | diff-verified, no runtime CI job by decision (ADR 0015 §2) | 7 | Verified by direct diff/grep inspection during each owning step (H2.1–H2.13); not a CI-gate question by design |
+
+**The count that CAN be stated honestly today: 29/29 constraints implemented, with a named test proving
+each one locally green. 0/29 are CI-executed-green, because CI has not run.** The next concrete action
+before this branch merges is: push, let `app-tests` run for real, and read the actual run — not infer it.
+
+#### The before/after record
+
+| Metric | Before (pre-Session-31) | After (H2.7 onward) |
+|---|---|---|
+| Candidates generated per post | 1 | 3 (`N_CANDIDATES`, ADR §2.1) |
+| Provider calls per post | 2 (1 generation + 1 hook-retry-eligible) | 6 (3 generations + 3 judge calls) |
+| Judging | single-dimension `openingStrength` retry, at most once | full 10-dimension rubric, every succeeded candidate |
+| Winner selection | first successful generation | argmax on `overall`, deterministic lowest-index tie-break |
+| Score persisted | none | `overall_score`, `dimension_scores` (10 dims), `candidate_count`, `cleared_quality_threshold` — all on `post_ai_originals` |
+| Recorded cost/post (≈) | ≈4.9¢ | ≈10¢ (ADR §2.1 arithmetic) |
+| Below-threshold handling | silent (no threshold existed) | surfaced, flagged, excluded from bulk approve (A-3) |
+
+**This session cannot prove the resulting posts are better — stated plainly, per ADR 0024 §10.4, for four
+reasons:**
+
+1. **The eval harness does not apply.** `eval-triage.yml` gates on triage paths (`lib/ai/prompts/triage*`
+   or the eval corpus) — post generation is a different prompt family, outside that workflow's trigger
+   condition entirely.
+2. **The headline metric does not exist.** `lib/learning/diff.ts` is exhaustively structural (word-level
+   diff classification) and carries an explicit ADR 0018 STOP against adding a diff-quality library —
+   there is no single number this session could report as "posts got N% better."
+3. **The corpus does not exist.** A labeled before/after post-quality corpus is a Session 32 deliverable,
+   not something Session 31 had available to measure against.
+4. **The judge-discrimination numbers that DO exist are a bootstrap ceiling, not an external validity
+   proof.** The interim `campaign.generate.judge_discrimination_margin` log line (H2.13, ADR §13) proves
+   the judge's outputs are not a 3-way tie — the cassettes/mock fixtures the harness replays and the labels
+   a human would score against share the same author (this session), so a real margin there proves the
+   mechanism discriminates, never that its discrimination tracks actual post quality.
+
+Per ADR 0015 Amendment B, any number produced by this track is **MEASURED, never COVERED** language.
+**Zero Tier-E constraints this session** — nothing here was scoped as "no deterministic test can express
+this," the four points above are a stated absence of a corpus/metric, not a Tier-E claim.
+
+#### Interim instrumentation (logged, not gated)
+
+`campaign.generate.judge_discrimination_margin` (H2.13, `lib/campaigns/generate.ts`) — one structured log
+line per SCORED outcome, stating both halves per the build guide's own requirement: the winner's `overall`
+minus the scored subset's median (proves the judge discriminates candidates) **and** an explicit note that
+this does **not** prove the discrimination tracks real post quality (the corpus gap above). Not a
+constraint, not gated on any threshold — an operator-observability line only.
+
+### Session 31-D — correction pass and BLOCKER-1 CI read, close-out (2026-09-12)
+
+**Session 31-D (D0-D19) closed 19 of the Reviewer's 20 findings** (all fixes, dispositions, tests and
+commit SHAs are recorded in `docs/reviews/session-31-reviewer.md`'s append-only correction-pass section — not
+restated here to avoid a second copy drifting out of sync). **BLOCKER-1 (D20/addendum/correction) is
+explained, not code-closed** — see below.
+
+**CI results, read from the logs, not inferred:**
+
+- `app-tests` — [run `34694455170`](https://github.com/tcr430/SOSH/actions/runs/34694455170), **green** at
+  `15aeb764`: `skip-guard: 255 file(s) under [app, lib, components] all visible, zero failures — green.
+  (3630/3630 tests passed)`, quoted verbatim from the log. This CI-executes-green all **18 Tier-2** rows —
+  the count that was "0/29 CI-executed-green, because CI has not run" in the pre-push entry above is now
+  **18/29 CI-executed-green (Tier 2), 0/29 for Tier 1**, not 0/29 across the board.
+- `db-tests` — [run `34694455123`](https://github.com/tcr430/SOSH/actions/runs/34694455123), **red**, on
+  both its first attempt and a `gh run rerun --failed` retry (reproduced identically both times). Skip-guard,
+  quoted verbatim from the rerun log: four invisible-skip files (`campaigns-social-accounts-role-policies.
+  test.ts`, `get-user-business-ids-matrix.test.ts`, `post-ai-originals-latest-per-post.test.ts`,
+  `signals3-triage-atomic.test.ts`) and `skip-guard: 6 failing test(s) — a RED suite must fail the job,
+  never be swallowed`. **This is a DB-behaviour regression NOT distinguished from a stack failure — it IS
+  the stack failure**: both runs' container logs show `server process ... was terminated by signal 11:
+  Segmentation fault` while executing `reserve_ai_budget` and `vault_update_secret` (both `SECURITY
+  DEFINER`), on the anon/authenticated **denial** path — exactly the trigger condition
+  `.github/workflows/db-tests.yml:43-78`'s own comment already names: Postgres image `17.6.1.099-17.6.1.112`
+  ships a broken `supautils` 3.2.0/3.2.1, confirmed upstream at `supabase/postgres#2367`/`#2112`/`#2377`,
+  fixed in supautils 3.2.2 (image `17.6.1.113+`). Tracked as `30.5-DBTESTS-READINESS-RACE` in
+  `docs/backlog.md`, updated today with this reproduction. **Not a code defect in D5's or ADR 0028's
+  permission fixes** — both independently re-verified correct (D20).
+
+**Per-tier constraint status, at `15aeb764`, stated per this pass's own CI reads (superseding the pre-push
+table above, which is left unedited as a dated historical record):**
+
+| Tier | Rows | Status at `15aeb764` |
+|---|---|---|
+| 1 | 4 (`QUAL-COST-CEILING-EXTENDED`, `QUAL-PRO-DAILY-POST-CAP`, `QUAL-BUDGET-PURPOSE-ISOLATED`, `QUAL-SCORE-ERASURE`) | Still schema-verified against the live linked project only (unchanged since H2.4/H2.8/H2.9). **Still not CI-executed** — `db-tests` has never completed a clean run at this head; blocked on the `supautils` environment bug, not on missing test authorship. |
+| 2 | 18 | **CI-executed-green** — `app-tests` run `34694455170`. |
+| 3 | 7 | Unchanged — diff-verified by design, no runtime CI job (ADR 0015 §2). |
+
+**db-tests promotion tally, stated per run with its event type:** unaffected by any run in this section.
+`34694455170` and `34694455123` (×2) are all `pull_request`-event runs against `session-30-5-adr-0028`; the
+tally only moves on `master`-push events. Separately — and this correction matters, because the wrong figure
+was repeated through Session 31's own review — **the tally itself already reached 7 consecutive green
+`master` runs** (see "Remaining pre-launch work" item 4 above, corrected 2026-09-03), not the "0/3" this
+review and its correction pass initially repeated. The two facts are independent: the tally was already at
+threshold before this session, and today's crash — being a `pull_request` run — could not have moved it
+either way even if it were still building toward 3/3.
+
+**Quality claim: unchanged.** This section fixes test coverage, documentation accuracy, and a CI diagnosis —
+it closes no quality question and makes no claim the generated posts are better than before. MEASURED, never
+COVERED, stands exactly as recorded above.
+
+**Session 31 Track H is closed.** BLOCKER-1's Tier-1 CI gap is not this session's to close — it is an
+environment defect (`30.5-DBTESTS-READINESS-RACE`) with three named, unattempted remedies, tracked
+separately from Track H's own scope.

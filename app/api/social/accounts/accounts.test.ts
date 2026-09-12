@@ -27,6 +27,7 @@ const MOCK_BUSINESS = { id: 'biz-456', owner_id: 'user-123' }
 
 const MOCK_ACCOUNTS = [
   {
+    id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     platform: 'linkedin' as const,
     platform_username: 'acme_corp',
     platform_display_name: 'Acme Corp',
@@ -35,6 +36,7 @@ const MOCK_ACCOUNTS = [
     token_expires_at: null,
   },
   {
+    id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
     platform: 'twitter' as const,
     platform_username: 'acme_x',
     platform_display_name: null,

@@ -69,9 +69,19 @@ export interface BriefAssemblyInput {
 
 export const briefAssemblyPrompt: Prompt<BriefAssemblyInput, CampaignBriefContentOutput> = {
   id: 'brief-assembly',
-  version: 1,
+  version: 2,
   modelKey: 'SONNET_4_6',
   outputSchema: CampaignBriefContentSchema,
+  // ADR 0024 §3.3/§3.3a — founder ruling A-4. Stage A brief assembly is the
+  // most strategic call in the pipeline; everything downstream is
+  // conditioned on its output. A thinking budget is spent OUT OF maxTokens,
+  // not additive to it — this prompt declared no maxTokens before, so it
+  // resolved to DEFAULT_MAX_TOKENS = 4096 (runner.ts), and a 4,000-token
+  // thinking budget against that ceiling would leave 96 tokens of visible
+  // output and fail response_truncated on every call. maxTokens raised to
+  // 12,000 (4,000 reasoning + 8,000 visible) in this SAME version bump.
+  thinking: 4000,
+  maxTokens: 12_000,
 
   buildSystemPrompt(ctx: CustomerContext): string {
     return `You are a content strategist proposing a campaign BRIEF for ${ctx.business.name} — a reviewable argument a human will approve BEFORE any copy is written, not finished posts.

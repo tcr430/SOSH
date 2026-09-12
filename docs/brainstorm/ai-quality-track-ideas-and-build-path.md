@@ -15,6 +15,20 @@
 
 ## 1. Where the ceiling actually is
 
+**Superseded by Session 31 (ADR 0024) for the post-generation half — see the note immediately below.**
+This section otherwise still describes the pre-Session-31 state accurately for everything it says about
+retrieval/context (T1.1, T1.4 — still open) and is left unedited above the note; only the note corrects it.
+
+> **Session 31-D correction (2026-09-12):** the paragraph below — *"Generated posts do get a quality
+> retry — but a one-dimension, one-shot one"* — is no longer the current reality. ADR 0024 (Session 31,
+> Track H, shipped and CI-executed-green for its Tier-2 rows as of `15aeb764`) replaced the one-dimension
+> `openingStrength` retry with best-of-N generation (`N_CANDIDATES = 3`) scored on the full 10-dimension
+> rubric per candidate, argmax winner selection, and persisted scores (`overall_score`, `dimension_scores`,
+> `candidate_count`, `cleared_quality_threshold` on `post_ai_originals`). This is exactly **T1.2** below,
+> now shipped — see the shipped-tags on T1.2/T1.3/T1.4/T1.5 and `docs/current-phase.md`'s Session 31
+> entries for the CI evidence. **T1.1** (voice exemplars) and the embeddings ruling in §4 remain open;
+> nothing in Session 31 touched retrieval/context beyond conditioning it on the task (T1.4, below).
+
 The AI layer's *governance* is genuinely strong — one entry point, versioned prompt programs, priced
 model routing, trial caps and rate limits ahead of the call, typed errors, and prompt-injection defense
 enforced by branded types (`lib/ai/wrap-evidence.ts`). None of that is the limiter.
@@ -26,7 +40,8 @@ What already exists, stated accurately so this document does not under-credit th
 - The rubric **is** wired as a real critique gate — but on the **brief**, not the post
   (`lib/campaigns/brief.ts:139`, Stage B, against `BRIEF_QUALITY_THRESHOLD`).
 - Generated posts **do** get a quality retry — but a **one-dimension, one-shot** one: regenerate once if
-  `openingStrength` is below threshold, no re-score (`lib/campaigns/generate.ts:259`).
+  `openingStrength` is below threshold, no re-score (`lib/campaigns/generate.ts:259`). **(Superseded —
+  see the note above.)**
 - Deterministic Tier-0 checks exist and are free: role coverage and link placement
   (`lib/campaigns/consistency.ts`).
 
@@ -55,7 +70,7 @@ version specifically (i.e. the version that reflects the customer's taste, not t
 - **Depends on:** the embeddings ruling (§4).
 - **Measured by:** average human edit distance on approved posts.
 
-### T1.2 — Generate three candidates and let the rubric pick
+### T1.2 — Generate three candidates and let the rubric pick — **SHIPPED (Session 31, ADR 0024)**
 
 Best-of-N with a judge is the most reliably effective quality technique available in this class of system,
 and the codebase is one small change from it: the rubric exists, the threshold exists, and a regeneration
@@ -69,7 +84,7 @@ path exists.
 - **Interacts with:** ADR 0017's frozen Mode 2 prompt fixtures — changing sampling changes fixtures.
   Scope that explicitly rather than discovering it mid-session.
 
-### T1.3 — Let the model think before it writes
+### T1.3 — Let the model think before it writes — **SHIPPED (Session 31, ADR 0024)**
 
 No thinking budget appears anywhere in the layer. For the strategic steps — brief assembly, campaign
 structure, Stage C triage — an extended thinking budget is a parameter change with a large effect on
@@ -77,7 +92,7 @@ exactly the decisions that matter most, and it is directly measurable on the exi
 
 Cheapest experiment in this document. Run it first, if only to size the rest.
 
-### T1.4 — Condition retrieval on the task
+### T1.4 — Condition retrieval on the task — **SHIPPED (Session 31, ADR 0024, D4/MAJOR-4 correction)**
 
 `lib/ai/context.ts` calls `retrievePerformancePatterns(client, businessId, {})` — **an empty
 `queryContext`**, which the in-file comment openly acknowledges. The governed-memory machinery already
@@ -86,7 +101,7 @@ accepts a query; the primary call site passes nothing.
 Consequence: a launch post and an objection-handling post receive **identical** memory. Threading the task
 down is close to free and makes every downstream item better.
 
-### T1.5 — Structured output through tool-use schemas
+### T1.5 — Structured output through tool-use schemas — **SHIPPED (Session 31, ADR 0024)**
 
 The layer parses JSON out of prose (`extractJsonBlock`, `lib/ai/parsers.ts:48`), and Session 30 shipped a
 fix for a **production bug in exactly that path** — the model prefaced its JSON decision with prose.

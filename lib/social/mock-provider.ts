@@ -73,7 +73,7 @@ export class MockProvider implements SocialProvider {
     return crypto.randomUUID()
   }
 
-  getOAuthAuthorizeUrl(input: OAuthAuthorizeInput): string {
+  async getOAuthAuthorizeUrl(input: OAuthAuthorizeInput): Promise<string> {
     this.calls.getOAuthAuthorizeUrl.push(input)
     this.maybeThrow(input.platform)
     return `https://mock.local/authorize?state=${input.state}&platform=${input.platform}`

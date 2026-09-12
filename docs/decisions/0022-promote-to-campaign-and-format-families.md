@@ -1023,3 +1023,43 @@ move it.** Both runs above are `pull_request`-event runs on PR #6 against `sessi
 events, exactly the distinction `docs/current-phase.md`'s existing tally log already draws for every prior
 entry. The tally stays at the count `docs/current-phase.md` records as of the last genuine `master` run
 (`e69e5c41`, 2026-08-21) until this branch actually merges.
+
+## 21. `RUNNER-UNMODIFIED` retired, superseded by ADR 0024 §3.1/§6.4 (Session 31-D correction pass, 2026-09-10, additive)
+
+**§11.3 is not edited.** Its `RUNNER-UNMODIFIED` row, and §20.1/§20.2's restatements of it, stand
+unchanged above as a historical record of what this ADR's own track (F1b.11) put in place. This section
+records that the underlying scan no longer exists, why that is correct, and what still guards the half of
+the original constraint that survives.
+
+**What happened.** `git diff 05baf1d2..55b421ad -- lib/scope-scans.test.ts` (ADR 0024, Track H, Session 31)
+deletes the `MODE2-RUNNER-UNTOUCHED` describe block in full — the SHA-256 content pin on `lib/ai/runner.ts`
+and the "no fourth `is*(promptId)` predicate" assertion both go with it. The deleting commit is
+**`bdcabf50`** ("H2.1: prompt sampling/thinking properties + ten-row frozen table"), whose own message
+states the retirement but which amended no ADR — flagged as MAJOR-3 in `docs/reviews/session-31-reviewer.md`
+because ADR 0024 §0's "Amends" list does not name ADR 0022, and no doc commit in the Session 31 range
+touches this file.
+
+**Why the retirement itself is correct.** `RUNNER-UNMODIFIED`'s job was proving ADR 0022's own F1b.11 work
+never touched `runner.ts` — a scope boundary for that track, not a permanent freeze on the file. ADR 0024
+§3.1/§6.4/§7 is a properly adjudicated, later ADR whose stated purpose includes adding the `temperature`/
+`thinking` properties `runPrompt` now reads (§3.1) and the guard reordering at §7 — both necessarily
+`runner.ts` changes. Holding a Track-F scope boundary against a later, in-scope ADR would be the wrong kind
+of rigidity; the same reasoning already applied to `POSTS-DDL-UNMODIFIED` (ADR 0028 §17, commit `b6580b84`)
+and to this file's own `MODE3-UNTOUCHED` precedent (§20's F1b.11 discussion) for a scan outgrown by a
+legitimate later track.
+
+**What the SHA-256 content-hash half loses, and what the "no fourth predicate" half does not.** The content
+pin is gone outright — nothing today asserts `runner.ts`'s hash. That is intentional and correct: ADR 0024
+is the ADR that is *supposed* to change `runner.ts`, repeatedly, across its own H2.x steps, so a byte-level
+freeze on the file would fail on every legitimate step of the ADR that retired it. The narrower half —
+"no fourth `is*(promptId)` predicate joins the three pre-existing ones" — is **not** left unguarded:
+`lib/ai/runner.test.ts`'s `QUAL-TRIAL-UNIT-PER-POST` case ("the full skip set is exactly
+`{native-generation-single, native-generation-thread, post-generation, rubric}`, no more, no less")
+exercises the same four-id skip set the original predicates gated, plus a control id outside the set that
+must still increment — proving the membership is neither narrowed nor silently widened, by behaviour rather
+than by hash. It does not pin `runner.ts`'s content the way the deleted scan did; it pins the *set of ids*
+the skip predicates recognise, which is what the four-way enumeration was standing in for.
+
+**Disposition:** `RUNNER-UNMODIFIED` (ADR 0022 §11.3) is retired as of `bdcabf50`, superseded by ADR 0024
+§3.1/§6.4 needing to modify the file the scan pinned. `docs/reviews/session-31-reviewer.md`'s MAJOR-3 is
+closed by this section — the missing ADR 0022 amendment it identified.

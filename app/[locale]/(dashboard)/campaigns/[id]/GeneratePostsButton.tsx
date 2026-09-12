@@ -19,6 +19,7 @@ type UiPhase =
 
 const ERROR_CODES = new Set([
   'quota_exceeded',
+  'daily_quota_exceeded',
   'rate_limited',
   'provider_error',
   'invalid_response',

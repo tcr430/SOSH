@@ -188,14 +188,16 @@ describe('triage state + cost ceiling (ADR 0021 §2.9, §2.11, §3.3)', () => {
     }
   })
 
-  // ─── SIGNAL3-COST-CEILING-ATOMIC ───────────────────────────────────────────
+  // ─── QUAL-COST-CEILING-EXTENDED (ADR 0024 §7.5b, Session 31 H2.8) ─────────
+  // The ADR 0021 case shape, re-run against the renamed ai_budget_daily
+  // table/RPCs. Every call now names purpose='triage_cents' explicitly.
 
-  it('SIGNAL3-COST-CEILING-ATOMIC: two concurrent reservations against one cap — exactly one wins', async () => {
+  it('QUAL-COST-CEILING-EXTENDED: two concurrent reservations against one cap — exactly one wins', async () => {
     const biz = await insertBusiness('Cost Ceiling Race Business')
 
     const [first, second] = await Promise.all([
-      admin.rpc('reserve_triage_budget', { p_business_id: biz, p_cents: 22, p_cap: 25 }),
-      admin.rpc('reserve_triage_budget', { p_business_id: biz, p_cents: 22, p_cap: 25 }),
+      admin.rpc('reserve_ai_budget', { p_business_id: biz, p_purpose: 'triage_cents', p_units: 22, p_cap: 25 }),
+      admin.rpc('reserve_ai_budget', { p_business_id: biz, p_purpose: 'triage_cents', p_units: 22, p_cap: 25 }),
     ])
 
     expect(first.error).toBeNull()
@@ -205,46 +207,135 @@ describe('triage state + cost ceiling (ADR 0021 §2.9, §2.11, §3.3)', () => {
     expect(wonCount).toBe(1)
     expect(deniedCount).toBe(1)
 
-    const { data: row } = await admin.from('signal_triage_budget').select('reserved_cents').eq('business_id', biz).single()
-    expect(Number(row.reserved_cents)).toBe(22)
+    const { data: row } = await admin
+      .from('ai_budget_daily')
+      .select('reserved_units')
+      .eq('business_id', biz)
+      .eq('purpose', 'triage_cents')
+      .single()
+    expect(Number(row.reserved_units)).toBe(22)
   })
 
-  it('SIGNAL3-COST-CEILING-ATOMIC: the first call of the day succeeds ([db-BLOCKER-1] — zero existing rows must not read as capped)', async () => {
+  it('QUAL-COST-CEILING-EXTENDED: the first call of the day succeeds ([db-BLOCKER-1] — zero existing rows must not read as capped)', async () => {
     const biz = await insertBusiness('First Call Of Day Business')
 
-    const { data, error } = await admin.rpc('reserve_triage_budget', { p_business_id: biz, p_cents: 22, p_cap: 125 })
+    const { data, error } = await admin.rpc('reserve_ai_budget', { p_business_id: biz, p_purpose: 'triage_cents', p_units: 22, p_cap: 125 })
     expect(error).toBeNull()
     expect(data ?? []).toHaveLength(1)
-    expect(Number(data[0].reserved_cents)).toBe(22)
+    expect(Number(data[0].reserved_units)).toBe(22)
   })
 
-  it('SIGNAL3-COST-CEILING-ATOMIC: a reservation that would exceed the cap is refused (zero rows, not an error)', async () => {
+  it('QUAL-COST-CEILING-EXTENDED: a reservation that would exceed the cap is refused (zero rows, not an error)', async () => {
     const biz = await insertBusiness('Over Cap Business')
 
-    const first = await admin.rpc('reserve_triage_budget', { p_business_id: biz, p_cents: 100, p_cap: 125 })
+    const first = await admin.rpc('reserve_ai_budget', { p_business_id: biz, p_purpose: 'triage_cents', p_units: 100, p_cap: 125 })
     expect(first.error).toBeNull()
     expect(first.data ?? []).toHaveLength(1)
 
-    const second = await admin.rpc('reserve_triage_budget', { p_business_id: biz, p_cents: 30, p_cap: 125 })
+    const second = await admin.rpc('reserve_ai_budget', { p_business_id: biz, p_purpose: 'triage_cents', p_units: 30, p_cap: 125 })
     expect(second.error).toBeNull()
     expect(second.data ?? []).toHaveLength(0)
 
-    const { data: row } = await admin.from('signal_triage_budget').select('reserved_cents').eq('business_id', biz).single()
-    expect(Number(row.reserved_cents)).toBe(100)
+    const { data: row } = await admin
+      .from('ai_budget_daily')
+      .select('reserved_units')
+      .eq('business_id', biz)
+      .eq('purpose', 'triage_cents')
+      .single()
+    expect(Number(row.reserved_units)).toBe(100)
   })
 
-  it('reconcile_triage_budget settles a reservation down to actual spend', async () => {
+  it('QUAL-COST-CEILING-EXTENDED: reconcile_ai_budget settles a reservation down to actual spend', async () => {
     const biz = await insertBusiness('Reconcile Business')
-    const { data: reserved } = await admin.rpc('reserve_triage_budget', { p_business_id: biz, p_cents: 22, p_cap: 125 })
+    const { data: reserved } = await admin.rpc('reserve_ai_budget', { p_business_id: biz, p_purpose: 'triage_cents', p_units: 22, p_cap: 125 })
     expect(reserved[0]).toBeDefined()
 
-    const { data: reconciled, error } = await admin.rpc('reconcile_triage_budget', {
+    const { data: reconciled, error } = await admin.rpc('reconcile_ai_budget', {
       p_business_id: biz,
-      p_reserved_cents: 22,
-      p_actual_cents: 8,
+      p_purpose: 'triage_cents',
+      p_reserved_units: 22,
+      p_actual_units: 8,
     })
     expect(error).toBeNull()
-    expect(Number(reconciled[0].reserved_cents)).toBe(8)
+    expect(Number(reconciled[0].reserved_units)).toBe(8)
+  })
+
+  // Session 31-D, D14 (MINOR-8). `QUAL-NO-SECOND-BUDGET-TABLE` (Tier 3,
+  // ADR 0024 §9/§10.3, constraint 24) is diff-verified BY DECISION — the
+  // migration renames `signal_triage_budget` to `ai_budget_daily` in place;
+  // a second budget mechanism would need its own `CREATE TABLE`, which fails
+  // that check. The case immediately below is a DIFFERENT property (the OLD
+  // table/RPCs are gone), not a stand-in for "no second table was created" —
+  // recorded here, in code, rather than only in the ADR, so the two are not
+  // conflated.
+  it('QUAL-COST-CEILING-EXTENDED: NO signal_triage_budget table or RPC survives the rename', async () => {
+    const tableProbe = await admin.from('signal_triage_budget').select('id').limit(1)
+    expect(tableProbe.error).not.toBeNull()
+
+    const reserveProbe = await admin.rpc('reserve_triage_budget', { p_business_id: '00000000-0000-0000-0000-000000000000', p_cents: 1, p_cap: 1 })
+    expect(reserveProbe.error).not.toBeNull()
+
+    const reconcileProbe = await admin.rpc('reconcile_triage_budget', { p_business_id: '00000000-0000-0000-0000-000000000000', p_reserved_cents: 1, p_actual_cents: 1 })
+    expect(reconcileProbe.error).not.toBeNull()
+  })
+
+  it('QUAL-COST-CEILING-EXTENDED: purpose has no default — the migration\'s DEFAULT-then-DROP-DEFAULT pattern only backfilled PRE-EXISTING rows, new rows must state it explicitly', async () => {
+    const biz = await insertBusiness('No Purpose Default Business')
+
+    const { error } = await admin
+      .from('ai_budget_daily')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .insert({ business_id: biz, day: '2026-09-09', reserved_units: 10 } as any)
+    expect(error).not.toBeNull()
+  })
+
+  // ─── QUAL-BUDGET-PURPOSE-ISOLATED (ADR 0024 §7.5b) ─────────────────────────
+  // Two purposes, two rows, two caps, no shared counter — written BOTH
+  // directions (a one-directional test passes on a shared counter half the
+  // time).
+
+  it('QUAL-BUDGET-PURPOSE-ISOLATED: a triage_cents reservation AT ITS CAP does NOT deny a generation_posts reservation on the same (business_id, day)', async () => {
+    const biz = await insertBusiness('Purpose Isolation A Business')
+
+    const triage = await admin.rpc('reserve_ai_budget', { p_business_id: biz, p_purpose: 'triage_cents', p_units: 125, p_cap: 125 })
+    expect(triage.error).toBeNull()
+    expect(triage.data ?? []).toHaveLength(1) // at cap, but this call itself succeeds
+
+    const triageDenied = await admin.rpc('reserve_ai_budget', { p_business_id: biz, p_purpose: 'triage_cents', p_units: 1, p_cap: 125 })
+    expect(triageDenied.data ?? []).toHaveLength(0) // triage_cents is now genuinely capped
+
+    const generation = await admin.rpc('reserve_ai_budget', { p_business_id: biz, p_purpose: 'generation_posts', p_units: 1, p_cap: 15 })
+    expect(generation.error).toBeNull()
+    expect(generation.data ?? []).toHaveLength(1) // a DIFFERENT purpose, DIFFERENT counter — not denied
+
+    const { data: rows } = await admin.from('ai_budget_daily').select('purpose, reserved_units').eq('business_id', biz)
+    expect(rows).toHaveLength(2)
+    const triageRow = rows.find((r: { purpose: string }) => r.purpose === 'triage_cents')
+    const generationRow = rows.find((r: { purpose: string }) => r.purpose === 'generation_posts')
+    expect(Number(triageRow.reserved_units)).toBe(125)
+    expect(Number(generationRow.reserved_units)).toBe(1)
+  })
+
+  it('QUAL-BUDGET-PURPOSE-ISOLATED: a generation_posts reservation AT ITS CAP does NOT deny a triage_cents reservation on the same (business_id, day) — the other direction', async () => {
+    const biz = await insertBusiness('Purpose Isolation B Business')
+
+    const generation = await admin.rpc('reserve_ai_budget', { p_business_id: biz, p_purpose: 'generation_posts', p_units: 15, p_cap: 15 })
+    expect(generation.error).toBeNull()
+    expect(generation.data ?? []).toHaveLength(1)
+
+    const generationDenied = await admin.rpc('reserve_ai_budget', { p_business_id: biz, p_purpose: 'generation_posts', p_units: 1, p_cap: 15 })
+    expect(generationDenied.data ?? []).toHaveLength(0) // generation_posts is now genuinely capped
+
+    const triage = await admin.rpc('reserve_ai_budget', { p_business_id: biz, p_purpose: 'triage_cents', p_units: 22, p_cap: 125 })
+    expect(triage.error).toBeNull()
+    expect(triage.data ?? []).toHaveLength(1) // a DIFFERENT purpose, DIFFERENT counter — not denied
+
+    const { data: rows } = await admin.from('ai_budget_daily').select('purpose, reserved_units').eq('business_id', biz)
+    expect(rows).toHaveLength(2)
+    const triageRow = rows.find((r: { purpose: string }) => r.purpose === 'triage_cents')
+    const generationRow = rows.find((r: { purpose: string }) => r.purpose === 'generation_posts')
+    expect(Number(triageRow.reserved_units)).toBe(22)
+    expect(Number(generationRow.reserved_units)).toBe(15)
   })
 
   // ─── SIGNAL3-CLAIM-RECLAIMABLE ─────────────────────────────────────────────

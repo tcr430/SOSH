@@ -202,7 +202,7 @@ const metric = (i: number): PostMetricsRow => ({
 })
 
 const post = (i: number): PostRow => ({
-  id: `post-${i}`, campaign_id: CAMPAIGN_ID, business_id: BUSINESS_ID,
+  id: `post-${i}`, campaign_id: CAMPAIGN_ID, business_id: BUSINESS_ID, social_account_id: null,
   platform: 'linkedin', content: `PERF-SNIPPET-${i}`, hashtags: [], media_urls: [],
   scheduled_at: '2026-01-01T00:00:00Z', published_at: null,
   platform_post_id: null, platform_url: null, status: 'published',
@@ -277,7 +277,7 @@ function allPromptText(): string {
 }
 
 describe('lib/campaigns/generate.ts caller — buildCustomerContext is called byte-identically (MODE2-CONTEXT-EQUIVALENT)', () => {
-  it('calls buildCustomerContext with the exact same args as before B2.6', async () => {
+  it('calls buildCustomerContext with the exact same args as before B2.6, plus H2.11\'s campaign-level queryContext', async () => {
     // Session 24-D (MINOR-1 correction) — buildCustomerContext itself is not
     // mocked in this file (module-level intent, see header note above), but
     // spying on it (calls-through to the REAL implementation, only records
@@ -288,8 +288,15 @@ describe('lib/campaigns/generate.ts caller — buildCustomerContext is called by
 
     await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
 
-    // Same call shape as the pre-B2.6 STEP 4: (businessId, campaign.voice_variation_id).
-    expect(spy).toHaveBeenCalledWith(BUSINESS_ID, VARIATION_ID)
+    // ADR 0024 §5.1/§5.4 (Session 31, H2.11) — the ONLY caller that passes a
+    // queryContext: {objective, audience, campaignId}. audience comes from
+    // the fixture's mockBrandVoice.target_audience ('Engineering leads'),
+    // objective from mockCampaign.objective, campaignId from CAMPAIGN_ID.
+    expect(spy).toHaveBeenCalledWith(BUSINESS_ID, VARIATION_ID, {
+      objective: 'Drive awareness',
+      audience: 'Engineering leads',
+      campaignId: CAMPAIGN_ID,
+    })
     expect(spy).toHaveBeenCalledTimes(1)
   })
 

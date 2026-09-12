@@ -27,7 +27,7 @@ function makeRow(overrides: Partial<BrandMemoryRow> = {}): BrandMemoryRow {
     created_at: '2026-06-01T00:00:00Z',
     updated_at: '2026-07-19T00:00:00Z',
     category: 'positioning',
-    statement: 'We integrate natively with Postiz',
+    statement: 'We integrate natively with every platform',
     ...overrides,
   }
 }

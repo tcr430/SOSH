@@ -21,6 +21,8 @@ import {
   skipPostAction,
 } from '@/app/[locale]/(dashboard)/campaigns/[id]/posts/actions'
 import { AiOutputPreview } from './AiOutputPreview'
+import { PostJudgmentBadge } from '@/components/posts/PostJudgmentBadge'
+import { isExcludedFromBulkApprove } from '@/lib/posts/judgment'
 import type { CalendarPostRow } from '@/lib/calendar/types'
 import type { CampaignRow, Platform, PostAiOriginalRow } from '@/lib/db/types'
 
@@ -241,11 +243,17 @@ export function ApprovalsInbox({
         // approver must not have to infer the active platform filter from a
         // number, so the accessible name states the actual scope (ADR 0014
         // Amendment A, B5 a11y pass).
+        // ADR 0024 §8.4 (A-3, H2.12) — below-threshold posts are excluded
+        // from bulk approve. bulkApproveDraftPosts carries no quality
+        // predicate; the exclusion is enforced entirely here, by never
+        // including an excluded id in what the Server Action receives.
+        const excludedRows = rows.filter(r => isExcludedFromBulkApprove(originalsByPostId[r.id]))
+        const approvableRows = rows.filter(r => !isExcludedFromBulkApprove(originalsByPostId[r.id]))
         const bulkAriaLabel =
           platformFilter === 'all'
-            ? t('bulk.approveAllLabel', { count: rows.length, campaign: campaign?.name ?? '' })
+            ? t('bulk.approveAllLabel', { count: approvableRows.length, campaign: campaign?.name ?? '' })
             : t('bulk.approveAllLabelFiltered', {
-                count: rows.length,
+                count: approvableRows.length,
                 platform: PLATFORM_LABELS[platformFilter as Platform],
                 campaign: campaign?.name ?? '',
               })
@@ -259,17 +267,17 @@ export function ApprovalsInbox({
                   business-wide pending total exceeds what was ever fetched —
                   in that case NO group (filtered or not) can be proven
                   complete, so bulk is disabled everywhere, not just here. */}
-              {!hasOverflow ? (
+              {!hasOverflow && approvableRows.length > 0 ? (
                 <Button
                   size="sm"
                   disabled={isPending}
                   aria-label={bulkAriaLabel}
-                  onClick={() => handleBulkApprove(campaignId, rows.map(r => r.id))}
+                  onClick={() => handleBulkApprove(campaignId, approvableRows.map(r => r.id))}
                   className="bg-emerald-700 hover:bg-emerald-600 text-white"
                 >
-                  {t('bulk.approveAll', { count: rows.length })}
+                  {t('bulk.approveAll', { count: approvableRows.length })}
                 </Button>
-              ) : (
+              ) : !hasOverflow ? null : (
                 <Tooltip>
                   <TooltipTrigger
                     type="button"
@@ -281,12 +289,21 @@ export function ApprovalsInbox({
                     // themes), not a comment claiming a measurement.
                     className="inline-flex items-center justify-center rounded-md px-3 py-1.5 text-xs font-medium bg-muted text-foreground cursor-not-allowed"
                   >
-                    {t('bulk.approveAll', { count: rows.length })}
+                    {t('bulk.approveAll', { count: approvableRows.length })}
                   </TooltipTrigger>
                   <TooltipContent>{t('bulk.incompleteSetHint')}</TooltipContent>
                 </Tooltip>
               )}
             </div>
+            {/* ADR 0024 §8.4 (A-3, H2.12) — the founder-accepted, customer-
+                observable behaviour change: a bulk approve now leaves
+                below-threshold drafts behind, and the surface says why
+                rather than silently skipping them. */}
+            {excludedRows.length > 0 && (
+              <p className="text-xs text-amber-700 dark:text-amber-300">
+                {t('bulk.excludedNotice', { count: excludedRows.length })}
+              </p>
+            )}
             {errorKey === campaignId && (
               <p role="alert" className="text-xs text-destructive">
                 {t('row.error')}
@@ -341,6 +358,7 @@ function DraftRow({
   onSkip: (note: string) => void
 }) {
   const t = useTranslations('approvals')
+  const tJudgment = useTranslations('approvals.row.judgment')
   const [isSkipOpen, setIsSkipOpen] = useState(false)
   const [note, setNote] = useState('')
   // ADR 0022 §2.5 (Session 29-D, MAJOR-4) — a <input type="datetime-local">
@@ -366,6 +384,7 @@ function DraftRow({
             </span>
           </div>
           <p className="line-clamp-2 text-sm leading-relaxed">{post.content}</p>
+          <PostJudgmentBadge original={original} t={tJudgment} />
           <AiOutputPreview original={original} />
         </div>
 

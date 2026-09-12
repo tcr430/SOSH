@@ -66,7 +66,7 @@ There are **three ways a campaign starts**, and they converge on the same pipeli
               APPROVALS  (/approvals) — human approves, edits, or rejects
               ▲                    │
               │                    ▼
-              │         CALENDAR (/calendar) → publish worker (cron, Postiz)
+              │         CALENDAR (/calendar) → publish worker (cron, native LinkedIn/X)
               │                    │
               │                    ▼
               │         METRICS worker (cron) → post_metrics
@@ -95,7 +95,7 @@ There are **three ways a campaign starts**, and they converge on the same pipeli
 | `campaigns/` | `brief.ts` (assembly + critique gate + freeze), `generate.ts`, `consistency.ts`, `promote.ts`, `schedule.ts`, `enforcement.ts` |
 | `studio/` | Mode 1 drafting and `verify.ts` (the verify-then-cite pattern) |
 | `learning/` | The ADR 0018 loop: classify → summarize → promote into `performance_memory` |
-| `social/` | Provider abstraction, OAuth state, vault token reads. **Currently Postiz-backed**; native migration open |
+| `social/` | Provider abstraction, OAuth state, vault token reads. **Native LinkedIn/X providers** (Session 30.5, ADR 0028) — production OAuth apps not yet registered |
 | `publishing/` | `orchestrator.ts` — publish tick + janitor tick, the error matrix, backoff |
 | `metrics/` | `orchestrator.ts` — metrics sync tick. Writes `post_metrics` and **nothing else** |
 | `db/` | One file per table, ~37 of them. The only place Supabase is called |

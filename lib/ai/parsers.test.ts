@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
-import { extractJsonBlock, safeParseOrAiError } from './parsers'
+import { extractJsonBlock, safeParseOrAiError, parseToolInputOrAiError } from './parsers'
 import { AiError } from './errors'
 
 describe('extractJsonBlock', () => {
@@ -117,5 +117,32 @@ describe('safeParseOrAiError', () => {
 
   it('throws AiError on completely empty input', () => {
     expect(() => safeParseOrAiError(schema, '')).toThrow(AiError)
+  })
+})
+
+// ADR 0024 §6.4 (Session 31, H2.10) — the tool_use sibling: no text to
+// extract JSON out of, `input` is already a parsed JS value.
+describe('parseToolInputOrAiError', () => {
+  const schema = z.object({ name: z.string(), value: z.number() })
+
+  it('returns the typed value when the input matches the schema', () => {
+    const result = parseToolInputOrAiError(schema, { name: 'test', value: 42 })
+    expect(result).toEqual({ name: 'test', value: 42 })
+  })
+
+  it('throws AiError with invalid_response, carrying the Zod message, when input fails schema validation', () => {
+    let caught: unknown
+    try {
+      parseToolInputOrAiError(schema, { name: 123, value: 'oops' })
+    } catch (err) {
+      caught = err
+    }
+    expect(caught).toBeInstanceOf(AiError)
+    expect((caught as AiError).code).toBe('invalid_response')
+    expect((caught as AiError).message).toContain('Response schema validation failed')
+  })
+
+  it('throws AiError when required fields are missing', () => {
+    expect(() => parseToolInputOrAiError(schema, { name: 'only-name' })).toThrow(AiError)
   })
 })

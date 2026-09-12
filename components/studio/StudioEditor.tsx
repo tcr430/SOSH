@@ -19,7 +19,10 @@ import {
   type SuggestStudioSuggestionsState,
   type PromoteDraftToCampaignState,
 } from '@/app/[locale]/(dashboard)/studio/actions'
-import { VALID_PLATFORMS, PLATFORM_CONFIGS } from '@/lib/social'
+// Imported directly, not from the '@/lib/social' barrel — see
+// AccountsClient.tsx's comment for why (Vercel build fix, 2026-09-06).
+import { VALID_PLATFORMS } from '@/lib/social/platforms/guards'
+import { PLATFORM_CONFIGS } from '@/lib/social/platforms/config'
 import type { Platform } from '@/lib/db/types'
 
 // ADR 0019 §11 — the Studio drafting page's Client Component half (the

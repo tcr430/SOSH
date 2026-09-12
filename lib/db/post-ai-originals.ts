@@ -5,8 +5,15 @@ import { getErrorMessage } from './utils'
 // ADR 0018 §2.6 — named constant, sibling in spirit to lib/memory/constants.ts's
 // ADR-constant convention (L-4: no scattered magic numbers). Every writer of
 // post_ai_originals (initial generation, regeneration, and any future writer)
-// references this one place rather than an inline literal `1`.
-export const AI_ORIGINAL_SCHEMA_VERSION = 1
+// references this one place rather than an inline literal.
+//
+// ADR 0024 §8.2 (Session 31, H2.4) — bumped 1 -> 2 in the same migration that
+// adds the four score columns (20260909100000_post_ai_original_scores.sql):
+// every row written from here on carries schema_version = 2 alongside the
+// winner's overall_score/dimension_scores/candidate_count/cleared_quality_threshold,
+// populated together at insert. Rows at schema_version 1 predate the rubric
+// score contract and have those four columns NULL.
+export const AI_ORIGINAL_SCHEMA_VERSION = 2
 
 export async function createPostAiOriginal(
   client: SupabaseClient,

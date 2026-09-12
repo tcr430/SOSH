@@ -41,11 +41,44 @@ jobs:
           npm ci
 
       # Pinned to an exact tag: no floating major tag (v1/v2) is published for
-      # this action, so `@v3`/`@v2` are not resolvable refs. Auto-detection via
-      # an omitted `version` input still applies — this only pins the action's
-      # own release, not the supabase CLI version it installs (that comes from
-      # package-lock.json's pinned supabase@^2.97.0).
+      # this action, so `@v3`/`@v2` are not resolvable refs.
+      #
+      # `version:` here OVERRIDES this action's normal lockfile auto-detection
+      # (which would otherwise install the CLI pinned in package-lock.json,
+      # supabase@2.109.1 — bundling Postgres image 17.6.1.111). That image
+      # range (17.6.1.099-17.6.1.112) ships a broken supautils (3.2.0/3.2.1):
+      # any EXECUTE-permission-denied call to a SECURITY DEFINER function
+      # SIGSEGVs the backend and takes the whole cluster into recovery —
+      # confirmed upstream at supabase/postgres#2367, #2112, #2377, fixed in
+      # supautils 3.2.2 (image 17.6.1.113+). This is what
+      # supabase/__tests__/vault-update-secret.test.ts's anon/authenticated
+      # denial assertions were tripping (Session 30.5-D, misdiagnosed at the
+      # time as OOM/memory pressure — it is not).
+      #
+      # Pinned to a concrete version, not the bare word "beta": the action
+      # release we're on (v2.1.1) predates that dist-tag alias and passes
+      # `version` straight to a semver comparison, so the literal string
+      # "beta" fails with "Invalid SemVer: beta".
+      #
+      # DOES NOT FIX THE CRASH — verified in CI (run 34027147179): this is
+      # still the newest published 2.x release and it STILL resolves to
+      # Postgres image 17.6.1.111 and still SIGSEGVs. supabase/cli's `main`
+      # branch bumped its embedded Postgres image past the fixed threshold
+      # (17.6.1.167) on 2026-08-31, days before this version was published
+      # (2026-09-05), but empirically that bump isn't in this build — the 2.x
+      # release train doesn't appear to branch from that commit. The only
+      # newer published option is the 3.0.0-beta.x line (different internal
+      # architecture, untested against this workflow — a bigger swing than
+      # this session had budget for). Left pinned here as a no-op placeholder
+      # documenting that this specific avenue is a dead end; db-tests stays
+      # RED on this branch until one of the real fixes lands: (a) a stable
+      # 2.x CLI release ships image >=17.6.1.113, (b) v3 is evaluated and
+      # proven compatible with this workflow, or (c) a CI-only Docker
+      # image-retag workaround is added to shadow the 17.6.1.111 tag with a
+      # verified-clean image (e.g. 17.6.1.156) before `supabase start`.
       - uses: supabase/setup-cli@v2.1.1
+        with:
+          version: 2.117.0-beta.21
 
       # A `supabase start -x analytics,vector,...` CLI-flag attempt to trim
       # the stack (bug-111) did NOT actually stop those containers -- real
@@ -96,9 +129,31 @@ jobs:
           set -euo pipefail
           vals=$(psql "$DATABASE_URL" -tA -c "SHOW shared_buffers; SHOW max_connections; SHOW work_mem;")
           echo "knobs: $vals"
-          echo "$vals" | grep -qx '256MB' || { echo "::error::shared_buffers did not stick (expected 256MB) — check supabase/config.toml [db.settings]"; exit 1; }
+          echo "$vals" | grep -qx '128MB' || { echo "::error::shared_buffers did not stick (expected 128MB) — check supabase/config.toml [db.settings]"; exit 1; }
           echo "$vals" | grep -qx '50'    || { echo "::error::max_connections did not stick (expected 50) — check supabase/config.toml [db.settings]"; exit 1; }
           echo "$vals" | grep -qx '8MB'   || { echo "::error::work_mem did not stick (expected 8MB) — check supabase/config.toml [db.settings]"; exit 1; }
+
+      # Session 30.5-D, D8 (BLOCKER-2): three consecutive reds showed a 503-to-
+      # every-role mid-suite crash (57P03 recovery mode) with OOMKilled:false on
+      # the Postgres container — database-reviewer's diagnosis is that a cgroup
+      # kill of a CHILD backend (not the tracked PID 1) never sets that flag, so
+      # the only after-the-fact `if: failure()` diagnostics couldn't have caught
+      # it. This backgrounds a live sample of container stats + cgroup memory
+      # counters DURING the run and uploads it UNCONDITIONALLY — a process that
+      # gets killed mid-run may never trigger the failure trap at all.
+      - name: Start live memory-pressure watch (backgrounded)
+        run: |
+          (
+            while true; do
+              date -u +%FT%TZ
+              docker stats --no-stream || true
+              for f in /sys/fs/cgroup/memory.max /sys/fs/cgroup/memory.current /sys/fs/cgroup/memory.events; do
+                [ -r "$f" ] && { echo "-- $f --"; cat "$f"; }
+              done
+              sleep 2
+            done
+          ) >> /tmp/mem-watch.log 2>&1 &
+          echo "MEM_WATCH_PID=$!" >> "$GITHUB_ENV"
 
       - name: Reset DB (deterministic re-apply of all migrations)
         run: supabase db reset
@@ -206,6 +261,16 @@ jobs:
             free -h || true
             echo "--- kernel OOM-killer messages (dmesg) ---"
             dmesg 2>/dev/null | grep -i -E "out of memory|oom.kill|killed process" || echo "(no dmesg access or no OOM lines)"
+            # Session 30.5-D, D8 (BLOCKER-2): docker inspect's OOMKilled flag only
+            # reflects the tracked PID 1 (Postgres's postmaster). A cgroup kill of
+            # a CHILD backend never sets it, but Postgres's own crash-recovery
+            # design still terminates every backend and restarts into recovery —
+            # the 57P03 signature this pass diagnosed. memory.events' oom_kill
+            # counter catches that case; docker inspect alone cannot.
+            echo "--- cgroup memory counters (host-level) ---"
+            for f in /sys/fs/cgroup/memory.max /sys/fs/cgroup/memory.current /sys/fs/cgroup/memory.events; do
+              [ -r "$f" ] && { echo "-- $f --"; cat "$f"; } || echo "-- $f not readable --"
+            done
             for c in $(docker ps -a --filter "name=supabase" --format '{{.Names}}'); do
               echo "--- inspect state: $c ---"
               docker inspect "$c" --format '{{.Name}}: ExitCode={{.State.ExitCode}} OOMKilled={{.State.OOMKilled}} Restarting={{.State.Restarting}} StartedAt={{.State.StartedAt}} FinishedAt={{.State.FinishedAt}}' || true
@@ -225,6 +290,22 @@ jobs:
           name: db-tests-oom-evidence
           path: /tmp/db-tests-diagnostics.log
           retention-days: 7
+
+      # Session 30.5-D, D8 (BLOCKER-2): uploaded UNCONDITIONALLY, not `if: failure()`
+      # — a process killed mid-run by the cgroup memory controller may never trip
+      # the failure trap above, so the only record of it is this live-sampled log.
+      - name: Stop memory-pressure watch and upload its log
+        if: always()
+        run: |
+          [ -n "${MEM_WATCH_PID:-}" ] && kill "$MEM_WATCH_PID" 2>/dev/null || true
+      - name: Upload memory-pressure watch log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-tests-mem-watch
+          path: /tmp/mem-watch.log
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Stop Supabase stack
         if: always()

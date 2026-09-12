@@ -14,8 +14,6 @@ export const serverSchema = z.object({
   // Direct Postgres connection string — required for migration scripts.
   // Found in: Supabase Dashboard → Project Settings → Database → Connection string (URI).
   DATABASE_URL: z.string().default(""),
-  POSTIZ_BASE_URL: z.string().default(""),
-  POSTIZ_API_KEY: z.string().default(""),
   STRIPE_SECRET_KEY: z.string().min(20).startsWith('sk_'),
   STRIPE_WEBHOOK_SECRET: z.string().min(20).startsWith('whsec_'),
   STRIPE_PRICE_ID_PLUS: z.string().min(10).startsWith('price_'),
@@ -36,7 +34,15 @@ export const serverSchema = z.object({
   APP_URL: z.string().url().default("http://localhost:3000"),
   AI_PROVIDER: z.enum(["anthropic", "mock"]).default("anthropic"),
   AI_RATE_LIMIT_BRAND_VOICE_PER_MIN: z.coerce.number().int().positive().default(10),
-  AI_RATE_LIMIT_POST_GENERATION_PER_MIN: z.coerce.number().int().positive().default(30),
+  // ADR 0024 §7.3 (Session 31 H2.6) — raised 30 -> 100. At N=3 (H2.7) a
+  // 12-entry campaign issues 36 generation calls; the rate limit counts
+  // PROVIDER CALLS, so N counts as N (QUAL-RATE-LIMIT-COUNTS-CALLS) and the
+  // old default died mid-run with rate_limited for a reason that has
+  // nothing to do with the fan-out itself. The judge (rubricPrompt) is
+  // counted separately under its own prompt id via
+  // countRecentCalls(..., prompt.id), so this ceiling covers generation
+  // calls only.
+  AI_RATE_LIMIT_POST_GENERATION_PER_MIN: z.coerce.number().int().positive().default(100),
   AI_TRIAL_BRAND_VOICE_ATTEMPTS: z.coerce.number().int().positive().default(3),
   AI_TRIAL_POST_CAP: z.coerce.number().int().positive().default(50),
   AI_TRIAL_CAMPAIGN_CAP: z.coerce.number().int().positive().default(1),
@@ -85,6 +91,16 @@ export const serverSchema = z.object({
   // 5 x 22c worst case = 110c, so the full TRIAGE_SHORTLIST_PER_TICK shortlist
   // fits with headroom and the cap binds only on pathology (§3.1).
   TRIAGE_DAILY_CAP_CENTS: z.coerce.number().int().positive().default(125),
+  // ADR 0024 §7.4/§7.5a (Session 31, H2.9) — founder ruling A-1's Pro daily
+  // post-count ceiling. A POST cap, not a cents cap — a 15-post/day limit
+  // IS a ≈150¢/day spend ceiling at ≈10¢/post recorded (§2.1), so §7.4's
+  // €45/mo figure is DERIVED from this constant, never separately enforced.
+  // Plus/trial do NOT reserve against this (§7.4 table: Plus is already
+  // bounded by its 250-posts/month cap; trial by AI_TRIAL_POST_CAP at
+  // runner.ts's STEP 1, a different guard in a different place). The
+  // founder may override the number without reopening the ruling — the ADR
+  // fixes the mechanism, not the constant.
+  AI_PRO_DAILY_POST_CAP: z.coerce.number().int().positive().default(15),
   // ADR 0023 §8.3/§16 (Session 30 G1b.3) — the market-responsive (RSS) egress
   // guard's three Builder-set constants, per-fetch/per-tick/body-size. A
   // recurring poller against a customer-supplied URL, not a one-shot fetch
@@ -270,8 +286,6 @@ function parseServerEnv() {
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
     DATABASE_URL: process.env.DATABASE_URL,
-    POSTIZ_BASE_URL: process.env.POSTIZ_BASE_URL,
-    POSTIZ_API_KEY: process.env.POSTIZ_API_KEY,
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
     STRIPE_PRICE_ID_PLUS: process.env.STRIPE_PRICE_ID_PLUS,
@@ -317,6 +331,7 @@ function parseServerEnv() {
     LEARNING_SUMMARY_MAX_INPUT_TOKENS: process.env.LEARNING_SUMMARY_MAX_INPUT_TOKENS,
     LEARNING_SUMMARY_MAX_MONTHLY_CALLS_PER_BUSINESS: process.env.LEARNING_SUMMARY_MAX_MONTHLY_CALLS_PER_BUSINESS,
     TRIAGE_DAILY_CAP_CENTS: process.env.TRIAGE_DAILY_CAP_CENTS,
+    AI_PRO_DAILY_POST_CAP: process.env.AI_PRO_DAILY_POST_CAP,
     RSS_FEED_FETCH_TIMEOUT_MS: process.env.RSS_FEED_FETCH_TIMEOUT_MS,
     RSS_FEED_POLL_TICK_BUDGET_MS: process.env.RSS_FEED_POLL_TICK_BUDGET_MS,
     RSS_FEED_MAX_BODY_BYTES: process.env.RSS_FEED_MAX_BODY_BYTES,
@@ -380,12 +395,6 @@ export const config = {
     },
     get DATABASE_URL() {
       return serverOnly("DATABASE_URL", () => server().DATABASE_URL);
-    },
-    get POSTIZ_BASE_URL() {
-      return serverOnly("POSTIZ_BASE_URL", () => server().POSTIZ_BASE_URL);
-    },
-    get POSTIZ_API_KEY() {
-      return serverOnly("POSTIZ_API_KEY", () => server().POSTIZ_API_KEY);
     },
     get STRIPE_SECRET_KEY() {
       return serverOnly(
@@ -527,6 +536,9 @@ export const config = {
     },
     get TRIAGE_DAILY_CAP_CENTS() {
       return serverOnly("TRIAGE_DAILY_CAP_CENTS", () => server().TRIAGE_DAILY_CAP_CENTS);
+    },
+    get AI_PRO_DAILY_POST_CAP() {
+      return serverOnly("AI_PRO_DAILY_POST_CAP", () => server().AI_PRO_DAILY_POST_CAP);
     },
     get RSS_FEED_FETCH_TIMEOUT_MS() {
       return serverOnly("RSS_FEED_FETCH_TIMEOUT_MS", () => server().RSS_FEED_FETCH_TIMEOUT_MS);

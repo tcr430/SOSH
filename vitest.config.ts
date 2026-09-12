@@ -27,9 +27,9 @@ export default defineConfig({
       // 'scripts/eval' added to its positional filter for the same reason.
       'scripts/eval/**/*.test.ts',
     ],
-    // Session 22-D (MAJOR-1) — the four real-network __integration__ suites
-    // (postiz-provider, purge-business, email round-trip, marketing route
-    // smoke) are opt-in only (vitest.integration.config.ts), never part of
+    // Session 22-D (MAJOR-1) — the real-network __integration__ suites
+    // (purge-business, email round-trip, marketing route smoke) are opt-in
+    // only (vitest.integration.config.ts), never part of
     // the required app-tests glob. Absent, not present-but-skipped: a green
     // skip inside a required job is the exact false-green shape this ADR
     // exists to eliminate (docs/decisions/0015-test-execution-and-ci-gates.md §4).
@@ -40,6 +40,12 @@ export default defineConfig({
       '**/__integration__/**',
     ],
     testTimeout: 15000,
+    // Session 31-D, D8 (MINOR-3) — global afterEach draining the
+    // lib/ai/client.ts __evalCassetteQueue FIFO, so a test that leaves it
+    // non-empty fails loudly (drainCassetteQueue throws) instead of
+    // silently poisoning the next file. A no-op for every file that never
+    // touches the queue.
+    setupFiles: ['./vitest.setup.ts'],
   },
   resolve: {
     alias: { '@': path.resolve(__dirname, '.') },

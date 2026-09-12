@@ -73,4 +73,25 @@ describe('SocialProvider type shapes', () => {
     expectTypeOf<ProviderRegistry>().toHaveProperty('get')
     expectTypeOf<ProviderRegistry>().toHaveProperty('register')
   })
+
+  // SOCIAL-NO-MULTI-PLATFORM, CORRECTED (ADR 0028 §8.3/N2.11, revised
+  // during N2.11 itself). The ADR's stated premise — that the now-deleted
+  // broker provider file was 'multi''s only producer, so removing the
+  // member becomes possible — turned out to be false: MockProvider
+  // (lib/social/mock-provider.ts) also declares platform = 'multi',
+  // predates this session, and is unrelated to any broker. It legitimately
+  // shares ONE instance across all five platforms in
+  // SOCIAL_PROVIDER_MODE=mock (registry.ts) — removing 'multi' from the
+  // type broke that at compile time. Founder-confirmed during N2.11: keep
+  // 'multi' in the type. What DOES hold, and is asserted here instead:
+  // 'multi' no longer describes a broker — the deleted provider file is
+  // gone (proved by the repo-wide removal scan test in
+  // lib/social/__tests__/, not re-proved here), and the contract suite's
+  // own runtime assertion (provider-contract.test.ts) already proves
+  // LinkedInProvider and TwitterProvider are each bound to exactly one
+  // real platform, never 'multi'.
+  it("SOCIAL-NO-MULTI-PLATFORM (corrected): 'multi' remains a valid SocialProvider.platform value — it describes MockProvider's shared-instance role, not a broker", () => {
+    expectTypeOf<'multi'>().toMatchTypeOf<SocialProvider['platform']>()
+    expectTypeOf<Platform>().toMatchTypeOf<SocialProvider['platform']>()
+  })
 })

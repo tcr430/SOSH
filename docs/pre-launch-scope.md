@@ -24,7 +24,7 @@
 
 `docs/launch-checklist.md` answers **"is what we built safe to turn on?"** — environment variables,
 migrations, cron, Sentry, security headers, the Stripe live-mode flip, auth and rate limits, legal slots,
-rollback, CI gates, Postiz removal. It is a readiness document and it is good at that job.
+rollback, CI gates, the native-publishing migration. It is a readiness document and it is good at that job.
 
 It never asks **"is what we built enough?"** Nothing in the repo does. That is the gap this file closes.
 
@@ -211,8 +211,10 @@ generation quality, the social read path and cold-start backfill, the outcome lo
 generation. **They are pre-launch by assumption, not by decision** — this document makes that explicit,
 and notes that **T1-B depends on Session 33** and **T1-A reuses Session 34's tool patterns**.
 
-The existing hardening queue (`current-phase.md` "Next up") is unchanged and still blocking: Postiz
-removal, legal gates, perf/CWV, and the `db-tests` promotion tally.
+The existing hardening queue (`current-phase.md` "Next up") is unchanged and still blocking: legal gates,
+perf/CWV, and the `db-tests` promotion tally. (The native-publishing migration that used to be on this
+list — Session 30.5, ADR 0028 — is complete in code; production OAuth apps are not yet registered, tracked
+in `launch-checklist.md` §16.)
 
 ---
 

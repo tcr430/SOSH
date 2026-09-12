@@ -1,7 +1,8 @@
+import { z } from 'zod'
 import Anthropic from '@anthropic-ai/sdk'
 import { AiError } from './errors'
 import { MODELS, calculateCostCents } from './models'
-import { safeParseOrAiError } from './parsers'
+import { safeParseOrAiError, parseToolInputOrAiError } from './parsers'
 import { getAnthropicClient, type AiClientLike } from './client'
 import type { Prompt } from './prompts/types'
 import type { CustomerContext } from './context'
@@ -140,6 +141,20 @@ export async function runPrompt<TInput, TOutput>(
     },
   ]
 
+  // ADR 0024 §6.1 (Session 31, H2.10) — the tool's input_schema is derived
+  // from the prompt's OWN outputSchema at call time (z.toJSONSchema), never
+  // hand-written beside it: one schema object per prompt. Same
+  // { name, description, input_schema } shape tool-runner.ts's triage loop
+  // already builds (tool-runner.ts:252-258).
+  const toolName = `${prompt.id}_output`
+  const anthropicTools: Anthropic.Tool[] = prompt.useToolOutput
+    ? [{
+        name: toolName,
+        description: `Return the structured output for the ${prompt.id} task.`,
+        input_schema: z.toJSONSchema(prompt.outputSchema) as Anthropic.Tool.InputSchema,
+      }]
+    : []
+
   const sdkParams: Anthropic.MessageCreateParamsNonStreaming & { _sosh?: { promptId: string; input: unknown } } = {
     model: MODELS[prompt.modelKey].id,
     // ADR 0019 §4.5, founder ruling A-5 — the WHOLE change: one optional
@@ -149,6 +164,22 @@ export async function runPrompt<TInput, TOutput>(
     max_tokens: prompt.maxTokens ?? DEFAULT_MAX_TOKENS,
     system: systemContent,
     messages,
+    // ADR 0024 §3.1 — sampling as a versioned prompt property. Omitted
+    // entirely (not sent as undefined) when the prompt declares nothing, so
+    // every existing prompt's SDK params stay byte-identical to today
+    // (QUAL-SAMPLING-DEFAULT-PRESERVED, lib/ai/runner.test.ts).
+    ...(prompt.temperature !== undefined ? { temperature: prompt.temperature } : {}),
+    // ADR 0024 §3.3 — thinking budget, sent in the SDK's thinking-block
+    // form. Same omit-when-unset shape.
+    ...(prompt.thinking !== undefined
+      ? { thinking: { type: 'enabled' as const, budget_tokens: prompt.thinking } }
+      : {}),
+    // ADR §6.1 — forced single-tool call (type: 'tool'), not 'auto': this
+    // is a structured-output contract, not an agentic choice, so the model
+    // must always call it when the prompt declares one.
+    ...(prompt.useToolOutput
+      ? { tools: anthropicTools, tool_choice: { type: 'tool' as const, name: toolName } }
+      : {}),
     // _sosh is stripped by the real Anthropic SDK (unknown fields ignored).
     // MockAnthropicClient reads it to route to per-prompt-id fixtures.
     _sosh: { promptId: prompt.id, input },
@@ -188,18 +219,50 @@ export async function runPrompt<TInput, TOutput>(
       throw err
     }
 
+    // ADR §6.4/§4.5 blocker 1 — the parse path learns tool_use FIRST,
+    // unconditionally (a non-tool prompt never receives one back, since it
+    // never sent `tools`, so this check is a no-op for the other nine
+    // prompts). A response carrying BOTH blocks logs the mixed case and the
+    // tool_use block wins — never silently prefers text.
+    const toolBlock = response.content.find(b => b.type === 'tool_use')
     const textBlock = response.content.find(b => b.type === 'text')
-    const rawText = textBlock?.type === 'text' ? textBlock.text : ''
+    if (toolBlock && textBlock) {
+      console.log(JSON.stringify({
+        kind: 'runner.mixed_tool_text_response',
+        level: 'warn',
+        prompt_id: prompt.id,
+      }))
+    }
+
     let parsed: TOutput
-    try {
-      parsed = safeParseOrAiError(prompt.outputSchema, rawText)
-    } catch (parseErr: unknown) {
-      const err =
-        parseErr instanceof AiError
-          ? parseErr
-          : new AiError('invalid_response', String(parseErr))
-      usageErrorCode = err.code
-      throw err
+    if (prompt.useToolOutput) {
+      if (!toolBlock) {
+        const err = new AiError('invalid_response', 'Expected a tool_use block but received none')
+        usageErrorCode = err.code
+        throw err
+      }
+      try {
+        parsed = parseToolInputOrAiError(prompt.outputSchema, toolBlock.input)
+      } catch (parseErr: unknown) {
+        const err =
+          parseErr instanceof AiError
+            ? parseErr
+            : new AiError('invalid_response', String(parseErr))
+        usageErrorCode = err.code
+        throw err
+      }
+    } else {
+      const rawText = textBlock?.type === 'text' ? textBlock.text : ''
+      try {
+        parsed = safeParseOrAiError(prompt.outputSchema, rawText)
+      } catch (parseErr: unknown) {
+        const err =
+          parseErr instanceof AiError
+            ? parseErr
+            : new AiError('invalid_response', String(parseErr))
+        usageErrorCode = err.code
+        throw err
+      }
     }
 
     // Step 6: Compute cost

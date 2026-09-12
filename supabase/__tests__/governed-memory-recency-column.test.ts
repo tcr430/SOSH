@@ -11,7 +11,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 const MEMORY_TABLES = ['brand_memory', 'evidence_memory', 'audience_memory', 'performance_memory'] as const
 
 const DOMAIN_COLUMNS: Record<(typeof MEMORY_TABLES)[number], Record<string, unknown>> = {
-  brand_memory: { category: 'positioning', statement: 'We integrate natively with Postiz' },
+  brand_memory: { category: 'positioning', statement: 'We integrate natively with every platform' },
   evidence_memory: { kind: 'quote', content: 'This tool saved us hours every week' },
   audience_memory: { kind: 'problem', statement: 'CTOs struggle to keep a consistent posting cadence' },
   performance_memory: { dimension: 'topic', pattern: 'technical-comparison posts perform well for CTO audiences' },

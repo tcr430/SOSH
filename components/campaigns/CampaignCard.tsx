@@ -18,7 +18,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
-import { PLATFORM_CONFIGS } from '@/lib/social'
+// Imported directly, not from the '@/lib/social' barrel — see
+// AccountsClient.tsx's comment for why (Vercel build fix, 2026-09-06).
+import { PLATFORM_CONFIGS } from '@/lib/social/platforms/config'
 import {
   pauseCampaignAction,
   resumeCampaignAction,

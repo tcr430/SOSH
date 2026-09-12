@@ -2,14 +2,14 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { createClient } from '@supabase/supabase-js'
 
 // ADR 0021 §4.1, §8 — Tier-1, live Postgres. Session 28 E5.1 scope only:
-// insight_cards + signal_triage_budget schema, RLS, the legality trigger,
+// insight_cards + ai_budget_daily schema, RLS, the legality trigger,
 // UNIQUE(signal_candidate_id), cascade + purge. SIGNAL3-RLS-ISOLATED,
 // -CASCADE-COMPLETE, -PURGE-COVERED, -TRIAGE-LEGAL-TRANSITION,
 // -CARD-EXPIRES, -DISMISS-REASON-ENUM.
 
 const PASSWORD = 'TestPass123!'
 
-describe('insight_cards / signal_triage_budget schema (ADR 0021 §4.1, §8)', () => {
+describe('insight_cards / ai_budget_daily schema (ADR 0021 §4.1, §8)', () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let admin: any
   let ownerAId: string
@@ -235,16 +235,16 @@ describe('insight_cards / signal_triage_budget schema (ADR 0021 §4.1, §8)', ()
     await admin.auth.admin.deleteUser(owner.id)
   })
 
-  // ─── signal_triage_budget unreachable by authenticated ────────────────────
+  // ─── ai_budget_daily unreachable by authenticated ────────────────────
 
-  it('SIGNAL3-RLS-ISOLATED: signal_triage_budget is unreachable by authenticated (no policy, REVOKE ALL, no GRANT)', async () => {
+  it('SIGNAL3-RLS-ISOLATED: ai_budget_daily is unreachable by authenticated (no policy, REVOKE ALL, no GRANT)', async () => {
     const { error: seedErr } = await admin
-      .from('signal_triage_budget')
-      .insert({ business_id: businessAId, day: '2026-08-09', reserved_cents: 500 })
+      .from('ai_budget_daily')
+      .insert({ business_id: businessAId, purpose: 'triage_cents', day: '2026-08-09', reserved_units: 500 })
     expect(seedErr).toBeNull()
 
     const client = await signInAs(ownerAEmail)
-    const { data, error } = await client.from('signal_triage_budget').select('id').eq('business_id', businessAId)
+    const { data, error } = await client.from('ai_budget_daily').select('id').eq('business_id', businessAId)
     // Deny-by-default at two independent layers: either a permission error
     // surfaces, or the query silently matches nothing. Either way, no row
     // reaches an authenticated caller.
@@ -421,13 +421,13 @@ describe('insight_cards / signal_triage_budget schema (ADR 0021 §4.1, §8)', ()
     const signal = await insertSignal(biz, repo, `cascade-direct-${Date.now()}`)
     const candidate = await insertCandidate(biz, signal)
     await insertCard(biz, candidate)
-    const { error: budgetErr } = await admin.from('signal_triage_budget').insert({ business_id: biz, day: '2026-08-09', reserved_cents: 100 })
+    const { error: budgetErr } = await admin.from('ai_budget_daily').insert({ business_id: biz, purpose: 'triage_cents', day: '2026-08-09', reserved_units: 100 })
     expect(budgetErr).toBeNull()
 
     const { error: deleteErr } = await admin.from('businesses').delete().eq('id', biz)
     expect(deleteErr).toBeNull()
 
-    for (const table of ['insight_cards', 'signal_triage_budget']) {
+    for (const table of ['insight_cards', 'ai_budget_daily']) {
       const { data, error } = await admin.from(table).select('id').eq('business_id', biz)
       expect(error).toBeNull()
       expect(data ?? []).toHaveLength(0)
@@ -444,13 +444,13 @@ describe('insight_cards / signal_triage_budget schema (ADR 0021 §4.1, §8)', ()
     const signal = await insertSignal(biz, repo, `cascade-purge-${Date.now()}`)
     const candidate = await insertCandidate(biz, signal)
     await insertCard(biz, candidate)
-    const { error: budgetErr } = await admin.from('signal_triage_budget').insert({ business_id: biz, day: '2026-08-09', reserved_cents: 100 })
+    const { error: budgetErr } = await admin.from('ai_budget_daily').insert({ business_id: biz, purpose: 'triage_cents', day: '2026-08-09', reserved_units: 100 })
     expect(budgetErr).toBeNull()
 
     const { error: purgeErr } = await admin.rpc('purge_business', { p_business_id: biz })
     expect(purgeErr).toBeNull()
 
-    for (const table of ['insight_cards', 'signal_triage_budget']) {
+    for (const table of ['insight_cards', 'ai_budget_daily']) {
       const { data, error } = await admin.from(table).select('id').eq('business_id', biz)
       expect(error).toBeNull()
       expect(data ?? []).toHaveLength(0)

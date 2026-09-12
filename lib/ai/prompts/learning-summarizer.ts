@@ -90,6 +90,12 @@ export const learningSummarizerPrompt: Prompt<SummarizerInput, SummarizerOutput>
   version: 1,
   modelKey: 'HAIKU_4_5',
   outputSchema: SummarizerOutputSchema,
+  // ADR 0024 §6.2 (Session 31, H2.10) — the FIRST and ONLY prompt to
+  // migrate to tool_use structured output this session: a background
+  // worker, no MODE2-* constraints, no fixture, and a Haiku call, so a bad
+  // migration day costs a delayed learning summary, never a customer's
+  // campaign.
+  useToolOutput: true,
 
   buildSystemPrompt(ctx: CustomerContext): string {
     return `You are analyzing edit patterns for ${ctx.business.name}'s social media content.

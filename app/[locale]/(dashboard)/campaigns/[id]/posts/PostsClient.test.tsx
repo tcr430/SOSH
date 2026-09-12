@@ -27,7 +27,7 @@ vi.mock('@/components/posts/PostCard', () => ({
 // ── Imports ───────────────────────────────────────────────────────────────────
 
 import { PostsClient } from './PostsClient'
-import type { PostRow, CampaignRow } from '@/lib/db/types'
+import type { PostRow, CampaignRow, PostAiOriginalRow } from '@/lib/db/types'
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -57,6 +57,7 @@ function makePost(overrides: Partial<PostRow> = {}): PostRow {
     id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     campaign_id: CAMPAIGN.id,
     business_id: CAMPAIGN.business_id,
+    social_account_id: null,
     platform: 'linkedin',
     content: 'Draft content',
     hashtags: [],
@@ -79,13 +80,13 @@ function makePost(overrides: Partial<PostRow> = {}): PostRow {
   }
 }
 
-function renderClient(posts: PostRow[]) {
+function renderClient(posts: PostRow[], originalsByPostId: Record<string, PostAiOriginalRow> = {}) {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
   act(() => {
     root.render(
-      React.createElement(PostsClient, { posts, campaign: CAMPAIGN, locale: 'en' }),
+      React.createElement(PostsClient, { posts, campaign: CAMPAIGN, locale: 'en', originalsByPostId }),
     )
   })
   return {
@@ -94,6 +95,28 @@ function renderClient(posts: PostRow[]) {
       act(() => { root.unmount() })
       container.remove()
     },
+  }
+}
+
+// ADR 0024 §8.2 (Session 31, H2.12) — a minimal post_ai_originals fixture.
+function makeOriginal(postId: string, clearedQualityThreshold: boolean | null): PostAiOriginalRow {
+  return {
+    id: `orig-${postId}`,
+    business_id: CAMPAIGN.business_id,
+    post_id: postId,
+    campaign_id: CAMPAIGN.id,
+    revision: 1,
+    generation_kind: 'initial',
+    format: 'single',
+    payload: { format: 'single', body: 'x', imageBrief: null, scriptBrief: null },
+    rendered_content: 'x',
+    hashtags: [],
+    schema_version: 2,
+    overall_score: clearedQualityThreshold === null ? null : 75,
+    dimension_scores: null,
+    candidate_count: clearedQualityThreshold === null ? null : 3,
+    cleared_quality_threshold: clearedQualityThreshold,
+    created_at: '2026-01-01T00:00:00.000Z',
   }
 }
 
@@ -238,6 +261,64 @@ describe('PostsClient — bulk approve count label and a11y announcement (P2, NE
     expect(liveRegion?.textContent).toContain('bulkApproveSuccess')
     expect(liveRegion?.textContent).toContain('"count":2')
     expect(liveRegion?.textContent).not.toContain('"count":3')
+    cleanup()
+  })
+})
+
+// ── ADR 0024 §8.3/§8.4 (Session 31, H2.12) — QUAL-BELOW-THRESHOLD-NOT-BULK-APPROVABLE ──
+
+describe('PostsClient — below-threshold bulk-approve exclusion (ADR §8.4, H2.12)', () => {
+  it('excludes below-threshold ids from the Server Action call, approving only the rest', () => {
+    const passing = makePost({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1' })
+    const belowThreshold = makePost({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2' })
+    const originalsByPostId = {
+      [passing.id]: makeOriginal(passing.id, true),
+      [belowThreshold.id]: makeOriginal(belowThreshold.id, false),
+    }
+    const { container, cleanup } = renderClient([passing, belowThreshold], originalsByPostId)
+
+    act(() => { bulkButton(container)?.click() })
+
+    expect(bulkApprovePostsAction).toHaveBeenCalledWith(CAMPAIGN.id, [passing.id])
+    cleanup()
+  })
+
+  it('shows the excluded-count notice when some rendered drafts are below threshold', () => {
+    const passing = makePost({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1' })
+    const belowThreshold = makePost({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2' })
+    const originalsByPostId = {
+      [passing.id]: makeOriginal(passing.id, true),
+      [belowThreshold.id]: makeOriginal(belowThreshold.id, false),
+    }
+    const { container, cleanup } = renderClient([passing, belowThreshold], originalsByPostId)
+
+    expect(container.textContent).toContain('bulkApproveExcludedNotice:')
+    cleanup()
+  })
+
+  it('does not show the excluded notice when nothing is excluded', () => {
+    const post = makePost()
+    const { container, cleanup } = renderClient([post], { [post.id]: makeOriginal(post.id, true) })
+
+    expect(container.textContent).not.toContain('bulkApproveExcludedNotice')
+    cleanup()
+  })
+
+  it('when EVERY rendered draft is below threshold, the bulk-approve control is not offered at all', () => {
+    const post = makePost()
+    const { container, cleanup } = renderClient([post], { [post.id]: makeOriginal(post.id, false) })
+
+    expect(bulkButton(container)).toBeUndefined()
+    cleanup()
+  })
+
+  it('a post with no post_ai_originals row is treated as approvable (not excluded)', () => {
+    const post = makePost()
+    const { container, cleanup } = renderClient([post], {})
+
+    act(() => { bulkButton(container)?.click() })
+
+    expect(bulkApprovePostsAction).toHaveBeenCalledWith(CAMPAIGN.id, [post.id])
     cleanup()
   })
 })

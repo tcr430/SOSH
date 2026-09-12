@@ -1,7 +1,6 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { config } from '@/lib/config'
-import { getRegistry, verifyOAuthState, isPlatform } from '@/lib/social'
+import { getRegistry, verifyOAuthState, isPlatform, getSocialRedirectUri } from '@/lib/social'
 import type { OAuthStateClaims, TokenSet } from '@/lib/social'
 import type { VaultSecretId } from '@/lib/db/types'
 import { getBusinessById } from '@/lib/db/businesses'
@@ -80,7 +79,7 @@ export async function GET(
   const code = searchParams.get('code') ?? ''
   const { createServiceRoleClient } = await import('@/lib/supabase/service')
   const serviceClient = createServiceRoleClient()
-  const redirectUri = `${config.server.APP_URL}/api/social/${platform}/callback`
+  const redirectUri = getSocialRedirectUri(platform)
 
   let tokenSet: TokenSet
   try {

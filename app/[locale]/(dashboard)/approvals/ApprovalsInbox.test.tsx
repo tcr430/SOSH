@@ -36,7 +36,7 @@ vi.mock('@/app/[locale]/(dashboard)/campaigns/[id]/posts/actions', () => ({
 
 import { ApprovalsInbox } from './ApprovalsInbox'
 import type { CalendarPostRow } from '@/lib/calendar/types'
-import type { CampaignRow } from '@/lib/db/types'
+import type { CampaignRow, PostAiOriginalRow } from '@/lib/db/types'
 import en from '@/i18n/en/approvals.json'
 import pt from '@/i18n/pt/approvals.json'
 import es from '@/i18n/es/approvals.json'
@@ -85,12 +85,13 @@ function renderInbox(
   posts: CalendarPostRow[],
   campaigns: CampaignRow[] = [CAMPAIGN],
   totalPendingCount: number = posts.length,
+  originalsByPostId: Record<string, PostAiOriginalRow> = {},
 ) {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
   act(() => {
-    root.render(React.createElement(ApprovalsInbox, { posts, campaigns, totalPendingCount }))
+    root.render(React.createElement(ApprovalsInbox, { posts, campaigns, totalPendingCount, originalsByPostId }))
   })
   return {
     container,
@@ -98,6 +99,41 @@ function renderInbox(
       act(() => { root.unmount() })
       container.remove()
     },
+  }
+}
+
+// ADR 0024 §8.2/§8.3 (Session 31, H2.12) — a minimal post_ai_originals
+// fixture. clearedQualityThreshold controls the state under test.
+function makeOriginal(
+  postId: string,
+  clearedQualityThreshold: boolean | null,
+  overrides: Partial<PostAiOriginalRow> = {},
+): PostAiOriginalRow {
+  const dim = { score: 80, note: 'ok' }
+  return {
+    id: `orig-${postId}`,
+    business_id: CAMPAIGN.business_id,
+    post_id: postId,
+    campaign_id: CAMPAIGN.id,
+    revision: 1,
+    generation_kind: 'initial',
+    format: 'single',
+    payload: { format: 'single', body: 'x', imageBrief: null, scriptBrief: null },
+    rendered_content: 'x',
+    hashtags: [],
+    schema_version: 2,
+    overall_score: clearedQualityThreshold === null ? null : 75,
+    dimension_scores: clearedQualityThreshold === null
+      ? null
+      : {
+          specificity: dim, originality: dim, evidenceSufficiency: dim, audienceRelevance: dim,
+          platformNativeness: dim, brandVoiceAlignment: dim, openingStrength: dim, ctaFit: dim,
+          unsupportedClaimsRisk: dim, redundancy: dim,
+        },
+    candidate_count: clearedQualityThreshold === null ? null : 3,
+    cleared_quality_threshold: clearedQualityThreshold,
+    created_at: '2026-01-01T00:00:00.000Z',
+    ...overrides,
   }
 }
 
@@ -705,6 +741,82 @@ describe('ApprovalsInbox — bulk button accessible name states WHAT it approves
 })
 
 // ── B5: i18n key completeness across en/pt/es ───────────────────────────────
+
+// ADR 0024 §8.3/§8.4 (Session 31, H2.12) — QUAL-BELOW-THRESHOLD-NOT-BULK-APPROVABLE.
+describe('ApprovalsInbox — judgment states and below-threshold bulk-approve exclusion (ADR §8.3/§8.4, H2.12)', () => {
+  it('a judged-and-passed post shows the score badge, expandable to the ten-dimension breakdown', () => {
+    const post = makePost()
+    const original = makeOriginal(post.id, true)
+    const { container, cleanup } = renderInbox([post], [CAMPAIGN], 1, { [post.id]: original })
+
+    expect(container.textContent).toContain('passed:')
+    expect(container.textContent).toContain('passedDetail:')
+    expect(container.textContent).not.toContain('dimension.specificity')
+
+    const badgeButton = container.querySelector('button[aria-expanded]') as HTMLButtonElement
+    expect(badgeButton).toBeTruthy()
+    act(() => { badgeButton.click() })
+    expect(container.textContent).toContain('dimension.specificity')
+    cleanup()
+  })
+
+  it('an all-below-threshold post shows the amber flag copy, no score badge', () => {
+    const post = makePost()
+    const original = makeOriginal(post.id, false)
+    const { container, cleanup } = renderInbox([post], [CAMPAIGN], 1, { [post.id]: original })
+
+    expect(container.textContent).toContain('belowThreshold')
+    expect(container.textContent).not.toContain('passed:')
+    cleanup()
+  })
+
+  it('a judging-failed (unscored) post shows the explicit not-scored statement, no badge', () => {
+    const post = makePost()
+    const original = makeOriginal(post.id, null)
+    const { container, cleanup } = renderInbox([post], [CAMPAIGN], 1, { [post.id]: original })
+
+    expect(container.textContent).toContain('unscored')
+    expect(container.textContent).not.toContain('belowThreshold')
+    expect(container.textContent).not.toContain('passed:')
+    cleanup()
+  })
+
+  it('a post with no post_ai_originals row at all renders no judgment UI', () => {
+    const post = makePost()
+    const { container, cleanup } = renderInbox([post], [CAMPAIGN], 1, {})
+
+    expect(container.textContent).not.toContain('unscored')
+    expect(container.textContent).not.toContain('belowThreshold')
+    expect(container.textContent).not.toContain('passed:')
+    cleanup()
+  })
+
+  it('QUAL-BELOW-THRESHOLD-NOT-BULK-APPROVABLE: bulk approve excludes below-threshold ids from the Server Action call', () => {
+    const passing = makePost({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1' })
+    const belowThreshold = makePost({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2' })
+    const originalsByPostId = {
+      [passing.id]: makeOriginal(passing.id, true),
+      [belowThreshold.id]: makeOriginal(belowThreshold.id, false),
+    }
+    const { container, cleanup } = renderInbox([passing, belowThreshold], [CAMPAIGN], 2, originalsByPostId)
+
+    const bulkButton = buttonWithText(container, 'bulk.approveAll')
+    expect(bulkButton).toBeTruthy()
+    act(() => { bulkButton!.click() })
+
+    expect(bulkApprovePostsAction).toHaveBeenCalledWith(CAMPAIGN.id, [passing.id])
+    expect(container.textContent).toContain('bulk.excludedNotice:')
+    cleanup()
+  })
+
+  it('when EVERY rendered post is below threshold, the bulk-approve button is not offered at all', () => {
+    const post = makePost()
+    const { container, cleanup } = renderInbox([post], [CAMPAIGN], 1, { [post.id]: makeOriginal(post.id, false) })
+
+    expect(buttonWithText(container, 'bulk.approveAll')).toBeUndefined()
+    cleanup()
+  })
+})
 
 describe('ApprovalsInbox — i18n key completeness (B5)', () => {
   function flattenKeys(obj: Record<string, unknown>, prefix = ''): string[] {

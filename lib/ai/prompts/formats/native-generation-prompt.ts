@@ -130,11 +130,19 @@ Fix it and return ONLY the corrected JSON.`)
   return sections.join('\n\n')
 }
 
+// ADR 0024 §2.4 — temperature 1.0 is the candidate-diversity lever: without
+// it, N=3 (generate.ts, H2.7) returns three near-identical strings and the
+// judge is decorative. Declared ONCE here so all three families inherit it;
+// each family's own version bumps to 2 in the same commit (§3.2's frozen
+// table takes three rows, one per id, even though the value is shared).
+const NATIVE_GENERATION_TEMPERATURE = 1.0
+
 function buildSinglePrompt(): Prompt<NativeGenInput, SinglePostOutput> {
   return {
     id: 'native-generation-single',
-    version: 1,
+    version: 2,
     modelKey: 'SONNET_4_6',
+    temperature: NATIVE_GENERATION_TEMPERATURE,
     outputSchema: SinglePostOutputSchema,
     buildSystemPrompt: buildSystemPrompt('single'),
     buildUserMessage,
@@ -144,8 +152,9 @@ function buildSinglePrompt(): Prompt<NativeGenInput, SinglePostOutput> {
 function buildThreadPrompt(): Prompt<NativeGenInput, ThreadOutput> {
   return {
     id: 'native-generation-thread',
-    version: 1,
+    version: 2,
     modelKey: 'SONNET_4_6',
+    temperature: NATIVE_GENERATION_TEMPERATURE,
     outputSchema: ThreadOutputSchema,
     buildSystemPrompt: buildSystemPrompt('thread'),
     buildUserMessage,
@@ -155,13 +164,25 @@ function buildThreadPrompt(): Prompt<NativeGenInput, ThreadOutput> {
 function buildCarouselPrompt(): Prompt<NativeGenInput, CarouselOutput> {
   return {
     id: 'native-generation-carousel',
-    version: 1,
+    version: 2,
     modelKey: 'SONNET_4_6',
+    temperature: NATIVE_GENERATION_TEMPERATURE,
     outputSchema: CarouselOutputSchema,
     buildSystemPrompt: buildSystemPrompt('carousel'),
     buildUserMessage,
   }
 }
+
+// ADR 0024 §15 (Session 31-D, D1/MAJOR-2) — the SINGLE runtime source of
+// truth for which families the factory below produces. collect-prompts.ts
+// enumerates the factory's output by iterating THIS array, never a literal
+// duplicated in a test file, so a fourth family added here is enumerated by
+// both prompt scans with no test edit. Kept in sync with FormatFamily by
+// hand (a TS union has no runtime form to derive this from) — that hand-sync
+// is the one thing a reviewer must still check when FormatFamily changes,
+// and it is the only remaining manual step, versus three duplicated lists
+// before this change.
+export const NATIVE_GENERATION_FAMILIES: readonly FormatFamily[] = ['single', 'thread', 'carousel']
 
 // ADR 0017 §4.4 [type-1] — the per-family Prompt FACTORY. Prompt<TInput,TOutput>
 // binds ONE concrete outputSchema per Prompt object (lib/ai/prompts/types.ts);

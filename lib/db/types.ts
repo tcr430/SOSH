@@ -13,6 +13,7 @@
 
 import type { VoiceAxes } from '@/lib/validation/voice'
 export type { VoiceAxes }
+import type { RubricOutput } from '@/lib/ai/prompts/rubric'
 
 // ---------------------------------------------------------------------------
 // Shared utility types
@@ -307,6 +308,15 @@ export type PostRow = {
   // service-role write path; this Omit-exclusion from PostUpdate below
   // enforces the app-layer authenticated path).
   role: PostRole | null
+  // Publish identity (ADR 0028 §9.2, N2.4). NULL for rows created before this
+  // column existed and for any row not yet resolved to a specific connected
+  // account. FK -> social_accounts(id) ON DELETE SET NULL — disconnecting an
+  // account must never delete published history. No backfill: existing
+  // platform_user_id values are the prior broker's own integrationIds, meaningless to the
+  // native LinkedIn/X providers (D-gamma). Excluded from PostUpdate below —
+  // publish-identity resolution (N2.5) is a service-role concern, not an
+  // app-layer authenticated write.
+  social_account_id: string | null
   rejection_note: string | null
   ai_generation_metadata: Record<string, unknown>
   publish_attempts: number
@@ -329,6 +339,8 @@ export type PostInsert = {
   // on (PostUpdate omits it, and the DB trigger enforces it regardless of
   // caller — ADR 0017 §3.2).
   role?: PostRole | null
+  // See PostRow.social_account_id above (ADR 0028 §9.2, N2.4).
+  social_account_id?: string | null
   hashtags?: string[]
   media_urls?: string[]
   scheduled_at: string
@@ -346,7 +358,7 @@ export type PostInsert = {
   updated_at?: string
 }
 
-export type PostUpdate = Partial<Omit<PostRow, 'id' | 'created_at' | 'business_id' | 'campaign_id' | 'published_at' | 'platform_post_id' | 'platform_url' | 'deleted_at' | 'role'>>
+export type PostUpdate = Partial<Omit<PostRow, 'id' | 'created_at' | 'business_id' | 'campaign_id' | 'published_at' | 'platform_post_id' | 'platform_url' | 'deleted_at' | 'role' | 'social_account_id'>>
 
 // ---------------------------------------------------------------------------
 // 5b. studio_drafts — Mode 1 Studio pre-campaign scratch content (ADR 0019 §2.2)
@@ -782,20 +794,28 @@ export type InsightCardUpdate = Partial<
   Pick<InsightCardRow, 'status' | 'dismiss_reason' | 'expires_at'>
 >
 
-export type SignalTriageBudgetRow = {
+// ADR 0024 §7.5b (Session 31, H2.8) — signal_triage_budget renamed to
+// ai_budget_daily with a MANDATORY purpose discriminator. `reserved_cents`
+// -> `reserved_units`: the unit is named BY purpose (cents for
+// 'triage_cents', posts for 'generation_posts', H2.9), not by the column.
+export type AiBudgetPurpose = 'triage_cents' | 'generation_posts'
+
+export type AiBudgetDailyRow = {
   id: string
   business_id: string
+  purpose: AiBudgetPurpose
   day: string
-  reserved_cents: number
+  reserved_units: number
   created_at: string
   updated_at: string
 }
 
-export type SignalTriageBudgetInsert = {
+export type AiBudgetDailyInsert = {
   id?: string
   business_id: string
+  purpose: AiBudgetPurpose
   day: string
-  reserved_cents?: number
+  reserved_units?: number
   created_at?: string
   updated_at?: string
 }
@@ -1272,6 +1292,14 @@ export type CampaignBriefUpdate = Partial<
 export type PostAiOriginalGenerationKind = 'initial' | 'regeneration' | 'studio_promoted'
 export type PostAiOriginalFormat = 'single' | 'thread'
 
+// ADR 0024 §8.2 (Session 31, H2.4) — the winner's rubric score, on the
+// existing post_ai_originals (20260909100000_post_ai_original_scores.sql).
+// Nullable: rows written before this migration ship carry no score under
+// this contract (see the migration's comment). `PostAiOriginalDimensionScores`
+// is RubricOutput's `dimensions` shape exactly (lib/ai/prompts/rubric.ts:88-99)
+// — not re-declared, so the two can never drift silently.
+export type PostAiOriginalDimensionScores = RubricOutput['dimensions']
+
 export type PostAiOriginalRow = {
   id: string
   business_id: string
@@ -1284,6 +1312,10 @@ export type PostAiOriginalRow = {
   rendered_content: string
   hashtags: string[]
   schema_version: number
+  overall_score: number | null
+  dimension_scores: PostAiOriginalDimensionScores | null
+  candidate_count: number | null
+  cleared_quality_threshold: boolean | null
   created_at: string
 }
 
@@ -1299,6 +1331,10 @@ export type PostAiOriginalInsert = {
   rendered_content: string
   hashtags?: string[]
   schema_version: number
+  overall_score?: number | null
+  dimension_scores?: PostAiOriginalDimensionScores | null
+  candidate_count?: number | null
+  cleared_quality_threshold?: boolean | null
   created_at?: string
 }
 
