@@ -1141,6 +1141,19 @@ unrelated `business_id CASCADE` FK regardless of what `social_account_id` holds 
 per the existing `social_accounts` row above) — no ordering dependency between the two FKs, no orphaned
 row, no erasure gap.
 
+**Session 31-D note (2026-09-12, D13 — MINOR-7):** ADR 0024 (generation quality core) added four new
+**columns** to `post_ai_originals` (`overall_score`, `dimension_scores`, `candidate_count`,
+`cleared_quality_threshold`; migration `20260909100000_post_ai_original_scores.sql`) — no new table, so
+**no new §D2.5 row is required**, on the same `studio_drafts`/`posts` precedent already recorded above: the
+existing `post_ai_originals` row already covers the whole table by its `business_id` (and `post_id`/
+`campaign_id`) CASCADE. `QUAL-SCORE-ERASURE` (ADR 0024 constraint 26, Tier 1,
+`supabase/__tests__`) is the executable proof that `purge_business` removes rows carrying these four new
+columns specifically, mirroring the `PROMOTE-CASCADE-COMPLETE` precedent Session 29-D's note above cites for
+the same purpose. `ai_budget_daily` (renamed from `signal_triage_budget`, same ADR, §7.5b) is a rename with
+a `purpose` column added, not a new table — already covered by the existing row for that table under its
+new name, and it was never customer-content-bearing (a per-day reservation counter) so no redaction question
+arises. No other table-shaped change landed in Session 31 or its correction pass.
+
 #### D2.6 — Retention & redaction (D1 / D2)
 
 - **Retain `billing_events`** — tax/financial record (10-year retention, §5). `business_id` auto-nulled by its SET NULL FK on root delete; redact `stripe_customer_id` → NULL and `payload` → `{redacted:true,type}` **before** the delete (the SET NULL means the rows can no longer be found by `business_id` afterward). PK `id` retained (pseudonymous Stripe event ref, audit key).

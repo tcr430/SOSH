@@ -966,3 +966,15 @@ it is the Reviewer's and is unedited.
 | **Commit** | `915276c9` |
 
 **What this step did NOT touch:** `app/globals.css` itself — no new tokens added, the `--warning`/`--success` pairs already existed and were already proven compliant by Session 28-D's own D5 fix; `ApprovalsInbox.tsx`'s pre-existing bulk-approve button (`bg-emerald-700 hover:bg-emerald-600 text-white`) — the Reviewer explicitly scoped this as "house-consistent, a continuation not a regression" and out of this finding's remit; the badge's overall layout, sizing, or the ten-dimension breakdown `<dl>` — unchanged, only the two colored-state class strings and their dot indicators changed.
+
+### D13 — MINOR-7
+
+| Field | |
+|---|---|
+| **Finding** | MINOR-7 |
+| **Fix** | Doc-only. `docs/decisions/0010-legal-surface.md` §D2.5 gains a "Session 31-D note" (dated, additive — the row itself and every prior confirmation above it are unedited), on the exact precedent the Session 29-D and Session 30.5 notes already established in the same section: records that ADR 0024's four new `post_ai_originals` columns (`overall_score`, `dimension_scores`, `candidate_count`, `cleared_quality_threshold`) require no new §D2.5 row (the existing `post_ai_originals` row already covers the table by CASCADE), names `QUAL-SCORE-ERASURE` as the executable proof, and confirms `ai_budget_daily`'s rename is a table-rename-not-new-table case already correctly captured by the existing row (line 1085) under its new name. |
+| **Proof** | `docs/decisions/0010-legal-surface.md`'s new note, present in the working tree; the `post_ai_originals` row (line 1071) and every prior Session 24-D/29-D/30.5 confirmation note above it confirmed byte-unchanged; `QUAL-SCORE-ERASURE` re-confirmed as ADR 0024 constraint 26 (Tier 1, `supabase/__tests__`) by re-reading §11's constraint table. |
+| **Reddening** | N/A — a missing documentation record, not a code-behind-a-test constraint. The underlying property (`purge_business` reaching the four new columns) is independently proven by `QUAL-SCORE-ERASURE`'s own Tier-1 test, cited here rather than re-run. |
+| **Commit** | *(pending — recorded once this step is committed)* |
+
+**What this step did NOT touch:** the `post_ai_originals` cascade row itself (line 1071) — unedited, it already correctly states CASCADE on all three FKs; the `ai_budget_daily` row (line 1085) — unedited, it already correctly records the rename; ADR 0024 §9 (where this same "no new table" statement already lives, per the Reviewer's own read) — unaffected, this step adds the record to §D2.5's own document as the finding required, it does not remove or alter the ADR 0024 copy.
