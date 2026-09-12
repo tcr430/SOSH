@@ -942,3 +942,15 @@ it is the Reviewer's and is unedited.
 | **Commit** | `5aa7e365` |
 
 **What this step did NOT touch:** `BriefReviewForm.tsx` — unchanged, no new component or spinner added, since A-4's obligation was specifically about copy ("a spinner with no copy is not the contract" — the copy was the missing half, not a new loading indicator); `docs/backlog.md` — no entry needed, since the copy is now shipped rather than deferred; the founder was not separately asked to ratify a specific duration figure — "up to 20 seconds" is derived directly from the Reviewer's own recorded latency figure (+8-15s added by `thinking: 4000`) rounded up, not a new commitment invented here.
+
+### D11 — MINOR-5
+
+| Field | |
+|---|---|
+| **Finding** | MINOR-5 |
+| **Fix** | Doc-only. `docs/decisions/0017-mode-2-upgrade.md`'s Amendment D, the five-row `MODE2-HOOK-STANDALONE` mapping table, gains a third column — `Test file:line` — naming the exact test for each of the five mapped-forward cases: `generate.test.ts:635` (describe block) + `rubric.test.ts:116-190` for the rubric-scoring case; `generate.test.ts:817`, `:707`, `:774` and `:680` for the other four. The two existing columns (case description, target constraint name) are unedited — this fills the missing column the Reviewer named, on the same table, rather than restating the mapping elsewhere. |
+| **Proof** | `docs/decisions/0017-mode-2-upgrade.md`'s five-row table, now three columns; each cited line re-verified by grep against the current file state (`grep -n "QUAL-BELOW-THRESHOLD-SURFACED\|QUAL-CANDIDATE-NEUTRALIZED\|QUAL-N-CANDIDATE-COUNT\|QUAL-JUDGE-RUBRIC-UNFORKED" lib/campaigns/generate.test.ts` and a direct read of `rubric.test.ts:116,190`) rather than trusted from the Reviewer's own citation, since two of this correction pass's own steps (D4, D6) touched `generate.test.ts` and could have shifted line numbers — they did not shift these five, but the check was run rather than assumed. |
+| **Reddening** | N/A — documentation-only, filling a missing table column with citations to tests that already exist and already pass (the Reviewer's own "why it matters" note: *"The files do exist... which is why this is MINOR"*). No behavior or assertion changes. |
+| **Commit** | *(pending — recorded once this step is committed)* |
+
+**What this step did NOT touch:** the two existing columns of the five-row table (case description, target constraint) — unedited; the 21-row table above it (§Amendment D's main table, already citing file:line per row) — unaffected; the five test cases themselves — unchanged, still exactly where they already were, still passing.

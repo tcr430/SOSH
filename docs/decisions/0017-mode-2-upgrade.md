@@ -868,10 +868,10 @@ judging (N=3 fan-out), structured output, retrieval conditioning, cost ceilings,
 constraint whose subject no longer exists cannot "still hold", and quietly leaving it green in this ADR's
 own table would be a false green. Its five test cases map forward individually rather than being deleted:
 
-| Old `MODE2-HOOK-STANDALONE` case | Maps forward to (ADR 0024) |
-|---|---|
-| opener scored against the rubric | `QUAL-JUDGE-RUBRIC-UNFORKED` |
-| regeneration fires below threshold | `QUAL-BELOW-THRESHOLD-SURFACED` (no regeneration; flagged instead) |
-| regeneration fires at most once | `QUAL-N-CANDIDATE-COUNT` (exactly N, bounded by construction) |
-| a scoring failure does not abort a successful generation | `QUAL-THREE-OUTCOMES` (the *unscored* outcome) |
-| opener is `neutralize()`'d before scoring | `QUAL-CANDIDATE-NEUTRALIZED` |
+| Old `MODE2-HOOK-STANDALONE` case | Maps forward to (ADR 0024) | Test file:line (Session 31-D, D11 — MINOR-5) |
+|---|---|---|
+| opener scored against the rubric | `QUAL-JUDGE-RUBRIC-UNFORKED` | `lib/campaigns/generate.test.ts:635` (describe block) + `lib/ai/prompts/rubric.test.ts:116-190` |
+| regeneration fires below threshold | `QUAL-BELOW-THRESHOLD-SURFACED` (no regeneration; flagged instead) | `lib/campaigns/generate.test.ts:817` |
+| regeneration fires at most once | `QUAL-N-CANDIDATE-COUNT` (exactly N, bounded by construction) | `lib/campaigns/generate.test.ts:707` |
+| a scoring failure does not abort a successful generation | `QUAL-THREE-OUTCOMES` (the *unscored* outcome) | `lib/campaigns/generate.test.ts:774` |
+| opener is `neutralize()`'d before scoring | `QUAL-CANDIDATE-NEUTRALIZED` | `lib/campaigns/generate.test.ts:680` |
