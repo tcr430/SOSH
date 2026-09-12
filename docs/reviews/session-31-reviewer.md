@@ -1038,3 +1038,37 @@ it is the Reviewer's and is unedited.
 | **Commit** | `ee279e52` |
 
 **What this step did NOT touch:** `lib/memory/performance.ts` itself — unchanged, `retrieveRelevant`/`retrieveStudioPerformancePatterns`'s `client: SupabaseClient` parameter type is exactly what these tests now satisfy without a cast to `any`; CLAUDE.md's carve-out list — unchanged, no new carve-out added, since the fix brings the file into compliance with the existing rule instead of requesting an exception to it; `supabase/__tests__/*.test.ts`'s own `any`-typed admin client pattern (CLAUDE.md's second named carve-out) — unrelated, that carve-out already covers a different file class and is untouched.
+
+### D19 — NIT-5
+
+| Field | |
+|---|---|
+| **Finding** | NIT-5 |
+| **Fix** | `.github/workflows/app-tests.yml`'s env-block comment updated from "two files import the REAL `lib/config.ts` unmocked" to name all three: `lib/config.test.ts`, `lib/signals/orchestrator.test.ts`, and `lib/campaigns/generate.test.ts` (the one the Reviewer's own bare-shell run surfaced — it transitively imports `lib/config.ts` via `lib/campaigns/generate.ts` and does not mock `'@/lib/config'`). Comment-only; the `env:` block's actual dummy values were already correct and unaffected (CI was already green under the step-scoped env, per the Reviewer's own note that this is a NIT and not a finding against the job). |
+| **Proof** | `grep -n "vi.mock('@/lib/config'"` against all three named files: zero matches in any, confirming none of the three mocks `lib/config` and all three genuinely need the real (dummy-valued) env block. `node -e "yaml.load(...)"`: "valid YAML" — the comment edit did not break the workflow file's syntax. |
+| **Reddening** | N/A — a stale comment with no behavior attached to redden; the job's actual `env:` values are unchanged. Verified by confirming the count claim itself (three files, not two) via direct grep rather than trusting the Reviewer's citation unverified. |
+| **Commit** | *(pending — recorded once this step is committed)* |
+
+**What this step did NOT touch:** the `env:` block's actual dummy values (`ANTHROPIC_API_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, etc.) — unchanged, all still correct; the job's `run:` step or its skip-guard logic — unaffected; `lib/config.test.ts`/`lib/signals/orchestrator.test.ts`'s own reasons for needing the real config — unchanged, only the count and the third file's name were added.
+
+---
+
+## Status after D0-D19 (Session 31-D correction pass)
+
+D0 through D19 close every finding from this review **except BLOCKER-1**: BLOCKER-2 (D0), all 5 MAJOR
+(D1-D5), all 8 MINOR (D6, D7-D8, D10-D14), the one routed observation (D9), and all 5 NIT (D15-D19). Every
+step above names its own commit(s), its proof, and — where a code change was involved — its reddening
+demonstration.
+
+**BLOCKER-1 remains OPEN and cannot be closed by this correction pass alone.** It reads *"0/29 constraints
+executed green in CI"* — the branch was unpushed at the time of review, and closing it requires an actual
+push and a real CI run whose skip-guard line is read and quoted, not a local `vitest`/`tsc` run repeated
+here. Every fix in this pass (D0-D19) has been verified locally (tsc, targeted and full `test:app` runs,
+and — for the two DB-touching steps, D5 and D17 — directly against the live linked Supabase project), but
+that is not a substitute for the actual CI execution BLOCKER-1 names. Pushing this branch and reading the
+resulting `app-tests`/`db-tests` run URLs is the next step to close it, and is a decision for the user
+(pushing is outside what this correction pass does on its own).
+
+The two items the Reviewer explicitly scoped as **NOT** Builder defects (`31-A1-PRICING-COPY`, a founder
+task; `31-DEAD-POST-GENERATION-PROMPT`, a deliberately deferred one-diff item) remain correctly out of this
+correction pass's scope, per the Reviewer's own disposition, and are tracked in `docs/backlog.md`.
