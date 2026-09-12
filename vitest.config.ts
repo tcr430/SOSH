@@ -40,6 +40,12 @@ export default defineConfig({
       '**/__integration__/**',
     ],
     testTimeout: 15000,
+    // Session 31-D, D8 (MINOR-3) — global afterEach draining the
+    // lib/ai/client.ts __evalCassetteQueue FIFO, so a test that leaves it
+    // non-empty fails loudly (drainCassetteQueue throws) instead of
+    // silently poisoning the next file. A no-op for every file that never
+    // touches the queue.
+    setupFiles: ['./vitest.setup.ts'],
   },
   resolve: {
     alias: { '@': path.resolve(__dirname, '.') },
