@@ -147,6 +147,10 @@ export async function GET(
         token_expires_at: tokenSet.tokenExpiresAt,
         is_active: true,
         connected_at: formatISO(new Date()),
+        // ADR 0025 §7.4 — advisory only, outside the authenticated UPDATE
+        // allowlist so it can't be forged; [] means unknown, same as NULL
+        // (lib/social/scopes.ts's scopesGrantedUnknown), never "no scopes".
+        scopes_granted: tokenSet.scopesGranted,
       },
       {
         onConflict: 'business_id,platform,platform_user_id',

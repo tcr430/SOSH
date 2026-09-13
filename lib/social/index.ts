@@ -35,6 +35,7 @@ export { VALID_PLATFORMS, isPlatform } from './platforms/guards'
 export type { ConnectionStatus } from './connection-status'
 export { getConnectionStatus, pickDefaultAccountId } from './connection-status'
 export { buildDisconnectUrl } from './disconnect-url'
+export { scopesGrantedUnknown } from './scopes'
 export type { SocialAccountPublic } from '@/lib/db/social-accounts'
 
 export {

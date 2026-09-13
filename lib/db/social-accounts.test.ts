@@ -32,6 +32,7 @@ const mockAccount: SocialAccountRow = {
   connected_at: '2026-04-30T00:00:00Z',
   created_at: '2026-04-30T00:00:00Z',
   updated_at: '2026-04-30T00:00:00Z',
+  scopes_granted: null,
 }
 
 describe('listAllSocialAccounts', () => {
@@ -104,14 +105,14 @@ describe('createSocialAccount', () => {
 describe('updateSocialAccount', () => {
   it('returns the updated social account', async () => {
     const { client } = createMockClient(mockAccount)
-    const result = await updateSocialAccount(client, 'sa-1', { is_active: false })
+    const result = await updateSocialAccount(client, 'sa-1', { platform_username: 'renamed_handle' })
     expect(result).toEqual(mockAccount)
     expect(client.from).toHaveBeenCalledWith('social_accounts')
   })
 
   it('throws when supabase returns an error', async () => {
     const { client } = createMockClient(null, { message: 'Update error' })
-    await expect(updateSocialAccount(client, 'sa-1', { is_active: false })).rejects.toThrow('Update error')
+    await expect(updateSocialAccount(client, 'sa-1', { platform_username: 'renamed_handle' })).rejects.toThrow('Update error')
   })
 })
 

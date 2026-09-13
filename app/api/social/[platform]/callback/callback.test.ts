@@ -329,3 +329,35 @@ describe('GET /api/social/[platform]/callback — N2.6 additions', () => {
     expect(mockCreateServiceRoleClient).not.toHaveBeenCalled()
   })
 })
+
+// BACKFILL-SCOPES-PERSISTED (ADR 0025 §7.4/§12 constraint 15, I2.4). The
+// callback route is the SAME handler for both the onboarding step-3 connect
+// flow and the settings connect flow (I2.0's own premise check found no
+// field in OAuthStateClaims distinguishing entry point) — so one test here
+// covers both entry paths by construction, not by duplicating the test.
+describe('GET /api/social/[platform]/callback — scopes_granted persistence', () => {
+  it('scopes_granted is written from TokenSet.scopesGranted on the upsert', async () => {
+    const serviceClient = makeServiceClient()
+    mockCreateServiceRoleClient.mockReturnValue(serviceClient as never)
+
+    await GET(makeRequest(), routeParams())
+
+    const upsertChain = serviceClient.from.mock.results[1]!.value as { upsert: ReturnType<typeof vi.fn> }
+    expect(upsertChain.upsert).toHaveBeenCalledOnce()
+    expect(upsertChain.upsert.mock.calls[0]![0]).toMatchObject({ scopes_granted: MOCK_TOKEN_SET.scopesGranted })
+  })
+
+  it('an empty scopesGranted array is still WRITTEN (as []), never silently omitted or nulled', async () => {
+    const emptyScopesProvider = makeMockProvider({
+      exchangeOAuthCode: vi.fn().mockResolvedValue({ ...MOCK_TOKEN_SET, scopesGranted: [] }),
+    })
+    mockGetRegistry.mockReturnValue({ get: vi.fn().mockReturnValue(emptyScopesProvider) } as never)
+    const serviceClient = makeServiceClient()
+    mockCreateServiceRoleClient.mockReturnValue(serviceClient as never)
+
+    await GET(makeRequest(), routeParams())
+
+    const upsertChain = serviceClient.from.mock.results[1]!.value as { upsert: ReturnType<typeof vi.fn> }
+    expect(upsertChain.upsert.mock.calls[0]![0]).toMatchObject({ scopes_granted: [] })
+  })
+})

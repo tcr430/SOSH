@@ -302,6 +302,30 @@ describe('TwitterProvider', () => {
       await expect(provider.refreshAccessToken({ socialAccountId: 'sa-1' })).rejects.toMatchObject({ code: 'TOKEN_REVOKED' })
     })
 
+    it('BACKFILL-SCOPES-PERSISTED: scopes_granted is persisted on refresh, split from the space-delimited scope string', async () => {
+      const updateSpy = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) })
+      mockFrom.mockReturnValue({ ...makeAccountQueryStub({ data: ACCOUNT, error: null }), update: updateSpy })
+      mockFetch.mockResolvedValueOnce(
+        jsonResponse(200, { access_token: 'new-access', refresh_token: 'new-refresh', expires_in: 7200, scope: 'tweet.read users.read offline.access' }),
+      )
+
+      await provider.refreshAccessToken({ socialAccountId: 'sa-1' })
+
+      expect(updateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ scopes_granted: ['tweet.read', 'users.read', 'offline.access'] }),
+      )
+    })
+
+    it('an absent scope on refresh persists scopes_granted as [] — recorded as unknown, never dropped', async () => {
+      const updateSpy = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) })
+      mockFrom.mockReturnValue({ ...makeAccountQueryStub({ data: ACCOUNT, error: null }), update: updateSpy })
+      mockFetch.mockResolvedValueOnce(jsonResponse(200, { access_token: 'new-access', refresh_token: 'new-refresh', expires_in: 7200 }))
+
+      await provider.refreshAccessToken({ socialAccountId: 'sa-1' })
+
+      expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ scopes_granted: [] }))
+    })
+
     it('no refresh token on file throws TOKEN_REVOKED before any network call', async () => {
       mockFrom.mockReturnValue(makeAccountQueryStub({ data: { vault_access_token_id: 'a', vault_refresh_token_id: null }, error: null }))
       await expect(provider.refreshAccessToken({ socialAccountId: 'sa-1' })).rejects.toMatchObject({ code: 'TOKEN_REVOKED' })

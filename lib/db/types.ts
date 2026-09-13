@@ -212,6 +212,11 @@ export type SocialAccountRow = {
   connected_at: string
   created_at: string
   updated_at: string
+  // ADR 0025 §7.4 (I2.4) — NULL or [] both mean UNKNOWN (see
+  // scopesGrantedUnknown() in lib/social/scopes.ts); it is advisory only
+  // (the platform's own 403 is authoritative) and deliberately OUTSIDE the
+  // `authenticated` UPDATE allowlist below, so it cannot be forged.
+  scopes_granted: string[] | null
 }
 
 export type SocialAccountInsert = {
@@ -228,12 +233,19 @@ export type SocialAccountInsert = {
   connected_at?: string
   created_at?: string
   updated_at?: string
+  scopes_granted?: string[] | null
 }
 
-export type SocialAccountUpdate = Partial<Omit<SocialAccountRow, 'id' | 'created_at' | 'vault_access_token_id' | 'vault_refresh_token_id'>> & {
-  vault_access_token_id?: VaultSecretId | null
-  vault_refresh_token_id?: VaultSecretId | null
-}
+// ADR 0025 §7.3 (I2.4) — the IDENTITY LOCK, expressed as a type. Built with
+// Pick, not Omit: an Omit-based type silently admits any FUTURE column
+// added to SocialAccountRow, which is exactly the "column added later is
+// not updatable until explicitly added" fail-closed guarantee the migration
+// makes at the DB level (20260913120000_social_accounts_identity_lock.sql).
+// This Pick is the same four-column allowlist that migration's
+// `GRANT UPDATE (...) TO authenticated` names — keep them in lockstep.
+export type SocialAccountUpdate = Partial<
+  Pick<SocialAccountRow, 'platform_username' | 'platform_display_name' | 'created_at' | 'updated_at'>
+>
 
 // ---------------------------------------------------------------------------
 // 4. campaigns

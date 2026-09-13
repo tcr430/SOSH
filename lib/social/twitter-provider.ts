@@ -530,7 +530,12 @@ export class TwitterProvider implements SocialProvider {
 
     const { error: bumpError } = await client
       .from('social_accounts')
-      .update({ token_expires_at: newExpiry, updated_at: formatISO(new Date()) })
+      .update({
+        token_expires_at: newExpiry,
+        updated_at: formatISO(new Date()),
+        // ADR 0025 §7.4 — persisted on refresh too, not just at connect.
+        scopes_granted: parsed.scope ? parsed.scope.split(' ') : [],
+      })
       .eq('id', input.socialAccountId)
     if (bumpError) {
       throw new SocialProviderError({

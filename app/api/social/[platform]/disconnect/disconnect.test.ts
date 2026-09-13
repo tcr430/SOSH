@@ -68,6 +68,7 @@ const MOCK_ACCOUNT = {
   connected_at: '2026-04-30T00:00:00Z',
   created_at: '2026-04-30T00:00:00Z',
   updated_at: '2026-04-30T00:00:00Z',
+  scopes_granted: null,
 }
 
 function makeRequest(platform = 'linkedin', accountId?: string): NextRequest {
