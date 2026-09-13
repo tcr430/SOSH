@@ -1394,3 +1394,71 @@ export type PostEditSignalInsert = {
   created_at?: string
   updated_at?: string
 }
+
+// ---------------------------------------------------------------------------
+// 18. social_backfill_runs / social_backfill_posts (ADR 0025 §9.1, Session 32
+// I2.5). Columns match 20260913130000_social_backfill_runs_and_posts.sql
+// exactly. No Insert/Update types — every write goes through the migration's
+// RPCs (enqueue_backfill_run, resume_backfill_run, discard_backfill_run,
+// reserve_backfill_spend, reconcile_backfill_spend, claim_backfill_posts),
+// never a raw .insert()/.update() call, so there is no caller-facing insert
+// or update shape to type.
+// ---------------------------------------------------------------------------
+
+export type BackfillRunStatus =
+  | 'queued'
+  | 'fetching'
+  | 'extracting'
+  | 'awaiting_ratification'
+  | 'ratified'
+  | 'unsupported'
+  | 'failed'
+  | 'discarded'
+export type BackfillAccountRole = 'brand' | 'founder'
+export type BackfillVoiceStatus = 'pending' | 'applied' | 'refused_cap' | 'failed' | 'declined'
+export type BackfillExtractionStatus = 'pending' | 'claimed' | 'extracted' | 'skipped' | 'failed'
+
+export type SocialBackfillRunRow = {
+  id: string
+  business_id: string
+  social_account_id: string
+  platform: Platform
+  status: BackfillRunStatus
+  partial: boolean
+  account_role: BackfillAccountRole | null
+  weighting: string | null
+  posts_fetched: number
+  posts_extracted: number
+  platform_posts_read: number
+  spend_cents: number
+  ceiling_cents: number
+  passes_done: number
+  summary: Record<string, unknown>
+  staged_voice: Record<string, unknown> | null
+  voice_status: BackfillVoiceStatus | null
+  voice_applied_to: string | null
+  voice_applied_at: string | null
+  error_code: string | null
+  created_at: string
+  updated_at: string
+  started_at: string | null
+  completed_at: string | null
+  ratified_at: string | null
+}
+
+export type SocialBackfillPostRow = {
+  id: string
+  business_id: string
+  run_id: string
+  social_account_id: string
+  platform_post_id: string
+  published_at: string
+  content: string
+  url: string | null
+  format: 'text' | 'image' | 'video' | 'link' | 'multi' | 'other'
+  metrics: Record<string, unknown> | null
+  lift: number | null
+  extraction_status: BackfillExtractionStatus
+  claimed_at: string | null
+  created_at: string
+}
