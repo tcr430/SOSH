@@ -73,4 +73,30 @@ describe('ESLint no-restricted-imports — SOCIAL_INTERNALS_BAN replaced, not re
     const violations = result.messages.filter((m) => m.ruleId === 'no-restricted-imports')
     expect(violations).toHaveLength(8)
   })
+
+  // BACKFILL-NO-PROVIDER-IMPORT-OUTSIDE-SOCIAL (ADR 0025 §12 constraint 11,
+  // Session 32 I2.1). I2.0's own premise check (answer 15) found no existing
+  // probe here covers lib/backfill/ — every SOCIAL_INTERNALS_BAN entry is
+  // scoped under '@/lib/social/*', and lib/backfill/ is a separate top-level
+  // directory the eslint.config.mjs main block (files: ['**/*.ts', '**/*.tsx'])
+  // still reaches, since no override carves lib/backfill/** out the way
+  // lib/social/**, lib/ai/**, or lib/stripe/** are. This probe proves that
+  // reach directly, on a path actually under lib/backfill/, rather than
+  // inferring it from reading the config.
+  it('fires for a probe path under lib/backfill/ importing a provider file directly (BACKFILL-NO-PROVIDER-IMPORT-OUTSIDE-SOCIAL)', async () => {
+    const eslint = new ESLint({ overrideConfigFile: 'eslint.config.mjs' })
+
+    const code = [
+      "import { LinkedInProvider } from '@/lib/social/linkedin-provider'",
+      "import { TwitterProvider } from '@/lib/social/twitter-provider'",
+      'void LinkedInProvider; void TwitterProvider',
+    ].join('\n')
+
+    const [result] = await eslint.lintText(code, {
+      filePath: 'lib/backfill/__test_fixtures__/social-boundary-probe.ts',
+    })
+
+    const violations = result.messages.filter((m) => m.ruleId === 'no-restricted-imports')
+    expect(violations).toHaveLength(2)
+  })
 })
