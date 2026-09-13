@@ -930,3 +930,107 @@ ADR 0005's status machine, retry policy and idempotency model; the read path `fe
 `NOT_IMPLEMENTED`; and Meta-family publishing, which is blocked on an external review process.
 
 _End Amendment A. Nothing above it was modified._
+
+---
+
+## Amendment B — The read path: `fetchRecentPosts` (Session 32, 2026-09-12)
+
+> **Author:** Session 32 Architect (Track I, agent I1). **Form:** the house amendment form used by Amendment A
+> above, ADR 0005 Amendment 1 and ADR 0010 Amendment 2 — **appended, additive, and not one character above
+> this line has been modified.** **Governing document:** `docs/decisions/0025-social-read-path-and-backfill.md`
+> (Accepted), which this amendment summarises rather than restates.
+>
+> **Amendment letter.** This is **Amendment B**, the letter Amendment A reserved for this read path.
+
+### B.1 Why this amendment exists
+
+§2 specified `SocialProvider` as publish-and-status only. Open decision **19D-5** — whether voice refinement
+reads the customer's platform history or only posts SOSH itself published — has been open since Session 19.
+**This amendment resolves it as option 1**: the abstraction gains a read capability.
+
+**Loser: option 2**, ratifying "refine reads local published posts from the SOSH DB" (ADR 0011 §7). Its
+reasoning was sound for the only consumer it had — refining a voice from posts SOSH had already published.
+**Its value changed, not its reasoning:** the consumer is now a cold-start backfill, and a customer who has just
+connected an account has **zero** local posts, so option 2 returns nothing on exactly the day it matters.
+
+### B.2 The interface — one method and one flag added
+
+§2 gains two members. **The seven existing methods are unchanged.**
+
+1. **`readonly historicalReadAvailable: boolean`** — a static fact about the implementation.
+2. **`fetchRecentPosts(input: FetchRecentPostsInput): Promise<RecentPostsPage>`** — account-shaped, returning
+   one page of the connected account's **original authored posts** (not replies, reposts or quotes), each with
+   plain-text content, a format, a permalink and `metrics: PostMetrics | null`.
+
+The full type definitions, bounds and error mapping are in ADR 0025 §2. Two points are fixed here because they
+bind every implementation:
+
+- **`metrics: null` means "not included in this read — fetch separately with `fetchPostMetrics`"**, never
+  "the platform does not expose it". Amendment A §A.3's `null` ambiguity is not extended to this type.
+- **`FetchRecentPostsInput` carries `platform`**, on the `OAuthAuthorizeInput` precedent Amendment A §A.3
+  kept, so a multi-platform implementation can serve it.
+
+**Loser:** a separate optional `HistoricalPostReader` interface — type-enforced, but a new pattern, a second
+registry map, and a capability probe at every call site.
+
+### B.3 The obligation on every implementation, including `MockProvider`
+
+- **Flag-consistency:** flag `false` ⇒ `fetchRecentPosts` throws `SocialProviderError('NOT_IMPLEMENTED')` with
+  **zero network calls**; flag `true` ⇒ it never throws `NOT_IMPLEMENTED`. This is asserted in the shared
+  contract suite, whose seven-method assertion becomes eight (authorised by founder adjudication A-2).
+- **Refuse out-of-range input** before any I/O; never clamp.
+- **The cursor is opaque and bound to its account**; it is never persisted or logged.
+- **Tokens only through `withFreshToken`**, refreshed per page; **no sleep and no retry loop** inside a
+  provider; a per-request timeout; `Retry-After` capped.
+- **Every response is Zod-parsed; no post content, cursor or token appears in `SocialProviderError.details`.**
+- **No identity-bearing expansion** (likers, reposters, quote authors, referenced posts) is requested or
+  returned.
+- **`MockProvider` serves deterministic, seeded fixture accounts** — empty, standard, a zero-post page with a
+  cursor, a non-terminating cursor, mixed post types, failure on page N, metrics-separate, over-long content,
+  two accounts, and a cross-account cursor — and remains offline in mock mode (ADR 0025 §2.9). A read test
+  against today's `MockProvider`, which fabricates `[]` for its only list read, would be circular.
+
+**As shipped by Session 32:**
+
+| Implementation | `historicalReadAvailable` | State |
+|---|---|---|
+| `TwitterProvider` | `true` | served; no scope change |
+| `LinkedInProvider` | `false` | implemented against LinkedIn's documented API, **unverified against the live API**, not served until `r_member_social` is approved (adjudication A-1) |
+| `MockProvider` | `true` | fixture-backed |
+
+### B.4 The boundary rule is unchanged
+
+No consumer outside `lib/social/` imports a provider, and **no consumer learns which provider served a read**:
+the backfill orchestrator obtains a provider by platform through the registry, exactly as publish does, and
+imports only from `lib/social/index.ts`. `SOCIAL-PROVIDER-BOUNDARY` and `SOCIAL_INTERNALS_BAN` are unchanged.
+The pre-registered gate `SOCIAL-NO-READ-PATH` (`lib/social/__tests__/no-read-path.test.ts`), which named this
+amendment, is **inverted** rather than deleted: it now asserts that the read method lives in the
+implementations and is reached only through the barrel.
+
+### B.5 No existing `SocialProvider` behaviour changes
+
+`getOAuthAuthorizeUrl`, `exchangeOAuthCode`, `publish`, `fetchPostMetrics`, `fetchEngagement`,
+`refreshAccessToken` and `revokeAccessToken` behave exactly as after Amendment A. In particular,
+**`LinkedInProvider.fetchPostMetrics` and both providers' `fetchEngagement` still throw `NOT_IMPLEMENTED`** —
+implementing LinkedIn metrics would change the metrics worker's behaviour and is deferred (ADR 0025 §13). The
+only adjacent changes are governed by ADR 0025 §7 rather than by this interface: `TwitterProvider`'s refresh
+additionally persists `scopes_granted`, and `social_accounts`' identity columns are locked against
+`authenticated` UPDATE.
+
+### B.6 What future providers and migrations inherit
+
+The Postiz removal this ADR's earlier sections anticipated is complete (Amendment A); nothing Postiz-shaped
+survives, and the read contract was written in platform-neutral vocabulary from the start. **The successor risk
+is a contract that quietly encodes X's response shape**, because X is the only platform serving this read today
+(ADR 0025 §3). Every future implementation — the Meta family, a LinkedIn organisation provider, the LinkedIn
+provider once its read scope is approved — **either implements `fetchRecentPosts` against the types above or
+declares `historicalReadAvailable: false`**, and none widens those types without a further amendment to this
+ADR.
+
+### B.7 What this amendment does not touch
+
+Publishing, the token lifecycle, the registry and the OAuth flow as amended by Amendment A; the engagement
+inbox; comment or reply reading of any kind (ADR 0025 §2.8, §13); and every consumer of the read path, all of
+which are governed by ADR 0025.
+
+_End Amendment B. Nothing above it was modified._
