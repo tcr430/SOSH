@@ -112,6 +112,7 @@ describe('getRegistry', () => {
 
     const customProvider: SocialProvider = {
       platform: 'linkedin' as const,
+      historicalReadAvailable: false,
       getOAuthAuthorizeUrl: async () => 'custom-url',
       exchangeOAuthCode: async () => ({
         accessToken: 'tok',
@@ -133,6 +134,7 @@ describe('getRegistry', () => {
         scopesGranted: [],
       }),
       revokeAccessToken: async () => undefined,
+      fetchRecentPosts: async () => ({ posts: [], nextCursor: null }),
     }
 
     registry.register('linkedin', customProvider)

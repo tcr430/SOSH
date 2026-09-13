@@ -114,6 +114,58 @@ export interface EngagementItem {
 }
 
 // ---------------------------------------------------------------------------
+// Read shapes (ADR 0002 Amendment B / ADR 0025 §2.2) — the historical-read
+// contract added at Session 32 I2.2. Platform-neutral vocabulary (§3): no
+// account type, author identity, referenced post, mention target, media URL
+// or engagement actor appears on any of these types — that omission is
+// structural (there is no field to put them in), not an oversight.
+// ---------------------------------------------------------------------------
+
+export interface FetchRecentPostsInput {
+  platform: import('@/lib/db/types').Platform
+  // The contract is account-shaped (L-11) — there is no business- or
+  // organisation-level read.
+  socialAccountId: string
+  // Must satisfy RECENT_POSTS_PAGE_SIZE_MIN <= pageSize <=
+  // RECENT_POSTS_PAGE_SIZE_MAX (constants.ts). Out-of-range is refused with
+  // a RangeError before any I/O — never clamped.
+  pageSize: number
+  // null for the first page; otherwise exactly a nextCursor this method
+  // previously returned for the SAME socialAccountId. One cursor per run is
+  // an orchestrator discipline (cursors live in memory for one tick and are
+  // never persisted) — the provider only enforces the account binding.
+  cursor: string | null
+  // An ISO timestamp HINT, not a guarantee — a provider may use it to stop
+  // early. The orchestrator enforces the lookback on publishedAt itself.
+  notBefore: string | null
+}
+
+export interface RecentPostsPage {
+  // Possibly empty even when nextCursor is non-null — a page whose items
+  // were all filtered out (e.g. all replies/reposts/quotes) is legitimate.
+  posts: readonly RecentPost[]
+  // null means the platform has no further page.
+  nextCursor: string | null
+}
+
+export interface RecentPost {
+  platformPostId: string
+  // ISO, validated finite by the provider before return.
+  publishedAt: string
+  // Plain text: markup stripped, entities decoded, whitespace collapsed,
+  // links and mentions kept as their visible text; truncated at
+  // RECENT_POST_CONTENT_MAX_CHARS.
+  content: string
+  // The post's public permalink.
+  url: string | null
+  // Derived from attachment TYPES only.
+  format: 'text' | 'image' | 'video' | 'link' | 'multi' | 'other'
+  // null means "not included in this read — fetch separately" (A-3), never
+  // "the platform does not expose it".
+  metrics: PostMetrics | null
+}
+
+// ---------------------------------------------------------------------------
 // Core interface
 // ---------------------------------------------------------------------------
 
@@ -129,6 +181,13 @@ export interface SocialProvider {
   // remaining, deliberate exception.
   readonly platform: import('@/lib/db/types').Platform | 'multi'
 
+  // ADR 0025 §2.1 — a static, per-implementation fact, not a per-call
+  // capability probe. Flag-consistency is part of the contract: false =>
+  // fetchRecentPosts throws NOT_IMPLEMENTED with zero fetch calls; true =>
+  // it never throws NOT_IMPLEMENTED (an account missing a scope still
+  // surfaces as a thrown error, never as this flag going false).
+  readonly historicalReadAvailable: boolean
+
   getOAuthAuthorizeUrl(input: OAuthAuthorizeInput): Promise<string>
 
   exchangeOAuthCode(input: ExchangeCodeInput): Promise<TokenSet>
@@ -142,6 +201,8 @@ export interface SocialProvider {
   refreshAccessToken(input: RefreshAccessTokenInput): Promise<TokenSet>
 
   revokeAccessToken(input: RevokeAccessTokenInput): Promise<void>
+
+  fetchRecentPosts(input: FetchRecentPostsInput): Promise<RecentPostsPage>
 }
 
 // ---------------------------------------------------------------------------

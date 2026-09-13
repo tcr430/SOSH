@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { MockProvider } from '../mock-provider'
+import { MockProvider, MOCK_FIXTURE_ACCOUNT_IDS } from '../mock-provider'
 import { LinkedInProvider } from '../linkedin-provider'
 import { TwitterProvider } from '../twitter-provider'
 import { SocialProviderError } from '../errors'
@@ -78,7 +78,7 @@ describe.each(IMPLEMENTATIONS)('SocialProvider contract: $name', ({ name, makePr
     provider = makeProvider()
   })
 
-  it('implements all seven SocialProvider methods', () => {
+  it('implements all eight SocialProvider methods', () => {
     expect(typeof provider.getOAuthAuthorizeUrl).toBe('function')
     expect(typeof provider.exchangeOAuthCode).toBe('function')
     expect(typeof provider.publish).toBe('function')
@@ -86,6 +86,7 @@ describe.each(IMPLEMENTATIONS)('SocialProvider contract: $name', ({ name, makePr
     expect(typeof provider.fetchEngagement).toBe('function')
     expect(typeof provider.refreshAccessToken).toBe('function')
     expect(typeof provider.revokeAccessToken).toBe('function')
+    expect(typeof provider.fetchRecentPosts).toBe('function')
   })
 
   // ADR 0028 §9.1 also asserts "platform is a real Platform and never
@@ -140,6 +141,67 @@ describe.each(IMPLEMENTATIONS)('SocialProvider contract: $name', ({ name, makePr
       expect(err.code).toBe('NOT_IMPLEMENTED')
     }
   })
+
+  // BACKFILL-READ-FLAG-CONSISTENT (ADR 0025 §2.1/§12 constraint 2). The flag
+  // is necessary, not sufficient: false => fetchRecentPosts throws
+  // NOT_IMPLEMENTED with ZERO fetch calls; true => it never rejects
+  // NOT_IMPLEMENTED, checked across every one of MockProvider's own named
+  // fixtures (ADR §2.9) — today the only historicalReadAvailable=true
+  // implementation. I2.3 flips TwitterProvider's flag; that half is proven
+  // there against recorded fixtures, not here.
+  it('historicalReadAvailable flag consistency for fetchRecentPosts', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+    try {
+      if (!provider.historicalReadAvailable) {
+        await expect(
+          provider.fetchRecentPosts({
+            platform: 'twitter',
+            socialAccountId: 'sa-1',
+            pageSize: 10,
+            cursor: null,
+            notBefore: null,
+          }),
+        ).rejects.toMatchObject({ code: 'NOT_IMPLEMENTED' })
+        expect(fetchSpy).not.toHaveBeenCalled()
+      } else if (name === 'MockProvider') {
+        for (const fixtureId of Object.values(MOCK_FIXTURE_ACCOUNT_IDS)) {
+          await expect(
+            provider.fetchRecentPosts({
+              platform: 'twitter',
+              socialAccountId: fixtureId,
+              pageSize: 10,
+              cursor: null,
+              notBefore: null,
+            }),
+          ).resolves.toHaveProperty('posts')
+        }
+      }
+    } finally {
+      fetchSpy.mockRestore()
+    }
+  })
+
+  // BACKFILL-PROVIDER-BOUNDED (ADR 0025 §2.3/§12 constraint 3) — refuse,
+  // don't clamp, on EVERY implementation regardless of its
+  // historicalReadAvailable flag: an out-of-range pageSize is a caller bug,
+  // checked before the flag is even consulted.
+  it.each([4, 101])('fetchRecentPosts refuses pageSize=%d with a RangeError before any I/O', async (pageSize) => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+    try {
+      await expect(
+        provider.fetchRecentPosts({
+          platform: 'twitter',
+          socialAccountId: 'sa-1',
+          pageSize,
+          cursor: null,
+          notBefore: null,
+        }),
+      ).rejects.toBeInstanceOf(RangeError)
+      expect(fetchSpy).not.toHaveBeenCalled()
+    } finally {
+      fetchSpy.mockRestore()
+    }
+  })
 })
 
 describe('SOCIAL_PROVIDER_MODE=mock (SOCIAL-MOCK-MODE-OFFLINE)', () => {
@@ -171,6 +233,17 @@ describe('SOCIAL_PROVIDER_MODE=mock (SOCIAL-MOCK-MODE-OFFLINE)', () => {
           state: `state-${platform}`,
         })
         expect(() => new URL(url)).not.toThrow()
+
+        // Extended at I2.2 (ADR 0025 §2.9 last line) — fetchRecentPosts
+        // must also perform zero network I/O in mock mode.
+        const page = await provider.fetchRecentPosts({
+          platform,
+          socialAccountId: MOCK_FIXTURE_ACCOUNT_IDS.STANDARD,
+          pageSize: 10,
+          cursor: null,
+          notBefore: null,
+        })
+        expect(page.posts.length).toBeGreaterThan(0)
       }
 
       expect(fetchSpy).not.toHaveBeenCalled()

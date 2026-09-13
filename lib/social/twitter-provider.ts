@@ -19,6 +19,8 @@ import { SocialProviderError } from './errors'
 import { withFreshToken, readRefreshToken } from './vault'
 import { generatePkceVerifier, generatePkceChallenge } from './oauth/pkce-crypto'
 import { mapHttpStatusToErrorCode, finiteRetryAfterSeconds } from './error-mapping'
+import { assertRecentPostsPageSize } from './constants'
+import type { FetchRecentPostsInput, RecentPostsPage } from './types'
 
 // ADR 0028 §3.2/§4.2 (N2.8). Corrected in Session 30.5-D (BLOCKER-1):
 // X_AUTHORIZE_URL and X_TOKEN_URL previously cited N2.1 items 1/3/4/6/7,
@@ -82,6 +84,9 @@ function buildTweetText(content: string, hashtags: readonly string[]): string {
 
 export class TwitterProvider implements SocialProvider {
   readonly platform = 'twitter' as const
+  // I2.3 flips this to true and implements the real body (ADR 0025 §2.1,
+  // §2.7 — X's historical read IS served, subject to §6.7's quota check).
+  readonly historicalReadAvailable = false
 
   // PKCE is MANDATORY for X (verified N2.1). Generation and cookie-setting
   // happen HERE, inside the provider — ADR 0028 §2.6's own reasoning: moving
@@ -525,5 +530,20 @@ export class TwitterProvider implements SocialProvider {
       // this catch also discards) are all treated the same way — the caller
       // still runs local cleanup via deactivateSocialAccount regardless.
     }
+  }
+
+  // I2.3 TEMPORARY STUB — flips historicalReadAvailable to true and
+  // implements the real body. Page size is still validated first (RangeError
+  // before any I/O, on every implementation alike, per ADR §2.3); once past
+  // that guard this always throws NOT_IMPLEMENTED with zero fetch calls,
+  // matching the flag above.
+  async fetchRecentPosts(input: FetchRecentPostsInput): Promise<RecentPostsPage> {
+    assertRecentPostsPageSize(input.pageSize)
+    throw new SocialProviderError({
+      code: 'NOT_IMPLEMENTED',
+      message: 'TwitterProvider.fetchRecentPosts is not implemented yet',
+      platform: 'twitter',
+      details: { method: 'fetchRecentPosts' },
+    })
   }
 }

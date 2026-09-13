@@ -14,6 +14,9 @@ export type {
   FetchEngagementInput,
   EngagementItem,
   SocialProviderErrorCode,
+  FetchRecentPostsInput,
+  RecentPostsPage,
+  RecentPost,
 } from './types'
 
 export { SocialProviderError } from './errors'
@@ -41,4 +44,10 @@ export {
   INSTAGRAM_REQUIRED_SCOPES,
   FACEBOOK_REQUIRED_SCOPES,
   THREADS_REQUIRED_SCOPES,
+  RECENT_POSTS_PAGE_SIZE_MIN,
+  RECENT_POSTS_PAGE_SIZE_MAX,
+  RECENT_POST_CONTENT_MAX_CHARS,
+  SOCIAL_READ_TIMEOUT_MS,
+  SOCIAL_READ_RETRY_AFTER_CEILING_SECONDS,
+  assertRecentPostsPageSize,
 } from './constants'
