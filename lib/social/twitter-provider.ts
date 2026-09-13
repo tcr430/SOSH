@@ -19,8 +19,13 @@ import { SocialProviderError } from './errors'
 import { withFreshToken, readRefreshToken } from './vault'
 import { generatePkceVerifier, generatePkceChallenge } from './oauth/pkce-crypto'
 import { mapHttpStatusToErrorCode, finiteRetryAfterSeconds } from './error-mapping'
-import { assertRecentPostsPageSize } from './constants'
-import type { FetchRecentPostsInput, RecentPostsPage } from './types'
+import {
+  assertRecentPostsPageSize,
+  RECENT_POST_CONTENT_MAX_CHARS,
+  SOCIAL_READ_TIMEOUT_MS,
+  SOCIAL_READ_RETRY_AFTER_CEILING_SECONDS,
+} from './constants'
+import type { FetchRecentPostsInput, RecentPostsPage, RecentPost } from './types'
 
 // ADR 0028 §3.2/§4.2 (N2.8). Corrected in Session 30.5-D (BLOCKER-1):
 // X_AUTHORIZE_URL and X_TOKEN_URL previously cited N2.1 items 1/3/4/6/7,
@@ -47,6 +52,15 @@ const X_TWEETS_URL = 'https://api.x.com/2/tweets' // N2.1 item 6
 // already recommends once real credentials exist (ADR 0028 §14.1).
 const X_REVOKE_URL = 'https://api.x.com/2/oauth2/revoke'
 const X_TEXT_MAX_LENGTH = 280 // verified N2.1 item 6
+// ADR 0025 §2.1/§7.3 (I2.3). Same Users lookup family as X_USERINFO_URL
+// (docs.x.com) — GET /2/users/:id/tweets is the documented timeline
+// endpoint for "tweets authored by this user".
+const X_USER_TWEETS_BASE_URL = 'https://api.x.com/2/users'
+// ADR §2.2 — the exact field set the ADR authorizes, nothing more: no
+// `expansions` requesting referenced_tweets.id, author_id, or any user
+// object (§2.4/§2.6 obligation 6 — this is the read path's own scope
+// discipline, distinct from publish's).
+const X_TIMELINE_TWEET_FIELDS = 'id,created_at,text,public_metrics,attachments,referenced_tweets,entities'
 // Session 30.5-D, D3: the bound stated for the disconnect route's revoke
 // call, per the correction pass's own instruction not to block or slow
 // disconnect on a network timeout. 5s is a deliberately short budget for a
@@ -68,6 +82,50 @@ const XTweetCreateSchema = z.object({
   data: z.object({ id: z.string() }),
 })
 
+// ADR §2.2/§2.4 — the read path's own response shapes, separate from the
+// publish schemas above. entities.urls carries the t.co-shortened-link spans
+// so plain-text reconstruction can replace them with their visible text
+// (ADR: "links and mentions kept as their visible text").
+const XTweetEntitiesSchema = z
+  .object({
+    urls: z
+      .array(
+        z.object({
+          start: z.number(),
+          end: z.number(),
+          url: z.string(),
+          expanded_url: z.string().optional(),
+          display_url: z.string().optional(),
+        }),
+      )
+      .optional(),
+  })
+  .optional()
+
+const XTweetSchema = z.object({
+  id: z.string(),
+  created_at: z.string(),
+  text: z.string(),
+  public_metrics: z
+    .object({
+      like_count: z.number(),
+      reply_count: z.number(),
+      retweet_count: z.number(),
+      quote_count: z.number(),
+      bookmark_count: z.number().optional(),
+      impression_count: z.number().optional(),
+    })
+    .optional(),
+  attachments: z.object({ media_keys: z.array(z.string()).optional() }).optional(),
+  referenced_tweets: z.array(z.object({ type: z.string(), id: z.string() })).optional(),
+  entities: XTweetEntitiesSchema,
+})
+
+const XTweetsListSchema = z.object({
+  data: z.array(XTweetSchema).optional(),
+  meta: z.object({ next_token: z.string().optional() }).optional(),
+})
+
 function basicAuthHeader(): string {
   // N2.1 finding 4: X confidential clients (SOSH holds X_CLIENT_SECRET)
   // authenticate via HTTP Basic — base64(client_id:client_secret) — unlike
@@ -84,9 +142,9 @@ function buildTweetText(content: string, hashtags: readonly string[]): string {
 
 export class TwitterProvider implements SocialProvider {
   readonly platform = 'twitter' as const
-  // I2.3 flips this to true and implements the real body (ADR 0025 §2.1,
-  // §2.7 — X's historical read IS served, subject to §6.7's quota check).
-  readonly historicalReadAvailable = false
+  // ADR 0025 §2.1, §2.7 — X's historical read IS served, subject to §6.7's
+  // operational quota check (launch-checklist, not code).
+  readonly historicalReadAvailable = true
 
   // PKCE is MANDATORY for X (verified N2.1). Generation and cookie-setting
   // happen HERE, inside the provider — ADR 0028 §2.6's own reasoning: moving
@@ -532,18 +590,304 @@ export class TwitterProvider implements SocialProvider {
     }
   }
 
-  // I2.3 TEMPORARY STUB — flips historicalReadAvailable to true and
-  // implements the real body. Page size is still validated first (RangeError
-  // before any I/O, on every implementation alike, per ADR §2.3); once past
-  // that guard this always throws NOT_IMPLEMENTED with zero fetch calls,
-  // matching the flag above.
+  // ADR 0025 §2.1/§2.6/§7.3 (I2.3). withFreshToken PER PAGE (obligation 3) —
+  // never a token held across pages. Identity verification (obligation 4)
+  // runs only on the first page (cursor === null): GET /2/users/me and
+  // compare to the row's platform_user_id, fail closed. No new
+  // get_vault_secret call site — this reuses vault.ts's existing wrapper,
+  // exactly like publish does.
   async fetchRecentPosts(input: FetchRecentPostsInput): Promise<RecentPostsPage> {
     assertRecentPostsPageSize(input.pageSize)
-    throw new SocialProviderError({
-      code: 'NOT_IMPLEMENTED',
-      message: 'TwitterProvider.fetchRecentPosts is not implemented yet',
+
+    // Cursor is validated (opaque, account-bound) BEFORE any I/O, same
+    // discipline as the page-size guard above — a foreign or unparseable
+    // cursor is a caller-visible PLATFORM_REJECTED, not a wasted round trip.
+    const paginationToken =
+      input.cursor === null ? null : this.decodeReadCursor(input.cursor, input.socialAccountId)
+
+    return withFreshToken(
+      input.socialAccountId,
+      (id) => this.refreshAccessToken({ socialAccountId: id }),
+      async (token) => {
+        const { createServiceRoleClient } = await import('@/lib/supabase/service')
+        const client = createServiceRoleClient()
+        const { data: account, error } = await client
+          .from('social_accounts')
+          .select('platform_user_id, platform_username')
+          .eq('id', input.socialAccountId)
+          .single()
+
+        if (error || !account) {
+          throw new SocialProviderError({
+            code: 'TOKEN_REVOKED',
+            message: `fetchRecentPosts: social account ${input.socialAccountId} not found`,
+            platform: 'twitter',
+          })
+        }
+
+        const accountId = account.platform_user_id as string
+        const accountUsername = account.platform_username as string | null
+
+        if (input.cursor === null) {
+          await this.verifyReadIdentity(token, accountId)
+        }
+
+        return this.fetchTimelinePage(token, accountId, accountUsername, input, paginationToken)
+      },
+    )
+  }
+
+  // ADR §2.6 obligation 4 — the token's own identity must match the
+  // connected account BEFORE the timeline is ever called. Uses the SAME
+  // X_USERINFO_URL exchangeOAuthCode already calls — no new endpoint.
+  private async verifyReadIdentity(token: string, expectedAccountId: string): Promise<void> {
+    let resp: Response
+    try {
+      resp = await fetch(X_USERINFO_URL, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(SOCIAL_READ_TIMEOUT_MS),
+      })
+    } catch (err) {
+      throw this.mapReadNetworkError(err)
+    }
+
+    if (!resp.ok) throw await this.mapReadErrorResponse(resp)
+
+    const rawBody = await resp.json()
+    let parsed: z.infer<typeof XUserSchema>
+    try {
+      parsed = XUserSchema.parse(rawBody)
+    } catch (e) {
+      throw new SocialProviderError({
+        code: 'UNKNOWN',
+        message: 'fetchRecentPosts: X returned an unexpected identity response shape',
+        platform: 'twitter',
+        details: { zodError: e instanceof Error ? e.message : String(e) },
+      })
+    }
+
+    if (parsed.data.id !== expectedAccountId) {
+      throw new SocialProviderError({
+        code: 'PLATFORM_REJECTED',
+        message: 'fetchRecentPosts: token identity does not match the connected account',
+        platform: 'twitter',
+        details: { reason: 'identity_mismatch' },
+      })
+    }
+  }
+
+  private async fetchTimelinePage(
+    token: string,
+    accountId: string,
+    accountUsername: string | null,
+    input: FetchRecentPostsInput,
+    paginationToken: string | null,
+  ): Promise<RecentPostsPage> {
+    const params = new URLSearchParams({
+      exclude: 'replies,retweets',
+      max_results: String(input.pageSize),
+      'tweet.fields': X_TIMELINE_TWEET_FIELDS,
+    })
+    if (paginationToken) params.set('pagination_token', paginationToken)
+    if (input.notBefore) params.set('start_time', input.notBefore)
+
+    let resp: Response
+    try {
+      resp = await fetch(`${X_USER_TWEETS_BASE_URL}/${accountId}/tweets?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(SOCIAL_READ_TIMEOUT_MS),
+      })
+    } catch (err) {
+      throw this.mapReadNetworkError(err)
+    }
+
+    if (!resp.ok) throw await this.mapReadErrorResponse(resp)
+
+    const rawBody = await resp.json()
+    let parsed: z.infer<typeof XTweetsListSchema>
+    try {
+      parsed = XTweetsListSchema.parse(rawBody)
+    } catch (e) {
+      throw new SocialProviderError({
+        code: 'UNKNOWN',
+        message: 'fetchRecentPosts: X returned an unexpected tweets response shape',
+        platform: 'twitter',
+        details: { zodError: e instanceof Error ? e.message : String(e) },
+      })
+    }
+
+    const posts: RecentPost[] = []
+    for (const tweet of parsed.data ?? []) {
+      // ADR §2.4 — exclude=replies,retweets already drops those two types;
+      // a quote tweet still appears in this endpoint and must be dropped
+      // here, using the NON-EXPANDED referenced_tweets[].type field only
+      // (no referenced_tweets.id expansion is ever requested).
+      if (tweet.referenced_tweets?.some((rt) => rt.type === 'quoted')) continue
+
+      const publishedDate = new Date(tweet.created_at)
+      if (!Number.isFinite(publishedDate.getTime())) {
+        throw new SocialProviderError({
+          code: 'UNKNOWN',
+          message: 'fetchRecentPosts: X returned a non-finite created_at',
+          platform: 'twitter',
+        })
+      }
+
+      posts.push({
+        platformPostId: tweet.id,
+        publishedAt: formatISO(publishedDate),
+        content: buildXPlainTextContent(tweet.text, tweet.entities),
+        url: accountUsername ? `https://x.com/${accountUsername}/status/${tweet.id}` : null,
+        format: deriveXFormat(tweet.attachments),
+        metrics: tweet.public_metrics
+          ? {
+              likes: tweet.public_metrics.like_count,
+              comments: tweet.public_metrics.reply_count,
+              shares: tweet.public_metrics.retweet_count + tweet.public_metrics.quote_count,
+              saves: tweet.public_metrics.bookmark_count ?? null,
+              impressions: tweet.public_metrics.impression_count ?? null,
+              clicks: null,
+              reach: null,
+              fetchedAt: formatISO(new Date()),
+            }
+          : null,
+      })
+    }
+
+    const nextCursor = parsed.meta?.next_token ? encodeReadCursor(input.socialAccountId, parsed.meta.next_token) : null
+    return { posts, nextCursor }
+  }
+
+  // Opaque, account-bound (ADR §2.6 obligation 1 / §12 constraint 4): a
+  // cursor minted for a different socialAccountId, or one that fails to
+  // parse, is rejected — never logged, never included in error details
+  // beyond the reason code.
+  private decodeReadCursor(cursor: string, expectedAccountId: string): string {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'))
+    } catch {
+      throw new SocialProviderError({
+        code: 'PLATFORM_REJECTED',
+        message: 'fetchRecentPosts: cursor is unparseable',
+        platform: 'twitter',
+        details: { reason: 'cursor_invalid' },
+      })
+    }
+    const obj = parsed as { sa?: unknown; pt?: unknown }
+    if (typeof obj.sa !== 'string' || typeof obj.pt !== 'string' || obj.sa !== expectedAccountId) {
+      throw new SocialProviderError({
+        code: 'PLATFORM_REJECTED',
+        message: 'fetchRecentPosts: cursor was not minted for this account',
+        platform: 'twitter',
+        details: { reason: 'cursor_invalid' },
+      })
+    }
+    return obj.pt
+  }
+
+  // Read-specific error map (ADR §2.5) — separate from mapHttpStatusToErrorCode
+  // (error-mapping.ts), which states it covers publish only. `details` never
+  // carries the response body — a reason code and numbers only.
+  private async mapReadErrorResponse(resp: Response): Promise<SocialProviderError> {
+    if (resp.status === 401) {
+      return new SocialProviderError({
+        code: 'TOKEN_EXPIRED',
+        message: `fetchRecentPosts: X returned ${resp.status}`,
+        platform: 'twitter',
+      })
+    }
+    if (resp.status === 403) {
+      const body = await resp.json().catch(() => ({}))
+      const scopeMissing = /scope/i.test(JSON.stringify(body))
+      return new SocialProviderError({
+        code: 'TOKEN_REVOKED',
+        message: `fetchRecentPosts: X returned ${resp.status}`,
+        platform: 'twitter',
+        details: { reason: scopeMissing ? 'scope_missing' : 'forbidden' },
+      })
+    }
+    if (resp.status === 404) {
+      return new SocialProviderError({
+        code: 'PLATFORM_REJECTED',
+        message: `fetchRecentPosts: X returned ${resp.status}`,
+        platform: 'twitter',
+        details: { reason: 'not_found' },
+      })
+    }
+    if (resp.status === 429) {
+      const raw = Number(resp.headers.get('Retry-After') ?? '60')
+      const guarded = finiteRetryAfterSeconds(raw, 60)
+      return new SocialProviderError({
+        code: 'RATE_LIMITED',
+        message: 'fetchRecentPosts: rate limited by X',
+        platform: 'twitter',
+        retryAfterSeconds: Math.min(guarded, SOCIAL_READ_RETRY_AFTER_CEILING_SECONDS),
+      })
+    }
+    if (resp.status >= 500) {
+      return new SocialProviderError({
+        code: 'NETWORK',
+        message: `fetchRecentPosts: X returned ${resp.status}`,
+        platform: 'twitter',
+      })
+    }
+    return new SocialProviderError({
+      code: 'PLATFORM_REJECTED',
+      message: `fetchRecentPosts: X returned ${resp.status}`,
       platform: 'twitter',
-      details: { method: 'fetchRecentPosts' },
+      details: { reason: 'unexpected_status', status: resp.status },
     })
   }
+
+  // NO sleep, NO retry loop (ADR §2.6 obligation 7 / §12 constraint 8) — a
+  // hung request is bounded by SOCIAL_READ_TIMEOUT_MS (AbortSignal.timeout)
+  // and mapped straight to NETWORK; retry belongs to the orchestrator's tick
+  // cadence, never to the provider.
+  private mapReadNetworkError(err: unknown): SocialProviderError {
+    const isTimeout = err instanceof Error && err.name === 'TimeoutError'
+    return new SocialProviderError({
+      code: 'NETWORK',
+      message: isTimeout ? 'fetchRecentPosts: request timed out' : 'fetchRecentPosts: network error',
+      platform: 'twitter',
+    })
+  }
+}
+
+// Opaque cursor encoding — base64url of a small JSON envelope binding the
+// pagination_token to the socialAccountId it was minted for. Never logged
+// (ADR §2.6 obligation 1); lifetime is one run (never persisted, §6.4).
+function encodeReadCursor(socialAccountId: string, paginationToken: string): string {
+  return Buffer.from(JSON.stringify({ sa: socialAccountId, pt: paginationToken })).toString('base64url')
+}
+
+// ADR §2.2 — plain text: entities decoded (t.co links replaced by their
+// visible display text), whitespace collapsed, truncated at
+// RECENT_POST_CONTENT_MAX_CHARS. Mentions need no special handling — X's
+// `text` field already carries @mentions as plain, visible text.
+function buildXPlainTextContent(text: string, entities: z.infer<typeof XTweetEntitiesSchema>): string {
+  const urls = entities?.urls ?? []
+  let result = text
+  // Replace right-to-left by start index so earlier spans' indices stay valid.
+  for (const url of [...urls].sort((a, b) => b.start - a.start)) {
+    const visible = url.display_url ?? url.expanded_url ?? url.url
+    result = result.slice(0, url.start) + visible + result.slice(url.end)
+  }
+  result = result.replace(/\s+/g, ' ').trim()
+  return result.length > RECENT_POST_CONTENT_MAX_CHARS ? result.slice(0, RECENT_POST_CONTENT_MAX_CHARS) : result
+}
+
+// ADR §2.2 — "derived from attachment TYPES only". X's media_key format
+// documents the leading segment as a type discriminator (1 = photo, 2 =
+// video, 3 = animated_gif) — read directly from the key string itself, so
+// no `expansions=attachments.media_keys` media-object lookup (and the
+// media.fields/user data it would pull in) is ever requested.
+function deriveXFormat(attachments: { media_keys?: string[] } | undefined): RecentPost['format'] {
+  const mediaKeys = attachments?.media_keys ?? []
+  if (mediaKeys.length === 0) return 'text'
+  if (mediaKeys.length > 1) return 'multi'
+  const typeDigit = mediaKeys[0]!.split('_')[0]
+  if (typeDigit === '1') return 'image'
+  if (typeDigit === '2' || typeDigit === '3') return 'video'
+  return 'other'
 }

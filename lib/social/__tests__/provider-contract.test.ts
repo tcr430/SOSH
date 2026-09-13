@@ -146,9 +146,15 @@ describe.each(IMPLEMENTATIONS)('SocialProvider contract: $name', ({ name, makePr
   // is necessary, not sufficient: false => fetchRecentPosts throws
   // NOT_IMPLEMENTED with ZERO fetch calls; true => it never rejects
   // NOT_IMPLEMENTED, checked across every one of MockProvider's own named
-  // fixtures (ADR §2.9) — today the only historicalReadAvailable=true
-  // implementation. I2.3 flips TwitterProvider's flag; that half is proven
-  // there against recorded fixtures, not here.
+  // fixtures (ADR §2.9's own wording: "across every MOCK fixture"). At I2.3,
+  // TwitterProvider is ALSO true, but its real body needs the full
+  // config/service-role/vault mocking twitter-provider.test.ts already
+  // provides — exercising it here with none of that would make a real,
+  // unmocked network attempt, which this neutral contract suite must never
+  // do. So this assertion intentionally covers only the false-flag
+  // implementations (LinkedIn) and MockProvider's fixtures; Twitter's
+  // true-flag half of the SAME property is proven in twitter-provider.test.ts
+  // instead (recorded fixtures, zero real network).
   it('historicalReadAvailable flag consistency for fetchRecentPosts', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch')
     try {
@@ -201,6 +207,17 @@ describe.each(IMPLEMENTATIONS)('SocialProvider contract: $name', ({ name, makePr
     } finally {
       fetchSpy.mockRestore()
     }
+  })
+})
+
+// I2.3 item 4 — pins the AS-SHIPPED flag table (Amendment B §B.3). This is
+// what stops the I2.2 stub (Twitter false) silently surviving a future edit:
+// a revert of Twitter's flag reddens here, not just in twitter-provider.test.ts.
+describe('historicalReadAvailable — the as-shipped table', () => {
+  it('TwitterProvider=true, LinkedInProvider=false, MockProvider=true', () => {
+    expect(new TwitterProvider().historicalReadAvailable).toBe(true)
+    expect(new LinkedInProvider().historicalReadAvailable).toBe(false)
+    expect(new MockProvider().historicalReadAvailable).toBe(true)
   })
 })
 

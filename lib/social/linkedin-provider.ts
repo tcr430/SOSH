@@ -17,9 +17,14 @@ import type {
 } from './types'
 import { SocialProviderError } from './errors'
 import { withFreshToken } from './vault'
-import { LINKEDIN_VERSION, assertRecentPostsPageSize } from './constants'
+import {
+  LINKEDIN_VERSION,
+  assertRecentPostsPageSize,
+  RECENT_POST_CONTENT_MAX_CHARS,
+  SOCIAL_READ_TIMEOUT_MS,
+} from './constants'
 import { mapHttpStatusToErrorCode, finiteRetryAfterSeconds } from './error-mapping'
-import type { FetchRecentPostsInput, RecentPostsPage } from './types'
+import type { FetchRecentPostsInput, RecentPostsPage, RecentPost } from './types'
 
 // ADR 0028 §3.1/§5.1 (N2.7). LINKEDIN_AUTHORIZE_URL/LINKEDIN_TOKEN_URL are
 // sourced by N2.1 item 1 (docs/reviews/session-30-5-platform-verification.md).
@@ -54,6 +59,31 @@ const LinkedInTokenResponseSchema = z.object({
 const LinkedInUserinfoSchema = z.object({
   sub: z.string(),
   name: z.string().optional(),
+})
+
+// UNVERIFIED against the live API — ADR 0025 A-1. Best-effort shape for the
+// Posts API author-finder response; never exercised (see fetchRecentPostsBody).
+const LinkedInPostsListSchema = z.object({
+  elements: z
+    .array(
+      z.object({
+        id: z.string(),
+        // LinkedIn's REST APIs conventionally return createdAt as epoch
+        // millis (a number), not an ISO string — normalized here so the
+        // caller's `new Date(...)` parse always sees a valid ISO string.
+        createdAt: z.union([z.string(), z.number()]).transform((v) => (typeof v === 'number' ? new Date(v).toISOString() : v)),
+        commentary: z.string().optional(),
+        reshareContext: z.unknown().optional(),
+        content: z
+          .object({
+            media: z.unknown().optional(),
+            article: z.unknown().optional(),
+          })
+          .optional(),
+      }),
+    )
+    .optional(),
+  paging: z.object({ start: z.number().optional(), count: z.number().optional(), total: z.number().optional() }).optional(),
 })
 
 // ADR 0028 §5.1 — the URN is self-describing; no platform_account_type
@@ -351,16 +381,153 @@ export class LinkedInProvider implements SocialProvider {
     return
   }
 
-  // Amendment B §B.5 — NOT implemented, not claimed as covered beyond its
-  // not-served path. Page size is still validated first (RangeError before
-  // any I/O, on every implementation alike).
+  // Amendment B §B.5 — NOT SERVED. Page size is still validated first
+  // (RangeError before any I/O, on every implementation alike); the flag
+  // check below then ALWAYS throws NOT_IMPLEMENTED with zero fetch calls —
+  // historicalReadAvailable is a readonly `false`, so fetchRecentPostsBody
+  // is structurally unreachable today, never executed, never tested.
   async fetchRecentPosts(input: FetchRecentPostsInput): Promise<RecentPostsPage> {
     assertRecentPostsPageSize(input.pageSize)
-    throw new SocialProviderError({
-      code: 'NOT_IMPLEMENTED',
-      message: 'LinkedInProvider.fetchRecentPosts is not implemented (not served — ADR 0025 A-1)',
-      platform: 'linkedin',
-      details: { method: 'fetchRecentPosts' },
-    })
+    if (!this.historicalReadAvailable) {
+      throw new SocialProviderError({
+        code: 'NOT_IMPLEMENTED',
+        message: 'LinkedInProvider.fetchRecentPosts is not implemented (not served — ADR 0025 A-1)',
+        platform: 'linkedin',
+        details: { method: 'fetchRecentPosts' },
+      })
+    }
+    return this.fetchRecentPostsBody(input)
+  }
+
+  // UNVERIFIED against the live API — ADR 0025 A-1. Re-verify when
+  // r_member_social is approved. No test covers this body.
+  //
+  // Written against LinkedIn's documented Posts API "author finder"
+  // (Microsoft Learn, the same LINKEDIN_POSTS_URL publish() already uses):
+  // GET /rest/posts?author={URN}&q=author&count={pageSize}&start={offset},
+  // original shares only (reshared posts are dropped — a reshareContext
+  // field's presence marks a repost of someone else's content, ADR §2.4's
+  // "original authored post" filter applied the same way TwitterProvider
+  // applies exclude=replies,retweets), metrics: null always (fetchPostMetrics
+  // still throws NOT_IMPLEMENTED — Amendment B §B.5, untouched here).
+  private async fetchRecentPostsBody(input: FetchRecentPostsInput): Promise<RecentPostsPage> {
+    const offset = input.cursor === null ? 0 : this.decodeReadCursor(input.cursor, input.socialAccountId)
+
+    return withFreshToken(
+      input.socialAccountId,
+      (id) => this.refreshAccessToken({ socialAccountId: id }),
+      async (token) => {
+        const { createServiceRoleClient } = await import('@/lib/supabase/service')
+        const client = createServiceRoleClient()
+        const { data: account, error } = await client
+          .from('social_accounts')
+          .select('platform_user_id')
+          .eq('id', input.socialAccountId)
+          .single()
+
+        if (error || !account) {
+          throw new SocialProviderError({
+            code: 'TOKEN_REVOKED',
+            message: `fetchRecentPosts: social account ${input.socialAccountId} not found`,
+            platform: 'linkedin',
+          })
+        }
+
+        const authorUrn = account.platform_user_id as string
+        const params = new URLSearchParams({
+          author: authorUrn,
+          q: 'author',
+          count: String(input.pageSize),
+          start: String(offset),
+        })
+
+        let resp: Response
+        try {
+          resp = await fetch(`${LINKEDIN_POSTS_URL}?${params}`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Linkedin-Version': LINKEDIN_VERSION,
+              'X-Restli-Protocol-Version': '2.0.0',
+            },
+            signal: AbortSignal.timeout(SOCIAL_READ_TIMEOUT_MS),
+          })
+        } catch {
+          throw new SocialProviderError({ code: 'NETWORK', message: 'fetchRecentPosts: network error', platform: 'linkedin' })
+        }
+
+        if (!resp.ok) {
+          if (resp.status === 429) {
+            const retryAfter = Number(resp.headers.get('Retry-After') ?? '60')
+            throw new SocialProviderError({
+              code: 'RATE_LIMITED',
+              message: 'fetchRecentPosts: rate limited by LinkedIn',
+              platform: 'linkedin',
+              retryAfterSeconds: finiteRetryAfterSeconds(retryAfter),
+            })
+          }
+          throw new SocialProviderError({
+            code: mapHttpStatusToErrorCode(resp.status),
+            message: `fetchRecentPosts: LinkedIn returned ${resp.status}`,
+            platform: 'linkedin',
+          })
+        }
+
+        const rawBody = await resp.json()
+        let parsed: z.infer<typeof LinkedInPostsListSchema>
+        try {
+          parsed = LinkedInPostsListSchema.parse(rawBody)
+        } catch (e) {
+          throw new SocialProviderError({
+            code: 'UNKNOWN',
+            message: 'fetchRecentPosts: LinkedIn returned an unexpected posts response shape',
+            platform: 'linkedin',
+            details: { zodError: e instanceof Error ? e.message : String(e) },
+          })
+        }
+
+        const posts: RecentPost[] = []
+        for (const element of parsed.elements ?? []) {
+          if (element.reshareContext) continue // original shares only
+
+          const publishedDate = new Date(element.createdAt)
+          if (!Number.isFinite(publishedDate.getTime())) {
+            throw new SocialProviderError({ code: 'UNKNOWN', message: 'fetchRecentPosts: LinkedIn returned a non-finite createdAt', platform: 'linkedin' })
+          }
+
+          const rawContent = element.commentary ?? ''
+          posts.push({
+            platformPostId: element.id,
+            publishedAt: formatISO(publishedDate),
+            content: rawContent.length > RECENT_POST_CONTENT_MAX_CHARS ? rawContent.slice(0, RECENT_POST_CONTENT_MAX_CHARS) : rawContent,
+            url: `https://www.linkedin.com/feed/update/${element.id}/`,
+            format: element.content?.media ? 'image' : element.content?.article ? 'link' : 'text',
+            metrics: null, // A-3 — metrics are a separate fetch, never included in this read for LinkedIn
+          })
+        }
+
+        const total = parsed.paging?.total ?? posts.length
+        const nextOffset = offset + posts.length
+        const nextCursor = nextOffset < total ? this.encodeReadCursor(input.socialAccountId, nextOffset) : null
+        return { posts, nextCursor }
+      },
+    )
+  }
+
+  private encodeReadCursor(socialAccountId: string, offset: number): string {
+    return Buffer.from(JSON.stringify({ sa: socialAccountId, o: offset })).toString('base64url')
+  }
+
+  private decodeReadCursor(cursor: string, expectedAccountId: string): number {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'))
+    } catch {
+      throw new SocialProviderError({ code: 'PLATFORM_REJECTED', message: 'fetchRecentPosts: cursor is unparseable', platform: 'linkedin', details: { reason: 'cursor_invalid' } })
+    }
+    const obj = parsed as { sa?: unknown; o?: unknown }
+    if (typeof obj.sa !== 'string' || typeof obj.o !== 'number' || obj.sa !== expectedAccountId) {
+      throw new SocialProviderError({ code: 'PLATFORM_REJECTED', message: 'fetchRecentPosts: cursor was not minted for this account', platform: 'linkedin', details: { reason: 'cursor_invalid' } })
+    }
+    return obj.o
   }
 }

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { formatISO } from 'date-fns'
 import { TwitterProvider } from '../twitter-provider'
+import { SOCIAL_READ_TIMEOUT_MS } from '../constants'
 
 vi.mock('@/lib/config', () => ({
   config: {
@@ -335,6 +336,234 @@ describe('TwitterProvider', () => {
 
       const [, init] = mockFetch.mock.calls[0] as [string, RequestInit]
       expect(init.signal).toBeInstanceOf(AbortSignal)
+    })
+  })
+
+  describe('fetchRecentPosts (ADR 0025 §2, I2.3)', () => {
+    const ACCOUNT_ID = 'sa-1'
+    const PLATFORM_USER_ID = 'x-user-123'
+    const PLATFORM_USERNAME = 'acme_founder'
+    const ACCESS_TOKEN = 'fresh-access-token'
+    const SENSITIVE_POST_TEXT = 'FIXTURE-POST-TEXT-that-must-never-leak-into-details'
+
+    function identityResponse(id = PLATFORM_USER_ID) {
+      return jsonResponse(200, { data: { id, username: PLATFORM_USERNAME } })
+    }
+
+    function timelineResponse(
+      tweets: Array<Record<string, unknown>>,
+      meta: Record<string, unknown> = {},
+    ) {
+      return jsonResponse(200, { data: tweets, meta })
+    }
+
+    function baseInput(overrides: Partial<Parameters<TwitterProvider['fetchRecentPosts']>[0]> = {}) {
+      return {
+        platform: 'twitter' as const,
+        socialAccountId: ACCOUNT_ID,
+        pageSize: 10,
+        cursor: null,
+        notBefore: null,
+        ...overrides,
+      }
+    }
+
+    beforeEach(() => {
+      mockFrom.mockReturnValue(
+        makeAccountQueryStub({
+          data: { platform_user_id: PLATFORM_USER_ID, platform_username: PLATFORM_USERNAME },
+          error: null,
+        }),
+      )
+    })
+
+    it('the timeline request URL carries exclude=replies,retweets and NO expansions param', async () => {
+      mockFetch
+        .mockResolvedValueOnce(identityResponse())
+        .mockResolvedValueOnce(timelineResponse([]))
+
+      await provider.fetchRecentPosts(baseInput())
+
+      const [timelineUrl] = mockFetch.mock.calls[1]!
+      const url = new URL(timelineUrl as string)
+      expect(url.pathname).toBe(`/2/users/${PLATFORM_USER_ID}/tweets`)
+      expect(url.searchParams.get('exclude')).toBe('replies,retweets')
+      expect(url.searchParams.has('expansions')).toBe(false)
+    })
+
+    it('a page containing a quote is returned without it', async () => {
+      mockFetch
+        .mockResolvedValueOnce(identityResponse())
+        .mockResolvedValueOnce(
+          timelineResponse([
+            { id: 't-original', created_at: '2026-08-01T00:00:00.000Z', text: 'An original post' },
+            {
+              id: 't-quote',
+              created_at: '2026-08-02T00:00:00.000Z',
+              text: 'A quote post',
+              referenced_tweets: [{ type: 'quoted', id: 't-quoted-source' }],
+            },
+          ]),
+        )
+
+      const page = await provider.fetchRecentPosts(baseInput())
+
+      expect(page.posts.map((p) => p.platformPostId)).toEqual(['t-original'])
+    })
+
+    it('page 1 calls /2/users/me first; identity mismatch fails closed with ZERO timeline calls', async () => {
+      mockFetch.mockResolvedValueOnce(identityResponse('some-other-user-id'))
+
+      await expect(provider.fetchRecentPosts(baseInput())).rejects.toMatchObject({
+        code: 'PLATFORM_REJECTED',
+        details: { reason: 'identity_mismatch' },
+      })
+      expect(mockFetch).toHaveBeenCalledTimes(1)
+      expect(mockFetch.mock.calls[0]![0]).toBe('https://api.x.com/2/users/me')
+    })
+
+    it('page 2 does not call /2/users/me again, and withFreshToken is invoked once per page', async () => {
+      mockFetch
+        .mockResolvedValueOnce(identityResponse())
+        .mockResolvedValueOnce(timelineResponse([], { next_token: 'x-pagination-token-1' }))
+
+      const page1 = await provider.fetchRecentPosts(baseInput())
+      expect(mockWithFreshToken).toHaveBeenCalledTimes(1)
+      expect(page1.nextCursor).not.toBeNull()
+
+      mockFetch.mockResolvedValueOnce(timelineResponse([]))
+      await provider.fetchRecentPosts(baseInput({ cursor: page1.nextCursor }))
+
+      expect(mockWithFreshToken).toHaveBeenCalledTimes(2)
+      // Only ONE fetch call on page 2 (the timeline) — no second /users/me.
+      const page2Calls = mockFetch.mock.calls.slice(2)
+      expect(page2Calls).toHaveLength(1)
+      expect(page2Calls[0]![0]).not.toBe('https://api.x.com/2/users/me')
+    })
+
+    it('a cross-account cursor is rejected as cursor_invalid', async () => {
+      mockFetch
+        .mockResolvedValueOnce(identityResponse())
+        .mockResolvedValueOnce(timelineResponse([], { next_token: 'x-pagination-token-1' }))
+      const page1 = await provider.fetchRecentPosts(baseInput())
+
+      await expect(
+        provider.fetchRecentPosts(baseInput({ socialAccountId: 'sa-DIFFERENT-account', cursor: page1.nextCursor })),
+      ).rejects.toMatchObject({ code: 'PLATFORM_REJECTED', details: { reason: 'cursor_invalid' } })
+    })
+
+    it('a garbage cursor is rejected as cursor_invalid, with zero fetch calls', async () => {
+      await expect(
+        provider.fetchRecentPosts(baseInput({ cursor: 'not-a-valid-cursor-at-all' })),
+      ).rejects.toMatchObject({ code: 'PLATFORM_REJECTED', details: { reason: 'cursor_invalid' } })
+      expect(mockFetch).not.toHaveBeenCalled()
+    })
+
+    it('429 with Retry-After: 5000 => retryAfterSeconds capped at 900, no timer scheduled', async () => {
+      vi.useFakeTimers()
+      try {
+        mockFetch
+          .mockResolvedValueOnce(identityResponse())
+          .mockResolvedValueOnce(new Response(null, { status: 429, headers: { 'Retry-After': '5000' } }))
+
+        await expect(provider.fetchRecentPosts(baseInput())).rejects.toMatchObject({
+          code: 'RATE_LIMITED',
+          retryAfterSeconds: 900,
+        })
+        expect(vi.getTimerCount()).toBe(0)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('a hung response maps to NETWORK, bounded by SOCIAL_READ_TIMEOUT_MS (10000ms)', async () => {
+      expect(SOCIAL_READ_TIMEOUT_MS).toBe(10_000)
+      const timeoutError = Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' })
+      mockFetch.mockResolvedValueOnce(identityResponse()).mockRejectedValueOnce(timeoutError)
+
+      await expect(provider.fetchRecentPosts(baseInput())).rejects.toMatchObject({ code: 'NETWORK' })
+      const [, init] = mockFetch.mock.calls[1] as [string, RequestInit]
+      expect(init.signal).toBeInstanceOf(AbortSignal)
+    })
+
+    it('a Zod parse failure maps to UNKNOWN', async () => {
+      // `data` present but the wrong TYPE (a string, not an array of
+      // tweets) — actually violates XTweetsListSchema, unlike an absent
+      // `data` field (which the schema's own .optional() treats as zero
+      // posts, not a parse failure).
+      mockFetch.mockResolvedValueOnce(identityResponse()).mockResolvedValueOnce(jsonResponse(200, { data: 'not-an-array' }))
+      await expect(provider.fetchRecentPosts(baseInput())).rejects.toMatchObject({ code: 'UNKNOWN' })
+    })
+
+    it('metrics map from public_metrics per the ADR table; saves/impressions null when absent, clicks/reach always null', async () => {
+      mockFetch.mockResolvedValueOnce(identityResponse()).mockResolvedValueOnce(
+        timelineResponse([
+          {
+            id: 't1',
+            created_at: '2026-08-01T00:00:00.000Z',
+            text: 'metrics post',
+            public_metrics: { like_count: 5, reply_count: 2, retweet_count: 3, quote_count: 1 },
+          },
+        ]),
+      )
+      const page = await provider.fetchRecentPosts(baseInput())
+      expect(page.posts[0]!.metrics).toEqual({
+        likes: 5,
+        comments: 2,
+        shares: 4, // retweet_count + quote_count
+        saves: null,
+        impressions: null,
+        clicks: null,
+        reach: null,
+        fetchedAt: expect.any(String),
+      })
+    })
+
+    it('content truncates at 3000 chars and replaces t.co links with their visible display text', async () => {
+      const longText = `check this out https://t.co/abc123 ${'x'.repeat(3200)}`
+      mockFetch.mockResolvedValueOnce(identityResponse()).mockResolvedValueOnce(
+        timelineResponse([
+          {
+            id: 't1',
+            created_at: '2026-08-01T00:00:00.000Z',
+            text: longText,
+            entities: { urls: [{ start: 15, end: 35, url: 'https://t.co/abc123', display_url: 'example.com/page' }] },
+          },
+        ]),
+      )
+      const page = await provider.fetchRecentPosts(baseInput())
+      expect(page.posts[0]!.content.length).toBe(3000)
+      expect(page.posts[0]!.content).toContain('example.com/page')
+      expect(page.posts[0]!.content).not.toContain('t.co')
+    })
+
+    // BACKFILL-ERROR-DETAILS-CONTENT-FREE — proven for the provider here
+    // (closes at I2.9 with the tick log). Every rejection this file produces
+    // is checked: JSON.stringify(err.details) must contain none of the
+    // access token, the cursor string, or fixture post text.
+    it('every thrown error in this file keeps details free of the access token, cursor, and post text', async () => {
+      const garbageCursor = 'garbage-cursor-value-xyz'
+      const caught: unknown[] = []
+
+      mockFetch.mockResolvedValueOnce(identityResponse('mismatched-id'))
+      await provider.fetchRecentPosts(baseInput()).catch((e) => caught.push(e))
+
+      await provider.fetchRecentPosts(baseInput({ cursor: garbageCursor })).catch((e) => caught.push(e))
+
+      mockFetch
+        .mockResolvedValueOnce(identityResponse())
+        .mockResolvedValueOnce(
+          jsonResponse(403, { title: 'Forbidden', detail: `insufficient scope near "${SENSITIVE_POST_TEXT}"` }),
+        )
+      await provider.fetchRecentPosts(baseInput()).catch((e) => caught.push(e))
+
+      expect(caught.length).toBeGreaterThan(0)
+      for (const err of caught) {
+        const serialized = JSON.stringify((err as { details: unknown }).details)
+        expect(serialized).not.toContain(ACCESS_TOKEN)
+        expect(serialized).not.toContain(garbageCursor)
+        expect(serialized).not.toContain(SENSITIVE_POST_TEXT)
+      }
     })
   })
 })
