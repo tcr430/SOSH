@@ -1,9 +1,11 @@
-import { type NextRequest, NextResponse } from 'next/server'
+import { type NextRequest, NextResponse, after } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getRegistry, verifyOAuthState, isPlatform, getSocialRedirectUri } from '@/lib/social'
 import type { OAuthStateClaims, TokenSet } from '@/lib/social'
 import type { VaultSecretId } from '@/lib/db/types'
 import { getBusinessById } from '@/lib/db/businesses'
+import { enqueueBackfillRun, resumeBackfillRun, getResumableFailedRunForAccount } from '@/lib/db/backfill-runs'
+import { fetchPhase } from '@/lib/backfill/orchestrator'
 import { formatISO } from 'date-fns'
 import * as Sentry from '@sentry/nextjs'
 
@@ -190,7 +192,28 @@ export async function GET(
     }
   }
 
-  // Step 7 — Success
+  // Step 7 — ADR 0025 §6.5/§6.9 (Session 32 I2.9): enqueue (or, on
+  // reconnect, resume) a backfill run for the newly-connected account, then
+  // fire ONE tick best-effort via after() (the step-1/actions.ts:53-55
+  // precedent). Both the onboarding step-3 connect and the settings
+  // reconnect paths land here — this is the ONE place every connect flows
+  // through, so there is no second call site to keep in sync. A failure
+  // here must NEVER fail the OAuth callback: caught and logged to Sentry,
+  // the cron tick (app/api/cron/backfill/route.ts) picks up the slack.
+  const accountId = (upsertResult as { id: string }).id
+  try {
+    const resumable = await getResumableFailedRunForAccount(accountId)
+    const run = resumable ? await resumeBackfillRun(resumable.id) : await enqueueBackfillRun(claims.businessId, accountId, platform)
+    if (run) {
+      after(() => {
+        fetchPhase(run.id).catch((err) => Sentry.captureException(err, { tags: { phase: 'backfill-fetch-first-tick' } }))
+      })
+    }
+  } catch (err) {
+    Sentry.captureException(err, { tags: { phase: 'backfill-enqueue' } })
+  }
+
+  // Step 8 — Success
   return NextResponse.redirect(
     new URL(`/${locale}/settings/accounts?connected=${platform}`, request.url),
   )

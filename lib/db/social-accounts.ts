@@ -122,6 +122,26 @@ export async function deactivateSocialAccount(id: string): Promise<void> {
       captureException(err, { tags: { operation: 'vault_delete_secret' } })
     }
   }
+
+  // ADR 0025 §6.8 BACKFILL-DISCONNECT-CANCELS (Session 32 I2.9) — after the
+  // three existing disconnect steps above (never before: the token must
+  // still be readable for anything mid-fetch, and discard's own guard
+  // makes ordering here immaterial anyway). p_user_id is null — the
+  // disconnect/system path has no authenticated session to name a user
+  // from (discard_backfill_run's own comment, 20260913130000:243-244).
+  // discard_backfill_run's guard (status NOT IN ('ratified','discarded'))
+  // leaves an already-ratified run's memory untouched, and a run that
+  // doesn't exist is a silent no-op — safe to call unconditionally whenever
+  // a live run is found.
+  try {
+    const { getLiveBackfillRunForAccount, discardBackfillRun } = await import('./backfill-runs')
+    const liveRun = await getLiveBackfillRunForAccount(id)
+    if (liveRun) {
+      await discardBackfillRun(liveRun.id, null)
+    }
+  } catch (err) {
+    captureException(err, { tags: { operation: 'discard_backfill_run' } })
+  }
 }
 
 // ADR 0028 §5.3 (N2.5) — getActiveByBusinessAndPlatform is REPLACED, not

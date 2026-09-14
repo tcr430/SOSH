@@ -2,9 +2,24 @@ import * as Sentry from '@sentry/nextjs'
 import { subMonths, formatISO } from 'date-fns'
 import { getRegistry, SocialProviderError } from '@/lib/social'
 import type { RecentPost } from '@/lib/social'
-import { getBackfillRunById, transitionBackfillRun, recordBackfillFetchProgress } from '@/lib/db/backfill-runs'
+import {
+  getBackfillRunById,
+  transitionBackfillRun,
+  recordBackfillFetchProgress,
+  getNextBackfillRunForTick,
+  sweepStalledBackfillRuns,
+  sweepExpiredBackfillStaging,
+  sweepExpiredStagedVoice,
+} from '@/lib/db/backfill-runs'
 import { stageBackfillPosts } from '@/lib/db/backfill-posts'
-import { BACKFILL_MAX_POSTS, BACKFILL_MAX_PAGES, BACKFILL_MAX_PLATFORM_READS, BACKFILL_LOOKBACK_MONTHS } from './constants'
+import {
+  BACKFILL_MAX_POSTS,
+  BACKFILL_MAX_PAGES,
+  BACKFILL_MAX_PLATFORM_READS,
+  BACKFILL_LOOKBACK_MONTHS,
+  BACKFILL_STALL_MINUTES,
+  BACKFILL_STAGING_TTL_DAYS,
+} from './constants'
 
 // ADR 0025 §2.3/§6.5 (Session 32 I2.8) — the fetch phase ONLY. Imports
 // lib/social via its index.ts barrel exclusively (the ESLint social
@@ -141,4 +156,92 @@ export async function fetchPhase(runId: string): Promise<FetchPhaseResult> {
   await recordBackfillFetchProgress(runId, postsStaged, platformPostsRead)
   await transitionBackfillRun(runId, ['fetching'], 'extracting')
   return { status: 'extracting', postsStaged, platformPostsRead }
+}
+
+// ADR §6.6 (Session 32 I2.9) — the cron tick. ONE unit of bounded work
+// (one run's fetch phase, OR one extraction unit once I2.10-I2.12 wire the
+// 'extracting' branch below), THEN the three sweeps, every invocation.
+// THE LOG LINE below (this file's sole console.log, mirroring
+// lib/metrics/orchestrator.ts's runMetricsSyncTick) carries run counts,
+// state transitions, reason codes and durations ONLY — never content,
+// cursors, tokens, handles, or platform_post_ids
+// (BACKFILL-ERROR-DETAILS-CONTENT-FREE).
+export interface BackfillTickSummary {
+  tick: string
+  durationMs: number
+  runId: string | null
+  runStatus: 'queued' | 'fetching' | 'extracting' | null
+  outcome: FetchPhaseResult['status'] | 'extraction_unit_pending' | 'idle'
+  errorCode: string | null
+  staleFailed: number
+  stagingPurged: number
+  stagedVoiceNulled: number
+}
+
+export async function runBackfillTick(opts?: { now?: Date }): Promise<BackfillTickSummary> {
+  return Sentry.withMonitor(
+    'backfill-tick',
+    async () => {
+      const start = Date.now()
+      const now = opts?.now ?? new Date()
+
+      const run = await getNextBackfillRunForTick()
+      let outcome: BackfillTickSummary['outcome'] = 'idle'
+      let errorCode: string | null = null
+
+      if (run) {
+        // getNextBackfillRunForTick's own query only ever returns one of
+        // these three statuses — narrowed here so the switch below is
+        // genuinely exhaustive over the reachable set, not the full
+        // BackfillRunStatus union (which also has terminal states this
+        // tick never claims).
+        const claimedStatus = run.status as 'queued' | 'fetching' | 'extracting'
+        switch (claimedStatus) {
+          case 'queued':
+          case 'fetching': {
+            const result = await fetchPhase(run.id)
+            outcome = result.status
+            if (result.status === 'failed') errorCode = result.errorCode
+            break
+          }
+          case 'extracting': {
+            // I2.10-I2.12 wire the extraction unit here (deterministic
+            // stats/weighting/format patterns, then the three model
+            // passes). Left as a typed, non-throwing no-op so this step's
+            // dispatch point exists without inventing extraction behaviour
+            // ahead of its own steps.
+            outcome = 'extraction_unit_pending'
+            break
+          }
+        }
+      }
+
+      const staleFailed = await sweepStalledBackfillRuns(BACKFILL_STALL_MINUTES)
+      const stagingPurged = await sweepExpiredBackfillStaging(BACKFILL_STAGING_TTL_DAYS)
+      const stagedVoiceNulled = await sweepExpiredStagedVoice(BACKFILL_STAGING_TTL_DAYS)
+
+      const summary: BackfillTickSummary = {
+        tick: formatISO(now),
+        durationMs: Date.now() - start,
+        runId: run?.id ?? null,
+        runStatus: run ? (run.status as BackfillTickSummary['runStatus']) : null,
+        outcome,
+        errorCode,
+        staleFailed,
+        stagingPurged,
+        stagedVoiceNulled,
+      }
+
+      console.log(JSON.stringify({ kind: 'backfill-tick', ...summary }))
+
+      return summary
+    },
+    {
+      schedule: { type: 'crontab', value: '* * * * *' },
+      checkinMargin: 2,
+      maxRuntime: 1,
+      failureIssueThreshold: 3,
+      recoveryThreshold: 1,
+    },
+  )
 }

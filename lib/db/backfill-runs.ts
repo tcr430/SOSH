@@ -186,3 +186,92 @@ export async function transitionBackfillRun(
   const rows = (data as SocialBackfillRunRow[] | null) ?? []
   return rows[0] ?? null
 }
+
+// ADR §6.5/§6.6 (Session 32 I2.9) — the cron tick's own claim read: ONE run
+// needing bounded work, oldest-updated first (matches
+// social_backfill_runs_claim_idx's (status, updated_at) shape exactly). A
+// concurrent tick racing the same row is not a correctness risk: the actual
+// mutation is transitionBackfillRun's conditional UPDATE above, which
+// simply no-ops (returns null) for whichever tick loses the race — this
+// read never claims exclusivity itself.
+export async function getNextBackfillRunForTick(): Promise<SocialBackfillRunRow | null> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client
+    .from('social_backfill_runs')
+    .select('*')
+    .in('status', ['queued', 'fetching', 'extracting'])
+    .order('updated_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as SocialBackfillRunRow | null) ?? null
+}
+
+// ADR §6.6 BACKFILL-LATENCY-BOUNDED (Session 32 I2.9) — over
+// sweep_stalled_backfill_runs (20260914020000_backfill_cron_sweeps.sql):
+// bulk conditional UPDATE, resumable (error_code='stalled', never
+// 'caller_bug'). Returns the count of runs failed this sweep.
+export async function sweepStalledBackfillRuns(stallMinutes: number): Promise<number> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client.rpc('sweep_stalled_backfill_runs', { p_stall_minutes: stallMinutes })
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as number | null) ?? 0
+}
+
+// ADR §8.3 (Session 32 I2.9) — over sweep_expired_backfill_staging: purges
+// social_backfill_posts rows for any run whose completed_at is older than
+// ttlDays. Returns the count of staging rows deleted.
+export async function sweepExpiredBackfillStaging(ttlDays: number): Promise<number> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client.rpc('sweep_expired_backfill_staging', { p_ttl_days: ttlDays })
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as number | null) ?? 0
+}
+
+// ADR §8.3 (Session 32 I2.9) — over sweep_expired_staged_voice: nulls
+// staged_voice for any run ratified more than ttlDays ago whose voice was
+// never reviewed. Returns the count of runs nulled.
+export async function sweepExpiredStagedVoice(ttlDays: number): Promise<number> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client.rpc('sweep_expired_staged_voice', { p_ttl_days: ttlDays })
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as number | null) ?? 0
+}
+
+// ADR §6.8 BACKFILL-DISCONNECT-CANCELS (Session 32 I2.9) — the disconnect
+// path's own read: the account's one LIVE (non-discarded) run, if any —
+// mirrors social_backfill_runs_live_account_uq's own predicate exactly, so
+// this can never return a run that index would treat as superseded.
+export async function getLiveBackfillRunForAccount(socialAccountId: string): Promise<SocialBackfillRunRow | null> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client
+    .from('social_backfill_runs')
+    .select('*')
+    .eq('social_account_id', socialAccountId)
+    .neq('status', 'discarded')
+    .maybeSingle()
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as SocialBackfillRunRow | null) ?? null
+}
+
+// ADR §6.5 (Session 32 I2.9) — the callback route's reconnect check: a
+// resumable failed run (error_code IS DISTINCT FROM 'caller_bug', mirroring
+// resume_backfill_run's own guard) on this account, if any.
+export async function getResumableFailedRunForAccount(socialAccountId: string): Promise<SocialBackfillRunRow | null> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client
+    .from('social_backfill_runs')
+    .select('*')
+    .eq('social_account_id', socialAccountId)
+    .eq('status', 'failed')
+    .neq('error_code', 'caller_bug')
+    .maybeSingle()
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as SocialBackfillRunRow | null) ?? null
+}

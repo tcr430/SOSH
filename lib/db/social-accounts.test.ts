@@ -1,5 +1,5 @@
 import { vi, describe, it, expect } from 'vitest'
-import { createMockClient } from './__test-utils__/mock-client'
+import { createMockClient, createSequentialMockClient } from './__test-utils__/mock-client'
 import * as serviceModule from '@/lib/supabase/service'
 import {
   listAllSocialAccounts,
@@ -127,8 +127,16 @@ describe('deactivateSocialAccount', () => {
     })
   })
 
-  it('does not call rpc for refresh token when null', async () => {
-    const { client } = createMockClient(mockAccount)
+  it('does not call rpc for refresh token when null (no live backfill run either)', async () => {
+    // 3 .from() calls: getSocialAccountById, the is_active UPDATE, and
+    // I2.9's getLiveBackfillRunForAccount read — the third resolves to
+    // null (no live run), so discard_backfill_run is never called.
+    const { client } = createSequentialMockClient([
+      { data: mockAccount, error: null },
+      { data: mockAccount, error: null },
+      { data: null, error: null },
+    ])
+    client.rpc = vi.fn().mockResolvedValue({ data: null, error: null })
     vi.mocked(serviceModule.createServiceRoleClient).mockReturnValue(client)
     await deactivateSocialAccount('sa-1')
     expect(client.rpc).toHaveBeenCalledTimes(1)
@@ -139,13 +147,61 @@ describe('deactivateSocialAccount', () => {
       ...mockAccount,
       vault_refresh_token_id: 'vault-refresh-1' as VaultSecretId,
     }
-    const { client } = createMockClient(accountWithRefresh)
+    const { client } = createSequentialMockClient([
+      { data: accountWithRefresh, error: null },
+      { data: accountWithRefresh, error: null },
+      { data: null, error: null },
+    ])
+    client.rpc = vi.fn().mockResolvedValue({ data: null, error: null })
     vi.mocked(serviceModule.createServiceRoleClient).mockReturnValue(client)
     await deactivateSocialAccount('sa-1')
     expect(client.rpc).toHaveBeenCalledTimes(2)
     expect(client.rpc).toHaveBeenCalledWith('vault_delete_secret', {
       secret_id: 'vault-refresh-1',
     })
+  })
+
+  // ADR 0025 §6.8 BACKFILL-DISCONNECT-CANCELS (Session 32 I2.9). Redden:
+  // comment out the discard_backfill_run block in deactivateSocialAccount —
+  // this assertion fails (rpc never called with that name). Reverted after
+  // confirming red.
+  it('discards a live (non-terminal) backfill run on the account, with p_user_id null (system path)', async () => {
+    const liveRun = { id: 'run-1', status: 'fetching' }
+    const { client } = createSequentialMockClient([
+      { data: mockAccount, error: null },
+      { data: mockAccount, error: null },
+      { data: liveRun, error: null },
+    ])
+    client.rpc = vi.fn().mockResolvedValue({ data: null, error: null })
+    vi.mocked(serviceModule.createServiceRoleClient).mockReturnValue(client)
+    await deactivateSocialAccount('sa-1')
+    expect(client.rpc).toHaveBeenCalledWith('discard_backfill_run', { p_run_id: 'run-1', p_user_id: null })
+  })
+
+  it('an already-ratified/discarded run (no live row found) is not discarded again', async () => {
+    const { client } = createSequentialMockClient([
+      { data: mockAccount, error: null },
+      { data: mockAccount, error: null },
+      { data: null, error: null }, // getLiveBackfillRunForAccount excludes status='discarded'; ratified rows still LIVE but discard is a guarded no-op server-side
+    ])
+    client.rpc = vi.fn().mockResolvedValue({ data: null, error: null })
+    vi.mocked(serviceModule.createServiceRoleClient).mockReturnValue(client)
+    await deactivateSocialAccount('sa-1')
+    expect(client.rpc).not.toHaveBeenCalledWith('discard_backfill_run', expect.anything())
+  })
+
+  it('a thrown discard_backfill_run RPC does not fail the disconnect (best-effort)', async () => {
+    const liveRun = { id: 'run-1', status: 'fetching' }
+    const { client } = createSequentialMockClient([
+      { data: mockAccount, error: null },
+      { data: mockAccount, error: null },
+      { data: liveRun, error: null },
+    ])
+    client.rpc = vi.fn().mockImplementation((name: string) =>
+      name === 'discard_backfill_run' ? Promise.reject(new Error('discard failed')) : Promise.resolve({ data: null, error: null }),
+    )
+    vi.mocked(serviceModule.createServiceRoleClient).mockReturnValue(client)
+    await expect(deactivateSocialAccount('sa-1')).resolves.toBeUndefined()
   })
 
   it('does not throw when vault deletion fails (best-effort)', async () => {

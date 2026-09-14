@@ -27,11 +27,22 @@ vi.mock('@/lib/db/businesses', () => ({
   getBusinessById: vi.fn(),
 }))
 
+vi.mock('@/lib/db/backfill-runs', () => ({
+  enqueueBackfillRun: vi.fn(),
+  resumeBackfillRun: vi.fn(),
+  getResumableFailedRunForAccount: vi.fn(),
+}))
+
+vi.mock('@/lib/backfill/orchestrator', () => ({
+  fetchPhase: vi.fn(),
+}))
+
 import { GET } from './route'
 import { verifyOAuthState, getRegistry, isPlatform } from '@/lib/social'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/service'
 import { getBusinessById } from '@/lib/db/businesses'
+import { enqueueBackfillRun, resumeBackfillRun, getResumableFailedRunForAccount } from '@/lib/db/backfill-runs'
 
 const mockVerifyOAuthState = vi.mocked(verifyOAuthState)
 const mockGetRegistry = vi.mocked(getRegistry)
@@ -39,6 +50,9 @@ const mockIsPlatform = vi.mocked(isPlatform)
 const mockCreateClient = vi.mocked(createClient)
 const mockCreateServiceRoleClient = vi.mocked(createServiceRoleClient)
 const mockGetBusinessById = vi.mocked(getBusinessById)
+const mockEnqueueBackfillRun = vi.mocked(enqueueBackfillRun)
+const mockResumeBackfillRun = vi.mocked(resumeBackfillRun)
+const mockGetResumableFailedRunForAccount = vi.mocked(getResumableFailedRunForAccount)
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -154,6 +168,14 @@ beforeEach(() => {
   } as never)
 
   mockCreateServiceRoleClient.mockReturnValue(makeServiceClient() as never)
+
+  // I2.9 defaults: no resumable run (fresh connect enqueues), enqueue
+  // succeeds with a run row (so the after()-scheduled tick has something
+  // to call, though that tick is itself best-effort and never asserted on
+  // here — see the dedicated backfill-enqueue describe block below).
+  mockGetResumableFailedRunForAccount.mockResolvedValue(null)
+  mockEnqueueBackfillRun.mockResolvedValue({ id: 'run-1' } as never)
+  mockResumeBackfillRun.mockResolvedValue({ id: 'run-1' } as never)
 })
 
 // ── Tests ──────────────────────────────────────────────────────────────────
@@ -359,5 +381,40 @@ describe('GET /api/social/[platform]/callback — scopes_granted persistence', (
 
     const upsertChain = serviceClient.from.mock.results[1]!.value as { upsert: ReturnType<typeof vi.fn> }
     expect(upsertChain.upsert.mock.calls[0]![0]).toMatchObject({ scopes_granted: [] })
+  })
+})
+
+// ADR 0025 §6.5 (Session 32 I2.9) — enqueue-or-resume on connect. The
+// callback route is the ONE place both entry paths (onboarding step-3
+// connect and a settings reconnect) land, so there is exactly one call
+// site to prove this at.
+describe('GET /api/social/[platform]/callback — backfill enqueue (I2.9)', () => {
+  it('a fresh connect (no resumable run) calls enqueueBackfillRun with business/account/platform', async () => {
+    mockGetResumableFailedRunForAccount.mockResolvedValue(null)
+    const serviceClient = makeServiceClient({ upsertResult: { data: { id: 'sa-42' }, error: null } })
+    mockCreateServiceRoleClient.mockReturnValue(serviceClient as never)
+
+    await GET(makeRequest(), routeParams())
+
+    expect(mockEnqueueBackfillRun).toHaveBeenCalledWith(BUSINESS_ID, 'sa-42', 'linkedin')
+    expect(mockResumeBackfillRun).not.toHaveBeenCalled()
+  })
+
+  it('a reconnect with a resumable failed run calls resumeBackfillRun on the SAME id, never enqueue', async () => {
+    mockGetResumableFailedRunForAccount.mockResolvedValue({ id: 'run-failed-1' } as never)
+
+    await GET(makeRequest(), routeParams())
+
+    expect(mockResumeBackfillRun).toHaveBeenCalledWith('run-failed-1')
+    expect(mockEnqueueBackfillRun).not.toHaveBeenCalled()
+  })
+
+  it('enqueueBackfillRun throwing still returns the normal callback redirect', async () => {
+    mockEnqueueBackfillRun.mockRejectedValue(new Error('backfill service unavailable'))
+
+    const response = await GET(makeRequest(), routeParams())
+
+    expect(response.status).toBe(307)
+    expect(response.headers.get('location')).toContain('/en/settings/accounts?connected=linkedin')
   })
 })
