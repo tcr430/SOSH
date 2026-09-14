@@ -1083,3 +1083,193 @@ property the build guide's own §0 sign-off block found unimplementable.
 | X refresh-rotation race | `30.5-X-REFRESH-ROTATION` | unchanged |
 
 _End ADR 0025._
+
+---
+
+## 14. Builder verification (I2.15)
+
+**Scope reviewed:** `4f3e7129..9359a708` (BASE = the commit immediately before I2.1; HEAD = I2.14). All
+commands below were run against this exact range. Sections 0-13 above are unedited (this section is
+purely additive, per this step's own instruction).
+
+### 14.1 Tier 3 — diff-verified, no runtime test by decision
+
+For each, the exact command, its output at HEAD, and a demonstration that it catches a planted violation
+(planted on the working tree against BASE, shown, then reverted — never committed).
+
+**BACKFILL-NO-RAW-TOKEN (13).**
+```
+git diff 4f3e7129..HEAD -- lib/ | grep -inE '^\+.*(token|secret|refresh|access_?token)'
+```
+Every hit at HEAD is inside a test file, a mock, an error-code string (`TOKEN_EXPIRED`/`TOKEN_REVOKED`),
+or a pre-existing column (`token_expires_at`, already in `SocialAccountRow` before this session) — no
+new `type`/`interface`/row type carries a raw token field, and no new producer or consumer of `TokenSet`
+was added. One local parameter, `fetchTimelinePage(token: string, …)`, holds an already-decrypted token
+transiently in memory for a single request — the same shape the pre-existing `withFreshToken` pattern
+already uses elsewhere in this provider, not a new storage or transport path.
+Violation demonstration: appended `export interface TestViolation { access_token: string }` to
+`lib/db/backfill-runs.ts`, then ran `git diff 4f3e7129 -- lib/db/backfill-runs.ts | grep -inE
+'^\+.*(access_?token|refresh_?token|secret)\s*:'` — hit confirmed (`+export interface TestViolation {
+access_token: string }`). Reverted (file diff-clean afterward).
+
+**BACKFILL-AFTER-CONNECT-CLOCK-UNTOUCHED (25).**
+```
+git diff 4f3e7129..HEAD -- supabase/migrations/ | grep -inE 'trial_state|find_trial_expiring_between|trigger.*trial'
+```
+One hit, a *comment* in `20260913120000_social_accounts_identity_lock.sql`: *"The trial trigger
+(20260430120008_social_accounts_trial_trigger.sql) is untouched."* — prose stating non-interference, not
+a reference that touches the trigger, the function, `trial_state`, or `find_trial_expiring_between`.
+Violation demonstration: appended `-- UPDATE trial_state SET x = 1;` to a migration file in this range,
+re-ran the grep, confirmed the hit, reverted.
+
+**BACKFILL-NO-RELATIONSHIP-MEMORY (50).**
+```
+git diff 4f3e7129..HEAD | grep -inE 'relationship_memory'
+```
+Zero hits. Violation demonstration: appended `-- relationship_memory placeholder` to a migration file in
+this range, re-ran the grep, confirmed the hit, reverted.
+
+**BACKFILL-NO-GENERATION-CHANGE (51).**
+```
+git diff 4f3e7129..HEAD --stat -- lib/ai/
+```
+`lib/ai/context.ts` and `lib/ai/wrap-evidence.ts` do not appear in the stat at all (zero lines changed —
+`CustomerContext`'s shape and its builder are untouched). The files that DO appear are: three new prompt
+files (`backfill-evidence.ts`, `backfill-insights.ts`, `backfill-voice-synthesis.ts` — new files, not
+edits to an existing prompt), `frozen-table.ts` (+29, the three new backfill prompt-id rows), `runner.ts`
+(+25/-4, classification only), and test files for all of the above. No existing prompt file other than
+the frozen table and runner classification changed.
+Violation demonstration: appended `// planted change` to `lib/ai/context.ts`, re-ran the stat command,
+confirmed `lib/ai/context.ts | 1 +` appeared, reverted.
+
+**BACKFILL-NO-CROSS-CUSTOMER-LEARNING (52).**
+```
+git diff 4f3e7129..HEAD -- supabase/migrations/ | grep -inE 'CREATE (OR REPLACE )?(VIEW|FUNCTION)' | grep -viE 'business_id|p_business_id'
+```
+Zero hits — every new function in the range takes `p_business_id`, `p_run_id` (itself business-owned,
+with the I2.6 review-fixes migration's explicit `p_business_id` vs. the run's own `business_id`
+consistency guard on every import RPC), or no business-scoped argument at all because it operates on a
+single named row (`p_run_id uuid` alone, e.g. `resume_backfill_run`). No new VIEW was added in this
+range at all. No aggregate across businesses is computed or stored anywhere in `lib/backfill/` or the new
+migrations (manually verified against every RPC body in the I2.5/I2.6/I2.13 migrations, not just the
+grep signature check).
+Violation demonstration: appended `CREATE VIEW public.test_cross_business_view AS SELECT pattern FROM
+public.performance_memory;` to a migration file in this range, re-ran the grep, confirmed the hit (the
+new view's signature has no `business_id`/`p_business_id` token), reverted.
+
+### 14.2 The constraint → CI map
+
+All 56 rows. The tier/proof columns are transcribed from §12's table (unedited). **The "executed green
+in CI at `<sha>`" column is left EMPTY** — per this step's own instruction, it may only be filled in
+after the pushed HEAD's CI runs have been opened and read, which has not happened yet (see §14.4).
+
+| # | Constraint | Tier | Test file / diff command / protocol | Step | Commit | CI job | Executed green in CI at `<sha>` |
+|---|---|---|---|---|---|---|---|
+| 1 | BACKFILL-READ-ON-ABSTRACTION | 2 | `provider-contract.test.ts`, `no-read-path.test.ts` | I2.2 | `f39f3394` | app-tests | — |
+| 2 | BACKFILL-READ-FLAG-CONSISTENT | 2 | `provider-contract.test.ts` | I2.2 | `f39f3394` | app-tests | — |
+| 3 | BACKFILL-PROVIDER-BOUNDED | 2 | contract suite | I2.2 | `f39f3394` | app-tests | — |
+| 4 | BACKFILL-CURSOR-ACCOUNT-BOUND | 2 | mock + X fixture tests | I2.3 | `0b92f079` | app-tests | — |
+| 5 | BACKFILL-OWN-POSTS-ONLY | 2 | X fixture test, mock `mixed-types` | I2.3 | `0b92f079` | app-tests | — |
+| 6 | BACKFILL-IDENTITY-VERIFIED | 2 | X fixture test | I2.3 | `0b92f079` | app-tests | — |
+| 7 | BACKFILL-NO-COMMENT-READ | 2 | source scan | I2.1 | `fd2d59ea` | app-tests | — |
+| 8 | BACKFILL-PROVIDER-NEVER-SLEEPS | 2 | fixture tests + scan | I2.3 | `0b92f079` | app-tests | — |
+| 9 | BACKFILL-ERROR-DETAILS-CONTENT-FREE | 2 | fixture tests | I2.9 | `8e5b0177` | app-tests | — |
+| 10 | BACKFILL-MOCK-FIXTURES-MEANINGFUL | 2 | `SOCIAL-MOCK-MODE-OFFLINE`, extended | I2.2 | `f39f3394` | app-tests | — |
+| 11 | BACKFILL-NO-PROVIDER-IMPORT-OUTSIDE-SOCIAL | 2 | `eslint-internals-ban.test.ts` | I2.1 | `fd2d59ea` | app-tests | — |
+| 12 | BACKFILL-VAULT-PATH-REUSED | 2 | scan + provider tests | I2.3 | `0b92f079` | app-tests | — |
+| 13 | BACKFILL-NO-RAW-TOKEN | 3 | diff (§14.1) | I2.15 | `<this commit>` | none-by-decision | — |
+| 14 | BACKFILL-SOCIAL-ACCOUNT-IDENTITY-LOCKED | 1 | `supabase/__tests__` | I2.4 | `828e5c53` | db-tests | — |
+| 15 | BACKFILL-SCOPES-PERSISTED | 2 | callback + refresh tests | I2.4 | `828e5c53` | app-tests | — |
+| 16 | BACKFILL-RUN-BOUNDED | 2 | orchestrator tests | I2.8 | `5fd62d85` | app-tests | — |
+| 17 | BACKFILL-X-READ-BOUNDED | 2 | orchestrator tests | I2.8 | `5fd62d85` | app-tests | — |
+| 18 | BACKFILL-ONCE-PER-ACCOUNT | 1 | `supabase/__tests__` | I2.5 | `9db35d8e` | db-tests | — |
+| 19 | BACKFILL-CLAIM-ATOMIC | 1 | `supabase/__tests__` | I2.5 | `9db35d8e` | db-tests | — |
+| 20 | BACKFILL-RESUMABLE-OR-DISCARDED | 2 | orchestrator tests | I2.13 | `f6539e19` | app-tests | — |
+| 21 | BACKFILL-NOTHING-ACTIVE-BEFORE-RATIFY | 1 | `supabase/__tests__` | I2.6 | `893e8b67` | db-tests | — |
+| 22 | BACKFILL-COST-CEILINGED | 1 | `supabase/__tests__` | I2.5 | `9db35d8e` | db-tests | — |
+| 23 | BACKFILL-BUDGET-PURPOSE | 1 | `supabase/__tests__` | I2.5 | `9db35d8e` | db-tests | — |
+| 24 | BACKFILL-TRIAL-CAPS-UNTOUCHED | 2 | `runner.test.ts` | I2.11 | `bbd7b0a9` | app-tests | — |
+| 25 | BACKFILL-AFTER-CONNECT-CLOCK-UNTOUCHED | 3 | diff (§14.1) | I2.15 | `<this commit>` | none-by-decision | — |
+| 26 | BACKFILL-LATENCY-BOUNDED | 2 | callback + sweep tests | I2.9 | `8e5b0177` | app-tests | — |
+| 27 | BACKFILL-DISCONNECT-CANCELS | 2 | disconnect tests | I2.9 | `8e5b0177` | app-tests | — |
+| 28 | BACKFILL-STAGING-PURGED | 2 | sweep + action tests | I2.13 | `f6539e19` | app-tests | — |
+| 29 | BACKFILL-UNSUPPORTED-PLATFORM-HONEST | 2 | orchestrator tests | I2.8 | `5fd62d85` | app-tests | — |
+| 30 | BACKFILL-DETERMINISTIC-FIRST | 2 | orchestrator tests | I2.11 | `bbd7b0a9` | app-tests | — |
+| 31 | BACKFILL-PERFORMANCE-WEIGHTED | 2 | extractor tests | I2.10 | `84574b13` | app-tests | — |
+| 32 | BACKFILL-CONFIDENCE-CAPPED | 2 | extractor tests | I2.10 | `84574b13` | app-tests | — |
+| 33 | BACKFILL-EVIDENCE-VERBATIM | 2 | extractor tests | I2.12 | `6e9eb91f` | app-tests | — |
+| 34 | BACKFILL-EVIDENCE-NOT-PUBLIC | 1 | `supabase/__tests__` | I2.6 | `893e8b67` | db-tests | — |
+| 35 | BACKFILL-SENTINEL-GUARDED | 2 | `lib/db/memory-*.test.ts` | I2.7 | `b1a45f54` | app-tests | — |
+| 36 | BACKFILL-WRITE-CAPS | 2 | extractor + action tests | I2.13 | `f6539e19` | app-tests | — |
+| 37 | BACKFILL-NO-URL-FETCH | 2 | source scan | I2.1 | `fd2d59ea` | app-tests | — |
+| 38 | BACKFILL-PROVENANCE-MARKED | 1 | `supabase/__tests__` | I2.6 | `893e8b67` | db-tests | — |
+| 39 | BACKFILL-PROVENANCE-IMMUTABLE | 1 | `supabase/__tests__` | I2.6 | `893e8b67` | db-tests | — |
+| 40 | BACKFILL-PROVENANCE-SURVIVES-PROMOTION | 1 | `supabase/__tests__` | I2.6 | `893e8b67` | db-tests | — |
+| 41 | BACKFILL-SOURCE-DATED | 2 | writer tests | I2.7 | `b1a45f54` | app-tests | — |
+| 42 | BACKFILL-ACCOUNTS-SEPARATE | 2 | `two-accounts` fixture | I2.13 | `f6539e19` | app-tests | — |
+| 43 | BACKFILL-PER-POST-REMOVABLE | 1 | `supabase/__tests__` | I2.6 | `893e8b67` | db-tests | — |
+| 44 | BACKFILL-VOICE-RATIFIED | 2 | action tests | I2.13 | `f6539e19` | app-tests | — |
+| 45 | BACKFILL-RATIFY-ATOMIC | 1 | `supabase/__tests__` | I2.6 | `893e8b67` | db-tests | — |
+| 46 | BACKFILL-VOICE-RETRYABLE | 2 | action tests | I2.13 | `f6539e19` | app-tests | — |
+| 47 | BACKFILL-RLS-ISOLATED | 1 | `supabase/__tests__` | I2.5 | `9db35d8e` | db-tests | — |
+| 48 | BACKFILL-CASCADE-COMPLETE | 1 | `supabase/__tests__` | I2.5 | `9db35d8e` | db-tests | — |
+| 49 | BACKFILL-PURGE-COVERED | 1 | `supabase/__tests__` | I2.6 | `893e8b67` | db-tests | — |
+| 50 | BACKFILL-NO-RELATIONSHIP-MEMORY | 3 | diff (§14.1) | I2.15 | `<this commit>` | none-by-decision | — |
+| 51 | BACKFILL-NO-GENERATION-CHANGE | 3 | diff (§14.1) | I2.15 | `<this commit>` | none-by-decision | — |
+| 52 | BACKFILL-NO-CROSS-CUSTOMER-LEARNING | 3 | diff (§14.1) | I2.15 | `<this commit>` | none-by-decision | — |
+| 53 | BACKFILL-UX-STATES | 2 | `BackfillPanel.test.tsx` | I2.14 | `9359a708` | app-tests | — |
+| 54 | BACKFILL-I18N-PARITY | 2 | `lib/i18n/backfill-parity.test.ts` | I2.14 | `9359a708` | app-tests | — |
+| 55 | BACKFILL-POPULATED-MEMORY-EVAL | E | out-of-band run artefact (§14.3) | I2.15 | `<this commit>` | out-of-band | MEASURED — NOT YET RUN |
+| 56 | BACKFILL-IMPORT-IDEMPOTENT | 1 | `supabase/__tests__` | I2.6 | `893e8b67` | db-tests | — |
+
+**Total: 56 constraints — Tier 1: 16 · Tier 2: 34 · Tier 3: 5 · Tier E: 1.** No total is claimed as
+"executed green in CI" — every cell in that column is empty pending §14.4.
+
+**db-tests skip-guard.** Not yet read — requires the same opened CI run as §14.4. Recorded here as an
+explicit gap, not silently skipped: whoever opens the db-tests run must record the skip-guard's file and
+test counts in this cell before the Tier-1 row above can be marked green.
+
+### 14.3 Tier E — BACKFILL-POPULATED-MEMORY-EVAL (55)
+
+Recorded as a runnable, founder-triggered protocol. **Not run. Do not run without the founder's explicit
+go-ahead** (real spend, a real X account).
+
+1. Connect a real X account the founder owns (a test/founder-personal account, not a customer's).
+2. Let the backfill run to `awaiting_ratification`; ratify some non-trivial subset of what it finds (the
+   founder's own judgment call — this protocol does not prescribe accept/reject choices).
+3. Build stub memory for the Session 30 eval corpus **from that real, ratified output** — not
+   hand-authored stubs, the difference D9 could not establish (§11.4).
+4. Re-run the Session 30 corpus (`corpus.v2.json`, **unmodified** — this protocol does not touch it) with
+   the real-backfill-built stub memory in place.
+5. Compare recall/precision against D9's baseline: **recall 0/24 → 11/24 with hand-authored stubs;
+   precision 11/11; $0.66.**
+6. **Neither outcome is a pass/fail gate on this session's code.** This session's constraints (1-54, 56)
+   are proven independently by their own tests; this protocol measures something ADR §11.4 explicitly
+   says D9 could not establish (that *realistic*, not hand-written-to-be-relevant, memory helps) — a
+   product/quality question, not a correctness one.
+
+**Expected cost:** one backfill run (≤ 50¢ per the run's own `ceiling_cents`) plus one corpus re-run at
+Haiku/Sonnet triage rates — the same order of magnitude as D9's $0.66, not materially more.
+
+### 14.4 What remains before this appendix is complete
+
+The following require pushing this branch and reading the resulting CI runs — **not done as part of this
+Builder session**, flagged here rather than fabricated:
+
+- Every `<sha>` in the "Commit" column of §14.2 is a real, already-made commit on this branch; the
+  **"executed green in CI at `<sha>`"** column requires opening the app-tests (and, once promoted,
+  db-tests) run for the pushed HEAD and reading its result — not inferring it from a local `vitest run`.
+- The db-tests skip-guard line (file + test counts) must be read from that same opened run's log.
+- §14.2's `I2.15` rows (`<this commit>`) get their real SHA once this step's own commit exists — recorded
+  here as a placeholder, not backfilled by amending a prior commit.
+
+Once those runs exist and are read, this section (§14.4) is superseded by filling in §14.2's empty column
+and recording the actual `<sha>` for the three `<this commit>` placeholders — never by editing this
+prose in place (this file's own §14 is additive-only by the same convention as
+`docs/evidence/0010-legal-evidence.md`'s amendments).
+
+**Session 32 Builder complete — range `4f3e7129..9359a708`, 15 steps (I2.1-I2.15), 51/55 non-E
+constraints closed by a passing test or a diff-verified check that has been run locally and shown to
+catch a planted violation (Tier 1 16/16, Tier 2 34/34, Tier 3 5/5 diff-verified locally) — 0/55 yet
+confirmed "executed green in CI" because no run has been opened and read (§14.4), Tier E recorded not
+run, LinkedIn read built not served.**

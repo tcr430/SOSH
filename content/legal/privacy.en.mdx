@@ -77,6 +77,8 @@ We do not use your content or personal data to train AI models. The AI we use (A
 
 - **Directly from you:** at registration, during onboarding, when managing campaigns and posts.
 - **From social platforms:** profile identifiers, usernames, and display names received via OAuth when you connect a social account.
+<!-- AWAITING COUNSEL REVIEW (ADR 0025 §8.6): processor posture for importing the customer's own account history, and founder-personal-account purpose limitation / possible Art. 9 special-category content in a two-year lookback. -->
+- **From your own past posts on a platform you connect:** when you connect a supported account (currently X/Twitter), we read up to 200 of your own recent posts from the last 24 months so we can suggest a starting brand voice and starting points for your content memory. We only ever read posts you authored yourself — never replies, reposts, or content from other people, and never other people's comments on your posts. Nothing from this import is used until you review and approve it.
 - **From Stripe:** billing events and payment status via webhook.
 - **Automatically:** rate-limit records, usage telemetry, error events.
 
@@ -108,6 +110,8 @@ Where any sub-processor transfers data outside the EEA in future, we will update
 | Brand voice profiles, campaigns, and posts | Same |
 | Social account OAuth tokens | Deleted immediately on disconnect (access revoked, identifiers removed, vault secret deleted) |
 | Social account metadata (username, display name) | Lifetime of account + 30 days |
+| Imported posts you haven't yet reviewed | Deleted at review, if you dismiss the import, if you disconnect the account, or after 30 days, whichever comes first |
+| Content saved to memory from an import you approved | Same rules as any other saved memory item: until you delete it, or up to 12 months for a specific quoted excerpt |
 | Billing records | 10 years from the transaction date (Portuguese tax law) |
 | Security and rate-limit records (IP addresses, email keys) | 30 days |
 | Error monitoring events | 90 days (Sentry platform default) |

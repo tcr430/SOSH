@@ -720,3 +720,53 @@ amendment updates the Evidence Pack itself; it does **not** touch `content/legal
 covering this amendment, per CLAUDE.md's standing rule — not done here because this is a code-removal
 session (N2.11), not a legal-copy session, and `[LEGAL ENTITY]` substitution and legal-copy edits stay
 gated on counsel ratification regardless.
+
+## Amendment A3 — Cold-start social backfill import (Session 32, ADR 0025)
+
+**Session:** 32 (ADR 0025, `docs/decisions/0025-social-read-path-and-backfill.md`). **Scope:** a new fact
+pattern this Evidence Pack has not previously described — reading a customer's OWN recent posts on a
+platform they connect, to seed memory during onboarding. Nothing above this heading is edited (this
+file's own append-only house form).
+
+**What is read.** On connecting a supported account (X/Twitter today; LinkedIn is built but not served —
+see current-phase.md), up to 200 of the connecting customer's own posts from the last 24 months, capped
+at 5 pages and 500 platform API reads per run (ADR §6.1/§6.2, `BACKFILL-RUN-BOUNDED` /
+`BACKFILL-X-READ-BOUNDED`). Only the connecting account's own original posts — replies, reposts and
+quotes of others are excluded by request shape (`BACKFILL-OWN-POSTS-ONLY`), and the first page verifies
+the token's identity matches the connected `platform_user_id` before any content is used
+(`BACKFILL-IDENTITY-VERIFIED`). No third party's comments, likes, or other engagers are ever read
+(`BACKFILL-NO-COMMENT-READ`).
+
+**What is derived and retained, and for how long.** Three deterministic/model passes over the customer's
+own staged post text produce candidate rows in the existing governed memory stores (`evidence_memory`,
+`audience_memory`, `performance_memory`) and a staged voice profile, all marked `source='import'` with an
+immutable link back to the run and the originating post ids (ADR §5.1, `BACKFILL-PROVENANCE-MARKED` /
+`-IMMUTABLE`). Retention:
+- Evidence rows (verbatim excerpts ≤ 500 characters, `BACKFILL-EVIDENCE-VERBATIM`) expire 12 months from
+  the source post's own publish date, capped at 40 per account.
+- Audience and performance rows carry the same governance `expires_at`/`confidence` fields as any other
+  memory row (≤ 25 and ≤ 15 per account respectively).
+- Nothing is retained "candidate" indefinitely: the founder must ratify (promote to `active`) or discard
+  each item; nothing an import writes is used in generation before ratification
+  (`BACKFILL-NOTHING-ACTIVE-BEFORE-RATIFY`). Raw staged post text itself is deleted from
+  `social_backfill_posts` at ratification, discard, disconnect, or a 30-day TTL sweep, whichever comes
+  first (`BACKFILL-STAGING-PURGED`) — it never persists as its own retained record past that point.
+- Evidence rows import with `public_use_permission` fixed `false` — nothing an import writes is ever
+  shown publicly without a separate, not-yet-built opt-in (`BACKFILL-EVIDENCE-NOT-PUBLIC`).
+
+**Identity lock.** The import is scoped to exactly the connecting `social_accounts` row; two accounts on
+one business never mix runs, candidates, or staged voices (`BACKFILL-ACCOUNTS-SEPARATE`).
+
+**Per-post removal.** If a customer later disputes or wants a specific post's derived memory removed, the
+per-post-id removal path retracts exactly the memory rows backed by that post id, on any of the three
+memory tables (`BACKFILL-PER-POST-REMOVABLE`, `supabase/__tests__`).
+
+**No cross-customer use.** Every import RPC and every read of imported rows is business-scoped; no query,
+view, or job in this session's code aggregates imported content across businesses
+(`BACKFILL-NO-CROSS-CUSTOMER-LEARNING`, diff-verified — see the ADR's own Builder verification appendix,
+§14).
+
+**Not resolved by this amendment:** this is a code/behaviour description only. `content/legal/*.mdx`'s
+privacy prose is updated in the same commit that adds this section (`evidenceRef` bumped to this commit),
+but the `[LEGAL ENTITY]` placeholder is untouched and the new prose is flagged in-file as awaiting counsel
+review, per ADR 0025 §8.6 and this file's standing gate on entity substitution.

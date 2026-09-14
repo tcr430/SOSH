@@ -128,6 +128,10 @@ Setup runbook: `docs/build-guide/runbooks/qstash-setup.md`
   - sync-metrics (`0 * * * *`)
   - process-deletions (`0 3 * * *`, retries=0 — see `docs/build-guide/runbooks/qstash-setup.md` Step 2b)
   - capture-learning (`0 * * * *`, ADR 0018 §9.2 — see `docs/build-guide/runbooks/qstash-setup.md` Step 2c)
+  - **backfill (`* * * * *`, every minute — ADR 0025 §6.6, Session 32 I2.9) — NOT YET CREATED as a QStash
+    schedule.** `/api/cron/backfill` exists and is bounded (one queued/fetching/extracting run's worth
+    of work per tick), but no schedule entry has been added to `qstash-setup.md` or provisioned in the
+    Upstash console. Owed before backfill can run unattended in production.
 - [ ] **Email cron schedules visible** in Upstash console: `drain-email-outbox` (`* * * * *`) and `trial-warnings` (`0 9 * * *`), status Active.
 - [ ] **First production tick observed** in Vercel logs with `triggeredBy: 'qstash'`:
   - `/api/cron/publish` — look for `{"kind":"publish-tick","triggeredBy":"qstash",...}` within 10 minutes of deploy.
@@ -510,6 +514,34 @@ none is planned** — capping something nobody adjudicated would make the produc
 was sold. N2.1's discrepancy between two sources on X's pay-per-use read cap (2M vs. §14.3's stated 3M) is
 carried forward **unresolved** — a factual gap, re-check against the live Developer Console billing page once
 a real X developer account exists (§14.1 Stage 1).
+
+---
+
+## 16c. Social backfill import — launch gates (ADR 0025 §6.2, §8.6, Session 32 I2.15)
+
+**Not yet observed — no real customer has connected an X account through the native flow yet (see
+Amendment A2/current-phase.md).**
+
+- [ ] **X paid-tier read quota verified against real usage.** ADR §6.2 budgets 500 platform API reads per
+  backfill run (`BACKFILL-X-READ-BOUNDED`). Before this scales past a handful of connects, confirm the
+  live Developer Console's per-app read cap against `500 reads × expected connects/month` — the same
+  N2.1 pay-per-use figure discrepancy §16b already flags as unresolved (2M vs. 3M reads) applies here
+  too; re-check on the same live billing page.
+- [ ] **10-minute latency target observed on first real connects.** ADR §6.6 (`BACKFILL-LATENCY-BOUNDED`)
+  stalls a run to `failed` after 30 minutes with no progress, but the target user-facing experience is
+  "ready to review within about 10 minutes" of connecting. Not yet measured against a real X account —
+  record the first three real-customer timings here once observed: `<fill>`.
+- [ ] **Counsel review list (ADR §8.6)** — none of the five items below are resolved; none block code from
+  shipping, but backfill should not be **promoted from onboarding to prod-default** before they are:
+  1. The Evidence Pack entry (Amendment A3, `docs/evidence/0010-legal-evidence.md`) and the processor
+     posture for importing a customer's own account history.
+  2. Founder personal accounts: purpose limitation and possible Art. 9 special-category content in a
+     24-month personal history. Flagged inline in `content/legal/privacy.en.mdx` §4.
+  3. X Developer Agreement: deletion-sync obligations, stored content used as AI context, and the paid
+     tier's terms (shares its tracking item with §16b's `A-10`).
+  4. The testimonial-permission confirmation copy (A-6), in all three locales — not yet written; evidence
+     permission stays off with no toggle until this exists.
+  5. LinkedIn: nothing new until `r_member_social` is pursued (§16a already tracks the legal-entity gate).
 
 ---
 
