@@ -1177,7 +1177,7 @@ after the pushed HEAD's CI runs have been opened and read, which has not happene
 | 10 | BACKFILL-MOCK-FIXTURES-MEANINGFUL | 2 | `SOCIAL-MOCK-MODE-OFFLINE`, extended | I2.2 | `f39f3394` | app-tests | — |
 | 11 | BACKFILL-NO-PROVIDER-IMPORT-OUTSIDE-SOCIAL | 2 | `eslint-internals-ban.test.ts` | I2.1 | `fd2d59ea` | app-tests | — |
 | 12 | BACKFILL-VAULT-PATH-REUSED | 2 | scan + provider tests | I2.3 | `0b92f079` | app-tests | — |
-| 13 | BACKFILL-NO-RAW-TOKEN | 3 | diff (§14.1) | I2.15 | `<this commit>` | none-by-decision | — |
+| 13 | BACKFILL-NO-RAW-TOKEN | 3 | diff (§14.1) | I2.15 | `70773e87` | none-by-decision | — |
 | 14 | BACKFILL-SOCIAL-ACCOUNT-IDENTITY-LOCKED | 1 | `supabase/__tests__` | I2.4 | `828e5c53` | db-tests | — |
 | 15 | BACKFILL-SCOPES-PERSISTED | 2 | callback + refresh tests | I2.4 | `828e5c53` | app-tests | — |
 | 16 | BACKFILL-RUN-BOUNDED | 2 | orchestrator tests | I2.8 | `5fd62d85` | app-tests | — |
@@ -1189,7 +1189,7 @@ after the pushed HEAD's CI runs have been opened and read, which has not happene
 | 22 | BACKFILL-COST-CEILINGED | 1 | `supabase/__tests__` | I2.5 | `9db35d8e` | db-tests | — |
 | 23 | BACKFILL-BUDGET-PURPOSE | 1 | `supabase/__tests__` | I2.5 | `9db35d8e` | db-tests | — |
 | 24 | BACKFILL-TRIAL-CAPS-UNTOUCHED | 2 | `runner.test.ts` | I2.11 | `bbd7b0a9` | app-tests | — |
-| 25 | BACKFILL-AFTER-CONNECT-CLOCK-UNTOUCHED | 3 | diff (§14.1) | I2.15 | `<this commit>` | none-by-decision | — |
+| 25 | BACKFILL-AFTER-CONNECT-CLOCK-UNTOUCHED | 3 | diff (§14.1) | I2.15 | `70773e87` | none-by-decision | — |
 | 26 | BACKFILL-LATENCY-BOUNDED | 2 | callback + sweep tests | I2.9 | `8e5b0177` | app-tests | — |
 | 27 | BACKFILL-DISCONNECT-CANCELS | 2 | disconnect tests | I2.9 | `8e5b0177` | app-tests | — |
 | 28 | BACKFILL-STAGING-PURGED | 2 | sweep + action tests | I2.13 | `f6539e19` | app-tests | — |
@@ -1214,12 +1214,12 @@ after the pushed HEAD's CI runs have been opened and read, which has not happene
 | 47 | BACKFILL-RLS-ISOLATED | 1 | `supabase/__tests__` | I2.5 | `9db35d8e` | db-tests | — |
 | 48 | BACKFILL-CASCADE-COMPLETE | 1 | `supabase/__tests__` | I2.5 | `9db35d8e` | db-tests | — |
 | 49 | BACKFILL-PURGE-COVERED | 1 | `supabase/__tests__` | I2.6 | `893e8b67` | db-tests | — |
-| 50 | BACKFILL-NO-RELATIONSHIP-MEMORY | 3 | diff (§14.1) | I2.15 | `<this commit>` | none-by-decision | — |
-| 51 | BACKFILL-NO-GENERATION-CHANGE | 3 | diff (§14.1) | I2.15 | `<this commit>` | none-by-decision | — |
-| 52 | BACKFILL-NO-CROSS-CUSTOMER-LEARNING | 3 | diff (§14.1) | I2.15 | `<this commit>` | none-by-decision | — |
+| 50 | BACKFILL-NO-RELATIONSHIP-MEMORY | 3 | diff (§14.1) | I2.15 | `70773e87` | none-by-decision | — |
+| 51 | BACKFILL-NO-GENERATION-CHANGE | 3 | diff (§14.1) | I2.15 | `70773e87` | none-by-decision | — |
+| 52 | BACKFILL-NO-CROSS-CUSTOMER-LEARNING | 3 | diff (§14.1) | I2.15 | `70773e87` | none-by-decision | — |
 | 53 | BACKFILL-UX-STATES | 2 | `BackfillPanel.test.tsx` | I2.14 | `9359a708` | app-tests | — |
 | 54 | BACKFILL-I18N-PARITY | 2 | `lib/i18n/backfill-parity.test.ts` | I2.14 | `9359a708` | app-tests | — |
-| 55 | BACKFILL-POPULATED-MEMORY-EVAL | E | out-of-band run artefact (§14.3) | I2.15 | `<this commit>` | out-of-band | MEASURED — NOT YET RUN |
+| 55 | BACKFILL-POPULATED-MEMORY-EVAL | E | out-of-band run artefact (§14.3) | I2.15 | `70773e87` | out-of-band | MEASURED — NOT YET RUN |
 | 56 | BACKFILL-IMPORT-IDEMPOTENT | 1 | `supabase/__tests__` | I2.6 | `893e8b67` | db-tests | — |
 
 **Total: 56 constraints — Tier 1: 16 · Tier 2: 34 · Tier 3: 5 · Tier E: 1.** No total is claimed as
@@ -1260,13 +1260,12 @@ Builder session**, flagged here rather than fabricated:
   **"executed green in CI at `<sha>`"** column requires opening the app-tests (and, once promoted,
   db-tests) run for the pushed HEAD and reading its result — not inferring it from a local `vitest run`.
 - The db-tests skip-guard line (file + test counts) must be read from that same opened run's log.
-- §14.2's `I2.15` rows (`<this commit>`) get their real SHA once this step's own commit exists — recorded
-  here as a placeholder, not backfilled by amending a prior commit.
+- §14.2's `I2.15` rows now carry their real commit SHA, `70773e87` — filled in as a small follow-up
+  commit once it existed, never by amending the I2.15 commit itself.
 
-Once those runs exist and are read, this section (§14.4) is superseded by filling in §14.2's empty column
-and recording the actual `<sha>` for the three `<this commit>` placeholders — never by editing this
-prose in place (this file's own §14 is additive-only by the same convention as
-`docs/evidence/0010-legal-evidence.md`'s amendments).
+Once the CI runs exist and are read, this section (§14.4) is superseded by filling in §14.2's still-empty
+"executed green in CI" column — never by editing this prose in place (this file's own §14 is
+additive-only by the same convention as `docs/evidence/0010-legal-evidence.md`'s amendments).
 
 **Session 32 Builder complete — range `4f3e7129..9359a708`, 15 steps (I2.1-I2.15), 51/55 non-E
 constraints closed by a passing test or a diff-verified check that has been run locally and shown to
