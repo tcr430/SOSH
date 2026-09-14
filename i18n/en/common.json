@@ -106,6 +106,74 @@
       "title": "You're all set!",
       "subtitle": "Your workspace is ready. Create your first campaign to start generating content.",
       "cta": "Create your first campaign"
+    },
+    "backfill": {
+      "not_started": {
+        "body": "Nothing is importing yet — connect a supported platform ({platforms}) to bring in what you've already published."
+      },
+      "progress": {
+        "title": "Reading {account}'s recent posts",
+        "counts": "{fetched} posts found, {extracted} analysed so far",
+        "keep_going": "You can keep going — we'll let you know when it's ready to review."
+      },
+      "unsupported": {
+        "title": "We can't read your {platform} history yet",
+        "body": "We can't read your LinkedIn history yet — this account is connected for publishing, but we won't be importing past posts."
+      },
+      "failed": {
+        "title": "We couldn't finish reading your posts",
+        "reason": {
+          "reconnect_needed": "Your connection needs to be refreshed before we can continue.",
+          "platform_refused": "The platform refused the request.",
+          "stalled": "This took too long and stopped — you can pick up where it left off.",
+          "unknown": "Something went wrong."
+        }
+      },
+      "nothing_to_learn": {
+        "title": "Nothing to learn from {account} yet",
+        "body": "We didn't find enough recent posts to learn from."
+      },
+      "headline": {
+        "line": "{count} posts from {account}, {dateRange}",
+        "weighted": "Weighted by what performed best",
+        "unweighted": "No engagement metrics available for these posts"
+      },
+      "partial": {
+        "notice": "We stopped early after analysing {extracted} posts — you can still review what we found."
+      },
+      "voice": {
+        "summary_title": "Your voice, from what you've already written",
+        "review": "Review voice"
+      },
+      "performed": {
+        "title": "What performed",
+        "pattern": "{pattern} (based on {count} posts)"
+      },
+      "audience": {
+        "title": "How you talk to your audience"
+      },
+      "evidence": {
+        "title": "Proof you've published ({count})",
+        "permission_off": "Not shown publicly unless you turn this on later."
+      },
+      "role": {
+        "question": "Whose voice is this?",
+        "founder": "This is me",
+        "brand": "This is my company"
+      },
+      "ratified": {
+        "title": "Saved to your memory"
+      },
+      "actions": {
+        "ratify": "Save what I've selected",
+        "discard": "Discard these results",
+        "retry": "Try again",
+        "accept_all": "Accept all"
+      },
+      "banner": {
+        "link": "We found things from your recent posts — review what to save",
+        "dismiss": "Dismiss"
+      }
     }
   },
   "settings": {

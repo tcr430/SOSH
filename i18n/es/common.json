@@ -106,6 +106,74 @@
       "title": "¡Todo listo!",
       "subtitle": "Tu espacio de trabajo está listo. Crea tu primera campaña para empezar a generar contenido.",
       "cta": "Crear primera campaña"
+    },
+    "backfill": {
+      "not_started": {
+        "body": "Todavía no se está importando nada — conecta una plataforma compatible ({platforms}) para traer lo que ya has publicado."
+      },
+      "progress": {
+        "title": "Leyendo las publicaciones recientes de {account}",
+        "counts": "{fetched} publicaciones encontradas, {extracted} analizadas hasta ahora",
+        "keep_going": "Puedes seguir — te avisaremos cuando esté listo para revisar."
+      },
+      "unsupported": {
+        "title": "Todavía no podemos leer tu historial de {platform}",
+        "body": "Todavía no podemos leer tu historial de LinkedIn — esta cuenta está conectada para publicar, pero no importaremos publicaciones antiguas."
+      },
+      "failed": {
+        "title": "No pudimos terminar de leer tus publicaciones",
+        "reason": {
+          "reconnect_needed": "Tu conexión necesita renovarse antes de continuar.",
+          "platform_refused": "La plataforma rechazó la solicitud.",
+          "stalled": "Esto tardó demasiado y se detuvo — puedes continuar donde quedó.",
+          "unknown": "Algo salió mal."
+        }
+      },
+      "nothing_to_learn": {
+        "title": "Todavía no hay nada que aprender de {account}",
+        "body": "No encontramos suficientes publicaciones recientes para aprender."
+      },
+      "headline": {
+        "line": "{count} publicaciones de {account}, {dateRange}",
+        "weighted": "Ponderado por lo que mejor rindió",
+        "unweighted": "No hay métricas de interacción disponibles para estas publicaciones"
+      },
+      "partial": {
+        "notice": "Nos detuvimos antes de tiempo tras analizar {extracted} publicaciones — aún puedes revisar lo que encontramos."
+      },
+      "voice": {
+        "summary_title": "Tu voz, a partir de lo que ya has escrito",
+        "review": "Revisar voz"
+      },
+      "performed": {
+        "title": "Qué rindió",
+        "pattern": "{pattern} (según {count} publicaciones)"
+      },
+      "audience": {
+        "title": "Cómo le hablas a tu audiencia"
+      },
+      "evidence": {
+        "title": "Pruebas de lo publicado ({count})",
+        "permission_off": "No se muestra públicamente a menos que lo actives más adelante."
+      },
+      "role": {
+        "question": "¿De quién es esta voz?",
+        "founder": "Soy yo",
+        "brand": "Es mi empresa"
+      },
+      "ratified": {
+        "title": "Guardado en tu memoria"
+      },
+      "actions": {
+        "ratify": "Guardar lo seleccionado",
+        "discard": "Descartar estos resultados",
+        "retry": "Reintentar",
+        "accept_all": "Aceptar todo"
+      },
+      "banner": {
+        "link": "Encontramos cosas en tus publicaciones recientes — revisa qué guardar",
+        "dismiss": "Descartar"
+      }
     }
   },
   "settings": {

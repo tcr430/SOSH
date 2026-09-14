@@ -56,3 +56,22 @@ export async function importAudienceMemory(insert: AudienceMemoryImportInsert): 
   if (error) throw new Error(getErrorMessage(error))
   return (data as AudienceMemoryRow[]) ?? []
 }
+
+// ADR 0025 §10.3 (Session 32 I2.14) — see listEvidenceCandidatesForRun's
+// comment in memory-evidence.ts for the run-scoping rationale.
+export async function listAudienceCandidatesForRun(
+  client: SupabaseClient,
+  runId: string,
+): Promise<AudienceMemoryRow[]> {
+  const { data, error } = await client
+    .from('audience_memory')
+    .select('*')
+    .eq('import_run_id', runId)
+    .eq('source', 'import')
+    .eq('status', 'candidate')
+    .is('deleted_at', null)
+    .order('confidence', { ascending: false })
+    .limit(25)
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as AudienceMemoryRow[]) ?? []
+}

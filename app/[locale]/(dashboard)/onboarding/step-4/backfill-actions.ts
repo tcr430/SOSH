@@ -9,9 +9,11 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { getBusinessForUser } from '@/lib/db/businesses'
 import { getMemberForUser } from '@/lib/db/business-members'
 import {
   getBackfillRunById,
+  getBackfillRunsForBusiness,
   ratifyBackfillRun,
   discardBackfillRun,
   resumeBackfillRun,
@@ -29,6 +31,46 @@ import {
   declineBackfillVoiceSchema,
 } from '@/lib/validation/backfill'
 import type { SocialBackfillRunRow } from '@/lib/db/types'
+
+// ADR §10.2 (Session 32 I2.14) — the panel's own bounded poll while a run is
+// queued/fetching/extracting. RLS-scoped (the caller's anon client), never
+// service-role: this is a plain member-facing read, same boundary as
+// getBackfillRunsForBusiness itself.
+export async function getBackfillRunsAction(): Promise<SocialBackfillRunRow[]> {
+  const client = await createClient()
+  const {
+    data: { user },
+  } = await client.auth.getUser()
+  if (!user) return []
+
+  const business = await getBusinessForUser(client, user.id)
+  if (!business) return []
+
+  return getBackfillRunsForBusiness(client, business.id)
+}
+
+// ADR §10.3 (Session 32 I2.14) — step-2 backfill mode's own read: the run's
+// staged voice, scoped to the caller's own business via the member SELECT
+// policy (never service-role). Returns null for a run that doesn't exist or
+// belongs to a different business — never distinguishes the two, so this
+// can't be used to probe which run ids exist.
+export async function getBackfillRunForReviewAction(
+  runId: string,
+): Promise<SocialBackfillRunRow | null> {
+  const client = await createClient()
+  const {
+    data: { user },
+  } = await client.auth.getUser()
+  if (!user) return null
+
+  const business = await getBusinessForUser(client, user.id)
+  if (!business) return null
+
+  const run = await getBackfillRunById(runId)
+  if (!run || run.business_id !== business.id) return null
+
+  return run
+}
 
 export type BackfillActionError =
   | 'validation'

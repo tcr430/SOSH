@@ -90,3 +90,26 @@ export async function importEvidenceMemory(insert: EvidenceMemoryImportInsert): 
   if (error) throw new Error(getErrorMessage(error))
   return (data as EvidenceMemoryRow[]) ?? []
 }
+
+// ADR 0025 §10.3 (Session 32 I2.14) — the onboarding review page's own read:
+// the CANDIDATE rows staged by a backfill run, never 'active' ones. Keyed by
+// import_run_id (not business_id) so two concurrent runs on one business
+// never mix each other's candidates (BACKFILL-ACCOUNTS-SEPARATE). Uses the
+// caller's own anon/RLS client — the member SELECT policy is the real
+// boundary, same convention as listEvidenceMemoryCandidates above.
+export async function listEvidenceCandidatesForRun(
+  client: SupabaseClient,
+  runId: string,
+): Promise<EvidenceMemoryRow[]> {
+  const { data, error } = await client
+    .from('evidence_memory')
+    .select('*')
+    .eq('import_run_id', runId)
+    .eq('source', 'import')
+    .eq('status', 'candidate')
+    .is('deleted_at', null)
+    .order('confidence', { ascending: false })
+    .limit(40)
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as EvidenceMemoryRow[]) ?? []
+}

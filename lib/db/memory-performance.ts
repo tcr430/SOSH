@@ -277,3 +277,23 @@ export async function importPerformanceMemory(insert: PerformanceMemoryImportIns
   if (error) throw new Error(getErrorMessage(error))
   return (data as PerformanceMemoryRow[]) ?? []
 }
+
+// ADR 0025 §10.3/§10.4 (Session 32 I2.14) — see listEvidenceCandidatesForRun's
+// comment in memory-evidence.ts for the run-scoping rationale. observation_count
+// is what lets the UI render "based on N posts" instead of an instruction.
+export async function listPerformanceCandidatesForRun(
+  client: SupabaseClient,
+  runId: string,
+): Promise<PerformanceMemoryRow[]> {
+  const { data, error } = await client
+    .from('performance_memory')
+    .select('*')
+    .eq('import_run_id', runId)
+    .eq('source', 'import')
+    .eq('status', 'candidate')
+    .is('deleted_at', null)
+    .order('confidence', { ascending: false })
+    .limit(15)
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as PerformanceMemoryRow[]) ?? []
+}

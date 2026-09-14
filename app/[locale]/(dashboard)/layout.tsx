@@ -11,6 +11,8 @@ import { getMemberForUser } from '@/lib/db/business-members'
 import { resolveMemberContext } from '@/lib/members/capabilities'
 import { BusinessProvider } from '@/lib/contexts/business-context'
 import { DashboardShell } from '@/components/layout/DashboardShell'
+import { BackfillBanner } from '@/components/onboarding/BackfillBanner'
+import { getBackfillRunsForBusiness } from '@/lib/db/backfill-runs'
 
 export default async function DashboardLayout({
   children,
@@ -30,14 +32,16 @@ export default async function DashboardLayout({
   const business = await getBusinessForUser(client, user.id)
   if (!business) redirect(`/${locale}/signup`)
 
-  const [brandVoice, activeAccounts, trialState, memberRow] = await Promise.all([
+  const [brandVoice, activeAccounts, trialState, memberRow, backfillRuns] = await Promise.all([
     getBrandVoice(client, business.id),
     listActiveSocialAccounts(client, business.id),
     getTrialStateMaybe(client, business.id),
     business.owner_id === user.id
       ? Promise.resolve(null)
       : getMemberForUser(client, business.id, user.id),
+    getBackfillRunsForBusiness(client, business.id),
   ])
+  const awaitingRun = backfillRuns.find((r) => r.status === 'awaiting_ratification')
   const hasSocialAccounts = activeAccounts.length > 0
   // ADR 0014 §6 — resolved once here; BusinessProvider hands it to useCan().
   const member = resolveMemberContext(business, user.id, memberRow)
@@ -63,6 +67,7 @@ export default async function DashboardLayout({
 
   return (
     <BusinessProvider user={user} activeBusiness={business} brandVoice={brandVoice} member={member}>
+      {awaitingRun && <BackfillBanner locale={locale} runId={awaitingRun.id} />}
       <DashboardShell locale={locale} hasSocialAccounts={hasSocialAccounts} daysRemaining={daysRemaining}>
         {children}
       </DashboardShell>

@@ -106,6 +106,74 @@
       "title": "Está tudo pronto!",
       "subtitle": "O seu espaço de trabalho está pronto. Crie a sua primeira campanha para começar a gerar conteúdo.",
       "cta": "Criar a primeira campanha"
+    },
+    "backfill": {
+      "not_started": {
+        "body": "Ainda não está a importar nada — ligue uma plataforma suportada ({platforms}) para trazer o que já publicou."
+      },
+      "progress": {
+        "title": "A ler as publicações recentes de {account}",
+        "counts": "{fetched} publicações encontradas, {extracted} analisadas até agora",
+        "keep_going": "Pode continuar — avisamo-lo quando estiver pronto para rever."
+      },
+      "unsupported": {
+        "title": "Ainda não conseguimos ler o seu histórico do {platform}",
+        "body": "Ainda não conseguimos ler o seu histórico do LinkedIn — esta conta está ligada para publicar, mas não vamos importar publicações antigas."
+      },
+      "failed": {
+        "title": "Não conseguimos terminar de ler as suas publicações",
+        "reason": {
+          "reconnect_needed": "A sua ligação precisa de ser renovada antes de continuarmos.",
+          "platform_refused": "A plataforma recusou o pedido.",
+          "stalled": "Isto demorou demasiado tempo e parou — pode continuar de onde ficou.",
+          "unknown": "Algo correu mal."
+        }
+      },
+      "nothing_to_learn": {
+        "title": "Ainda não há nada a aprender de {account}",
+        "body": "Não encontrámos publicações recentes suficientes para aprender."
+      },
+      "headline": {
+        "line": "{count} publicações de {account}, {dateRange}",
+        "weighted": "Ponderado pelo que teve melhor desempenho",
+        "unweighted": "Sem métricas de envolvimento disponíveis para estas publicações"
+      },
+      "partial": {
+        "notice": "Paramos mais cedo depois de analisar {extracted} publicações — ainda pode rever o que encontrámos."
+      },
+      "voice": {
+        "summary_title": "A sua voz, a partir do que já escreveu",
+        "review": "Rever voz"
+      },
+      "performed": {
+        "title": "O que teve desempenho",
+        "pattern": "{pattern} (com base em {count} publicações)"
+      },
+      "audience": {
+        "title": "Como fala com o seu público"
+      },
+      "evidence": {
+        "title": "Provas do que já publicou ({count})",
+        "permission_off": "Não é mostrado publicamente a menos que ative isto mais tarde."
+      },
+      "role": {
+        "question": "De quem é esta voz?",
+        "founder": "Sou eu",
+        "brand": "É a minha empresa"
+      },
+      "ratified": {
+        "title": "Guardado na sua memória"
+      },
+      "actions": {
+        "ratify": "Guardar o que selecionei",
+        "discard": "Descartar estes resultados",
+        "retry": "Tentar novamente",
+        "accept_all": "Aceitar tudo"
+      },
+      "banner": {
+        "link": "Encontrámos coisas nas suas publicações recentes — reveja o que guardar",
+        "dismiss": "Dispensar"
+      }
     }
   },
   "settings": {
