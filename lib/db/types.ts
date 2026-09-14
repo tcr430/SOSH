@@ -1457,9 +1457,11 @@ export type PostEditSignalInsert = {
 // ---------------------------------------------------------------------------
 // 18. social_backfill_runs / social_backfill_posts (ADR 0025 §9.1, Session 32
 // I2.5). Columns match 20260913130000_social_backfill_runs_and_posts.sql
-// exactly. No Insert/Update types — every write goes through the migration's
+// exactly. No Insert/Update types — every write goes through the migrations'
 // RPCs (enqueue_backfill_run, resume_backfill_run, discard_backfill_run,
-// reserve_backfill_spend, reconcile_backfill_spend, claim_backfill_posts),
+// reserve_backfill_spend, reconcile_backfill_spend, claim_backfill_posts,
+// and I2.8's stage_backfill_posts, record_backfill_fetch_progress,
+// transition_backfill_run — 20260914010000_backfill_fetch_phase_rpcs.sql),
 // never a raw .insert()/.update() call, so there is no caller-facing insert
 // or update shape to type.
 // ---------------------------------------------------------------------------

@@ -1,5 +1,6 @@
 import type { SocialBackfillPostRow } from './types'
 import { getErrorMessage } from './utils'
+import type { RecentPost } from '@/lib/social'
 
 // ADR 0025 §6.4/§9.1 (Session 32 I2.5). social_backfill_posts carries NO
 // authenticated policy at all (deny by default) — service-role only, no
@@ -22,4 +23,37 @@ export async function claimBackfillPosts(
   })
   if (error) throw new Error(getErrorMessage(error))
   return (data as SocialBackfillPostRow[] | null) ?? []
+}
+
+// ADR §2.3/§9.1 (Session 32 I2.8) — over stage_backfill_posts
+// (20260914010000_backfill_fetch_phase_rpcs.sql): idempotent, ON CONFLICT
+// (social_account_id, platform_post_id) DO NOTHING. Returns the count of
+// rows ACTUALLY inserted (never the input length) — the orchestrator's
+// 200-post loop-stop bound is counted against this, not against
+// pre-dedup page size, so cross-page/cross-tick duplicates never inflate
+// it. Empty input is a no-op that skips the round trip entirely.
+export async function stageBackfillPosts(
+  runId: string,
+  businessId: string,
+  socialAccountId: string,
+  posts: readonly RecentPost[],
+): Promise<number> {
+  if (posts.length === 0) return 0
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client.rpc('stage_backfill_posts', {
+    p_run_id: runId,
+    p_business_id: businessId,
+    p_social_account_id: socialAccountId,
+    p_posts: posts.map((post) => ({
+      platform_post_id: post.platformPostId,
+      published_at: post.publishedAt,
+      content: post.content,
+      url: post.url,
+      format: post.format,
+      metrics: post.metrics,
+    })),
+  })
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as number | null) ?? 0
 }

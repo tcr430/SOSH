@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { SocialBackfillRunRow, Platform } from './types'
+import type { SocialBackfillRunRow, Platform, BackfillRunStatus } from './types'
 import { getErrorMessage } from './utils'
 
 // ADR 0025 §9.1/§9.4/§6.3-6.5 (Session 32 I2.5). Every write is a
@@ -119,4 +119,70 @@ export async function getBackfillRunsForBusiness(
     .limit(limit)
   if (error) throw new Error(getErrorMessage(error))
   return (data as SocialBackfillRunRow[]) ?? []
+}
+
+// ADR §6.5 (Session 32 I2.8) — the orchestrator's own read of a single run
+// by id, service-role (the cron tick has no authenticated session to scope
+// an RLS-bound read to). Not a raw table type carrying any write risk — a
+// plain SELECT, same shape as getBackfillRunsForBusiness above, just keyed
+// by id and unbounded by business_id since service-role already bypasses
+// RLS for this whole file.
+export async function getBackfillRunById(runId: string): Promise<SocialBackfillRunRow | null> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client
+    .from('social_backfill_runs')
+    .select('*')
+    .eq('id', runId)
+    .maybeSingle()
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as SocialBackfillRunRow | null) ?? null
+}
+
+// ADR §2.3 (Session 32 I2.8) — over record_backfill_fetch_progress
+// (20260914010000_backfill_fetch_phase_rpcs.sql): an atomic conditional
+// UPDATE incrementing both counters in one statement, guarded to
+// status='fetching' so a progress write racing a cancellation is a no-op.
+export async function recordBackfillFetchProgress(
+  runId: string,
+  postsFetchedDelta: number,
+  platformPostsReadDelta: number,
+): Promise<SocialBackfillRunRow | null> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client.rpc('record_backfill_fetch_progress', {
+    p_run_id: runId,
+    p_posts_fetched_delta: postsFetchedDelta,
+    p_platform_posts_read_delta: platformPostsReadDelta,
+  })
+  if (error) throw new Error(getErrorMessage(error))
+  const rows = (data as SocialBackfillRunRow[] | null) ?? []
+  return rows[0] ?? null
+}
+
+// ADR §2.3/§6.5 (Session 32 I2.8) — over transition_backfill_run
+// (20260914010000_backfill_fetch_phase_rpcs.sql), the ONE generic
+// conditional-status-UPDATE reused for every fetch-phase edge (queued ->
+// fetching, fetching -> extracting/unsupported/failed) and by I2.9/I2.13's
+// later transitions. Returns null when the guard did not hold (the run was
+// already moved elsewhere by a concurrent discard/disconnect) — the
+// caller's "no-op, not an error" signal, same convention as every other
+// conditional-UPDATE wrapper in this file.
+export async function transitionBackfillRun(
+  runId: string,
+  fromStatuses: readonly BackfillRunStatus[],
+  toStatus: BackfillRunStatus,
+  errorCode: string | null = null,
+): Promise<SocialBackfillRunRow | null> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client.rpc('transition_backfill_run', {
+    p_run_id: runId,
+    p_from_statuses: fromStatuses,
+    p_to_status: toStatus,
+    p_error_code: errorCode,
+  })
+  if (error) throw new Error(getErrorMessage(error))
+  const rows = (data as SocialBackfillRunRow[] | null) ?? []
+  return rows[0] ?? null
 }
