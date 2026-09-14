@@ -57,3 +57,36 @@ export async function stageBackfillPosts(
   if (error) throw new Error(getErrorMessage(error))
   return (data as number | null) ?? 0
 }
+
+// ADR §4.1 (Session 32 I2.10) — every staged post for a run, for the
+// deterministic stats/weighting step. service-role only (the table has NO
+// authenticated policy at all, deny by default, per 20260913130000).
+export async function getStagedPostsForRun(runId: string): Promise<SocialBackfillPostRow[]> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client
+    .from('social_backfill_posts')
+    .select('*')
+    .eq('run_id', runId)
+    .order('published_at', { ascending: false })
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as SocialBackfillPostRow[]) ?? []
+}
+
+// ADR §4.1 step 3 BACKFILL-PERFORMANCE-WEIGHTED (Session 32 I2.10) — over
+// update_backfill_post_lifts: bulk-writes the lift column from a
+// {id, lift}[] array, scoped to run_id. Empty input is a no-op.
+export async function updateBackfillPostLifts(
+  runId: string,
+  lifts: ReadonlyArray<{ id: string; lift: number }>,
+): Promise<number> {
+  if (lifts.length === 0) return 0
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client.rpc('update_backfill_post_lifts', {
+    p_run_id: runId,
+    p_lifts: lifts,
+  })
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as number | null) ?? 0
+}

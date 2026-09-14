@@ -275,3 +275,25 @@ export async function getResumableFailedRunForAccount(socialAccountId: string): 
   if (error) throw new Error(getErrorMessage(error))
   return (data as SocialBackfillRunRow | null) ?? null
 }
+
+// ADR §4.1 step 2 (Session 32 I2.10) — over record_backfill_run_summary:
+// writes the account-statistics summary and the weighting flag, guarded to
+// status='extracting'. summary is jsonb-shaped by lib/backfill/stats.ts's
+// BackfillStatsSummary — cadence and timing are NOT memory (ADR §4.1),
+// this is the run row's own "what we learned" jsonb, never a *_memory row.
+export async function recordBackfillRunSummary(
+  runId: string,
+  summary: Record<string, unknown>,
+  weighting: 'weighted' | 'unweighted_no_metrics',
+): Promise<SocialBackfillRunRow | null> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client.rpc('record_backfill_run_summary', {
+    p_run_id: runId,
+    p_summary: summary,
+    p_weighting: weighting,
+  })
+  if (error) throw new Error(getErrorMessage(error))
+  const rows = (data as SocialBackfillRunRow[] | null) ?? []
+  return rows[0] ?? null
+}
