@@ -12,6 +12,7 @@ import {
   sweepExpiredStagedVoice,
 } from '@/lib/db/backfill-runs'
 import { stageBackfillPosts } from '@/lib/db/backfill-posts'
+import { runExtractionUnit } from './extract'
 import {
   BACKFILL_MAX_POSTS,
   BACKFILL_MAX_PAGES,
@@ -171,7 +172,7 @@ export interface BackfillTickSummary {
   durationMs: number
   runId: string | null
   runStatus: 'queued' | 'fetching' | 'extracting' | null
-  outcome: FetchPhaseResult['status'] | 'extraction_unit_pending' | 'idle'
+  outcome: FetchPhaseResult['status'] | 'extraction_unit_pending' | 'awaiting_ratification' | 'no_op' | 'idle'
   errorCode: string | null
   staleFailed: number
   stagingPurged: number
@@ -205,12 +206,12 @@ export async function runBackfillTick(opts?: { now?: Date }): Promise<BackfillTi
             break
           }
           case 'extracting': {
-            // I2.10-I2.12 wire the extraction unit here (deterministic
-            // stats/weighting/format patterns, then the three model
-            // passes). Left as a typed, non-throwing no-op so this step's
-            // dispatch point exists without inventing extraction behaviour
-            // ahead of its own steps.
-            outcome = 'extraction_unit_pending'
+            // ADR §4.1 (Session 32 I2.11) — ONE extraction unit (stats,
+            // voice or insights; I2.12 adds an evidence-batch unit before
+            // the final transition). extract.ts owns the passes_done
+            // dispatch internally, mirroring fetchPhase's own encapsulation.
+            const result = await runExtractionUnit(run.id)
+            outcome = result.status === 'progressed' ? 'extraction_unit_pending' : result.status
             break
           }
         }

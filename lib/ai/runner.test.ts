@@ -936,6 +936,85 @@ describe('ADR 0024 §7.1-§7.3 — guards at N (H2.6)', () => {
   })
 })
 
+// ADR 0025 §4.1 BACKFILL-TRIAL-CAPS-UNTOUCHED (Session 32 I2.11) — a
+// backfill pass is a background import job, not a customer-facing post
+// generation or brand-voice inference. It must NEITHER check nor increment
+// EITHER trial counter, even on a business with BOTH counters exhausted
+// (very likely, since a backfill run starts on first account connection,
+// day one of the trial).
+describe('BACKFILL-TRIAL-CAPS-UNTOUCHED (ADR 0025 §4.1, Session 32 I2.11)', () => {
+  const backfillPromptIds = ['backfill-voice-synthesis', 'backfill-insights', 'backfill-evidence']
+
+  const trialExhaustedBoth: CustomerContext = {
+    ...mockContext,
+    trialState: { isTrial: true, postsRemaining: 0, campaignsRemaining: 0, brandVoiceAttemptsRemaining: 0 },
+  }
+
+  it('with postsRemaining=0 AND brandVoiceAttemptsRemaining=0, all three backfill ids still run (Step 1 never throws)', async () => {
+    for (const id of backfillPromptIds) {
+      vi.clearAllMocks()
+      vi.mocked(getAnthropicClient).mockResolvedValue({ messages: { create: mockCreate } } as never)
+      mockCreate.mockResolvedValue(validSdkResponse)
+      vi.mocked(countRecentCalls).mockResolvedValue(0)
+
+      const backfillPrompt: Prompt<MockInput, MockOutput> = { ...mockPrompt, id }
+      const result = await runPrompt(backfillPrompt, trialExhaustedBoth, { text: 'hi' })
+      expect(result).toEqual(validOutput)
+    }
+  })
+
+  it('after a successful call, neither posts_generated_count nor the brand-voice counter moved', async () => {
+    for (const id of backfillPromptIds) {
+      vi.clearAllMocks()
+      vi.mocked(getAnthropicClient).mockResolvedValue({ messages: { create: mockCreate } } as never)
+      mockCreate.mockResolvedValue(validSdkResponse)
+      vi.mocked(countRecentCalls).mockResolvedValue(0)
+
+      const backfillPrompt: Prompt<MockInput, MockOutput> = { ...mockPrompt, id }
+      await runPrompt(backfillPrompt, trialExhaustedBoth, { text: 'hi' })
+      expect(incrementPostsGenerated, `${id} must not increment posts_generated_count`).not.toHaveBeenCalled()
+      expect(incrementBrandVoiceAttempts, `${id} must not increment brand-voice attempts`).not.toHaveBeenCalled()
+    }
+  })
+
+  it('every PRE-EXISTING id classification is byte-identical to before I2.11 — the backfill predicate is additive, not a rewrite', async () => {
+    // Re-run the exact QUAL-TRIAL-UNIT-PER-POST fixture set — if adding
+    // isBackfillPass had touched isPostGeneration/isScoringOnly/isBrandVoice
+    // in any way, one of these four would newly skip, or the control id
+    // would newly be skipped too.
+    const preExistingSkipIds: Array<Prompt<MockInput, MockOutput>> = [
+      mockPrompt,
+      nativeGenerationSinglePrompt,
+      nativeGenerationThreadPrompt,
+      rubricScoringPrompt,
+    ]
+    for (const prompt of preExistingSkipIds) {
+      vi.clearAllMocks()
+      vi.mocked(getAnthropicClient).mockResolvedValue({ messages: { create: mockCreate } } as never)
+      mockCreate.mockResolvedValue(validSdkResponse)
+      vi.mocked(countRecentCalls).mockResolvedValue(0)
+      await runPrompt(prompt, mockContext, { text: 'hi' })
+      expect(incrementPostsGenerated, `${prompt.id} classification changed`).not.toHaveBeenCalled()
+      expect(incrementBrandVoiceAttempts, `${prompt.id} classification changed`).not.toHaveBeenCalled()
+    }
+
+    vi.clearAllMocks()
+    vi.mocked(getAnthropicClient).mockResolvedValue({ messages: { create: mockCreate } } as never)
+    mockCreate.mockResolvedValue(validSdkResponse)
+    vi.mocked(countRecentCalls).mockResolvedValue(0)
+    await runPrompt(brandVoicePrompt, mockContext, { text: 'hi' })
+    expect(incrementBrandVoiceAttempts, 'brand-voice-inference classification changed').toHaveBeenCalledWith('biz-1')
+
+    vi.clearAllMocks()
+    vi.mocked(getAnthropicClient).mockResolvedValue({ messages: { create: mockCreate } } as never)
+    mockCreate.mockResolvedValue(validSdkResponse)
+    vi.mocked(countRecentCalls).mockResolvedValue(0)
+    const unrelatedPrompt: Prompt<MockInput, MockOutput> = { ...mockPrompt, id: 'some-other-prompt' }
+    await runPrompt(unrelatedPrompt, mockContext, { text: 'hi' })
+    expect(incrementPostsGenerated, 'the control id must still increment').toHaveBeenCalledWith('biz-1')
+  })
+})
+
 describe('response_truncated (ADR 0019 §5.4 [sec-HIGH-7])', () => {
   it('stop_reason === "max_tokens" throws response_truncated, distinct from invalid_response, and never reaches the parse step', async () => {
     mockCreate.mockResolvedValue({

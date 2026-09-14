@@ -119,4 +119,23 @@ export const FROZEN_TABLE: Record<string, FrozenRow> = {
     maxTokens: undefined,
     useToolOutput: undefined,
   },
+  // ADR 0025 §4.1 (Session 32 I2.11) — the two new backfill model passes.
+  // Neither trial-classified (BACKFILL-TRIAL-CAPS-UNTOUCHED, lib/ai/
+  // runner.ts's isBackfillPass).
+  'backfill-voice-synthesis': {
+    version: 1,
+    modelKey: 'SONNET_4_6',
+    temperature: undefined,
+    thinking: undefined,
+    maxTokens: undefined,
+    useToolOutput: undefined,
+  },
+  'backfill-insights': {
+    version: 1,
+    modelKey: 'SONNET_4_6',
+    temperature: undefined,
+    thinking: undefined,
+    maxTokens: undefined,
+    useToolOutput: undefined,
+  },
 }

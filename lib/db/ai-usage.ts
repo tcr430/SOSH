@@ -60,6 +60,30 @@ export async function getLastSuccessfulCallAt(
   return (data as { created_at: string } | null)?.created_at ?? null
 }
 
+// ADR 0025 §6.1 (Session 32 I2.11) — the backfill extraction loop's
+// "reconcile to actual" step: runPrompt records the real cost to ai_usage
+// internally but does not return it to its caller, so this is the read
+// side of that same row. service-role, lazy-imported (the caller, lib/
+// backfill/extract.ts, has no client of its own — it is a background cron
+// job, not a request-scoped Server Action). Returns null when no
+// successful call has been recorded yet for this prompt id, which the
+// caller treats as "fall back to the estimate," never as an error.
+export async function getMostRecentUsageCostCents(businessId: string, promptId: string): Promise<number | null> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client
+    .from('ai_usage')
+    .select('cost_cents')
+    .eq('business_id', businessId)
+    .eq('prompt_id', promptId)
+    .eq('success', true)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as { cost_cents: number } | null)?.cost_cents ?? null
+}
+
 export async function listAiUsageByBusiness(
   client: SupabaseClient,
   businessId: string,

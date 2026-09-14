@@ -26,6 +26,18 @@ const RUBRIC_PROMPT_ID = 'rubric'
 // exactly — duplicated as a literal (not imported) because lib/ai/ must not
 // depend on lib/signals/ (the dependency runs the other way, ADR 0021 §2.1).
 const CARD_GENERATION_PROMPT_ID = 'signal-card-generation'
+// ADR 0025 §4.1 BACKFILL-TRIAL-CAPS-UNTOUCHED (Session 32 I2.11, I2.12
+// declares 'backfill-evidence' here now, built at I2.12). A backfill pass
+// is a background import job, not a customer-facing post generation or
+// brand-voice inference — it must NEITHER check nor increment EITHER
+// trial counter, on a business that is very likely still mid-trial (a
+// backfill run starts on first account connection, day one). Unlike
+// isScoringOnly (STEP 8 only, a known unresolved STEP-1 gap per
+// rubric.ts:130-134), this classifier is checked at BOTH steps below —
+// the summarize.ts:161-163 precedent achieves the same exemption by never
+// presenting a trialState; this is the same outcome enforced at the
+// shared choke point instead, so no future backfill caller can forget it.
+const BACKFILL_PASS_PROMPT_IDS = new Set(['backfill-voice-synthesis', 'backfill-insights', 'backfill-evidence'])
 const RETRY_DELAY_MS = 2000
 const CACHE_CONTROL_CHAR_THRESHOLD = 4096 // chars / 4 ≈ tokens; 4096 chars ≈ 1024 tokens
 const DEFAULT_MAX_TOKENS = 4096
@@ -55,6 +67,10 @@ function isPostGeneration(promptId: string): boolean {
 // exception.
 function isScoringOnly(promptId: string): boolean {
   return promptId === RUBRIC_PROMPT_ID || promptId === CARD_GENERATION_PROMPT_ID
+}
+
+function isBackfillPass(promptId: string): boolean {
+  return BACKFILL_PASS_PROMPT_IDS.has(promptId)
 }
 
 async function sleep(ms: number): Promise<void> {
@@ -91,7 +107,12 @@ export async function runPrompt<TInput, TOutput>(
   input: TInput,
 ): Promise<TOutput> {
   // ── STEP 1: Trial cap check (must be first — C-1) ─────────────────────
-  if (context.trialState !== null) {
+  // BACKFILL-TRIAL-CAPS-UNTOUCHED — a backfill pass skips this ENTIRE
+  // block, checked here rather than only at Step 8, so a backfill run on a
+  // business with postsRemaining=0 or brandVoiceAttemptsRemaining=0 still
+  // runs (it is neither a post generation nor a brand-voice inference the
+  // customer's trial quota governs).
+  if (context.trialState !== null && !isBackfillPass(prompt.id)) {
     if (isBrandVoice(prompt.id) && context.trialState.brandVoiceAttemptsRemaining <= 0) {
       throw new AiError('quota_exceeded', 'Brand voice inference trial limit reached')
     }
@@ -278,7 +299,7 @@ export async function runPrompt<TInput, TOutput>(
     // — the orchestrator batch-increments once after insert. A scoring-only
     // call (rubric) skips this too — it never generates a post or consumes
     // brand-voice quota (B2.6 BLOCKER fix).
-    if (context.trialState !== null && !isPostGeneration(prompt.id) && !isScoringOnly(prompt.id)) {
+    if (context.trialState !== null && !isPostGeneration(prompt.id) && !isScoringOnly(prompt.id) && !isBackfillPass(prompt.id)) {
       try {
         if (isBrandVoice(prompt.id)) {
           await incrementBrandVoiceAttempts(context.business.id)

@@ -810,7 +810,7 @@ export type InsightCardUpdate = Partial<
 // ai_budget_daily with a MANDATORY purpose discriminator. `reserved_cents`
 // -> `reserved_units`: the unit is named BY purpose (cents for
 // 'triage_cents', posts for 'generation_posts', H2.9), not by the column.
-export type AiBudgetPurpose = 'triage_cents' | 'generation_posts'
+export type AiBudgetPurpose = 'triage_cents' | 'generation_posts' | 'backfill_cents'
 
 export type AiBudgetDailyRow = {
   id: string

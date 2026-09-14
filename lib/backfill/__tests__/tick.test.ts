@@ -16,6 +16,9 @@ vi.mock('@/lib/db/backfill-runs', () => ({
 vi.mock('@/lib/db/backfill-posts', () => ({
   stageBackfillPosts: vi.fn(),
 }))
+vi.mock('../extract', () => ({
+  runExtractionUnit: vi.fn(),
+}))
 
 import { getRegistry } from '@/lib/social'
 import type { SocialProvider } from '@/lib/social'
@@ -29,9 +32,11 @@ import {
 } from '@/lib/db/backfill-runs'
 import type { SocialBackfillRunRow } from '@/lib/db/types'
 import { runBackfillTick } from '../orchestrator'
+import { runExtractionUnit } from '../extract'
 import { BACKFILL_STALL_MINUTES, BACKFILL_STAGING_TTL_DAYS } from '../constants'
 
 const mockGetRegistry = vi.mocked(getRegistry)
+const mockRunExtractionUnit = vi.mocked(runExtractionUnit)
 const mockGetBackfillRunById = vi.mocked(getBackfillRunById)
 const mockTransitionBackfillRun = vi.mocked(transitionBackfillRun)
 const mockGetNextBackfillRunForTick = vi.mocked(getNextBackfillRunForTick)
@@ -116,17 +121,29 @@ describe('runBackfillTick (ADR 0025 §6.6, Session 32 I2.9)', () => {
     expect(mockSweepExpiredStagedVoice).toHaveBeenCalledWith(BACKFILL_STAGING_TTL_DAYS)
   })
 
-  it('an extracting run does not call fetchRecentPosts — the extraction unit is a typed stub pending I2.10-I2.12', async () => {
+  it('an extracting run dispatches to runExtractionUnit, never fetchPhase (fetchRecentPosts is never called)', async () => {
     const run = makeRun({ status: 'extracting' })
     mockGetNextBackfillRunForTick.mockResolvedValue(run)
+    mockRunExtractionUnit.mockResolvedValue({ status: 'progressed', pass: 'stats' })
     const provider = makeFakeProvider()
     mockGetRegistry.mockReturnValue({ get: () => provider, register: vi.fn() })
 
     const summary = await runBackfillTick()
 
+    expect(mockRunExtractionUnit).toHaveBeenCalledWith('run-1')
     expect(summary.outcome).toBe('extraction_unit_pending')
     expect(provider.fetchRecentPosts).not.toHaveBeenCalled()
     expect(mockGetBackfillRunById).not.toHaveBeenCalled() // fetchPhase never invoked
+  })
+
+  it('an extracting run that finishes extraction reports the real outcome (awaiting_ratification), not the generic pending label', async () => {
+    const run = makeRun({ status: 'extracting' })
+    mockGetNextBackfillRunForTick.mockResolvedValue(run)
+    mockRunExtractionUnit.mockResolvedValue({ status: 'awaiting_ratification', partial: false })
+
+    const summary = await runBackfillTick()
+
+    expect(summary.outcome).toBe('awaiting_ratification')
   })
 
   it('no run needing work: outcome idle, sweeps still run', async () => {

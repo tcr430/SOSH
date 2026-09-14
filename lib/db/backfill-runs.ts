@@ -187,6 +187,44 @@ export async function transitionBackfillRun(
   return rows[0] ?? null
 }
 
+// ADR §4.1 (Session 32 I2.11) — over increment_backfill_passes_done,
+// recorded AFTER each pass's own writes (never before).
+export async function incrementBackfillPassesDone(runId: string): Promise<SocialBackfillRunRow | null> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client.rpc('increment_backfill_passes_done', { p_run_id: runId })
+  if (error) throw new Error(getErrorMessage(error))
+  const rows = (data as SocialBackfillRunRow[] | null) ?? []
+  return rows[0] ?? null
+}
+
+// ADR §6.1 (Session 32 I2.11) — over mark_backfill_run_partial: a budget
+// reservation refusal stops extracting; whatever memory was already
+// written stays.
+export async function markBackfillRunPartial(runId: string, reason: string): Promise<SocialBackfillRunRow | null> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client.rpc('mark_backfill_run_partial', { p_run_id: runId, p_reason: reason })
+  if (error) throw new Error(getErrorMessage(error))
+  const rows = (data as SocialBackfillRunRow[] | null) ?? []
+  return rows[0] ?? null
+}
+
+// ADR §4.2 (Session 32 I2.11) — over stage_backfill_voice: writes NOTHING
+// to brand_voices/brand_voice_variations, only this run row's own
+// staged_voice + voice_status.
+export async function stageBackfillVoice(
+  runId: string,
+  stagedVoice: Record<string, unknown>,
+): Promise<SocialBackfillRunRow | null> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client.rpc('stage_backfill_voice', { p_run_id: runId, p_staged_voice: stagedVoice })
+  if (error) throw new Error(getErrorMessage(error))
+  const rows = (data as SocialBackfillRunRow[] | null) ?? []
+  return rows[0] ?? null
+}
+
 // ADR §6.5/§6.6 (Session 32 I2.9) — the cron tick's own claim read: ONE run
 // needing bounded work, oldest-updated first (matches
 // social_backfill_runs_claim_idx's (status, updated_at) shape exactly). A
