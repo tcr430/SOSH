@@ -1157,6 +1157,13 @@ type MemoryGovernanceRow = {
   deleted_at: string | null
   created_at: string
   updated_at: string
+  // ADR 0025 §5.1 (Session 32 I2.6, 20260913140000_memory_import_provenance.sql)
+  // — the L-3 provenance marker: CHECK ((source = 'import') = (import_run_id
+  // IS NOT NULL)), mirrored for import_source_post_ids. A BEFORE UPDATE
+  // trigger (enforce_memory_import_immutable) makes both columns immutable
+  // once written — no lib/db function updates them after INSERT.
+  import_run_id: string | null
+  import_source_post_ids: string[] | null
 }
 
 export type BrandMemoryCategory = 'positioning' | 'capability' | 'pricing' | 'competitor' | 'other'
@@ -1214,6 +1221,58 @@ export type PerformanceMemoryInsert = {
   scope_ref: string | null
   confidence: number
   observation_count: number
+}
+
+// ADR 0025 §9.4 (Session 32 I2.7) — inputs to the import_{evidence,audience,
+// performance}_memory RPCs (20260913140000/150000). Deliberately has NO
+// status/source/sensitivity/public_use_permission field — those are FIXED
+// IN SQL inside the RPC itself, so a caller cannot pass a wrong governance
+// value even if it wanted to. last_confirmed_at/expires_at ARE caller
+// inputs here (unlike PerformanceMemoryInsert above) because the import
+// writer's whole point is source-dating (BACKFILL-SOURCE-DATED,
+// ADR §5.3) — lib/memory/import.ts computes them from the source post's
+// date, never from now().
+export type EvidenceMemoryImportInsert = {
+  business_id: string
+  import_run_id: string
+  import_source_post_ids: string[]
+  kind: EvidenceMemoryKind
+  content: string
+  source_url: string | null
+  scope: MemoryScope
+  scope_ref: string | null
+  confidence: number
+  last_confirmed_at: string
+  expires_at: string | null
+}
+
+export type AudienceMemoryImportInsert = {
+  business_id: string
+  import_run_id: string
+  import_source_post_ids: string[]
+  segment: string | null
+  kind: AudienceMemoryKind
+  statement: string
+  scope: MemoryScope
+  scope_ref: string | null
+  confidence: number
+  last_confirmed_at: string
+  expires_at: string | null
+}
+
+export type PerformanceMemoryImportInsert = {
+  business_id: string
+  import_run_id: string
+  import_source_post_ids: string[]
+  dimension: PerformanceMemoryDimension
+  pattern: string
+  platform: Platform | null
+  scope: MemoryScope
+  scope_ref: string | null
+  confidence: number
+  observation_count: number
+  last_confirmed_at: string
+  expires_at: string | null
 }
 
 // ---------------------------------------------------------------------------

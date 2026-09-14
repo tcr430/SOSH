@@ -343,6 +343,7 @@ describe('lib/campaigns/generate.ts caller — buildCustomerContext is called by
         sensitivity: 'internal', public_use_permission: false,
         scope: 'brand', scope_ref: null,
         last_confirmed_at: '2026-07-19T00:00:00Z', recency_at: '2026-07-19T00:00:00Z',
+        import_run_id: null, import_source_post_ids: null,
         expires_at: null, deleted_at: null,
         created_at: '2026-06-01T00:00:00Z', updated_at: '2026-07-19T00:00:00Z',
         dimension: 'topic', pattern: `GOVERNED-PATTERN-${i}`, platform: 'linkedin',
