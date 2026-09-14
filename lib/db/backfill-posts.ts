@@ -25,6 +25,25 @@ export async function claimBackfillPosts(
   return (data as SocialBackfillPostRow[] | null) ?? []
 }
 
+// ADR §4.1/§4.5 (Session 32 I2.12) — over resolve_backfill_posts:
+// claim_backfill_posts' other half, claimed -> extracted | skipped |
+// failed. Bulk, guarded to extraction_status='claimed'. Empty input is a
+// no-op that skips the round trip entirely.
+export async function resolveBackfillPosts(
+  postIds: readonly string[],
+  status: 'extracted' | 'skipped' | 'failed',
+): Promise<number> {
+  if (postIds.length === 0) return 0
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client.rpc('resolve_backfill_posts', {
+    p_post_ids: postIds,
+    p_status: status,
+  })
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as number | null) ?? 0
+}
+
 // ADR §2.3/§9.1 (Session 32 I2.8) — over stage_backfill_posts
 // (20260914010000_backfill_fetch_phase_rpcs.sql): idempotent, ON CONFLICT
 // (social_account_id, platform_post_id) DO NOTHING. Returns the count of

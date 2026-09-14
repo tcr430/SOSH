@@ -40,10 +40,10 @@ import { FROZEN_TABLE } from './frozen-table'
 const prompts = await collectPrompts()
 
 describe('prompt-properties frozen table (QUAL-SAMPLING-VERSIONED)', () => {
-  it('has exactly twelve live prompt ids, matching the frozen table one-for-one', () => {
-    // ADR 0025 §4.1 (Session 32 I2.11) raised the count from ten to twelve:
-    // backfill-voice-synthesis and backfill-insights.
-    expect(prompts).toHaveLength(12)
+  it('has exactly thirteen live prompt ids, matching the frozen table one-for-one', () => {
+    // ADR 0025 §4.1 (Session 32 I2.11/I2.12) raised the count from ten to
+    // thirteen: backfill-voice-synthesis, backfill-insights, backfill-evidence.
+    expect(prompts).toHaveLength(13)
     expect(prompts.map((p) => p.id).sort()).toEqual(Object.keys(FROZEN_TABLE).sort())
   })
 

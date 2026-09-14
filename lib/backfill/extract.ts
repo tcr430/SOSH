@@ -3,8 +3,9 @@ import { buildCustomerContext } from '@/lib/ai/context'
 import { calculateCostCents } from '@/lib/ai/models'
 import { backfillVoiceSynthesisPrompt } from '@/lib/ai/prompts/backfill-voice-synthesis'
 import { backfillInsightsPrompt, type BackfillInsightsOutput } from '@/lib/ai/prompts/backfill-insights'
+import { backfillEvidencePrompt } from '@/lib/ai/prompts/backfill-evidence'
 import { getMostRecentUsageCostCents } from '@/lib/db/ai-usage'
-import { getStagedPostsForRun } from '@/lib/db/backfill-posts'
+import { getStagedPostsForRun, claimBackfillPosts, resolveBackfillPosts } from '@/lib/db/backfill-posts'
 import {
   getBackfillRunById,
   reserveBackfillSpend,
@@ -15,10 +16,11 @@ import {
   transitionBackfillRun,
 } from '@/lib/db/backfill-runs'
 import { reserveBackfillDailySpend, reconcileBackfillDailySpend } from '@/lib/db/backfill-daily-budget'
-import { importAudienceItem, importPerformanceItem } from '@/lib/memory/import'
+import { importAudienceItem, importPerformanceItem, importEvidenceItem } from '@/lib/memory/import'
 import { computeBackfillStats, writeBackfillStatsSummary } from './stats'
 import { computeWeightedSubset, writeBackfillLifts } from './weighting'
 import { computeFormatPatterns, writeFormatPatterns, importedConfidence } from './patterns/format'
+import { verifyAndFilterEvidenceItems } from './evidence'
 import {
   BACKFILL_VOICE_INPUT_POSTS,
   BACKFILL_VOICE_EXAMPLES,
@@ -28,19 +30,23 @@ import {
   BACKFILL_PATTERN_MIN_LIFT,
   BACKFILL_AUDIENCE_MIN_BACKING,
   BACKFILL_AUDIENCE_CONFIDENCE,
+  BACKFILL_EVIDENCE_CONFIDENCE,
+  BACKFILL_EVIDENCE_BATCH,
   BACKFILL_DAILY_CENTS,
 } from './constants'
 import type { SocialBackfillPostRow, SocialBackfillRunRow } from '@/lib/db/types'
 
-// ADR 0025 §4.1 step 4 / §6.1 (Session 32 I2.11) — the model-pass
+// ADR 0025 §4.1 step 4 / §6.1 (Session 32 I2.11/I2.12) — the model-pass
 // orchestrator. ONE unit of bounded work per call (the I2.9 cron tick's
 // dispatch discipline): pass 0 is the deterministic stats/weighting/format
 // step (I2.10, no model call); pass 1 is voice synthesis; pass 2 is
-// insights. I2.12 inserts the evidence-batch phase between pass 2 and the
-// final transition to 'awaiting_ratification'.
+// insights; passes_done >= 3 is the evidence batch loop (I2.12), which
+// drives itself off remaining 'pending' staged posts rather than a single
+// pass increment, and performs the final transition to
+// 'awaiting_ratification' once no pending posts remain.
 
 export type ExtractionUnitResult =
-  | { status: 'progressed'; pass: 'stats' | 'voice' | 'insights' }
+  | { status: 'progressed'; pass: 'stats' | 'voice' | 'insights' | 'evidence' }
   | { status: 'awaiting_ratification'; partial: boolean }
   | { status: 'no_op' }
 
@@ -164,10 +170,74 @@ async function runInsightsPass(
   await writeInsightsOutput(run, posts, insightsOutput)
 
   await incrementBackfillPassesDone(run.id)
-  // I2.12 inserts the evidence-batch phase here (passes_done >= 3) before
-  // this final transition. For now, extraction completes after insights.
-  await transitionBackfillRun(run.id, ['extracting'], 'awaiting_ratification')
-  return { status: 'awaiting_ratification', partial: false }
+  // The evidence batch loop (passes_done >= 3, below) drives itself off
+  // remaining 'pending' staged posts and performs the final transition —
+  // insights no longer finalizes the run directly.
+  return { status: 'progressed', pass: 'insights' }
+}
+
+// ADR §4.1 step 4 / §4.5 BACKFILL-EVIDENCE-VERBATIM (Session 32 I2.12) —
+// the only Haiku batch loop, and the only path that stores verbatim
+// third-party-adjacent text. ONE batch (<= BACKFILL_EVIDENCE_BATCH posts)
+// per call, via claim_backfill_posts (pending -> claimed). When zero
+// posts remain pending, extraction is complete and the run finalizes here.
+async function runEvidenceBatch(run: SocialBackfillRunRow): Promise<ExtractionUnitResult> {
+  const claimed = await claimBackfillPosts(run.id, BACKFILL_EVIDENCE_BATCH)
+
+  if (claimed.length === 0) {
+    await transitionBackfillRun(run.id, ['extracting'], 'awaiting_ratification')
+    return { status: 'awaiting_ratification', partial: false }
+  }
+
+  const inputPosts = claimed.map((post) => ({
+    platformPostId: post.platform_post_id,
+    content: truncate(post.content, BACKFILL_EXTRACTION_TRUNCATE_CHARS),
+  }))
+
+  const estimateCents = calculateCostCents(
+    'HAIKU_4_5',
+    Math.ceil(inputPosts.reduce((sum, p) => sum + p.content.length, 0) / 4),
+    DEFAULT_MAX_OUTPUT_TOKENS,
+  )
+  if (!(await reserveSpend(run, estimateCents))) return refuseAsPartial(run)
+
+  let output
+  try {
+    const context = await buildCustomerContext(run.business_id)
+    output = await runPrompt(backfillEvidencePrompt, context, { posts: inputPosts })
+  } catch {
+    // FAIL CLOSED — invalid output from the model: the batch's posts are
+    // marked failed, nothing is written from it, the run continues with
+    // the next batch on the next tick.
+    await reconcileSpend(run, estimateCents, backfillEvidencePrompt.id)
+    await resolveBackfillPosts(claimed.map((post) => post.id), 'failed')
+    return { status: 'progressed', pass: 'evidence' }
+  }
+  await reconcileSpend(run, estimateCents, backfillEvidencePrompt.id)
+
+  const verified = verifyAndFilterEvidenceItems(output.items, claimed)
+  const writtenPostIds = new Set<string>()
+  for (const item of verified) {
+    const result = await importEvidenceItem({
+      businessId: run.business_id,
+      runId: run.id,
+      sourcePostIds: [item.post.platform_post_id],
+      kind: item.kind,
+      content: item.content,
+      sourceUrl: item.post.url,
+      platform: run.platform,
+      confidence: BACKFILL_EVIDENCE_CONFIDENCE,
+      publishedAt: item.post.published_at,
+    })
+    if (result) writtenPostIds.add(item.post.id)
+  }
+
+  const extractedIds = claimed.filter((post) => writtenPostIds.has(post.id)).map((post) => post.id)
+  const skippedIds = claimed.filter((post) => !writtenPostIds.has(post.id)).map((post) => post.id)
+  if (extractedIds.length > 0) await resolveBackfillPosts(extractedIds, 'extracted')
+  if (skippedIds.length > 0) await resolveBackfillPosts(skippedIds, 'skipped')
+
+  return { status: 'progressed', pass: 'evidence' }
 }
 
 async function writeInsightsOutput(
@@ -228,8 +298,9 @@ export async function runExtractionUnit(runId: string): Promise<ExtractionUnitRe
   const run = await getBackfillRunById(runId)
   if (!run || run.status !== 'extracting') return { status: 'no_op' }
 
-  const posts = await getStagedPostsForRun(runId)
+  if (run.passes_done >= 3) return runEvidenceBatch(run)
 
+  const posts = await getStagedPostsForRun(runId)
   if (run.passes_done === 0) return runDeterministicPass(run, posts)
   if (run.passes_done === 1) return runVoiceSynthesisPass(run, posts)
   return runInsightsPass(run, posts)

@@ -138,4 +138,14 @@ export const FROZEN_TABLE: Record<string, FrozenRow> = {
     maxTokens: undefined,
     useToolOutput: undefined,
   },
+  // ADR 0025 §4.1/§4.5 (Session 32 I2.12) — the third and last backfill
+  // model pass, Haiku (cheap, batched).
+  'backfill-evidence': {
+    version: 1,
+    modelKey: 'HAIKU_4_5',
+    temperature: undefined,
+    thinking: undefined,
+    maxTokens: undefined,
+    useToolOutput: undefined,
+  },
 }
