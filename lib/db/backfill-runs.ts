@@ -1,5 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { SocialBackfillRunRow, Platform, BackfillRunStatus } from './types'
+import type {
+  SocialBackfillRunRow,
+  Platform,
+  BackfillRunStatus,
+  BackfillVoiceStatus,
+} from './types'
 import { getErrorMessage } from './utils'
 
 // ADR 0025 §9.1/§9.4/§6.3-6.5 (Session 32 I2.5). Every write is a
@@ -330,6 +335,63 @@ export async function recordBackfillRunSummary(
     p_run_id: runId,
     p_summary: summary,
     p_weighting: weighting,
+  })
+  if (error) throw new Error(getErrorMessage(error))
+  const rows = (data as SocialBackfillRunRow[] | null) ?? []
+  return rows[0] ?? null
+}
+
+// ADR §6.4/§10.3 (Session 32 I2.13) — over ratify_backfill_run
+// (20260913150000_backfill_review_fixes.sql). userId MUST be the
+// server-verified session user (supabase.auth.getUser() on the anon server
+// client) — never a form field; the RPC itself re-checks approver/admin
+// membership and raises if the caller isn't one. Returns null when the run
+// doesn't exist or isn't in 'awaiting_ratification' (already ratified,
+// discarded, or racing another ratify/discard).
+export async function ratifyBackfillRun(
+  userId: string,
+  runId: string,
+  acceptedIds: readonly string[],
+  rejectedIds: readonly string[],
+  accountRole: 'brand' | 'founder',
+): Promise<SocialBackfillRunRow | null> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client.rpc('ratify_backfill_run', {
+    p_user_id: userId,
+    p_run_id: runId,
+    p_accepted_ids: acceptedIds,
+    p_rejected_ids: rejectedIds,
+    p_account_role: accountRole,
+  })
+  if (error) throw new Error(getErrorMessage(error))
+  const rows = (data as SocialBackfillRunRow[] | null) ?? []
+  return rows[0] ?? null
+}
+
+// ADR §4.2/§10.3 (Session 32 I2.13) — over transition_backfill_voice_status
+// (20260914060000_backfill_voice_transition.sql): the ONE generic
+// conditional-UPDATE for every voice_status edge (pending ->
+// applied/refused_cap/failed/declined). Callers apply/decline the voice
+// through this AFTER the brand_voices upsert or create_voice_variation call
+// has already succeeded — this only records the outcome on the run row.
+// appliedTo is set ONLY when toStatus is 'applied' (the RPC ignores it
+// otherwise); staged_voice is nulled for 'applied' and 'declined', kept for
+// 'refused_cap' and 'failed' so a retry can reuse it. Returns null when the
+// guard didn't hold (voice_status had already moved on).
+export async function transitionBackfillVoiceStatus(
+  runId: string,
+  fromStatuses: readonly BackfillVoiceStatus[],
+  toStatus: BackfillVoiceStatus,
+  appliedTo: string | null = null,
+): Promise<SocialBackfillRunRow | null> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client.rpc('transition_backfill_voice_status', {
+    p_run_id: runId,
+    p_from_statuses: fromStatuses,
+    p_to_status: toStatus,
+    p_applied_to: appliedTo,
   })
   if (error) throw new Error(getErrorMessage(error))
   const rows = (data as SocialBackfillRunRow[] | null) ?? []
