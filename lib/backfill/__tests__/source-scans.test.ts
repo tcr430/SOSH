@@ -40,13 +40,15 @@ function stripLineComments(source: string): string {
     .join('\n')
 }
 
-// Extracts the body of a named method from a class-bearing TS source file by
-// brace-depth counting from the method's opening `{`, or returns null if the
-// method is not defined at all. Used to scope BACKFILL-NO-COMMENT-READ's
-// second half to fetchRecentPosts's own body — the surrounding provider file
-// legitimately implements fetchEngagement elsewhere and must not be banned
-// wholesale.
-function extractMethodBody(source: string, methodName: string): string | null {
+// Extracts the FULL declaration (signature through matching closing brace) of
+// a named async method from a class-bearing TS source file by brace-depth
+// counting, or returns null if the method is not defined at all. Session
+// 32-D (MAJOR-6, NIT-6): returning the signature line too — not just the
+// body — matters, because the carve-out below excises fetchEngagement's and
+// fetchPostMetrics's own declarations from the scan, and the method's own
+// name is still visible on an excised BODY's signature line if that line is
+// left behind.
+function extractMethodDeclaration(source: string, methodName: string): string | null {
   const sigMatch = source.match(new RegExp(`\\basync\\s+${methodName}\\s*\\(`))
   if (!sigMatch || sigMatch.index === undefined) return null
   const openBraceIdx = source.indexOf('{', sigMatch.index)
@@ -56,7 +58,7 @@ function extractMethodBody(source: string, methodName: string): string | null {
     if (source[i] === '{') depth++
     else if (source[i] === '}') {
       depth--
-      if (depth === 0) return source.slice(openBraceIdx, i + 1)
+      if (depth === 0) return source.slice(sigMatch.index, i + 1)
     }
   }
   return null // unbalanced — treat as not found rather than guess
@@ -89,27 +91,56 @@ describe('BACKFILL-NO-COMMENT-READ (ADR 0025 §12 constraint 7)', () => {
     expect(offenders).toEqual([])
   })
 
-  // Until I2.2 lands fetchRecentPosts's real bodies, this asserts the
-  // method is either absent (I2.1's state) or, once present, clean of the
-  // same patterns — scoped to the METHOD BODY, not the whole provider file,
-  // which legitimately implements fetchEngagement (still NOT_IMPLEMENTED)
-  // elsewhere in the same class.
-  it("no occurrence of the same forbidden terms inside fetchRecentPosts's own body in lib/social/*-provider.ts, when it exists", () => {
+  // Session 32-D (MAJOR-6, NIT-6). The ORIGINAL version of this test scoped
+  // its scan to fetchRecentPosts's own body only — but the actual read path
+  // lives mostly in PRIVATE HELPERS the same class declares elsewhere
+  // (TwitterProvider.fetchTimelinePage, .verifyReadIdentity,
+  // .mapReadErrorResponse; LinkedInProvider.fetchRecentPostsBody), which a
+  // body-only extraction never reaches. The Reviewer proved this: planting
+  // 'https://api.x.com/2/tweets/1/liking_users' inside fetchTimelinePage left
+  // the scan green.
+  //
+  // Fix: scan the WHOLE provider file, carving out only the two separately
+  // declared, always-NOT_IMPLEMENTED stub methods that legitimately name
+  // these terms in their own error message/details (fetchEngagement,
+  // fetchPostMetrics). This is deliberately NOT "fetchRecentPosts plus an
+  // enumerated list of the private helpers it currently calls" — an
+  // enumerated callee list can silently shrink coverage the day a new
+  // private helper is added and this test isn't updated to list it. "The
+  // rest of the file" cannot shrink that way: any helper the class gains,
+  // now or later, is scanned by construction.
+  //
+  // NIT-6: `if (body === null) continue` treated a missing/renamed
+  // fetchRecentPosts as "clean by construction" — silently passing. Now a
+  // missing fetchRecentPosts fails the assertion by name instead.
+  it("lib/social/*-provider.ts's read path (the whole file, minus the fetchEngagement/fetchPostMetrics stub declarations) carries no comment/like/repost/quote endpoint reference, and fetchRecentPosts is defined", () => {
     const providerFiles = [
       path.join(ROOT, 'lib', 'social', 'twitter-provider.ts'),
       path.join(ROOT, 'lib', 'social', 'linkedin-provider.ts'),
     ]
 
     const offenders: string[] = []
+    const missingFetchRecentPosts: string[] = []
     for (const file of providerFiles) {
       expect(fs.existsSync(file), `${path.relative(ROOT, file)} no longer exists`).toBe(true)
       const source = stripLineComments(fs.readFileSync(file, 'utf8'))
-      const body = extractMethodBody(source, 'fetchRecentPosts')
-      if (body === null) continue // absent — clean by construction (I2.1's state)
-      if (COMMENT_READ_PATTERNS.some((p) => p.test(body))) {
-        offenders.push(path.relative(ROOT, file).replace(/\\/g, '/'))
+      const relPath = path.relative(ROOT, file).replace(/\\/g, '/')
+
+      if (extractMethodDeclaration(source, 'fetchRecentPosts') === null) {
+        missingFetchRecentPosts.push(relPath)
+        continue
+      }
+
+      let scanned = source
+      for (const stubMethod of ['fetchEngagement', 'fetchPostMetrics']) {
+        const declaration = extractMethodDeclaration(scanned, stubMethod)
+        if (declaration) scanned = scanned.replace(declaration, '/* excised */')
+      }
+      if (COMMENT_READ_PATTERNS.some((p) => p.test(scanned))) {
+        offenders.push(relPath)
       }
     }
+    expect(missingFetchRecentPosts, 'fetchRecentPosts must be defined in every provider file').toEqual([])
     expect(offenders).toEqual([])
   })
 })
