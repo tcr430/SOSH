@@ -158,10 +158,31 @@ describe('BackfillPanel — Section 10.2 states', () => {
     expect(container.querySelector('[data-state="awaiting-ratification"]')).toBeNull()
   })
 
-  it('awaiting_ratification, complete: renders headline, groups with observation counts, evidence permission OFF, CTA enabled', () => {
+  // BLOCKER-3 (Session 32-D, D4) — zero candidates with a staged voice is
+  // NOT nothing-to-learn: the old condition (posts_extracted === 0 ||
+  // totalCandidates === 0) hid the voice review link in exactly this case.
+  it('zero candidates but a staged voice: NOT nothing-to-learn, voice review link renders', () => {
     const run = makeRun({
       status: 'awaiting_ratification',
-      posts_extracted: 12,
+      posts_extracted: 3,
+      staged_voice: { voice_axes: { formal_casual: 50 } },
+    })
+    const { container, cleanup } = renderPanel([{ run, accountLabel: 'acme', candidates: makeCandidates() }])
+    cleanupFns.push(cleanup)
+    expect(container.querySelector('[data-state="nothing-to-learn"]')).toBeNull()
+    expect(container.querySelector('[data-state="awaiting-ratification"]')).not.toBeNull()
+    expect(container.textContent).toContain('voice.summary_title')
+  })
+
+  it('awaiting_ratification, complete: renders headline, groups with observation counts, evidence permission OFF, CTA enabled', () => {
+    // BLOCKER-3 (Session 32-D, D4) — posts_extracted is deliberately LEFT at
+    // its makeRun() default (0) here: this test is about candidate-group
+    // rendering, not the count copy (that's the "partial" test below), and
+    // the old nothing-to-learn condition required a nonzero posts_extracted
+    // to even reach this branch — hand-setting it here would mask exactly
+    // the defect D4 closes.
+    const run = makeRun({
+      status: 'awaiting_ratification',
       weighting: 'weighted',
       staged_voice: { voice_axes: { formal_casual: 50 } },
     })

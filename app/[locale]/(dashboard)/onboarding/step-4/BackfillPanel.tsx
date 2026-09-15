@@ -252,7 +252,12 @@ function RunCard({
 
       case 'awaiting_ratification': {
         const totalCandidates = candidates.evidence.length + candidates.audience.length + candidates.performance.length
-        if (run.posts_extracted === 0 || totalCandidates === 0) {
+        // BLOCKER-3 (Session 32-D, D4) — "nothing to learn" means zero
+        // candidates in all three groups AND no staged voice, never a bare
+        // posts_extracted check: that counter can legitimately be nonzero
+        // with zero candidates (every post skipped) and, before D3, was
+        // never written at all — silently hiding a real run's candidates.
+        if (totalCandidates === 0 && run.staged_voice == null) {
           return (
             <div data-state="nothing-to-learn" className="space-y-1">
               <p className="text-sm font-medium">{t('nothing_to_learn.title', { account: accountLabel })}</p>
