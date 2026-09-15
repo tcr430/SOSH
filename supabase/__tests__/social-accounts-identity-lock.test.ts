@@ -80,6 +80,10 @@ describe('social_accounts identity lock (ADR 0025 §7.3, 20260913120000_social_a
   })
 
   const LOCKED_COLUMN_CASES: Array<{ column: string; value: unknown }> = [
+    // NIT-4 (Session 32-D, D3) — id was the one column in the ALLOWLIST
+    // EXCEPT list (20260913120000's header comment) never actually covered
+    // by a case here.
+    { column: 'id', value: '00000000-0000-4000-8000-000000000099' },
     { column: 'platform_user_id', value: 'attacker-controlled-user-id' },
     { column: 'vault_access_token_id', value: '00000000-0000-4000-8000-000000000002' },
     { column: 'vault_refresh_token_id', value: '00000000-0000-4000-8000-000000000003' },
@@ -116,5 +120,45 @@ describe('social_accounts identity lock (ADR 0025 §7.3, 20260913120000_social_a
 
     expect(error).toBeNull()
     expect(data?.platform_username).toBe('renamed_by_owner')
+  })
+
+  // MINOR-8 (Session 32-D, D3) — authenticated held a table-level INSERT and
+  // DELETE grant on social_accounts (same over-wide-grant shape UPDATE had
+  // before this migration's predecessor), closed by a table-level REVOKE.
+  // Both fail with 42501 — a privilege error, never an RLS-policy-shaped
+  // empty result.
+  it('authenticated INSERT on social_accounts fails with a privilege error (42501)', async () => {
+    const client = await signInAsOwner()
+    const { error } = await client.from('social_accounts').insert({
+      business_id: businessId,
+      platform: 'twitter',
+      platform_user_id: 'attacker-inserted-account',
+      platform_username: 'attacker_handle',
+      vault_access_token_id: '00000000-0000-4000-8000-000000000098',
+      connected_at: new Date().toISOString(),
+    })
+
+    expect(error).not.toBeNull()
+    expect(error!.code).toBe('42501')
+  })
+
+  it('authenticated DELETE on social_accounts fails with a privilege error (42501)', async () => {
+    const client = await signInAsOwner()
+    const { error } = await client.from('social_accounts').delete().eq('id', socialAccountId)
+
+    expect(error).not.toBeNull()
+    expect(error!.code).toBe('42501')
+  })
+
+  it('the service-role OAuth callback path (upsert) is unaffected — positive control', async () => {
+    const { data, error } = await admin
+      .from('social_accounts')
+      .update({ platform_username: 'service-role-still-works' })
+      .eq('id', socialAccountId)
+      .select('platform_username')
+      .single()
+
+    expect(error).toBeNull()
+    expect(data?.platform_username).toBe('service-role-still-works')
   })
 })

@@ -10,6 +10,7 @@ import {
   sweepStalledBackfillRuns,
   sweepExpiredBackfillStaging,
   sweepExpiredStagedVoice,
+  sweepExpiredBackfillCandidates,
 } from '@/lib/db/backfill-runs'
 import { stageBackfillPosts } from '@/lib/db/backfill-posts'
 import { runExtractionUnit } from './extract'
@@ -177,6 +178,7 @@ export interface BackfillTickSummary {
   staleFailed: number
   stagingPurged: number
   stagedVoiceNulled: number
+  candidatesSwept: number
 }
 
 export async function runBackfillTick(opts?: { now?: Date }): Promise<BackfillTickSummary> {
@@ -220,6 +222,7 @@ export async function runBackfillTick(opts?: { now?: Date }): Promise<BackfillTi
       const staleFailed = await sweepStalledBackfillRuns(BACKFILL_STALL_MINUTES)
       const stagingPurged = await sweepExpiredBackfillStaging(BACKFILL_STAGING_TTL_DAYS)
       const stagedVoiceNulled = await sweepExpiredStagedVoice(BACKFILL_STAGING_TTL_DAYS)
+      const candidatesSwept = await sweepExpiredBackfillCandidates(BACKFILL_STAGING_TTL_DAYS)
 
       const summary: BackfillTickSummary = {
         tick: formatISO(now),
@@ -231,6 +234,7 @@ export async function runBackfillTick(opts?: { now?: Date }): Promise<BackfillTi
         staleFailed,
         stagingPurged,
         stagedVoiceNulled,
+        candidatesSwept,
       }
 
       console.log(JSON.stringify({ kind: 'backfill-tick', ...summary }))

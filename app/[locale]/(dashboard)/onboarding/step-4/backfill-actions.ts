@@ -112,29 +112,6 @@ async function requireApproverOrAdmin(
   return { ok: true, userId: user.id, run }
 }
 
-// ADR §6.4 — discard/retry accept any active member, not just approver/admin
-// (discard_backfill_run's own p_user_id guard has the same shape).
-async function requireActiveMember(
-  runId: string,
-): Promise<
-  | { ok: true; userId: string; run: SocialBackfillRunRow }
-  | { ok: false; error: BackfillActionError }
-> {
-  const client = await createClient()
-  const {
-    data: { user },
-  } = await client.auth.getUser()
-  if (!user) return { ok: false, error: 'unauthenticated' }
-
-  const run = await getBackfillRunById(runId)
-  if (!run) return { ok: false, error: 'not_found' }
-
-  const member = await getMemberForUser(client, run.business_id, user.id)
-  if (!member) return { ok: false, error: 'forbidden' }
-
-  return { ok: true, userId: user.id, run }
-}
-
 export async function ratifyBackfillRunAction(input: unknown): Promise<BackfillActionResult> {
   const parsed = ratifyBackfillRunSchema.safeParse(input)
   if (!parsed.success) return { ok: false, error: 'validation' }
@@ -159,7 +136,7 @@ export async function discardBackfillRunAction(input: unknown): Promise<Backfill
   const parsed = discardBackfillRunSchema.safeParse(input)
   if (!parsed.success) return { ok: false, error: 'validation' }
 
-  const auth = await requireActiveMember(parsed.data.runId)
+  const auth = await requireApproverOrAdmin(parsed.data.runId)
   if (!auth.ok) return auth
 
   const run = await discardBackfillRun(parsed.data.runId, auth.userId)
@@ -176,7 +153,7 @@ export async function retryBackfillRunAction(input: unknown): Promise<BackfillAc
   const parsed = retryBackfillRunSchema.safeParse(input)
   if (!parsed.success) return { ok: false, error: 'validation' }
 
-  const auth = await requireActiveMember(parsed.data.runId)
+  const auth = await requireApproverOrAdmin(parsed.data.runId)
   if (!auth.ok) return auth
 
   const run = await resumeBackfillRun(parsed.data.runId)

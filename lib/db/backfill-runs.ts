@@ -285,6 +285,19 @@ export async function sweepExpiredStagedVoice(ttlDays: number): Promise<number> 
   return (data as number | null) ?? 0
 }
 
+// ADR §8.3/MINOR-9 per A-8 (Session 32-D, D3) — over
+// sweep_expired_backfill_candidates: retires import candidate memory of a
+// run still awaiting_ratification past ttlDays, then deletes rows it
+// already retired once the run is past 2 * ttlDays. Returns the combined
+// count of rows retired and deleted.
+export async function sweepExpiredBackfillCandidates(ttlDays: number): Promise<number> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client.rpc('sweep_expired_backfill_candidates', { p_ttl_days: ttlDays })
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as number | null) ?? 0
+}
+
 // ADR §6.8 BACKFILL-DISCONNECT-CANCELS (Session 32 I2.9) — the disconnect
 // path's own read: the account's one LIVE (non-discarded) run, if any —
 // mirrors social_backfill_runs_live_account_uq's own predicate exactly, so

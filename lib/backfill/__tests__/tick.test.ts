@@ -12,6 +12,7 @@ vi.mock('@/lib/db/backfill-runs', () => ({
   sweepStalledBackfillRuns: vi.fn(),
   sweepExpiredBackfillStaging: vi.fn(),
   sweepExpiredStagedVoice: vi.fn(),
+  sweepExpiredBackfillCandidates: vi.fn(),
 }))
 vi.mock('@/lib/db/backfill-posts', () => ({
   stageBackfillPosts: vi.fn(),
@@ -29,6 +30,7 @@ import {
   sweepStalledBackfillRuns,
   sweepExpiredBackfillStaging,
   sweepExpiredStagedVoice,
+  sweepExpiredBackfillCandidates,
 } from '@/lib/db/backfill-runs'
 import type { SocialBackfillRunRow } from '@/lib/db/types'
 import { runBackfillTick } from '../orchestrator'
@@ -43,6 +45,7 @@ const mockGetNextBackfillRunForTick = vi.mocked(getNextBackfillRunForTick)
 const mockSweepStalledBackfillRuns = vi.mocked(sweepStalledBackfillRuns)
 const mockSweepExpiredBackfillStaging = vi.mocked(sweepExpiredBackfillStaging)
 const mockSweepExpiredStagedVoice = vi.mocked(sweepExpiredStagedVoice)
+const mockSweepExpiredBackfillCandidates = vi.mocked(sweepExpiredBackfillCandidates)
 
 let consoleLogSpy: ReturnType<typeof vi.spyOn>
 
@@ -51,6 +54,7 @@ beforeEach(() => {
   mockSweepStalledBackfillRuns.mockResolvedValue(0)
   mockSweepExpiredBackfillStaging.mockResolvedValue(0)
   mockSweepExpiredStagedVoice.mockResolvedValue(0)
+  mockSweepExpiredBackfillCandidates.mockResolvedValue(0)
 })
 
 afterEach(() => {
@@ -105,7 +109,7 @@ function makeFakeProvider(): SocialProvider {
 }
 
 describe('runBackfillTick (ADR 0025 §6.6, Session 32 I2.9)', () => {
-  it('a queued/fetching run dispatches fetchPhase and runs all three sweeps', async () => {
+  it('a queued/fetching run dispatches fetchPhase and runs all four sweeps', async () => {
     const run = makeRun({ status: 'queued' })
     mockGetNextBackfillRunForTick.mockResolvedValue(run)
     mockGetBackfillRunById.mockResolvedValue(run)
@@ -119,6 +123,7 @@ describe('runBackfillTick (ADR 0025 §6.6, Session 32 I2.9)', () => {
     expect(mockSweepStalledBackfillRuns).toHaveBeenCalledWith(BACKFILL_STALL_MINUTES)
     expect(mockSweepExpiredBackfillStaging).toHaveBeenCalledWith(BACKFILL_STAGING_TTL_DAYS)
     expect(mockSweepExpiredStagedVoice).toHaveBeenCalledWith(BACKFILL_STAGING_TTL_DAYS)
+    expect(mockSweepExpiredBackfillCandidates).toHaveBeenCalledWith(BACKFILL_STAGING_TTL_DAYS)
   })
 
   it('an extracting run dispatches to runExtractionUnit, never fetchPhase (fetchRecentPosts is never called)', async () => {
@@ -186,6 +191,7 @@ describe('runBackfillTick (ADR 0025 §6.6, Session 32 I2.9)', () => {
         'staleFailed',
         'stagingPurged',
         'stagedVoiceNulled',
+        'candidatesSwept',
       ].sort(),
     )
   })

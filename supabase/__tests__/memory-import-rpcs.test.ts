@@ -53,7 +53,10 @@ describe('import_evidence_memory / import_audience_memory / import_performance_m
 
     const { data: run, error: runErr } = await admin
       .from('social_backfill_runs')
-      .insert({ business_id: businessId, social_account_id: socialAccountId, platform: 'twitter' })
+      // MINOR-3 (Session 32-D, D3) — the three import RPCs now write zero
+      // rows unless the owning run is 'extracting'; every positive-path
+      // case below needs that status explicitly, not the 'queued' default.
+      .insert({ business_id: businessId, social_account_id: socialAccountId, platform: 'twitter', status: 'extracting' })
       .select('id')
       .single()
     if (runErr) throw runErr
@@ -149,6 +152,162 @@ describe('import_evidence_memory / import_audience_memory / import_performance_m
     const sixthP = await admin.rpc('import_performance_memory', performanceArgs)
     if (sixthP.error) throw sixthP.error
     expect(sixthP.data).toHaveLength(0)
+  })
+
+  // MINOR-3 (Session 32-D, D3) — discard, then each import RPC -> zero rows.
+  it('discard, then each import RPC writes zero rows (run is no longer extracting)', async () => {
+    // A fresh account — social_backfill_runs_live_account_uq blocks a
+    // second non-discarded run on the shared fixture's account.
+    const { data: freshAccount, error: freshAcctErr } = await admin
+      .from('social_accounts')
+      .insert({
+        business_id: businessId,
+        platform: 'twitter',
+        platform_user_id: 'x-import-rpcs-minor3',
+        platform_username: 'import_rpcs_minor3_handle',
+        vault_access_token_id: '00000000-0000-4000-8000-000000000081',
+        connected_at: new Date().toISOString(),
+      })
+      .select('id')
+      .single()
+    if (freshAcctErr) throw freshAcctErr
+
+    const { data: discardRun, error: mkErr } = await admin
+      .from('social_backfill_runs')
+      .insert({ business_id: businessId, social_account_id: freshAccount.id, platform: 'twitter', status: 'extracting' })
+      .select('id')
+      .single()
+    if (mkErr) throw mkErr
+
+    const { error: discardErr } = await admin.rpc('discard_backfill_run', {
+      p_run_id: discardRun.id,
+      p_user_id: null,
+    })
+    if (discardErr) throw discardErr
+
+    const evidence = await admin.rpc('import_evidence_memory', {
+      p_business_id: businessId,
+      p_import_run_id: discardRun.id,
+      p_import_source_post_ids: ['minor-3-post'],
+      p_kind: 'quote',
+      p_content: 'MINOR-3 status-guard content',
+      p_source_url: null,
+      p_scope: 'brand',
+      p_scope_ref: null,
+      p_confidence: 0.5,
+      p_last_confirmed_at: new Date().toISOString(),
+      p_expires_at: null,
+    })
+    if (evidence.error) throw evidence.error
+    expect(evidence.data).toHaveLength(0)
+
+    const audience = await admin.rpc('import_audience_memory', {
+      p_business_id: businessId,
+      p_import_run_id: discardRun.id,
+      p_import_source_post_ids: ['minor-3-post'],
+      p_segment: null,
+      p_kind: 'problem',
+      p_statement: 'MINOR-3 status-guard statement',
+      p_scope: 'brand',
+      p_scope_ref: null,
+      p_confidence: 0.3,
+      p_last_confirmed_at: new Date().toISOString(),
+      p_expires_at: null,
+    })
+    if (audience.error) throw audience.error
+    expect(audience.data).toHaveLength(0)
+
+    const performance = await admin.rpc('import_performance_memory', {
+      p_business_id: businessId,
+      p_import_run_id: discardRun.id,
+      p_import_source_post_ids: ['minor-3-post'],
+      p_dimension: 'topic',
+      p_pattern: 'MINOR-3 status-guard pattern',
+      p_platform: null,
+      p_scope: 'brand',
+      p_scope_ref: null,
+      p_confidence: 0.6,
+      p_observation_count: 5,
+      p_last_confirmed_at: new Date().toISOString(),
+      p_expires_at: null,
+    })
+    if (performance.error) throw performance.error
+    expect(performance.data).toHaveLength(0)
+  })
+
+  // MAJOR-5 (Session 32-D, D3) — 26 distinct audience and 16 distinct
+  // performance imports -> exactly 25 and 15 rows (evidence_memory's own
+  // 40-cap is already covered at 20260914050000).
+  it('audience caps at 25 and performance caps at 15 rows already written for the run', async () => {
+    // A fresh account — social_backfill_runs_live_account_uq blocks a
+    // second non-discarded run on the shared fixture's account.
+    const { data: freshAccount, error: freshAcctErr } = await admin
+      .from('social_accounts')
+      .insert({
+        business_id: businessId,
+        platform: 'twitter',
+        platform_user_id: 'x-import-rpcs-major5',
+        platform_username: 'import_rpcs_major5_handle',
+        vault_access_token_id: '00000000-0000-4000-8000-000000000082',
+        connected_at: new Date().toISOString(),
+      })
+      .select('id')
+      .single()
+    if (freshAcctErr) throw freshAcctErr
+
+    const { data: capRun, error: mkErr } = await admin
+      .from('social_backfill_runs')
+      .insert({ business_id: businessId, social_account_id: freshAccount.id, platform: 'twitter', status: 'extracting' })
+      .select('id')
+      .single()
+    if (mkErr) throw mkErr
+
+    for (let i = 0; i < 26; i += 1) {
+      const { error } = await admin.rpc('import_audience_memory', {
+        p_business_id: businessId,
+        p_import_run_id: capRun.id,
+        p_import_source_post_ids: [`audience-cap-post-${i}`],
+        p_segment: null,
+        p_kind: 'problem',
+        p_statement: `Distinct audience statement number ${i}`,
+        p_scope: 'brand',
+        p_scope_ref: null,
+        p_confidence: 0.3,
+        p_last_confirmed_at: new Date().toISOString(),
+        p_expires_at: null,
+      })
+      if (error) throw error
+    }
+    const { count: audienceCount, error: audCountErr } = await admin
+      .from('audience_memory')
+      .select('id', { count: 'exact', head: true })
+      .eq('import_run_id', capRun.id)
+    if (audCountErr) throw audCountErr
+    expect(audienceCount).toBe(25)
+
+    for (let i = 0; i < 16; i += 1) {
+      const { error } = await admin.rpc('import_performance_memory', {
+        p_business_id: businessId,
+        p_import_run_id: capRun.id,
+        p_import_source_post_ids: [`performance-cap-post-${i}`],
+        p_dimension: 'topic',
+        p_pattern: `Distinct performance pattern number ${i}`,
+        p_platform: null,
+        p_scope: 'brand',
+        p_scope_ref: null,
+        p_confidence: 0.6,
+        p_observation_count: 5,
+        p_last_confirmed_at: new Date().toISOString(),
+        p_expires_at: null,
+      })
+      if (error) throw error
+    }
+    const { count: performanceCount, error: perfCountErr } = await admin
+      .from('performance_memory')
+      .select('id', { count: 'exact', head: true })
+      .eq('import_run_id', capRun.id)
+    if (perfCountErr) throw perfCountErr
+    expect(performanceCount).toBe(15)
   })
 
   it('authenticated EXECUTE is refused on all three import RPCs', async () => {

@@ -81,6 +81,7 @@ const tickSummary = {
   staleFailed: 0,
   stagingPurged: 0,
   stagedVoiceNulled: 0,
+  candidatesSwept: 0,
 }
 
 beforeEach(() => {

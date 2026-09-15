@@ -216,7 +216,10 @@ describe('ratify_backfill_run (ADR 0025 §9.4)', () => {
 
   it('an import row from a DIFFERENT run, passed in p_accepted_ids, is NOT activated', async () => {
     const runA = await makeRun()
-    const runB = await makeRun()
+    // MINOR-3 (Session 32-D, D3) — import_evidence_memory now writes zero
+    // rows unless the owning run is 'extracting'; makeRun's default status
+    // is 'awaiting_ratification'.
+    const runB = await makeRun({ status: 'extracting' })
 
     const { data: importRows, error: importErr } = await admin.rpc('import_evidence_memory', {
       p_business_id: businessId,
@@ -246,6 +249,63 @@ describe('ratify_backfill_run (ADR 0025 §9.4)', () => {
 
     const { data: afterRow } = await admin.from('evidence_memory').select('status').eq('id', rowFromRunB.id).single()
     expect(afterRow.status).toBe('candidate')
+  })
+
+  // MAJOR-2 (Session 32-D, D3) — the status guard moved BEFORE the memory
+  // UPDATEs and the staging DELETE. Ratifying an 'extracting' run (not
+  // 'awaiting_ratification') must touch NOTHING: zero status changes on any
+  // candidate, staging still present, zero rows returned.
+  it("ratifying an 'extracting' run: zero status changes, staging count unchanged, zero rows returned", async () => {
+    const runId = await makeRun({ status: 'extracting' })
+
+    const { data: candidate, error: candidateErr } = await admin
+      .from('evidence_memory')
+      .insert({
+        business_id: businessId,
+        source: 'import',
+        import_run_id: runId,
+        import_source_post_ids: ['major-2-post'],
+        confidence: 0.5,
+        status: 'candidate',
+        sensitivity: 'internal',
+        public_use_permission: false,
+        scope: 'brand',
+        kind: 'quote',
+        content: 'MAJOR-2 guard-order candidate',
+      })
+      .select('id')
+      .single()
+    if (candidateErr) throw candidateErr
+
+    const { error: postErr } = await admin.from('social_backfill_posts').insert({
+      business_id: businessId,
+      run_id: runId,
+      social_account_id: socialAccountId,
+      platform_post_id: 'major-2-staging-post-1',
+      published_at: new Date().toISOString(),
+      content: 'staged content',
+      format: 'text',
+    })
+    if (postErr) throw postErr
+
+    const { data, error } = await admin.rpc('ratify_backfill_run', {
+      p_user_id: approverId,
+      p_run_id: runId,
+      p_accepted_ids: [candidate.id],
+      p_rejected_ids: [],
+      p_account_role: 'brand',
+    })
+    if (error) throw error
+    expect(data).toEqual([])
+
+    const { data: afterCandidate } = await admin.from('evidence_memory').select('status').eq('id', candidate.id).single()
+    expect(afterCandidate.status).toBe('candidate')
+
+    const { data: staging } = await admin.from('social_backfill_posts').select('id').eq('run_id', runId)
+    expect(staging).toHaveLength(1)
+
+    const { data: afterRun } = await admin.from('social_backfill_runs').select('status').eq('id', runId).single()
+    expect(afterRun.status).toBe('extracting')
   })
 
   it('authenticated EXECUTE is refused', async () => {

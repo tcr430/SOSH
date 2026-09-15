@@ -50,7 +50,9 @@ describe('remove_import_source_post (ADR §4 A-5)', () => {
 
     const { data: run, error: runErr } = await admin
       .from('social_backfill_runs')
-      .insert({ business_id: businessId, social_account_id: socialAccountId, platform: 'twitter' })
+      // MINOR-3 (Session 32-D, D3) — import RPCs now write zero rows
+      // unless the run is 'extracting'.
+      .insert({ business_id: businessId, social_account_id: socialAccountId, platform: 'twitter', status: 'extracting' })
       .select('id')
       .single()
     if (runErr) throw runErr

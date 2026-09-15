@@ -61,7 +61,10 @@ describe('performance_memory import row survives ratify, retire and a colliding 
         business_id: businessId,
         social_account_id: socialAccountId,
         platform: 'twitter',
-        status: 'awaiting_ratification',
+        // MINOR-3 (Session 32-D, D3) — import_performance_memory now writes
+        // zero rows unless the run is 'extracting'; the test below moves it
+        // to 'awaiting_ratification' itself before ratifying.
+        status: 'extracting',
       })
       .select('id')
       .single()
@@ -100,6 +103,14 @@ describe('performance_memory import row survives ratify, retire and a colliding 
       import_source_post_ids: importRow.import_source_post_ids,
     }
     expect(originalProvenance.source).toBe('import')
+
+    // MAJOR-2 (Session 32-D, D3) — ratify now refuses a run that is not
+    // 'awaiting_ratification'.
+    const { error: transitionErr } = await admin
+      .from('social_backfill_runs')
+      .update({ status: 'awaiting_ratification' })
+      .eq('id', runId)
+    if (transitionErr) throw transitionErr
 
     // Ratify — accepted, flips candidate -> active.
     const { data: ratifyRows, error: ratifyErr } = await admin.rpc('ratify_backfill_run', {

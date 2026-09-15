@@ -190,6 +190,26 @@ describe('discardBackfillRunAction / retryBackfillRunAction', () => {
     expect(resumeBackfillRun).toHaveBeenCalledWith(baseRun.id)
     expect(resumeBackfillRun).toHaveBeenCalledTimes(1)
   })
+
+  // MINOR-4 (Session 32-D, D3) — discard/retry now require approver/admin,
+  // matching ratify's own gate, not any active member.
+  it('discard rejects when the caller is not an approver or admin', async () => {
+    mockAuthedClient('user-1')
+    vi.mocked(getMemberForUser).mockResolvedValue({ ...approverMember, role: 'viewer', is_admin: false })
+    const result = await discardBackfillRunAction({ runId: baseRun.id })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toBe('forbidden')
+    expect(discardBackfillRun).not.toHaveBeenCalled()
+  })
+
+  it('retry rejects when the caller is not an approver or admin', async () => {
+    mockAuthedClient('user-1')
+    vi.mocked(getMemberForUser).mockResolvedValue({ ...approverMember, role: 'viewer', is_admin: false })
+    const result = await retryBackfillRunAction({ runId: baseRun.id })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toBe('forbidden')
+    expect(resumeBackfillRun).not.toHaveBeenCalled()
+  })
 })
 
 describe('applyBackfillVoiceAction', () => {

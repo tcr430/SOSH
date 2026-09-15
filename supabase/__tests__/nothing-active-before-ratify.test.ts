@@ -101,7 +101,10 @@ describe('nothing is active before ratify (ADR 0025 §6.4/§9.4)', () => {
         business_id: businessId,
         social_account_id: account.id,
         platform: 'twitter',
-        status: 'awaiting_ratification',
+        // MINOR-3 (Session 32-D, D3) — every import RPC now writes zero
+        // rows unless the run is 'extracting'; every test here imports
+        // first, so the run must start there, not 'awaiting_ratification'.
+        status: 'extracting',
       })
       .select('id')
       .single()
@@ -236,6 +239,15 @@ describe('nothing is active before ratify (ADR 0025 §6.4/§9.4)', () => {
     })
     if (error) throw error
     const row = rows[0]
+
+    // MAJOR-2 (Session 32-D, D3) — ratify now refuses a run that is not
+    // 'awaiting_ratification'; this run started 'extracting' so the import
+    // RPC above would write.
+    const { error: transitionErr } = await admin
+      .from('social_backfill_runs')
+      .update({ status: 'awaiting_ratification' })
+      .eq('id', runId)
+    if (transitionErr) throw transitionErr
 
     const { error: ratifyErr } = await admin.rpc('ratify_backfill_run', {
       p_user_id: approverId,
