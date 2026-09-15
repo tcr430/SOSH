@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { formatISO } from 'date-fns'
 import { config } from '@/lib/config'
+import { toUtcIso } from '@/lib/utils'
 import type {
   SocialProvider,
   OAuthAuthorizeInput,
@@ -71,7 +72,7 @@ const LinkedInPostsListSchema = z.object({
         // LinkedIn's REST APIs conventionally return createdAt as epoch
         // millis (a number), not an ISO string — normalized here so the
         // caller's `new Date(...)` parse always sees a valid ISO string.
-        createdAt: z.union([z.string(), z.number()]).transform((v) => (typeof v === 'number' ? new Date(v).toISOString() : v)),
+        createdAt: z.union([z.string(), z.number()]).transform((v) => (typeof v === 'number' ? toUtcIso(new Date(v)) : v)),
         commentary: z.string().optional(),
         reshareContext: z.unknown().optional(),
         content: z

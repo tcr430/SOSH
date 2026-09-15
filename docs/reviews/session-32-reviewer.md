@@ -300,3 +300,26 @@ Not shipped: comment mining, embeddings, exemplar selection, the outcome loop, r
 | NIT-6 | 10 | Missing method passes scan |
 
 Session 32 review complete - 31 findings (3 BLOCKER, 12 MAJOR, 10 MINOR, 6 NIT) over range 4f3e7129..3914a31c; 4/55 non-E BACKFILL-* constraints verified executed green in CI (Tier 1 0/16, Tier 2 0/34, Tier 3 4/5 diff-verified); Tier E recorded not run.
+
+## CORRECTION PASS (Session 32-D)
+
+**Author:** Session 32-D correction pass · **Date:** 2026-09-15 · **Range fixed:** `3914a31c..<D12-sha>`
+**Reviewed head:** `3914a31c` — the head the Reviewer read; only this pass's section 4 landed after it, at D0
+(`0038e94c`).
+**Founder adjudications consumed:** A-7 = _pending_ (not required at this step; D9 gates on it), A-8 = _pending_
+(not required at this step; D3 gates on it) (build-guide section 4).
+**Everything above this line is the Reviewer's. Everything below it is this pass's.**
+
+### D1 — BLOCKER-2: the two lint errors
+
+| Field | Detail |
+|---|---|
+| **Finding** | BLOCKER-2 |
+| **Fix** | `components/onboarding/BackfillBanner.tsx`: replaced `useState` + `useEffect(() => setDismissed(...))` with `useSyncExternalStore` over a per-`storageKey` external store (`getServerSnapshot` always returns `true`, so server and first client render match — no hydration mismatch, no synchronous setState in an effect). `lib/social/linkedin-provider.ts:74`: `new Date(v).toISOString()` replaced with `toUtcIso(new Date(v))`, imported from `@/lib/utils`. |
+| **Proof** | `app/[locale]/(dashboard)/layout.test.tsx` (30 tests, unchanged, green — BackfillBanner is mocked there) and `lib/social/__tests__/linkedin-provider.test.ts` (green). Full `npm run test:app` (CI env block, `--no-file-parallelism`): 3837/3837 green — identical count to pre-fix HEAD, confirming zero regressions. `npx tsc --noEmit --skipLibCheck`: clean. `npm run lint`: 0 errors, 107 warnings (unchanged count). |
+| **Reddening** | Two separate mutations, one file at a time, each followed by `git diff --stat` confirmed empty after restore: (1) restored original `linkedin-provider.ts:74` (`new Date(v).toISOString()`, no `toUtcIso` import) → `npx eslint lib/social/linkedin-provider.ts` failed at `74:96` naming `no-restricted-properties` ("'toISOString' is restricted..."). (2) restored original `BackfillBanner.tsx` (`useState(true)` + `useEffect(() => setDismissed(...))`) → `npx eslint components/onboarding/BackfillBanner.tsx` failed at `20:7` naming `react-hooks/set-state-in-effect` ("Calling setState synchronously within an effect..."). Both restored to the fix; `git diff --stat` matched the pre-mutation diff exactly each time. |
+| **Commit** | `<D1-sha>` |
+
+**Verification note (not a finding, not fixed by this step):** a parallel `npm run test:app` run intermittently fails `lib/signals/__fixtures__/eval/corpus-v2-schema.test.ts` ("the 40 GitHub examples are unchanged in count..." — expects 24 `card` verdicts, observes 0). Root cause: `scripts/eval/run-triage-eval.test.ts` writes the shared fixture `lib/signals/__fixtures__/eval/corpus.v2.json` to disk mid-test and restores it only in `afterEach`; under Vitest's default file-parallelism this races against `corpus-v2-schema.test.ts` reading the same path from a concurrent worker. This is a pre-existing test-isolation defect, out of L-1 scope and not one of the 31 findings — confirmed pre-existing and diff-independent: (a) `npm run test:app --no-file-parallelism` is green at 3837/3837 both at D0 HEAD and with D1's diff applied; (b) the identical failure shape was independently observed and traced to the same root cause under a wholly unrelated Session 31-D D1 diff (different files entirely), i.e. it is triggered by scheduling nondeterminism, not by what changed. This step's gate uses the serial (`--no-file-parallelism`) run as its evidence, matching `db-tests.yml`'s own precedent for a suite with shared on-disk fixture state.
+
+**What I did NOT touch:** the 107 pre-existing lint warnings.

@@ -6,22 +6,49 @@
 // browser/session, which is acceptable for a "you left something behind"
 // nudge and avoids a new column/table for a single boolean.
 
-import { useEffect, useState } from 'react'
+import { useMemo, useSyncExternalStore } from 'react'
 import Link from 'next/link'
 import { useTranslations } from 'next-intl'
+
+// Per-storageKey external store so dismissal state is read without a
+// synchronous setState in an effect (that pattern triggers a cascading-render
+// lint error — Session 32-D BLOCKER-2). getServerSnapshot always reports
+// "dismissed" so the server render and the first client render match (no
+// hydration mismatch); useSyncExternalStore then reconciles to the real
+// localStorage value itself, outside our render/effect cycle.
+function createDismissalStore(storageKey: string) {
+  const listeners = new Set<() => void>()
+  return {
+    subscribe(listener: () => void) {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
+    getSnapshot(): boolean {
+      try {
+        return localStorage.getItem(storageKey) === '1'
+      } catch {
+        return false
+      }
+    },
+    getServerSnapshot(): boolean {
+      return true
+    },
+    dismiss() {
+      try {
+        localStorage.setItem(storageKey, '1')
+      } catch {
+        // best-effort only
+      }
+      listeners.forEach((listener) => listener())
+    },
+  }
+}
 
 export function BackfillBanner({ locale, runId }: { locale: string; runId: string }) {
   const t = useTranslations('onboarding.backfill')
   const storageKey = `backfill-banner-dismissed-${runId}`
-  const [dismissed, setDismissed] = useState(true)
-
-  useEffect(() => {
-    try {
-      setDismissed(localStorage.getItem(storageKey) === '1')
-    } catch {
-      setDismissed(false)
-    }
-  }, [storageKey])
+  const store = useMemo(() => createDismissalStore(storageKey), [storageKey])
+  const dismissed = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getServerSnapshot)
 
   if (dismissed) return null
 
@@ -33,14 +60,7 @@ export function BackfillBanner({ locale, runId }: { locale: string; runId: strin
       <button
         type="button"
         aria-label={t('banner.dismiss')}
-        onClick={() => {
-          try {
-            localStorage.setItem(storageKey, '1')
-          } catch {
-            // best-effort only
-          }
-          setDismissed(true)
-        }}
+        onClick={() => store.dismiss()}
         className="text-muted-foreground hover:text-foreground"
       >
         ×
