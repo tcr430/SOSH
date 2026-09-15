@@ -2188,6 +2188,713 @@ ahead of time produces a fictional resolution log.
 > argued in the appendix, not erased**. The Session 22-D failure (RESOLVED verdicts written *into* the
 > reviewer's findings) remains prohibited under condition 1.
 
+**✅ AUTHORED 2026-09-15 — the placeholder above is retained as the specification this section was written
+against; everything below is the section itself.**
+
+**Filled in from `docs/reviews/session-32-reviewer.md`** (Reviewer range **`4f3e7129..3914a31c`**, 16 commits
+`I2.1` `fd2d59ea` … `I2.15` follow-up `3914a31c`, on branch `session-30-5-adr-0028`). **Thirteen steps:
+D0–D12.** Correction passes are normal, not failures (constitution). **There is no independent re-review pass
+this session** (mirroring 23-D…31-D): this pass fixes the Reviewer's findings, records its own resolutions in
+the Reviewer's own file, and the founder adjudicates close-out.
+
+**Reviewer's tally: 3 BLOCKER, 12 MAJOR, 10 MINOR, 6 NIT — 31 findings.** Every one appears **exactly once**
+in the disposition table below. **Three are ADR findings** (MINOR-8, MINOR-9, MINOR-10), where the Reviewer
+judged ADR 0025 itself wrong or silent. Each of those closes with an **appended** ADR 0025 amendment as well as
+code.
+
+> **No finding is deferred by this guide.** There is no deferral column and no `docs/backlog.md` row for any
+> finding. A step that cannot close its finding **REPORTS and STOPS**; only a founder ruling can move a
+> finding out of this pass. This is the guide's posture, not a founder instruction — if the founder issues
+> one (as for 31-D), record it here verbatim beside this note.
+
+**The three BLOCKERs are three different failures, and only one is a code defect.**
+- **BLOCKER-3 is the product failure.** `posts_extracted` has no writer anywhere in the range, and
+  `BackfillPanel.tsx:255` gates the review surface on it being non-zero. Every real run reaches the founder as
+  *"nothing to learn"*. **Nothing an import writes can become active through the product**, so Tier E's own
+  measurement is structurally zero.
+- **BLOCKER-2 is a gate failure the Builder could not see.** `npm run lint` exits 1 on two range-introduced
+  errors, while the Builder's verification loop ran vitest only.
+- **BLOCKER-1 is the session-state failure.** The branch was never pushed, so **0 of 56 constraints are
+  executed green in CI**. The Builder disclosed this honestly in ADR 0025 §14.4. It closes **last** (D12),
+  because a push before the corrections would produce green runs for a range this pass is about to invalidate.
+
+---
+
+### Founder adjudications — **two required, both PENDING; each is the named step's gate**
+
+A-1…A-6 (§0.2) stand untouched and are **not** reopened. Two remedies are not engineering decisions, because
+they change a recorded ruling or a legal-retention posture. Each is recorded below with the recommendation
+and its named loser, **awaiting the founder**. The step it gates does not run until the Decision cell is
+filled.
+
+| # | Question | Recommendation (not a ruling) | Loser | Decision | Gates |
+|---|---|---|---|---|---|
+| **A-7** | MINOR-6: step-2 ships a second voice-review surface (`BackfillVoiceReview.tsx`), contradicting ADR 0025 §0 interpretation note 1 (*"the same `VoiceEditor` component … not … a second voice editor"*). Reuse `VoiceEditor`, or accept the second surface? | **Reuse `VoiceEditor`**, with an axes-only founder mode and the ≤ 3-example brand chooser. The ruling exists so exactly one voice editor has to be kept consistent. | Keeping `BackfillVoiceReview`: cheaper now, but the two editors drift, and the ruling becomes a dead letter recorded only in a commit body | _pending_ | **D9** |
+| **A-8** | MINOR-9 (ADR finding): what retention governs **candidate** memory of a run that is never ratified or discarded? ADR §8.3 has no row, and today such rows persist forever. | **Retire at `BACKFILL_STAGING_TTL_DAYS = 30` after `completed_at`**, then delete retired import candidates 30 days later. This matches the horizon already accepted for staged post text. | (a) Keep forever: contradicts §8.4's "staging is short-lived" intent for third-party-adjacent excerpts. (b) Delete at 30 days with no retire step: loses the ratify/discard distinction in the audit trail. | _pending_ | **D3** |
+
+**Engineering decisions this pass takes without a ruling, with the reason:**
+
+| Finding | Remedy chosen | Why no ruling is needed |
+|---|---|---|
+| **MAJOR-8** | Correct `/privacy` and the Evidence Pack **to match the code and ADR §4.5** (only `usage_data` expires), not the code to the prose | §4.5 is the ruled text. The prose change bumps `evidenceRef`, keeps the counsel flag and leaves `[LEGAL ENTITY]` untouched. |
+| **MINOR-4** | Discard requires `approver` or `is_admin`, the same gate as ratify | Discard is irreversible for every candidate, and §9.4 already gates the other founder decisions on a run this way. This aligns rather than invents. |
+| **MINOR-8** | Revoke table-level INSERT and DELETE on `social_accounts` from `authenticated`, **only if D3's caller grep finds no authenticated INSERT/DELETE path** | §8.1 names the lock as a legal precondition, so closing the bypass restores intent. If an authenticated writer exists, **STOP** — that needs a ruling. |
+| **MINOR-10** | Voice is applied **only to a `ratified` run, using `run.account_role`**; "Review voice" is not offered before ratify | §4.2 and §10.3 already say this; the amendment removes §10.4's contradicting placement. |
+| **NIT-1** | **Recorded closure, no code** | `20260913130000` is committed and applied. Its DO block has already executed and fails loud on ambiguity, and no forward migration can alter it. |
+
+---
+
+### What the Reviewer found — disposition of all 31 findings (`session-32-reviewer.md` is authoritative)
+
+| ID | Tier | One line | Disposition | Step |
+|---|---|---|---|---|
+| **BLOCKER-2** | **BLOCKER** | `npm run lint` exits 1: `BackfillBanner.tsx:20`, `linkedin-provider.ts:74` | FIX | **D1** |
+| **MAJOR-6** | MAJOR | The NO-COMMENT-READ provider scan sees only `fetchRecentPosts`'s body; a helper plant stays green | FIX | **D2** |
+| **NIT-6** | NIT | A missing `fetchRecentPosts` passes the scan | FIX | **D2** |
+| **MAJOR-2** | MAJOR | Ratify activates memory and purges staging before its status guard | FIX (migration) | **D3** |
+| **MAJOR-5** | MAJOR | Performance (15) and audience (25) caps unenforced; readers hide overflow | FIX (migration) | **D3** |
+| **MINOR-3** | MINOR | Import RPCs don't require an `extracting` run | FIX (migration) | **D3** |
+| **MINOR-4** | MINOR | A viewer can discard | FIX (migration + action; ADR at D11) | **D3** |
+| **MINOR-8** | MINOR (**ADR**, §7.3) | The lock covers UPDATE only | FIX (migration; ADR at D11) | **D3** |
+| **MINOR-9** | MINOR (**ADR**, §8.3) | No retention for unratified candidates | FIX per **A-8** (migration; ADR at D11) | **D3** |
+| **NIT-4** | NIT | The lock test omits `id` | FIX | **D3** |
+| **BLOCKER-3** | **BLOCKER** | `posts_extracted` never written; ratification unreachable | FIX (writer at D3, surface at D4) | **D4** |
+| **MAJOR-3** | MAJOR | Fetch bounds reset per call | FIX | **D5** |
+| **NIT-2** | NIT | `.neq` excludes NULL-code failed runs | FIX | **D5** |
+| **MAJOR-11** | MAJOR | Any evidence error fails the batch; `partial: false` | FIX | **D6** |
+| **MINOR-1** | MINOR | Thrown pass leaks its reservation | FIX | **D6** |
+| **MINOR-2** | MINOR | Reconcile cross-reads usage rows | FIX | **D6** |
+| **MAJOR-4** | MAJOR | No resume-with-memory duplicate test | FIX (Tier 1) | **D7** |
+| **MAJOR-10** | MAJOR | STAGING-PURGED rests on a regex over SQL | FIX (Tier 1) | **D7** |
+| **MAJOR-1** | MAJOR | Voice applied pre-ratify, to a form-chosen role | FIX | **D8** |
+| **MAJOR-9** | MAJOR | ACCOUNTS-SEPARATE unproven | FIX (end-to-end test) | **D8** |
+| **MINOR-10** | MINOR (**ADR**, §9.4/§10.4) | Ratify/voice ordering ambiguous | FIX (code at D8; ADR at D11) | **D8** |
+| **MAJOR-12** | MAJOR | §10.4 hierarchy incomplete; date range empty | FIX | **D9** |
+| **MINOR-6** | MINOR | Second voice editor vs ADR §0 note 1 | FIX per **A-7** | **D9** |
+| **MINOR-5** | MINOR | Pre-existing prompt ids not asserted | FIX | **D10** |
+| **MINOR-7** | MINOR | Stale "THREE files" CI comment | FIX | **D10** |
+| **NIT-3** | NIT | Fields requested in transit | FIX | **D10** |
+| **NIT-5** | NIT | Refresh erases known scopes | FIX | **D10** |
+| **MAJOR-7** | MAJOR | Tier-3 #52 "Zero hits" false; #50 self-hits | FIX (ADR §15, appended) | **D11** |
+| **MAJOR-8** | MAJOR | `/privacy` and Evidence Pack contradict the code | FIX (prose; `evidenceRef` bump) | **D11** |
+| **NIT-1** | NIT | Purpose lookup lacks a namespace | RECORDED CLOSURE | **D11** |
+| **BLOCKER-1** | **BLOCKER** | No CI run for the range | FIX | **D12** |
+
+**Count check, re-run at D12:** 31 rows, 31 distinct IDs, every ID from the Reviewer's index exactly once. If
+it fails, the pass is not closed.
+
+---
+
+### Ordering rationale
+
+1. **D0 first.** The reviewer report is untracked, and it must enter git exactly as written so the appendix
+   diff proves itself additive. ADR 0025 is already tracked, so there is no untracked ADR to land.
+2. **D1 (BLOCKER-2) is the first code step**, because lint is part of the required gate and every later
+   step's loop includes `npm run lint`.
+3. **D2 (scan false-green) precedes every behavioural step.** This pass's proof standard is "the new test
+   reddens", and D2 is the finding that the L-2 boundary scan cannot redden. D5 and D6 edit the paths it
+   fences.
+4. **D3 is the only migration, and it runs alone** (the 31-D D5 precedent). A second migration mid-pass makes
+   earlier `test:db` runs meaningless. It is gated on A-8, and it precedes D4–D8, which test against its
+   guards.
+5. **D4 (BLOCKER-3) directly after D3.** Until the panel reaches the ratifiable state, no later voice, UX or
+   two-account test exercises the real founder path.
+6. **D5 before D6, and D6 before D7.** D7's resume test exercises both the cumulative bounds (D5) and the
+   failed-pass state (D6); writing it first would pin pre-fix behaviour.
+7. **D7 groups the two Tier-1 test-truth findings**: both need live Postgres, and both assert on every change
+   before them.
+8. **D8 before D9.** D8 decides when voice may be applied and to which store; D9 redesigns the surface around
+   that gate.
+9. **D9 is the only step that may invoke `/impeccable`** (Builder-phase design against ADR §10), and it is
+   gated on A-7.
+10. **D10 is residue**: nothing in it changes behaviour a constraint asserts.
+11. **D11 is documentation truth, after every code step**, because every amendment cites the test that now
+    proves it.
+12. **D12 pushes last**, producing green runs for the corrected range.
+
+---
+
+### Where resolutions go (CLAUDE.md — `REVIEWER-REPORT APPEND-ONLY`, revised Session 23-D)
+
+Resolutions go **into `docs/reviews/session-32-reviewer.md`**, under one appended, attributed
+`## CORRECTION PASS (Session 32-D)` section at the end; there is no separate corrections file.
+
+**The Reviewer's text is immutable:**
+- Not one character is edited.
+- No verdict is flipped, and no `RESOLVED` is stamped.
+- This includes every "Verified" block, the "Could not verify" list, the Tier-3 table and the 31-row index.
+
+**The appendix itself:**
+- It references findings **by ID** and records *finding → fix → proving test → SHA*.
+- A disputed finding is argued in the appendix, never erased.
+
+**Never weaken a test to reach green.** Amend ADR 0025 (appended) if a constraint proves infeasible.
+
+**ADR 0025 §14 is itself append-only** (its own §14.4), so MAJOR-7's correction is a new §15, never an edit to
+§14.1. **Do not fold D0 and the first resolution row into one commit.**
+
+**ECC budget: ≤ 1 subagent per step, and only where the finding names one.**
+- **D3** → `security-reviewer` **and** `database-reviewer`, the single step permitted two: grants on a
+  legal-precondition table, `SECURITY DEFINER` guards and a retention sweep.
+- **D9** → `/impeccable`.
+- **All other steps carry none.** Do not re-run the I2.4/I2.6 reviewers; the proving test is the
+  confirmation.
+
+**The highest-risk classes:**
+- **(a) D3.** An over-wide REVOKE silently breaks OAuth connect. A count-then-insert cap reintroduces the race
+  it closes, so use `import_evidence_memory`'s in-INSERT `< 40` shape.
+- **(b) D4.** `posts_extracted` must count posts processed, never posts staged.
+- **(c) D5.** Cumulative bounds must not strand a run that deferred on a 429 before reading anything.
+- **(d) D8.** Gating on `ratified` must not break retry from `refused_cap`/`failed` on a ratified run.
+
+Each ends by re-running the full existing suite for its files and confirming no previously-green assertion
+changed.
+
+---
+
+### §4.0 — Correction primer  (paste first · wait for acknowledgement)
+
+```
+You are the Session 32-D correction pass (Track I, ADR 0025 + ADR 0002 Amendment B). You fix the findings in
+docs/reviews/session-32-reviewer.md - you do not re-review, and you do not re-litigate the Reviewer's
+verdicts. Acknowledge these ten rules, then stop and wait for D0.
+
+1. THE REVIEWER'S TEXT IS IMMUTABLE. Resolutions go in ONE appended, attributed
+   "## CORRECTION PASS (Session 32-D)" section at the END of docs/reviews/session-32-reviewer.md, opening with
+   author, date and the commit range fixed. Not one character above it changes. A disputed finding is argued
+   in the appendix, never erased.
+2. ONE STEP, ONE COMMIT, THEN STOP. Each step's commit message is given; use it.
+3. EVERY FIX IS PROVED BY MUTATION. Break the fix, watch the new test go RED, restore, confirm
+   `git diff --stat` is empty. Record the exact mutation in the appendix.
+4. NEVER WEAKEN A TEST TO REACH GREEN. Amend ADR 0025 as an APPENDED section if a constraint is infeasible.
+   ADR 0025 section 14 is append-only: correct it with a new section.
+5. ALL 31 FINDINGS ARE ACCOUNTED FOR; NOTHING IS DEFERRED BY THIS GUIDE. A finding you cannot close, you
+   REPORT and STOP. No docs/backlog.md row for any finding.
+6. A-1..A-6 ARE RULED. A-7 AND A-8 ARE PENDING: D3 waits for A-8's Decision cell, D9 for A-7's. If a cell
+   reads "pending" at its step, STOP. Never invent a ruling.
+7. ONE MIGRATION, AT D3 ONLY. Never edit a committed migration. If another step appears to need SQL, STOP.
+8. EVERY STEP'S LOOP: npx tsc --noEmit --skipLibCheck; npm run lint; npm run test:app with app-tests.yml's
+   env block (five files fail at collection without it - env, not behaviour); and for D3/D4/D7/D8,
+   npm run test:db against a running local Supabase stack. If the stack cannot start, STOP - a Tier-1 change
+   is never committed unexecuted.
+9. DO NOT PUSH BEFORE D12.
+10. SCOPE IS THE FINDINGS. L-1 binds: no comment mining, embeddings, exemplar selection, outcome loop,
+    retrieval or CustomerContext change, LinkedIn fetchPostMetrics, brand_voice_variations or writing_examples
+    widening, relationship_memory, or new dependency. LinkedIn stays historicalReadAvailable=false.
+```
+
+---
+
+### §4.1 — Correction steps
+
+#### D0 — land the governing documents in git  ·  FIRST, by design  ·  no code
+
+```
+CORRECTION - Session 32-D · D0. No .ts/.tsx/.sql. No specialist.
+
+THE STATE: docs/reviews/session-32-reviewer.md is UNTRACKED; docs/build-guide/session-32.md's committed
+version predates this section 4 (this pass's work order). ADR 0025 is already tracked (4f3e7129; section 14
+at 70773e87).
+
+DO - commit exactly these two paths, AS THEY STAND:
+- docs/reviews/session-32-reviewer.md  (EXACTLY as the Reviewer left it)
+- docs/build-guide/session-32.md       (with section 4 authored - say so in the commit message)
+Do NOT append the CORRECTION PASS section. Do NOT stage any code file; report any present and leave it.
+
+VERIFY: `git show <D0-sha>:docs/reviews/session-32-reviewer.md` byte-identical to the working tree and
+containing no "CORRECTION PASS"; `git show <D0-sha>:docs/build-guide/session-32.md | grep -c "### §4.1"`
+non-zero; no code file in the commit.
+On commit: "D0 - Session 32-D audit trail: the Reviewer's report enters git exactly as written (range
+4f3e7129..3914a31c, 31 findings) before any resolution row, so the appendix is provably additive;
+session-32.md lands with section 4 authored, since section 4 is this pass's work order." Then stop.
+```
+
+#### D1 — BLOCKER-2: the two lint errors
+
+```
+CORRECTION - Session 32-D · D1. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+
+THE DEFECT (BLOCKER-2): `npm run lint` exits 1 at 3914a31c with two range-introduced errors, so the REQUIRED
+app-tests gate is red:
+- components/onboarding/BackfillBanner.tsx:20 (9359a708): setDismissed(...) synchronously inside useEffect.
+- lib/social/linkedin-provider.ts:74 (0b92f079): new Date(v).toISOString() - no-restricted-properties.
+
+BUILD:
+1. BackfillBanner: read the dismissed flag without a synchronous setState in an effect (e.g.
+   useSyncExternalStore over localStorage, or an SSR-safe lazy initialiser). Keep: hidden until known,
+   try/catch around storage, per-run key, no hydration mismatch.
+2. linkedin-provider.ts:74: use toUtcIso() from '@/lib/utils'. The LinkedIn read stays NOT SERVED; claim no
+   coverage for its body.
+3. Leave the 107 warnings; they are not findings.
+
+VERIFY: reintroduce each original line -> lint exits 1 naming that rule; restore; `git diff --stat` empty.
+npm run lint exit 0; layout.test.tsx unchanged green; tsc; test:app (CI env).
+Append the appendix opening block (section 4.2) and the BLOCKER-2 row.
+On commit: "D1 - BLOCKER-2 closed: BackfillBanner no longer sets state synchronously in an effect and
+LinkedInProvider uses toUtcIso(); npm run lint exits 0. Each original line reintroduced and shown to fail
+lint." Then stop.
+```
+
+#### D2 — MAJOR-6 + NIT-6: make the L-2 boundary scan able to fail
+
+```
+CORRECTION - Session 32-D · D2. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist BY
+DESIGN: the proof is a planted endpoint turning the scan RED.
+
+THE DEFECT (MAJOR-6): lib/backfill/__tests__/source-scans.test.ts:107 extracts only fetchRecentPosts's own
+body. Every X URL and fetch lives in private helpers (fetchTimelinePage, verifyReadIdentity). The Reviewer
+planted 'https://api.x.com/2/tweets/1/liking_users' in fetchTimelinePage in a sandbox copy: 3/3 stayed green.
+NIT-6: `if (body === null) continue` (:108) silently passes a renamed method.
+
+BUILD:
+1. Scan the READ PATH: fetchRecentPosts plus every private method it transitively calls, OR the whole
+   provider file with only the separately declared fetchEngagement and fetchPostMetrics bodies excised. Pick
+   whichever cannot silently shrink; state which.
+2. NIT-6: fetchRecentPosts must exist in both provider files; missing is RED.
+3. The lib/backfill/** half, BACKFILL-NO-URL-FETCH and the empty-glob guards stay unchanged in meaning.
+
+VERIFY - one plant at a time on the working tree, restoring after each:
+P1 (THE FINDING) liking_users URL in fetchTimelinePage -> RED; P2 in fetchRecentPosts -> RED; P3 fetch( in
+lib/backfill/orchestrator.ts -> RED; P4 website-fetcher import in lib/backfill/extract.ts -> RED; P5
+'fetchEngagement' in lib/backfill -> RED; rename fetchRecentPosts -> RED. After each, `git diff --stat` empty.
+Paste the transcript into the appendix. tsc; lint; test:app (CI env).
+Append the MAJOR-6 and NIT-6 rows.
+On commit: "D2 - MAJOR-6 and NIT-6 closed: BACKFILL-NO-COMMENT-READ scans the whole read path including
+private helpers, and a missing fetchRecentPosts is RED. The Reviewer's P1 plant, previously green, now
+fails." Then stop.
+```
+
+#### D3 — the SQL: MAJOR-2, MAJOR-5, MINOR-3, MINOR-4, MINOR-8, MINOR-9, NIT-4, BLOCKER-3's writer  ·  THE ONLY MIGRATION
+
+```
+CORRECTION - Session 32-D · D3. GATE: A-8's Decision cell must be filled; if "pending", STOP.
+/ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. Invoke security-reviewer AND database-reviewer
+ONCE EACH, in parallel, after the migration and tests are drafted and before commit. Fix what they raise in
+THIS uncommitted migration and record it.
+
+ONE forward migration: supabase/migrations/<timestamp>_backfill_correction_pass.sql. Never edit
+20260913120000..20260914060000. Each item gets a Tier-1 test in supabase/__tests__/.
+
+1. MAJOR-2 - ratify_backfill_run (20260913150000:205-272) runs six memory UPDATEs (:239-257) and the staging
+   DELETE (:259) before its only status guard (:268-269).
+   BUILD: status check immediately after the FOR UPDATE lock; a run not 'awaiting_ratification' returns zero
+   rows and touches NOTHING. Grants, membership check, source/import_run_id filter and staged_voice unchanged.
+   TEST: ratify an 'extracting' run holding candidates -> zero status changes, staging count unchanged, zero
+   rows returned. Existing ratify-backfill-run.test.ts unchanged green.
+2. MAJOR-5 - import_audience_memory / import_performance_memory have no per-run cap (only evidence has
+   `< 40`, 20260914050000:77-80).
+   BUILD: the same in-INSERT shape, audience < 25, performance < 15, over rows already written for the run.
+   TEST: 26 distinct audience and 16 distinct performance imports -> exactly 25 and 15 rows.
+3. MINOR-3 - import RPCs don't check run status.
+   BUILD: each writes zero rows unless the run is 'extracting'. TEST: discard, then each import -> zero rows.
+4. MINOR-4 - discard accepts any active member (20260913150000:295-305).
+   BUILD: non-null p_user_id requires status='active' AND (role='approver' OR is_admin); the NULL system path
+   (deactivateSocialAccount) unchanged. In app/[locale]/(dashboard)/onboarding/step-4/backfill-actions.ts,
+   discard and retry use requireApproverOrAdmin; delete requireActiveMember if unused.
+   TEST: viewer discard raises; approver succeeds; NULL system discard succeeds.
+5. MINOR-8 - authenticated holds table-level INSERT/DELETE on social_accounts.
+   FIRST `git grep` every INSERT and DELETE of social_accounts across app/, lib/, supabase/migrations/ and
+   list each with its client. If ANY uses an authenticated client, STOP AND REPORT.
+   BUILD (only if none): REVOKE INSERT, DELETE ON public.social_accounts FROM authenticated, anon.
+   TEST: signed-in owner INSERT and DELETE -> both 42501; the service-role callback upsert still succeeds.
+6. MINOR-9 per A-8 - build EXACTLY the recorded decision. If it matches the recommendation: a service_role
+   sweep (house grant shape) retiring import candidates of 'awaiting_ratification' runs whose completed_at
+   is older than p_ttl_days, and deleting retired import candidates past the second horizon; wire it into
+   runBackfillTick beside the existing sweeps. TEST: back-dated run -> retired; a ratified run's active rows
+   untouched.
+7. NIT-4 - add the `id` case to social-accounts-identity-lock.test.ts, expecting 42501.
+8. BLOCKER-3's WRITER - nothing sets posts_extracted.
+   BUILD: resolve_backfill_posts (same signature) increments the run's posts_extracted by rows it moves to
+   'extracted' or 'skipped' - posts PROCESSED, never staged. State the definition in the migration header.
+   TEST: claim 5, resolve 3 extracted + 2 skipped -> 5; re-resolving the same ids does not double-count.
+
+VERIFY: npm run test:db green including every pre-existing Tier-1 file. For items 1-8, revert that hunk,
+confirm its test RED, restore. tsc; lint; test:app (CI env).
+Append rows for MAJOR-2, MAJOR-5, MINOR-3, MINOR-4, MINOR-8, MINOR-9, NIT-4, and a partial note for
+BLOCKER-3 (closure at D4). Record the INSERT/DELETE grep verbatim and both reviewers' findings.
+On commit: "D3 - the Session 32-D migration: ratify refuses non-awaiting runs before touching memory
+(MAJOR-2); audience <25 / performance <15 in-INSERT (MAJOR-5); import RPCs require an extracting run
+(MINOR-3); discard requires approver/admin (MINOR-4); authenticated INSERT/DELETE on social_accounts revoked
+after a caller grep found none (MINOR-8); unratified candidates retired per A-8 (MINOR-9); lock test covers
+id (NIT-4); resolve_backfill_posts maintains posts_extracted (BLOCKER-3 writer). Each hunk reverted and shown
+RED." Then stop.
+```
+
+#### D4 — BLOCKER-3: make the founder's review surface reachable
+
+```
+CORRECTION - Session 32-D · D4. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+
+THE DEFECT (BLOCKER-3): app/[locale]/(dashboard)/onboarding/step-4/BackfillPanel.tsx:255 renders "nothing to
+learn" when `run.posts_extracted === 0 || totalCandidates === 0`. No writer set posts_extracted at 3914a31c
+(D3 added one), so every real run showed no candidates, no role declaration and no ratify button; :204, :271
+and :281 showed 0. BackfillPanel.test.tsx:161/:210 passed only because fixtures hand-set the column.
+
+BUILD:
+1. Nothing-to-learn means zero candidates in all three groups AND no staged voice - never a counter alone.
+2. progress/headline/partial copy reads posts_extracted as D3 defined it; if lib/backfill/extract.ts needs a
+   call change for D3's writer to fire, make it here.
+3. A test with NO hand-set posts_extracted: drive the MockProvider 'standard' fixture through fetchPhase and
+   runExtractionUnit (mocked runPrompt, valid output) to awaiting_ratification, render the panel from that
+   run and its candidates, and assert the ratify control and role fieldset are present. The 'empty' fixture
+   still renders nothing-to-learn.
+4. Remove posts_extracted from existing fixtures where it masked the defect; keep it only where a test is
+   about the count copy - state which, per fixture.
+
+VERIFY: restore the original condition -> the real-path test RED; stub D3's increment out -> the count-copy
+test RED; restore; `git diff --stat` empty. test:db; tsc; lint; test:app (CI env).
+Append the BLOCKER-3 row (D3 and D4 SHAs).
+On commit: "D4 - BLOCKER-3 closed: the step-4 panel reaches the ratifiable state for a real run -
+nothing-to-learn means no candidates and no staged voice, and counts read D3's posts_extracted. Proved by
+driving the standard fixture through fetch and extraction with no hand-set counter." Then stop.
+```
+
+#### D5 — MAJOR-3 + NIT-2: bound the run, not the call
+
+```
+CORRECTION - Session 32-D · D5. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+
+THE DEFECT (MAJOR-3): lib/backfill/orchestrator.ts:111-117 keeps postsStaged, platformPostsRead and page
+local to ONE fetchPhase call, restarting at cursor=null. A RATE_LIMITED/NETWORK deferral (:62-65), a resume
+and a reconnect-triggered resume each re-enter with fresh counters: platform_posts_read passes 500 on the row
+and staged rows can pass 200 (stage_backfill_posts counts only new inserts). Every fetch-phase test was a
+single call (fetch-phase.test.ts:187, :204).
+NIT-2: lib/db/backfill-runs.ts:316 `.neq('error_code','caller_bug')` excludes NULL-code failed runs.
+
+BUILD:
+1. fetchPhase seeds from the run's cumulative platform_posts_read and its existing staged count, stopping at
+   500 reads and 200 staged. Pages stay a per-call non-terminating-cursor guard (comment why).
+2. A run already at 500 cumulative reads moves to 'extracting' without calling the provider.
+3. NIT-2: match error_code IS NULL or not 'caller_bug'.
+
+VERIFY: new tests - three consecutive calls each deferred after 2 full pages -> cumulative reads <= 500 and
+provider calls stop; a run with 150 staged stages at most 50 more; a resumed run at 500 makes zero provider
+calls; a NULL-code failed run is resumable, caller_bug is not. Revert to per-call counters -> RED; revert
+NIT-2 -> RED; restore; `git diff --stat` empty. Existing fetch-phase cases unchanged green. tsc; lint;
+test:app (CI env).
+Append the MAJOR-3 and NIT-2 rows.
+On commit: "D5 - MAJOR-3 and NIT-2 closed: fetchPhase bounds reads (500) and staged posts (200) against the
+run's cumulative totals across deferrals, resumes and reconnects; resumable lookup includes NULL codes.
+Proved by a three-deferral test RED against per-call counters." Then stop.
+```
+
+#### D6 — MAJOR-11 + MINOR-1 + MINOR-2: a failed pass never looks complete, and never leaks spend
+
+```
+CORRECTION - Session 32-D · D6. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+
+THE DEFECTS:
+- MAJOR-11: lib/backfill/extract.ts:205-215's bare catch treats every runPrompt throw as invalid output,
+  permanently fails up to 20 claimed posts, and :187-189 finalises partial:false regardless - ADR 6.4's
+  "half-imported memory that looks complete". ADR 4.5 fails closed on INVALID OUTPUT only.
+- MINOR-1: :129/:164 reserve before runPrompt; a throw skips reconcile, the next tick re-reserves, and the
+  updated_at bump hides the run from the stall sweep, draining the 50c run and 150c daily budgets.
+- MINOR-2: reconcileSpend reads getMostRecentUsageCostCents(business_id, promptId) (:85), not run-scoped.
+
+BUILD:
+1. MAJOR-11: distinguish the runner's output-validation AiError (check lib/ai/runner.ts for its code) from
+   everything else. Validation -> batch 'failed' as today. Anything else -> posts return to a retryable state
+   and the reservation reconciles to zero. If a retryable state needs SQL, STOP - SQL was D3's. The final
+   transition sets partial=true with a reason whenever any staged post is 'failed'.
+2. MINOR-1: every reservation is reconciled on every exit path (try/finally), actual = 0 when no call
+   completed - voice and insights included.
+3. MINOR-2: take the call's own cost from lib/ai (widen runPrompt's return or add a lib/ai helper; no SDK call
+   outside lib/ai); delete the most-recent-row lookup from extract.ts.
+
+VERIFY: new tests - a network error on an evidence batch leaves posts retryable and spend unchanged; a
+schema-validation failure still fails the batch; any failed post finalises partial=true; a throwing voice pass
+reconciles run and daily budgets to 0; two concurrent runs on one business reconcile their own cost. Restore
+the bare catch -> RED; remove the finally -> RED; restore; `git diff --stat` empty. Existing extract.test.ts
+and runner.test.ts cases unchanged green. tsc; lint; test:app (CI env).
+Append the MAJOR-11, MINOR-1 and MINOR-2 rows.
+On commit: "D6 - MAJOR-11, MINOR-1, MINOR-2 closed: only output-validation failures fail an evidence batch;
+transient errors release the batch and reservation; any failed post marks the run partial; every reservation
+reconciles on every exit path against the call's own cost." Then stop.
+```
+
+#### D7 — MAJOR-4 + MAJOR-10: the two tests that could not fail
+
+```
+CORRECTION - Session 32-D · D7. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+Requires the local Supabase stack (rule 8).
+
+THE DEFECTS:
+- MAJOR-4: no test writes memory, crashes between a pass's writes and increment_backfill_passes_done,
+  resumes the SAME run id and counts memory rows. fetch-phase.test.ts:274 checks staging against mocks; the
+  Tier-1 RPC test only ignores byte-identical re-inserts.
+- MAJOR-10: lib/backfill/__tests__/staging-lifecycle.test.ts:13-58 regex-matches DELETE text in SQL. Only
+  ratify's purge executes (ratify-backfill-run.test.ts:158); discard, both TTL sweeps and disconnect do not.
+
+BUILD:
+1. supabase/__tests__/backfill-resume.test.ts (Tier 1; real RPCs; mock provider and runPrompt only):
+   a. fail on page 3, resume the same run id, complete -> staged rows unique, run id unchanged;
+   b. let insights write, throw BEFORE increment_backfill_passes_done, resume, re-run returns DIFFERENTLY
+      WORDED output -> audience <= 25, performance <= 15, zero exact duplicates, passes_done advances once;
+   c. caller_bug not resumable; retry is failed -> queued on the same row.
+2. supabase/__tests__/backfill-staging-purge.test.ts (Tier 1): discard purges staging; both TTL sweeps with
+   back-dated completed_at / ratified_at purge staging and null staged_voice while a fresh run is untouched;
+   deactivateSocialAccount through the real discard RPC purges staging.
+3. Delete staging-lifecycle.test.ts, or reduce it to a pointer comment - a regex over SQL must not stand as
+   coverage. Say which.
+
+VERIFY: remove D3's audience cap -> 1b RED; drop discard's DELETE in a scratch migration applied only locally
+-> discard case RED; revert, `supabase db reset`, restore; `git diff --stat` empty. test:db green including
+the skip-guard; tsc; lint; test:app (CI env).
+Append the MAJOR-4 and MAJOR-10 rows.
+On commit: "D7 - MAJOR-4 and MAJOR-10 closed: a Tier-1 resume test crashes extraction between writes and
+passes_done, resumes with differently worded output, and proves no duplicate or over-cap memory; staging
+purge is executed for discard, both TTL sweeps and disconnect; the SQL regex no longer stands as coverage."
+Then stop.
+```
+
+#### D8 — MAJOR-1 + MAJOR-9 + MINOR-10 (code): voice only after ratify, only to the ratified role
+
+```
+CORRECTION - Session 32-D · D8. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+
+THE DEFECTS:
+- MAJOR-1: stage_backfill_voice sets voice_status='pending' during extraction (20260914040000:60);
+  applyBackfillVoiceAction (backfill-actions.ts:189-231) checks neither run.status==='ratified' nor
+  run.account_role and branches on the form's accountRole (:206). "Review voice" sits in the pre-ratify view
+  (BackfillPanel.tsx:286-296); step-2/page.tsx:25-43 renders review for any status;
+  BackfillVoiceReview.tsx:48 defaults an editable role to 'founder'.
+- MAJOR-9: BACKFILL-ACCOUNTS-SEPARATE's only test is mock-provider.test.ts:262.
+- MINOR-10 (code): ADR 4.2/10.3 order voice after ratify with the role declared.
+
+BUILD:
+1. Apply and decline refuse unless run.status === 'ratified' and run.account_role is non-null; route ONLY by
+   run.account_role; the Zod schema no longer accepts accountRole from the client (brand keeps tone,
+   keywords, avoidWords, writingExamples max 3). Retry from refused_cap/failed on a ratified run still works.
+2. "Review voice" only for a ratified run with voice_status pending/refused_cap/failed. Step-2 renders review
+   only for such a run; any other ?run falls through to Step2Form. The role is shown, not editable.
+3. MAJOR-9: an end-to-end test over TWO_ACCOUNTS_FOUNDER and TWO_ACCOUNTS_COMPANY on ONE business: fetch ->
+   extract -> ratify (founder / brand) -> apply voice. Assert every memory row's import_run_id belongs to its
+   own account's run; ratifying A changes no row of B; founder -> exactly one brand_voice_variations row,
+   axes only; brand -> brand_voices, no variation; no staged_voice crosses runs. Tier 1 with real RPCs
+   (preferred), or say why not.
+
+VERIFY: new action tests - apply on 'awaiting_ratification' refused with no voice writer called; client
+accountRole rejected at Zod; a ratified founder run never calls upsertBrandVoice. Remove the status check ->
+RED; route by a client field -> two-accounts routing RED; restore; `git diff --stat` empty. Existing
+cap/retry/decline tests unchanged green. test:db; tsc; lint; test:app (CI env).
+Append the MAJOR-1, MAJOR-9 and MINOR-10 (code) rows.
+On commit: "D8 - MAJOR-1 and MAJOR-9 closed, MINOR-10 code half: voice applies only to a ratified run and only
+to the role recorded at ratification, and Review voice appears only after ratify; an end-to-end two-account
+test proves corpora, candidates and voices never mix." Then stop.
+```
+
+#### D9 — MAJOR-12 + MINOR-6: the §10.4 hierarchy, on the editor A-7 rules on  ·  the ONE step that may invoke /impeccable
+
+```
+CORRECTION - Session 32-D · D9. GATE: A-7's Decision cell must be filled; if "pending", STOP.
+/ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. Invoke /impeccable ONCE against ADR 0025 section 10.
+taste-skill stays declined (I2.14's recorded reason).
+
+THE DEFECTS:
+- MAJOR-12: BackfillPanel.tsx:286-296 shows the voice summary as title + link only (10.4 item 2 needs the
+  descriptor and three strongest axes); item 6 (cadence and format mix) is absent; the headline reads
+  summary.date_range (:264, :273), which lib/backfill/stats.ts never writes.
+- MINOR-6: step-2 ships BackfillVoiceReview.tsx instead of VoiceEditor, against ADR 0025 section 0 note 1.
+
+BUILD:
+1. All six 10.4 items, in order: headline with N posts, account and a REAL date range (derive from staged
+   data or add a range to BackfillStatsSummary - never read a field nothing writes); voice descriptor + three
+   strongest axes; up to three patterns with "based on N posts", never phrased as instructions; up to five
+   audience statements; evidence count with excerpts, permission off; cadence and format mix. New strings in
+   en/pt/es; parity test green.
+2. MINOR-6 per A-7: REUSE -> step-2 ?run renders VoiceEditor (axes-only founder mode, <=3-example brand
+   chooser) against D8's gated actions, BackfillVoiceReview.tsx deleted; KEEP -> record the ruling reference.
+3. No asChild on Button/DropdownMenu; buttonVariants() on Link; Tailwind only; existing tokens only - a new
+   token needs a both-themes contrast test reading the shipped token file.
+
+VERIFY: component tests from a summary produced by calling computeBackfillStats (not a hand-written
+fixture): six items in DOM order, date range non-empty, patterns carry counts; step-2 renders the A-7 editor
+for a ratified run and Step2Form otherwise. Reintroduce the date_range lookup -> RED; drop item 6 -> RED;
+restore. Every 10.2 state test unchanged green. tsc; lint; test:app (CI env).
+Append the MAJOR-12 and MINOR-6 rows, and what /impeccable changed, file by file.
+On commit: "D9 - MAJOR-12 and MINOR-6 closed: step-4 renders all six section 10.4 items in order from the
+summary stats.ts actually writes, with a real date range and cadence/format mix; step-2 voice review follows
+A-7. /impeccable run against ADR 0025 section 10." Then stop.
+```
+
+#### D10 — MINOR-5 + MINOR-7 + NIT-3 + NIT-5: the residue
+
+```
+CORRECTION - Session 32-D · D10. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+
+THE DEFECTS:
+- MINOR-5: lib/ai/runner.test.ts:980-1000 checks four fixture prompts plus brand-voice and a synthetic id.
+  The ten ids at 4f3e7129: brand-voice-inference, brief-assembly, learning-summarizer, post-generation,
+  post-regeneration, rubric, studio-suggestion, native-generation-single, native-generation-thread,
+  native-generation-carousel.
+- MINOR-7: .github/workflows/app-tests.yml:31 says "THREE files"; fetch-phase.test.ts and tick.test.ts also
+  import the real lib/config.ts.
+- NIT-3: lib/social/twitter-provider.ts:63 requests entities and referenced_tweets; entities.mentions brings
+  third-party ids/handles in transit.
+- NIT-5: twitter-provider.ts:537 writes scopes_granted: [] when refresh omits scope (pinned at
+  twitter-provider.test.ts:319).
+
+BUILD:
+1. MINOR-5: a table-driven case over all ten real prompt objects asserting Step-1 refusal and Step-8
+   increment per id, under an exhausted trial context and a paid context. No production change.
+2. MINOR-7: both files mock '@/lib/config'; correct the yml comment to the true count.
+3. NIT-3: request only what the parser reads; referenced_tweets stays (ADR 2.4 quote-dropping). If urls cannot
+   be had without mentions, keep entities and record the decision for D11. No expansion.
+4. NIT-5: omit scopes_granted from the refresh UPDATE when scope is absent; update :319 to assert the prior
+   value survives.
+
+VERIFY: change brief-assembly's classification locally -> its row RED; unmock config -> fails without env;
+write [] again -> RED; restore each; `git diff --stat` empty. fetch-phase and tick tests pass in a bare shell.
+The :404 request test still asserts exclude=replies,retweets and no expansions. tsc; lint; test:app (CI env).
+Append the four rows and "did NOT touch: classification logic; no new CLAUDE.md carve-out".
+On commit: "D10 - MINOR-5, MINOR-7, NIT-3, NIT-5 closed: classification asserted for all ten pre-existing
+prompt ids; backfill tests mock config and the CI comment is true; the X read requests only what the parser
+needs; a scope-less refresh no longer erases known scopes." Then stop.
+```
+
+#### D11 — documentation truth: MAJOR-7, MAJOR-8, NIT-1, and the ADR amendments for MINOR-4/-8/-9/-10  ·  no code
+
+```
+CORRECTION - Session 32-D · D11. No .ts/.tsx/.sql. No specialist. Every statement cites the test
+(file:line) that now proves it at D3..D10's SHAs.
+
+THE DEFECTS:
+- MAJOR-7: ADR 0025 section 14.1 (:1149 at 3914a31c) claims "Zero hits" for the NO-CROSS-CUSTOMER-LEARNING
+  command; at the range it prints 33 signature lines and cannot see function bodies. The #50 command now
+  matches section 14.1's own prose (:1127, :1129).
+- MAJOR-8: content/legal/privacy.en.mdx:114 says quoted excerpts last "up to 12 months"; quote/case_study
+  rows get expires_at NULL (lib/memory/import.ts:66-70). Evidence Pack A3 :745 (expiry), :748 (caps, enforced
+  only since D3), :749 (no indefinite candidates, true only since D3/A-8), and "5 pages / 500 reads per run"
+  (true only since D5).
+- NIT-1: 20260913130000:310/:321 look up the purpose CHECK by relname without a namespace.
+
+DO:
+1. ADR 0025 - append "## 15. Correction pass verification (Session 32-D)"; never edit sections 0-14:
+   a. MAJOR-7: corrected Tier-3 commands, each true at this head with a planted-violation demonstration. #52
+      inspects function/VIEW BODIES for any SELECT over a *_memory or backfill table with no business_id
+      predicate; #50 excludes docs/decisions/0025-*. State that section 14.1's "Zero hits" was wrong and that
+      the property itself held on manual reading.
+   b. MINOR-8: the lock covers INSERT and DELETE, citing D3's grep and test.
+   c. MINOR-9: the unratified-candidate retention rule verbatim per A-8, with a new section 8.3 row.
+   d. MINOR-10: voice review/application require a ratified run and use run.account_role; section 10.4's
+      "Review voice" placement superseded. MINOR-4: discard requires approver/admin.
+   e. NIT-1: recorded closure - a committed, applied migration whose DO block already executed; ambiguity
+      raises; no forward migration can alter an executed lookup.
+   f. Section 11.5's upsertBrandVoice row corrected to the six callers the Reviewer enumerated.
+   g. Do NOT fill section 14.2's CI column - that is D12's, from the logs.
+2. MAJOR-8 - privacy.en.mdx: the retention row says what the code does (usage_data excerpts expire 12 months
+   after the source post; other excerpts remain until deleted or removed per post; unreviewed candidates are
+   retired per A-8). Keep the AWAITING COUNSEL REVIEW comment. Do NOT substitute [LEGAL ENTITY].
+   docs/evidence/0010-legal-evidence.md: append Amendment A3.1 correcting A3's statements, citing D3/D5 tests -
+   never edit A3. Bump evidenceRef to the commit carrying A3.1 (a two-commit follow-up is acceptable, as I2.15
+   did - state it).
+
+VERIFY: `git diff <D10-sha>..HEAD` on ADR 0025 and the Evidence Pack shows additions only below section 14 and
+below A3; `grep -c "LEGAL ENTITY" content/legal/privacy.en.mdx` unchanged; each corrected Tier-3 command
+re-run with output and planted violation pasted into section 15; d2.5-backfill-rows.test.ts green.
+Append the MAJOR-7, MAJOR-8 and NIT-1 rows, and the ADR half of MINOR-4, MINOR-8, MINOR-9, MINOR-10.
+On commit: "D11 - MAJOR-7, MAJOR-8 closed, NIT-1 recorded: ADR 0025 section 15 records true, body-aware Tier-3
+commands and corrects section 14.1's 'Zero hits'; amendments for the identity lock, unratified-candidate
+retention (A-8), voice/discard ordering and roles; /privacy and Evidence Pack A3.1 say what the code does,
+evidenceRef bumped, [LEGAL ENTITY] untouched." Then stop.
+```
+
+---
+
+### §4.2 — Resolution log (the appendix's required shape)
+
+The appendix in `docs/reviews/session-32-reviewer.md` is written **incrementally, one block per step**. D1
+opens it, D2…D11 append, and D12 closes it. It is never assembled from memory at the end.
+
+**Opening block (written at D1):**
+
+```
+## CORRECTION PASS (Session 32-D)
+
+**Author:** Session 32-D correction pass · **Date:** <YYYY-MM-DD> · **Range fixed:** `3914a31c..<D12-sha>`
+**Reviewed head:** `3914a31c` — the head the Reviewer read; only this pass's section 4 landed after it, at D0
+(`<D0-sha>`).
+**Founder adjudications consumed:** A-7 = <decision>, A-8 = <decision> (build-guide section 4).
+**Everything above this line is the Reviewer's. Everything below it is this pass's.**
+```
+
+**Per-finding row shape.** All five fields; a row missing one is not complete:
+
+| Field | What it must say |
+|---|---|
+| **Finding** | The ID, and nothing restated from the Reviewer's text |
+| **Fix** | What changed, in one sentence, naming the file |
+| **Proof** | The test file **and line**, never "covered by the suite" |
+| **Reddening** | The exact mutation, and the clean tree confirmed afterwards |
+| **Commit** | The step's SHA(s) |
+
+**Rows that are not ordinary fixes:**
+- **NIT-1** is the only **recorded closure**. It states why no code change can express the fix and names the
+  §15 paragraph.
+- **BLOCKER-3** carries two SHAs (the D3 writer, the D4 surface) and D3's definition of `posts_extracted`.
+- **MINOR-4, MINOR-8, MINOR-9, MINOR-10** each carry a code SHA and an ADR SHA, citing their §15 sub-item.
+- **MINOR-6 and MINOR-9** quote the adjudication they executed (A-7, A-8).
+
+**Every step appends a "what I did NOT touch" line** where it had a tempting adjacent target:
+- D1: the 107 warnings.
+- D3: no LinkedIn scope or flag change, no allowlist widening.
+- D5: no persisted cursor (ADR §6.4's named loser).
+- D6: no retry loop in the provider.
+- D9: `taste-skill` not run.
+- D10: no classification change.
+- D11: `[LEGAL ENTITY]` not substituted, and §14.2's CI column left for D12.
+
+---
+
+### §4.3 — Close-out
+
+#### D12 — BLOCKER-1: push the corrected range, run CI green, close Track I
+
+```
+CORRECTION - Session 32-D · D12. No specialist. This step produces green runs FOR THE CORRECTED RANGE, which
+turns 55 AUTHORED-NOT-EXECUTED rows into executed-green rows and makes D11's citations true.
+
+THE DEFECT (BLOCKER-1): at 3914a31c the branch was 17 commits ahead of origin/session-30-5-adr-0028
+(7202da89) and had NEVER been pushed; `gh run list --commit` returned nothing for any range commit; no
+app-tests run, no db-tests run, no skip-guard line. The Builder did NOT misreport this (ADR 0025 14.4).
+
+DO:
+1. Push D0..D11; run every required workflow to green at the corrected head:
+   - app-tests (tsc + eslint + vitest) - REQUIRED; lint must be green.
+   - db-tests INCLUDING THE SKIP-GUARD. If red, OPEN THE RUN and distinguish a DB-behaviour regression from a
+     stack OOM / the known supautils SIGSEGV (Session 31-D D20), quoting the deciding log line.
+2. Record FROM THE LOGS: app-tests URL and counts; db-tests URL and the skip-guard's file and test counts
+   QUOTED VERBATIM; per-row "executed green in CI at <sha>" for ADR 0025's constraint table - as a section 15
+   table if section 14's append-only wording forbids filling 14.2, saying which. Tier 1 stays uncovered unless
+   db-tests ITSELF is green; Tier 3 cites D11's corrected commands; Tier E (#55) stays MEASURED - NOT YET RUN.
+3. db-tests PROMOTION TALLY: pull_request runs never move it; only consecutive green master PUSH runs do.
+   Record it in docs/current-phase.md with each run's event type.
+4. docs/current-phase.md - Session 32 close-out entry: this pass and its range; real post-correction counts at
+   the head they are dated to, never claimed; the tally; LinkedIn cold start NOT solved (A-1); Tier E NOT RUN
+   and now performable through the product. No quality or memory-yield claim: MEASURED, never COVERED.
+5. Section 5 of docs/build-guide/session-32.md - tick with evidence, stating per item whether it applied.
+   Correct section 5's stale "Amendment A" references to Amendment B (section 0's sign-off ruled B) in an
+   appended note, not in place.
+6. THE APPENDIX CLOSING BLOCK: all 31 findings by ID -> disposition -> proving test -> SHA(s); re-run the
+   count check (31 rows, 31 distinct IDs) - if it fails, the pass is not closed. Name the recorded closure
+   (NIT-1), the adjudicated executions (MINOR-6/A-7, MINOR-9/A-8) and the four code+ADR closures. Answer the
+   Reviewer's "could NOT verify" list: CI results (cite); Tier-1 execution (what db-tests ran); live X shape,
+   LinkedIn body, 10-minute latency (still unverifiable - say so); ECC reviewer output (D3's recorded;
+   I2.4/I2.6's still summarised only). State which Reviewer "Verified" entries have since changed - WITHOUT
+   editing them.
+7. .wolf/anatomy.md, .wolf/memory.md, .wolf/cerebrum.md; log every bug from this pass to .wolf/buglog.json.
+
+VERIFY: `git diff <D0-sha>..<D12-sha> -- docs/reviews/session-32-reviewer.md` shows additions BELOW the
+appendix marker and NOTHING ELSE. Required workflows green at the corrected head, or their red explained from
+the log with evidence in the appendix.
+On commit: "D12 - BLOCKER-1 closed: Builder range plus D0..D11 pushed; app-tests green at <sha> (<URL>);
+db-tests <state> (<URL>, skip-guard <n> files / <n> tests quoted from the log); BACKFILL-* rows executed green
+recorded per tier at the head they are dated to; db-tests tally per run with event type. The 32-D appendix
+records all 31 findings - NIT-1 the single recorded closure, MINOR-6/MINOR-9 per A-7/A-8 - and the diff proves
+nothing above the appendix changed. LinkedIn cold start not solved; Tier E not run. Session 32 Track I closed."
+Then stop.
+```
+
 ---
 
 ## §5 — Docs to update at close-out (Track I done)
