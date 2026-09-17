@@ -160,18 +160,22 @@ describe('BackfillPanel — Section 10.2 states', () => {
 
   // BLOCKER-3 (Session 32-D, D4) — zero candidates with a staged voice is
   // NOT nothing-to-learn: the old condition (posts_extracted === 0 ||
-  // totalCandidates === 0) hid the voice review link in exactly this case.
-  it('zero candidates but a staged voice: NOT nothing-to-learn, voice review link renders', () => {
+  // totalCandidates === 0) hid the voice notice in exactly this case.
+  // MAJOR-1 (Session 32-D, D8) — the pre-ratify view shows a plain staged-
+  // voice NOTICE now, never a "Review voice" link (voice only applies
+  // after ratify, ADR §4.2/§10.3).
+  it('zero candidates but a staged voice: NOT nothing-to-learn, voice notice renders (no pre-ratify review link)', () => {
     const run = makeRun({
       status: 'awaiting_ratification',
       posts_extracted: 3,
-      staged_voice: { voice_axes: { formal_casual: 50 } },
+      staged_voice: { voiceAxes: { formal_casual: 50 } },
     })
     const { container, cleanup } = renderPanel([{ run, accountLabel: 'acme', candidates: makeCandidates() }])
     cleanupFns.push(cleanup)
     expect(container.querySelector('[data-state="nothing-to-learn"]')).toBeNull()
     expect(container.querySelector('[data-state="awaiting-ratification"]')).not.toBeNull()
     expect(container.textContent).toContain('voice.summary_title')
+    expect(container.textContent).not.toContain('voice.review')
   })
 
   it('awaiting_ratification, complete: renders headline, groups with observation counts, evidence permission OFF, CTA enabled', () => {
@@ -184,7 +188,7 @@ describe('BackfillPanel — Section 10.2 states', () => {
     const run = makeRun({
       status: 'awaiting_ratification',
       weighting: 'weighted',
-      staged_voice: { voice_axes: { formal_casual: 50 } },
+      staged_voice: { voiceAxes: { formal_casual: 50 } },
     })
     const candidates = makeCandidates({
       performance: [

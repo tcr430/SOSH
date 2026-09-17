@@ -289,14 +289,12 @@ function RunCard({
             </div>
 
             {run.staged_voice != null && (
+              // MAJOR-1 (Session 32-D, D8) — no "Review voice" link before
+              // ratify: voice only applies to a ratified run's declared
+              // role (ADR §4.2/§10.3). A staged voice existing pre-ratify
+              // is shown as a plain notice, not an actionable link.
               <div className="rounded-md bg-muted/40 p-3 space-y-1">
                 <p className="text-sm font-medium">{t('voice.summary_title')}</p>
-                <Link
-                  href={`/${locale}/onboarding/step-2?run=${run.id}`}
-                  className="text-sm text-primary underline underline-offset-4"
-                >
-                  {t('voice.review')}
-                </Link>
               </div>
             )}
 

@@ -171,8 +171,20 @@ export async function applyBackfillVoiceAction(input: unknown): Promise<Backfill
   if (!auth.ok) return auth
 
   const { run } = auth
-  const stagedVoice = (run.staged_voice ?? {}) as { voice_axes?: VoiceAxes }
-  if (!stagedVoice.voice_axes) return { ok: false, error: 'no_op' }
+  // MAJOR-1/MINOR-10 (Session 32-D, D8) — voice applies ONLY to a ratified
+  // run, ONLY to the role the founder declared AT ratification
+  // (run.account_role — never a client-supplied field, which the Zod
+  // schema above no longer even accepts). ADR §4.2/§10.3's ordering:
+  // ratify first, voice after, role fixed.
+  if (run.status !== 'ratified' || run.account_role == null) return { ok: false, error: 'no_op' }
+
+  // Field-name fix (found while implementing D8): BrandVoiceOutput's model
+  // field is `voiceAxes` (lib/ai/prompts/brand-voice-inference.ts), spread
+  // verbatim into staged_voice by runVoiceSynthesisPass — this read a
+  // snake_case `voice_axes` key that stage_backfill_voice never wrote,
+  // so apply/decline could never find a real run's axes at all.
+  const stagedVoice = (run.staged_voice ?? {}) as { voiceAxes?: VoiceAxes }
+  if (!stagedVoice.voiceAxes) return { ok: false, error: 'no_op' }
 
   const { createServiceRoleClient } = await import('@/lib/supabase/service')
   const serviceClient = createServiceRoleClient()
@@ -180,10 +192,10 @@ export async function applyBackfillVoiceAction(input: unknown): Promise<Backfill
 
   try {
     let appliedTo: string
-    if (parsed.data.accountRole === 'brand') {
+    if (run.account_role === 'brand') {
       await upsertBrandVoice(serviceClient, {
         business_id: run.business_id,
-        voice_axes: stagedVoice.voice_axes,
+        voice_axes: stagedVoice.voiceAxes,
         tone: parsed.data.tone,
         keywords: parsed.data.keywords,
         avoid_words: parsed.data.avoidWords,
@@ -195,7 +207,7 @@ export async function applyBackfillVoiceAction(input: unknown): Promise<Backfill
       const variation = await addVariation({
         businessId: run.business_id,
         name,
-        voiceAxes: stagedVoice.voice_axes,
+        voiceAxes: stagedVoice.voiceAxes,
       })
       appliedTo = variation.id
     }
@@ -224,6 +236,9 @@ export async function declineBackfillVoiceAction(input: unknown): Promise<Backfi
 
   const auth = await requireApproverOrAdmin(parsed.data.runId)
   if (!auth.ok) return auth
+
+  // MAJOR-1 (Session 32-D, D8) — same ratified/role-declared gate as apply.
+  if (auth.run.status !== 'ratified' || auth.run.account_role == null) return { ok: false, error: 'no_op' }
 
   const run = await transitionBackfillVoiceStatus(
     parsed.data.runId,

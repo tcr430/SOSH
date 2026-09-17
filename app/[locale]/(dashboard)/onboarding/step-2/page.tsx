@@ -5,13 +5,17 @@ import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
 import { getBrandVoice } from '@/lib/db/brand-voices'
 
-// ADR 0025 §10.3 (Session 32 I2.14) — step-2 backfill mode: ?run=<id> loads
-// the staged voice and renders the review surface instead of the website
-// path. hasInferredContent / inferred_from_url are NOT used as a
-// ratification signal (they can't distinguish inferred from ratified voice)
-// — this branches on the presence of a VALID run belonging to the caller's
-// own business, nothing else. With no run param (or an invalid one), this
-// is byte-for-byte the existing website-inference path.
+// ADR 0025 §10.3 (Session 32 I2.14, corrected Session 32-D D8 MAJOR-1) —
+// step-2 backfill mode: ?run=<id> loads the staged voice and renders the
+// review surface instead of the website path — ONLY for a run that is
+// 'ratified' with a still-actionable voice_status (pending/refused_cap/
+// failed; 'applied'/'declined' are done, and BackfillVoiceReview's own
+// state branches handle showing that). A run that hasn't been ratified
+// yet — or has no staged voice at all — falls through to the ordinary
+// website-inference path (Step2Form), never a broken review surface for a
+// role that isn't declared yet.
+const REVIEWABLE_VOICE_STATUSES = new Set(['pending', 'refused_cap', 'failed'])
+
 export default async function Step2Page({
   params,
   searchParams,
@@ -24,7 +28,7 @@ export default async function Step2Page({
 
   if (runId) {
     const run = await getBackfillRunForReviewAction(runId)
-    if (run) {
+    if (run && run.status === 'ratified' && run.voice_status != null && REVIEWABLE_VOICE_STATUSES.has(run.voice_status)) {
       const client = await createClient()
       const {
         data: { user },

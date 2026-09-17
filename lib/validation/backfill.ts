@@ -29,23 +29,27 @@ export const retryBackfillRunSchema = z.object({
 })
 export type RetryBackfillRunInput = z.infer<typeof retryBackfillRunSchema>
 
-// ADR §4.2 (I2.13) — brand offers <= 3 writing examples chosen from the
-// existing + staged pool the UI presents; the Zod max(3) is the actual cap
+// ADR §4.2/§10.3 (I2.13, corrected Session 32-D D8 MAJOR-1) — the account
+// role that decides brand vs. founder routing is READ FROM THE RUN
+// (run.account_role, recorded at ratification) — never accepted from the
+// client. Accepting it here would let a client resend a different role
+// than the one the founder declared at ratification (ADR 4.2/10.3's
+// ordering: role is fixed at ratify, voice only applies after). The brand
+// fields are simply optional — the action ignores them entirely on a
+// founder-role run. writingExamples' Zod max(3) is the actual cap
 // enforcement point (BACKFILL-WRITE-CAPS), never a client-side courtesy.
-export const applyBackfillVoiceSchema = z.discriminatedUnion('accountRole', [
-  z.object({
+// .strict() — an accountRole field on the wire is REJECTED, not silently
+// stripped: fail closed on a client that still thinks it gets to declare
+// the role, rather than quietly ignoring a signal that used to matter.
+export const applyBackfillVoiceSchema = z
+  .object({
     runId: z.string().uuid(),
-    accountRole: z.literal('brand'),
-    tone: wordArraySchema,
-    keywords: wordArraySchema,
-    avoidWords: wordArraySchema,
-    writingExamples: z.array(z.string().max(1000)).max(3),
-  }),
-  z.object({
-    runId: z.string().uuid(),
-    accountRole: z.literal('founder'),
-  }),
-])
+    tone: wordArraySchema.default([]),
+    keywords: wordArraySchema.default([]),
+    avoidWords: wordArraySchema.default([]),
+    writingExamples: z.array(z.string().max(1000)).max(3).default([]),
+  })
+  .strict()
 export type ApplyBackfillVoiceInput = z.infer<typeof applyBackfillVoiceSchema>
 
 export const declineBackfillVoiceSchema = z.object({

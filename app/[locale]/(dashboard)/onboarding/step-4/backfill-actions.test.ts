@@ -52,9 +52,12 @@ const baseRun: SocialBackfillRunRow = {
   business_id: '22222222-2222-4222-8222-222222222222',
   social_account_id: '33333333-3333-4333-8333-333333333333',
   platform: 'twitter',
-  status: 'awaiting_ratification',
+  // Session 32-D D8 (MAJOR-1) — apply/decline now require a RATIFIED run
+  // with a declared role, so the default fixture is post-ratify. Tests
+  // that need the pre-ratify state override status explicitly.
+  status: 'ratified',
   partial: false,
-  account_role: null,
+  account_role: 'founder',
   weighting: null,
   posts_fetched: 10,
   posts_extracted: 10,
@@ -63,7 +66,10 @@ const baseRun: SocialBackfillRunRow = {
   ceiling_cents: 50,
   passes_done: 3,
   summary: {},
-  staged_voice: { voice_axes: AXES },
+  // Field-name fix (found while implementing D8): the real writer
+  // (runVoiceSynthesisPass) spreads BrandVoiceOutput's camelCase
+  // `voiceAxes`, never a snake_case `voice_axes` key.
+  staged_voice: { voiceAxes: AXES },
   voice_status: 'pending',
   voice_applied_to: null,
   voice_applied_at: null,
@@ -215,9 +221,9 @@ describe('discardBackfillRunAction / retryBackfillRunAction', () => {
 describe('applyBackfillVoiceAction', () => {
   it('brand apply rejects 6 offered examples at the Zod boundary (cap is 3)', async () => {
     mockAuthedClient('user-1')
+    vi.mocked(getBackfillRunById).mockResolvedValue({ ...baseRun, account_role: 'brand' })
     const result = await applyBackfillVoiceAction({
       runId: baseRun.id,
-      accountRole: 'brand',
       tone: ['direct'],
       keywords: ['saas'],
       avoidWords: [],
@@ -228,12 +234,53 @@ describe('applyBackfillVoiceAction', () => {
     expect(upsertBrandVoice).not.toHaveBeenCalled()
   })
 
-  it('brand apply writes brand_voices once with exactly 3 examples', async () => {
+  // MAJOR-1 (Session 32-D, D8) — a client-supplied accountRole is REJECTED
+  // at the Zod boundary (the schema is .strict()), not silently stripped.
+  it('a client-supplied accountRole is rejected at the Zod boundary', async () => {
     mockAuthedClient('user-1')
-    vi.mocked(transitionBackfillVoiceStatus).mockResolvedValue({ ...baseRun, voice_status: 'applied' })
     const result = await applyBackfillVoiceAction({
       runId: baseRun.id,
       accountRole: 'brand',
+      tone: [], keywords: [], avoidWords: [], writingExamples: [],
+    })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toBe('validation')
+    expect(upsertBrandVoice).not.toHaveBeenCalled()
+    expect(addVariation).not.toHaveBeenCalled()
+  })
+
+  // MAJOR-1 — apply refuses on a run that hasn't been ratified yet, even
+  // with a perfectly valid payload; no voice writer is ever called.
+  it('apply on an awaiting_ratification run is refused — no voice writer called', async () => {
+    mockAuthedClient('user-1')
+    vi.mocked(getBackfillRunById).mockResolvedValue({ ...baseRun, status: 'awaiting_ratification' })
+    const result = await applyBackfillVoiceAction({ runId: baseRun.id, tone: [], keywords: [], avoidWords: [], writingExamples: [] })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toBe('no_op')
+    expect(upsertBrandVoice).not.toHaveBeenCalled()
+    expect(addVariation).not.toHaveBeenCalled()
+    expect(transitionBackfillVoiceStatus).not.toHaveBeenCalled()
+  })
+
+  // MAJOR-1 — a ratified run with no account_role recorded (shouldn't
+  // happen given ratify always requires one, but the action must not
+  // trust that) also refuses.
+  it('apply on a ratified run with a null account_role is refused', async () => {
+    mockAuthedClient('user-1')
+    vi.mocked(getBackfillRunById).mockResolvedValue({ ...baseRun, status: 'ratified', account_role: null })
+    const result = await applyBackfillVoiceAction({ runId: baseRun.id, tone: [], keywords: [], avoidWords: [], writingExamples: [] })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toBe('no_op')
+    expect(upsertBrandVoice).not.toHaveBeenCalled()
+    expect(addVariation).not.toHaveBeenCalled()
+  })
+
+  it('brand apply writes brand_voices once with exactly 3 examples', async () => {
+    mockAuthedClient('user-1')
+    vi.mocked(getBackfillRunById).mockResolvedValue({ ...baseRun, account_role: 'brand' })
+    vi.mocked(transitionBackfillVoiceStatus).mockResolvedValue({ ...baseRun, account_role: 'brand', voice_status: 'applied' })
+    const result = await applyBackfillVoiceAction({
+      runId: baseRun.id,
       tone: ['direct'],
       keywords: ['saas'],
       avoidWords: [],
@@ -250,6 +297,22 @@ describe('applyBackfillVoiceAction', () => {
     )
   })
 
+  // MAJOR-1 — a ratified FOUNDER run never calls upsertBrandVoice, even if
+  // the (now-ignored) client payload shape looks brand-like.
+  it('a ratified founder run never calls upsertBrandVoice', async () => {
+    mockAuthedClient('user-1')
+    vi.mocked(getBackfillRunById).mockResolvedValue({ ...baseRun, account_role: 'founder' })
+    vi.mocked(addVariation).mockResolvedValue({
+      id: 'var-1', business_id: '22222222-2222-4222-8222-222222222222', name: 'Acme Founder', voice_axes: AXES,
+      created_at: '2026-09-01T00:00:00Z', updated_at: '2026-09-01T00:00:00Z',
+    })
+    vi.mocked(transitionBackfillVoiceStatus).mockResolvedValue({ ...baseRun, voice_status: 'applied' })
+    const result = await applyBackfillVoiceAction({ runId: baseRun.id, tone: [], keywords: [], avoidWords: [], writingExamples: [] })
+    expect(result.ok).toBe(true)
+    expect(upsertBrandVoice).not.toHaveBeenCalled()
+    expect(addVariation).toHaveBeenCalledTimes(1)
+  })
+
   it('founder apply creates one variation with axes only — no tone/keywords/examples written', async () => {
     mockAuthedClient('user-1')
     vi.mocked(addVariation).mockResolvedValue({
@@ -257,7 +320,7 @@ describe('applyBackfillVoiceAction', () => {
       created_at: '2026-09-01T00:00:00Z', updated_at: '2026-09-01T00:00:00Z',
     })
     vi.mocked(transitionBackfillVoiceStatus).mockResolvedValue({ ...baseRun, voice_status: 'applied' })
-    const result = await applyBackfillVoiceAction({ runId: baseRun.id, accountRole: 'founder' })
+    const result = await applyBackfillVoiceAction({ runId: baseRun.id, tone: [], keywords: [], avoidWords: [], writingExamples: [] })
     expect(result.ok).toBe(true)
     expect(addVariation).toHaveBeenCalledWith({
       businessId: '22222222-2222-4222-8222-222222222222', name: 'Acme Founder', voiceAxes: AXES,
@@ -273,7 +336,7 @@ describe('applyBackfillVoiceAction', () => {
     mockAuthedClient('user-1')
     vi.mocked(addVariation).mockRejectedValueOnce(new VoiceVariationCapError())
     vi.mocked(transitionBackfillVoiceStatus).mockResolvedValueOnce({ ...baseRun, voice_status: 'refused_cap' })
-    const refused = await applyBackfillVoiceAction({ runId: baseRun.id, accountRole: 'founder' })
+    const refused = await applyBackfillVoiceAction({ runId: baseRun.id, tone: [], keywords: [], avoidWords: [], writingExamples: [] })
     expect(refused.ok).toBe(true)
     expect(transitionBackfillVoiceStatus).toHaveBeenCalledWith(baseRun.id, ['pending'], 'refused_cap')
 
@@ -283,7 +346,7 @@ describe('applyBackfillVoiceAction', () => {
       created_at: '2026-09-01T00:00:00Z', updated_at: '2026-09-01T00:00:00Z',
     })
     vi.mocked(transitionBackfillVoiceStatus).mockResolvedValueOnce({ ...baseRun, voice_status: 'applied', staged_voice: null })
-    const retried = await applyBackfillVoiceAction({ runId: baseRun.id, accountRole: 'founder' })
+    const retried = await applyBackfillVoiceAction({ runId: baseRun.id, tone: [], keywords: [], avoidWords: [], writingExamples: [] })
     expect(retried.ok).toBe(true)
     expect(transitionBackfillVoiceStatus).toHaveBeenCalledWith(
       baseRun.id, ['pending', 'refused_cap', 'failed'], 'applied', 'var-2',
@@ -292,10 +355,11 @@ describe('applyBackfillVoiceAction', () => {
 
   it('a thrown upsert marks voice_status failed and keeps staged_voice', async () => {
     mockAuthedClient('user-1')
+    vi.mocked(getBackfillRunById).mockResolvedValue({ ...baseRun, account_role: 'brand' })
     vi.mocked(upsertBrandVoice).mockRejectedValue(new Error('db error'))
-    vi.mocked(transitionBackfillVoiceStatus).mockResolvedValue({ ...baseRun, voice_status: 'failed' })
+    vi.mocked(transitionBackfillVoiceStatus).mockResolvedValue({ ...baseRun, account_role: 'brand', voice_status: 'failed' })
     const result = await applyBackfillVoiceAction({
-      runId: baseRun.id, accountRole: 'brand', tone: [], keywords: [], avoidWords: [], writingExamples: [],
+      runId: baseRun.id, tone: [], keywords: [], avoidWords: [], writingExamples: [],
     })
     expect(result.ok).toBe(true)
     expect(transitionBackfillVoiceStatus).toHaveBeenCalledWith(baseRun.id, ['pending'], 'failed')
@@ -311,5 +375,15 @@ describe('declineBackfillVoiceAction', () => {
     expect(transitionBackfillVoiceStatus).toHaveBeenCalledWith(
       baseRun.id, ['pending', 'refused_cap', 'failed'], 'declined',
     )
+  })
+
+  // MAJOR-1 (Session 32-D, D8) — same ratified/role-declared gate as apply.
+  it('decline on an awaiting_ratification run is refused', async () => {
+    mockAuthedClient('user-1')
+    vi.mocked(getBackfillRunById).mockResolvedValue({ ...baseRun, status: 'awaiting_ratification' })
+    const result = await declineBackfillVoiceAction({ runId: baseRun.id })
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.error).toBe('no_op')
+    expect(transitionBackfillVoiceStatus).not.toHaveBeenCalled()
   })
 })

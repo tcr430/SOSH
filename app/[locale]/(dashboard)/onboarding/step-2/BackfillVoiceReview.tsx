@@ -45,13 +45,22 @@ export function BackfillVoiceReview({
 }) {
   const t = useTranslations('onboarding.backfill')
   const [isPending, startTransition] = useTransition()
-  const [accountRole, setAccountRole] = useState<BackfillAccountRole>(run.account_role ?? 'founder')
+  // MAJOR-1/MINOR-10 (Session 32-D, D8) — the role is fixed at ratification
+  // (run.account_role) and shown here, never editable: step-2/page.tsx only
+  // renders this component for a 'ratified' run, so account_role is always
+  // non-null by the time this component mounts.
+  const accountRole: BackfillAccountRole = run.account_role ?? 'founder'
   const [selectedExamples, setSelectedExamples] = useState<Set<string>>(new Set())
   const [result, setResult] = useState<SocialBackfillRunRow>(run)
 
-  const stagedVoice = (run.staged_voice ?? {}) as { voice_axes?: VoiceAxes; writing_examples?: string[] }
-  const axes = stagedVoice.voice_axes
-  const stagedExamples = stagedVoice.writing_examples ?? []
+  // Field-name fix (found while implementing D8): runVoiceSynthesisPass
+  // spreads the model's BrandVoiceOutput (camelCase `voiceAxes`) plus its
+  // own `examples` field into staged_voice — this read snake_case keys
+  // (`voice_axes`, `writing_examples`) that were never written, so a real
+  // run's axes and examples never actually reached this component.
+  const stagedVoice = (run.staged_voice ?? {}) as { voiceAxes?: VoiceAxes; examples?: string[] }
+  const axes = stagedVoice.voiceAxes
+  const stagedExamples = stagedVoice.examples ?? []
   const allExamples = [...existingWritingExamples, ...stagedExamples]
 
   function toggleExample(example: string) {
@@ -65,17 +74,12 @@ export function BackfillVoiceReview({
 
   function handleApply() {
     startTransition(async () => {
+      // MAJOR-1 (Session 32-D, D8) — accountRole is never sent; the action
+      // routes strictly by run.account_role (set at ratification).
       const payload =
         accountRole === 'brand'
-          ? {
-              runId: run.id,
-              accountRole: 'brand' as const,
-              tone: [],
-              keywords: [],
-              avoidWords: [],
-              writingExamples: [...selectedExamples],
-            }
-          : { runId: run.id, accountRole: 'founder' as const }
+          ? { runId: run.id, tone: [], keywords: [], avoidWords: [], writingExamples: [...selectedExamples] }
+          : { runId: run.id }
       const res = await applyBackfillVoiceAction(payload)
       if (res.ok) setResult(res.run)
     })
@@ -149,17 +153,12 @@ export function BackfillVoiceReview({
         ))}
       </div>
 
-      <fieldset className="space-y-2">
-        <legend className="text-sm font-medium">{t('role.question')}</legend>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="radio" checked={accountRole === 'founder'} onChange={() => setAccountRole('founder')} />
-          {t('role.founder')}
-        </label>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="radio" checked={accountRole === 'brand'} onChange={() => setAccountRole('brand')} />
-          {t('role.brand')}
-        </label>
-      </fieldset>
+      {/* MAJOR-1/MINOR-10 (Session 32-D, D8) — role is declared at ratify
+          and shown here, never re-editable. */}
+      <p className="text-sm">
+        <span className="font-medium">{t('role.question')} </span>
+        {accountRole === 'brand' ? t('role.brand') : t('role.founder')}
+      </p>
 
       {accountRole === 'brand' && allExamples.length > 0 && (
         <div className="space-y-1.5">
