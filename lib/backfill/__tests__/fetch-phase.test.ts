@@ -368,4 +368,105 @@ describe('fetchPhase (ADR 0025 §2.3/§6.5, Session 32 I2.8)', () => {
 
     expect(result).toEqual({ status: 'no_op' })
   })
+
+  // MAJOR-3 (Session 32-D, D5) — the run's cumulative platform_posts_read
+  // and posts_fetched MUST seed the loop-stop counters on every call, not
+  // just the first. Before the fix these were local to a single call, so a
+  // deferral/resume/reconnect always restarted at cursor=null with fresh
+  // counters and could blow past both ceilings across repeated calls.
+  describe('cumulative bounds across calls (MAJOR-3, Session 32-D D5)', () => {
+    it('a run resumed already at the platform-read ceiling moves to extracting with zero provider calls', async () => {
+      const db = wireDb(makeRun({ status: 'fetching', platform_posts_read: 500, posts_fetched: 10 }))
+      const provider = makeFakeProvider()
+      registryWith(provider)
+
+      const result = await fetchPhase('run-1')
+
+      expect(provider.fetchRecentPosts).not.toHaveBeenCalled()
+      expect(result).toEqual({ status: 'extracting', postsStaged: 0, platformPostsRead: 0 })
+      expect(db.getRun().status).toBe('extracting')
+      // Cumulative totals are untouched — nothing new happened this call.
+      expect(db.getRun().platform_posts_read).toBe(500)
+      expect(db.getRun().posts_fetched).toBe(10)
+    })
+
+    it('a run resumed already at the posts-staged ceiling moves to extracting with zero provider calls', async () => {
+      const db = wireDb(makeRun({ status: 'fetching', posts_fetched: 200, platform_posts_read: 50 }))
+      const provider = makeFakeProvider()
+      registryWith(provider)
+
+      const result = await fetchPhase('run-1')
+
+      expect(provider.fetchRecentPosts).not.toHaveBeenCalled()
+      expect(result).toEqual({ status: 'extracting', postsStaged: 0, platformPostsRead: 0 })
+      expect(db.getRun().status).toBe('extracting')
+    })
+
+    it('a run already at 150 staged stages at most 50 more before the 200 ceiling stops it', async () => {
+      const db = wireDb(makeRun({ status: 'fetching', posts_fetched: 150, platform_posts_read: 150 }))
+      const provider = makeFakeProvider()
+      registryWith(provider)
+      // Exactly 50 new in-window posts in one page — a page-boundary check
+      // (not a mid-page cutoff) is the cleanest way to prove "at most 50
+      // more" without relying on provider-side truncation.
+      provider.fetchRecentPosts = vi.fn().mockResolvedValueOnce({
+        posts: Array.from({ length: 50 }, (_, i) => post(`p${i}`, daysAgo(1))),
+        nextCursor: 'page-2',
+      })
+
+      const result = await fetchPhase('run-1')
+
+      expect(provider.fetchRecentPosts).toHaveBeenCalledTimes(1)
+      expect(result).toEqual({ status: 'extracting', postsStaged: 50, platformPostsRead: 50 })
+      expect(db.getRun().posts_fetched).toBe(200)
+    })
+
+    it('cumulative platform_posts_read persists across a deferral and a resumed call, stopping the run near the ceiling instead of restarting at zero', async () => {
+      const db = wireDb(makeRun({ status: 'fetching', platform_posts_read: 0, posts_fetched: 0 }))
+      const provider = makeFakeProvider()
+      registryWith(provider)
+      // Every page is 199 old + 1 in-window, so postsStaged never trips
+      // first — only platform_posts_read climbs, 200 per page — mirroring
+      // the single-call 500-read test above.
+      let calls = 0
+      provider.fetchRecentPosts = vi
+        .fn()
+        .mockImplementationOnce(async () => {
+          calls += 1
+          return {
+            posts: [post('in-1', daysAgo(1)), ...Array.from({ length: 199 }, (_, i) => post(`old-1-${i}`, '2000-01-01T00:00:00Z'))],
+            nextCursor: 'cursor-1',
+          }
+        })
+        .mockImplementationOnce(async () => {
+          calls += 1
+          return {
+            posts: [post('in-2', daysAgo(1)), ...Array.from({ length: 199 }, (_, i) => post(`old-2-${i}`, '2000-01-01T00:00:00Z'))],
+            nextCursor: 'cursor-2',
+          }
+        })
+        .mockRejectedValueOnce(new SocialProviderError({ code: 'RATE_LIMITED', message: 'slow down', platform: 'twitter' }))
+
+      const firstResult = await fetchPhase('run-1')
+      expect(firstResult).toEqual({ status: 'deferred', reason: 'rate_limited' })
+      expect(calls).toBe(2) // 2 successful pages; the 3rd call rejected before incrementing `calls`
+      expect(db.getRun().platform_posts_read).toBe(400)
+      expect(db.getRun().status).toBe('fetching')
+
+      // Second call (a resume): seeds from the cumulative 400, requests one
+      // more page (600 read after it), then stops WITHOUT another provider
+      // call — proving the ceiling is enforced against the cumulative
+      // total, not reset to zero for this call.
+      provider.fetchRecentPosts = vi.fn().mockResolvedValueOnce({
+        posts: [post('in-3', daysAgo(1)), ...Array.from({ length: 199 }, (_, i) => post(`old-3-${i}`, '2000-01-01T00:00:00Z'))],
+        nextCursor: 'cursor-3',
+      })
+
+      const secondResult = await fetchPhase('run-1')
+      expect(provider.fetchRecentPosts).toHaveBeenCalledTimes(1)
+      expect(secondResult.status).toBe('extracting')
+      expect(db.getRun().platform_posts_read).toBe(600)
+      expect(db.getRun().status).toBe('extracting')
+    })
+  })
 })

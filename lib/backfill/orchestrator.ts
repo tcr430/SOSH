@@ -109,13 +109,32 @@ export async function fetchPhase(runId: string): Promise<FetchPhaseResult> {
   const transitioned = await transitionBackfillRun(runId, ['queued', 'fetching'], 'fetching')
   if (!transitioned) return { status: 'no_op' }
 
+  // MAJOR-3 (Session 32-D, D5) — a deferral/resume/reconnect re-enters this
+  // function as a BRAND NEW call, so the loop-stop counters below MUST seed
+  // from the run's own cumulative totals rather than starting at zero, or a
+  // run that already read/staged up to the ceiling keeps re-fetching from
+  // cursor=null forever. `page`, by contrast, stays per-call on purpose — it
+  // is only the non-terminating-cursor guard for THIS call, not a resource
+  // the run is billed against across calls.
+  const seedPostsStaged = run.posts_fetched
+  const seedPlatformPostsRead = run.platform_posts_read
+
+  if (seedPostsStaged >= BACKFILL_MAX_POSTS || seedPlatformPostsRead >= BACKFILL_MAX_PLATFORM_READS) {
+    await transitionBackfillRun(runId, ['fetching'], 'extracting')
+    return { status: 'extracting', postsStaged: 0, platformPostsRead: 0 }
+  }
+
   const notBefore = subMonths(new Date(), BACKFILL_LOOKBACK_MONTHS)
   let cursor: string | null = null
   let postsStaged = 0
   let platformPostsRead = 0
   let page = 0
 
-  while (page < BACKFILL_MAX_PAGES && postsStaged < BACKFILL_MAX_POSTS && platformPostsRead < BACKFILL_MAX_PLATFORM_READS) {
+  while (
+    page < BACKFILL_MAX_PAGES &&
+    seedPostsStaged + postsStaged < BACKFILL_MAX_POSTS &&
+    seedPlatformPostsRead + platformPostsRead < BACKFILL_MAX_PLATFORM_READS
+  ) {
     let result
     try {
       result = await provider.fetchRecentPosts({

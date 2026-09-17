@@ -317,7 +317,12 @@ export async function getLiveBackfillRunForAccount(socialAccountId: string): Pro
 
 // ADR §6.5 (Session 32 I2.9) — the callback route's reconnect check: a
 // resumable failed run (error_code IS DISTINCT FROM 'caller_bug', mirroring
-// resume_backfill_run's own guard) on this account, if any.
+// resume_backfill_run's own guard) on this account, if any. NIT-2 (Session
+// 32-D, D5): a plain `.neq('error_code', 'caller_bug')` excludes NULL — SQL
+// three-valued logic makes `NULL <> 'caller_bug'` unknown, not true, so a
+// NULL-code failed run would be silently treated as non-resumable. `.or()`
+// expresses IS DISTINCT FROM directly: NULL or anything other than
+// 'caller_bug'.
 export async function getResumableFailedRunForAccount(socialAccountId: string): Promise<SocialBackfillRunRow | null> {
   const { createServiceRoleClient } = await import('@/lib/supabase/service')
   const client = createServiceRoleClient()
@@ -326,7 +331,7 @@ export async function getResumableFailedRunForAccount(socialAccountId: string): 
     .select('*')
     .eq('social_account_id', socialAccountId)
     .eq('status', 'failed')
-    .neq('error_code', 'caller_bug')
+    .or('error_code.is.null,error_code.neq.caller_bug')
     .maybeSingle()
   if (error) throw new Error(getErrorMessage(error))
   return (data as SocialBackfillRunRow | null) ?? null
