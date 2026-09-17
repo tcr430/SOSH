@@ -1,11 +1,12 @@
-import { runPrompt } from '@/lib/ai/runner'
+import { runPromptWithCost } from '@/lib/ai/runner'
+import { AiError } from '@/lib/ai/errors'
 import { buildCustomerContext } from '@/lib/ai/context'
 import { calculateCostCents } from '@/lib/ai/models'
 import { backfillVoiceSynthesisPrompt } from '@/lib/ai/prompts/backfill-voice-synthesis'
 import { backfillInsightsPrompt, type BackfillInsightsOutput } from '@/lib/ai/prompts/backfill-insights'
 import { backfillEvidencePrompt } from '@/lib/ai/prompts/backfill-evidence'
-import { getMostRecentUsageCostCents } from '@/lib/db/ai-usage'
-import { getStagedPostsForRun, claimBackfillPosts, resolveBackfillPosts } from '@/lib/db/backfill-posts'
+import type { Prompt } from '@/lib/ai/prompts/types'
+import { getStagedPostsForRun, claimBackfillPosts, resolveBackfillPosts, hasFailedBackfillPosts } from '@/lib/db/backfill-posts'
 import {
   getBackfillRunById,
   reserveBackfillSpend,
@@ -52,6 +53,11 @@ export type ExtractionUnitResult =
 
 const DEFAULT_MAX_OUTPUT_TOKENS = 4096
 const PARTIAL_REASON_BUDGET_CEILING = 'budget_ceiling_reached'
+// MAJOR-11 (Session 32-D, D6) — the run finalizes with this reason whenever
+// any staged post ended up 'failed' (an evidence batch fail-closed on
+// invalid model output), so the run never looks complete when it silently
+// skipped writing some of its own memory.
+const PARTIAL_REASON_EVIDENCE_FAILED = 'evidence_extraction_failed'
 
 function truncate(text: string, max: number): string {
   return text.length > max ? text.slice(0, max) : text
@@ -78,13 +84,40 @@ async function reserveSpend(run: SocialBackfillRunRow, estimateCents: number): P
   return true
 }
 
-// ADR §6.1 — reconcile BOTH reservations to the ACTUAL cost after the call.
-// runPrompt does not return usage to its caller (it records ai_usage
-// internally) — getMostRecentUsageCostCents reads that same row back.
-async function reconcileSpend(run: SocialBackfillRunRow, reservedCents: number, promptId: string): Promise<void> {
-  const actual = (await getMostRecentUsageCostCents(run.business_id, promptId)) ?? reservedCents
-  await reconcileBackfillSpend(run.id, reservedCents, actual)
-  await reconcileBackfillDailySpend(run.business_id, reservedCents, actual)
+// ADR §6.1 — reconcile BOTH reservations to the ACTUAL cost after the
+// call. MINOR-2 (Session 32-D, D6): actualCents now comes from the call's
+// OWN return value (runPromptWithCost, via callBackfillPrompt below) —
+// never a "most recent ai_usage row for this business+prompt" lookup,
+// which two concurrent runs on the same business racing the same prompt
+// could misattribute to each other.
+async function reconcileSpend(run: SocialBackfillRunRow, reservedCents: number, actualCents: number): Promise<void> {
+  await reconcileBackfillSpend(run.id, reservedCents, actualCents)
+  await reconcileBackfillDailySpend(run.business_id, reservedCents, actualCents)
+}
+
+// MINOR-1 (Session 32-D, D6) — every model call an extraction pass makes
+// goes through this ONE path so the reservation reconciles on EVERY exit
+// (success or throw), never just the success path: actualCents stays 0
+// when the call never completed, so a throw releases the FULL reservation
+// immediately instead of leaking it until the 30-minute stall sweep. The
+// caller (runVoiceSynthesisPass/runInsightsPass/runEvidenceBatch) still
+// decides what a throw MEANS for its own posts/run state — this helper
+// only owns the money.
+async function callBackfillPrompt<TInput, TOutput>(
+  run: SocialBackfillRunRow,
+  estimateCents: number,
+  prompt: Prompt<TInput, TOutput>,
+  input: TInput,
+): Promise<TOutput> {
+  let actualCents = 0
+  try {
+    const context = await buildCustomerContext(run.business_id)
+    const { output, costCents } = await runPromptWithCost(prompt, context, input)
+    actualCents = costCents
+    return output
+  } finally {
+    await reconcileSpend(run, estimateCents, actualCents)
+  }
 }
 
 async function refuseAsPartial(run: SocialBackfillRunRow): Promise<ExtractionUnitResult> {
@@ -128,9 +161,7 @@ async function runVoiceSynthesisPass(
   )
   if (!(await reserveSpend(run, estimateCents))) return refuseAsPartial(run)
 
-  const context = await buildCustomerContext(run.business_id)
-  const voiceOutput = await runPrompt(backfillVoiceSynthesisPrompt, context, { posts: top20 })
-  await reconcileSpend(run, estimateCents, backfillVoiceSynthesisPrompt.id)
+  const voiceOutput = await callBackfillPrompt(run, estimateCents, backfillVoiceSynthesisPrompt, { posts: top20 })
 
   // ADR §4.2 — up to 3 examples = the highest-lift posts, verbatim. subset
   // is already ordered by lift descending (weighted) or recency (unweighted).
@@ -163,9 +194,7 @@ async function runInsightsPass(
   )
   if (!(await reserveSpend(run, estimateCents))) return refuseAsPartial(run)
 
-  const context = await buildCustomerContext(run.business_id)
-  const insightsOutput = await runPrompt(backfillInsightsPrompt, context, { posts: inputPosts })
-  await reconcileSpend(run, estimateCents, backfillInsightsPrompt.id)
+  const insightsOutput = await callBackfillPrompt(run, estimateCents, backfillInsightsPrompt, { posts: inputPosts })
 
   await writeInsightsOutput(run, posts, insightsOutput)
 
@@ -185,6 +214,14 @@ async function runEvidenceBatch(run: SocialBackfillRunRow): Promise<ExtractionUn
   const claimed = await claimBackfillPosts(run.id, BACKFILL_EVIDENCE_BATCH)
 
   if (claimed.length === 0) {
+    // MAJOR-11 (Session 32-D, D6) — a run that fail-closed on ANY batch
+    // along the way must not look complete: finalizing checks for a
+    // failed post first and marks the run partial (with a reason), same
+    // shape as a budget-ceiling refusal.
+    if (await hasFailedBackfillPosts(run.id)) {
+      await markBackfillRunPartial(run.id, PARTIAL_REASON_EVIDENCE_FAILED)
+      return { status: 'awaiting_ratification', partial: true }
+    }
     await transitionBackfillRun(run.id, ['extracting'], 'awaiting_ratification')
     return { status: 'awaiting_ratification', partial: false }
   }
@@ -203,17 +240,20 @@ async function runEvidenceBatch(run: SocialBackfillRunRow): Promise<ExtractionUn
 
   let output
   try {
-    const context = await buildCustomerContext(run.business_id)
-    output = await runPrompt(backfillEvidencePrompt, context, { posts: inputPosts })
-  } catch {
-    // FAIL CLOSED — invalid output from the model: the batch's posts are
-    // marked failed, nothing is written from it, the run continues with
-    // the next batch on the next tick.
-    await reconcileSpend(run, estimateCents, backfillEvidencePrompt.id)
-    await resolveBackfillPosts(claimed.map((post) => post.id), 'failed')
+    output = await callBackfillPrompt(run, estimateCents, backfillEvidencePrompt, { posts: inputPosts })
+  } catch (err) {
+    // MAJOR-11 — ADR §4.5 fails closed on INVALID OUTPUT ONLY. A schema/
+    // parse failure (AiError('invalid_response'), the runner's own code
+    // for "the model gave a real answer we cannot trust") permanently
+    // fails this batch's posts. Anything else — rate limit, provider
+    // error, timeout, a truncated response — is TRANSIENT: the posts
+    // return to 'pending' so a future tick re-claims and retries them.
+    // The reservation is already reconciled to 0 by callBackfillPrompt's
+    // finally in both cases — nothing to release here.
+    const isInvalidOutput = err instanceof AiError && err.code === 'invalid_response'
+    await resolveBackfillPosts(claimed.map((post) => post.id), isInvalidOutput ? 'failed' : 'pending')
     return { status: 'progressed', pass: 'evidence' }
   }
-  await reconcileSpend(run, estimateCents, backfillEvidencePrompt.id)
 
   const verified = verifyAndFilterEvidenceItems(output.items, claimed)
   const writtenPostIds = new Set<string>()

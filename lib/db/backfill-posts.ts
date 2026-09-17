@@ -27,11 +27,17 @@ export async function claimBackfillPosts(
 
 // ADR §4.1/§4.5 (Session 32 I2.12) — over resolve_backfill_posts:
 // claim_backfill_posts' other half, claimed -> extracted | skipped |
-// failed. Bulk, guarded to extraction_status='claimed'. Empty input is a
-// no-op that skips the round trip entirely.
+// failed | pending. Bulk, guarded to extraction_status='claimed'. Empty
+// input is a no-op that skips the round trip entirely. MAJOR-11 (Session
+// 32-D, D6) added 'pending' — a batch that hit a TRANSIENT error (rate
+// limit, provider error, timeout) returns its claimed posts to 'pending'
+// so claim_backfill_posts' own WHERE clause re-offers them on a future
+// tick, rather than permanently failing posts the model never actually
+// rejected. The RPC and its CHECK constraint already accept 'pending'
+// (20260913130000:96) — no new migration.
 export async function resolveBackfillPosts(
   postIds: readonly string[],
-  status: 'extracted' | 'skipped' | 'failed',
+  status: 'pending' | 'extracted' | 'skipped' | 'failed',
 ): Promise<number> {
   if (postIds.length === 0) return 0
   const { createServiceRoleClient } = await import('@/lib/supabase/service')
@@ -90,6 +96,26 @@ export async function getStagedPostsForRun(runId: string): Promise<SocialBackfil
     .order('published_at', { ascending: false })
   if (error) throw new Error(getErrorMessage(error))
   return (data as SocialBackfillPostRow[]) ?? []
+}
+
+// ADR §4.5/§6.4 (Session 32-D, D6) — MAJOR-11's finalization check: does
+// this run have any post the evidence batch loop fail-closed on (invalid
+// model output, never a transient error — those return posts to
+// 'pending' instead, see resolveBackfillPosts above)? A bounded existence
+// check, not a new RPC — runEvidenceBatch calls this ONLY when it is about
+// to finalize (zero pending posts left), so the run never looks complete
+// when a batch it gave up on is silently missing from memory.
+export async function hasFailedBackfillPosts(runId: string): Promise<boolean> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client
+    .from('social_backfill_posts')
+    .select('id')
+    .eq('run_id', runId)
+    .eq('extraction_status', 'failed')
+    .limit(1)
+  if (error) throw new Error(getErrorMessage(error))
+  return (data?.length ?? 0) > 0
 }
 
 // ADR §4.1 step 3 BACKFILL-PERFORMANCE-WEIGHTED (Session 32 I2.10) — over

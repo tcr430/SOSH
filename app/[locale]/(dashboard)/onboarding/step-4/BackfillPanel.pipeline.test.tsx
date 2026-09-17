@@ -41,9 +41,8 @@ vi.mock('@/lib/social', async () => {
   const actual = await vi.importActual<typeof import('@/lib/social')>('@/lib/social')
   return { ...actual, getRegistry: vi.fn() }
 })
-vi.mock('@/lib/ai/runner', () => ({ runPrompt: vi.fn() }))
+vi.mock('@/lib/ai/runner', () => ({ runPromptWithCost: vi.fn() }))
 vi.mock('@/lib/ai/context', () => ({ buildCustomerContext: vi.fn().mockResolvedValue({}) }))
-vi.mock('@/lib/db/ai-usage', () => ({ getMostRecentUsageCostCents: vi.fn().mockResolvedValue(1) }))
 vi.mock('@/lib/db/backfill-daily-budget', () => ({
   reserveBackfillDailySpend: vi.fn().mockResolvedValue({
     id: 'budget-1', business_id: 'biz-1', purpose: 'backfill_cents', day: '2026-09-01',
@@ -168,7 +167,7 @@ vi.mock('@/lib/db/backfill-posts', () => ({
     for (const p of pending) p.extraction_status = 'claimed'
     return pending
   }),
-  resolveBackfillPosts: vi.fn(async (ids: readonly string[], status: 'extracted' | 'skipped' | 'failed') => {
+  resolveBackfillPosts: vi.fn(async (ids: readonly string[], status: 'pending' | 'extracted' | 'skipped' | 'failed') => {
     let n = 0
     for (const id of ids) {
       const post = stagedPosts.find((p) => p.id === id)
@@ -178,12 +177,16 @@ vi.mock('@/lib/db/backfill-posts', () => ({
       }
     }
     // Mirrors the D3 migration's resolve_backfill_posts writer exactly:
-    // extracted/skipped increment posts_extracted, failed never does.
+    // extracted/skipped increment posts_extracted, pending/failed never do.
     if (n > 0 && (status === 'extracted' || status === 'skipped')) {
       runState = { ...runState, posts_extracted: runState.posts_extracted + n }
     }
     return n
   }),
+  // Session 32-D, D6 (MAJOR-11) — the finalization check runEvidenceBatch
+  // makes before transitioning: mirrors the real query directly off this
+  // fixture's own staged-post state, never a hand-set flag.
+  hasFailedBackfillPosts: vi.fn(async (_runId: string) => stagedPosts.some((p) => p.extraction_status === 'failed')),
 }))
 
 vi.mock('@/lib/memory/import', () => ({
@@ -227,13 +230,13 @@ vi.mock('@/lib/memory/import', () => ({
 
 import { getRegistry } from '@/lib/social'
 import type { SocialProvider, RecentPost } from '@/lib/social'
-import { runPrompt } from '@/lib/ai/runner'
+import { runPromptWithCost } from '@/lib/ai/runner'
 import { fetchPhase } from '@/lib/backfill/orchestrator'
 import { runExtractionUnit } from '@/lib/backfill/extract'
 import { BackfillPanel, type BackfillRunViewModel } from './BackfillPanel'
 
 const mockGetRegistry = vi.mocked(getRegistry)
-const mockRunPrompt = vi.mocked(runPrompt)
+const mockRunPromptWithCost = vi.mocked(runPromptWithCost)
 
 afterEach(() => {
   vi.clearAllMocks()
@@ -276,23 +279,29 @@ async function driveToAwaitingRatification() {
   expect(runState.status).toBe('extracting')
 
   // Pass 1 (voice) — sequenced by prompt id so each pass gets its own output.
-  mockRunPrompt.mockImplementation(async (prompt: { id: string }) => {
+  mockRunPromptWithCost.mockImplementation(async (prompt: { id: string }) => {
     if (prompt.id === 'backfill-voice-synthesis') {
       return {
-        tone: ['direct'], targetAudience: 'B2B founders', keywords: [], avoidWords: [],
-        uniqueValueProp: 'a platform for founders', competitors: [],
-        voiceAxes: { formal_casual: 50, expert_peer: 50, serious_playful: 50, reserved_warm: 50, calm_energetic: 50, rational_emotional: 50, exclusive_inclusive: 50 },
+        output: {
+          tone: ['direct'], targetAudience: 'B2B founders', keywords: [], avoidWords: [],
+          uniqueValueProp: 'a platform for founders', competitors: [],
+          voiceAxes: { formal_casual: 50, expert_peer: 50, serious_playful: 50, reserved_warm: 50, calm_energetic: 50, rational_emotional: 50, exclusive_inclusive: 50 },
+        },
+        costCents: 1,
       }
     }
     if (prompt.id === 'backfill-insights') {
-      return { patterns: [], audienceStatements: [] }
+      return { output: { patterns: [], audienceStatements: [] }, costCents: 1 }
     }
     if (prompt.id === 'backfill-evidence') {
       return {
-        items: [
-          { kind: 'case_study', content: 'Real customer story number 0: we cut onboarding time by 40% for enterprise buyers.', platformPostId: 'post-0' },
-          { kind: 'case_study', content: 'Real customer story number 1: we cut onboarding time by 40% for enterprise buyers.', platformPostId: 'post-1' },
-        ],
+        output: {
+          items: [
+            { kind: 'case_study', content: 'Real customer story number 0: we cut onboarding time by 40% for enterprise buyers.', platformPostId: 'post-0' },
+            { kind: 'case_study', content: 'Real customer story number 1: we cut onboarding time by 40% for enterprise buyers.', platformPostId: 'post-1' },
+          ],
+        },
+        costCents: 1,
       }
     }
     throw new Error(`unexpected prompt: ${prompt.id}`)

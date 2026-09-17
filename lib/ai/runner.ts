@@ -101,11 +101,18 @@ async function callWithRetry(
   }
 }
 
-export async function runPrompt<TInput, TOutput>(
+// ADR 0025 §6.1 (Session 32-D, D6/MINOR-2) — executePrompt is the ONE real
+// implementation; runPrompt (below) is a thin wrapper kept byte-identical
+// for its 20+ existing callers, and runPromptWithCost is the only way a
+// caller can learn the ACTUAL cost of ITS OWN call, rather than reading
+// back "whatever ai_usage row is most recent for this business+prompt" —
+// which silently misattributes cost between two runs racing the same
+// prompt for the same business (lib/backfill/extract.ts's bug before D6).
+async function executePrompt<TInput, TOutput>(
   prompt: Prompt<TInput, TOutput>,
   context: CustomerContext,
   input: TInput,
-): Promise<TOutput> {
+): Promise<{ data: TOutput; costCents: number }> {
   // ── STEP 1: Trial cap check (must be first — C-1) ─────────────────────
   // BACKFILL-TRIAL-CAPS-UNTOUCHED — a backfill pass skips this ENTIRE
   // block, checked here rather than only at Step 8, so a backfill run on a
@@ -312,7 +319,7 @@ export async function runPrompt<TInput, TOutput>(
     }
 
     usageSuccess = true
-    return parsed
+    return { data: parsed, costCents }
   } finally {
     // Step 7: Insert ai_usage — always, never throws
     const latencyMs = Date.now() - startTime
@@ -335,4 +342,25 @@ export async function runPrompt<TInput, TOutput>(
       console.error('runner: failed to record ai_usage', usageErr)
     }
   }
+}
+
+export async function runPrompt<TInput, TOutput>(
+  prompt: Prompt<TInput, TOutput>,
+  context: CustomerContext,
+  input: TInput,
+): Promise<TOutput> {
+  const { data } = await executePrompt(prompt, context, input)
+  return data
+}
+
+// ADR 0025 §6.1 (Session 32-D, D6/MINOR-2) — see executePrompt's comment
+// above. Every caller that must reconcile a per-call spend reservation
+// (currently only lib/backfill/extract.ts) uses this instead of runPrompt.
+export async function runPromptWithCost<TInput, TOutput>(
+  prompt: Prompt<TInput, TOutput>,
+  context: CustomerContext,
+  input: TInput,
+): Promise<{ output: TOutput; costCents: number }> {
+  const { data, costCents } = await executePrompt(prompt, context, input)
+  return { output: data, costCents }
 }

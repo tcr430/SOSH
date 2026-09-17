@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 
-vi.mock('@/lib/ai/runner', () => ({ runPrompt: vi.fn() }))
+vi.mock('@/lib/ai/runner', () => ({ runPromptWithCost: vi.fn() }))
 vi.mock('@/lib/ai/context', () => ({ buildCustomerContext: vi.fn() }))
-vi.mock('@/lib/db/ai-usage', () => ({ getMostRecentUsageCostCents: vi.fn() }))
 vi.mock('@/lib/db/backfill-posts', () => ({
   getStagedPostsForRun: vi.fn(),
   updateBackfillPostLifts: vi.fn(),
   claimBackfillPosts: vi.fn(),
   resolveBackfillPosts: vi.fn(),
+  hasFailedBackfillPosts: vi.fn(),
 }))
 vi.mock('@/lib/db/backfill-runs', () => ({
   getBackfillRunById: vi.fn(),
@@ -32,10 +32,10 @@ vi.mock('@/lib/memory/import', () => ({
 const brandVoicesWriterSpy = vi.fn()
 vi.mock('@/lib/db/brand-voices', () => ({ upsertBrandVoice: brandVoicesWriterSpy }))
 
-import { runPrompt } from '@/lib/ai/runner'
+import { runPromptWithCost } from '@/lib/ai/runner'
+import { AiError } from '@/lib/ai/errors'
 import { buildCustomerContext } from '@/lib/ai/context'
-import { getMostRecentUsageCostCents } from '@/lib/db/ai-usage'
-import { getStagedPostsForRun, claimBackfillPosts, resolveBackfillPosts } from '@/lib/db/backfill-posts'
+import { getStagedPostsForRun, claimBackfillPosts, resolveBackfillPosts, hasFailedBackfillPosts } from '@/lib/db/backfill-posts'
 import {
   getBackfillRunById,
   reserveBackfillSpend,
@@ -53,9 +53,9 @@ import type { BrandVoiceOutput } from '@/lib/ai/prompts/brand-voice-inference'
 import type { BackfillInsightsOutput } from '@/lib/ai/prompts/backfill-insights'
 import type { BackfillEvidenceOutput } from '@/lib/ai/prompts/backfill-evidence'
 
-const mockRunPrompt = vi.mocked(runPrompt)
+const mockRunPromptWithCost = vi.mocked(runPromptWithCost)
 const mockBuildCustomerContext = vi.mocked(buildCustomerContext)
-const mockGetMostRecentUsageCostCents = vi.mocked(getMostRecentUsageCostCents)
+const mockHasFailedBackfillPosts = vi.mocked(hasFailedBackfillPosts)
 const mockGetStagedPostsForRun = vi.mocked(getStagedPostsForRun)
 const mockGetBackfillRunById = vi.mocked(getBackfillRunById)
 const mockReserveBackfillSpend = vi.mocked(reserveBackfillSpend)
@@ -136,10 +136,10 @@ function stubAllSucceed() {
   mockReserveBackfillDailySpend.mockResolvedValue(makeBudgetRow())
   mockReconcileBackfillSpend.mockResolvedValue(makeRun())
   mockReconcileBackfillDailySpend.mockResolvedValue(makeBudgetRow())
-  mockGetMostRecentUsageCostCents.mockResolvedValue(3)
   mockBuildCustomerContext.mockResolvedValue({} as never)
   mockIncrementBackfillPassesDone.mockResolvedValue(makeRun())
   mockTransitionBackfillRun.mockResolvedValue(makeRun({ status: 'awaiting_ratification' }))
+  mockHasFailedBackfillPosts.mockResolvedValue(false)
 }
 
 describe('runExtractionUnit — pass 0 (deterministic, no model call)', () => {
@@ -154,7 +154,7 @@ describe('runExtractionUnit — pass 0 (deterministic, no model call)', () => {
     const result = await runExtractionUnit('run-1')
 
     expect(result).toEqual({ status: 'progressed', pass: 'stats' })
-    expect(mockRunPrompt).not.toHaveBeenCalled()
+    expect(mockRunPromptWithCost).not.toHaveBeenCalled()
     expect(mockIncrementBackfillPassesDone).toHaveBeenCalledWith('run-1')
   })
 })
@@ -183,7 +183,7 @@ describe('runExtractionUnit — pass 1 (voice synthesis)', () => {
       makePost({ id: 'r3', platform_post_id: 'p3', content: 'third', lift: 2.0 }),
       makePost({ id: 'r4', platform_post_id: 'p4', content: 'fourth', lift: 1.0 }),
     ])
-    mockRunPrompt.mockResolvedValue(voiceOutput)
+    mockRunPromptWithCost.mockResolvedValue({ output: voiceOutput, costCents: 3 })
 
     const result = await runExtractionUnit('run-1')
 
@@ -198,10 +198,9 @@ describe('runExtractionUnit — pass 1 (voice synthesis)', () => {
 
   it('reconciles the run AND daily reservation to the actual usage cost after the call', async () => {
     stubAllSucceed()
-    mockGetMostRecentUsageCostCents.mockResolvedValue(7)
     mockGetBackfillRunById.mockResolvedValue(makeRun({ passes_done: 1 }))
     mockGetStagedPostsForRun.mockResolvedValue([makePost()])
-    mockRunPrompt.mockResolvedValue(voiceOutput)
+    mockRunPromptWithCost.mockResolvedValue({ output: voiceOutput, costCents: 7 })
 
     await runExtractionUnit('run-1')
 
@@ -219,7 +218,7 @@ describe('runExtractionUnit — pass 1 (voice synthesis)', () => {
 
     expect(result).toEqual({ status: 'awaiting_ratification', partial: true })
     expect(mockMarkBackfillRunPartial).toHaveBeenCalledWith('run-1', 'budget_ceiling_reached')
-    expect(mockRunPrompt).not.toHaveBeenCalled()
+    expect(mockRunPromptWithCost).not.toHaveBeenCalled()
   })
 
   it('a refused DAILY reservation (run-level succeeded) also stops extraction and releases the run-level reservation', async () => {
@@ -232,7 +231,44 @@ describe('runExtractionUnit — pass 1 (voice synthesis)', () => {
 
     expect(result).toEqual({ status: 'awaiting_ratification', partial: true })
     expect(mockReconcileBackfillSpend).toHaveBeenCalledWith('run-1', expect.any(Number), 0) // released
-    expect(mockRunPrompt).not.toHaveBeenCalled()
+    expect(mockRunPromptWithCost).not.toHaveBeenCalled()
+  })
+
+  // MINOR-1 (Session 32-D, D6) — before the fix, reconcileSpend was only
+  // called AFTER a successful runPrompt call: a throw skipped it entirely,
+  // leaking the reservation until the 30-minute stall sweep. callBackfillPrompt's
+  // finally now reconciles on every exit, actual=0 when no call completed.
+  it('a throwing voice pass still reconciles the run AND daily reservation to 0 before rethrowing', async () => {
+    stubAllSucceed()
+    mockGetBackfillRunById.mockResolvedValue(makeRun({ passes_done: 1 }))
+    mockGetStagedPostsForRun.mockResolvedValue([makePost()])
+    mockRunPromptWithCost.mockRejectedValue(new AiError('provider_error', 'API server error 503'))
+
+    await expect(runExtractionUnit('run-1')).rejects.toThrow('API server error 503')
+
+    expect(mockReconcileBackfillSpend).toHaveBeenCalledWith('run-1', expect.any(Number), 0)
+    expect(mockReconcileBackfillDailySpend).toHaveBeenCalledWith('biz-1', expect.any(Number), 0)
+  })
+
+  // MINOR-2 (Session 32-D, D6) — reconcileSpend used to read back
+  // "whatever ai_usage row is most recent for this business+prompt",
+  // which two runs on the SAME business racing the SAME prompt could
+  // misattribute to each other. Now the cost comes from the call's own
+  // return value, so each run reconciles its own cost regardless of what
+  // any other run's call returned — there is no shared lookup left to race.
+  it('two runs on the same business each reconcile their OWN call cost, never a cross-run value', async () => {
+    stubAllSucceed()
+    mockGetBackfillRunById.mockResolvedValueOnce(makeRun({ id: 'run-a', business_id: 'biz-1', passes_done: 1 }))
+    mockGetStagedPostsForRun.mockResolvedValueOnce([makePost()])
+    mockRunPromptWithCost.mockResolvedValueOnce({ output: voiceOutput, costCents: 11 })
+    await runExtractionUnit('run-a')
+    expect(mockReconcileBackfillSpend).toHaveBeenLastCalledWith('run-a', expect.any(Number), 11)
+
+    mockGetBackfillRunById.mockResolvedValueOnce(makeRun({ id: 'run-b', business_id: 'biz-1', passes_done: 1 }))
+    mockGetStagedPostsForRun.mockResolvedValueOnce([makePost()])
+    mockRunPromptWithCost.mockResolvedValueOnce({ output: voiceOutput, costCents: 4 })
+    await runExtractionUnit('run-b')
+    expect(mockReconcileBackfillSpend).toHaveBeenLastCalledWith('run-b', expect.any(Number), 4)
   })
 })
 
@@ -246,8 +282,8 @@ describe('runExtractionUnit — pass 2 (insights)', () => {
     mockGetBackfillRunById.mockResolvedValue(makeRun({ passes_done: 2 }))
     const realPosts = Array.from({ length: 4 }, (_, i) => makePost({ id: `r${i}`, platform_post_id: `real-${i}`, lift: 2.0 }))
     mockGetStagedPostsForRun.mockResolvedValue(realPosts)
-    mockRunPrompt.mockResolvedValue(
-      makeInsightsOutput({
+    mockRunPromptWithCost.mockResolvedValue({
+      output: makeInsightsOutput({
         patterns: [
           {
             dimension: 'topic',
@@ -256,7 +292,8 @@ describe('runExtractionUnit — pass 2 (insights)', () => {
           },
         ],
       }),
-    )
+      costCents: 3,
+    })
 
     const result = await runExtractionUnit('run-1')
 
@@ -271,11 +308,12 @@ describe('runExtractionUnit — pass 2 (insights)', () => {
       makePost({ id: `r${i}`, platform_post_id: `real-${i}`, lift: 2.0, published_at: `2026-01-0${i + 1}T00:00:00Z` }),
     )
     mockGetStagedPostsForRun.mockResolvedValue(realPosts)
-    mockRunPrompt.mockResolvedValue(
-      makeInsightsOutput({
+    mockRunPromptWithCost.mockResolvedValue({
+      output: makeInsightsOutput({
         patterns: [{ dimension: 'topic', pattern: 'a real pattern', backingPostIds: realPosts.map((p) => p.platform_post_id) }],
       }),
-    )
+      costCents: 3,
+    })
 
     await runExtractionUnit('run-1')
 
@@ -288,9 +326,10 @@ describe('runExtractionUnit — pass 2 (insights)', () => {
     stubAllSucceed()
     mockGetBackfillRunById.mockResolvedValue(makeRun({ passes_done: 2 }))
     mockGetStagedPostsForRun.mockResolvedValue([makePost({ platform_post_id: 'only-one' })])
-    mockRunPrompt.mockResolvedValue(
-      makeInsightsOutput({ audienceStatements: [{ kind: 'problem', statement: 'thin evidence', backingPostIds: ['only-one'] }] }),
-    )
+    mockRunPromptWithCost.mockResolvedValue({
+      output: makeInsightsOutput({ audienceStatements: [{ kind: 'problem', statement: 'thin evidence', backingPostIds: ['only-one'] }] }),
+      costCents: 3,
+    })
 
     await runExtractionUnit('run-1')
 
@@ -301,7 +340,7 @@ describe('runExtractionUnit — pass 2 (insights)', () => {
     stubAllSucceed()
     mockGetBackfillRunById.mockResolvedValue(makeRun({ passes_done: 2 }))
     mockGetStagedPostsForRun.mockResolvedValue([makePost()])
-    mockRunPrompt.mockResolvedValue(makeInsightsOutput())
+    mockRunPromptWithCost.mockResolvedValue({ output: makeInsightsOutput(), costCents: 3 })
 
     const result = await runExtractionUnit('run-1')
 
@@ -318,7 +357,7 @@ describe('runExtractionUnit — pass 2 (insights)', () => {
     const result = await runExtractionUnit('run-1')
 
     expect(result).toEqual({ status: 'awaiting_ratification', partial: true })
-    expect(mockRunPrompt).not.toHaveBeenCalled()
+    expect(mockRunPromptWithCost).not.toHaveBeenCalled()
     expect(mockImportPerformanceItem).not.toHaveBeenCalled()
     expect(mockImportAudienceItem).not.toHaveBeenCalled()
   })
@@ -338,12 +377,13 @@ describe('runExtractionUnit — passes_done >= 3 (evidence batch loop)', () => {
     ]
     mockClaimBackfillPosts.mockResolvedValue(claimed)
     mockImportEvidenceItem.mockResolvedValue({ id: 'ev-1' } as never)
-    mockRunPrompt.mockResolvedValue(
-      makeEvidenceOutput([
+    mockRunPromptWithCost.mockResolvedValue({
+      output: makeEvidenceOutput([
         { kind: 'usage_data', content: 'We hit 10,000 signups in our first month.', platformPostId: 'p1' }, // verbatim
         { kind: 'quote', content: 'The customer loved how the product transformed their workflow', platformPostId: 'p2' }, // paraphrase
       ]),
-    )
+      costCents: 2,
+    })
 
     const result = await runExtractionUnit('run-1')
 
@@ -360,7 +400,10 @@ describe('runExtractionUnit — passes_done >= 3 (evidence batch loop)', () => {
     const longContent = 'a'.repeat(501)
     const claimed = [makePost({ id: 'r1', platform_post_id: 'p1', content: longContent })]
     mockClaimBackfillPosts.mockResolvedValue(claimed)
-    mockRunPrompt.mockResolvedValue(makeEvidenceOutput([{ kind: 'usage_data', content: longContent, platformPostId: 'p1' }]))
+    mockRunPromptWithCost.mockResolvedValue({
+      output: makeEvidenceOutput([{ kind: 'usage_data', content: longContent, platformPostId: 'p1' }]),
+      costCents: 1,
+    })
 
     await runExtractionUnit('run-1')
 
@@ -372,25 +415,84 @@ describe('runExtractionUnit — passes_done >= 3 (evidence batch loop)', () => {
     mockGetBackfillRunById.mockResolvedValue(makeRun({ passes_done: 3 }))
     const claimed = [makePost({ id: 'r1', platform_post_id: 'p1', content: 'a real post' })]
     mockClaimBackfillPosts.mockResolvedValue(claimed)
-    mockRunPrompt.mockResolvedValue(makeEvidenceOutput([{ kind: 'usage_data', content: 'a real post', platformPostId: 'outside-batch' }]))
+    mockRunPromptWithCost.mockResolvedValue({
+      output: makeEvidenceOutput([{ kind: 'usage_data', content: 'a real post', platformPostId: 'outside-batch' }]),
+      costCents: 1,
+    })
 
     await runExtractionUnit('run-1')
 
     expect(mockImportEvidenceItem).not.toHaveBeenCalled()
   })
 
-  it('invalid output (runPrompt throws) => the batch is marked failed, zero rows written, the run continues (progressed, not awaiting_ratification)', async () => {
+  // MAJOR-11 (Session 32-D, D6) — ADR §4.5 fails closed on INVALID OUTPUT
+  // ONLY. A schema/parse failure (AiError('invalid_response'), the
+  // runner's own code for a Zod-rejected or unparseable response) is the
+  // one case that permanently fails a batch's posts.
+  it('a schema-validation failure (AiError invalid_response) fails the batch: posts marked failed, zero rows written, run continues', async () => {
     stubAllSucceed()
     mockGetBackfillRunById.mockResolvedValue(makeRun({ passes_done: 3 }))
     const claimed = [makePost({ id: 'r1', platform_post_id: 'p1' }), makePost({ id: 'r2', platform_post_id: 'p2' })]
     mockClaimBackfillPosts.mockResolvedValue(claimed)
-    mockRunPrompt.mockRejectedValue(new Error('invalid JSON'))
+    mockRunPromptWithCost.mockRejectedValue(new AiError('invalid_response', 'Response schema validation failed'))
 
     const result = await runExtractionUnit('run-1')
 
     expect(result).toEqual({ status: 'progressed', pass: 'evidence' })
     expect(mockImportEvidenceItem).not.toHaveBeenCalled()
     expect(mockResolveBackfillPosts).toHaveBeenCalledWith(['r1', 'r2'], 'failed')
+  })
+
+  // MAJOR-11 — anything OTHER than invalid_response (rate limit, provider
+  // error, timeout, a truncated response, or any non-AiError throw) is
+  // TRANSIENT: the batch's posts return to 'pending' so a future tick
+  // re-claims and retries them, rather than being permanently failed for
+  // an error that had nothing to do with what the model returned.
+  it('a network error on an evidence batch leaves its posts retryable (pending), never failed', async () => {
+    stubAllSucceed()
+    mockGetBackfillRunById.mockResolvedValue(makeRun({ passes_done: 3 }))
+    const claimed = [makePost({ id: 'r1', platform_post_id: 'p1' }), makePost({ id: 'r2', platform_post_id: 'p2' })]
+    mockClaimBackfillPosts.mockResolvedValue(claimed)
+    mockRunPromptWithCost.mockRejectedValue(new AiError('provider_error', 'API server error 503'))
+
+    const result = await runExtractionUnit('run-1')
+
+    expect(result).toEqual({ status: 'progressed', pass: 'evidence' })
+    expect(mockImportEvidenceItem).not.toHaveBeenCalled()
+    expect(mockResolveBackfillPosts).toHaveBeenCalledWith(['r1', 'r2'], 'pending')
+    expect(mockResolveBackfillPosts).not.toHaveBeenCalledWith(['r1', 'r2'], 'failed')
+  })
+
+  // MINOR-1 — the reservation reconciles to 0 (fully released) on EVERY
+  // exit, transient or invalid-output alike, never leaked until the
+  // 30-minute stall sweep.
+  it('either kind of evidence-batch error reconciles the run AND daily reservation to 0', async () => {
+    stubAllSucceed()
+    mockGetBackfillRunById.mockResolvedValue(makeRun({ passes_done: 3 }))
+    mockClaimBackfillPosts.mockResolvedValue([makePost({ id: 'r1', platform_post_id: 'p1' })])
+    mockRunPromptWithCost.mockRejectedValue(new AiError('timeout', 'SDK call exceeded timeout'))
+
+    await runExtractionUnit('run-1')
+
+    expect(mockReconcileBackfillSpend).toHaveBeenCalledWith('run-1', expect.any(Number), 0)
+    expect(mockReconcileBackfillDailySpend).toHaveBeenCalledWith('biz-1', expect.any(Number), 0)
+  })
+
+  // MAJOR-11 — a run must never look complete when it fail-closed on ANY
+  // batch along the way: finalizing (zero pending posts left) checks for a
+  // failed post FIRST and marks the run partial, exactly like a
+  // budget-ceiling refusal.
+  it('a run with a failed evidence post finalizes as partial=true with a reason, not a clean awaiting_ratification', async () => {
+    stubAllSucceed()
+    mockGetBackfillRunById.mockResolvedValue(makeRun({ passes_done: 3 }))
+    mockClaimBackfillPosts.mockResolvedValue([])
+    mockHasFailedBackfillPosts.mockResolvedValue(true)
+
+    const result = await runExtractionUnit('run-1')
+
+    expect(mockMarkBackfillRunPartial).toHaveBeenCalledWith('run-1', 'evidence_extraction_failed')
+    expect(mockTransitionBackfillRun).not.toHaveBeenCalled()
+    expect(result).toEqual({ status: 'awaiting_ratification', partial: true })
   })
 
   it('a batch with zero pending posts left finalizes the run to awaiting_ratification', async () => {
@@ -402,7 +504,7 @@ describe('runExtractionUnit — passes_done >= 3 (evidence batch loop)', () => {
 
     expect(mockTransitionBackfillRun).toHaveBeenCalledWith('run-1', ['extracting'], 'awaiting_ratification')
     expect(result).toEqual({ status: 'awaiting_ratification', partial: false })
-    expect(mockRunPrompt).not.toHaveBeenCalled()
+    expect(mockRunPromptWithCost).not.toHaveBeenCalled()
   })
 
   // The 40-per-run cap (BACKFILL-EVIDENCE-CAP) is enforced ATOMICALLY inside
@@ -418,7 +520,10 @@ describe('runExtractionUnit — passes_done >= 3 (evidence batch loop)', () => {
     const claimed = [makePost({ id: 'r1', platform_post_id: 'p1', content: 'a capped-out post' })]
     mockClaimBackfillPosts.mockResolvedValue(claimed)
     mockImportEvidenceItem.mockResolvedValue(null)
-    mockRunPrompt.mockResolvedValue(makeEvidenceOutput([{ kind: 'usage_data', content: 'a capped-out post', platformPostId: 'p1' }]))
+    mockRunPromptWithCost.mockResolvedValue({
+      output: makeEvidenceOutput([{ kind: 'usage_data', content: 'a capped-out post', platformPostId: 'p1' }]),
+      costCents: 1,
+    })
 
     await runExtractionUnit('run-1')
 
@@ -435,7 +540,7 @@ describe('runExtractionUnit — passes_done >= 3 (evidence batch loop)', () => {
     const result = await runExtractionUnit('run-1')
 
     expect(result).toEqual({ status: 'awaiting_ratification', partial: true })
-    expect(mockRunPrompt).not.toHaveBeenCalled()
+    expect(mockRunPromptWithCost).not.toHaveBeenCalled()
   })
 
   // Cites I2.7's BACKFILL-SENTINEL-GUARDED guard (proven directly in
@@ -452,11 +557,11 @@ describe('runExtractionUnit — passes_done >= 3 (evidence batch loop)', () => {
     const claimed = [makePost({ id: 'r1', platform_post_id: 'p1', content: injected })]
     mockClaimBackfillPosts.mockResolvedValue(claimed)
     mockImportEvidenceItem.mockResolvedValue({ id: 'ev-1' } as never)
-    mockRunPrompt.mockImplementation(async (_prompt, _ctx, input) => {
+    mockRunPromptWithCost.mockImplementation(async (_prompt, _ctx, input) => {
       // The provider's normal content — including the injection string —
       // must have reached the model wrapped in [DATA]...[/DATA].
       void input
-      return makeEvidenceOutput([{ kind: 'quote', content: injected, platformPostId: 'p1' }])
+      return { output: makeEvidenceOutput([{ kind: 'quote', content: injected, platformPostId: 'p1' }]), costCents: 1 }
     })
 
     await runExtractionUnit('run-1')
