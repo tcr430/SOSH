@@ -8,6 +8,8 @@
 import { useState, useEffect, useRef, useTransition } from 'react'
 import { useTranslations } from 'next-intl'
 import Link from 'next/link'
+import { format } from 'date-fns'
+import { enUS, pt, es, type Locale } from 'date-fns/locale'
 import { Button } from '@/components/ui/button'
 import {
   ratifyBackfillRunAction,
@@ -15,6 +17,9 @@ import {
   retryBackfillRunAction,
   getBackfillRunsAction,
 } from './backfill-actions'
+import { strongestAxisLabels } from '@/lib/voice/axis-labels'
+import { vectorToVoiceFields } from '@/lib/voice/translate'
+import type { VoiceAxes } from '@/lib/validation/voice'
 import type {
   SocialBackfillRunRow,
   EvidenceMemoryRow,
@@ -22,6 +27,41 @@ import type {
   PerformanceMemoryRow,
   BackfillAccountRole,
 } from '@/lib/db/types'
+import type { BackfillStatsSummary } from '@/lib/backfill/stats'
+
+const DATE_FNS_LOCALES: Record<string, Locale> = { en: enUS, pt, es }
+
+// ADR 0025 §10.4 item 1 (Session 32-D, D9, MAJOR-12) — the REAL date range
+// lib/backfill/stats.ts now writes, never the summary.date_range field
+// nothing wrote. Short, locale-aware, no year repeated when both ends fall
+// in the same year.
+function formatDateRange(dateRange: BackfillStatsSummary['dateRange'], locale: string): string {
+  if (!dateRange) return ''
+  const dateFnsLocale = DATE_FNS_LOCALES[locale] ?? enUS
+  const start = new Date(dateRange.start)
+  const end = new Date(dateRange.end)
+  const sameYear = start.getUTCFullYear() === end.getUTCFullYear()
+  const startStr = format(start, sameYear ? 'MMM d' : 'MMM d, yyyy', { locale: dateFnsLocale })
+  const endStr = format(end, 'MMM d, yyyy', { locale: dateFnsLocale })
+  return `${startStr} – ${endStr}`
+}
+
+// ADR 0025 §10.4 item 6 (Session 32-D, D9, MAJOR-12) — cadence and format
+// mix, read from the run's own summary jsonb (lib/backfill/stats.ts),
+// never memory. The single most common key by count; ties keep object
+// insertion order (stable).
+function mostCommonKey(dist: Record<string, number> | undefined): string | null {
+  if (!dist) return null
+  let best: string | null = null
+  let bestCount = -1
+  for (const [key, count] of Object.entries(dist)) {
+    if (count > bestCount) {
+      best = key
+      bestCount = count
+    }
+  }
+  return best
+}
 
 export interface BackfillCandidates {
   evidence: EvidenceMemoryRow[]
@@ -266,18 +306,29 @@ function RunCard({
           )
         }
 
-        const summary = run.summary as { date_range?: string } | null
+        // MAJOR-12 (Session 32-D, D9) — the summary jsonb lib/backfill/stats.ts
+        // actually writes (ADR §10.4 items 1 and 6), never a field nothing writes.
+        const summary = run.summary as Partial<BackfillStatsSummary> | null
+        const stagedVoice = (run.staged_voice ?? null) as { voiceAxes?: VoiceAxes } | null
+        const axes = stagedVoice?.voiceAxes
+        const cadenceWeekday = mostCommonKey(summary?.weekdayDistribution)
+        const cadenceHour = mostCommonKey(summary?.hourDistribution)
+        const cadenceFormat = mostCommonKey(summary?.formatDistribution)
 
         return (
           <div data-state="awaiting-ratification" data-partial={run.partial} className="space-y-4">
+            {/* §10.4 item 1 — headline: N posts, account, real date range.
+                /impeccable audit (Session 32-D D9): a real heading, not a
+                <p>, so the six-item hierarchy is a landmark a screen reader
+                can actually navigate by. */}
             <div>
-              <p className="text-sm font-medium">
+              <h2 className="text-sm font-medium">
                 {t('headline.line', {
                   count: run.posts_extracted,
                   account: accountLabel,
-                  dateRange: summary?.date_range ?? '',
+                  dateRange: formatDateRange(summary?.dateRange ?? null, locale),
                 })}
-              </p>
+              </h2>
               <p className="text-xs text-muted-foreground">
                 {run.weighting === 'weighted' ? t('headline.weighted') : t('headline.unweighted')}
               </p>
@@ -288,13 +339,20 @@ function RunCard({
               )}
             </div>
 
-            {run.staged_voice != null && (
-              // MAJOR-1 (Session 32-D, D8) — no "Review voice" link before
-              // ratify: voice only applies to a ratified run's declared
-              // role (ADR §4.2/§10.3). A staged voice existing pre-ratify
-              // is shown as a plain notice, not an actionable link.
-              <div className="rounded-md bg-muted/40 p-3 space-y-1">
-                <p className="text-sm font-medium">{t('voice.summary_title')}</p>
+            {/* §10.4 item 2 — voice summary: descriptor + three strongest axes.
+                MAJOR-1 (D8): no "Review voice" link before ratify — voice only
+                applies to a ratified run's declared role (ADR §4.2/§10.3).
+                /impeccable audit (D9): dropped the bg-muted box — it was the
+                only boxed section on an otherwise unboxed page (headline,
+                candidate groups and item 6 are all plain); a heading now
+                carries the hierarchy instead of a card. */}
+            {axes != null && (
+              <div className="space-y-1" data-section="voice-summary">
+                <h3 className="text-sm font-medium">{t('voice.summary_title')}</h3>
+                <p className="text-sm text-muted-foreground">{vectorToVoiceFields(axes).descriptor}</p>
+                <p className="text-xs text-muted-foreground">
+                  {t('voice.strongest_axes', { axes: strongestAxisLabels(axes, 3).join(', ') })}
+                </p>
               </div>
             )}
 
@@ -333,6 +391,24 @@ function RunCard({
                 acceptAllLabel={t('actions.accept_all')}
                 footnote={t('evidence.permission_off')}
               />
+            )}
+
+            {/* §10.4 item 6 — cadence and format mix: context, not memory. */}
+            {(cadenceWeekday || cadenceFormat) && (
+              <div className="space-y-1" data-section="cadence">
+                <h3 className="text-sm font-medium">{t('cadence.title')}</h3>
+                {cadenceWeekday && cadenceHour != null && (
+                  <p className="text-xs text-muted-foreground">
+                    {t('cadence.most_active', {
+                      weekday: t(`cadence.weekdays.${cadenceWeekday}` as never),
+                      hour: cadenceHour,
+                    })}
+                  </p>
+                )}
+                {cadenceFormat && (
+                  <p className="text-xs text-muted-foreground">{t('cadence.formats', { formats: cadenceFormat })}</p>
+                )}
+              </div>
             )}
 
             <fieldset className="space-y-2">
@@ -390,7 +466,9 @@ function CandidateGroup({
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-medium">{title}</p>
+        {/* /impeccable audit (Session 32-D D9) — a heading, matching the
+            rest of the §10.4 hierarchy's promoted section titles. */}
+        <h3 className="text-sm font-medium">{title}</h3>
         <button
           type="button"
           onClick={() => onAcceptAll(items.map((i) => i.id))}

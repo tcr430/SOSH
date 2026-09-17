@@ -71,10 +71,25 @@ describe('computeBackfillStats', () => {
     expect(computeBackfillStats(posts).spanDays).toBe(10)
   })
 
+  // MAJOR-12 (Session 32-D, D9) — the real date range the step-4 headline
+  // (ADR §10.4 item 1) reads, never a field nothing writes.
+  it('dateRange carries the earliest and latest published_at, exactly', () => {
+    const posts = [
+      makePost({ id: 'p1', published_at: '2026-01-01T00:00:00Z' }),
+      makePost({ id: 'p2', published_at: '2026-01-11T00:00:00Z' }),
+      makePost({ id: 'p3', published_at: '2026-01-05T00:00:00Z' }),
+    ]
+    expect(computeBackfillStats(posts).dateRange).toEqual({
+      start: '2026-01-01T00:00:00Z',
+      end: '2026-01-11T00:00:00Z',
+    })
+  })
+
   it('an empty post list produces zeroed stats, not a throw', () => {
     const stats = computeBackfillStats([])
     expect(stats.totalPosts).toBe(0)
     expect(stats.spanDays).toBe(0)
+    expect(stats.dateRange).toBeNull()
     expect(stats.engagementBaselineBasis).toBe('none')
   })
 

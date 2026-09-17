@@ -143,7 +143,22 @@
       },
       "voice": {
         "summary_title": "A sua voz, a partir do que já escreveu",
-        "review": "Rever voz"
+        "review": "Rever voz",
+        "strongest_axes": "Tende para {axes}"
+      },
+      "cadence": {
+        "title": "Cadência de publicação",
+        "most_active": "Mais ativo: {weekday}, por volta das {hour}:00",
+        "formats": "Sobretudo {formats}",
+        "weekdays": {
+          "sunday": "domingo",
+          "monday": "segunda-feira",
+          "tuesday": "terça-feira",
+          "wednesday": "quarta-feira",
+          "thursday": "quinta-feira",
+          "friday": "sexta-feira",
+          "saturday": "sábado"
+        }
       },
       "performed": {
         "title": "O que teve desempenho",
@@ -426,7 +441,11 @@
     "saving": "A guardar…",
     "tracks_hint": "A sua voz vai-se definindo à medida que responde às perguntas.",
     "tracks_toggle_show": "Mostrar painel de voz",
-    "tracks_toggle_hide": "Ocultar painel de voz"
+    "tracks_toggle_hide": "Ocultar painel de voz",
+    "review_founder_note": "Isto reflete como escreve pessoalmente — não são necessários exemplos.",
+    "review_examples_title": "Escolha até 3 exemplos",
+    "review_apply": "Usar esta voz",
+    "review_decline": "Não usar esta voz"
   },
   "calibration": {
     "q1": {

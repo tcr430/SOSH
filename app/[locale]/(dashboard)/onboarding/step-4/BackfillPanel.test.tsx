@@ -35,7 +35,14 @@ vi.mock('./backfill-actions', () => ({
 // ── Imports ──────────────────────────────────────────────────────────────────
 
 import { BackfillPanel, type BackfillRunViewModel } from './BackfillPanel'
-import type { SocialBackfillRunRow, EvidenceMemoryRow, AudienceMemoryRow, PerformanceMemoryRow } from '@/lib/db/types'
+import { computeBackfillStats } from '@/lib/backfill/stats'
+import type {
+  SocialBackfillRunRow,
+  SocialBackfillPostRow,
+  EvidenceMemoryRow,
+  AudienceMemoryRow,
+  PerformanceMemoryRow,
+} from '@/lib/db/types'
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -74,6 +81,55 @@ function makeRun(overrides: Partial<SocialBackfillRunRow> = {}): SocialBackfillR
 
 function makeCandidates(overrides: Partial<{ evidence: EvidenceMemoryRow[]; audience: AudienceMemoryRow[]; performance: PerformanceMemoryRow[] }> = {}) {
   return { evidence: [], audience: [], performance: [], ...overrides }
+}
+
+function makePost(platformPostId: string, publishedAt: string, format: SocialBackfillPostRow['format']): SocialBackfillPostRow {
+  return {
+    id: `row-${platformPostId}`,
+    business_id: '22222222-2222-4222-8222-222222222222',
+    run_id: RUN_ID,
+    social_account_id: '33333333-3333-4333-8333-333333333333',
+    platform_post_id: platformPostId,
+    published_at: publishedAt,
+    content: `content for ${platformPostId}`,
+    url: null,
+    format,
+    metrics: null,
+    lift: null,
+    extraction_status: 'pending',
+    claimed_at: null,
+    created_at: publishedAt,
+  }
+}
+
+function makePerformanceCandidate(run: SocialBackfillRunRow, id: string, pattern: string, observationCount: number): PerformanceMemoryRow {
+  return {
+    id, business_id: run.business_id, source: 'import', confidence: 0.6, observation_count: observationCount,
+    status: 'candidate', sensitivity: 'internal', public_use_permission: false, scope: 'brand', scope_ref: null,
+    last_confirmed_at: null, recency_at: '2026-09-01T00:00:00Z', expires_at: null, deleted_at: null,
+    created_at: '2026-09-01T00:00:00Z', updated_at: '2026-09-01T00:00:00Z', import_run_id: run.id,
+    import_source_post_ids: ['p1'], dimension: 'topic', pattern, platform: 'twitter', pattern_key: null,
+  }
+}
+
+function makeAudienceCandidate(run: SocialBackfillRunRow, id: string, statement: string): AudienceMemoryRow {
+  return {
+    id, business_id: run.business_id, source: 'import', confidence: 0.5, observation_count: 1,
+    status: 'candidate', sensitivity: 'internal', public_use_permission: false, scope: 'brand', scope_ref: null,
+    last_confirmed_at: null, recency_at: '2026-09-01T00:00:00Z', expires_at: null, deleted_at: null,
+    created_at: '2026-09-01T00:00:00Z', updated_at: '2026-09-01T00:00:00Z', import_run_id: run.id,
+    import_source_post_ids: ['p1'], segment: null, kind: 'problem', statement,
+  }
+}
+
+function makeEvidenceCandidate(run: SocialBackfillRunRow, id: string, content: string): EvidenceMemoryRow {
+  return {
+    id, business_id: run.business_id, source: 'import', confidence: 0.5, observation_count: 1,
+    status: 'candidate', sensitivity: 'internal', public_use_permission: false, scope: 'brand', scope_ref: null,
+    last_confirmed_at: null, recency_at: '2026-09-01T00:00:00Z', expires_at: null, deleted_at: null,
+    created_at: '2026-09-01T00:00:00Z', updated_at: '2026-09-01T00:00:00Z', import_run_id: run.id,
+    import_source_post_ids: ['p1'], kind: 'usage_data', content, source_url: null,
+  }
 }
 
 function renderPanel(runs: BackfillRunViewModel[]) {
@@ -230,6 +286,72 @@ describe('BackfillPanel — Section 10.2 states', () => {
     expect(container.querySelector('input[type="checkbox"][data-permission]')).toBeNull()
     const button = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('actions.ratify'))
     expect(button).toBeDefined()
+  })
+
+  // MAJOR-12 (Session 32-D, D9) — ADR §10.4's six-item hierarchy, in DOM
+  // order, from a summary produced by the REAL computeBackfillStats (never
+  // a hand-written fixture) — the exact defect being closed is a summary
+  // field nothing writes.
+  it('renders all six §10.4 items in DOM order, with a non-empty date range and pattern counts, from a real computeBackfillStats summary', () => {
+    const posts: SocialBackfillPostRow[] = [
+      makePost('p1', '2026-01-05T09:00:00Z', 'text'), // Monday 09:00
+      makePost('p2', '2026-01-05T09:00:00Z', 'text'), // Monday 09:00
+      makePost('p3', '2026-01-06T14:00:00Z', 'image'), // Tuesday 14:00
+      makePost('p4', '2026-01-11T09:00:00Z', 'text'), // Monday 09:00
+    ]
+    const summary = computeBackfillStats(posts)
+    expect(summary.dateRange).not.toBeNull() // sanity: the real function actually produced one
+
+    const run = makeRun({
+      status: 'awaiting_ratification',
+      posts_extracted: 4,
+      weighting: 'weighted',
+      staged_voice: { voiceAxes: { formal_casual: 90, expert_peer: 50, serious_playful: 50, reserved_warm: 50, calm_energetic: 50, rational_emotional: 50, exclusive_inclusive: 50 } },
+      summary: summary as unknown as Record<string, unknown>,
+    })
+    const candidates = makeCandidates({
+      performance: [makePerformanceCandidate(run, 'perf-1', 'Short posts perform best', 7)],
+      audience: [makeAudienceCandidate(run, 'aud-1', 'Founders ask about pricing')],
+      evidence: [makeEvidenceCandidate(run, 'ev-1', 'We hit 10,000 signups')],
+    })
+    const { container, cleanup } = renderPanel([{ run, accountLabel: 'Acme Founder', candidates }])
+    cleanupFns.push(cleanup)
+
+    const el = container.querySelector('[data-state="awaiting-ratification"]')!
+    expect(el).not.toBeNull()
+
+    // Item 1 — headline carries a non-empty, real date range (not the old
+    // summary.date_range field, which this run's summary never sets).
+    expect(el.textContent).toMatch(/"dateRange":"[^"]+–[^"]+"/)
+
+    // Item 2 — voice summary section exists with a descriptor and strongest axes.
+    const voiceSection = el.querySelector('[data-section="voice-summary"]')
+    expect(voiceSection).not.toBeNull()
+    expect(voiceSection!.textContent).toContain('strongest_axes')
+
+    // Item 3 — pattern carries its observation count ("based on N posts").
+    expect(el.textContent).toContain('"count":7')
+
+    // Item 6 — cadence section exists, after the candidate groups.
+    const cadenceSection = el.querySelector('[data-section="cadence"]')
+    expect(cadenceSection).not.toBeNull()
+    expect(cadenceSection!.textContent).toContain('cadence.title')
+
+    // DOM order: headline -> voice summary -> performed -> audience ->
+    // evidence -> cadence -> role fieldset.
+    const positions = [
+      el.textContent!.indexOf('headline.line'),
+      el.textContent!.indexOf('voice.summary_title'),
+      el.textContent!.indexOf('performed.title'),
+      el.textContent!.indexOf('audience.title'),
+      el.textContent!.indexOf('evidence.title'),
+      el.textContent!.indexOf('cadence.title'),
+      el.textContent!.indexOf('role.question'),
+    ]
+    expect(positions.every((p) => p !== -1)).toBe(true)
+    for (let i = 1; i < positions.length; i++) {
+      expect(positions[i]).toBeGreaterThan(positions[i - 1])
+    }
   })
 
   it('awaiting_ratification, partial: shows the real extracted count and the stop reason', () => {

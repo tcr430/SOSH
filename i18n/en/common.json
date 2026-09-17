@@ -143,7 +143,22 @@
       },
       "voice": {
         "summary_title": "Your voice, from what you've already written",
-        "review": "Review voice"
+        "review": "Review voice",
+        "strongest_axes": "Leans {axes}"
+      },
+      "cadence": {
+        "title": "Posting cadence",
+        "most_active": "Most active: {weekday}, around {hour}:00",
+        "formats": "Mostly {formats}",
+        "weekdays": {
+          "sunday": "Sunday",
+          "monday": "Monday",
+          "tuesday": "Tuesday",
+          "wednesday": "Wednesday",
+          "thursday": "Thursday",
+          "friday": "Friday",
+          "saturday": "Saturday"
+        }
       },
       "performed": {
         "title": "What performed",
@@ -426,7 +441,11 @@
     "saving": "Saving…",
     "tracks_hint": "Your voice takes shape as you answer each question.",
     "tracks_toggle_show": "Show voice track",
-    "tracks_toggle_hide": "Hide voice track"
+    "tracks_toggle_hide": "Hide voice track",
+    "review_founder_note": "This captures how you personally write — no examples needed.",
+    "review_examples_title": "Choose up to 3 examples",
+    "review_apply": "Use this voice",
+    "review_decline": "Don't use this voice"
   },
   "calibration": {
     "q1": {

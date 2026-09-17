@@ -1,3 +1,4 @@
+import { formatISO } from 'date-fns'
 import type { SocialBackfillPostRow } from '@/lib/db/types'
 import { recordBackfillRunSummary } from '@/lib/db/backfill-runs'
 
@@ -15,6 +16,10 @@ export type EngagementBaselineBasis = 'impressions' | 'raw' | 'none'
 export interface BackfillStatsSummary {
   totalPosts: number
   spanDays: number
+  // MAJOR-12 (Session 32-D, D9) — the REAL date range the step-4 headline
+  // (ADR §10.4 item 1) reads. Derived from the same earliest/latest
+  // timestamps spanDays already computes, never a field nothing writes.
+  dateRange: { start: string; end: string } | null
   weekdayDistribution: Record<string, number>
   hourDistribution: Record<string, number>
   formatDistribution: Record<string, number>
@@ -104,11 +109,13 @@ export function computeBackfillStats(posts: readonly SocialBackfillPostRow[]): B
   }
 
   const spanDays = posts.length > 0 ? Math.max(1, Math.round((latestMs - earliestMs) / 86_400_000)) : 0
+  const dateRange = posts.length > 0 ? { start: formatISO(new Date(earliestMs)), end: formatISO(new Date(latestMs)) } : null
   const { baseline, basis } = computeEngagementBaseline(posts)
 
   return {
     totalPosts: posts.length,
     spanDays,
+    dateRange,
     weekdayDistribution,
     hourDistribution,
     formatDistribution,

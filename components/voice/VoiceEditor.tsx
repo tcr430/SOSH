@@ -18,45 +18,119 @@ import {
   type VoiceEditorSavePayload,
 } from '@/lib/voice/editor-state'
 import { CALIBRATION_BANK } from '@/lib/voice/calibration'
+import { AXIS_ORDER, AXIS_POLES } from '@/lib/voice/axis-labels'
 import type { VoiceAxes } from '@/lib/validation/voice'
 import type { CalibrationOption } from '@/lib/voice/calibration'
 
-const AXIS_ORDER: ReadonlyArray<keyof VoiceAxes> = [
-  'formal_casual',
-  'expert_peer',
-  'serious_playful',
-  'reserved_warm',
-  'calm_energetic',
-  'rational_emotional',
-  'exclusive_inclusive',
-]
-
-const AXIS_POLES: Record<keyof VoiceAxes, [string, string]> = {
-  formal_casual:       ['Formal',    'Casual'],
-  expert_peer:         ['Expert',    'Peer'],
-  serious_playful:     ['Serious',   'Playful'],
-  reserved_warm:       ['Reserved',  'Warm'],
-  calm_energetic:      ['Calm',      'Energetic'],
-  rational_emotional:  ['Rational',  'Emotional'],
-  exclusive_inclusive: ['Exclusive', 'Inclusive'],
+// ADR 0025 §10.3 (Session 32-D, D9, A-7) — the backfill "review" mode:
+// axes are pre-filled and LOCKED (never re-calibrated — the founder is
+// confirming an AI-derived voice, not recalibrating from scratch), no
+// calibration questions, no keyword/avoid-word inputs. Founder role shows
+// only the axes; brand role adds a <=3-example chooser from the pool the
+// caller supplies (existing + staged examples). Reuses the SAME component
+// (never a second voice editor, ADR §0 note 1) via a distinct save path
+// (onApply/onDecline) rather than the calibration flow's onSave.
+export interface VoiceEditorReviewProps {
+  accountRole: 'founder' | 'brand'
+  /** Pool to choose from (existing + staged writing examples) — brand only. */
+  examples: string[]
+  onApply: (writingExamples: string[]) => void | Promise<unknown>
+  onDecline: () => void | Promise<unknown>
+  isPending?: boolean
 }
 
-export interface VoiceEditorProps {
-  initialAxes: VoiceAxes
-  initialKeywords?: string[]
-  initialAvoidWords?: string[]
-  /** AI-derived summary line shown atop the left pane */
-  aiSummary?: string | null
-  onSave: (payload: VoiceEditorSavePayload) => void | Promise<unknown>
+export type VoiceEditorProps =
+  | {
+      mode?: 'calibration'
+      initialAxes: VoiceAxes
+      initialKeywords?: string[]
+      initialAvoidWords?: string[]
+      /** AI-derived summary line shown atop the left pane */
+      aiSummary?: string | null
+      onSave: (payload: VoiceEditorSavePayload) => void | Promise<unknown>
+    }
+  | ({ mode: 'review'; initialAxes: VoiceAxes } & VoiceEditorReviewProps)
+
+export function VoiceEditor(props: VoiceEditorProps) {
+  if (props.mode === 'review') return <VoiceEditorReview {...props} />
+  return <VoiceEditorCalibration {...props} />
 }
 
-export function VoiceEditor({
+function VoiceEditorReview({ initialAxes, accountRole, examples, onApply, onDecline, isPending }: { initialAxes: VoiceAxes } & VoiceEditorReviewProps) {
+  const t = useTranslations('voiceEditor')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+
+  function toggle(example: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(example)) next.delete(example)
+      else if (next.size < 3) next.add(example)
+      return next
+    })
+  }
+
+  return (
+    <div className="space-y-6" data-voice-editor-mode="review">
+      <div className="space-y-3">
+        {AXIS_ORDER.map((axis) => (
+          <AxisTrack
+            key={axis}
+            lowLabel={AXIS_POLES[axis][0]}
+            highLabel={AXIS_POLES[axis][1]}
+            value={initialAxes[axis]}
+            locked
+            highlighted={false}
+          />
+        ))}
+      </div>
+
+      {accountRole === 'founder' && (
+        <p className="text-sm text-muted-foreground">{t('review_founder_note')}</p>
+      )}
+
+      {accountRole === 'brand' && examples.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-sm font-medium">{t('review_examples_title')}</p>
+          <ul className="space-y-1">
+            {examples.map((example, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={selected.has(example)}
+                  onChange={() => toggle(example)}
+                  disabled={!selected.has(example) && selected.size >= 3}
+                />
+                <span>{example}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="flex items-center gap-4">
+        <Button onClick={() => onApply([...selected])} disabled={isPending}>
+          {t('review_apply')}
+        </Button>
+        <button
+          type="button"
+          onClick={() => onDecline()}
+          disabled={isPending}
+          className="text-sm text-muted-foreground hover:text-foreground underline underline-offset-4"
+        >
+          {t('review_decline')}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function VoiceEditorCalibration({
   initialAxes,
   initialKeywords = [],
   initialAvoidWords = [],
   aiSummary,
   onSave,
-}: VoiceEditorProps) {
+}: Extract<VoiceEditorProps, { mode?: 'calibration' }>) {
   const t = useTranslations('voiceEditor')
   const tCal = useTranslations('calibration')
 
