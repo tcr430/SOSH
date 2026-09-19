@@ -90,6 +90,38 @@ describe('SocialProviderError', () => {
   })
 })
 
+// ── SOCIAL-NO-SECRET-EGRESS (ADR 0028 §2.1/§2.7, N2.6) ───────────────────────
+// The primary control, not the backstop: constructing an error from a
+// realistic failed code-exchange must never carry the client secret or PKCE
+// verifier into the serialised result. The redaction above is what makes
+// this true; this asserts the OUTCOME a caller actually observes.
+
+describe('SOCIAL-NO-SECRET-EGRESS — a failed exchange never carries the client secret in details', () => {
+  it('client_secret is absent from the serialised error, even when the raw exchange failure payload contained it', () => {
+    const err = new SocialProviderError({
+      code: 'PLATFORM_REJECTED',
+      message: 'Token exchange failed',
+      platform: 'twitter',
+      details: {
+        // What a naive implementation might pass straight through from the
+        // failed request it just made.
+        grant_type: 'authorization_code',
+        client_id: 'public-client-id-ok-to-log',
+        client_secret: 'super-secret-value',
+        redirect_uri: 'https://app.example.com/api/social/twitter/callback',
+        error: 'invalid_client',
+      },
+    })
+
+    const serialised = JSON.stringify(err.details)
+    expect(serialised).not.toContain('super-secret-value')
+    expect(err.details['client_secret']).toBe('[REDACTED]')
+    // Non-secret fields survive — the control is targeted, not a blanket wipe.
+    expect(err.details['client_id']).toBe('public-client-id-ok-to-log')
+    expect(err.details['grant_type']).toBe('authorization_code')
+  })
+})
+
 // ── Single source of truth — CATCH_ALL_SUBSTRINGS ────────────────────────────
 
 describe('CATCH_ALL_SUBSTRINGS — single source of truth', () => {

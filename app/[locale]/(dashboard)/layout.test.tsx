@@ -24,6 +24,12 @@ vi.mock('@/lib/db/social-accounts', () => ({
 vi.mock('@/lib/db/trial-state', () => ({
   getTrialStateMaybe: vi.fn().mockResolvedValue(null),
 }))
+vi.mock('@/lib/db/backfill-runs', () => ({
+  getBackfillRunsForBusiness: vi.fn().mockResolvedValue([]),
+}))
+vi.mock('@/components/onboarding/BackfillBanner', () => ({
+  BackfillBanner: () => null,
+}))
 vi.mock('@/lib/contexts/business-context', () => ({
   BusinessProvider: ({ children }: { children: React.ReactNode }) =>
     React.createElement(React.Fragment, null, children),

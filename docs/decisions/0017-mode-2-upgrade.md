@@ -821,3 +821,57 @@ by what actually shipped:
 **Net effect on this ADR's own D-6 line:** carousel — mostly closed (family shipped, sourcing deferred);
 script — its original framing (eventual format family) does not happen; a recommendation field ships
 instead, which is a different shape than D-6 anticipated, not merely a delayed version of it.
+
+---
+
+## Amendment D — every `MODE2-*` constraint's status after ADR 0024 (2026-09-10, Session 31, H2.13)
+
+**Author:** Session 31 (Claude Code, Sonnet 5), Track H's close-out step (H2.13).
+**Authority:** ADR 0024 §4.4. **Transcribed from that section verbatim, not re-derived** — ADR 0024 is the
+grounded source; this amendment exists so the status lives on record in the ADR whose constraints it
+reports on, per this repo's standing convention (ADR 0015 §1(c) — a claim about test coverage must be
+checked against the actual test files, not assumed from a table; ADR 0024 §4.4 did that checking).
+**Everything above this line is unchanged.**
+
+This ADR names **21** `MODE2-*` constraints. **Thirteen are Tier-1 DB-behaviour** (RLS, cascade, atomic
+transitions, write-once) and are **not touched by any Session 31 change** — no migration in Track H alters
+a Mode 2 table. Session 31 (ADR 0024) touches the app layer around brief-frozen generation — sampling,
+judging (N=3 fan-out), structured output, retrieval conditioning, cost ceilings, and the approvals surface
+— never the Mode 2 tables or their RLS/atomicity guarantees themselves.
+
+| Constraint | Still holds? | Test that proves it AFTER the move |
+|---|---|---|
+| `MODE2-BRIEF-FROZEN` | yes | `supabase/__tests__` Tier-1 — untouched |
+| `MODE2-BRIEF-FROZEN-GUARD` | yes | Tier-1 — untouched |
+| `MODE2-BRIEF-RLS-ISOLATED` | yes | Tier-1 — untouched |
+| `MODE2-BRIEF-STATE-ATOMIC` | yes | Tier-1 — untouched |
+| `MODE2-BRIEF-CASCADE-COMPLETE` | yes | Tier-1 — untouched |
+| `MODE2-ACTIVATE-GUARD-MIGRATED` | yes | Tier-1 — untouched |
+| `MODE2-ROLE-WRITE-ONCE` | yes | Tier-1 — untouched |
+| `MODE2-ORIGIN-ROLE-BACKFILL` | yes | Tier-1 — untouched |
+| `MODE2-BRIEF-BEFORE-COPY` | yes | Tier-1 — untouched |
+| `MODE2-CRITIQUE-GATE` | yes | `lib/campaigns/brief.test.ts` — §1.1(1): the Stage B gate is not touched |
+| `MODE2-RUBRIC-SHARED` | yes, **strengthened** | `lib/ai/prompts/rubric.test.ts` + `QUAL-JUDGE-RUBRIC-UNFORKED`. The judge is a **fourth** consumer of the same unforked prompt |
+| `MODE2-EVIDENCE-DATA-GUARDED` | yes | `brief.test.ts` + `QUAL-CANDIDATE-NEUTRALIZED`, which extends the same posture to N candidates |
+| `MODE2-CONTEXT-EQUIVALENT` | yes | `lib/campaigns/generate.context-equivalence.test.ts:279-345` |
+| `MODE2-MEMORY-WIRED` | yes | `generate.context-equivalence.test.ts:322,331` — conditioning changes *what fills* the slots, never the caps |
+| `MODE2-REDUNDANCY-UNDEFER` | yes | `generate.test.ts` consistency-pass cases — `generate.ts:308` untouched |
+| `MODE2-ROLE-COVERAGE` | yes | `generate.test.ts` — `checkRoleCoverage` against the frozen `roleSequence`, untouched |
+| `MODE2-LINK-PLACEMENT` | yes | `lib/ai/prompts/formats/policy.test.ts` — untouched |
+| `MODE2-THREAD-GUARDRAILS` | yes | `lib/ai/prompts/formats/schemas.test.ts` — untouched |
+| `MODE2-FORMAT-FAMILY-STRUCTURAL` | yes | `platform-map.frozen-table.test.ts` — untouched, and now **extended** by the ADR 0024 §3.2 prompt-property frozen table on the same precedent |
+| `MODE2-NATIVE-RETRY` | yes, **unrelated** | the retry it names is `runner.ts`'s transport retry, not the hook loop; `lib/ai/runner.test.ts` — untouched |
+| `MODE2-HOOK-STANDALONE` | **NO — deliberately retired** | see below |
+
+**`MODE2-HOOK-STANDALONE` is retired on the record.** It asserted the existence of the standalone
+`openingStrength` hook loop, which ADR 0024 §2.9/L-3 removes (replaced by the N=3 judged fan-out). A
+constraint whose subject no longer exists cannot "still hold", and quietly leaving it green in this ADR's
+own table would be a false green. Its five test cases map forward individually rather than being deleted:
+
+| Old `MODE2-HOOK-STANDALONE` case | Maps forward to (ADR 0024) | Test file:line (Session 31-D, D11 — MINOR-5) |
+|---|---|---|
+| opener scored against the rubric | `QUAL-JUDGE-RUBRIC-UNFORKED` | `lib/campaigns/generate.test.ts:635` (describe block) + `lib/ai/prompts/rubric.test.ts:116-190` |
+| regeneration fires below threshold | `QUAL-BELOW-THRESHOLD-SURFACED` (no regeneration; flagged instead) | `lib/campaigns/generate.test.ts:817` |
+| regeneration fires at most once | `QUAL-N-CANDIDATE-COUNT` (exactly N, bounded by construction) | `lib/campaigns/generate.test.ts:707` |
+| a scoring failure does not abort a successful generation | `QUAL-THREE-OUTCOMES` (the *unscored* outcome) | `lib/campaigns/generate.test.ts:774` |
+| opener is `neutralize()`'d before scoring | `QUAL-CANDIDATE-NEUTRALIZED` | `lib/campaigns/generate.test.ts:680` |

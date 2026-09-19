@@ -29,7 +29,7 @@ vi.mock('@/lib/members/useCan', () => ({ useCan: vi.fn(() => true) }))
 import { PostCard } from '@/components/posts/PostCard'
 import { useCan } from '@/lib/members/useCan'
 import type { Capability } from '@/lib/members/capabilities'
-import type { PostRow } from '@/lib/db/types'
+import type { PostRow, PostAiOriginalRow } from '@/lib/db/types'
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -38,6 +38,7 @@ function makePost(overrides: Partial<PostRow> = {}): PostRow {
     id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     campaign_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
     business_id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+    social_account_id: null,
     platform: 'linkedin',
     content: 'Test post content',
     hashtags: [],
@@ -60,12 +61,12 @@ function makePost(overrides: Partial<PostRow> = {}): PostRow {
   }
 }
 
-function renderCard(post: PostRow) {
+function renderCard(post: PostRow, original?: PostAiOriginalRow) {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
   act(() => {
-    root.render(React.createElement(PostCard, { post, onOptimisticUpdate: () => {} }))
+    root.render(React.createElement(PostCard, { post, original, onOptimisticUpdate: () => {} }))
   })
   return {
     container,
@@ -73,6 +74,35 @@ function renderCard(post: PostRow) {
       act(() => { root.unmount() })
       container.remove()
     },
+  }
+}
+
+// ADR 0024 §8.2 (Session 31, H2.12) — a minimal post_ai_originals fixture.
+function makeOriginal(postId: string, clearedQualityThreshold: boolean | null): PostAiOriginalRow {
+  const dim = { score: 80, note: 'ok' }
+  return {
+    id: `orig-${postId}`,
+    business_id: 'biz-1',
+    post_id: postId,
+    campaign_id: 'camp-1',
+    revision: 1,
+    generation_kind: 'initial',
+    format: 'single',
+    payload: { format: 'single', body: 'x', imageBrief: null, scriptBrief: null },
+    rendered_content: 'x',
+    hashtags: [],
+    schema_version: 2,
+    overall_score: clearedQualityThreshold === null ? null : 75,
+    dimension_scores: clearedQualityThreshold === null
+      ? null
+      : {
+          specificity: dim, originality: dim, evidenceSufficiency: dim, audienceRelevance: dim,
+          platformNativeness: dim, brandVoiceAlignment: dim, openingStrength: dim, ctaFit: dim,
+          unsupportedClaimsRisk: dim, redundancy: dim,
+        },
+    candidate_count: clearedQualityThreshold === null ? null : 3,
+    cleared_quality_threshold: clearedQualityThreshold,
+    created_at: '2026-01-01T00:00:00.000Z',
   }
 }
 
@@ -123,6 +153,83 @@ describe('PostCard — capability gate: approver (full access)', () => {
     const approve = buttons.find(b => b.textContent?.includes('card.actions.approve'))
     expect(approve).not.toBeUndefined()
     expect(approve?.hasAttribute('aria-disabled')).toBe(false)
+    cleanup()
+  })
+})
+
+// MINOR-7 (Session 30.5-D, D6): resolvePublishAccount's 'ambiguous' outcome
+// surfaces as errorCode TOKEN_REVOKED (the code L-1 permits — no new union
+// member) with errorDetails.reason: 'account_ambiguous'. TOKEN_REVOKED alone
+// maps to "reconnect your account", the wrong instruction for a user whose
+// two identities on one platform simply need one picked. The failure-surface
+// copy must branch on the reason, not the code alone.
+describe('PostCard — failure-surface copy branches on errorDetails.reason, not errorCode alone (MINOR-7)', () => {
+  it('renders the disambiguation copy, not the reconnect copy, when TOKEN_REVOKED carries reason account_ambiguous', () => {
+    mockRole('viewer')
+    const { container, cleanup } = renderCard(makePost({
+      status: 'failed',
+      last_publish_error: 'TOKEN_REVOKED',
+      ai_generation_metadata: { publish_error: { reason: 'account_ambiguous' } },
+    }))
+    expect(container.textContent).toContain('card.error.account_ambiguous')
+    expect(container.textContent).not.toContain('card.error.token_revoked')
+    cleanup()
+  })
+
+  it('renders the ordinary reconnect copy for a TOKEN_REVOKED failure with no ambiguous reason (regression)', () => {
+    mockRole('viewer')
+    const { container, cleanup } = renderCard(makePost({
+      status: 'failed',
+      last_publish_error: 'TOKEN_REVOKED',
+      ai_generation_metadata: {},
+    }))
+    expect(container.textContent).toContain('card.error.token_revoked')
+    expect(container.textContent).not.toContain('card.error.account_ambiguous')
+    cleanup()
+  })
+})
+
+// ADR 0024 §8.3 (Session 31, H2.12) — the four judgment states, rendered via
+// the shared PostJudgmentBadge (not mocked here — this is the one suite that
+// proves the badge itself renders inside PostCard; PostsClient.test.tsx
+// mocks PostCard and only proves the bulk-approve exclusion logic).
+describe('PostCard — judgment badge (ADR §8.3, H2.12)', () => {
+  it('judged-and-passed: shows the score badge, no badge text when no original is passed', () => {
+    mockRole('viewer')
+    const { container, cleanup } = renderCard(makePost(), undefined)
+    expect(container.textContent).not.toContain('judgment')
+    cleanup()
+  })
+
+  it('judged-and-passed: shows the score badge and expands to the ten-dimension breakdown', () => {
+    mockRole('viewer')
+    const post = makePost()
+    const { container, cleanup } = renderCard(post, makeOriginal(post.id, true))
+    expect(container.textContent).toContain('passed')
+    expect(container.textContent).not.toContain('dimension.specificity')
+
+    const badgeButton = container.querySelector('button[aria-expanded]') as HTMLButtonElement
+    expect(badgeButton).toBeTruthy()
+    act(() => { badgeButton.click() })
+    expect(container.textContent).toContain('dimension.specificity')
+    cleanup()
+  })
+
+  it('all-below-threshold: shows the amber flag copy, no score badge', () => {
+    mockRole('viewer')
+    const post = makePost()
+    const { container, cleanup } = renderCard(post, makeOriginal(post.id, false))
+    expect(container.textContent).toContain('belowThreshold')
+    expect(container.textContent).not.toContain('passed')
+    cleanup()
+  })
+
+  it('judging-failed: shows the explicit not-scored statement, no badge', () => {
+    mockRole('viewer')
+    const post = makePost()
+    const { container, cleanup } = renderCard(post, makeOriginal(post.id, null))
+    expect(container.textContent).toContain('unscored')
+    expect(container.textContent).not.toContain('belowThreshold')
     cleanup()
   })
 })

@@ -13,6 +13,7 @@
 
 import type { VoiceAxes } from '@/lib/validation/voice'
 export type { VoiceAxes }
+import type { RubricOutput } from '@/lib/ai/prompts/rubric'
 
 // ---------------------------------------------------------------------------
 // Shared utility types
@@ -211,6 +212,11 @@ export type SocialAccountRow = {
   connected_at: string
   created_at: string
   updated_at: string
+  // ADR 0025 §7.4 (I2.4) — NULL or [] both mean UNKNOWN (see
+  // scopesGrantedUnknown() in lib/social/scopes.ts); it is advisory only
+  // (the platform's own 403 is authoritative) and deliberately OUTSIDE the
+  // `authenticated` UPDATE allowlist below, so it cannot be forged.
+  scopes_granted: string[] | null
 }
 
 export type SocialAccountInsert = {
@@ -227,12 +233,19 @@ export type SocialAccountInsert = {
   connected_at?: string
   created_at?: string
   updated_at?: string
+  scopes_granted?: string[] | null
 }
 
-export type SocialAccountUpdate = Partial<Omit<SocialAccountRow, 'id' | 'created_at' | 'vault_access_token_id' | 'vault_refresh_token_id'>> & {
-  vault_access_token_id?: VaultSecretId | null
-  vault_refresh_token_id?: VaultSecretId | null
-}
+// ADR 0025 §7.3 (I2.4) — the IDENTITY LOCK, expressed as a type. Built with
+// Pick, not Omit: an Omit-based type silently admits any FUTURE column
+// added to SocialAccountRow, which is exactly the "column added later is
+// not updatable until explicitly added" fail-closed guarantee the migration
+// makes at the DB level (20260913120000_social_accounts_identity_lock.sql).
+// This Pick is the same four-column allowlist that migration's
+// `GRANT UPDATE (...) TO authenticated` names — keep them in lockstep.
+export type SocialAccountUpdate = Partial<
+  Pick<SocialAccountRow, 'platform_username' | 'platform_display_name' | 'created_at' | 'updated_at'>
+>
 
 // ---------------------------------------------------------------------------
 // 4. campaigns
@@ -307,6 +320,15 @@ export type PostRow = {
   // service-role write path; this Omit-exclusion from PostUpdate below
   // enforces the app-layer authenticated path).
   role: PostRole | null
+  // Publish identity (ADR 0028 §9.2, N2.4). NULL for rows created before this
+  // column existed and for any row not yet resolved to a specific connected
+  // account. FK -> social_accounts(id) ON DELETE SET NULL — disconnecting an
+  // account must never delete published history. No backfill: existing
+  // platform_user_id values are the prior broker's own integrationIds, meaningless to the
+  // native LinkedIn/X providers (D-gamma). Excluded from PostUpdate below —
+  // publish-identity resolution (N2.5) is a service-role concern, not an
+  // app-layer authenticated write.
+  social_account_id: string | null
   rejection_note: string | null
   ai_generation_metadata: Record<string, unknown>
   publish_attempts: number
@@ -329,6 +351,8 @@ export type PostInsert = {
   // on (PostUpdate omits it, and the DB trigger enforces it regardless of
   // caller — ADR 0017 §3.2).
   role?: PostRole | null
+  // See PostRow.social_account_id above (ADR 0028 §9.2, N2.4).
+  social_account_id?: string | null
   hashtags?: string[]
   media_urls?: string[]
   scheduled_at: string
@@ -346,7 +370,7 @@ export type PostInsert = {
   updated_at?: string
 }
 
-export type PostUpdate = Partial<Omit<PostRow, 'id' | 'created_at' | 'business_id' | 'campaign_id' | 'published_at' | 'platform_post_id' | 'platform_url' | 'deleted_at' | 'role'>>
+export type PostUpdate = Partial<Omit<PostRow, 'id' | 'created_at' | 'business_id' | 'campaign_id' | 'published_at' | 'platform_post_id' | 'platform_url' | 'deleted_at' | 'role' | 'social_account_id'>>
 
 // ---------------------------------------------------------------------------
 // 5b. studio_drafts — Mode 1 Studio pre-campaign scratch content (ADR 0019 §2.2)
@@ -782,20 +806,28 @@ export type InsightCardUpdate = Partial<
   Pick<InsightCardRow, 'status' | 'dismiss_reason' | 'expires_at'>
 >
 
-export type SignalTriageBudgetRow = {
+// ADR 0024 §7.5b (Session 31, H2.8) — signal_triage_budget renamed to
+// ai_budget_daily with a MANDATORY purpose discriminator. `reserved_cents`
+// -> `reserved_units`: the unit is named BY purpose (cents for
+// 'triage_cents', posts for 'generation_posts', H2.9), not by the column.
+export type AiBudgetPurpose = 'triage_cents' | 'generation_posts' | 'backfill_cents'
+
+export type AiBudgetDailyRow = {
   id: string
   business_id: string
+  purpose: AiBudgetPurpose
   day: string
-  reserved_cents: number
+  reserved_units: number
   created_at: string
   updated_at: string
 }
 
-export type SignalTriageBudgetInsert = {
+export type AiBudgetDailyInsert = {
   id?: string
   business_id: string
+  purpose: AiBudgetPurpose
   day: string
-  reserved_cents?: number
+  reserved_units?: number
   created_at?: string
   updated_at?: string
 }
@@ -1125,6 +1157,13 @@ type MemoryGovernanceRow = {
   deleted_at: string | null
   created_at: string
   updated_at: string
+  // ADR 0025 §5.1 (Session 32 I2.6, 20260913140000_memory_import_provenance.sql)
+  // — the L-3 provenance marker: CHECK ((source = 'import') = (import_run_id
+  // IS NOT NULL)), mirrored for import_source_post_ids. A BEFORE UPDATE
+  // trigger (enforce_memory_import_immutable) makes both columns immutable
+  // once written — no lib/db function updates them after INSERT.
+  import_run_id: string | null
+  import_source_post_ids: string[] | null
 }
 
 export type BrandMemoryCategory = 'positioning' | 'capability' | 'pricing' | 'competitor' | 'other'
@@ -1182,6 +1221,58 @@ export type PerformanceMemoryInsert = {
   scope_ref: string | null
   confidence: number
   observation_count: number
+}
+
+// ADR 0025 §9.4 (Session 32 I2.7) — inputs to the import_{evidence,audience,
+// performance}_memory RPCs (20260913140000/150000). Deliberately has NO
+// status/source/sensitivity/public_use_permission field — those are FIXED
+// IN SQL inside the RPC itself, so a caller cannot pass a wrong governance
+// value even if it wanted to. last_confirmed_at/expires_at ARE caller
+// inputs here (unlike PerformanceMemoryInsert above) because the import
+// writer's whole point is source-dating (BACKFILL-SOURCE-DATED,
+// ADR §5.3) — lib/memory/import.ts computes them from the source post's
+// date, never from now().
+export type EvidenceMemoryImportInsert = {
+  business_id: string
+  import_run_id: string
+  import_source_post_ids: string[]
+  kind: EvidenceMemoryKind
+  content: string
+  source_url: string | null
+  scope: MemoryScope
+  scope_ref: string | null
+  confidence: number
+  last_confirmed_at: string
+  expires_at: string | null
+}
+
+export type AudienceMemoryImportInsert = {
+  business_id: string
+  import_run_id: string
+  import_source_post_ids: string[]
+  segment: string | null
+  kind: AudienceMemoryKind
+  statement: string
+  scope: MemoryScope
+  scope_ref: string | null
+  confidence: number
+  last_confirmed_at: string
+  expires_at: string | null
+}
+
+export type PerformanceMemoryImportInsert = {
+  business_id: string
+  import_run_id: string
+  import_source_post_ids: string[]
+  dimension: PerformanceMemoryDimension
+  pattern: string
+  platform: Platform | null
+  scope: MemoryScope
+  scope_ref: string | null
+  confidence: number
+  observation_count: number
+  last_confirmed_at: string
+  expires_at: string | null
 }
 
 // ---------------------------------------------------------------------------
@@ -1272,6 +1363,14 @@ export type CampaignBriefUpdate = Partial<
 export type PostAiOriginalGenerationKind = 'initial' | 'regeneration' | 'studio_promoted'
 export type PostAiOriginalFormat = 'single' | 'thread'
 
+// ADR 0024 §8.2 (Session 31, H2.4) — the winner's rubric score, on the
+// existing post_ai_originals (20260909100000_post_ai_original_scores.sql).
+// Nullable: rows written before this migration ship carry no score under
+// this contract (see the migration's comment). `PostAiOriginalDimensionScores`
+// is RubricOutput's `dimensions` shape exactly (lib/ai/prompts/rubric.ts:88-99)
+// — not re-declared, so the two can never drift silently.
+export type PostAiOriginalDimensionScores = RubricOutput['dimensions']
+
 export type PostAiOriginalRow = {
   id: string
   business_id: string
@@ -1284,6 +1383,10 @@ export type PostAiOriginalRow = {
   rendered_content: string
   hashtags: string[]
   schema_version: number
+  overall_score: number | null
+  dimension_scores: PostAiOriginalDimensionScores | null
+  candidate_count: number | null
+  cleared_quality_threshold: boolean | null
   created_at: string
 }
 
@@ -1299,6 +1402,10 @@ export type PostAiOriginalInsert = {
   rendered_content: string
   hashtags?: string[]
   schema_version: number
+  overall_score?: number | null
+  dimension_scores?: PostAiOriginalDimensionScores | null
+  candidate_count?: number | null
+  cleared_quality_threshold?: boolean | null
   created_at?: string
 }
 
@@ -1345,4 +1452,74 @@ export type PostEditSignalInsert = {
   signals?: Record<string, unknown> | null
   created_at?: string
   updated_at?: string
+}
+
+// ---------------------------------------------------------------------------
+// 18. social_backfill_runs / social_backfill_posts (ADR 0025 §9.1, Session 32
+// I2.5). Columns match 20260913130000_social_backfill_runs_and_posts.sql
+// exactly. No Insert/Update types — every write goes through the migrations'
+// RPCs (enqueue_backfill_run, resume_backfill_run, discard_backfill_run,
+// reserve_backfill_spend, reconcile_backfill_spend, claim_backfill_posts,
+// and I2.8's stage_backfill_posts, record_backfill_fetch_progress,
+// transition_backfill_run — 20260914010000_backfill_fetch_phase_rpcs.sql),
+// never a raw .insert()/.update() call, so there is no caller-facing insert
+// or update shape to type.
+// ---------------------------------------------------------------------------
+
+export type BackfillRunStatus =
+  | 'queued'
+  | 'fetching'
+  | 'extracting'
+  | 'awaiting_ratification'
+  | 'ratified'
+  | 'unsupported'
+  | 'failed'
+  | 'discarded'
+export type BackfillAccountRole = 'brand' | 'founder'
+export type BackfillVoiceStatus = 'pending' | 'applied' | 'refused_cap' | 'failed' | 'declined'
+export type BackfillExtractionStatus = 'pending' | 'claimed' | 'extracted' | 'skipped' | 'failed'
+
+export type SocialBackfillRunRow = {
+  id: string
+  business_id: string
+  social_account_id: string
+  platform: Platform
+  status: BackfillRunStatus
+  partial: boolean
+  account_role: BackfillAccountRole | null
+  weighting: string | null
+  posts_fetched: number
+  posts_extracted: number
+  platform_posts_read: number
+  spend_cents: number
+  ceiling_cents: number
+  passes_done: number
+  summary: Record<string, unknown>
+  staged_voice: Record<string, unknown> | null
+  voice_status: BackfillVoiceStatus | null
+  voice_applied_to: string | null
+  voice_applied_at: string | null
+  error_code: string | null
+  created_at: string
+  updated_at: string
+  started_at: string | null
+  completed_at: string | null
+  ratified_at: string | null
+}
+
+export type SocialBackfillPostRow = {
+  id: string
+  business_id: string
+  run_id: string
+  social_account_id: string
+  platform_post_id: string
+  published_at: string
+  content: string
+  url: string | null
+  format: 'text' | 'image' | 'video' | 'link' | 'multi' | 'other'
+  metrics: Record<string, unknown> | null
+  lift: number | null
+  extraction_status: BackfillExtractionStatus
+  claimed_at: string | null
+  created_at: string
 }

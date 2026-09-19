@@ -678,4 +678,128 @@ All 10 §0 inputs were answered before Phase 1 (ADR 0010) was written. Amendment
 | `engagement_inbox` third-party PII | E2 — `author_username` / `content` | ✅ Disclosed in Privacy Policy §6; ingestion not active at launch |
 | `billing_events.payload` contains customer email | E2 — raw Stripe JSON | ✅ Disclosed in Privacy Policy §2 (T8 email webhook events) |
 | `auth_rate_limits.bucket_key` contains IPs + emails | E2 — composite key | ✅ Disclosed in Privacy Policy §2; no expiry job → launch blocker via E6/T4 |
-| Postiz → direct API migration | E10 — WIP | ⚠ Launch blocker (T1): complete before go-live |
+| Postiz → direct API migration | E10 — WIP | ✅ Code-complete (Amendment A2) — see below |
+
+---
+
+## Amendment A2 — Native publishing migration complete in code (2026-09-04)
+
+**Session:** 30.5 (ADR 0028, Track N). **Scope:** E10's migration state only. Nothing else in this
+Evidence Pack, Amendment A1, or the ADR 0010 prose is affected. Amendment A1's text above is left
+unedited — this amendment updates the record forward, per this file's own append-only house form.
+
+**E10 is superseded.** The migration E10 described as "WIP" is now code-complete:
+
+- `lib/social/postiz-provider.ts` — **deleted**, along with its two test files. No file matching that
+  name exists in the repository (`lib/social/__tests__/no-postiz.test.ts` is the executable proof, run in
+  CI on every push).
+- `lib/social/linkedin-provider.ts` and `lib/social/twitter-provider.ts` — **exist and are registered**
+  in `lib/social/registry.ts`, per-platform, independently of each other (ADR 0028 §8.2). No
+  `linkedin-api-client` or `twitter-api-v2` package is used — both providers call each platform's REST
+  API directly via `fetch`, with no SDK dependency to evidence separately.
+- **Production OAuth apps are not yet registered** with either LinkedIn or X (ADR 0028 §14.1). No real
+  customer has connected an account through the native flow yet. This is an operational gap, not a code
+  gap — §631's platform-specific compliance items (V17: LinkedIn/X/Meta/Threads API ToS confirmation)
+  remain **open** and are unaffected by this amendment; they still gate ToS §9 finalisation.
+- The end-state data flows §602 already documented (OAuth token exchange, post publishing, token
+  refresh, token revocation, account-linking-only for the Meta family) are **unchanged** — native
+  providers implement exactly those flows; nothing about what data leaves SOSH or reaches each platform
+  changed with the broker's removal, only who initiates the request (SOSH directly, not an intermediary).
+- Token revocation is confirmed **more clearly best-effort than under the broker**: LinkedIn has no
+  programmatic revocation endpoint for a standard third-party app at all (member-initiated only, via the
+  member's own LinkedIn account settings) — `lib/social/linkedin-provider.ts`'s `revokeAccessToken`
+  returns early with no network call. X's revocation endpoint exists but its exact request shape for
+  SOSH's OAuth2 flow was not conclusively confirmed against vendor documentation (flagged inline in
+  `lib/social/twitter-provider.ts`); it remains best-effort and non-blocking either way (§619's posture is
+  unchanged).
+
+**Not resolved by this amendment, flagged for counsel-aware follow-up:** this Evidence Pack is the
+ground-truth source `content/legal/*.mdx`'s `evidenceRef` frontmatter cites (CLAUDE.md, Legal pages). This
+amendment updates the Evidence Pack itself; it does **not** touch `content/legal/*.mdx` or bump any
+`evidenceRef`. Whoever next edits a legal page citing E10 or V18 should bump `evidenceRef` to a commit
+covering this amendment, per CLAUDE.md's standing rule — not done here because this is a code-removal
+session (N2.11), not a legal-copy session, and `[LEGAL ENTITY]` substitution and legal-copy edits stay
+gated on counsel ratification regardless.
+
+## Amendment A3 — Cold-start social backfill import (Session 32, ADR 0025)
+
+**Session:** 32 (ADR 0025, `docs/decisions/0025-social-read-path-and-backfill.md`). **Scope:** a new fact
+pattern this Evidence Pack has not previously described — reading a customer's OWN recent posts on a
+platform they connect, to seed memory during onboarding. Nothing above this heading is edited (this
+file's own append-only house form).
+
+**What is read.** On connecting a supported account (X/Twitter today; LinkedIn is built but not served —
+see current-phase.md), up to 200 of the connecting customer's own posts from the last 24 months, capped
+at 5 pages and 500 platform API reads per run (ADR §6.1/§6.2, `BACKFILL-RUN-BOUNDED` /
+`BACKFILL-X-READ-BOUNDED`). Only the connecting account's own original posts — replies, reposts and
+quotes of others are excluded by request shape (`BACKFILL-OWN-POSTS-ONLY`), and the first page verifies
+the token's identity matches the connected `platform_user_id` before any content is used
+(`BACKFILL-IDENTITY-VERIFIED`). No third party's comments, likes, or other engagers are ever read
+(`BACKFILL-NO-COMMENT-READ`).
+
+**What is derived and retained, and for how long.** Three deterministic/model passes over the customer's
+own staged post text produce candidate rows in the existing governed memory stores (`evidence_memory`,
+`audience_memory`, `performance_memory`) and a staged voice profile, all marked `source='import'` with an
+immutable link back to the run and the originating post ids (ADR §5.1, `BACKFILL-PROVENANCE-MARKED` /
+`-IMMUTABLE`). Retention:
+- Evidence rows (verbatim excerpts ≤ 500 characters, `BACKFILL-EVIDENCE-VERBATIM`) expire 12 months from
+  the source post's own publish date, capped at 40 per account.
+- Audience and performance rows carry the same governance `expires_at`/`confidence` fields as any other
+  memory row (≤ 25 and ≤ 15 per account respectively).
+- Nothing is retained "candidate" indefinitely: the founder must ratify (promote to `active`) or discard
+  each item; nothing an import writes is used in generation before ratification
+  (`BACKFILL-NOTHING-ACTIVE-BEFORE-RATIFY`). Raw staged post text itself is deleted from
+  `social_backfill_posts` at ratification, discard, disconnect, or a 30-day TTL sweep, whichever comes
+  first (`BACKFILL-STAGING-PURGED`) — it never persists as its own retained record past that point.
+- Evidence rows import with `public_use_permission` fixed `false` — nothing an import writes is ever
+  shown publicly without a separate, not-yet-built opt-in (`BACKFILL-EVIDENCE-NOT-PUBLIC`).
+
+**Identity lock.** The import is scoped to exactly the connecting `social_accounts` row; two accounts on
+one business never mix runs, candidates, or staged voices (`BACKFILL-ACCOUNTS-SEPARATE`).
+
+**Per-post removal.** If a customer later disputes or wants a specific post's derived memory removed, the
+per-post-id removal path retracts exactly the memory rows backed by that post id, on any of the three
+memory tables (`BACKFILL-PER-POST-REMOVABLE`, `supabase/__tests__`).
+
+**No cross-customer use.** Every import RPC and every read of imported rows is business-scoped; no query,
+view, or job in this session's code aggregates imported content across businesses
+(`BACKFILL-NO-CROSS-CUSTOMER-LEARNING`, diff-verified — see the ADR's own Builder verification appendix,
+§14).
+
+**Not resolved by this amendment:** this is a code/behaviour description only. `content/legal/*.mdx`'s
+privacy prose is updated in the same commit that adds this section (`evidenceRef` bumped to this commit),
+but the `[LEGAL ENTITY]` placeholder is untouched and the new prose is flagged in-file as awaiting counsel
+review, per ADR 0025 §8.6 and this file's standing gate on entity substitution.
+
+
+## Amendment A3.1 — Corrections to Amendment A3 (Session 32-D, MAJOR-8)
+
+**Session:** 32-D (correction pass, D11). **Scope:** four statements in Amendment A3 described behaviour the code
+did not have at the commit A3 was written against (`70773e87`). Nothing above this heading is edited (this
+file's append-only house form); A3 is left exactly as written, and this amendment supersedes it where they differ.
+
+**1. Evidence-row expiry (A3, "Retention", first bullet) — corrected.** A3 said evidence rows expire 12 months
+from the source post's publish date. That is true **only for `usage_data` evidence**. Rows of kind `quote` and
+`case_study` are written with `expires_at = NULL` (`lib/memory/import.ts:66-70`): they stay until the customer
+deletes them, the per-post removal path retracts them, or the business is purged. `/privacy` now says so.
+
+**2. Per-account caps (A3, same section, "≤ 40", "≤ 25 and ≤ 15") — true only since D3.** The evidence cap of 40
+was enforced in-INSERT from `20260914050000`; the audience (25) and performance (15) caps were **not enforced**
+until D3 (`98753597`), so between `70773e87` and D3 an import could write more than A3 stated. Proved now by
+`supabase/__tests__/memory-import-rpcs.test.ts:241` (audience caps at 25, performance at 15).
+
+**3. "Nothing is retained 'candidate' indefinitely" (A3) — true only since D3 / founder ruling A-8.** Before D3,
+candidates of a run that was never ratified or discarded persisted forever. Since D3 they are retired 30 days
+after the run's `completed_at` and deleted 30 days after that (`sweep_expired_backfill_candidates`), proved by
+`supabase/__tests__/backfill-candidate-retention.test.ts:100` (retire) and `:128` (delete).
+
+**4. "5 pages and 500 platform API reads per run" (A3, "What is read") — true only since D5.** Until D5
+(`d4755442`) the bounds were counted per call, so a run that was deferred, resumed or reconnected restarted the
+count. Since D5 they are cumulative across the run: `lib/backfill/__tests__/fetch-phase.test.ts:427`.
+
+**Unchanged and still accurate:** raw staged post text is purged at ratification, discard, disconnect or the
+30-day sweep — now proved by executed Tier-1 tests rather than a regex (`supabase/__tests__/backfill-staging-purge.test.ts:103`,
+`:115`, `:157`); evidence imports with `public_use_permission = false`; the identity lock and per-post removal.
+
+**Not resolved by this amendment:** as A3, a code/behaviour description only. The `[LEGAL ENTITY]` placeholder is
+untouched, and the revised `/privacy` retention rows remain flagged in-file as awaiting counsel review.

@@ -6,7 +6,10 @@ import { useTranslations } from 'next-intl'
 import Link from 'next/link'
 import { differenceInWeeks, formatISO, parseISO } from 'date-fns'
 import { cn } from '@/lib/utils'
-import { PLATFORM_CONFIGS, VALID_PLATFORMS, publishingAvailableFor } from '@/lib/social'
+// Imported directly, not from the '@/lib/social' barrel — see
+// AccountsClient.tsx's comment for why (Vercel build fix, 2026-09-06).
+import { PLATFORM_CONFIGS, publishingAvailableFor } from '@/lib/social/platforms/config'
+import { VALID_PLATFORMS } from '@/lib/social/platforms/guards'
 import { createCampaignAction } from './actions'
 import type { Platform } from '@/lib/db/types'
 

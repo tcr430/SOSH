@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 const axisSchema = z.number().int().min(0).max(100)
 const axisCoerceSchema = z.coerce.number().int().min(0).max(100)
-const wordArraySchema = z.array(z.string().max(100)).max(20)
+export const wordArraySchema = z.array(z.string().max(100)).max(20)
 
 export const voiceAxesSchema = z.object({
   formal_casual: axisSchema,

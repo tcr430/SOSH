@@ -77,3 +77,21 @@ export function safeParseOrAiError<T>(schema: z.ZodType<T>, text: string): T {
   }
   return result.data
 }
+
+// ADR 0024 §6.4 (Session 31, H2.10) — the tool_use sibling of
+// safeParseOrAiError above. A tool_use block's `input` is ALREADY a parsed
+// JS value (the SDK decodes the model's tool-call JSON before this code
+// ever sees it) — there is no text to extract JSON out of, so this skips
+// straight to schema validation, but throws the IDENTICAL error shape
+// (same code, same message format) so no caller can distinguish which
+// path produced an invalid_response.
+export function parseToolInputOrAiError<T>(schema: z.ZodType<T>, input: unknown): T {
+  const result = schema.safeParse(input)
+  if (!result.success) {
+    throw new AiError(
+      'invalid_response',
+      `Response schema validation failed: ${result.error.message}`,
+    )
+  }
+  return result.data
+}

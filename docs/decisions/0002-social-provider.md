@@ -793,3 +793,244 @@ Explicitly **not** decided in this ADR — separate sessions:
 - An ESLint rule banning imports of `/lib/social/{postiz,mock}-provider` from outside `/lib/social/**` (Builder adds during file creation).
 - Sanitised debug logging — `SocialProviderError.toJSON()` and a `redactTokens(obj)` helper that the publishing worker uses before writing `details` into `posts.ai_generation_metadata`.
 - **`OAuthAuthorizeInput` field drift (B18-026):** the interface defined in §2 has three fields (`businessId`, `redirectUri`, `scopes`); the Phase 1 PostizProvider adds two more (`platform: Platform` and `state: string`) that are not in the shared type. A future native-provider ADR should canonicalise these into the shared interface so callers never need to supply undocumented fields.
+
+---
+
+## Amendment A — Native providers replace the broker (Session 30.5, 2026-09-03)
+
+> **Author:** Session 30.5 Architect (Track N, agent N1). **Form:** the house amendment form used by ADR
+> 0005 Amendment 1 and ADR 0010 Amendment 2 — **appended, additive, and not one character above this line
+> has been modified.** **Governing document:** `docs/decisions/0028-native-social-providers.md` (Accepted),
+> which this amendment summarises rather than restates.
+>
+> **Amendment letter.** This is **Amendment A**. **Amendment B is reserved for Session 32's read path**
+> (`fetchRecentPosts` / 19D-5) and must not be taken by any other session.
+
+### A.1 What this amendment does
+
+Postiz is removed in full. `LinkedInProvider` and `TwitterProvider` implement this ADR's interface natively
+and are registered per platform. **§5 (the `PostizProvider` specification) is superseded in its entirety** and
+survives only as history; nothing in it describes running code after Session 30.5.
+
+### A.2 The interface — one signature change, one member removed
+
+**§2 stands, with two corrections:**
+
+1. **`getOAuthAuthorizeUrl` becomes `Promise<string>`.** §2 declares it synchronous and comments it "Pure URL
+   builder. No I/O." That is no longer true: X mandates PKCE, and the verifier must be generated and
+   persisted before the redirect is issued. Its only caller (`app/api/social/[platform]/connect/route.ts:56`)
+   **already awaits it**, so the change is source-compatible at every call site.
+2. **`readonly platform` loses its `'multi'` member.** `'multi'` existed solely so `PostizProvider` could
+   describe itself as a broker (`postiz-provider.ts:58`, its only producer). Every provider now names one real
+   `Platform`.
+
+**The seven methods are otherwise unchanged, and §2's shape was correct.** Two native implementations were
+built against it without widening it — which is the proof §10 set out to give.
+
+### A.3 §3 — supporting types, as shipped versus as specified
+
+Three drifts between this ADR and the shipped code are recorded here rather than silently inherited:
+
+| Type | ADR §3 | Shipped | Disposition |
+|---|---|---|---|
+| `OAuthAuthorizeInput` | `businessId`, `redirectUri`, `scopes` | also `platform` and `state` (`types.ts:21-32`) | **Both KEPT.** They are what lets the shared route stay platform-agnostic while the provider builds a platform-specific URL. |
+| OAuth state claims (§7) | `businessId`, `platform`, `nonce`, `iat`, `exp` | also `locale` (`oauth/state.ts:7-12`) | **KEPT** — it is how the callback redirects into the user's own locale. §7's four-claim list is incomplete, not wrong. |
+| `PostMetrics` | `null` = "platform does not expose this metric" | the metrics worker also writes `null` for "not fetched this tick" | **Ambiguity recorded**, ADR 0028 §6. Session 33 must not read `null` as a capability statement. |
+
+**§3's error union is unchanged and no code is added.** Both native providers map onto the existing eight.
+
+> **Note for readers arriving from ADR 0005 §5:** that section's error matrix claims to be "the ADR 0002 §3
+> taxonomy" and is not — it names two codes that do not exist (`BAD_REQUEST`, `NOT_CONFIGURED`) and omits two
+> that do (`NOT_IMPLEMENTED`, `PROVIDER_NOT_CONFIGURED`). **This ADR's §3 is correct**; ADR 0005 §5 is amended
+> separately in Session 30.5 (ADR 0028 §7.1).
+
+### A.4 §4 — the registry loses its default
+
+§4's default-provider pattern was written when one broker served every platform. In production there is now
+**no default**: LinkedIn and X are registered through the `overrides` map §4 always anticipated, and `get()`
+throws `PROVIDER_NOT_CONFIGURED` for anything unregistered — **which is exactly what §4 already specifies**
+("Throws PROVIDER_NOT_CONFIGURED if no provider is registered and no default is set"). No contract change.
+
+§4's sentence *"Postiz continues to handle the other four platforms via the default"* is superseded.
+Instagram, Facebook and Threads keep their enum membership and `publishingAvailable: false`, have **no
+provider**, and are surfaced as `coming_soon` (ADR 0028 A-1). `SOCIAL_PROVIDER_MODE=mock` is unchanged and
+still serves all five in tests.
+
+### A.5 §7 — the OAuth flow contract
+
+**What survives unchanged:** Reversal 3's signed-JWT state; the validation sequence; the ownership re-check
+through the RLS-enforced client; the Step 4 Vault write ordering; **Step 5's compensation table verbatim**;
+and the `OAUTH_STATE_SECRET` split from the Supabase JWT secret, whose reasoning is unaffected by who owns the
+OAuth app.
+
+**What changes:**
+
+- **PKCE is added for X.** The verifier lives in an `httpOnly`, `Secure`, `SameSite=Lax` cookie with a
+  600-second lifetime matching the state TTL, cleared on every callback path. **It is never placed in the
+  state JWT**, which is signed but not encrypted and is therefore readable by anyone who observes the
+  redirect.
+- **`redirect_uri` gets a single source.** It is currently derived from `request.nextUrl.origin` at authorize
+  (`connect/route.ts:53`) but from `config.server.APP_URL` at exchange (`callback/route.ts:83`). The broker
+  tolerated the mismatch; **LinkedIn and X enforce exact match and would reject every exchange.** Both sides
+  now read one config value. Three redirect URIs are registered per platform; **per-preview-deployment OAuth
+  cannot work**, because preview origins cannot be pre-registered.
+- **Step 6's error-redirect codes** are unchanged in meaning but land on `/{locale}/settings/accounts`, not
+  `/dashboard/connections` as §7 states, and there are **seven** in the shipped code (`connect_failed` is
+  emitted by the connect route).
+
+### A.6 §8 — token lifecycle, and a defect this ADR specified but never got
+
+**§8's in-place-update contract was never implementable.** §8 requires `vault.update_secret` and explicitly
+forbids delete-then-create, but **no such function exists in any migration** —
+`20260516180000_vault_write_helpers.sql` defines only `vault_create_secret` and `vault_delete_secret`.
+`postiz-provider.ts:255,262` calls `client.rpc('vault.update_secret')`, a name that is undefined, dotted, and
+in a schema PostgREST does not expose, and it never checks `error`. **Token refresh has therefore never
+worked**, failing silently and then bumping `token_expires_at` as though it had succeeded. Session 30.5 adds
+`public.vault_update_secret` (service-role only) with Tier-1 coverage, and checks `error` at every call site.
+
+**§8's lazy refresh and 5-minute skew stand**, as does `withFreshToken`'s injected-refresh shape
+(`vault.ts:85-89`), which is what lets each provider supply its own refresh without `lib/social/vault.ts`
+knowing anything about platforms. **`lib/social/vault.ts` does not move and does not change.**
+
+**§8's accepted concurrent-refresh race is re-scoped, not re-accepted blindly.** §8 reasoned the loser merely
+wastes one retry. X rotates its refresh token, so the loser presents a consumed token and is hard-rejected —
+and where reuse is treated as a theft signal, the account can be disconnected. **Same race, materially worse
+consequence.** It remains accepted for MVP on traffic-profile grounds, and is filed as
+`30.5-X-REFRESH-ROTATION` with §8's own advisory-lock remedy and an un-defer trigger.
+
+**§8's revoke-is-not-coupled-to-local-cleanup stands**, with one obligation made explicit: **a failed platform
+revocation must never block local deactivation or `purge_business`.** Erasure is a legal obligation and a
+third party's availability cannot gate it.
+
+### A.7 §10 — the native-provider proof, revisited
+
+**§10 achieved what it set out to: the interface held.** Two native implementations conform to §2 with one
+signature change and no widening, and `register()` at boot is the only boot-time change, exactly as predicted.
+
+**But §10's endpoints are stale and must not be copied.** It cites `POST /v2/ugcPosts` and `GET /v2/me`; the
+verified endpoint is **`POST https://api.linkedin.com/rest/posts`**, the Posts API having replaced ugcPosts,
+and it requires `Linkedin-Version: {YYYYMM}` and `X-Restli-Protocol-Version: 2.0.0` headers §10 does not
+mention. §10 also implies the created id is in the response body; **it arrives in the `x-restli-id` response
+header.** §10 is illustrative history from 2026-05-03, not a specification.
+
+### A.8 §11 — testing strategy
+
+§11's `PostizProvider` and `POSTIZ_BASE_URL`-gated integration sections are superseded. The replacement is a
+**single shared contract suite run against every implementation** — `MockProvider`, `LinkedInProvider` and
+`TwitterProvider` — because with the broker gone there is no longer one implementation keeping the others
+honest. Provider-specific behaviour is proven against recorded fixtures; **no Tier-2 test touches the
+network.** `lib/social/__integration__/` remains discovered by **no CI job** (`vitest.config` excludes
+`**/__integration__/**`; backlog `22E-integration-discovery`), so anything placed there is
+**`AUTHORED-NOT-EXECUTED`** and no coverage is claimed from it.
+
+### A.9 What this amendment does not touch
+
+ADR 0005's status machine, retry policy and idempotency model; the read path `fetchRecentPosts` / 19D-5
+(**Amendment B**, Session 32); the engagement inbox (T1-A), for which `fetchEngagement` continues to throw
+`NOT_IMPLEMENTED`; and Meta-family publishing, which is blocked on an external review process.
+
+_End Amendment A. Nothing above it was modified._
+
+---
+
+## Amendment B — The read path: `fetchRecentPosts` (Session 32, 2026-09-12)
+
+> **Author:** Session 32 Architect (Track I, agent I1). **Form:** the house amendment form used by Amendment A
+> above, ADR 0005 Amendment 1 and ADR 0010 Amendment 2 — **appended, additive, and not one character above
+> this line has been modified.** **Governing document:** `docs/decisions/0025-social-read-path-and-backfill.md`
+> (Accepted), which this amendment summarises rather than restates.
+>
+> **Amendment letter.** This is **Amendment B**, the letter Amendment A reserved for this read path.
+
+### B.1 Why this amendment exists
+
+§2 specified `SocialProvider` as publish-and-status only. Open decision **19D-5** — whether voice refinement
+reads the customer's platform history or only posts SOSH itself published — has been open since Session 19.
+**This amendment resolves it as option 1**: the abstraction gains a read capability.
+
+**Loser: option 2**, ratifying "refine reads local published posts from the SOSH DB" (ADR 0011 §7). Its
+reasoning was sound for the only consumer it had — refining a voice from posts SOSH had already published.
+**Its value changed, not its reasoning:** the consumer is now a cold-start backfill, and a customer who has just
+connected an account has **zero** local posts, so option 2 returns nothing on exactly the day it matters.
+
+### B.2 The interface — one method and one flag added
+
+§2 gains two members. **The seven existing methods are unchanged.**
+
+1. **`readonly historicalReadAvailable: boolean`** — a static fact about the implementation.
+2. **`fetchRecentPosts(input: FetchRecentPostsInput): Promise<RecentPostsPage>`** — account-shaped, returning
+   one page of the connected account's **original authored posts** (not replies, reposts or quotes), each with
+   plain-text content, a format, a permalink and `metrics: PostMetrics | null`.
+
+The full type definitions, bounds and error mapping are in ADR 0025 §2. Two points are fixed here because they
+bind every implementation:
+
+- **`metrics: null` means "not included in this read — fetch separately with `fetchPostMetrics`"**, never
+  "the platform does not expose it". Amendment A §A.3's `null` ambiguity is not extended to this type.
+- **`FetchRecentPostsInput` carries `platform`**, on the `OAuthAuthorizeInput` precedent Amendment A §A.3
+  kept, so a multi-platform implementation can serve it.
+
+**Loser:** a separate optional `HistoricalPostReader` interface — type-enforced, but a new pattern, a second
+registry map, and a capability probe at every call site.
+
+### B.3 The obligation on every implementation, including `MockProvider`
+
+- **Flag-consistency:** flag `false` ⇒ `fetchRecentPosts` throws `SocialProviderError('NOT_IMPLEMENTED')` with
+  **zero network calls**; flag `true` ⇒ it never throws `NOT_IMPLEMENTED`. This is asserted in the shared
+  contract suite, whose seven-method assertion becomes eight (authorised by founder adjudication A-2).
+- **Refuse out-of-range input** before any I/O; never clamp.
+- **The cursor is opaque and bound to its account**; it is never persisted or logged.
+- **Tokens only through `withFreshToken`**, refreshed per page; **no sleep and no retry loop** inside a
+  provider; a per-request timeout; `Retry-After` capped.
+- **Every response is Zod-parsed; no post content, cursor or token appears in `SocialProviderError.details`.**
+- **No identity-bearing expansion** (likers, reposters, quote authors, referenced posts) is requested or
+  returned.
+- **`MockProvider` serves deterministic, seeded fixture accounts** — empty, standard, a zero-post page with a
+  cursor, a non-terminating cursor, mixed post types, failure on page N, metrics-separate, over-long content,
+  two accounts, and a cross-account cursor — and remains offline in mock mode (ADR 0025 §2.9). A read test
+  against today's `MockProvider`, which fabricates `[]` for its only list read, would be circular.
+
+**As shipped by Session 32:**
+
+| Implementation | `historicalReadAvailable` | State |
+|---|---|---|
+| `TwitterProvider` | `true` | served; no scope change |
+| `LinkedInProvider` | `false` | implemented against LinkedIn's documented API, **unverified against the live API**, not served until `r_member_social` is approved (adjudication A-1) |
+| `MockProvider` | `true` | fixture-backed |
+
+### B.4 The boundary rule is unchanged
+
+No consumer outside `lib/social/` imports a provider, and **no consumer learns which provider served a read**:
+the backfill orchestrator obtains a provider by platform through the registry, exactly as publish does, and
+imports only from `lib/social/index.ts`. `SOCIAL-PROVIDER-BOUNDARY` and `SOCIAL_INTERNALS_BAN` are unchanged.
+The pre-registered gate `SOCIAL-NO-READ-PATH` (`lib/social/__tests__/no-read-path.test.ts`), which named this
+amendment, is **inverted** rather than deleted: it now asserts that the read method lives in the
+implementations and is reached only through the barrel.
+
+### B.5 No existing `SocialProvider` behaviour changes
+
+`getOAuthAuthorizeUrl`, `exchangeOAuthCode`, `publish`, `fetchPostMetrics`, `fetchEngagement`,
+`refreshAccessToken` and `revokeAccessToken` behave exactly as after Amendment A. In particular,
+**`LinkedInProvider.fetchPostMetrics` and both providers' `fetchEngagement` still throw `NOT_IMPLEMENTED`** —
+implementing LinkedIn metrics would change the metrics worker's behaviour and is deferred (ADR 0025 §13). The
+only adjacent changes are governed by ADR 0025 §7 rather than by this interface: `TwitterProvider`'s refresh
+additionally persists `scopes_granted`, and `social_accounts`' identity columns are locked against
+`authenticated` UPDATE.
+
+### B.6 What future providers and migrations inherit
+
+The Postiz removal this ADR's earlier sections anticipated is complete (Amendment A); nothing Postiz-shaped
+survives, and the read contract was written in platform-neutral vocabulary from the start. **The successor risk
+is a contract that quietly encodes X's response shape**, because X is the only platform serving this read today
+(ADR 0025 §3). Every future implementation — the Meta family, a LinkedIn organisation provider, the LinkedIn
+provider once its read scope is approved — **either implements `fetchRecentPosts` against the types above or
+declares `historicalReadAvailable: false`**, and none widens those types without a further amendment to this
+ADR.
+
+### B.7 What this amendment does not touch
+
+Publishing, the token lifecycle, the registry and the OAuth flow as amended by Amendment A; the engagement
+inbox; comment or reply reading of any kind (ADR 0025 §2.8, §13); and every consumer of the read path, all of
+which are governed by ADR 0025.
+
+_End Amendment B. Nothing above it was modified._

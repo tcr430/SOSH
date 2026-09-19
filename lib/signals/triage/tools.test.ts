@@ -18,6 +18,8 @@ function memoryRow(overrides: Record<string, unknown>) {
     scope_ref: null,
     last_confirmed_at: null,
     recency_at: NOW_ISO,
+    import_run_id: null,
+    import_source_post_ids: null,
     created_at: NOW_ISO,
     updated_at: NOW_ISO,
     ...overrides,

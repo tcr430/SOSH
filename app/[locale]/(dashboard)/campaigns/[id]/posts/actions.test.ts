@@ -132,6 +132,7 @@ const MOCK_DRAFT_POST: PostRow = {
   id: VALID_POST_ID,
   campaign_id: VALID_CAMPAIGN_ID,
   business_id: 'biz-456',
+  social_account_id: null,
   platform: 'linkedin',
   content: 'Original post content',
   hashtags: ['#saas', '#launch'],

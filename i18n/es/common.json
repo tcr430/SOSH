@@ -106,6 +106,89 @@
       "title": "¡Todo listo!",
       "subtitle": "Tu espacio de trabajo está listo. Crea tu primera campaña para empezar a generar contenido.",
       "cta": "Crear primera campaña"
+    },
+    "backfill": {
+      "not_started": {
+        "body": "Todavía no se está importando nada — conecta una plataforma compatible ({platforms}) para traer lo que ya has publicado."
+      },
+      "progress": {
+        "title": "Leyendo las publicaciones recientes de {account}",
+        "counts": "{fetched} publicaciones encontradas, {extracted} analizadas hasta ahora",
+        "keep_going": "Puedes seguir — te avisaremos cuando esté listo para revisar."
+      },
+      "unsupported": {
+        "title": "Todavía no podemos leer tu historial de {platform}",
+        "body": "Todavía no podemos leer tu historial de LinkedIn — esta cuenta está conectada para publicar, pero no importaremos publicaciones antiguas."
+      },
+      "failed": {
+        "title": "No pudimos terminar de leer tus publicaciones",
+        "reason": {
+          "reconnect_needed": "Tu conexión necesita renovarse antes de continuar.",
+          "platform_refused": "La plataforma rechazó la solicitud.",
+          "stalled": "Esto tardó demasiado y se detuvo — puedes continuar donde quedó.",
+          "unknown": "Algo salió mal."
+        }
+      },
+      "nothing_to_learn": {
+        "title": "Todavía no hay nada que aprender de {account}",
+        "body": "No encontramos suficientes publicaciones recientes para aprender."
+      },
+      "headline": {
+        "line": "{count} publicaciones de {account}, {dateRange}",
+        "weighted": "Ponderado por lo que mejor rindió",
+        "unweighted": "No hay métricas de interacción disponibles para estas publicaciones"
+      },
+      "partial": {
+        "notice": "Nos detuvimos antes de tiempo tras analizar {extracted} publicaciones — aún puedes revisar lo que encontramos."
+      },
+      "voice": {
+        "summary_title": "Tu voz, a partir de lo que ya has escrito",
+        "review": "Revisar voz",
+        "strongest_axes": "Se inclina hacia {axes}"
+      },
+      "cadence": {
+        "title": "Cadencia de publicación",
+        "most_active": "Más activo: {weekday}, alrededor de las {hour}:00",
+        "formats": "Sobre todo {formats}",
+        "weekdays": {
+          "sunday": "domingo",
+          "monday": "lunes",
+          "tuesday": "martes",
+          "wednesday": "miércoles",
+          "thursday": "jueves",
+          "friday": "viernes",
+          "saturday": "sábado"
+        }
+      },
+      "performed": {
+        "title": "Qué rindió",
+        "pattern": "{pattern} (según {count} publicaciones)"
+      },
+      "audience": {
+        "title": "Cómo le hablas a tu audiencia"
+      },
+      "evidence": {
+        "title": "Pruebas de lo publicado ({count})",
+        "permission_off": "No se muestra públicamente a menos que lo actives más adelante."
+      },
+      "role": {
+        "question": "¿De quién es esta voz?",
+        "founder": "Soy yo",
+        "brand": "Es mi empresa"
+      },
+      "ratified": {
+        "title": "Guardado en tu memoria"
+      },
+      "actions": {
+        "ratify": "Guardar lo seleccionado",
+        "discard": "Descartar estos resultados",
+        "retry": "Reintentar",
+        "accept_all": "Aceptar todo"
+      },
+      "banner": {
+        "link": "Encontramos cosas en tus publicaciones recientes — revisa qué guardar",
+        "dismiss": "Descartar"
+      }
     }
   },
   "settings": {
@@ -141,9 +224,11 @@
         "coming_soon": "Próximamente"
       },
       "reconnect": "Reconectar — expira en {days} días",
-      "publishing_soon": "Publicación próximamente disponible",
+      "reconnect_by": "El acceso a {platform} expira el {date} y debe renovarse",
+      "publishing_soon": "Pendiente de la revisión de aplicaciones de Meta para publicar",
       "connect": "Conectar",
-      "connect_coming_soon_tooltip": "Conéctate para prepararte para cuando se lance la publicación",
+      "connect_another": "Conectar otra cuenta de {platform}",
+      "connect_coming_soon_tooltip": "La publicación aquí está pendiente del proceso de revisión de aplicaciones de Meta",
       "disconnect": "Desconectar",
       "confirm_disconnect_title": "¿Desconectar {platform}?",
       "confirm_disconnect_body": "Tendrás que reconectarte para reanudar la publicación.",
@@ -151,6 +236,8 @@
       "confirm_disconnect_confirm": "Desconectar",
       "disconnect_error": "Error al desconectar. Por favor, inténtalo de nuevo.",
       "connected_as": "Conectado como @{username}",
+      "default_badge": "Predeterminada",
+      "no_default": "Sin cuenta predeterminada — elige una cuenta para cada publicación",
       "error": {
         "invalid_state": "Sesión inválida. Por favor, intenta conectarte de nuevo.",
         "forbidden": "No tienes permiso para conectar esta cuenta.",
@@ -158,7 +245,6 @@
         "exchange_failed": "No pudimos completar la conexión. Por favor, inténtalo de nuevo.",
         "vault_write_failed": "No pudimos guardar tus credenciales de forma segura. Por favor, inténtalo de nuevo.",
         "db_write_failed": "No pudimos guardar la conexión. Por favor, inténtalo de nuevo.",
-        "postiz_unavailable": "El servicio de publicación no está disponible temporalmente. Por favor, inténtalo más tarde.",
         "connect_failed": "Error al conectar. Por favor inténtelo de nuevo."
       },
       "success": {
@@ -223,7 +309,7 @@
       "role_sequence_label": "Publicaciones planificadas",
       "critique_label": "Crítica",
       "score_label": "Puntuación: {score}/100",
-      "pending": "El brief todavía se está preparando y evaluando. Vuelve a comprobarlo pronto.",
+      "pending": "El brief todavía se está preparando y evaluando — esto puede tardar hasta 20 segundos. Vuelve a comprobarlo pronto.",
       "already_approved": "Este brief ya ha sido aprobado.",
       "approve": "Aprobar",
       "reject": "Devolver",
@@ -311,6 +397,7 @@
         "timeout": "Todavía trabajando — vuelve pronto.",
         "error": {
           "quota_exceeded": "Has alcanzado el límite de publicaciones de prueba. Mejora tu plan para continuar.",
+          "daily_quota_exceeded": "Has alcanzado tu límite diario de generación — se reinicia a las 00:00 UTC.",
           "rate_limited": "Demasiadas solicitudes. Espera un momento e inténtalo de nuevo.",
           "provider_error": "El proveedor de IA devolvió un error. Por favor, inténtalo de nuevo.",
           "invalid_response": "La IA devolvió una respuesta inesperada. Por favor, inténtalo de nuevo.",
@@ -354,7 +441,11 @@
     "saving": "Guardando…",
     "tracks_hint": "Tu voz se va definiendo a medida que respondes cada pregunta.",
     "tracks_toggle_show": "Mostrar panel de voz",
-    "tracks_toggle_hide": "Ocultar panel de voz"
+    "tracks_toggle_hide": "Ocultar panel de voz",
+    "review_founder_note": "Esto refleja cómo escribes tú personalmente — no se necesitan ejemplos.",
+    "review_examples_title": "Elige hasta 3 ejemplos",
+    "review_apply": "Usar esta voz",
+    "review_decline": "No usar esta voz"
   },
   "calibration": {
     "q1": {

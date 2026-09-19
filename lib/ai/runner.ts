@@ -1,7 +1,8 @@
+import { z } from 'zod'
 import Anthropic from '@anthropic-ai/sdk'
 import { AiError } from './errors'
 import { MODELS, calculateCostCents } from './models'
-import { safeParseOrAiError } from './parsers'
+import { safeParseOrAiError, parseToolInputOrAiError } from './parsers'
 import { getAnthropicClient, type AiClientLike } from './client'
 import type { Prompt } from './prompts/types'
 import type { CustomerContext } from './context'
@@ -25,6 +26,18 @@ const RUBRIC_PROMPT_ID = 'rubric'
 // exactly — duplicated as a literal (not imported) because lib/ai/ must not
 // depend on lib/signals/ (the dependency runs the other way, ADR 0021 §2.1).
 const CARD_GENERATION_PROMPT_ID = 'signal-card-generation'
+// ADR 0025 §4.1 BACKFILL-TRIAL-CAPS-UNTOUCHED (Session 32 I2.11, I2.12
+// declares 'backfill-evidence' here now, built at I2.12). A backfill pass
+// is a background import job, not a customer-facing post generation or
+// brand-voice inference — it must NEITHER check nor increment EITHER
+// trial counter, on a business that is very likely still mid-trial (a
+// backfill run starts on first account connection, day one). Unlike
+// isScoringOnly (STEP 8 only, a known unresolved STEP-1 gap per
+// rubric.ts:130-134), this classifier is checked at BOTH steps below —
+// the summarize.ts:161-163 precedent achieves the same exemption by never
+// presenting a trialState; this is the same outcome enforced at the
+// shared choke point instead, so no future backfill caller can forget it.
+const BACKFILL_PASS_PROMPT_IDS = new Set(['backfill-voice-synthesis', 'backfill-insights', 'backfill-evidence'])
 const RETRY_DELAY_MS = 2000
 const CACHE_CONTROL_CHAR_THRESHOLD = 4096 // chars / 4 ≈ tokens; 4096 chars ≈ 1024 tokens
 const DEFAULT_MAX_TOKENS = 4096
@@ -56,6 +69,10 @@ function isScoringOnly(promptId: string): boolean {
   return promptId === RUBRIC_PROMPT_ID || promptId === CARD_GENERATION_PROMPT_ID
 }
 
+function isBackfillPass(promptId: string): boolean {
+  return BACKFILL_PASS_PROMPT_IDS.has(promptId)
+}
+
 async function sleep(ms: number): Promise<void> {
   await new Promise(resolve => setTimeout(resolve, ms))
 }
@@ -84,13 +101,25 @@ async function callWithRetry(
   }
 }
 
-export async function runPrompt<TInput, TOutput>(
+// ADR 0025 §6.1 (Session 32-D, D6/MINOR-2) — executePrompt is the ONE real
+// implementation; runPrompt (below) is a thin wrapper kept byte-identical
+// for its 20+ existing callers, and runPromptWithCost is the only way a
+// caller can learn the ACTUAL cost of ITS OWN call, rather than reading
+// back "whatever ai_usage row is most recent for this business+prompt" —
+// which silently misattributes cost between two runs racing the same
+// prompt for the same business (lib/backfill/extract.ts's bug before D6).
+async function executePrompt<TInput, TOutput>(
   prompt: Prompt<TInput, TOutput>,
   context: CustomerContext,
   input: TInput,
-): Promise<TOutput> {
+): Promise<{ data: TOutput; costCents: number }> {
   // ── STEP 1: Trial cap check (must be first — C-1) ─────────────────────
-  if (context.trialState !== null) {
+  // BACKFILL-TRIAL-CAPS-UNTOUCHED — a backfill pass skips this ENTIRE
+  // block, checked here rather than only at Step 8, so a backfill run on a
+  // business with postsRemaining=0 or brandVoiceAttemptsRemaining=0 still
+  // runs (it is neither a post generation nor a brand-voice inference the
+  // customer's trial quota governs).
+  if (context.trialState !== null && !isBackfillPass(prompt.id)) {
     if (isBrandVoice(prompt.id) && context.trialState.brandVoiceAttemptsRemaining <= 0) {
       throw new AiError('quota_exceeded', 'Brand voice inference trial limit reached')
     }
@@ -140,6 +169,20 @@ export async function runPrompt<TInput, TOutput>(
     },
   ]
 
+  // ADR 0024 §6.1 (Session 31, H2.10) — the tool's input_schema is derived
+  // from the prompt's OWN outputSchema at call time (z.toJSONSchema), never
+  // hand-written beside it: one schema object per prompt. Same
+  // { name, description, input_schema } shape tool-runner.ts's triage loop
+  // already builds (tool-runner.ts:252-258).
+  const toolName = `${prompt.id}_output`
+  const anthropicTools: Anthropic.Tool[] = prompt.useToolOutput
+    ? [{
+        name: toolName,
+        description: `Return the structured output for the ${prompt.id} task.`,
+        input_schema: z.toJSONSchema(prompt.outputSchema) as Anthropic.Tool.InputSchema,
+      }]
+    : []
+
   const sdkParams: Anthropic.MessageCreateParamsNonStreaming & { _sosh?: { promptId: string; input: unknown } } = {
     model: MODELS[prompt.modelKey].id,
     // ADR 0019 §4.5, founder ruling A-5 — the WHOLE change: one optional
@@ -149,6 +192,22 @@ export async function runPrompt<TInput, TOutput>(
     max_tokens: prompt.maxTokens ?? DEFAULT_MAX_TOKENS,
     system: systemContent,
     messages,
+    // ADR 0024 §3.1 — sampling as a versioned prompt property. Omitted
+    // entirely (not sent as undefined) when the prompt declares nothing, so
+    // every existing prompt's SDK params stay byte-identical to today
+    // (QUAL-SAMPLING-DEFAULT-PRESERVED, lib/ai/runner.test.ts).
+    ...(prompt.temperature !== undefined ? { temperature: prompt.temperature } : {}),
+    // ADR 0024 §3.3 — thinking budget, sent in the SDK's thinking-block
+    // form. Same omit-when-unset shape.
+    ...(prompt.thinking !== undefined
+      ? { thinking: { type: 'enabled' as const, budget_tokens: prompt.thinking } }
+      : {}),
+    // ADR §6.1 — forced single-tool call (type: 'tool'), not 'auto': this
+    // is a structured-output contract, not an agentic choice, so the model
+    // must always call it when the prompt declares one.
+    ...(prompt.useToolOutput
+      ? { tools: anthropicTools, tool_choice: { type: 'tool' as const, name: toolName } }
+      : {}),
     // _sosh is stripped by the real Anthropic SDK (unknown fields ignored).
     // MockAnthropicClient reads it to route to per-prompt-id fixtures.
     _sosh: { promptId: prompt.id, input },
@@ -188,18 +247,50 @@ export async function runPrompt<TInput, TOutput>(
       throw err
     }
 
+    // ADR §6.4/§4.5 blocker 1 — the parse path learns tool_use FIRST,
+    // unconditionally (a non-tool prompt never receives one back, since it
+    // never sent `tools`, so this check is a no-op for the other nine
+    // prompts). A response carrying BOTH blocks logs the mixed case and the
+    // tool_use block wins — never silently prefers text.
+    const toolBlock = response.content.find(b => b.type === 'tool_use')
     const textBlock = response.content.find(b => b.type === 'text')
-    const rawText = textBlock?.type === 'text' ? textBlock.text : ''
+    if (toolBlock && textBlock) {
+      console.log(JSON.stringify({
+        kind: 'runner.mixed_tool_text_response',
+        level: 'warn',
+        prompt_id: prompt.id,
+      }))
+    }
+
     let parsed: TOutput
-    try {
-      parsed = safeParseOrAiError(prompt.outputSchema, rawText)
-    } catch (parseErr: unknown) {
-      const err =
-        parseErr instanceof AiError
-          ? parseErr
-          : new AiError('invalid_response', String(parseErr))
-      usageErrorCode = err.code
-      throw err
+    if (prompt.useToolOutput) {
+      if (!toolBlock) {
+        const err = new AiError('invalid_response', 'Expected a tool_use block but received none')
+        usageErrorCode = err.code
+        throw err
+      }
+      try {
+        parsed = parseToolInputOrAiError(prompt.outputSchema, toolBlock.input)
+      } catch (parseErr: unknown) {
+        const err =
+          parseErr instanceof AiError
+            ? parseErr
+            : new AiError('invalid_response', String(parseErr))
+        usageErrorCode = err.code
+        throw err
+      }
+    } else {
+      const rawText = textBlock?.type === 'text' ? textBlock.text : ''
+      try {
+        parsed = safeParseOrAiError(prompt.outputSchema, rawText)
+      } catch (parseErr: unknown) {
+        const err =
+          parseErr instanceof AiError
+            ? parseErr
+            : new AiError('invalid_response', String(parseErr))
+        usageErrorCode = err.code
+        throw err
+      }
     }
 
     // Step 6: Compute cost
@@ -215,7 +306,7 @@ export async function runPrompt<TInput, TOutput>(
     // — the orchestrator batch-increments once after insert. A scoring-only
     // call (rubric) skips this too — it never generates a post or consumes
     // brand-voice quota (B2.6 BLOCKER fix).
-    if (context.trialState !== null && !isPostGeneration(prompt.id) && !isScoringOnly(prompt.id)) {
+    if (context.trialState !== null && !isPostGeneration(prompt.id) && !isScoringOnly(prompt.id) && !isBackfillPass(prompt.id)) {
       try {
         if (isBrandVoice(prompt.id)) {
           await incrementBrandVoiceAttempts(context.business.id)
@@ -228,7 +319,7 @@ export async function runPrompt<TInput, TOutput>(
     }
 
     usageSuccess = true
-    return parsed
+    return { data: parsed, costCents }
   } finally {
     // Step 7: Insert ai_usage — always, never throws
     const latencyMs = Date.now() - startTime
@@ -251,4 +342,25 @@ export async function runPrompt<TInput, TOutput>(
       console.error('runner: failed to record ai_usage', usageErr)
     }
   }
+}
+
+export async function runPrompt<TInput, TOutput>(
+  prompt: Prompt<TInput, TOutput>,
+  context: CustomerContext,
+  input: TInput,
+): Promise<TOutput> {
+  const { data } = await executePrompt(prompt, context, input)
+  return data
+}
+
+// ADR 0025 §6.1 (Session 32-D, D6/MINOR-2) — see executePrompt's comment
+// above. Every caller that must reconcile a per-call spend reservation
+// (currently only lib/backfill/extract.ts) uses this instead of runPrompt.
+export async function runPromptWithCost<TInput, TOutput>(
+  prompt: Prompt<TInput, TOutput>,
+  context: CustomerContext,
+  input: TInput,
+): Promise<{ output: TOutput; costCents: number }> {
+  const { data, costCents } = await executePrompt(prompt, context, input)
+  return { output: data, costCents }
 }

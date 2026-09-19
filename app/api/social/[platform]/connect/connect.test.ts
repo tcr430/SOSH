@@ -10,7 +10,7 @@ vi.mock('@/lib/config', () => ({
       STRIPE_PUBLISHABLE_KEY: 'pk_test_placeholder',
       NODE_ENV: 'test',
     },
-    server: {},
+    server: { APP_URL: 'http://localhost:3000' },
   },
 }))
 
@@ -27,6 +27,9 @@ vi.mock('@/lib/social', () => ({
   getRegistry: vi.fn(),
   getPlatformConfig: vi.fn().mockReturnValue({ scopes: ['openid'] }),
   isPlatform: vi.fn().mockReturnValue(true),
+  // Real-shaped, not a stub: SOCIAL-REDIRECT-URI-MATCH tests below assert
+  // the actual config.server.APP_URL-derived value survives a spoofed Host.
+  getSocialRedirectUri: vi.fn((platform: string) => `http://localhost:3000/api/social/${platform}/callback`),
 }))
 
 import { GET } from './route'
@@ -116,5 +119,23 @@ describe('GET /api/social/[platform]/connect — app-layer capability gate (ADR 
       p_business_id: MOCK_BUSINESS.id,
       p_capability: 'connect_accounts',
     })
+  })
+})
+
+// ADR 0028 §2.5 (D-β, N2.6) — SOCIAL-REDIRECT-URI-MATCH.
+describe('GET /api/social/[platform]/connect — redirect URI (ADR 0028 §2.5, D-β)', () => {
+  it('a spoofed request origin (Host header) does not influence redirectUri — it always derives from config.server.APP_URL', async () => {
+    mockCreateClient.mockResolvedValue(makeAuthClient(MOCK_USER, true) as never)
+    const mockGetOAuthAuthorizeUrl = vi.fn().mockResolvedValue('https://provider.example/authorize')
+    mockGetRegistry.mockReturnValue({
+      get: vi.fn().mockReturnValue({ getOAuthAuthorizeUrl: mockGetOAuthAuthorizeUrl }),
+    } as never)
+
+    const spoofedRequest = new NextRequest('http://evil.example.com/api/social/linkedin/connect?locale=en')
+    await GET(spoofedRequest, makeParams('linkedin'))
+
+    expect(mockGetOAuthAuthorizeUrl).toHaveBeenCalledWith(
+      expect.objectContaining({ redirectUri: 'http://localhost:3000/api/social/linkedin/callback' }),
+    )
   })
 })

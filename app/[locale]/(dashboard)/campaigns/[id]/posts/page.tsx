@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
 import { getCampaignById } from '@/lib/db/campaigns'
 import { listPostsByCampaign } from '@/lib/db/posts'
+import { listLatestPostAiOriginalsByPostIds } from '@/lib/db/post-ai-originals'
 import { PostsClient } from './PostsClient'
 
 type Props = {
@@ -36,6 +37,12 @@ export default async function CampaignPostsPage({ params, searchParams }: Props)
   const posts = [...rawPosts].sort((a, b) =>
     a.scheduled_at.localeCompare(b.scheduled_at),
   )
+
+  // ADR 0024 §8.3/§8.4 (Session 31, H2.12) — same pattern as
+  // approvals/page.tsx: each rendered post's latest post_ai_originals
+  // snapshot, as a plain object (a Map isn't a serializable Server->Client prop).
+  const originalsMap = await listLatestPostAiOriginalsByPostIds(client, posts.map(p => p.id))
+  const originalsByPostId = Object.fromEntries(originalsMap)
 
   const total = posts.length
   const approved = posts.filter(p => p.status === 'approved').length
@@ -103,6 +110,7 @@ export default async function CampaignPostsPage({ params, searchParams }: Props)
           campaign={campaign}
           locale={locale}
           initialFilter={filter === 'failed' ? 'failed' : undefined}
+          originalsByPostId={originalsByPostId}
         />
       )}
     </div>

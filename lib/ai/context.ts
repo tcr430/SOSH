@@ -2,7 +2,7 @@ import type { BusinessRow, BrandVoiceRow, CampaignRow, Platform } from '@/lib/db
 import { getBusinessById } from '@/lib/db/businesses'
 import { listCampaigns } from '@/lib/db/campaigns'
 import { getTrialStateMaybe } from '@/lib/db/trial-state'
-import { retrievePerformancePatterns, retrieveVoice } from '@/lib/memory'
+import { retrievePerformancePatterns, retrieveVoice, type PerformancePattern, type MemoryQueryContext } from '@/lib/memory'
 
 export type BrandVoiceContext = BrandVoiceRow & { readonly descriptor: string }
 
@@ -28,9 +28,31 @@ export interface CustomerContext {
   } | null
 }
 
+// ADR 0019 §8.2 — shared by buildCustomerContext and withPostQueryContext
+// below so the "strip provenance" mapping exists in exactly one place.
+// Explicitly re-mapped, never a raw spread: TypeScript's structural typing
+// would silently allow PerformancePattern[] through as-is (extra fields on
+// an assigned variable aren't excess-property-checked), leaking
+// `provenance` into a Mode 2 prompt.
+function toRecentPostPerformance(patterns: PerformancePattern[]): CustomerContext['recentPostPerformance'] {
+  return patterns.map(p => ({
+    platform: p.platform,
+    topContent: p.topContent,
+    ...(p.likes !== undefined ? { likes: p.likes } : {}),
+    ...(p.impressions !== undefined ? { impressions: p.impressions } : {}),
+  }))
+}
+
 export async function buildCustomerContext(
   businessId: string,
   voiceVariationId?: string | null,
+  // ADR 0024 §5.2a (Session 31, H2.11) — the campaign-level seam. Mirrors
+  // the existing optional voiceVariationId / `?? DEFAULT` shape exactly:
+  // any caller that omits this produces the IDENTICAL call it produced
+  // before H2.11, including the literal `{}` passed to
+  // retrievePerformancePatterns below. Nine of ten production callers omit
+  // it (ADR §5.4) and are byte-for-byte unchanged.
+  queryContext: MemoryQueryContext = {},
 ): Promise<CustomerContext> {
   const { createServiceRoleClient } = await import('@/lib/supabase/service')
   const { config } = await import('@/lib/config')
@@ -56,7 +78,7 @@ export async function buildCustomerContext(
     getBusinessById(client, businessId),
     retrieveVoice(client, businessId, voiceVariationId),
     listCampaigns(client, businessId, 5),
-    retrievePerformancePatterns(client, businessId, {}),
+    retrievePerformancePatterns(client, businessId, queryContext),
     getTrialStateMaybe(client, businessId),
   ])
 
@@ -110,12 +132,49 @@ export async function buildCustomerContext(
     // leak `provenance` into a Mode 2 prompt. Explicitly re-mapped to strip
     // it — this is the fix, not a workaround; lib/ai/context.test.ts's
     // literal-shape assertions are what caught the gap.
-    recentPostPerformance: recentPostPerformance.map(p => ({
-      platform: p.platform,
-      topContent: p.topContent,
-      ...(p.likes !== undefined ? { likes: p.likes } : {}),
-      ...(p.impressions !== undefined ? { impressions: p.impressions } : {}),
-    })),
+    recentPostPerformance: toRecentPostPerformance(recentPostPerformance),
     trialState,
+  }
+}
+
+// ADR 0024 §5.2b (Session 31, H2.11) — the per-post seam. Re-runs
+// retrievePerformancePatterns ONLY and returns a SHALLOW-COPIED
+// CustomerContext with the performance slot replaced. Brand, evidence,
+// audience and voice are NOT re-read here: they cannot vary per post within
+// one campaign, and re-reading them would multiply the brand/evidence/
+// audience fan-out by the campaign's entry count for three stores whose
+// contents cannot change between two posts of one campaign (§5.2's named
+// loser). Cost: one extra lib/memory DATABASE read per post — no extra AI
+// call — bounded by PERFORMANCE_CAP.
+//
+// Session 31-D, D4 (MAJOR-4): `postContext` now MERGES onto the
+// campaign-level MemoryQueryContext instead of replacing it outright.
+// Before this fix, this function only ever received {platform, role} and
+// built a query with THOSE TWO FIELDS ALONE — the campaign-level
+// {objective, audience, campaignId} STEP 4 in lib/campaigns/generate.ts
+// spent a whole retrieval computing was discarded, unused, every single
+// time. That silently undid §5.1's stated purpose for `campaignId` ("makes
+// the existing 0.2 scope-match weight do work it currently cannot") on the
+// product's only production call path. The caller now spreads its own
+// campaign-level MemoryQueryContext into postContext (`{ ...queryContext,
+// platform, role }`) so campaignId/objective/audience survive alongside
+// the per-post platform/role — see lib/campaigns/generate.ts:297.
+//
+// Takes NO client parameter, exactly like buildCustomerContext (§5.3):
+// acquires its own service-role client via the lazy-import pattern. Adding
+// a client parameter would let a caller pass an authenticated client into a
+// service-role read path and get silent permission failures.
+export async function withPostQueryContext(
+  ctx: CustomerContext,
+  postContext: MemoryQueryContext & { platform: Platform; role: string },
+): Promise<CustomerContext> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+
+  const recentPostPerformance = await retrievePerformancePatterns(client, ctx.business.id, postContext)
+
+  return {
+    ...ctx,
+    recentPostPerformance: toRecentPostPerformance(recentPostPerformance),
   }
 }

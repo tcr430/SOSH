@@ -22,12 +22,14 @@ function makeRow(overrides: Partial<BrandMemoryRow> = {}): BrandMemoryRow {
     scope_ref: null,
     last_confirmed_at: '2026-07-19T00:00:00Z',
     recency_at: '2026-07-19T00:00:00Z',
+    import_run_id: null,
+    import_source_post_ids: null,
     expires_at: null,
     deleted_at: null,
     created_at: '2026-06-01T00:00:00Z',
     updated_at: '2026-07-19T00:00:00Z',
     category: 'positioning',
-    statement: 'We integrate natively with Postiz',
+    statement: 'We integrate natively with every platform',
     ...overrides,
   }
 }

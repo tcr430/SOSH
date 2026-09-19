@@ -149,6 +149,7 @@ const mockPost: PostRow = {
   id: 'post-1',
   campaign_id: 'camp-1',
   business_id: 'biz-1',
+  social_account_id: null,
   platform: 'linkedin',
   content: 'Top content here',
   hashtags: [],
@@ -187,6 +188,8 @@ const makeGovernedPerfRow = (
   scope_ref: null,
   last_confirmed_at: '2026-07-19T00:00:00Z',
   recency_at: '2026-07-19T00:00:00Z',
+  import_run_id: null,
+  import_source_post_ids: null,
   expires_at: null,
   deleted_at: null,
   created_at: '2026-06-01T00:00:00Z',
@@ -600,6 +603,8 @@ describe('buildCustomerContext — B3 behaviour-equivalence (ADR 0016 §6, MEM-C
         scope_ref: null,
         last_confirmed_at: '2026-07-19T00:00:00Z',
         recency_at: '2026-07-19T00:00:00Z',
+        import_run_id: null,
+        import_source_post_ids: null,
         expires_at: null,
         deleted_at: null,
         created_at: '2026-06-01T00:00:00Z',
@@ -619,6 +624,102 @@ describe('buildCustomerContext — B3 behaviour-equivalence (ADR 0016 §6, MEM-C
       { platform: 'linkedin', topContent: 'technical-comparison posts perform well for CTO audiences' },
     ])
     expect(listTopPostMetrics).not.toHaveBeenCalled()
+  })
+
+  // ADR 0024 §5.1/§5.2a (Session 31, H2.11) — QUAL-QUERY-CONDITIONED. Proves
+  // the third parameter REACHES retrievePerformancePatterns and CHANGES
+  // ranking — plumbing alone (asserting the argument was accepted) is not
+  // sufficient per the constraint's own wording.
+  it('the third queryContext parameter reaches retrievePerformancePatterns and changes ranking (QUAL-QUERY-CONDITIONED)', async () => {
+    vi.mocked(listPerformanceMemoryCandidates).mockResolvedValue([
+      makeGovernedPerfRow({ id: 'pf-other', pattern: 'OTHER-CAMPAIGN-PATTERN', scope: 'campaign', scope_ref: 'camp-OTHER', confidence: 0.9 }),
+      makeGovernedPerfRow({ id: 'pf-this', pattern: 'THIS-CAMPAIGN-PATTERN', scope: 'campaign', scope_ref: 'camp-THIS', confidence: 0.6 }),
+    ])
+
+    const withoutQueryContext = await buildCustomerContext('biz-1')
+    const withQueryContext = await buildCustomerContext('biz-1', null, { campaignId: 'camp-THIS' })
+
+    // Same underlying rows, different queryContext -> different top-ranked
+    // result. Without campaignId, raw confidence decides (0.9 wins). With
+    // it, the matching campaign's lower-confidence row outranks it.
+    expect(withoutQueryContext.recentPostPerformance[0].topContent).toBe('OTHER-CAMPAIGN-PATTERN')
+    expect(withQueryContext.recentPostPerformance[0].topContent).toBe('THIS-CAMPAIGN-PATTERN')
+  })
+})
+
+// ADR 0024 §5.2b (Session 31, H2.11) — the per-post refinement seam.
+describe('withPostQueryContext', () => {
+  it('re-runs performance retrieval ONLY and returns a shallow-copied CustomerContext with the performance slot replaced', async () => {
+    const ctx = await buildCustomerContext('biz-1')
+
+    vi.mocked(listTopPostMetrics).mockResolvedValue([{ ...mockMetric, post_id: 'post-2' }])
+    vi.mocked(listPostsByIds).mockResolvedValue([{ ...mockPost, id: 'post-2', content: 'PER-POST content' }])
+
+    const { withPostQueryContext } = await import('./context')
+    const refined = await withPostQueryContext(ctx, { platform: 'linkedin', role: 'anchor_thesis' })
+
+    // Performance IS refreshed with the new per-post query.
+    expect(refined.recentPostPerformance).toEqual([
+      { platform: 'linkedin', topContent: 'PER-POST content', likes: 100, impressions: 1000 },
+    ])
+    // Brand, evidence/campaigns, voice and trialState are NOT re-read —
+    // identical to the original ctx (same object references, since nothing
+    // touched them).
+    expect(refined.business).toBe(ctx.business)
+    expect(refined.brandVoice).toBe(ctx.brandVoice)
+    expect(refined.recentCampaigns).toBe(ctx.recentCampaigns)
+    expect(refined.trialState).toBe(ctx.trialState)
+    // A genuinely different object, not a mutation of the original.
+    expect(refined).not.toBe(ctx)
+    expect(ctx.recentPostPerformance).not.toEqual(refined.recentPostPerformance)
+  })
+
+  it('does not re-read brand/evidence/audience/voice or campaigns — only listTopPostMetrics/listPostsByIds (or the governed equivalent) run again', async () => {
+    const ctx = await buildCustomerContext('biz-1')
+    vi.clearAllMocks() // isolate calls made by withPostQueryContext itself
+
+    const { withPostQueryContext } = await import('./context')
+    await withPostQueryContext(ctx, { platform: 'linkedin', role: 'anchor_thesis' })
+
+    expect(getBrandVoice).not.toHaveBeenCalled()
+    expect(getBusinessById).not.toHaveBeenCalled()
+    expect(listCampaigns).not.toHaveBeenCalled()
+    expect(getTrialStateMaybe).not.toHaveBeenCalled()
+  })
+
+  it('QUAL-SERVICE-ROLE-UNWIDENED: takes no client parameter — acquires its own service-role client, same as buildCustomerContext', async () => {
+    const { withPostQueryContext } = await import('./context')
+    // Runtime proof the function's arity is exactly (ctx, postContext) — no
+    // client slot. A client parameter would let a caller pass an
+    // authenticated client into this service-role-only read path.
+    expect(withPostQueryContext.length).toBe(2)
+  })
+
+  // Session 31-D, D4 (MAJOR-4). Before this fix, postContext carried ONLY
+  // {platform, role} — campaignId (and objective/audience) computed at the
+  // campaign level never reached this seam at all, so §5.1's stated purpose
+  // for campaignId was inert on the one production call path that matters.
+  // Mirrors QUAL-QUERY-CONDITIONED's own proof shape (ranking changes, not
+  // just "the argument was accepted") but through withPostQueryContext
+  // specifically, not buildCustomerContext.
+  it('MAJOR-4 fix: campaignId spread into postContext reaches retrievePerformancePatterns and changes ranking', async () => {
+    vi.mocked(listPerformanceMemoryCandidates).mockResolvedValue([
+      makeGovernedPerfRow({ id: 'pf-other', pattern: 'OTHER-CAMPAIGN-PATTERN', scope: 'campaign', scope_ref: 'camp-OTHER', confidence: 0.9 }),
+      makeGovernedPerfRow({ id: 'pf-this', pattern: 'THIS-CAMPAIGN-PATTERN', scope: 'campaign', scope_ref: 'camp-THIS', confidence: 0.6 }),
+    ])
+    const ctx = await buildCustomerContext('biz-1')
+
+    const { withPostQueryContext } = await import('./context')
+    const withoutCampaignId = await withPostQueryContext(ctx, { platform: 'linkedin', role: 'anchor_thesis' })
+    const withCampaignId = await withPostQueryContext(ctx, { campaignId: 'camp-THIS', platform: 'linkedin', role: 'anchor_thesis' })
+
+    // Same underlying rows, same ctx — only the spread-in campaignId
+    // differs. Without it, raw confidence decides (0.9 wins). With it, the
+    // matching campaign's lower-confidence row outranks it — proving
+    // campaignId reaches retrievePerformancePatterns THROUGH this seam, not
+    // just through buildCustomerContext's separate call.
+    expect(withoutCampaignId.recentPostPerformance[0].topContent).toBe('OTHER-CAMPAIGN-PATTERN')
+    expect(withCampaignId.recentPostPerformance[0].topContent).toBe('THIS-CAMPAIGN-PATTERN')
   })
 })
 

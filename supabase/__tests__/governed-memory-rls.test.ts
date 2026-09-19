@@ -14,7 +14,7 @@ type MemoryTable = 'brand_memory' | 'evidence_memory' | 'audience_memory' | 'per
 // Minimal valid domain columns per table (ADR §3.1-§3.4), on top of the
 // shared governance block's required columns (source, scope).
 const DOMAIN_COLUMNS: Record<MemoryTable, Record<string, unknown>> = {
-  brand_memory: { category: 'positioning', statement: 'We integrate natively with Postiz' },
+  brand_memory: { category: 'positioning', statement: 'We integrate natively with every platform' },
   evidence_memory: { kind: 'quote', content: 'This tool saved us hours every week' },
   audience_memory: { kind: 'problem', statement: 'CTOs struggle to keep a consistent posting cadence' },
   performance_memory: { dimension: 'topic', pattern: 'technical-comparison posts perform well for CTO audiences' },

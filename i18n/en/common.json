@@ -106,6 +106,89 @@
       "title": "You're all set!",
       "subtitle": "Your workspace is ready. Create your first campaign to start generating content.",
       "cta": "Create your first campaign"
+    },
+    "backfill": {
+      "not_started": {
+        "body": "Nothing is importing yet — connect a supported platform ({platforms}) to bring in what you've already published."
+      },
+      "progress": {
+        "title": "Reading {account}'s recent posts",
+        "counts": "{fetched} posts found, {extracted} analysed so far",
+        "keep_going": "You can keep going — we'll let you know when it's ready to review."
+      },
+      "unsupported": {
+        "title": "We can't read your {platform} history yet",
+        "body": "We can't read your LinkedIn history yet — this account is connected for publishing, but we won't be importing past posts."
+      },
+      "failed": {
+        "title": "We couldn't finish reading your posts",
+        "reason": {
+          "reconnect_needed": "Your connection needs to be refreshed before we can continue.",
+          "platform_refused": "The platform refused the request.",
+          "stalled": "This took too long and stopped — you can pick up where it left off.",
+          "unknown": "Something went wrong."
+        }
+      },
+      "nothing_to_learn": {
+        "title": "Nothing to learn from {account} yet",
+        "body": "We didn't find enough recent posts to learn from."
+      },
+      "headline": {
+        "line": "{count} posts from {account}, {dateRange}",
+        "weighted": "Weighted by what performed best",
+        "unweighted": "No engagement metrics available for these posts"
+      },
+      "partial": {
+        "notice": "We stopped early after analysing {extracted} posts — you can still review what we found."
+      },
+      "voice": {
+        "summary_title": "Your voice, from what you've already written",
+        "review": "Review voice",
+        "strongest_axes": "Leans {axes}"
+      },
+      "cadence": {
+        "title": "Posting cadence",
+        "most_active": "Most active: {weekday}, around {hour}:00",
+        "formats": "Mostly {formats}",
+        "weekdays": {
+          "sunday": "Sunday",
+          "monday": "Monday",
+          "tuesday": "Tuesday",
+          "wednesday": "Wednesday",
+          "thursday": "Thursday",
+          "friday": "Friday",
+          "saturday": "Saturday"
+        }
+      },
+      "performed": {
+        "title": "What performed",
+        "pattern": "{pattern} (based on {count} posts)"
+      },
+      "audience": {
+        "title": "How you talk to your audience"
+      },
+      "evidence": {
+        "title": "Proof you've published ({count})",
+        "permission_off": "Not shown publicly unless you turn this on later."
+      },
+      "role": {
+        "question": "Whose voice is this?",
+        "founder": "This is me",
+        "brand": "This is my company"
+      },
+      "ratified": {
+        "title": "Saved to your memory"
+      },
+      "actions": {
+        "ratify": "Save what I've selected",
+        "discard": "Discard these results",
+        "retry": "Try again",
+        "accept_all": "Accept all"
+      },
+      "banner": {
+        "link": "We found things from your recent posts — review what to save",
+        "dismiss": "Dismiss"
+      }
     }
   },
   "settings": {
@@ -141,9 +224,11 @@
         "coming_soon": "Coming soon"
       },
       "reconnect": "Reconnect — expires in {days} days",
-      "publishing_soon": "Publishing coming soon",
+      "reconnect_by": "{platform} access expires {date} and must be renewed",
+      "publishing_soon": "Awaiting Meta's app review for publishing",
       "connect": "Connect",
-      "connect_coming_soon_tooltip": "Connect to prepare for when publishing launches",
+      "connect_another": "Connect another {platform} account",
+      "connect_coming_soon_tooltip": "Publishing here is pending Meta's app review process",
       "disconnect": "Disconnect",
       "confirm_disconnect_title": "Disconnect {platform}?",
       "confirm_disconnect_body": "You'll need to reconnect to resume publishing.",
@@ -151,6 +236,8 @@
       "confirm_disconnect_confirm": "Disconnect",
       "disconnect_error": "Disconnect failed. Please try again.",
       "connected_as": "Connected as @{username}",
+      "default_badge": "Default",
+      "no_default": "No default — choose an account for each post",
       "error": {
         "invalid_state": "Invalid session. Please try connecting again.",
         "forbidden": "You don't have permission to connect this account.",
@@ -158,7 +245,6 @@
         "exchange_failed": "We couldn't complete the connection. Please try again.",
         "vault_write_failed": "We couldn't securely store your credentials. Please try again.",
         "db_write_failed": "We couldn't save the connection. Please try again.",
-        "postiz_unavailable": "The publishing service is temporarily unavailable. Please try again later.",
         "connect_failed": "Failed to connect. Please try again."
       },
       "success": {
@@ -223,7 +309,7 @@
       "role_sequence_label": "Planned posts",
       "critique_label": "Critique",
       "score_label": "Score: {score}/100",
-      "pending": "The brief is still being assembled and critiqued. Check back shortly.",
+      "pending": "The brief is still being assembled and critiqued — this can take up to 20 seconds. Check back shortly.",
       "already_approved": "This brief has already been approved.",
       "approve": "Approve",
       "reject": "Send back",
@@ -311,6 +397,7 @@
         "timeout": "Still working — check back soon.",
         "error": {
           "quota_exceeded": "You've reached your trial post limit. Upgrade to continue generating.",
+          "daily_quota_exceeded": "You've reached your daily generation limit — resets at 00:00 UTC.",
           "rate_limited": "Too many requests. Please wait a moment and try again.",
           "provider_error": "The AI provider returned an error. Please try again.",
           "invalid_response": "The AI returned an unexpected response. Please try again.",
@@ -354,7 +441,11 @@
     "saving": "Saving…",
     "tracks_hint": "Your voice takes shape as you answer each question.",
     "tracks_toggle_show": "Show voice track",
-    "tracks_toggle_hide": "Hide voice track"
+    "tracks_toggle_hide": "Hide voice track",
+    "review_founder_note": "This captures how you personally write — no examples needed.",
+    "review_examples_title": "Choose up to 3 examples",
+    "review_apply": "Use this voice",
+    "review_decline": "Don't use this voice"
   },
   "calibration": {
     "q1": {

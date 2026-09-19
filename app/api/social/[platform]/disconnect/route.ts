@@ -1,12 +1,12 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
-import { getActiveByBusinessAndPlatform, deactivateSocialAccount } from '@/lib/db/social-accounts'
-import { isPlatform } from '@/lib/social'
+import { getActiveById, listActiveByBusinessAndPlatform, deactivateSocialAccount } from '@/lib/db/social-accounts'
+import { getRegistry, isPlatform } from '@/lib/social'
 import { CAPABILITIES } from '@/lib/members/capabilities'
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ platform: string }> },
 ): Promise<NextResponse> {
   const { platform: platformParam } = await params
@@ -38,9 +38,43 @@ export async function DELETE(
       return new NextResponse(null, { status: 403 })
     }
 
-    const account = await getActiveByBusinessAndPlatform(supabase, business.id, platform)
+    // ADR 0028 §5.3: disconnects ONE NAMED identity. accountId names it
+    // explicitly (the accounts UI, N2.12, will always pass one once two
+    // active identities can exist for a platform). Without it, this falls
+    // back to the pre-dual-identity single-account shape — but when more
+    // than one active account exists, guessing which one to deactivate is
+    // exactly the "act on the wrong identity" failure this ADR forbids, so
+    // it is refused rather than resolved arbitrarily.
+    const accountIdParam = request.nextUrl.searchParams.get('accountId')
+
+    let account
+    if (accountIdParam) {
+      const candidate = await getActiveById(supabase, accountIdParam)
+      account = candidate && candidate.business_id === business.id && candidate.platform === platform
+        ? candidate
+        : null
+    } else {
+      const candidates = await listActiveByBusinessAndPlatform(supabase, business.id, platform)
+      if (candidates.length > 1) {
+        return NextResponse.json({ error: 'account_ambiguous' }, { status: 409 })
+      }
+      account = candidates[0] ?? null
+    }
     if (!account) {
       return new NextResponse(null, { status: 404 })
+    }
+
+    // MAJOR-1 (Session 30.5-D, D3): attempt platform revocation BEFORE local
+    // cleanup — the vault secret must still exist for the provider to read
+    // the token. SOCIAL-REVOKE-NEVER-BLOCKS: a throw here (a network
+    // failure, or an unconfigured/unregistered provider) must never prevent
+    // the local disconnect from completing — catch and discard, never
+    // propagate, never retry.
+    try {
+      const provider = getRegistry().get(platform)
+      await provider.revokeAccessToken({ socialAccountId: account.id })
+    } catch {
+      // Best-effort only. See SOCIAL-REVOKE-NEVER-BLOCKS above.
     }
 
     await deactivateSocialAccount(account.id)

@@ -39,8 +39,18 @@ import type { CustomerContext } from '@/lib/ai/context'
 // echoes input.text and never touches the context.
 import { postGenerationPrompt } from '@/lib/ai/prompts/post-generation'
 import { postRegenerationPrompt } from '@/lib/ai/prompts/post-regeneration'
+import { briefAssemblyPrompt } from '@/lib/ai/prompts/brief'
+import { studioSuggestionPrompt } from '@/lib/ai/prompts/studio-suggestion'
+import { rubricPrompt } from '@/lib/ai/prompts/rubric'
+import { learningSummarizerPrompt } from '@/lib/ai/prompts/learning-summarizer'
 import { brandVoiceInferencePrompt } from '@/lib/ai/prompts/brand-voice-inference'
 import type { BrandVoiceRow } from '@/lib/db/types'
+// D2/MAJOR-1 — the REAL native-generation factory, not a synthetic prompt
+// with a copied id: the constraint is about the actual generation path
+// sending temperature at the SDK level, and a synthetic prompt would pass
+// even if the factory stopped declaring it.
+import { createNativeGenerationPrompt, type NativeGenInput } from '@/lib/ai/prompts/formats/native-generation-prompt'
+import type { RenderedEvidence } from '@/lib/ai/wrap-evidence'
 
 // ── Fixtures ──────────────────────────────────────────────────────────────
 
@@ -675,12 +685,9 @@ describe('Step 3 — per-template model input (MEM-RUNNER-CACHE-SPLIT, MAJOR-1a)
 // object leaves maxTokens unset (static); (2) an unset maxTokens resolves
 // to EXACTLY DEFAULT_MAX_TOKENS=4096 at the SDK call site (behavioural).
 describe('STUDIO-RUNNER-DEFAULT-PRESERVED (ADR 0019 §4.5 / A-5)', () => {
-  it('none of the existing prompt objects sets maxTokens — the SHARED-FUNCTION CALLERS table for runPrompt, one row per prompt', async () => {
+  it('none of the OTHER existing prompt objects sets maxTokens — the SHARED-FUNCTION CALLERS table for runPrompt, one row per prompt', async () => {
     const { postGenerationPrompt: pg } = await import('@/lib/ai/prompts/post-generation')
     const { postRegenerationPrompt: pr } = await import('@/lib/ai/prompts/post-regeneration')
-    const { rubricPrompt } = await import('@/lib/ai/prompts/rubric')
-    const { briefAssemblyPrompt } = await import('@/lib/ai/prompts/brief')
-    const { learningSummarizerPrompt } = await import('@/lib/ai/prompts/learning-summarizer')
     const { brandVoiceInferencePrompt: bv } = await import('@/lib/ai/prompts/brand-voice-inference')
     const { createNativeGenerationPrompt } = await import('@/lib/ai/prompts/formats/native-generation-prompt')
 
@@ -688,12 +695,14 @@ describe('STUDIO-RUNNER-DEFAULT-PRESERVED (ADR 0019 §4.5 / A-5)', () => {
     //   post-generation.ts (lib/campaigns/generate.ts)
     //   post-regeneration.ts (app/.../posts/actions.ts)
     //   rubric.ts (lib/campaigns/generate.ts, lib/campaigns/brief.ts)
-    //   brief.ts (lib/campaigns/brief.ts)
     //   learning-summarizer.ts (lib/learning/summarize.ts)
     //   brand-voice-inference.ts (onboarding/infer-brand-voice, settings/voice/refine-from-posts)
     //   native-generation-prompt.ts ×2 families (lib/campaigns/generate.ts)
-    const prompts = [pg, pr, rubricPrompt, briefAssemblyPrompt, learningSummarizerPrompt, bv, createNativeGenerationPrompt('single'), createNativeGenerationPrompt('thread')]
-    expect(prompts).toHaveLength(8)
+    // brief-assembly is EXCLUDED here as of ADR 0024 §3.3a (H2.2) — it now
+    // legitimately declares maxTokens: 12_000 alongside its thinking budget.
+    // See QUAL-THINKING-BUDGETED below, which asserts that value directly.
+    const prompts = [pg, pr, rubricPrompt, learningSummarizerPrompt, bv, createNativeGenerationPrompt('single'), createNativeGenerationPrompt('thread')]
+    expect(prompts).toHaveLength(7)
     for (const prompt of prompts) {
       expect(prompt.maxTokens).toBeUndefined()
     }
@@ -710,6 +719,297 @@ describe('STUDIO-RUNNER-DEFAULT-PRESERVED (ADR 0019 §4.5 / A-5)', () => {
     await runPrompt(withMaxTokens, mockContext, { text: 'hi' })
     const callArgs = mockCreate.mock.calls[0][0]
     expect(callArgs.max_tokens).toBe(8192)
+  })
+})
+
+// ── QUAL-THINKING-BUDGETED (ADR 0024 §3.3/§3.3a, H2.2) ─────────────────────
+// Sibling of STUDIO-RUNNER-DEFAULT-PRESERVED immediately above: brief-
+// assembly is the ONE prompt that declares thinking, and it must declare
+// maxTokens: 12_000 in the SAME version bump (a thinking budget is spent
+// OUT OF maxTokens, not additive — §3.3a). Every other id stays undeclared.
+// The two sets (native-generation's temperature, brief-assembly's thinking)
+// are disjoint by construction — asserted here so a future prompt cannot
+// silently acquire both.
+describe('QUAL-THINKING-BUDGETED (ADR 0024 §3.3/§3.3a)', () => {
+  it('brief-assembly declares thinking:4000 AND maxTokens:12_000 at version:2', async () => {
+    const { briefAssemblyPrompt } = await import('@/lib/ai/prompts/brief')
+    expect(briefAssemblyPrompt.version).toBe(2)
+    expect(briefAssemblyPrompt.thinking).toBe(4000)
+    expect(briefAssemblyPrompt.maxTokens).toBe(12_000)
+  })
+
+  it('no other of the ten prompt ids declares thinking', async () => {
+    const { postGenerationPrompt: pg } = await import('@/lib/ai/prompts/post-generation')
+    const { postRegenerationPrompt: pr } = await import('@/lib/ai/prompts/post-regeneration')
+    const { brandVoiceInferencePrompt: bv } = await import('@/lib/ai/prompts/brand-voice-inference')
+    const { studioSuggestionPrompt } = await import('@/lib/ai/prompts/studio-suggestion')
+    const { createNativeGenerationPrompt } = await import('@/lib/ai/prompts/formats/native-generation-prompt')
+
+    const others = [
+      pg,
+      pr,
+      rubricPrompt,
+      learningSummarizerPrompt,
+      bv,
+      studioSuggestionPrompt,
+      createNativeGenerationPrompt('single'),
+      createNativeGenerationPrompt('thread'),
+      createNativeGenerationPrompt('carousel'),
+    ]
+    expect(others).toHaveLength(9)
+    for (const prompt of others) {
+      expect(prompt.thinking, `${prompt.id} must not declare thinking`).toBeUndefined()
+    }
+  })
+
+  it('no prompt declares BOTH temperature and thinking — the two sets stay disjoint', async () => {
+    const { briefAssemblyPrompt } = await import('@/lib/ai/prompts/brief')
+    const { postGenerationPrompt: pg } = await import('@/lib/ai/prompts/post-generation')
+    const { postRegenerationPrompt: pr } = await import('@/lib/ai/prompts/post-regeneration')
+    const { brandVoiceInferencePrompt: bv } = await import('@/lib/ai/prompts/brand-voice-inference')
+    const { studioSuggestionPrompt } = await import('@/lib/ai/prompts/studio-suggestion')
+    const { createNativeGenerationPrompt } = await import('@/lib/ai/prompts/formats/native-generation-prompt')
+
+    const all = [
+      briefAssemblyPrompt,
+      pg,
+      pr,
+      rubricPrompt,
+      learningSummarizerPrompt,
+      bv,
+      studioSuggestionPrompt,
+      createNativeGenerationPrompt('single'),
+      createNativeGenerationPrompt('thread'),
+      createNativeGenerationPrompt('carousel'),
+    ]
+    expect(all).toHaveLength(10)
+    for (const prompt of all) {
+      const hasBoth = prompt.temperature !== undefined && prompt.thinking !== undefined
+      expect(hasBoth, `${prompt.id} declares both temperature and thinking`).toBe(false)
+    }
+  })
+
+  it('a thinking block followed by a text block parses exactly as a text-only response would', async () => {
+    mockCreate.mockResolvedValue({
+      content: [
+        { type: 'thinking', thinking: 'reasoning about the brief...' },
+        { type: 'text', text: JSON.stringify(validOutput) },
+      ],
+      usage: { input_tokens: 100, output_tokens: 50, cache_read_input_tokens: 0 },
+    })
+    await expect(runPrompt(mockPrompt, mockContext, { text: 'hi' })).resolves.toEqual(validOutput)
+  })
+
+  it('a thinking budget is sent in the SDK thinking-block form, and omitted entirely when unset', async () => {
+    const withThinking: Prompt<MockInput, MockOutput> = { ...mockPrompt, thinking: 4000, maxTokens: 12_000 }
+    await runPrompt(withThinking, mockContext, { text: 'hi' })
+    let callArgs = mockCreate.mock.calls[0][0]
+    expect(callArgs.thinking).toEqual({ type: 'enabled', budget_tokens: 4000 })
+
+    await runPrompt(mockPrompt, mockContext, { text: 'hi' })
+    callArgs = mockCreate.mock.calls[1][0]
+    expect(callArgs).not.toHaveProperty('thinking')
+  })
+})
+
+// ── QUAL-SAMPLING-DEFAULT-PRESERVED, the SDK-params half (ADR 0024 §3.1,
+// Session 31-D D2/MAJOR-1) ──────────────────────────────────────────────
+// Sibling of the maxTokens pair (:703-715) and the thinking pair (:799-808)
+// immediately above, at the SAME level: the prompt-object field (asserted
+// by prompt-properties.frozen-table.test.ts) is not the same claim as "the
+// field arrives in the SDK call" — before this pair, nothing asserted the
+// latter for temperature, so deleting runner.ts's temperature spread left
+// every existing test green.
+describe('QUAL-SAMPLING-DEFAULT-PRESERVED — temperature at the SDK params level (D2/MAJOR-1)', () => {
+  const nativeGenInput: NativeGenInput = {
+    angle: 'Show the churn-reduction proof point',
+    role: 'customer_proof',
+    platform: 'linkedin',
+    narrative: 'We help B2B SaaS teams post consistently.',
+    renderedEvidence: '' as RenderedEvidence,
+    scheduledAt: '2026-08-01T09:00:00.000Z',
+  }
+
+  it('a native-generation prompt (temperature: 1.0) sends temperature 1.0 at the SDK params level', async () => {
+    // The real prompt carries the real SinglePostOutputSchema — the mock
+    // response must satisfy IT, not the generic mockOutputSchema every
+    // other test in this file uses.
+    mockCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: JSON.stringify({ format: 'single', body: 'post body', imageBrief: null }) }],
+      usage: { input_tokens: 100, output_tokens: 50, cache_read_input_tokens: 0 },
+    })
+    await runPrompt(createNativeGenerationPrompt('single'), mockContext, nativeGenInput)
+    const callArgs = mockCreate.mock.calls[0][0]
+    expect(callArgs.temperature).toBe(1.0)
+  })
+
+  it('a prompt declaring no temperature sends NO temperature key at all — not undefined, absent', async () => {
+    await runPrompt(mockPrompt, mockContext, { text: 'hi' })
+    const callArgs = mockCreate.mock.calls[0][0]
+    expect(callArgs).not.toHaveProperty('temperature')
+  })
+})
+
+// ── ADR 0024 §7.1-§7.3 — the guards at N (Session 31 H2.6) ────────────────
+//
+// H2.6 ships no new production mechanism inside runPrompt — only the config
+// default move (lib/config.test.ts) — so these are regression tests over
+// what already holds true "by construction" (ADR §7.2/§7.3), guarding
+// against a future change silently narrowing or reordering any of it.
+describe('ADR 0024 §7.1-§7.3 — guards at N (H2.6)', () => {
+  // QUAL-GUARD-ORDER-PRESERVED — STEP 1 (trial cap) fires strictly before
+  // STEP 2 (rate limit), which fires strictly before STEP 3 (SDK call).
+  // Composed from the two existing skip-on-earlier-failure assertions into
+  // one test that states the ORDER explicitly, not just each pairwise skip.
+  it('QUAL-GUARD-ORDER-PRESERVED — trial cap, then rate limit, then SDK call, in that order', async () => {
+    // Trial cap denies -> neither the rate-limit query nor the SDK is reached.
+    await expect(runPrompt(mockPrompt, trialExhaustedPosts, { text: 'hi' })).rejects.toMatchObject({
+      code: 'quota_exceeded',
+    })
+    expect(countRecentCalls).not.toHaveBeenCalled()
+    expect(mockCreate).not.toHaveBeenCalled()
+
+    vi.clearAllMocks()
+    vi.mocked(getAnthropicClient).mockResolvedValue({ messages: { create: mockCreate } } as never)
+
+    // Trial cap clears, rate limit denies -> the SDK is still not reached.
+    vi.mocked(countRecentCalls).mockResolvedValue(30)
+    await expect(runPrompt(mockPrompt, mockContext, { text: 'hi' })).rejects.toMatchObject({
+      code: 'rate_limited',
+    })
+    expect(countRecentCalls).toHaveBeenCalledTimes(1)
+    expect(mockCreate).not.toHaveBeenCalled()
+  })
+
+  // QUAL-RATE-LIMIT-COUNTS-CALLS — N runPrompt calls issue N separate
+  // countRecentCalls checks (never batched/undercounted as one unit), and
+  // generation vs. judge calls are counted under their OWN prompt id, never
+  // merged into a shared bucket.
+  it('QUAL-RATE-LIMIT-COUNTS-CALLS — three generation calls plus three judge calls are six separately-counted checks', async () => {
+    for (let i = 0; i < 3; i++) {
+      await runPrompt(mockPrompt, mockContext, { text: `gen-${i}` })
+    }
+    for (let i = 0; i < 3; i++) {
+      await runPrompt(rubricScoringPrompt, mockContext, { text: `judge-${i}` })
+    }
+
+    expect(countRecentCalls).toHaveBeenCalledTimes(6)
+    const promptIdsCounted = vi.mocked(countRecentCalls).mock.calls.map((call) => call[3])
+    expect(promptIdsCounted.filter((id) => id === 'post-generation')).toHaveLength(3)
+    expect(promptIdsCounted.filter((id) => id === 'rubric')).toHaveLength(3)
+  })
+
+  // QUAL-TRIAL-UNIT-PER-POST — the negative obligation: isPostGeneration and
+  // isScoringOnly's membership must not be narrowed (every id below must
+  // keep skipping BOTH trial counters), and the predicate set must not be
+  // widened to swallow an unrelated prompt id (the control case below must
+  // keep incrementing).
+  it('QUAL-TRIAL-UNIT-PER-POST — the full skip set is exactly {native-generation-single, native-generation-thread, post-generation, rubric}, no more, no less', async () => {
+    const skippedIds: Array<Prompt<MockInput, MockOutput>> = [
+      mockPrompt, // post-generation
+      nativeGenerationSinglePrompt,
+      nativeGenerationThreadPrompt,
+      rubricScoringPrompt,
+    ]
+    for (const prompt of skippedIds) {
+      vi.clearAllMocks()
+      vi.mocked(getAnthropicClient).mockResolvedValue({ messages: { create: mockCreate } } as never)
+      mockCreate.mockResolvedValue(validSdkResponse)
+      vi.mocked(countRecentCalls).mockResolvedValue(0)
+
+      await runPrompt(prompt, mockContext, { text: 'hi' })
+      expect(incrementPostsGenerated, `${prompt.id} must skip the per-call counter`).not.toHaveBeenCalled()
+      expect(incrementBrandVoiceAttempts, `${prompt.id} must not touch brand-voice quota`).not.toHaveBeenCalled()
+    }
+
+    // Control: an id OUTSIDE the named set must still increment — proves the
+    // predicates are narrow, not "skip everything."
+    vi.clearAllMocks()
+    vi.mocked(getAnthropicClient).mockResolvedValue({ messages: { create: mockCreate } } as never)
+    mockCreate.mockResolvedValue(validSdkResponse)
+    vi.mocked(countRecentCalls).mockResolvedValue(0)
+    const unrelatedPrompt: Prompt<MockInput, MockOutput> = { ...mockPrompt, id: 'some-other-prompt' }
+    await runPrompt(unrelatedPrompt, mockContext, { text: 'hi' })
+    expect(incrementPostsGenerated).toHaveBeenCalledWith('biz-1')
+  })
+})
+
+// ADR 0025 §4.1 BACKFILL-TRIAL-CAPS-UNTOUCHED (Session 32 I2.11) — a
+// backfill pass is a background import job, not a customer-facing post
+// generation or brand-voice inference. It must NEITHER check nor increment
+// EITHER trial counter, even on a business with BOTH counters exhausted
+// (very likely, since a backfill run starts on first account connection,
+// day one of the trial).
+describe('BACKFILL-TRIAL-CAPS-UNTOUCHED (ADR 0025 §4.1, Session 32 I2.11)', () => {
+  const backfillPromptIds = ['backfill-voice-synthesis', 'backfill-insights', 'backfill-evidence']
+
+  const trialExhaustedBoth: CustomerContext = {
+    ...mockContext,
+    trialState: { isTrial: true, postsRemaining: 0, campaignsRemaining: 0, brandVoiceAttemptsRemaining: 0 },
+  }
+
+  it('with postsRemaining=0 AND brandVoiceAttemptsRemaining=0, all three backfill ids still run (Step 1 never throws)', async () => {
+    for (const id of backfillPromptIds) {
+      vi.clearAllMocks()
+      vi.mocked(getAnthropicClient).mockResolvedValue({ messages: { create: mockCreate } } as never)
+      mockCreate.mockResolvedValue(validSdkResponse)
+      vi.mocked(countRecentCalls).mockResolvedValue(0)
+
+      const backfillPrompt: Prompt<MockInput, MockOutput> = { ...mockPrompt, id }
+      const result = await runPrompt(backfillPrompt, trialExhaustedBoth, { text: 'hi' })
+      expect(result).toEqual(validOutput)
+    }
+  })
+
+  it('after a successful call, neither posts_generated_count nor the brand-voice counter moved', async () => {
+    for (const id of backfillPromptIds) {
+      vi.clearAllMocks()
+      vi.mocked(getAnthropicClient).mockResolvedValue({ messages: { create: mockCreate } } as never)
+      mockCreate.mockResolvedValue(validSdkResponse)
+      vi.mocked(countRecentCalls).mockResolvedValue(0)
+
+      const backfillPrompt: Prompt<MockInput, MockOutput> = { ...mockPrompt, id }
+      await runPrompt(backfillPrompt, trialExhaustedBoth, { text: 'hi' })
+      expect(incrementPostsGenerated, `${id} must not increment posts_generated_count`).not.toHaveBeenCalled()
+      expect(incrementBrandVoiceAttempts, `${id} must not increment brand-voice attempts`).not.toHaveBeenCalled()
+    }
+  })
+
+  it('every PRE-EXISTING id classification is byte-identical to before I2.11 — the backfill predicate is additive, not a rewrite', async () => {
+    // Re-run the exact QUAL-TRIAL-UNIT-PER-POST fixture set — if adding
+    // isBackfillPass had touched isPostGeneration/isScoringOnly/isBrandVoice
+    // in any way, one of these four would newly skip, or the control id
+    // would newly be skipped too.
+    const preExistingSkipIds: Array<Prompt<MockInput, MockOutput>> = [
+      mockPrompt,
+      nativeGenerationSinglePrompt,
+      nativeGenerationThreadPrompt,
+      rubricScoringPrompt,
+    ]
+    for (const prompt of preExistingSkipIds) {
+      vi.clearAllMocks()
+      vi.mocked(getAnthropicClient).mockResolvedValue({ messages: { create: mockCreate } } as never)
+      mockCreate.mockResolvedValue(validSdkResponse)
+      vi.mocked(countRecentCalls).mockResolvedValue(0)
+      await runPrompt(prompt, mockContext, { text: 'hi' })
+      expect(incrementPostsGenerated, `${prompt.id} classification changed`).not.toHaveBeenCalled()
+      expect(incrementBrandVoiceAttempts, `${prompt.id} classification changed`).not.toHaveBeenCalled()
+    }
+
+    vi.clearAllMocks()
+    vi.mocked(getAnthropicClient).mockResolvedValue({ messages: { create: mockCreate } } as never)
+    mockCreate.mockResolvedValue(validSdkResponse)
+    vi.mocked(countRecentCalls).mockResolvedValue(0)
+    await runPrompt(brandVoicePrompt, mockContext, { text: 'hi' })
+    expect(incrementBrandVoiceAttempts, 'brand-voice-inference classification changed').toHaveBeenCalledWith('biz-1')
+
+    vi.clearAllMocks()
+    vi.mocked(getAnthropicClient).mockResolvedValue({ messages: { create: mockCreate } } as never)
+    mockCreate.mockResolvedValue(validSdkResponse)
+    vi.mocked(countRecentCalls).mockResolvedValue(0)
+    const unrelatedPrompt: Prompt<MockInput, MockOutput> = { ...mockPrompt, id: 'some-other-prompt' }
+    await runPrompt(unrelatedPrompt, mockContext, { text: 'hi' })
+    expect(incrementPostsGenerated, 'the control id must still increment').toHaveBeenCalledWith('biz-1')
   })
 })
 
@@ -732,5 +1032,144 @@ describe('response_truncated (ADR 0019 §5.4 [sec-HIGH-7])', () => {
       usage: { input_tokens: 100, output_tokens: 50, cache_read_input_tokens: 0 },
     })
     await expect(runPrompt(mockPrompt, mockContext, { text: 'hi' })).resolves.toEqual({ result: 'ok' })
+  })
+})
+
+// ADR 0024 §6 (Session 31, H2.10) — tool_use structured output, migrated for
+// exactly one prompt (learningSummarizerPrompt). `toolPrompt` below stands
+// in for it — same outputSchema/id shape as `mockPrompt`, `useToolOutput`
+// added — so these tests exercise the runner's generic mechanism, not the
+// real prompt's own copy.
+describe('QUAL-STRUCTURED-OUTPUT / QUAL-MALFORMED-TOOL-CALL (ADR 0024 §6, H2.10)', () => {
+  const toolPrompt: Prompt<MockInput, MockOutput> = {
+    ...mockPrompt,
+    id: 'learning-summarizer',
+    useToolOutput: true,
+  }
+
+  it('QUAL-STRUCTURED-OUTPUT — sends a tool derived from the prompt\'s outputSchema, forces it via tool_choice, and parses the tool_use input through Zod', async () => {
+    mockCreate.mockResolvedValue({
+      content: [{ type: 'tool_use', id: 'tu_1', name: 'learning-summarizer_output', input: { result: 'from tool' } }],
+      stop_reason: 'tool_use',
+      usage: { input_tokens: 100, output_tokens: 50, cache_read_input_tokens: 0 },
+    })
+
+    const result = await runPrompt(toolPrompt, mockContext, { text: 'hi' })
+
+    expect(result).toEqual({ result: 'from tool' })
+    const sentParams = mockCreate.mock.calls[0][0]
+    expect(sentParams.tool_choice).toEqual({ type: 'tool', name: 'learning-summarizer_output' })
+    expect(sentParams.tools).toHaveLength(1)
+    expect(sentParams.tools[0]).toMatchObject({ name: 'learning-summarizer_output' })
+    expect(sentParams.tools[0].input_schema).toBeDefined()
+  })
+
+  it('a non-tool prompt never sends tools/tool_choice — the migration is per-prompt, not global', async () => {
+    await runPrompt(mockPrompt, mockContext, { text: 'hi' })
+
+    const sentParams = mockCreate.mock.calls[0][0]
+    expect(sentParams.tools).toBeUndefined()
+    expect(sentParams.tool_choice).toBeUndefined()
+  })
+
+  it('QUAL-MALFORMED-TOOL-CALL — no tool_use block in the response throws invalid_response', async () => {
+    mockCreate.mockResolvedValue({
+      content: [{ type: 'text', text: 'the model ignored the tool' }],
+      stop_reason: 'end_turn',
+      usage: { input_tokens: 100, output_tokens: 50, cache_read_input_tokens: 0 },
+    })
+
+    await expect(runPrompt(toolPrompt, mockContext, { text: 'hi' })).rejects.toMatchObject({
+      code: 'invalid_response',
+    })
+  })
+
+  it('QUAL-MALFORMED-TOOL-CALL — a tool_use block whose input fails Zod throws invalid_response carrying the Zod message', async () => {
+    mockCreate.mockResolvedValue({
+      content: [{ type: 'tool_use', id: 'tu_1', name: 'learning-summarizer_output', input: { result: 42 } }], // wrong type
+      stop_reason: 'tool_use',
+      usage: { input_tokens: 100, output_tokens: 50, cache_read_input_tokens: 0 },
+    })
+
+    await expect(runPrompt(toolPrompt, mockContext, { text: 'hi' })).rejects.toMatchObject({
+      code: 'invalid_response',
+      message: expect.stringContaining('Response schema validation failed'),
+    })
+  })
+
+  it('QUAL-MALFORMED-TOOL-CALL — a response carrying BOTH a text block and a tool_use block: the tool_use block wins, and the mixed case logs', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    mockCreate.mockResolvedValue({
+      content: [
+        { type: 'text', text: JSON.stringify({ result: 'from text — must lose' }) },
+        { type: 'tool_use', id: 'tu_1', name: 'learning-summarizer_output', input: { result: 'from tool — must win' } },
+      ],
+      stop_reason: 'tool_use',
+      usage: { input_tokens: 100, output_tokens: 50, cache_read_input_tokens: 0 },
+    })
+
+    const result = await runPrompt(toolPrompt, mockContext, { text: 'hi' })
+
+    expect(result).toEqual({ result: 'from tool — must win' })
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('runner.mixed_tool_text_response'))
+    logSpy.mockRestore()
+  })
+})
+
+// Session 32-D, D10 (MINOR-5) — every PRE-EXISTING prompt id, individually,
+// against the real prompt objects (outputSchema and the two message builders
+// swapped so the shared mock input/response validate; id, modelKey and
+// temperature are the real ones, and id is all the classification reads). The four-fixture check above left brief-assembly,
+// learning-summarizer, post-regeneration, studio-suggestion and
+// native-generation-carousel unasserted. This pins CURRENT behaviour; it
+// does not change classification.
+describe('runner trial classification — all ten pre-existing prompt ids (Session 32-D D10, MINOR-5)', () => {
+  type Counter = 'posts' | 'brand-voice' | 'none'
+  const withMockSchema = (p: unknown): Prompt<MockInput, MockOutput> =>
+    ({
+      ...(p as Prompt<MockInput, MockOutput>),
+      outputSchema: mockOutputSchema,
+      useToolOutput: false,
+      buildSystemPrompt: () => 'Short system prompt.',
+      buildUserMessage: (input: MockInput) => input.text,
+    })
+
+  const rows: Array<{ prompt: Prompt<MockInput, MockOutput>; counter: Counter }> = [
+    { prompt: withMockSchema(brandVoiceInferencePrompt), counter: 'brand-voice' },
+    { prompt: withMockSchema(briefAssemblyPrompt), counter: 'posts' },
+    { prompt: withMockSchema(learningSummarizerPrompt), counter: 'posts' },
+    { prompt: withMockSchema(postGenerationPrompt), counter: 'none' },
+    { prompt: withMockSchema(postRegenerationPrompt), counter: 'posts' },
+    { prompt: withMockSchema(rubricPrompt), counter: 'none' },
+    { prompt: withMockSchema(studioSuggestionPrompt), counter: 'posts' },
+    { prompt: withMockSchema(createNativeGenerationPrompt('single')), counter: 'none' },
+    { prompt: withMockSchema(createNativeGenerationPrompt('thread')), counter: 'none' },
+    { prompt: withMockSchema(createNativeGenerationPrompt('carousel')), counter: 'posts' },
+  ]
+
+  const trialExhaustedBoth: CustomerContext = {
+    ...mockContext,
+    trialState: { isTrial: true, postsRemaining: 0, campaignsRemaining: 0, brandVoiceAttemptsRemaining: 0 },
+  }
+
+  it('covers exactly ten distinct ids', () => {
+    expect(new Set(rows.map((r) => r.prompt.id)).size).toBe(10)
+  })
+
+  it.each(rows.map((r) => [r.prompt.id, r] as const))('%s: Step-1 refuses under an exhausted trial', async (_id, { prompt }) => {
+    await expect(runPrompt(prompt, trialExhaustedBoth, { text: 'hi' })).rejects.toMatchObject({ code: 'quota_exceeded' })
+    expect(mockCreate).not.toHaveBeenCalled()
+  })
+
+  it.each(rows.map((r) => [r.prompt.id, r] as const))('%s: Step-8 increments the classified counter (trial with quota)', async (_id, { prompt, counter }) => {
+    await runPrompt(prompt, mockContext, { text: 'hi' })
+    expect(incrementPostsGenerated).toHaveBeenCalledTimes(counter === 'posts' ? 1 : 0)
+    expect(incrementBrandVoiceAttempts).toHaveBeenCalledTimes(counter === 'brand-voice' ? 1 : 0)
+  })
+
+  it.each(rows.map((r) => [r.prompt.id, r] as const))('%s: a paid context is never refused and never increments', async (_id, { prompt }) => {
+    await runPrompt(prompt, paidContext, { text: 'hi' })
+    expect(incrementPostsGenerated).not.toHaveBeenCalled()
+    expect(incrementBrandVoiceAttempts).not.toHaveBeenCalled()
   })
 })

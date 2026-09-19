@@ -32,6 +32,10 @@ function makeOriginal(payload: Record<string, unknown>): PostAiOriginalRow {
     rendered_content: 'rendered',
     hashtags: [],
     schema_version: 1,
+    overall_score: null,
+    dimension_scores: null,
+    candidate_count: null,
+    cleared_quality_threshold: null,
     created_at: '2026-08-22T00:00:00Z',
   }
 }

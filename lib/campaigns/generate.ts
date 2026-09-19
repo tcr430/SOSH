@@ -1,13 +1,19 @@
 import * as Sentry from '@sentry/nextjs'
 import { formatISO } from 'date-fns'
-import { buildCustomerContext } from '@/lib/ai/context'
+import { buildCustomerContext, withPostQueryContext } from '@/lib/ai/context'
+import type { MemoryQueryContext } from '@/lib/memory'
 import { runPrompt } from '@/lib/ai/runner'
 import { rubricPrompt, BRIEF_QUALITY_THRESHOLD } from '@/lib/ai/prompts/rubric'
+import type { RubricOutput } from '@/lib/ai/prompts/rubric'
 import { PLATFORM_CONSTRAINTS, getPlatformConstraintsVersion } from '@/lib/ai/prompts/post-generation'
 import { generateNativeContent } from '@/lib/ai/generate-native'
 import { neutralize } from '@/lib/ai/wrap-evidence'
 import { MODELS } from '@/lib/ai/models'
 import { AiError } from '@/lib/ai/errors'
+import { config } from '@/lib/config'
+import { getBusinessById } from '@/lib/db/businesses'
+import { getBrandVoice } from '@/lib/db/brand-voices'
+import { reserveGenerationPost, releaseGenerationPost } from '@/lib/db/generation-budget'
 import { getCampaignById, activateCampaign } from '@/lib/db/campaigns'
 import { getBriefByCampaign, markBriefGenerated } from '@/lib/db/campaign-briefs'
 import { freezeBrief, type FrozenBrief } from '@/lib/campaigns/brief'
@@ -33,6 +39,14 @@ const CANONICAL_PLATFORM_ORDER: Platform[] = [
   'threads',
 ]
 
+// ADR 0024 §2.1 (Session 31, H2.7) — do not change without reopening the
+// ruling. 6 provider calls/post (3 generations + 3 judge calls) at ≈10¢
+// recorded is the founder-adjudicated point: N=5 would put A-1's Pro daily
+// cap at 58% of revenue (§7.4); N=2 gives the judge a binary choice where
+// one bad draw halves the expected lift. This also IS the concurrency bound
+// (§2.2) — candidates for one post are fired together, never more.
+const N_CANDIDATES = 3
+
 // ADR 0017 §4.3 — selectFormatFamily's `estimatedTweetsWorth` input has no
 // direct signal in CampaignBriefContent (B2.4 flagged this as a Stage-D
 // concern to resolve here). First-pass heuristic: a longer angle suggests a
@@ -42,10 +56,6 @@ function estimateTweetsWorth(angle: string): number {
   if (angle.length > 200) return 5
   if (angle.length > 80) return 3
   return 1
-}
-
-function extractOpener(output: SinglePostOutput | ThreadOutput): string {
-  return output.format === 'single' ? (output.body.split('\n')[0] ?? '') : (output.posts[0]?.text ?? '')
 }
 
 function joinContent(output: SinglePostOutput | ThreadOutput): string {
@@ -61,8 +71,25 @@ interface GeneratedItem {
   platform: Platform
   scheduledAt: string
   output: SinglePostOutput | ThreadOutput
+  // ADR 0024 §2.9 (Session 31, H2.5) — RETAINED, always 0/null at initial
+  // generation now that the judge REPLACES the openingStrength retry that
+  // used to set these. Do NOT repurpose as a candidate counter — conflating
+  // "the user asked for a regeneration" with "the pipeline generated N
+  // candidates" would corrupt ADR 0018's learning signal, which keys on
+  // generation_kind.
   regenerationCount: number
   previousContent: string | null
+  // The WINNING candidate's full-rubric score (neutralize()d
+  // joinContent(output), mode:'post'), argmax'd on `overall` over the N=3
+  // fan-out (ADR 0024 §2.6/§2.7, H2.7) — or null in the UNSCORED outcome
+  // (every judge call threw for this entry; the pipeline still proceeds,
+  // unscored and ungated, §2.3).
+  rubricScore: RubricOutput | null
+  // How many of the N=3 candidates actually generated for this entry (ADR
+  // §2.3's hard-fail/unscored/scored split needs this even when
+  // rubricScore is null; persisted verbatim into post_ai_originals'
+  // candidate_count, §8.2).
+  candidateCount: number
 }
 
 export async function generatePostsForCampaign(
@@ -170,10 +197,28 @@ export async function generatePostsForCampaign(
     }
 
     // STEP 4 — Build customer context (§4.3: pass variation so descriptor reflects campaign's voice)
-    // ADR 0017 §5.1 (L-10) — BYTE-IDENTICAL to the pre-B2.6 call. Memory
-    // wires into the BRIEF (assembled in Stage A, already frozen above),
-    // never into this context.
-    const ctx = await buildCustomerContext(businessId, campaign.voice_variation_id)
+    // ADR 0024 §5.1/§5.4 (Session 31, H2.11) — the campaign-level
+    // MemoryQueryContext: {objective, audience, campaignId}. `audience`
+    // needs one extra, cheap single-row read here — ctx (and its
+    // brandVoice.target_audience) doesn't exist until buildCustomerContext
+    // RETURNS, so it cannot supply its own queryContext's audience field.
+    // getBrandVoice is the SAME base read retrieveVoice performs internally
+    // (voice variations only override voice_axes, never target_audience),
+    // so this is not a second, drifting copy of voice resolution.
+    const brandVoiceForAudience = await getBrandVoice(client, businessId)
+    const queryContext: MemoryQueryContext = {
+      objective: campaign.objective,
+      audience: brandVoiceForAudience?.target_audience ?? undefined,
+      campaignId,
+    }
+    const ctx = await buildCustomerContext(businessId, campaign.voice_variation_id, queryContext)
+
+    // STEP 4b — Business plan (ADR 0024 §7.4/§7.5a, H2.9). CustomerContext
+    // does not carry `plan` (context.ts's business Pick omits it), and only
+    // the Pro tier's fan-out reservation below needs it — a separate,
+    // service-role read, same as checkCampaignCreationAllowed's pattern in
+    // lib/campaigns/enforcement.ts.
+    const business = await getBusinessById(client, businessId)
 
     if (!ctx.brandVoice) {
       await updateGenerationSessionStatus(client, sessionId, {
@@ -219,6 +264,16 @@ export async function generatePostsForCampaign(
     // frozen brief (ADR §5, MODE2-BRIEF-FROZEN) — not one joint call.
     const generated: GeneratedItem[] = []
 
+    // Session 31-D, D6 (MINOR-1). ADR §7.5a names two outcomes for a
+    // reserved unit — hard fail releases, success keeps — but did not name
+    // a third: a MID-CAMPAIGN reservation refusal, which left every EARLIER
+    // entry's already-reserved unit stranded (the whole session fails with
+    // postsCreated: 0, so those posts never exist, but their units stayed
+    // consumed against the day's cap). Tracks how many units this SESSION
+    // has successfully reserved so far, across platforms, so a refusal can
+    // release all of them rather than none.
+    let reservedUnitsSoFar = 0
+
     for (const platform of activePlatforms) {
       const entriesForPlatform = frozenBrief.content.roleSequence.filter((r) => r.platform === platform)
       const dates = scheduleMap.get(platform)!
@@ -241,11 +296,86 @@ export async function generatePostsForCampaign(
           estimatedTweetsWorth: estimateTweetsWorth(entry.angle),
         })
 
-        let output: SinglePostOutput | ThreadOutput
-        try {
-          output = await generateNativeContent(client, ctx, genInput())
-        } catch (err: unknown) {
-          const errorCode = err instanceof AiError ? err.code : 'generic'
+        const input = genInput()
+
+        // ADR 0024 §5.2b (Session 31, H2.11) — per-post refinement: platform
+        // and role are the strongest task discriminators WITHIN one
+        // campaign, and are only known per-entry, not at STEP 4's
+        // campaign-level call. Brand/evidence/audience/voice are NOT
+        // re-read (they cannot vary within one campaign) — only the
+        // performance slot is replaced, one extra lib/memory DB read.
+        //
+        // Session 31-D, D4 (MAJOR-4): spreads STEP 4's campaign-level
+        // queryContext ({objective, audience, campaignId}) in ALONGSIDE
+        // platform/role, rather than passing platform/role alone. Before
+        // this fix, campaignId never reached retrievePerformancePatterns on
+        // this path — computed once at STEP 4, then thrown away every time
+        // withPostQueryContext replaced it with a platform/role-only query.
+        const postCtx = await withPostQueryContext(ctx, { ...queryContext, platform: entry.platform, role: entry.role })
+
+        // STEP 7a-pre — Pro daily post cap (ADR §7.4/§7.5/§7.5a, A-1,
+        // QUAL-PRO-DAILY-POST-CAP). ONE reservation of ONE unit, BEFORE the
+        // fan-out below — never per candidate, which would reopen the
+        // check-then-call race N-fold inside a single generation (L-6's
+        // named loser). Only Pro reserves: Plus is already bounded by its
+        // 250-posts/month product cap and trial by AI_TRIAL_POST_CAP (STEP
+        // 5 above) — a different guard, in a different place (§7.4 table).
+        // A denied reservation uses its OWN error_code, distinct from the
+        // trial cap's 'quota_exceeded' (STEP 5) — the two cases need
+        // different copy, and reusing one code would show a Pro customer
+        // the trial-limit string.
+        let reservedGenerationBudget = false
+        if (business.plan === 'pro') {
+          const reservation = await reserveGenerationPost(businessId, config.server.AI_PRO_DAILY_POST_CAP)
+          if (reservation === null) {
+            // Session 31-D, D6 (MINOR-1) — release every unit reserved by
+            // THIS session's earlier entries before failing. Without this,
+            // a 12-entry campaign that fails on entry 6 leaves entries 1-5's
+            // units consumed against the day's cap for zero posts created.
+            for (let released = 0; released < reservedUnitsSoFar; released++) {
+              await releaseGenerationPost(businessId)
+            }
+            await updateGenerationSessionStatus(client, sessionId, {
+              status: 'failed',
+              error_code: 'daily_quota_exceeded',
+              completed_at: formatISO(new Date()),
+            })
+            return { sessionId, postsCreated: 0 }
+          }
+          reservedGenerationBudget = true
+          reservedUnitsSoFar++
+        }
+
+        // STEP 7a — N=3 candidates, PARALLEL within this post (ADR 0024
+        // §2.1/§2.2). Posts stay SEQUENTIAL: this whole block is awaited
+        // before the entry loop's next iteration starts, so the fan-out
+        // width (N) IS the concurrency bound — no separate limiter needed,
+        // and the STEP-2 rate-limit overshoot this can cause is capped at
+        // N-1 (§2.2, QUAL-RATE-LIMIT-COUNTS-CALLS).
+        const candidateResults = await Promise.allSettled(
+          Array.from({ length: N_CANDIDATES }, () => generateNativeContent(client, postCtx, input)),
+        )
+
+        const succeeded: Array<{ index: number; output: SinglePostOutput | ThreadOutput }> = []
+        candidateResults.forEach((result, index) => {
+          if (result.status === 'fulfilled') succeeded.push({ index, output: result.value })
+        })
+
+        // HARD FAIL (ADR §2.3) — 0 of N candidates generated. Unchanged
+        // from the pre-fan-out path: the whole session fails. Uses the
+        // LAST attempt's error (array position N-1) — deterministic, and
+        // matches "error_code from the last AiError" (§2.3) without
+        // depending on unguaranteed settle-order.
+        if (succeeded.length === 0) {
+          // ADR §7.5a — a hard-failed generation releases its reserved
+          // unit; a generation that succeeds keeps it regardless of
+          // candidate count, so this is the ONLY release path.
+          if (reservedGenerationBudget) {
+            await releaseGenerationPost(businessId)
+          }
+          const lastResult = candidateResults[candidateResults.length - 1]
+          const lastError = lastResult.status === 'rejected' ? lastResult.reason : undefined
+          const errorCode = lastError instanceof AiError ? lastError.code : 'generic'
           await updateGenerationSessionStatus(client, sessionId, {
             status: 'failed',
             error_code: errorCode,
@@ -254,53 +384,107 @@ export async function generatePostsForCampaign(
           return { sessionId, postsCreated: 0 }
         }
 
-        // ADR §7 — the hook Tier-2 loop. Score the opener against the
-        // rubric's openingStrength dimension (the dimension purpose-built
-        // for this, §6.1); regenerate ONCE if below threshold, no re-score
-        // of the second attempt (bounded — this is the ONLY Tier-2 in the
-        // whole pipeline, no Tier-3 anywhere).
-        let regenerationCount = 0
-        let previousContent: string | null = null
-        try {
-          // Session 24-D (MINOR-7 correction) — the opener is the model's OWN
-          // prior output being fed back into a second AI call, same reused-
-          // AI-generated-text shape as brief.ts's narrative/proofPlan
-          // (B2.5 security-reviewer pass) — neutralize() (wrap-evidence.ts,
-          // NFKC + Cf-strip + fence/brace/[/DATA]-closer defusal) is the
-          // stated L-9 posture for that shape, stronger than rubric.ts's own
-          // local ASCII-literal-only sanitizeDataField.
-          const openerScore = await runPrompt(rubricPrompt, ctx, {
-            mode: 'post' as const,
-            contentLabel: `${entry.platform} post opener`,
-            content: neutralize(extractOpener(output)),
-            platform: entry.platform,
-          })
-          if (openerScore.dimensions.openingStrength.score < BRIEF_QUALITY_THRESHOLD) {
-            previousContent = joinContent(output)
-            output = await generateNativeContent(client, ctx, genInput())
-            regenerationCount = 1
+        // STEP 7b — judge every SUCCEEDED candidate, also in parallel (ADR
+        // §2.6, §2.9 — the judge REPLACES the retired openingStrength
+        // retry, MODE2-HOOK-STANDALONE). Full-rubric score of the WHOLE
+        // candidate via joinContent, never a single sentence — nine of the
+        // ten dimensions are undefined over one sentence. Each candidate is
+        // neutralize()'d first: it is the model's own prior output fed back
+        // into a second AI call, the same reused-AI-generated-text shape as
+        // brief.ts's narrative/proofPlan (B2.5 security-reviewer pass) —
+        // neutralize() (wrap-evidence.ts, NFKC + Cf-strip + fence/brace/
+        // [/DATA]-closer defusal) is the stated L-9 posture for that shape.
+        const judgeResults = await Promise.allSettled(
+          succeeded.map(({ output }) =>
+            runPrompt(rubricPrompt, postCtx, {
+              mode: 'post' as const,
+              contentLabel: `${entry.platform} post`,
+              content: neutralize(joinContent(output)),
+              platform: entry.platform,
+            }),
+          ),
+        )
+
+        const scored: Array<{ index: number; output: SinglePostOutput | ThreadOutput; score: RubricOutput }> = []
+        judgeResults.forEach((result, i) => {
+          if (result.status === 'fulfilled') {
+            scored.push({ index: succeeded[i].index, output: succeeded[i].output, score: result.value })
           }
-        } catch (hookErr: unknown) {
-          // A hook-scoring hiccup (e.g. rate limit) must not abort a
-          // generation that already succeeded — logged, not silently
-          // swallowed, and the original content stands unregenerated.
+        })
+
+        let winningOutput: SinglePostOutput | ThreadOutput
+        let winningScore: RubricOutput | null
+
+        if (scored.length === 0) {
+          // UNSCORED (ADR §2.3) — at least 1 candidate generated, but
+          // EVERY judge call threw. Proceed with the lowest-index
+          // SUCCEEDED candidate, unscored and ungated — the backward-
+          // compatible extension of the pre-H2.7 swallow-and-continue. ONE
+          // structured log line for the outcome, not one per failed judge
+          // call.
           console.log(JSON.stringify({
-            kind: 'campaign.generate.hook_loop_scoring_failed',
+            kind: 'campaign.generate.judge_scoring_failed',
             level: 'warn',
             campaign_id: campaignId,
             platform: entry.platform,
-            error: hookErr instanceof Error ? hookErr.message : String(hookErr),
+            candidate_count: succeeded.length,
+          }))
+          const lowest = succeeded.reduce((min, c) => (c.index < min.index ? c : min))
+          winningOutput = lowest.output
+          winningScore = null
+        } else {
+          // SCORED — argmax on `overall` over the scored subset; unscored
+          // candidates are never eligible to win. Deterministic tie-break:
+          // the lowest candidate index (ADR §2.7) — no hidden preference,
+          // no randomness.
+          const winner = scored.reduce((best, c) => {
+            if (c.score.overall > best.score.overall) return c
+            if (c.score.overall === best.score.overall && c.index < best.index) return c
+            return best
+          })
+          winningOutput = winner.output
+          winningScore = winner.score
+
+          // ADR 0024 §13 (H2.13) — interim instrumentation, LOGGED not
+          // GATED, not a constraint. The judge self-discrimination margin:
+          // winner's overall minus the SCORED subset's median. This proves
+          // the judge discriminates (a measurable margin) — it does NOT
+          // prove that discrimination tracks real quality (ADR 0015
+          // Amendment B's MEASURED-NEVER-COVERED posture; no eval corpus
+          // exists yet to check that, Session 32).
+          const sortedOveralls = scored.map(c => c.score.overall).sort((a, b) => a - b)
+          const mid = Math.floor(sortedOveralls.length / 2)
+          const median = sortedOveralls.length % 2 === 0
+            ? (sortedOveralls[mid - 1] + sortedOveralls[mid]) / 2
+            : sortedOveralls[mid]
+          console.log(JSON.stringify({
+            kind: 'campaign.generate.judge_discrimination_margin',
+            level: 'info',
+            campaign_id: campaignId,
+            platform: entry.platform,
+            candidate_count: scored.length,
+            winner_overall: winner.score.overall,
+            median_overall: median,
+            margin: winner.score.overall - median,
+            note: 'proves the judge discriminates candidates; does NOT prove discrimination tracks real post quality',
           }))
         }
 
+        // ADR §2.8 — ALL N below BRIEF_QUALITY_THRESHOLD is not a failure:
+        // the best of the set is surfaced, flagged. No regeneration (§2.8's
+        // named loser: unbounded by construction), no Opus escalation.
+        // §8.1 — losing candidate CONTENT is discarded here: only
+        // winningOutput/winningScore ever reach `generated`.
         generated.push({
           order: entry.order,
           role: entry.role,
           platform: entry.platform,
           scheduledAt,
-          output,
-          regenerationCount,
-          previousContent,
+          output: winningOutput,
+          regenerationCount: 0,
+          previousContent: null,
+          rubricScore: winningScore,
+          candidateCount: succeeded.length,
         })
       }
     }
@@ -366,10 +550,15 @@ export async function generatePostsForCampaign(
         platformConstraintsVersion: getPlatformConstraintsVersion(),
         rationale: frozenBrief.content.roleSequence.find((r) => r.order === g.order)?.angle ?? '',
         regenerationCount: g.regenerationCount,
-        previousVersions:
-          g.previousContent !== null
-            ? [{ content: g.previousContent, rejectionNote: 'weak opener (openingStrength below threshold)', regeneratedAt: generatedAt }]
-            : [],
+        // Session 31-D, D15 (NIT-1). `g.previousContent` is hard-coded `null`
+        // at this file's own construction (:485) — the ternary this replaced
+        // was dead residue from the retired openingStrength hook retry (ADR
+        // 0024 §2.9), which was the only path that ever set it non-null, and
+        // whose stale rejectionNote string ("weak opener...") no longer
+        // describes anything the judge-based pipeline does. `previousVersions`
+        // itself stays a real, reusable array — actions.ts's regenerate flow
+        // appends its own, user-supplied rejectionNote to it.
+        previousVersions: [],
         generatedAt,
       }
       return {
@@ -418,6 +607,16 @@ export async function generatePostsForCampaign(
           payload: g.output,
           rendered_content: renderedContent,
           schema_version: AI_ORIGINAL_SCHEMA_VERSION,
+          // ADR 0024 §8.2 (H2.7) — the WINNER's score, persisted alongside
+          // the payload it belongs to. null/null/false when the entry was
+          // UNSCORED (§2.3) — an absent badge must not read as a passing
+          // one (§8.3), so cleared_quality_threshold is null, not a
+          // defaulted false, whenever rubricScore itself is null.
+          overall_score: g.rubricScore?.overall ?? null,
+          dimension_scores: g.rubricScore?.dimensions ?? null,
+          candidate_count: g.candidateCount,
+          cleared_quality_threshold:
+            g.rubricScore !== null ? g.rubricScore.overall >= BRIEF_QUALITY_THRESHOLD : null,
         }),
       ),
     )

@@ -1,7 +1,7 @@
 import { timingSafeEqual } from 'crypto'
 import { type NextRequest, NextResponse } from 'next/server'
 import { config } from '@/lib/config'
-import { getRegistry } from '@/lib/social'
+import { getRegistry, VALID_PLATFORMS } from '@/lib/social'
 
 function safeCompare(a: string, b: string): boolean {
   if (a.length !== b.length) return false
@@ -28,28 +28,34 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
   }
 
-  let providerName: string
+  // ADR 0028 §8.3 (N2.11) — no single app-wide "provider" name any more:
+  // the registry is per-platform and overrides-only (§8.2), so absence is
+  // per-platform too. Report each platform's actual resolved provider (or
+  // 'not_configured' when get() would throw) rather than one broker label.
+  let providers: Record<string, string>
   let status: 'ok' | 'error'
 
   try {
-    getRegistry()
+    const registry = getRegistry()
 
-    try {
-      const mode = config.server.SOCIAL_PROVIDER_MODE
-      const postizUrl = config.server.POSTIZ_BASE_URL
-      providerName = mode === 'mock' ? 'mock' : postizUrl ? 'postiz' : 'mock'
-    } catch {
-      providerName = 'unknown'
-    }
+    providers = Object.fromEntries(
+      VALID_PLATFORMS.map((platform) => {
+        try {
+          return [platform, registry.get(platform).platform]
+        } catch {
+          return [platform, 'not_configured']
+        }
+      }),
+    )
 
     status = 'ok'
   } catch {
-    providerName = 'unknown'
+    providers = {}
     status = 'error'
   }
 
   return NextResponse.json({
-    provider: providerName,
+    providers,
     status,
     platform_count: PLATFORM_COUNT,
     env: config.public.NODE_ENV,

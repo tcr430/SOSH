@@ -80,17 +80,29 @@ sql_paths = ["./seed.sql"]
 # hard ceiling on the worst-case memory fan-out behind the recovery-mode crash
 # (S427-S430).
 max_connections = 50
-# shared_buffers: default is 128MB; on a 7GB runner shared with GoTrue+PostgREST+
-# Docker, keeping this modest leaves headroom for the auth-heavy setup
-# (admin.createUser/bcrypt) rather than the OS cache.
-shared_buffers = "256MB"
+# shared_buffers: LOWERED from 256MB to Postgres's own default 128MB (Session
+# 30.5-D, D8, BLOCKER-2). Three consecutive db-tests reds (be03c917, b6580b84,
+# 608f3839) all show the SAME signature — every role incl. service_role gets a
+# 503 mid-suite after prior 204 successes, with `57P03 database system is in
+# recovery mode` in the container log and `OOMKilled: false` on the Postgres
+# container. database-reviewer's diagnosis: OOMKilled:false does not rule out
+# memory pressure — Postgres is multi-process, and a cgroup kill of a CHILD
+# backend (a GoTrue-driven connection, a checkpointer) never sets the
+# postmaster's own OOMKilled flag, but Postgres's crash-recovery design still
+# terminates every backend and restarts into recovery, producing exactly this
+# 57P03 signature. The 256MB bump (chosen for "headroom... rather than the OS
+# cache") competed with GoTrue's bcrypt-heavy admin.createUser spikes for the
+# same constrained runner memory instead of leaving room for them — reverted.
+shared_buffers = "128MB"
 # work_mem: per-sort/hash allocation. The RLS-matrix suites do many small scans, not
 # big sorts, so a low cap prevents a pathological query from ballooning *
 # max_connections.
 work_mem = "8MB"
-# maintenance_work_mem: db reset re-applies all migrations (index builds); a modest
-# bump keeps resets fast without competing with the connection pool at test time.
-maintenance_work_mem = "128MB"
+# maintenance_work_mem: LOWERED from 128MB to 64MB (Session 30.5-D, D8,
+# BLOCKER-2, same diagnosis as shared_buffers above). This migration set's
+# index builds are not large; the prior value competed with GoTrue's memory
+# spikes for no real benefit to db reset speed.
+maintenance_work_mem = "64MB"
 
 [db.network_restrictions]
 # Enable management of network restrictions.

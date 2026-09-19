@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { PerformanceMemoryRow, PerformanceMemoryInsert } from './types'
+import type { PerformanceMemoryRow, PerformanceMemoryInsert, PerformanceMemoryImportInsert } from './types'
 import { getErrorMessage } from './utils'
 import { MEMORY_CANDIDATE_LIMIT } from './memory-constants'
 import { neutralizeWithSentinels } from '@/lib/ai/wrap-evidence'
@@ -239,4 +239,61 @@ export async function demotePerformancePattern(
   if (error) throw new Error(getErrorMessage(error))
   const row = Array.isArray(data) ? data[0] : data
   return (row as PerformanceMemoryRow | undefined) ?? null
+}
+
+// ADR 0025 §9.4 (Session 32 I2.7) — the ONLY writer that produces
+// source='import' performance_memory rows, over import_performance_memory
+// (20260913140000/150000_*.sql). Distinct from upsertDistilledPerformancePattern
+// above (source='distilled', import_run_id NULL always) — the two never
+// collide because their partial UNIQUE indexes are disjoint on `source`.
+// service-role, lazy-imported, no client parameter. Callers: ONLY
+// lib/memory/import.ts (MEM-NO-DIRECT-TABLE-ACCESS; enforced by
+// lib/memory/import.test.ts's source scan).
+//
+// BACKFILL-SENTINEL-GUARDED — neutralizeWithSentinels() applied to
+// `pattern` HERE, the SAME function and the SAME choke-point pattern as
+// upsertDistilledPerformancePattern's MEM-PATTERN-SENTINEL-GUARDED guard
+// above — not a second copy, not skipped because this is "just" arithmetic
+// input, since I2.11's model-derived topic/hook/proof_type patterns also
+// route through here. Governance columns are fixed inside the RPC — this
+// type has no field for them.
+export async function importPerformanceMemory(insert: PerformanceMemoryImportInsert): Promise<PerformanceMemoryRow[]> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client.rpc('import_performance_memory', {
+    p_business_id: insert.business_id,
+    p_import_run_id: insert.import_run_id,
+    p_import_source_post_ids: insert.import_source_post_ids,
+    p_dimension: insert.dimension,
+    p_pattern: neutralizeWithSentinels(insert.pattern),
+    p_platform: insert.platform,
+    p_scope: insert.scope,
+    p_scope_ref: insert.scope_ref,
+    p_confidence: insert.confidence,
+    p_observation_count: insert.observation_count,
+    p_last_confirmed_at: insert.last_confirmed_at,
+    p_expires_at: insert.expires_at,
+  })
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as PerformanceMemoryRow[]) ?? []
+}
+
+// ADR 0025 §10.3/§10.4 (Session 32 I2.14) — see listEvidenceCandidatesForRun's
+// comment in memory-evidence.ts for the run-scoping rationale. observation_count
+// is what lets the UI render "based on N posts" instead of an instruction.
+export async function listPerformanceCandidatesForRun(
+  client: SupabaseClient,
+  runId: string,
+): Promise<PerformanceMemoryRow[]> {
+  const { data, error } = await client
+    .from('performance_memory')
+    .select('*')
+    .eq('import_run_id', runId)
+    .eq('source', 'import')
+    .eq('status', 'candidate')
+    .is('deleted_at', null)
+    .order('confidence', { ascending: false })
+    .limit(15)
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as PerformanceMemoryRow[]) ?? []
 }

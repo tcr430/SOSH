@@ -39,6 +39,8 @@ function evidenceRow(content: string): EvidenceMemoryRow {
     scope_ref: null,
     last_confirmed_at: null,
     recency_at: '2026-01-01T00:00:00.000Z',
+    import_run_id: null,
+    import_source_post_ids: null,
     expires_at: null,
     deleted_at: null,
     created_at: '2026-01-01T00:00:00.000Z',

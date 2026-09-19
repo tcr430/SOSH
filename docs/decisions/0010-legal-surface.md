@@ -1082,8 +1082,10 @@ GRANT EXECUTE ON FUNCTION public.purge_business(uuid) TO service_role;
 | signals | yes (business_id) | CASCADE | yes | none — cascade = erasure (holds third-party-authored release text; contributor identity fields are never stored, ADR 0020 §5.3) |
 | signal_candidates | yes (business_id + signal_id) | CASCADE (both) | yes | none — cascade = erasure |
 | insight_cards | yes (business_id) | CASCADE | yes | none — cascade = erasure (quotes third-party-authored release text; contributor identity is never stored, ADR 0020 §5.3) |
-| signal_triage_budget | yes (business_id) | CASCADE | yes | none — cascade = erasure (holds only a per-day cent counter) |
+| ai_budget_daily | yes (business_id) | CASCADE | yes | none — cascade = erasure (holds only a per-day, per-purpose unit counter; renamed from signal_triage_budget, ADR 0024 §7.5b, Session 31 H2.8 — same row, same FK, same cascade, purpose column added carries no personal data) |
 | watched_feeds | yes (business_id) | CASCADE | yes | none — cascade = erasure, exercised by `purge_business`'s root `DELETE FROM public.businesses` (no explicit per-table statement in the function body); holds the customer's own subscribed feed URL/label, ADR 0023 §3.2 |
+| social_backfill_runs | yes (business_id + social_account_id) | CASCADE (both) | yes | none — cascade = erasure (holds `staged_voice`, which may include verbatim post excerpts, and account statistics; ADR 0025 §9.1) |
+| social_backfill_posts | yes (business_id + run_id) | CASCADE (both) | yes | none — cascade = erasure (holds the customer's own imported post text, which may quote third parties; short-lived by design, ADR 0025 §8.3) |
 
 Only `business_deletion_requests` (NO ACTION) would have blocked the root delete; D2.1 resolves it. Every other business-scoped table either cascades or is deliberately retained.
 
@@ -1128,6 +1130,31 @@ Tier-1 cases) proves erasure reaches rows carrying the new columns specifically.
 added a new Postgres FUNCTION (`get_latest_post_ai_originals`, `SECURITY INVOKER`, no new table or column)
 — functions carry no PII of their own and need no cascade row. No other table-shaped change landed in
 Session 29 or its correction pass.
+
+**Session 30.5 N2.4 note (2026-09-04):** ADR 0028 (native social providers) added one new **column**,
+`posts.social_account_id` (migration `20260904100000_posts_social_account_id.sql`) — no new table, so
+**no new §D2.5 row is required**; the existing `posts` row above already covers the whole table by its
+`business_id` CASCADE. The new column's own FK (`-> social_accounts(id) ON DELETE SET NULL`, not CASCADE)
+is a *second*, independent reference and is worth stating explicitly rather than assuming table-level
+coverage settles it: disconnecting a social account SETs NULL on any post that referenced it, but never
+deletes the post — so a business erasure still removes every post for that business through the
+unrelated `business_id CASCADE` FK regardless of what `social_account_id` holds at the time, and
+`social_accounts` rows are themselves purged in the same cascade (with `vault_delete_secret` run first,
+per the existing `social_accounts` row above) — no ordering dependency between the two FKs, no orphaned
+row, no erasure gap.
+
+**Session 31-D note (2026-09-12, D13 — MINOR-7):** ADR 0024 (generation quality core) added four new
+**columns** to `post_ai_originals` (`overall_score`, `dimension_scores`, `candidate_count`,
+`cleared_quality_threshold`; migration `20260909100000_post_ai_original_scores.sql`) — no new table, so
+**no new §D2.5 row is required**, on the same `studio_drafts`/`posts` precedent already recorded above: the
+existing `post_ai_originals` row already covers the whole table by its `business_id` (and `post_id`/
+`campaign_id`) CASCADE. `QUAL-SCORE-ERASURE` (ADR 0024 constraint 26, Tier 1,
+`supabase/__tests__`) is the executable proof that `purge_business` removes rows carrying these four new
+columns specifically, mirroring the `PROMOTE-CASCADE-COMPLETE` precedent Session 29-D's note above cites for
+the same purpose. `ai_budget_daily` (renamed from `signal_triage_budget`, same ADR, §7.5b) is a rename with
+a `purpose` column added, not a new table — already covered by the existing row for that table under its
+new name, and it was never customer-content-bearing (a per-day reservation counter) so no redaction question
+arises. No other table-shaped change landed in Session 31 or its correction pass.
 
 #### D2.6 — Retention & redaction (D1 / D2)
 

@@ -2,11 +2,18 @@ import { differenceInDays } from 'date-fns'
 import type { MemoryScope, MemoryStatus } from '@/lib/db/types'
 import { MEMORY_SCORE_WEIGHTS } from './constants'
 
-// ADR 0016 §5.2 — the task shape already known at generation time.
+// ADR 0016 §5.2 — the task shape already known at generation time. ADR 0024
+// §5.1 (Session 31, H2.11) adds `role` and `campaignId`: role is the post's
+// role in the frozen roleSequence (the strongest task discriminator WITHIN
+// one campaign, threaded through even though no MemoryScope value maps to
+// it yet); campaignId makes the EXISTING 'campaign' scope-match branch below
+// do real work — nothing ever supplied it before.
 export type MemoryQueryContext = {
   objective?: string
   platform?: string
   audience?: string
+  role?: string
+  campaignId?: string
 }
 
 type Scorable = {
@@ -33,13 +40,19 @@ export function recencyDecay(recencyAt: string, now: Date): number {
 }
 
 // scope/scope_ref governance-scope match against the per-call queryContext.
-// 'brand' and 'contact' scopes carry no queryContext-comparable scope_ref in
-// Track A's queryContext shape (objective/platform/audience) — they are
-// broadly relevant by construction, not a "no match" default. 'platform'
-// and 'campaign' scopes DO have a comparable field; an unset scope_ref on
-// those is a partial (not full, not zero) match — a record scoped to "some
-// platform, unspecified" is more relevant than an outright mismatch but
-// less certain than an exact one.
+// 'brand' and 'contact' scopes carry no queryContext-comparable scope_ref —
+// they are broadly relevant by construction, not a "no match" default.
+// 'platform' and 'campaign' scopes DO have a comparable field; an unset
+// scope_ref on those is a partial (not full, not zero) match — a record
+// scoped to "some platform, unspecified" is more relevant than an outright
+// mismatch but less certain than an exact one.
+//
+// ADR 0024 §5.1 (Session 31, H2.11) — the 'campaign' branch now compares
+// against `queryContext.campaignId`, not `.objective`. A campaign's
+// scope_ref is the campaign's id (the natural key for "specific to one
+// campaign"), never its free-text objective; comparing against `.objective`
+// was dead code in production — no caller ever supplied a campaignId, and
+// an objective STRING was never a stand-in for a campaign's identity.
 export function scopeMatch(
   record: Pick<Scorable, 'scope' | 'scope_ref'>,
   queryContext: MemoryQueryContext,
@@ -54,7 +67,7 @@ export function scopeMatch(
       return record.scope_ref === queryContext.platform ? 1 : 0
     case 'campaign':
       if (!record.scope_ref) return 0.5
-      return record.scope_ref === queryContext.objective ? 1 : 0
+      return record.scope_ref === queryContext.campaignId ? 1 : 0
   }
 }
 

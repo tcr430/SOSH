@@ -53,7 +53,7 @@ describe('recencyDecay', () => {
 })
 
 describe('scopeMatch', () => {
-  const ctx: MemoryQueryContext = { platform: 'linkedin', objective: 'awareness', audience: 'CTOs' }
+  const ctx: MemoryQueryContext = { platform: 'linkedin', objective: 'awareness', audience: 'CTOs', campaignId: 'camp-1', role: 'anchor_thesis' }
 
   it('brand scope always matches fully, regardless of queryContext', () => {
     expect(scopeMatch({ scope: 'brand', scope_ref: null }, {})).toBe(1)
@@ -76,12 +76,20 @@ describe('scopeMatch', () => {
     expect(scopeMatch({ scope: 'platform', scope_ref: null }, ctx)).toBe(0.5)
   })
 
-  it('campaign scope matches fully when scope_ref equals queryContext.objective', () => {
-    expect(scopeMatch({ scope: 'campaign', scope_ref: 'awareness' }, ctx)).toBe(1)
+  it('campaign scope matches fully when scope_ref equals queryContext.campaignId (ADR 0024 §5.1, H2.11)', () => {
+    expect(scopeMatch({ scope: 'campaign', scope_ref: 'camp-1' }, ctx)).toBe(1)
   })
 
-  it('campaign scope scores zero when scope_ref does not match the objective', () => {
-    expect(scopeMatch({ scope: 'campaign', scope_ref: 'lead-gen' }, ctx)).toBe(0)
+  it('campaign scope scores zero when scope_ref does not match campaignId', () => {
+    expect(scopeMatch({ scope: 'campaign', scope_ref: 'camp-2' }, ctx)).toBe(0)
+  })
+
+  it('campaign scope no longer matches against objective — a fixed bug (§5.1): scope_ref equal to objective text is NOT a match', () => {
+    expect(scopeMatch({ scope: 'campaign', scope_ref: 'awareness' }, ctx)).toBe(0)
+  })
+
+  it('campaign scope with no scope_ref is a partial match, not a full or zero match', () => {
+    expect(scopeMatch({ scope: 'campaign', scope_ref: null }, ctx)).toBe(0.5)
   })
 })
 

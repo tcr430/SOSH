@@ -127,7 +127,7 @@ const mockCampaign: CampaignRow = {
 }
 
 const mockDraftPost: PostRow = {
-  id: POST_ID, campaign_id: CAMPAIGN_ID, business_id: BUSINESS_ID,
+  id: POST_ID, campaign_id: CAMPAIGN_ID, business_id: BUSINESS_ID, social_account_id: null,
   platform: 'linkedin', content: 'The previous draft', hashtags: ['#saas'],
   media_urls: [], scheduled_at: '2026-08-01T10:00:00Z', published_at: null,
   platform_post_id: null, platform_url: null, status: 'draft',

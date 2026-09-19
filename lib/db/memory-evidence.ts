@@ -1,7 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { EvidenceMemoryRow } from './types'
+import type { EvidenceMemoryRow, EvidenceMemoryImportInsert } from './types'
 import { getErrorMessage } from './utils'
 import { MEMORY_CANDIDATE_LIMIT } from './memory-constants'
+import { neutralizeWithSentinels } from '@/lib/ai/wrap-evidence'
 
 // ADR 0016 §5.1 (Q4) — candidate query only. No scoring, no capping; that is
 // lib/memory/evidence.ts's job (B2). business_id is filtered explicitly
@@ -52,6 +53,63 @@ export async function getEvidenceMemoryByIds(
     .eq('status', 'active')
     .is('deleted_at', null)
     .order('created_at', { ascending: true })
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as EvidenceMemoryRow[]) ?? []
+}
+
+// ADR 0025 §9.4 (Session 32 I2.7) — the ONLY writer that produces
+// source='import' evidence_memory rows, over import_evidence_memory
+// (20260913140000/150000_*.sql). service-role, lazy-imported, no client
+// parameter — matches lib/db/generation-budget.ts's shape. Callers: ONLY
+// lib/memory/import.ts (MEM-NO-DIRECT-TABLE-ACCESS; enforced by
+// lib/memory/import.test.ts's source scan).
+//
+// BACKFILL-SENTINEL-GUARDED — neutralizeWithSentinels() (the SAME function
+// memory-performance.ts's upsertDistilledPerformancePattern already uses,
+// not a second copy) is applied to `content` HERE, at the sole choke point
+// this table's import path funnels through, not at the caller — mirrors
+// the MEM-PATTERN-SENTINEL-GUARDED precedent exactly. Governance columns
+// (source, status, sensitivity, public_use_permission) are fixed inside the
+// RPC — this type has no field for them, so they cannot be passed wrong.
+export async function importEvidenceMemory(insert: EvidenceMemoryImportInsert): Promise<EvidenceMemoryRow[]> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client.rpc('import_evidence_memory', {
+    p_business_id: insert.business_id,
+    p_import_run_id: insert.import_run_id,
+    p_import_source_post_ids: insert.import_source_post_ids,
+    p_kind: insert.kind,
+    p_content: neutralizeWithSentinels(insert.content),
+    p_source_url: insert.source_url,
+    p_scope: insert.scope,
+    p_scope_ref: insert.scope_ref,
+    p_confidence: insert.confidence,
+    p_last_confirmed_at: insert.last_confirmed_at,
+    p_expires_at: insert.expires_at,
+  })
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as EvidenceMemoryRow[]) ?? []
+}
+
+// ADR 0025 §10.3 (Session 32 I2.14) — the onboarding review page's own read:
+// the CANDIDATE rows staged by a backfill run, never 'active' ones. Keyed by
+// import_run_id (not business_id) so two concurrent runs on one business
+// never mix each other's candidates (BACKFILL-ACCOUNTS-SEPARATE). Uses the
+// caller's own anon/RLS client — the member SELECT policy is the real
+// boundary, same convention as listEvidenceMemoryCandidates above.
+export async function listEvidenceCandidatesForRun(
+  client: SupabaseClient,
+  runId: string,
+): Promise<EvidenceMemoryRow[]> {
+  const { data, error } = await client
+    .from('evidence_memory')
+    .select('*')
+    .eq('import_run_id', runId)
+    .eq('source', 'import')
+    .eq('status', 'candidate')
+    .is('deleted_at', null)
+    .order('confidence', { ascending: false })
+    .limit(40)
   if (error) throw new Error(getErrorMessage(error))
   return (data as EvidenceMemoryRow[]) ?? []
 }
