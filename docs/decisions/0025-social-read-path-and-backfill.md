@@ -1479,3 +1479,26 @@ locally (`test:db` 452/452 at D8, per that commit body), and they are the same t
 at the previous head; but I have not re-run them in isolation on CI. **Consequence, per the step's own rule: Tier
 1 stays uncovered.** Resolving it needs the supautils/Postgres image fix or a green rerun; a rerun of the same
 job is not evidence either way until it is read.
+
+### 15.11 db-tests fixed and re-read at `15beb540` (supersedes §15.9's Tier-1 column and §15.10's "not covered")
+
+§15.10 stated that Tier 1 stays uncovered while db-tests is red. The workflow's own comment already named the cause
+(Postgres image `17.6.1.099-17.6.1.112`, broken `supautils` 3.2.x, SIGSEGV on any EXECUTE-denied SECURITY DEFINER
+call, fixed in `17.6.1.113+`), and all seven failures were exactly that call shape. Fix, in
+`.github/workflows/db-tests.yml` (`15beb540`): pull `ghcr.io/supabase/postgres:17.6.1.113`, re-point the `.111` tag
+the CLI resolves to at it, start the stack, then **fail the job unless the running DB container's image ID equals the
+`.113` image ID**.
+
+Read from the run log at `15beb540` (all `pull_request`, PR #9): **db-tests**
+[35436865202](https://github.com/tcr430/SOSH/actions/runs/35436865202) green — image check printed
+`want=sha256:bd620fdea28b… got=sha256:bd620fdea28b…` (equal), no `signal 11` in the log, and the skip-guard reads
+`62 file(s) under [supabase/__tests__] all visible, zero failures — green. (452/452 tests passed)`. **app-tests**
+[35436865152](https://github.com/tcr430/SOSH/actions/runs/35436865152) green, `277 file(s) … (3894/3894 tests passed)`.
+**eval** [35436865175](https://github.com/tcr430/SOSH/actions/runs/35436865175) green.
+
+**Consequence for §15.9:** the 16 Tier-1 rows are now **executed green in CI at `15beb540`** (db-tests run
+35436865202, 62 files / 452 tests), replacing "NOT covered"; the other tiers are unchanged. **What the fix does not
+change:** the earlier caveat that the crash was not proven to explain each of the seven failures is closed by the
+rerun — the same seven tests pass on the fixed image with no code change to them. Tier 3 still cites §15.1; Tier E
+(#55) is still MEASURED — NOT YET RUN. This remains a `pull_request` run: it does not move the `db-tests` promotion
+tally.

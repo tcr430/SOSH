@@ -610,3 +610,15 @@ NIT-3 is a recorded decision rather than a code change. The adjudicated executio
 LinkedIn cold start is **not solved** (A-1; the provider still reports `historicalReadAvailable = false`). Tier E
 (#55, `BACKFILL-POPULATED-MEMORY-EVAL`) is **MEASURED — NOT YET RUN**, though it is now performable through the
 product. No claim is made here about the quality or memory yield of the backfill.
+
+#### D12 addendum — db-tests fixed and re-read (author: correction pass, after `ed14894b`)
+
+The closing block above records db-tests as RED at `c6f087d2` and Tier 1 as uncovered; that stays as written. Cause
+per the workflow's own comment and the log's `signal 11`: Postgres image `17.6.1.111` (broken supautils). Fix
+`15beb540`: shadow the tag with `17.6.1.113`, and fail the job unless the DB container's image ID matches. Re-read at
+`15beb540`: db-tests [35436865202](https://github.com/tcr430/SOSH/actions/runs/35436865202) **green** —
+`skip-guard: 62 file(s) under [supabase/__tests__] all visible, zero failures — green. (452/452 tests passed)`;
+app-tests [35436865152](https://github.com/tcr430/SOSH/actions/runs/35436865152) green (277 files, 3894/3894); eval
+[35436865175](https://github.com/tcr430/SOSH/actions/runs/35436865175) green. The seven tests that failed pass with no
+change to them. **Tier 1 is now executed green in CI** (ADR 0025 §15.11); "Tier-1 execution" in the Reviewer's could-not-verify
+list is answered. All three runs are `pull_request` events, so the promotion tally is unchanged.

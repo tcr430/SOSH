@@ -1503,8 +1503,11 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
     neither advances nor resets it.
   - **Not solved / not run:** LinkedIn cold start is not solved (A-1). Tier E (#55) is MEASURED — NOT YET RUN, and
     is now performable through the product. No quality or memory-yield claim is made.
-  - **Still open before launch:** a green db-tests (the segfault), and an isolated CI re-run of the seven failing
-    tests once it is.
+  - **Update — db-tests fixed at `15beb540`:** the workflow now shadows the broken Postgres image tag with
+    `17.6.1.113` and fails unless the DB container runs it. db-tests
+    [35436865202](https://github.com/tcr430/SOSH/actions/runs/35436865202) **green** (62 files, 452/452, skip-guard
+    quoted in ADR 0025 §15.11); app-tests and eval green at the same head. **Tier 1 is now executed green in CI.**
+    All `pull_request` events — the promotion tally is still unchanged. Still open: LinkedIn cold start, Tier E.
 
 ## What's next
 
