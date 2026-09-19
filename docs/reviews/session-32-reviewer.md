@@ -418,7 +418,7 @@ note (`scripts/eval/run-triage-eval.test.ts` rewriting the shared fixture). Not 
 | **Fix** | `lib/ai/runner.test.ts`: a table-driven block over all ten pre-existing prompt ids, built from the real prompt objects (`brandVoiceInferencePrompt`, `briefAssemblyPrompt`, `learningSummarizerPrompt`, `postGenerationPrompt`, `postRegenerationPrompt`, `rubricPrompt`, `studioSuggestionPrompt`, `createNativeGenerationPrompt('single'\|'thread'\|'carousel')`). Only `outputSchema`, `useToolOutput` and the two message builders are swapped so the shared mock input and response validate; id, modelKey and temperature are the real ones. No production change. |
 | **Proof** | `runner.test.ts:1126` — per id: Step-1 refuses under an exhausted trial; Step-8 increments the classified counter under a trial with quota (`brand-voice` for brand-voice-inference; `posts` for brief-assembly, learning-summarizer, post-regeneration, studio-suggestion, native-generation-carousel; none for post-generation, rubric, native-generation-single, native-generation-thread); a paid context is never refused and never increments. A guard case asserts exactly ten distinct ids. |
 | **Reddening** | `RUBRIC_PROMPT_ID` changed to `'brief-assembly'` in `runner.ts` → the `brief-assembly` and `rubric` rows RED (plus three pre-existing classification tests). Restored; `git status` showed no change to `runner.ts`. |
-| **Commit** | `<D10-sha>` |
+| **Commit** | `b54c8ec4` |
 
 | Field | Detail |
 |---|---|
@@ -426,7 +426,7 @@ note (`scripts/eval/run-triage-eval.test.ts` rewriting the shared fixture). Not 
 | **Fix** | `lib/backfill/__tests__/fetch-phase.test.ts:6` and `tick.test.ts:5` mock `'@/lib/config'`. `.github/workflows/app-tests.yml` comment corrected from "THREE files" to **FOUR**, not two-plus-three: with those two mocked, the files still loading the real config are `lib/config.test.ts`, `lib/signals/orchestrator.test.ts`, `lib/campaigns/generate.test.ts` and `BackfillPanel.pipeline.test.tsx`; the last was missing from the comment. |
 | **Proof** | Both backfill files pass in a shell with none of the CI env vars (23 tests); before the change they failed to load there. |
 | **Reddening** | Deleted the mock line from `tick.test.ts` → the file failed to load in the bare shell. Restored from backup. |
-| **Commit** | `<D10-sha>` |
+| **Commit** | `b54c8ec4` |
 
 | Field | Detail |
 |---|---|
@@ -434,7 +434,7 @@ note (`scripts/eval/run-triage-eval.test.ts` rewriting the shared fixture). Not 
 | **Fix** | **Recorded, not narrowed** — the spec's own fallback. X's `tweet.fields` selects whole objects, so `entities` cannot be reduced to `entities.urls`, and the parser needs `urls` to decode t.co links. `referenced_tweets` stays (ADR §2.4 quote-dropping). `entities.mentions` therefore transits; it is stripped at `XTweetEntitiesSchema` (declares `urls` only) before any `RecentPost` exists. Comment at `twitter-provider.ts` above `X_TIMELINE_TWEET_FIELDS` records this. **For D11: the ADR amendment must record the in-transit exposure.** No expansion added. |
 | **Proof** | Unchanged request test `twitter-provider.test.ts:404` still asserts `exclude=replies,retweets` and no `expansions`; full suite green. No new test: a claim of absence is not made here, the exposure is recorded. |
 | **Reddening** | None applicable; no behaviour changed. |
-| **Commit** | `<D10-sha>` |
+| **Commit** | `b54c8ec4` |
 
 | Field | Detail |
 |---|---|
@@ -442,7 +442,7 @@ note (`scripts/eval/run-triage-eval.test.ts` rewriting the shared fixture). Not 
 | **Fix** | `lib/social/twitter-provider.ts` refresh UPDATE spreads `scopes_granted` only when X returns `scope`. |
 | **Proof** | `twitter-provider.test.ts:319` now asserts the UPDATE payload has no `scopes_granted` key when scope is absent; `:305` (scope present → persisted) unchanged and green. |
 | **Reddening** | Restored `scopes_granted: parsed.scope ? … : []` → `:319` RED. Restored from backup. |
-| **Commit** | `<D10-sha>` |
+| **Commit** | `b54c8ec4` |
 
 **Process note (disclosed):** my first NIT-5 edit was blocked by a hook and I misread the tool output as applied; the
 first mutation run therefore "reddened" code that never had the fix. Caught when the full suite failed on clean code;
