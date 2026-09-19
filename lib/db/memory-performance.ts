@@ -297,3 +297,105 @@ export async function listPerformanceCandidatesForRun(
   if (error) throw new Error(getErrorMessage(error))
   return (data as PerformanceMemoryRow[]) ?? []
 }
+
+// ─── ADR 0026 (Session 33 J2.6) — the OUTCOME writer's own functions ─────────
+//
+// A THIRD writer to performance_memory (source = 'outcome'), deliberately given ITS OWN functions
+// instead of sharing the two above (ADR 0026 §5.6): no existing function gains a caller or a
+// parameter, so the structural lesson of both Session 22 blockers (one shared function, one caller
+// verified) cannot recur. Called ONLY from lib/outcomes/ (J2.7+) and lib/memory/outcomes.ts (J2.9).
+//
+// SERVICE-ROLE, lazy-imported, NO `client` parameter (CLAUDE.md "Functions that internally use
+// service-role do not take a client parameter" — a caller cannot pass an authenticated client and
+// trigger a silent permission failure). The floor lives in SQL and never trusts this file: these
+// wrappers pass only WHAT IDENTIFIES THE CELL and the human-readable text — never n, wins, campaigns
+// or a bound. Nothing here re-implements the gate.
+
+export type OutcomePatternDimension = 'role' | 'format' | 'length_band' | 'cta' | 'origin_mode'
+
+export interface OutcomePatternInput {
+  business_id: string
+  dimension: OutcomePatternDimension
+  // The dimension's value: a role, 'single'/'thread', 'short'/'medium'/'long', 'true'/'false', an origin.
+  value: string
+  platform: string
+  direction: 'above' | 'below'
+  // A closed template rendered by the caller (ADR 0026 §6.4) — NEVER free member text. It is still passed
+  // through neutralizeWithSentinels here, at the single choke point, exactly as the distilled writer does.
+  pattern: string
+}
+
+// PostgREST renders a NULL composite as an all-null object, not as null — key on the id.
+function rowOrNull(data: unknown): PerformanceMemoryRow | null {
+  const row = Array.isArray(data) ? data[0] : data
+  if (!row || (row as { id?: string | null }).id == null) return null
+  return row as PerformanceMemoryRow
+}
+
+// Returns null when the cell has fewer than 5 observations (nothing is written below OUTCOME_PROVISIONAL_N).
+export async function upsertOutcomePattern(input: OutcomePatternInput): Promise<PerformanceMemoryRow | null> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const pattern = PATTERN_PROMOTER_BOUND_SCHEMA.parse(neutralizeWithSentinels(input.pattern))
+  const { data, error } = await client.rpc('upsert_outcome_performance_pattern', {
+    p_business_id: input.business_id,
+    p_dimension: input.dimension,
+    p_value: input.value,
+    p_platform: input.platform,
+    p_direction: input.direction,
+    p_pattern_text: pattern,
+  })
+  if (error) throw new Error(getErrorMessage(error))
+  return rowOrNull(data)
+}
+
+// null = the floor did not clear (or the row is not a candidate); the row when it was promoted.
+export async function promoteOutcomePattern(businessId: string, patternKey: string): Promise<PerformanceMemoryRow | null> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client.rpc('promote_outcome_pattern', { p_business_id: businessId, p_pattern_key: patternKey })
+  if (error) throw new Error(getErrorMessage(error))
+  return rowOrNull(data)
+}
+
+// null = nothing to demote; the row when it moved active -> candidate.
+export async function demoteOutcomePattern(businessId: string, patternKey: string): Promise<PerformanceMemoryRow | null> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client.rpc('demote_outcome_pattern', { p_business_id: businessId, p_pattern_key: patternKey })
+  if (error) throw new Error(getErrorMessage(error))
+  return rowOrNull(data)
+}
+
+export interface ListOutcomePatternsOptions {
+  limit?: number
+  // 'active' (the default) is what generation may read; 'candidate' is the UI's provisional state.
+  status?: 'active' | 'candidate'
+  platform?: string
+}
+
+// Outcome rows ONLY (source = 'outcome'), business-scoped, bounded and ordered on the retrieval index
+// (business_id, confidence DESC, recency_at DESC). Active rows exclude the expired, like the shared reader.
+export async function listOutcomePatterns(
+  businessId: string,
+  options: ListOutcomePatternsOptions = {},
+): Promise<PerformanceMemoryRow[]> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const status = options.status ?? 'active'
+  let query = client
+    .from('performance_memory')
+    .select('*')
+    .eq('business_id', businessId)
+    .eq('source', 'outcome')
+    .eq('status', status)
+    .is('deleted_at', null)
+  if (options.platform) query = query.eq('platform', options.platform)
+  if (status === 'active') query = query.or('expires_at.is.null,expires_at.gt.now()')
+  const { data, error } = await query
+    .order('confidence', { ascending: false })
+    .order('recency_at', { ascending: false })
+    .limit(options.limit ?? MEMORY_CANDIDATE_LIMIT)
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as PerformanceMemoryRow[]) ?? []
+}

@@ -144,6 +144,11 @@ export function findPostDimensionsTsWrites(source: string): string[] {
 export const POST_DIMENSIONS_WRITER_MIGRATIONS: readonly string[] = [
   '20260919110000_outcome_tables.sql',
   '20260919120000_post_dimensions_history_copy.sql',
+  // J2.6 (database-review fix): a FORWARD migration that REDEFINES tag_post_dimensions()'s body to add a
+  // proof_type vocabulary guard. It is the same single trigger writer, not a new write path — but the scan
+  // rightly forces that to be a deliberate, named decision rather than a silent pass. Any further name added
+  // here must be justified the same way.
+  '20260919150000_outcome_review_fixes.sql',
 ]
 
 export function migrationWritesPostDimensions(sql: string): boolean {
@@ -183,7 +188,7 @@ describe('OUTCOME-NO-RETRO-TAGGING (ADR 0026 §12.3, constraint 6)', () => {
     expect(offenders).toEqual([])
   })
 
-  it('an INSERT INTO public.post_dimensions appears in migrations ONLY in the two-name allowlist, and in BOTH of them', () => {
+  it('an INSERT INTO public.post_dimensions appears in migrations ONLY in the named allowlist, and in ALL of it', () => {
     const migrations = collect(path.join(ROOT, 'supabase', 'migrations'), (n) => n.endsWith('.sql'))
     expect(migrations.length, 'scanned suspiciously few migrations').toBeGreaterThan(50)
 
@@ -195,7 +200,7 @@ describe('OUTCOME-NO-RETRO-TAGGING (ADR 0026 §12.3, constraint 6)', () => {
     // Exact, not just a subset: a stale or over-broad allowlist entry that no longer
     // writes anything would silently widen the door.
     expect([...writers].sort()).toEqual([...POST_DIMENSIONS_WRITER_MIGRATIONS].sort())
-    expect(POST_DIMENSIONS_WRITER_MIGRATIONS).toHaveLength(2)
+    expect(POST_DIMENSIONS_WRITER_MIGRATIONS).toHaveLength(3)
   })
 })
 
@@ -205,13 +210,9 @@ describe('OUTCOME-NO-RETRO-TAGGING (ADR 0026 §12.3, constraint 6)', () => {
 // The authenticated 'manual' path is RLS, not a migration insert, so it never
 // appears here. J2.5/J2.6 add 'outcome' to the allowlist — and nothing else may.
 
-// J2.5 adds 'outcome' to the ALLOWED set (the schema now admits it). No migration INSERTs an
-// outcome row yet — the writer RPCs are J2.6 — so the real-tree check below asserts "nothing
-// outside the allowlist, and the two existing writers still present" rather than exact
-// equality; J2.6 tightens it back to exact once 'outcome' is actually written.
+// J2.5 added 'outcome' to the schema; J2.6 added its two writers (the upsert RPC and the acknowledge
+// RPC), so the real-tree check below is EXACT equality again.
 export const PERFORMANCE_MEMORY_WRITER_SOURCES: readonly string[] = ['distilled', 'import', 'outcome']
-// The writers that exist in migrations TODAY and must keep existing.
-export const PERFORMANCE_MEMORY_WRITERS_PRESENT_TODAY: readonly string[] = ['distilled', 'import']
 
 // Skips a single-quoted SQL string starting at `i` (handles '' escapes); returns
 // the index just past its closing quote.
@@ -361,8 +362,9 @@ describe('OUTCOME-NO-EXTRA-WRITER (ADR 0026 §12.3, constraint 31)', () => {
     }
     expect(inserts, 'no performance_memory INSERT was found — the extractor would pass vacuously').toBeGreaterThanOrEqual(4)
     expect(nonLiteral).toBe(0)
-    expect([...written].filter((s) => !PERFORMANCE_MEMORY_WRITER_SOURCES.includes(s))).toEqual([])
-    for (const present of PERFORMANCE_MEMORY_WRITERS_PRESENT_TODAY) expect(written.has(present), `${present} writer vanished`).toBe(true)
+    // Exact again (J2.6): 'outcome' is now genuinely written by upsert_outcome_performance_pattern and
+    // acknowledge_campaign_retrospective, so a stale allowlist entry can no longer hide.
+    expect([...written].sort()).toEqual([...PERFORMANCE_MEMORY_WRITER_SOURCES].sort())
   })
 })
 

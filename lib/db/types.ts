@@ -1284,6 +1284,38 @@ export type PerformanceMemoryUpdate = Partial<
   >
 >
 
+// ADR 0026 §8.3 (Session 33 J2.6) — one row per campaign: the verdict on its hypothesis. Written by
+// the service-role worker (insertCampaignRetrospective, ON CONFLICT DO NOTHING — evaluated once) and
+// transitioned completed -> acknowledged ONLY by acknowledge_campaign_retrospective.
+export type RetrospectiveVerdict = 'supported' | 'not_supported' | 'inconclusive'
+
+export type CampaignRetrospectiveRow = {
+  id: string
+  campaign_id: string
+  business_id: string
+  hypothesis_snapshot: string
+  hypothesis_source: 'brief' | 'implicit'
+  criteria_snapshot: Record<string, unknown>
+  verdict: RetrospectiveVerdict
+  n: number
+  wins: number
+  interval_low: number | null
+  interval_high: number | null
+  median_log_lift: number | null
+  by_role: Record<string, unknown>
+  status: 'completed' | 'acknowledged'
+  completed_at: string
+  acknowledged_at: string | null
+  acknowledged_by: string | null
+  note: string | null
+}
+
+// The worker's insert: no id/status (defaults) and none of the acknowledgement columns.
+export type CampaignRetrospectiveInsert = Omit<
+  CampaignRetrospectiveRow,
+  'id' | 'status' | 'acknowledged_at' | 'acknowledged_by' | 'note'
+>
+
 // ADR 0025 §9.4 (Session 32 I2.7) — inputs to the import_{evidence,audience,
 // performance}_memory RPCs (20260913140000/150000). Deliberately has NO
 // status/source/sensitivity/public_use_permission field — those are FIXED
