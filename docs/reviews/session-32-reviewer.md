@@ -367,3 +367,45 @@ delete retired candidates 30 days after that (i.e. 2×TTL from `completed_at`). 
 | **Commit** | `<D4-sha>` |
 
 **What I did NOT touch:** whether voice synthesis should gate on staged-post count (a real question the pipeline test's design surfaced — a truly-zero-post run still stages a non-null voice output today, so it can never reach the "nothing to learn" state through the full pipeline; not exploitable, not in BLOCKER-3's scope, no ticket filed); D5 onward.
+
+### D9 — MAJOR-12 + MINOR-6: the §10.4 hierarchy, on the editor A-7 rules on
+
+**Gate:** A-7's Decision cell was filled 2026-09-17 — founder accepted the recommendation: reuse `VoiceEditor`
+(axes-only founder mode, ≤3-example brand chooser), retire `BackfillVoiceReview.tsx`. D9 proceeded on that ruling.
+**D9's code commit:** `458eb55f`. This block, and the step-2 page test it cites, were written afterwards (see "What
+the commit did not carry").
+
+| Field | Detail |
+|---|---|
+| **Finding** | MAJOR-12 |
+| **Fix** | `lib/backfill/stats.ts`: `BackfillStatsSummary` gains `dateRange: { start, end } \| null`, derived from the same earliest/latest timestamps `spanDays` already uses. `app/[locale]/(dashboard)/onboarding/step-4/BackfillPanel.tsx`: the headline reads `summary.dateRange` via `formatDateRange` (never `summary.date_range`); item 2 renders the descriptor plus three strongest axes (`lib/voice/axis-labels.ts`, new); item 6 (cadence and format mix) is rendered from the run's own summary. All six §10.4 items render in order. i18n keys added in en, pt and es. |
+| **Proof** | `BackfillPanel.test.tsx:295` builds its summary by calling `computeBackfillStats` (not a hand-written fixture) and asserts a non-empty date range, the voice section, `"count":7` on the pattern, the cadence section, and the six titles in ascending DOM position. `lib/backfill/__tests__/stats.test.ts:76` asserts `dateRange` carries the exact earliest and latest `published_at`; `:92` asserts `null` for no posts. |
+| **Reddening** | Re-run at close-out against the committed tree, one at a time: (1) headline changed back to `(run.summary).date_range ?? ''` → `BackfillPanel.test.tsx:295` RED. (2) item 6 guard changed to `{false && (` → `BackfillPanel.test.tsx:295` RED. Each restored from a backup copy; `git status` afterwards showed no change to `BackfillPanel.tsx`. |
+| **Commit** | `458eb55f` |
+
+| Field | Detail |
+|---|---|
+| **Finding** | MINOR-6 |
+| **Fix** | Per A-7: `step-2/BackfillVoiceReview.tsx` deleted. `components/voice/VoiceEditor.tsx` gains a `review` mode (locked axes for founder, ≤3-example chooser for brand). New `step-2/VoiceReviewHost.tsx` wires it to D8's gated apply/decline actions. `step-2/page.tsx` renders the host for a `ratified` run with a `pending`/`refused_cap`/`failed` voice, `Step2Form` otherwise. |
+| **Proof** | `app/[locale]/(dashboard)/onboarding/step-2/page.test.tsx` (new, 6 cases): a ratified run with a pending voice renders `VoiceReviewHost`; `applied`, `declined` and `null` voice_status, an `awaiting_ratification` run, and no `?run` all render `Step2Form`. |
+| **Reddening** | Removed `run.status === 'ratified' &&` from `step-2/page.tsx` → `page.test.tsx` "an un-ratified run falls through to Step2Form" RED. Restored from backup; `git status` afterwards showed no change to `page.tsx`. |
+| **Commit** | `458eb55f` (code); the close-out commit carrying `page.test.tsx` and this block |
+
+**What `/impeccable` changed, file by file** (one invocation, against ADR 0025 §10; `taste-skill` stays declined per
+I2.14):
+- `BackfillPanel.tsx`: the headline `<p>` became `<h2>`; each subsection title and `CandidateGroup`'s title became
+  `<h3>`, so the six-item hierarchy is a screen-reader landmark. The voice-summary section's lone `bg-muted` box
+  was dropped, matching the page's otherwise unboxed rhythm. No new tokens.
+- No other file changed as a result of the audit; spacing, contrast pattern and responsive behaviour were recorded as clean.
+
+**What the commit did not carry (disclosed, not a finding):** at `458eb55f` the VERIFY line "step-2 renders the A-7
+editor for a ratified run and Step2Form otherwise" had no test, and this appendix block had not been written. Both
+were closed afterwards, in the close-out commit. `VoiceEditor`'s new `review` mode has no direct component test; it
+is exercised only through the host, which `page.test.tsx` mocks. That is a coverage gap left open, not asserted closed.
+
+**Verification at close-out:** `npx tsc --noEmit --skipLibCheck` clean; `npm run lint` 0 errors, 108 warnings;
+`npm run test:app` with the `app-tests.yml` env block: 1 failing file, `lib/signals/__fixtures__/eval/corpus-v2-schema.test.ts`
+("the 40 GitHub examples are unchanged in count…"), the parallel-run race already recorded under D1's verification
+note (`scripts/eval/run-triage-eval.test.ts` rewriting the shared fixture). Not caused by D9.
+
+**What I did NOT touch:** D10 onward; the corpus fixture race.
