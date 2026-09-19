@@ -138,10 +138,13 @@ export function findPostDimensionsTsWrites(source: string): string[] {
   return hits
 }
 
-// The migrations allowed to INSERT INTO public.post_dimensions. EMPTY today.
-// J2.3 adds exactly TWO names — the trigger migration and the history-copy
-// migration — and nothing else ever may (ADR 0026 §4.2, §4.5).
-export const POST_DIMENSIONS_WRITER_MIGRATIONS: readonly string[] = []
+// The migrations allowed to INSERT INTO public.post_dimensions: exactly TWO —
+// the trigger migration (its tag_post_dimensions() body) and the history-copy
+// migration (J2.3) — and nothing else ever may (ADR 0026 §4.2, §4.5).
+export const POST_DIMENSIONS_WRITER_MIGRATIONS: readonly string[] = [
+  '20260919110000_outcome_tables.sql',
+  '20260919120000_post_dimensions_history_copy.sql',
+]
 
 export function migrationWritesPostDimensions(sql: string): boolean {
   return /insert\s+into\s+(?:public\.)?post_dimensions\b/i.test(stripSqlComments(sql))
@@ -180,7 +183,7 @@ describe('OUTCOME-NO-RETRO-TAGGING (ADR 0026 §12.3, constraint 6)', () => {
     expect(offenders).toEqual([])
   })
 
-  it('an INSERT INTO public.post_dimensions appears in migrations ONLY in the allowlist (empty until J2.3)', () => {
+  it('an INSERT INTO public.post_dimensions appears in migrations ONLY in the two-name allowlist, and in BOTH of them', () => {
     const migrations = collect(path.join(ROOT, 'supabase', 'migrations'), (n) => n.endsWith('.sql'))
     expect(migrations.length, 'scanned suspiciously few migrations').toBeGreaterThan(50)
 
@@ -189,6 +192,10 @@ describe('OUTCOME-NO-RETRO-TAGGING (ADR 0026 §12.3, constraint 6)', () => {
       .map((f) => path.basename(f))
     const unexpected = writers.filter((name) => !POST_DIMENSIONS_WRITER_MIGRATIONS.includes(name))
     expect(unexpected).toEqual([])
+    // Exact, not just a subset: a stale or over-broad allowlist entry that no longer
+    // writes anything would silently widen the door.
+    expect([...writers].sort()).toEqual([...POST_DIMENSIONS_WRITER_MIGRATIONS].sort())
+    expect(POST_DIMENSIONS_WRITER_MIGRATIONS).toHaveLength(2)
   })
 })
 

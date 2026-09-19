@@ -1086,6 +1086,9 @@ GRANT EXECUTE ON FUNCTION public.purge_business(uuid) TO service_role;
 | watched_feeds | yes (business_id) | CASCADE | yes | none — cascade = erasure, exercised by `purge_business`'s root `DELETE FROM public.businesses` (no explicit per-table statement in the function body); holds the customer's own subscribed feed URL/label, ADR 0023 §3.2 |
 | social_backfill_runs | yes (business_id + social_account_id) | CASCADE (both) | yes | none — cascade = erasure (holds `staged_voice`, which may include verbatim post excerpts, and account statistics; ADR 0025 §9.1) |
 | social_backfill_posts | yes (business_id + run_id) | CASCADE (both) | yes | none — cascade = erasure (holds the customer's own imported post text, which may quote third parties; short-lived by design, ADR 0025 §8.3) |
+| post_dimensions | yes (business_id + post_id + ai_original_id) | CASCADE | yes | none — cascade = erasure (generation-time tags of the customer's posts; no content; ADR 0026 §4.2) |
+| post_outcomes | yes (business_id + post_id) | CASCADE | yes | none — cascade = erasure (per-post engagement measurements and baselines; no content; ADR 0026 §6.1) |
+| campaign_retrospectives | yes (business_id + campaign_id) | CASCADE | yes | none — cascade = erasure (holds the customer's hypothesis text and an optional member note; ADR 0026 §8.3) |
 
 Only `business_deletion_requests` (NO ACTION) would have blocked the root delete; D2.1 resolves it. Every other business-scoped table either cascades or is deliberately retained.
 
