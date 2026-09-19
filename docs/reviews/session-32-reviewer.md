@@ -368,6 +368,54 @@ delete retired candidates 30 days after that (i.e. 2×TTL from `completed_at`). 
 
 **What I did NOT touch:** whether voice synthesis should gate on staged-post count (a real question the pipeline test's design surfaced — a truly-zero-post run still stages a non-null voice output today, so it can never reach the "nothing to learn" state through the full pipeline; not exploitable, not in BLOCKER-3's scope, no ticket filed); D5 onward.
 
+### Backfilled blocks D5–D8 (written at D11 close-out)
+
+**Author's note, not the D-steps' own record.** D5–D8 were committed without their appendix blocks (§4.2 requires
+one block per step). The four blocks below were written afterwards, at D11, **from each step's commit body and diff**,
+not from the sessions' own working notes. The **Reddening** cells therefore restate what each commit body says was
+done; the D11 close-out did **not** re-execute those mutations (D7 and D8's need the local Postgres stack). What the
+close-out did re-run is stated in each row's Proof cell: the app-layer proof files, green at HEAD.
+
+### D5 — MAJOR-3 + NIT-2: fetch bounds are cumulative
+
+| Field | Detail |
+|---|---|
+| **Finding** | MAJOR-3, NIT-2 |
+| **Fix** | `lib/backfill/orchestrator.ts` `fetchPhase` bounds reads (500) and staged posts (200) against the run's cumulative totals across deferrals, resumes and reconnects, not per-call counters. `lib/db/backfill-runs.ts`: the resumable lookup includes runs with a NULL `error_code` (`error_code.is.null` OR `error_code.neq.caller_bug`), never a bare `.neq()`. |
+| **Proof** | `lib/backfill/__tests__/fetch-phase.test.ts:427` (cumulative `platform_posts_read` persists across a deferral and a resumed call); `lib/db/backfill-runs.test.ts:49` (filter string) and `:61` (a NULL-code failed run is resumable). Re-run at close-out: green. |
+| **Reddening** | Per commit body: the `:427` test RED against per-call counters; the `:49` test RED against a bare `.neq()`. |
+| **Commit** | `d4755442` |
+
+### D6 — MAJOR-11 + MINOR-1 + MINOR-2: a failed pass never looks complete, and never leaks spend
+
+| Field | Detail |
+|---|---|
+| **Finding** | MAJOR-11, MINOR-1, MINOR-2 |
+| **Fix** | `lib/backfill/extract.ts`: only output-validation failures fail an evidence batch; transient errors release the batch and reservation; any failed post marks the run `partial`. `lib/ai/runner.ts` and `lib/db/backfill-posts.ts`: every reservation reconciles on every exit path (a `finally`) against the call's own cost. |
+| **Proof** | `lib/backfill/__tests__/extract.test.ts:199` (reconcile to actual cost), `:241` (throwing voice pass reconciles to 0), `:259` (two runs each reconcile their own cost), `:469` (either evidence-error kind reconciles to 0), `:485` (a failed evidence post finalizes `partial=true` with a reason); `BackfillPanel.pipeline.test.tsx` updated. Re-run at close-out: green. |
+| **Reddening** | Per commit body: the bare `catch` restored → RED against the new transient-error test; the `finally` removed → RED against the reconcile-to-0 tests. |
+| **Commit** | `ef76a1af` |
+
+### D7 — MAJOR-4 + MAJOR-10: resume and staging purge executed, not regexed
+
+| Field | Detail |
+|---|---|
+| **Finding** | MAJOR-4, MAJOR-10 |
+| **Fix** | Tier-1 tests replace the SQL-regex "coverage": `supabase/__tests__/backfill-resume.test.ts` and `backfill-staging-purge.test.ts` added; the regex block removed from `lib/backfill/__tests__/staging-lifecycle.test.ts`. **Out-of-scope production bug found and fixed, disclosed in the commit body:** `deactivateSocialAccount` crashed on every real disconnect because `vault_access_token_id` was NOT NULL in the live schema; migration `20260917100000_social_accounts_vault_id_nullable.sql` drops the constraint, matching CLAUDE.md's disconnect spec. |
+| **Proof** | `backfill-resume.test.ts:230` (crash between insights writes and `passes_done`, resumed with differently worded output: no duplicate or over-cap memory), `:170`, `:323`; `backfill-staging-purge.test.ts:103` (discard), `:115` (staging TTL sweep), `:131` (staged-voice TTL sweep), `:157` (disconnect). Tier-1: **not** re-run at close-out. |
+| **Reddening** | Per commit body: D3's audience cap removed → RED on the duplicate/cap test; discard's staging DELETE dropped in a scratch migration applied locally only → RED on both discard-purge cases; each reverted, `git diff --stat` empty on the correction-pass migration. |
+| **Commit** | `8042870f` |
+
+### D8 — MAJOR-1 + MAJOR-9 + MINOR-10 (code half): voice only after ratify, only to the ratified role
+
+| Field | Detail |
+|---|---|
+| **Finding** | MAJOR-1, MAJOR-9, MINOR-10 (code half; ADR half is D11) |
+| **Fix** | `step-4/backfill-actions.ts` and `lib/validation/backfill.ts`: apply/decline require a `ratified` run and use the role recorded at ratification; a client-supplied `accountRole` is rejected at the Zod boundary. `BackfillPanel.tsx` and `step-2/page.tsx`: "Review voice" appears only after ratify. Two latent field-name bugs fixed in the same functions (disclosed in the commit body): `staged_voice` is written camelCase (`voiceAxes`, `examples`) but was read snake_case. |
+| **Proof** | `backfill-actions.test.ts:239` (client `accountRole` rejected), `:268` (null role refused), `:302` (ratified founder run never calls `upsertBrandVoice`); `supabase/__tests__/backfill-accounts-separate.test.ts:206` (two accounts never cross-contaminate corpora, candidates or voices; Tier-1, **not** re-run at close-out). |
+| **Reddening** | Per commit body: the ratified/role status check removed → RED on both guard tests; routing by a hardcoded branch instead of `run.account_role` → RED on both brand-routing tests. |
+| **Commit** | `62516773` |
+
 ### D9 — MAJOR-12 + MINOR-6: the §10.4 hierarchy, on the editor A-7 rules on
 
 **Gate:** A-7's Decision cell was filled 2026-09-17 — founder accepted the recommendation: reuse `VoiceEditor`
