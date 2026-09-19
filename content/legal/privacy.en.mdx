@@ -110,8 +110,8 @@ Where any sub-processor transfers data outside the EEA in future, we will update
 | Brand voice profiles, campaigns, and posts | Same |
 | Social account OAuth tokens | Deleted immediately on disconnect (access revoked, identifiers removed, vault secret deleted) |
 | Social account metadata (username, display name) | Lifetime of account + 30 days |
-| Imported posts you haven't yet reviewed | Deleted at review, if you dismiss the import, if you disconnect the account, or after 30 days, whichever comes first |
-| Content saved to memory from an import you approved | Same rules as any other saved memory item: until you delete it, or up to 12 months for a specific quoted excerpt |
+| Imported posts you haven't yet reviewed | Deleted at review, if you dismiss the import, if you disconnect the account, or after 30 days, whichever comes first. Imported items you never approve or dismiss are retired after 30 days and deleted 30 days after that |
+| Content saved to memory from an import you approved | Same rules as any other saved memory item. A quoted excerpt taken from your usage data expires 12 months after the source post; other saved excerpts stay until you delete them, remove the post they came from, or delete your account |
 | Billing records | 10 years from the transaction date (Portuguese tax law) |
 | Security and rate-limit records (IP addresses, email keys) | 30 days |
 | Error monitoring events | 90 days (Sentry platform default) |

@@ -1272,3 +1272,122 @@ constraints closed by a passing test or a diff-verified check that has been run 
 catch a planted violation (Tier 1 16/16, Tier 2 34/34, Tier 3 5/5 diff-verified locally) — 0/55 yet
 confirmed "executed green in CI" because no run has been opened and read (§14.4), Tier E recorded not
 run, LinkedIn read built not served.**
+
+
+## 15. Correction pass verification (Session 32-D)
+
+Appended by the Session 32-D correction pass (D11). Sections 0–14 are not edited; where this section corrects
+or supersedes them it says so. Every statement cites the test (file:line) that proves it at the D3–D10 SHAs
+(`98753597`, `d4755442`, `ef76a1af`, `8042870f`, `62516773`, `458eb55f`, `b54c8ec4`).
+
+### 15.1 Tier-3 commands — §14.1 corrected (MAJOR-7)
+
+**§14.1's "Zero hits" for BACKFILL-NO-CROSS-CUSTOMER-LEARNING (52) was wrong.** At `4f3e7129..3914a31c` its
+command printed 33 `CREATE FUNCTION` signature lines, and a signature grep cannot see function bodies at all.
+The property itself held on manual reading of every RPC body; the command claimed a proof it could not give.
+§14.1's command for BACKFILL-NO-RELATIONSHIP-MEMORY (50) also matched the ADR's own prose (§14.1 names the
+table), so it could not be "zero hits" once documents were in the diff.
+
+**BACKFILL-NO-RELATIONSHIP-MEMORY (50), corrected** — code and migrations only, base to working tree so a planted
+line is visible before commit:
+```
+git diff 4f3e7129 -- . ':!docs' | grep -icE 'relationship_memory'
+```
+Output at this head: `0`. Planted violation (`-- relationship_memory placeholder` appended to
+`20260915120000_backfill_correction_pass.sql`): the same command with `-in` printed
+`17751:+-- relationship_memory placeholder`; reverted, re-run `0`.
+
+**BACKFILL-NO-CROSS-CUSTOMER-LEARNING (52), corrected** — inspects function and VIEW **bodies** (text after the
+first `AS`, so a `p_business_id` in the signature does not count) in every migration added or modified since the
+base. It flags any body that SELECTs from a `*_memory` or `social_backfill_*` table and mentions none of
+`business_id`, `p_run_id`, `p_id`. Two service-role TTL sweeps are allow-listed by name
+(`sweep_expired_backfill_staging`, `sweep_expired_backfill_candidates`): they run from cron, retire or delete
+expired rows run-by-run, and return counts only; they read no content across businesses and store no aggregate.
+The allow-list is part of the command, so a third such function fails it and must be justified here.
+```js
+// node <this file>  (run from the repo root)
+const { execSync } = require('child_process'), fs = require('fs')
+const files = execSync('git diff --name-only --diff-filter=AM 4f3e7129 -- supabase/migrations/').toString().trim().split('\n').filter(Boolean)
+const READ = /\bSELECT\b[^;]*?\b(?:FROM|JOIN)\s+(?:public\.)?(?:\w+_memory|social_backfill_\w+)\b/is
+const SCOPED = /business_id|p_run_id|p_id\b/i
+const ALLOW = /sweep_expired_backfill_(?:staging|candidates)$/
+let hits = 0
+for (const f of files) {
+  if (!fs.existsSync(f)) continue
+  for (const c of fs.readFileSync(f, 'utf8').split(/(?=CREATE\s+(?:OR\s+REPLACE\s+)?(?:FUNCTION|VIEW)\s)/i).slice(1)) {
+    const name = (c.match(/(?:FUNCTION|VIEW)\s+([\w.]+)/i) || [])[1]
+    const body = c.slice(c.search(/\bAS\b/i))
+    if (READ.test(body) && !SCOPED.test(body) && !ALLOW.test(name)) { hits++; console.log(f + ': ' + name) }
+  }
+}
+console.log('files=' + files.length + ' hits=' + hits)
+```
+Output at this head: `files=12 hits=0`. **Planted violations, each reverted:** (P1) `CREATE VIEW
+public.test_cross_business_view AS SELECT pattern FROM public.performance_memory;` →
+`…correction_pass.sql: public.test_cross_business_view`, `hits=1`. (P2) a function declaring `p_business_id uuid`
+whose body ignores it and reads `performance_memory` → `…: public.test_leak`, `hits=1` — the case the old
+signature grep passed by construction. Without the allow-list the same run reports 2 hits, the two sweeps.
+
+### 15.2 The identity lock covers INSERT and DELETE (MINOR-8)
+
+`authenticated` and `anon` have no INSERT or DELETE on `social_accounts` (`REVOKE INSERT, DELETE` in
+`20260915120000_backfill_correction_pass.sql`, D3 `98753597`). Precondition, checked by a repo-wide grep at D3:
+no authenticated-role caller inserts or deletes (the callback route and disconnect use the service role).
+Proved by `supabase/__tests__/social-accounts-identity-lock.test.ts:130` (INSERT → 42501) and `:145` (DELETE →
+42501); both went RED when the grant was restored.
+
+### 15.3 Unratified-candidate retention (MINOR-9, founder ruling A-8, 2026-09-15)
+
+**Rule, verbatim:** retire at `BACKFILL_STAGING_TTL_DAYS = 30` after the owning run's `completed_at`, then delete
+retired import candidates 30 days later.
+
+**§8.3 gains this row (added here; §8.3 is not edited):**
+
+| Data | Where | Retained until |
+|---|---|---|
+| Unratified import candidates | `evidence_memory`, `audience_memory`, `performance_memory` (`status = 'candidate'`) | ratification or discard; else retired at **30** days after the run's `completed_at` and deleted **30** days after that (`sweep_expired_backfill_candidates`, wired into `runBackfillTick`) |
+
+Proved by `supabase/__tests__/backfill-candidate-retention.test.ts:100` (retire), `:117` (fresh run untouched),
+`:128` (delete at 2× TTL), `:139` (a ratified run's active rows are never touched). Known edge, recorded by the
+D3 security review: a run whose candidates were retired and which the founder then ratifies leaves the retired
+rows unreachable by the delete stage. Not exploitable; a follow-up if a retention SLA ever depends on it.
+
+### 15.4 Voice ordering and roles; discard authority (MINOR-10, MINOR-4)
+
+**Supersedes §10.4 item 2's "Review voice" placement and §10.3's step ordering where they let voice be reviewed
+before ratification.** Voice review and application require a **ratified** run and use the role recorded at
+ratification (`run.account_role`); a client-supplied role is rejected at the Zod boundary. "Review voice"
+appears only after ratify. Proved by `app/[locale]/(dashboard)/onboarding/step-4/backfill-actions.test.ts:239`
+(client `accountRole` rejected), `:268` (null role refused), `:302` (ratified founder run never calls
+`upsertBrandVoice`), `supabase/__tests__/backfill-accounts-separate.test.ts:206` (two accounts never mix) at D8
+`62516773`; and `app/[locale]/(dashboard)/onboarding/step-2/page.test.tsx` at D9 (ratified → shared-editor host,
+otherwise `Step2Form`). **Discard requires an active `approver` or admin** (a viewer is refused): proved by
+`supabase/__tests__/backfill-discard-guard.test.ts:89`; the system path (`deactivateSocialAccount`, NULL user) is
+unchanged.
+
+### 15.5 NIT-1 — recorded closure
+
+`20260913130000_social_backfill_runs_and_posts.sql:310` and `:321` look up the `ai_budget_daily` purpose CHECK by
+`relname` without a namespace. **No code change can express the fix:** the migration is committed and applied, its
+DO block has already executed, and a forward migration cannot alter a lookup that already ran. The residual risk
+is that a second `ai_budget_daily` in another schema makes the lookup ambiguous; the block's own guard
+(`v_count <> 1` → `RAISE EXCEPTION`) turns that into a loud failure at apply time, never a wrong constraint.
+
+### 15.6 §11.5 corrected — `upsertBrandVoice` has six callers
+
+§11.5 lists three. The six, from `git grep` at this head: `signup/actions.ts:155`,
+`infer-brand-voice/actions.ts:36`, `step-2/actions.ts:30`, `settings/voice/actions.ts:57`,
+`settings/voice/refine-from-posts-action.ts:51`, `step-4/backfill-actions.ts:196` (the ratified-brand path). The
+function is unchanged; only the backfill caller is tested against this feature (`backfill-actions.test.ts`, above).
+
+### 15.7 NIT-3 — X timeline field set (recorded, not narrowed)
+
+X's `tweet.fields` selects whole objects, so `entities` cannot be narrowed to `entities.urls`, which the parser
+needs to decode t.co links. `entities.mentions` (third-party ids and handles) therefore transits in the response;
+it is stripped at `XTweetEntitiesSchema`, which declares `urls` only, before any `RecentPost` exists, and is never
+staged or stored. `referenced_tweets` stays (§2.4 quote-dropping). No expansion is requested
+(`twitter-provider.test.ts:404`). Recorded at D10 `b54c8ec4`.
+
+### 15.8 What this section does not do
+
+It does not fill §14.2's CI column — that is D12's, from the run logs.

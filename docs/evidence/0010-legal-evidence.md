@@ -770,3 +770,36 @@ view, or job in this session's code aggregates imported content across businesse
 privacy prose is updated in the same commit that adds this section (`evidenceRef` bumped to this commit),
 but the `[LEGAL ENTITY]` placeholder is untouched and the new prose is flagged in-file as awaiting counsel
 review, per ADR 0025 §8.6 and this file's standing gate on entity substitution.
+
+
+## Amendment A3.1 — Corrections to Amendment A3 (Session 32-D, MAJOR-8)
+
+**Session:** 32-D (correction pass, D11). **Scope:** four statements in Amendment A3 described behaviour the code
+did not have at the commit A3 was written against (`70773e87`). Nothing above this heading is edited (this
+file's append-only house form); A3 is left exactly as written, and this amendment supersedes it where they differ.
+
+**1. Evidence-row expiry (A3, "Retention", first bullet) — corrected.** A3 said evidence rows expire 12 months
+from the source post's publish date. That is true **only for `usage_data` evidence**. Rows of kind `quote` and
+`case_study` are written with `expires_at = NULL` (`lib/memory/import.ts:66-70`): they stay until the customer
+deletes them, the per-post removal path retracts them, or the business is purged. `/privacy` now says so.
+
+**2. Per-account caps (A3, same section, "≤ 40", "≤ 25 and ≤ 15") — true only since D3.** The evidence cap of 40
+was enforced in-INSERT from `20260914050000`; the audience (25) and performance (15) caps were **not enforced**
+until D3 (`98753597`), so between `70773e87` and D3 an import could write more than A3 stated. Proved now by
+`supabase/__tests__/memory-import-rpcs.test.ts:241` (audience caps at 25, performance at 15).
+
+**3. "Nothing is retained 'candidate' indefinitely" (A3) — true only since D3 / founder ruling A-8.** Before D3,
+candidates of a run that was never ratified or discarded persisted forever. Since D3 they are retired 30 days
+after the run's `completed_at` and deleted 30 days after that (`sweep_expired_backfill_candidates`), proved by
+`supabase/__tests__/backfill-candidate-retention.test.ts:100` (retire) and `:128` (delete).
+
+**4. "5 pages and 500 platform API reads per run" (A3, "What is read") — true only since D5.** Until D5
+(`d4755442`) the bounds were counted per call, so a run that was deferred, resumed or reconnected restarted the
+count. Since D5 they are cumulative across the run: `lib/backfill/__tests__/fetch-phase.test.ts:427`.
+
+**Unchanged and still accurate:** raw staged post text is purged at ratification, discard, disconnect or the
+30-day sweep — now proved by executed Tier-1 tests rather than a regex (`supabase/__tests__/backfill-staging-purge.test.ts:103`,
+`:115`, `:157`); evidence imports with `public_use_permission = false`; the identity lock and per-post removal.
+
+**Not resolved by this amendment:** as A3, a code/behaviour description only. The `[LEGAL ENTITY]` placeholder is
+untouched, and the revised `/privacy` retention rows remain flagged in-file as awaiting counsel review.

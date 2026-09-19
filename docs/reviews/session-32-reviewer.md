@@ -500,3 +500,33 @@ the fix was applied and the NIT-5 reddening redone against it. The row above is 
 (CI env block, `--no-file-parallelism`) 280/280 files, 3894/3894 tests.
 
 **What I did NOT touch:** classification logic in `runner.ts`; no new CLAUDE.md carve-out; the `entities` field set.
+
+### D11 — documentation truth: MAJOR-7, MAJOR-8, NIT-1, and the ADR halves of MINOR-4/-8/-9/-10  ·  no code
+
+| Field | Detail |
+|---|---|
+| **Finding** | MAJOR-7 |
+| **Fix** | `docs/decisions/0025-social-read-path-and-backfill.md` §15.1 (appended; §§0–14 untouched): states that §14.1's "Zero hits" for constraint 52 was wrong — the command printed 33 signature lines and cannot see bodies — and that the property held on manual reading. #50 is corrected to exclude `docs/` (it matched the ADR's own prose). #52 is replaced by a body-aware script (text after the first `AS`; flags an unscoped SELECT over a `*_memory` or `social_backfill_*` table), with the two service-role TTL sweeps allow-listed by name and reasoned. |
+| **Proof** | Commands and outputs pasted in ADR §15.1. #50: `0` clean; planted `-- relationship_memory placeholder` → `17751:+-- relationship_memory placeholder`. #52: `files=12 hits=0` clean; planted unscoped VIEW → `hits=1`; planted function with `p_business_id` in its signature but an ignoring body → `hits=1` (the case the old grep passed by construction). |
+| **Reddening** | Both plants applied to `20260915120000_backfill_correction_pass.sql` one at a time and restored from a backup copy; `git diff --stat` on that file was empty afterwards. |
+| **Commit** | `<D11-sha>` |
+
+| Field | Detail |
+|---|---|
+| **Finding** | MAJOR-8 |
+| **Fix** | `content/legal/privacy.en.mdx` retention rows (lines 113–114) now say what the code does: unreviewed imported items are retired at 30 days and deleted 30 days after (A-8); `usage_data` excerpts expire 12 months after the source post, other saved excerpts stay until deleted, removed per post, or the account is deleted. `docs/evidence/0010-legal-evidence.md` gains **Amendment A3.1**, correcting A3's four statements (evidence expiry; caps, enforced only since D3; no indefinite candidates, true only since D3/A-8; "5 pages / 500 reads", true only since D5). A3 is unedited. |
+| **Proof** | A3.1 cites `lib/memory/import.ts:66-70`, `memory-import-rpcs.test.ts:241`, `backfill-candidate-retention.test.ts:100/:128`, `fetch-phase.test.ts:427`. `git diff 70773e87 -- docs/evidence/0010-legal-evidence.md` shows 0 deletions; `git diff 3914a31c` on ADR 0025 shows 0 deletions; `grep -c "LEGAL ENTITY" privacy.en.mdx` is 2 before and after; the `AWAITING COUNSEL REVIEW` comment is retained. |
+| **Reddening** | Not applicable (documentation). |
+| **Commit** | `<D11-sha>`; `evidenceRef` bumped in the follow-up commit (two-commit form, as I2.15 did: the SHA that carries A3.1 cannot be inside itself). |
+
+| Field | Detail |
+|---|---|
+| **Finding** | NIT-1 — **recorded closure** |
+| **Fix** | ADR §15.5: the lookup is in a committed, applied migration whose DO block already executed; no forward migration can alter it; the `v_count <> 1` guard turns ambiguity into a loud failure at apply time. No code change. |
+| **Commit** | `<D11-sha>` |
+
+**The ADR half of MINOR-4, MINOR-8, MINOR-9, MINOR-10:** ADR §15.4 (discard needs approver/admin, proved `backfill-discard-guard.test.ts:89`; voice needs a ratified run and `run.account_role`, "Review voice" placement in §10.4 superseded), §15.2 (identity lock covers INSERT and DELETE, `social-accounts-identity-lock.test.ts:130/:145`), §15.3 (A-8 rule verbatim plus the new §8.3 row, `backfill-candidate-retention.test.ts:100/:117/:128/:139`). Also in §15: §11.5's `upsertBrandVoice` row corrected to six callers (§15.6), and D10's NIT-3 exposure recorded (§15.7). §14.2's CI column is not filled — D12's.
+
+**Verification:** `lib/db/__tests__/d2.5-backfill-rows.test.ts` green. **Not run:** Tier-1 (`supabase/__tests__`) — Docker is not running on this machine; D11 changes no `.ts`, `.tsx` or `.sql`, so no Tier-1 behaviour can have moved.
+
+**What I did NOT touch:** ADR §§0–14 and A3; §14.2's CI column; `[LEGAL ENTITY]`; any `.ts`/`.tsx`/`.sql`.
