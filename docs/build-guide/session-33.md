@@ -285,6 +285,25 @@ contradict a §0 Locked decision; if it needs to, it **STOPS and flags for found
 
 ## §0.2 — Founder adjudications
 
+> **RECEIVED 2026-09-19 (founder, in the J1 session).** Recorded below; the original placeholder text is kept
+> beneath it for the record.
+
+| # | Question | Decision | Where encoded |
+|---|---|---|---|
+| A-1 | The frozen brief carries **no** hypothesis or success criteria (VERIFY-FIRST: `CampaignBriefContent`, `lib/db/types.ts:1300-1307`; zero repo hits) | **Option A** — ADR 0017 Amendment C adds `hypothesis` (≤ 300) and structured `successCriteria` `{metric: win_rate\|median_lift, target, evaluationWindowDays}`; pre-amendment briefs use a labelled implicit hypothesis | ADR 0026 §8.1 |
+| A-2 | `performance_memory` schema: `source` + `dimension` CHECK widening, namespace CHECKs, outcome stats columns, sibling partial UNIQUE, narrowed authenticated writes | **Approved** — the existing distilled partial UNIQUE index is **unchanged** | ADR 0026 §5 (ADR 0016 Amendment C) |
+| A-3 | `fetchPostMetrics` throws `NOT_IMPLEMENTED` on X and LinkedIn — the loop has no input | **Implement it in this session** as ADR 0028 Amendment A and the **first** Builder step; sync cadence becomes day 1/3/7 (not hourly); verified endpoints only; LinkedIn falls back to `NOT_IMPLEMENTED` if counts are unreadable under current scopes | ADR 0026 §3 |
+| A-4 | Imported/backfilled posts cannot be dimension observations (L-4; 30-day staging TTL; LinkedIn imports lack metrics) | **(a) Accept** — patterns learn only from SOSH-published posts; imports contribute only a stamped X baseline seed. Option (b) (retain measured facts of imports) **declined** | ADR 0026 §6.3, §9 |
+| A-5 | No UTM / conversion-event infrastructure exists | **No business attribution this session**; surfaces say "engagement, not signups". UTM auto-tagging queued with T1-B; conversion ingestion is a later track | ADR 0026 §10.3, §15 |
+| A-6 | New `AFTER INSERT` trigger on ADR 0018's `post_ai_originals`; optional `hookType` in ADR 0024's output schemas | **Approved** — `lib/learning/**` and ADR 0018's migrations stay byte-identical; `AI_ORIGINAL_SCHEMA_VERSION` not bumped | ADR 0026 §4.2, §4.3 |
+
+**No adjudication went against J1's recommendation.** Constraints added by the adjudications:
+`OUTCOME-METRICS-FETCH-REAL`, `OUTCOME-METRICS-CADENCE-BOUNDED` (A-3), `OUTCOME-HYPOTHESIS-IN-BRIEF` (A-1),
+`OUTCOME-SEED-BASIS-MATCH` (A-4), `OUTCOME-HOOKTYPE-ADDITIVE` (A-6). **ADR 0026 total: 35 `OUTCOME-*`
+constraints.**
+
+> *Original placeholder, preserved:*
+>
 > **AWAITING THE ARCHITECT — this section is the Builder's gate; J2 does not start without it.**
 >
 > Recorded here in the Sessions 22–30 form, **before** §2 is authored:
@@ -543,6 +562,1050 @@ and any founder adjudication is recorded in §0.2. Then author §2/§3 below fro
 > **no third memory writer** was added (L-1); and `OUTCOME-NO-ZERO-METRICS-REINTRODUCED` (the MINOR-2
 > correction in `lib/memory/performance.ts` is not undone).
 
+**✅ AUTHORED 2026-09-19 — the placeholder above is retained as the specification this section was written
+against; everything below is the section itself.** Gate satisfied: `docs/decisions/0026-outcome-loop.md` is
+**Accepted**, carrying **35 `OUTCOME-*` constraints** (18 rows with a Tier-1 component · 20 with a Tier-2
+component · 8 with a Tier-3 component · 1 Tier E — rows are mixed-tier, so these overlap); `§0.2` records
+**A-1 … A-6**, none against J1's recommendation.
+
+**Audit-trail precondition — before `J2.0` is pasted.** At authoring time ADR 0026 is **untracked** and
+`session-33.md` carries uncommitted edits. Both are committed **first, as their own docs-only commit** (the
+untracked `step-2/.impeccable/` directory and `supabase/.temp/cli-latest` are **not** part of it), and that
+commit's SHA is the `BASE` the Reviewer reads against and the base of `OUTCOME-ADR0018-UNCHANGED`'s path
+check. The Builder works on its own branch, `session-33-adr-0026`, cut from the head where Session 32 closed
+(`859fd73f`), or from `master` if PR #9 has merged by then.
+
+**Six places where the ADR overrode the placeholder above, stated first because a Builder reading only the
+placeholder would build the wrong session:**
+
+1. **The first code step is the metrics input, not tagging.** ADR §1.2 item 1: `fetchPostMetrics` throws
+   `NOT_IMPLEMENTED` on both native providers, so `post_metrics` receives no real rows. Founder ruling
+   **A-3** makes the real fetch and the day-1/3/7 cadence **the first Builder step** (`J2.1`). Tagging still
+   precedes everything in `lib/outcomes/`.
+2. **This is the third writer, not the second** (ADR §1.1 item 2 — Session 32's `importPerformanceMemory`).
+   And the placeholder's *"every `lib/db/memory-performance` function now has two callers"* is **not true by
+   design**: ADR §5.6 gives the outcome writer **its own functions**, so no existing writer gains a caller.
+   The SHARED-FUNCTION CALLERS risk moves to `listPerformanceMemoryCandidates` (a read with two call paths
+   that must now exclude outcome rows) and the three prompt render sites.
+3. **Tagging is a database trigger on `post_ai_originals`, not an extension of `generate.ts:303` in TS.**
+   Per-caller TS tagging is the named loser (`[test-BLOCKER-4]`, ADR §4.2): it would repeat the Session 22
+   pattern of covering one caller and missing another.
+4. **The floor lives in SQL.** Promotion and demotion are RPCs that recompute from `post_outcomes` and never
+   trust a caller (ADR §5.4). So the placeholder's "baseline and floor before promotion" becomes: tables
+   (`J2.3`), then the memory schema (`J2.5`), then the RPCs (`J2.6`), then the TS normaliser that writes
+   observations (`J2.7`). The first promotion that ever runs in production is gated by construction, because
+   nothing calls the RPCs until the worker (`J2.8`) exists.
+5. **The hypothesis fields ARE in scope** (ruling A-1, ADR 0017 Amendment C, `J2.10`). The placeholder
+   assumed they might be flagged and deferred.
+6. **The "no cross-business query" tripwire is `OUTCOME-NO-CROSS-BUSINESS` and scans RPC *bodies*.** It
+   lands last (`J2.13`) because its targets exist only then; the other tripwires land in `J2.2`, before the
+   code they fence.
+
+**The ADR decisions J2 TRANSCRIBES rather than re-derives.** Every one carries a named loser in ADR 0026; a
+Builder that changes one has re-opened an adjudicated decision.
+
+| Decision | Value | ADR |
+|---|---|---|
+| Metrics fields | X: `likes`, `comments`, `shares`, `impressions` (+ `saves`/`clicks` only if verified); `reach` **always null**. LinkedIn: `likes`/`comments`/`shares` **only if verified under current scopes**, else `NOT_IMPLEMENTED`; `saves`/`clicks`/`reach`/`impressions` **always null**. **No scope added.** | §3.1 |
+| Sync cadence | due at **day 1, 3, 7** via `last_synced_at` vs `published_at`; **no new column**; `METRICS_MAX_AGE_DAYS` = **9**; hourly tick and tick line unchanged | §3.2 |
+| Dimensions | **7**: `role`, `format`, `origin_mode`, `length_band`, `cta_present` **promotable**; `hook_type`, `proof_type` **descriptive only** | §4.1 |
+| Tag storage | `post_dimensions`, PK `ai_original_id`, filled by an **`AFTER INSERT` trigger on `post_ai_originals`**, `ON CONFLICT DO NOTHING`, **no `EXCEPTION` block**, `BEFORE UPDATE` rejects, **no `BEFORE DELETE`**; latest revision applies | §4.2 |
+| `hookType` | `z.enum([6]).nullish()` on three output schemas; **`AI_ORIGINAL_SCHEMA_VERSION` stays 1** | §4.3 |
+| Length bands | X single `<100 / 100–220 / >220` chars · X thread `<4 / 4–6 / >6` segments · LinkedIn `<600 / 600–1,300 / >1,300` chars | §4.4 |
+| History | copy `role`, `format`, `origin_mode` for existing snapshots; `hook_type` NULL; **imports never** | §4.5 |
+| Row distinction | `source='outcome'`; key `outcome:<dimension>:<value>:<direction>:<platform>` and `outcome:hypothesis:<campaign_id>`; sibling partial UNIQUE; two namespace CHECKs; **distilled index unchanged** | §5.1 |
+| CHECK widening | `source` + `'outcome'`; `dimension` + `role`, `origin_mode`, `length_band`, `cta`, `hypothesis`; **`NOT VALID` then `VALIDATE`** | §5.1 |
+| Stats columns | `outcome_n`, `outcome_wins`, `outcome_distinct_campaigns`, `interval_low`, `interval_high`, `metric_basis`, `baseline_seeded`, each `CHECK ((col IS NOT NULL) = (source='outcome'))`; `contradicted_at` nullable | §5.3 |
+| RPCs | **one** `wilson_bounds`; upsert takes **no stats parameters**; promote/demote are single conditional UPDATEs that recompute | §5.4 |
+| Write protection | INSERT policy `AND source='manual'`; `BEFORE UPDATE` trigger allows only retire/`deleted_at` on non-manual rows | §5.5 |
+| Outcome freeze | once, at day 7; grace **2** days; missed → **no row**, counted | §6.1 |
+| Metric | X **rate** `(likes+comments+shares)/impressions`; LinkedIn **count** `likes+comments+shares`; null → **excluded**; X `impressions=0` → excluded | §6.2 |
+| Baseline | X: 90-day own median, **≥ 8**; LinkedIn: last **20**, **≥ 8**; seed **X only, basis `rate` only**; `log_lift` clipped **[-3, 3]**, count floor **1**; **the gate uses `beat_baseline`** | §6.3 |
+| Gates | **k = 10**, **≥ 3 campaigns**, **Wilson (z = 1.96) low > 0.5** (or high < 0.5); provisional row at **n ≥ 5** | §6.4 |
+| Confidence | `wilson_low × n/(n+10)` (or `(1−wilson_high) × n/(n+10)`) | §6.4 |
+| Retrieval | `listPerformanceMemoryCandidates` **excludes outcome rows**; `retrieveOutcomePatterns` caps at **3**; own prompt block, closed template; **three render sites**; "Top-Performing Post Snippets" untouched | §6.4 |
+| Decay | window **180 days**; `last_confirmed_at` = newest **agreeing** observation; `expires_at` + **90 days** | §7.1–7.2 |
+| Demotion | window bound fails **or** **≥ 4 of the last 5** contrary; `active → candidate`, `contradicted_at` stamped, never deleted | §7.3 |
+| Brief fields | `hypothesis` ≤ 300; `successCriteria` `{win_rate ∈ [0.5, 0.95] \| median_lift ∈ [1.0, 3.0], evaluationWindowDays ∈ [7, 60]}`; pre-amendment → implicit hypothesis | §8.1 |
+| Retrospective | due at last publish + `max(7, window)` days with no unpublished post left; `inconclusive` if n < 5; evaluated **once** | §8.2–8.3 |
+| Write-back | acknowledgement writes **exactly one** `dimension='hypothesis'` row, `expires_at` + **365 days**, read **only by Stage A** | §8.4 |
+| North-star | a cycle = an acknowledged supported/not-supported retrospective **with** its memory row; ÷ active brands, trailing 30 days; ops script only | §8.5 |
+| Provenance | observations **only** from SOSH-published posts; seed stamped → `baseline_seeded`; **no mixed patterns** | §9 |
+| UX | campaign detail page only; **not the approval gate**; no `/analytics`; every §10.2 state; §10.3 prohibited framing | §10 |
+| Tables | three, SELECT-only RLS, no authenticated write policy, cascade from `businesses`, three §D2.5 rows **verbatim** | §11 |
+| Worker | `extract-outcomes`, `0 4 * * *`, `capture-learning`'s dual-mode shape, the §14 tick-line keys, `OUTCOME_BATCH_SIZE` 200 | §14 |
+
+**Ordering, restated as binding.** Each position is forced by something that breaks under the alternative.
+
+1. **`J2.0` grounds and ships nothing.** Two premises change the session if they have drifted: whether any
+   authenticated app code writes `performance_memory` (ADR §5.5 makes that a STOP), and whether ADR 0018's CTA
+   rule function can be imported **without editing `lib/learning/`** (ADR §4.4 against
+   `OUTCOME-ADR0018-UNCHANGED`).
+2. **The metrics input (`J2.1`) first**, by ruling A-3.
+3. **Boundary scans (`J2.2`) before the code they fence.** `lib/outcomes/` is created here with its constants
+   file, so the scans have a real target and cannot pass vacuously.
+4. **Tables and the tagging trigger (`J2.3`) before anything reads a dimension.** Every day tagging is
+   delayed is a day of untaggable output (L-4). `hookType` (`J2.4`) follows, because the trigger already
+   tolerates its absence.
+5. **The `performance_memory` schema (`J2.5`) before the RPCs that write it (`J2.6`).** A row written without
+   the namespace CHECKs and write protection cannot be corrected afterwards.
+6. **RPCs (`J2.6`) before the normaliser (`J2.7`) and the worker (`J2.8`)**, so the floor exists before any
+   code can call it.
+7. **Retrieval and render (`J2.9`) after the worker**, so there is something real to retrieve.
+8. **The brief amendment (`J2.10`) before the retrospective (`J2.11`)**, which scores the hypothesis it adds.
+9. **Surfaces (`J2.12`) after every state they render exists.** The Tier-3 re-verification, the amendments and
+   the constraint→CI map (`J2.13`) come last.
+
+**Scope tripwires — executable, not prose:**
+
+- **`OUTCOME-DETERMINISTIC-NO-LLM`**, **`OUTCOME-NO-RETRO-TAGGING`**, **`OUTCOME-NO-EXTRA-WRITER`** and the
+  scan half of **`OUTCOME-NO-ZERO-METRICS-REINTRODUCED`** are source scans in `J2.2`.
+- **`OUTCOME-ADR0018-UNCHANGED`**: `git diff BASE..HEAD -- lib/learning/ <ADR 0018 migrations>` is empty. It
+  is a path check by ADR decision (`[test-3b]`) and lands in `J2.2`.
+- **`OUTCOME-NO-CROSS-BUSINESS`** is wrapper tests plus an RPC-body scan, in `J2.13`.
+- **L-1 out of scope — STOP and report:**
+  - experimentation or holdouts;
+  - UTM tagging or conversion ingestion (ruling A-5);
+  - an analytics page;
+  - cross-type retrieval, or merging outcome rows into the shared ranking;
+  - any memory writer beyond `lib/outcomes/*`;
+  - comment mining or embeddings;
+  - any edit under `lib/learning/`;
+  - a new OAuth scope;
+  - a model call anywhere in the extractor.
+
+**Each scan is demonstrated to REDDEN against a planted violation and then reverted.** A scan that has never
+failed is a comment with a test runner attached.
+
+**Definition of done for every step:**
+- `npm run typecheck` clean.
+- `npm run test:app` green.
+- `npm run test:db` green wherever the step touches DB behaviour.
+- Each named constraint **demonstrated to redden against the pre-fix code**, then reverted.
+- One commit per step, its subject naming the step id and the constraints it closes.
+
+**Never bare `npx vitest run`** — it picks up ECC test files that call `process.exit()`.
+
+**ECC budget for the Builder phase — three subagent invocations, total.** Fourteen steps invite a reviewer
+each; **don't**. Each spawn starts cold and re-reads what the Builder already holds, and the Reviewer (`J3`)
+exists for that audit. Each of the three is placed where a second pair of eyes can find what the Builder's
+own tests structurally cannot:
+
+- **One `ecc:code-explorer`** in `J2.0`, over that step's closed file list and no other.
+- **One `ecc:database-reviewer`** at the end of `J2.6`, **before `J2.6` commits**, over the four migrations
+  of `J2.1`, `J2.3`, `J2.5` and `J2.6`. This session's sharpest risk is in SQL:
+  - three `SECURITY DEFINER` RPCs that gate promotion;
+  - a trigger inside ADR 0018's write path;
+  - CHECK widenings on a populated table.
+
+  Findings against an already-committed migration are fixed by a **forward migration inside `J2.6`**.
+- **One `ecc:security-reviewer`** at the end of `J2.11`, **before it commits**. It covers how member-controlled
+  text (hypothesis, note, campaign name) and member privileges reach `performance_memory` and a generation
+  prompt:
+  - the `J2.5` write protection;
+  - the `J2.6` acknowledge RPC;
+  - the `J2.9` render;
+  - the `J2.10` brief action;
+  - the `J2.11` action.
+- **Deliberately not invoked:**
+  - `ecc:mle-reviewer`. Its findings are already folded into ADR §6 and §12.4. The statistics are transcribed, not re-derived, and consulting it again would re-argue a settled ADR.
+  - `ecc:pr-test-analyzer` and `ecc:typescript-reviewer`. That audit is `J3`'s job.
+  - Any subagent for the repetitive i18n or render-site work.
+
+**Skills are free and do not count:**
+- `/ecc:plan` → `/ecc:tdd-workflow` → `/ecc:verification-loop` on every code step.
+- `supabase:supabase-postgres-best-practices` in `J2.1`, `J2.3`, `J2.5` and `J2.6`.
+- `ecc:documentation-lookup` (a **skill**) in `J2.1`, for the vendor-doc verification ADR 0028 §13 requires.
+- **`taste-skill` then `impeccable` in `J2.12` only**, against ADR 0026 §10.
+- `ecc:cost-aware-llm-pipeline` is **not** needed. The session adds no model call
+  (`OUTCOME-DETERMINISTIC-NO-LLM`), and `hookType` rides the existing generation call.
+
+**Cost note.**
+- Zero model spend.
+- **The Builder makes no live platform call.** Providers are tested on responses shaped from the verified
+  docs, and a live X smoke is recorded in ADR 0028 Amendment A as `NOT YET RUN`.
+- **`OUTCOME-PREDICTION-ACCURACY` (Tier E) is not run.** It cannot produce a number before about
+  T0 + 150 days, and T0 is undefined today (ADR §12.4).
+
+### §2a — Builder primer  (paste first · wait for acknowledgement)
+
+```
+Session 33 Track J - BUILDER phase (J2). You implement ADR 0026 and the additive amendments it names. You
+write code; you do NOT make architectural decisions. Every decision you need has already been made and
+carries a named loser. If you find yourself choosing between two designs, STOP and report - that is an ADR
+gap, not your call.
+
+PRECONDITION: git status must show docs/decisions/0026-outcome-loop.md and docs/build-guide/session-33.md
+COMMITTED and clean (a docs-only commit; do NOT include app/[locale]/(dashboard)/onboarding/step-2/.impeccable/
+or supabase/.temp/). If either is untracked or modified, STOP - the Reviewer cannot read an ADR that is not in
+git. Record that commit's SHA as BASE in your acknowledgement. Work on branch session-33-adr-0026.
+
+READ FIRST, in this order:
+- docs/decisions/0026-outcome-loop.md - ALL of it. Section 13 (35 constraints) is your checklist. Sections
+  3, 4, 5, 6, 7, 8 and 11 are the ones you transcribe numbers and SQL shapes from. Section 16 records why each
+  advisory finding was adopted or rejected - do not re-open any of them.
+- docs/build-guide/session-33.md - the goal block, Reality, Section 0 (L-1..L-9, D-1..D-7) and Section 0.2
+  (A-1..A-6). SECTION 0.2 IS YOUR GATE.
+- docs/decisions/0018-diff-based-learning-capture.md - the OTHER pipeline into performance_memory. You change
+  none of it. Its [db-BLOCKER-1] (no BEFORE DELETE on a child table) binds you.
+- docs/decisions/0016-governed-memory.md - governance fields, MEM-NO-DIRECT-TABLE-ACCESS, active-only
+  retrieval.
+- docs/decisions/0028-*.md Sections 13, 14 and 16 - the verification rule, the read cost, the permanently
+  unavailable fields.
+- docs/decisions/0025-social-read-path-and-backfill.md Sections 4.1, 5.4, 9.4 - the seed, the note you
+  correct, the ratify-RPC shape you copy.
+- docs/decisions/0015-test-execution-and-ci-gates.md - Section 2 (tiers) and Amendment B (Tier E).
+- docs/decisions/0010-legal-surface.md Amendment 2 Section D2.5 - you add three rows.
+- CLAUDE.md - DB access, three Supabase clients, RLS and the erasure cascade, atomic transitions, Zod, i18n,
+  bounded queries, the worker console.log carve-out, UI Component patterns, test-execution integrity.
+
+BINDING RULES YOU WILL BE REVIEWED AGAINST:
+
+1. TRANSCRIBE, DO NOT RE-DERIVE. k = 10, >= 3 distinct campaigns, Wilson z = 1.96 with low > 0.5 (or high <
+   0.5), provisional at n >= 5, confidence = wilson_low * n/(n+10), window 180 days, expiry newest agreeing
+   observation + 90 days, fast contradiction 4 of the last 5, OUTCOME_CAP 3, maturity day 7 with 2 days grace,
+   baselines >= 8 (X 90-day median, LinkedIn last 20), log_lift clipped to [-3, 3] with a count floor of 1.
+   Every one is a named constant in lib/outcomes/constants.ts citing its ADR section, with its SQL twin
+   documented beside the RPC that uses it. Statistical constants are code, never env.
+
+2. THE FLOOR LIVES IN SQL AND NEVER TRUSTS A CALLER. upsert_outcome_performance_pattern takes NO stats
+   parameters; promote and demote are ONE conditional UPDATE each that RECOMPUTES n, wins, campaigns and the
+   bound from post_outcomes JOIN post_dimensions. wilson_bounds is the ONE copy of the formula. No TS
+   re-implementation of the gate is accepted as proof of it.
+
+3. TAG AT GENERATION, NEVER AFTER (L-4). post_dimensions is written ONLY by the AFTER INSERT trigger on
+   post_ai_originals and by ONE history-copy migration that copies role, format and origin_mode. No
+   classifier, no model call, no TS write to post_dimensions anywhere. Imports are never tagged and never
+   observations (ruling A-4). Human-written posts get no row - that is correct.
+
+4. ADR 0018 IS UNTOUCHED. No file under lib/learning/ and no ADR 0018 migration changes - not even to add an
+   export. If you need one to change, STOP. AI_ORIGINAL_SCHEMA_VERSION stays 1.
+
+5. THREE WRITERS, DISTINGUISHED IN THE ROW. source='outcome' is set INSIDE the RPC. Namespace CHECKs make a
+   cross-writer key collision impossible; the new partial UNIQUE is a SIBLING - the distilled index is
+   unchanged. No existing lib/db/memory-performance function gains a caller or a parameter; the outcome writer
+   has its own functions, called only from lib/outcomes/.
+
+6. NULL IS NEVER ZERO. A permanently unavailable field (X reach; LinkedIn saves, clicks, reach, impressions)
+   is null forever. An eligible field null at day 7 EXCLUDES the post. MINOR-2 in lib/memory/performance.ts
+   (likes/impressions omitted for governed rows) is not undone.
+
+7. PATTERNS ARE OBSERVATIONS, NOT RULES (L-2, L-7). Every rendered line carries "in <wins> of <n> posts
+   (<c> campaigns)". Never a multiplier, a causal verb, a percentage without n, or a superlative - in en, pt,
+   es, or the prompt. Outcome rows never enter the shared ranking or the "Top-Performing Post Snippets" block.
+   Engagement only - no business attribution this session (ruling A-5).
+
+8. NO MODEL CALL IN THE LOOP. lib/outcomes/** and app/api/cron/extract-outcomes/** import nothing from the
+   AI layer. hookType is requested inside the EXISTING generation call.
+
+9. NO LOOKUP BY GUESSED NAME. Every CHECK you widen is found in pg_constraint BY DEFINITION; the migration
+   RAISES unless exactly one matches, drops it by that name, re-adds it EXPLICITLY NAMED as NOT VALID, then
+   VALIDATEs it. A guessed DROP CONSTRAINT IF EXISTS silently no-ops.
+
+10. SERVICE-ROLE DISCIPLINE. Every new RPC is SECURITY DEFINER with search_path pinned, REVOKE ALL FROM
+    public, anon, authenticated, GRANT EXECUTE TO service_role. acknowledge_campaign_retrospective's p_user_id
+    comes from supabase.auth.getUser() on the anon server client - never a form field - and is checked
+    against business_members. lib/db functions that use service-role acquire their own client by lazy import
+    and take no client parameter.
+
+11. UNTRUSTED TEXT. Hypothesis, note and campaign name are member-controlled. neutralizeWithSentinels inside
+    the lib/db wrapper before any write to performance_memory; neutralize() at every prompt render.
+
+12. GDPR. Three new business-scoped tables, each ON DELETE CASCADE from businesses, SELECT-only RLS in the
+    InitPlan form, no authenticated write policy, BEFORE UPDATE write-once triggers where the ADR says so and
+    NO BEFORE DELETE trigger anywhere. The three ADR 11 rows go into ADR 0010 Amendment 2 Section D2.5
+    VERBATIM, IN THE SAME COMMIT as the migration. purge_business is proven by a live-Postgres case.
+
+13. SHARED-FUNCTION CALLERS. Before marking ANY constraint on a shared function tested, git grep its callers
+    and state PER CALLER which test exercises it. ADR 5.6 is the table: listPerformanceMemoryCandidates (two
+    call paths - context.ts and studio/actions.ts), the three prompt render sites, every creator of a
+    post_ai_originals row (covered by the trigger - prove it with a raw insert), list_posts_for_metrics_sync's
+    caller, and the ADR 0018 CTA function's new importer. A caller with no listed test is
+    AUTHORED-NOT-EXECUTED for that caller.
+
+14. CONTRACT DISCIPLINE. DB only via lib/db/ and lib/memory/ (no *_memory table touched outside
+    lib/db/memory-*); lib/social only via lib/social/index.ts; Zod on every Server Action and route input;
+    atomic conditional UPDATEs; every list query bounded with an explicit ORDER BY matching an index;
+    date-fns and formatISO(); no `any`; no console.* except the ONE canonical structured-JSON tick line in
+    the cron route; env only via lib/config.ts; i18n en/pt/es in the same commit; shadcn v4 / Base UI with NO
+    asChild on Button or DropdownMenu primitives.
+
+ECC BUDGET FOR THIS PHASE: THREE subagent invocations, total. One ecc:code-explorer in J2.0. One
+ecc:database-reviewer at the end of J2.6, before it commits, over the J2.1, J2.3, J2.5 and J2.6 migrations.
+One ecc:security-reviewer at the end of J2.11, before it commits, over the member-text-to-memory-to-prompt
+path. No reviewer per step, no re-consultation, no mle-reviewer (its findings are already in the ADR). Skills
+are free: /ecc:plan, /ecc:tdd-workflow, /ecc:verification-loop every code step;
+supabase:supabase-postgres-best-practices for J2.1, J2.3, J2.5, J2.6; ecc:documentation-lookup (a SKILL) in
+J2.1; taste-skill then impeccable in J2.12 ONLY, against ADR 0026 Section 10.
+
+DO NOT make any live platform call and DO NOT run anything for OUTCOME-PREDICTION-ACCURACY - it is Tier E,
+recorded in J2.13, not run.
+
+VERIFICATION, every step: npm run typecheck ; npm run test:app ; npm run test:db where the step touches DB
+behaviour. NEVER bare `npx vitest run`. If test:db fails, distinguish a DB-behaviour regression from a local
+stack failure and say which. Each named constraint must be DEMONSTRATED TO REDDEN against the pre-fix code and
+then reverted. One commit per step, subject naming the step id and the constraints it closes.
+
+Acknowledge in ONE line: the BASE SHA, confirmation you have read ADR 0026 Sections 3-8, 11 and 13, and that
+you understand rule 2 (the floor never trusts a caller) and rule 4 (lib/learning is untouched). Then STOP and
+wait for J2.0.
+```
+
+### §2b — Builder steps
+
+Each step is one paste and one commit. **A step that closes no ADR constraint does not exist.** `J2.0` is the
+one deliberate exception, because of premise risk. **All 35 constraints are closed by exactly one step each.**
+Where a constraint has a Tier-1 half authored earlier, the step that closes it is the one that lands its last
+half, and the table says so. **Do not claim a count until it is executed green in CI at the head it is dated
+to** (Session 28's false *"29/29"*).
+
+| Step | What it ships | Constraints closed (ADR §13 #) | Tier |
+|---|---|---|---|
+| **J2.0** | **Grounding — no code, no commit** · `code-explorer` | — | — |
+| **J2.1** | Real `fetchPostMetrics` + day-1/3/7 cadence (ADR 0028 Amendment A, ruling A-3) | `METRICS-FETCH-REAL` (1), `METRICS-CADENCE-BOUNDED` (2) | 2 · **1**+2 |
+| **J2.2** | `lib/outcomes/constants.ts` + boundary scans, each reddened | `NO-RETRO-TAGGING` (6), `DETERMINISTIC-NO-LLM` (28), `ADR0018-UNCHANGED` (29), `NO-EXTRA-WRITER` (31) | 3 |
+| **J2.3** | Three tables, RLS, write-once, the tagging trigger, history copy, §D2.5 rows | `DIMENSIONS-TAGGED-AT-GENERATION` (3), `TAG-ALL-CALLERS` (4), `DIMENSIONS-WRITE-ONCE` (5), `RLS-ISOLATED` (33), `CASCADE-COMPLETE` (34) | **1** + 3 |
+| **J2.4** | `hookType` additive in three output schemas | `HOOKTYPE-ADDITIVE` (8) | 2 |
+| **J2.5** | `performance_memory` Amendment C schema + write protection | `TWO-WRITERS-DISTINGUISHED` (18), `KEY-COLLISION-DEFINED` (19), `WRITE-PROTECTED` (20) | **1** |
+| **J2.6** | `wilson_bounds`, upsert/promote/demote, acknowledge, north-star RPCs + wrappers · **database-reviewer** | `MIN-N-ENFORCED` (13), `RECOMPUTE-NOT-TRUST` (14), `NORTHSTAR-COMPUTABLE` (26); **Tier-1 halves** of 21, 22, 23, 25 authored | **1** + 2 |
+| **J2.7** | Deterministic normaliser → `post_outcomes` | `ELIGIBLE-FIELDS-ONLY` (10), `NORMALISED-TO-OWN-BASELINE` (11), `SEED-BASIS-MATCH` (12) | 2 |
+| **J2.8** | `extract-outcomes` worker, tick line, runbook | `DESCRIPTIVE-ONLY` (7), `MATURED-SNAPSHOT` (9), `CONTRADICTION-DEMOTES-ATOMIC` (21), `WINDOWED-DECAY` (22), `PROVENANCE-PROPAGATED` (23), `TICK-IDEMPOTENT` (32) | 1 + 2 + 3 |
+| **J2.9** | Separate retrieval + observed-outcomes block at three render sites | `CONFIDENCE-RENDERED` (15), `NO-ZERO-METRICS-REINTRODUCED` (16), `SEPARATE-RETRIEVAL` (17) | 2 + 3 |
+| **J2.10** | ADR 0017 Amendment C: hypothesis + success criteria | `HYPOTHESIS-IN-BRIEF` (24) | 1 + 2 |
+| **J2.11** | Retrospective evaluation, acknowledge action, north-star script · **security-reviewer** | `RETROSPECTIVE-WRITES-BACK` (25) | 1 + 2 |
+| **J2.12** | Campaign-page surfaces + copy lint · **taste-skill → impeccable** | `ATTRIBUTION-CONFIDENCE-FRAMED` (27) | 2 |
+| **J2.13** | Cross-business scan, Tier-3 re-verify, amendments, constraint→CI map, Tier E protocol | `NO-CROSS-BUSINESS` (30), `PREDICTION-ACCURACY` (35) | 2 + 3 + E |
+
+**Tally: 2 + 4 + 5 + 1 + 3 + 3 + 3 + 6 + 3 + 1 + 1 + 1 + 2 = 35.** (`OUTCOME-` prefix dropped in the table
+for width; every commit subject and test title uses the full name.)
+
+The fourteen pastes follow, one per step.
+
+#### J2.0 — Grounding pass: re-verify every ADR premise  ·  no code, no commit
+
+```
+BUILDER - Session 33 - J2.0. NO CODE, NO COMMIT. Produce a premise -> file:line -> still-true? table before
+anything is built. ADR 0026 was written at 859fd73f. If a premise has drifted, the step that depends on it is
+NOT built until the drift is reconciled and recorded here.
+
+ECC BUDGET INVOCATION 1 of 3. Invoke ecc:code-explorer ONCE over exactly this closed file list and no other:
+  lib/social/twitter-provider.ts, linkedin-provider.ts, mock-provider.ts, types.ts, platforms/config.ts
+  lib/metrics/orchestrator.ts, app/api/cron/sync-metrics/route.ts, lib/db/post-metrics.ts, lib/config.ts
+  app/api/cron/capture-learning/route.ts, lib/cron/qstash-auth.ts
+  lib/learning/orchestrator.ts, lib/learning/classify.ts
+  lib/db/memory-performance.ts, lib/memory/performance.ts, lib/memory/scoring.ts, lib/memory/constants.ts,
+  lib/memory/import.ts, lib/ai/context.ts
+  lib/ai/prompts/post-generation.ts, post-regeneration.ts, brief.ts, formats/native-generation-prompt.ts,
+  formats/schemas.ts
+  lib/campaigns/generate.ts, lib/db/campaigns.ts, lib/db/posts.ts, lib/db/types.ts
+  app/[locale]/(dashboard)/campaigns/[id]/ (page.tsx and posts/actions.ts),
+  app/[locale]/(dashboard)/studio/actions.ts
+  supabase/migrations: the governed_memory migration; 20260726020000*; 20260726030000*;
+  20260728220000_demote_recomputes_contradictions.sql; the ADR 0018 post_ai_originals / post_edit_signals
+  migrations; the migration that defines list_posts_for_metrics_sync; the ADR 0025 performance_memory import
+  migration; 20260702120700_purge_business_member_delete.sql
+Ask it ONE question: "for each file, what does it currently do with the metrics fetch, the metrics sync
+predicate, post_ai_originals and its triggers, performance_memory writers/readers/CHECKs/policies, the brief
+shape, and the performance-memory render sites - with line numbers?" Do not ask it to propose changes.
+
+VERIFY THESE PREMISES SPECIFICALLY. Each is load-bearing for a named later step.
+
+1. NO METRIC INPUT (J2.1). fetchPostMetrics throws NOT_IMPLEMENTED at linkedin-provider.ts:342 and
+   twitter-provider.ts:398; the orchestrator short-circuits on it (orchestrator.ts:95-97); upsertPostMetrics
+   uses onConflict post_id (post-metrics.ts:12). Record the CURRENT list_posts_for_metrics_sync definition
+   (file + line) and METRICS_MAX_AGE_DAYS's current default in lib/config.ts.
+2. THE WRITERS TODAY (J2.5). performance_memory writers: promote.ts:109-159 and summarize.ts:184-213
+   (distilled); import.ts:144 -> memory-performance.ts:260-279 (import). git grep for ANY other writer, and for
+   ANY app/** code writing performance_memory with an authenticated client. If one exists, STOP - ADR 5.5 makes
+   it a STOP, not a policy exception.
+3. THE CHECKS BY REAL NAME (J2.5). Query pg_constraint on the local DB for performance_memory's source CHECK
+   and dimension CHECK: current names and value lists. Write (do not run in a migration yet) the by-definition
+   lookup J2.5 will use and confirm it returns EXACTLY ONE row for each.
+4. WHAT J2.5/J2.6 MUST NOT DISTURB. performance_memory_distilled_pattern_key_uq and its predicate;
+   upsert_distilled_performance_pattern's ON CONFLICT ... WHERE source='distilled' (20260726030000:63-64);
+   promote_performance_pattern's third gate counting post_edit_signals (:118-127); the ADR 0025 import partial
+   UNIQUE; trg_performance_memory_voice_write_guard's firing condition (20260726020000:80-115);
+   enforce_voice_write_preference_only's retirement branch (:85-88); the authenticated INSERT/UPDATE policies
+   (governed_memory.sql:246-253).
+5. POST_AI_ORIGINALS (J2.3, J2.2). Its columns (format, payload, rendered_content, revision, post_id,
+   business_id), its write-once trigger, enqueue_post_edit_signal, and EVERY existing trigger on it by name.
+   Record the ADR 0018 migration file names - J2.2's path check lists them.
+6. TAGGING INPUTS (J2.3). posts.role written from roleSequence (generate.ts:478-488, inserted :539-575); the
+   campaigns.origin enum values; CampaignBriefContent at types.ts:1300-1307 = {narrative, proofPlan,
+   pinnedEvidence[], roleSequence[]} and the pinnedEvidence kind values (proof_type's source). If hypothesis
+   or successCriteria already exist anywhere, STOP - ruling A-1 assumed they do not.
+7. THE CTA RULE (J2.7). Find ADR 0018's CTA rule function (ADR 0026 4.4: "imported unmodified"). Is it
+   EXPORTED today? If using it needs ANY edit under lib/learning/ - even adding `export` - STOP and report.
+   OUTCOME-ADR0018-UNCHANGED forbids the edit and the choice is the ADR's, not yours.
+8. RENDER SITES (J2.9). post-generation.ts:179-181 renders governed rows under "Top-Performing Post Snippets";
+   native-generation-prompt.ts renders NO performance memory (grep topContent / recentPostPerformance); state
+   what post-regeneration.ts renders. List every caller of listPerformanceMemoryCandidates
+   (performance.ts:51,140 -> context.ts; studio/actions.ts:136) and of buildCustomerContext.
+9. MINOR-2 / MINOR-3 (J2.2, J2.9). performance.ts:18-22 and :61-66: likes/impressions omitted for governed rows;
+   a null platform rendered "Across platforms". Record the exact lines.
+10. THE SEED (J2.7). social_backfill_runs.summary: the exact JSON path of the X engagement baseline, and whether
+    the run records its BASIS (rate vs count). If the basis is not recorded, OUTCOME-SEED-BASIS-MATCH cannot be
+    enforced at read time - STOP and report. Do not infer it.
+11. THE WORKER PATTERN (J2.8). capture-learning's dual-mode QStash/bearer route, its Sentry.withMonitor usage
+    and its tick line. ADR 14 cites docs/runbooks/qstash-setup.md; the file is at
+    docs/build-guide/runbooks/qstash-setup.md - confirm and use the real path.
+12. RETROSPECTIVE INPUTS (J2.10, J2.11). The exact post status enum values meaning "not yet published"; whether
+    anything sets campaigns.status 'completed' and what; the brief-review surface where the brief is edited
+    before freeze; MODE2-BRIEF-FROZEN-GUARD's test file.
+13. PURGE (J2.3). 20260702120700_purge_business_member_delete.sql:62 deletes the businesses row and cascades;
+    confirm no table added since blocks it.
+
+OUTPUT: the premise table, then a DRIFT list naming, for each drifted premise, the step it affects and what
+you propose. You do not decide - an ADR-level change is a STOP. Then STOP and wait for J2.1.
+```
+
+#### J2.1 — The metrics input: real `fetchPostMetrics` and the day-1/3/7 cadence  ·  ruling A-3
+
+```
+BUILDER - Session 33 - J2.1. /ecc:plan then /ecc:tdd-workflow then /ecc:verification-loop. Use
+supabase:supabase-postgres-best-practices for the migration and the ecc:documentation-lookup SKILL (not a
+subagent) for vendor documentation.
+
+WHY FIRST: founder ruling A-3. Without this, post_metrics receives no real rows and every later step computes
+over nothing.
+
+SHIP: ADR 0028 Amendment A (ADR 0026 Section 3).
+
+1. VERIFY BEFORE WRITING. ADR 0028 Section 13 binds unchanged: no endpoint, field name or scope is written from
+   memory. For X: the endpoint, the public-metrics field names, and the scope each needs - confirm it is inside
+   platforms/config.ts's granted scopes. For LinkedIn: whether like/comment/share counts are readable under the
+   scopes ALREADY granted. Record each citation (URL, retrieval date, exact field names) in a new appended
+   "Amendment A" section of docs/decisions/0028-*.md and in its verification log. DO NOT add a scope - it forces
+   re-authorisation of every connected account (ADR 0028 14.1).
+2. TwitterProvider.fetchPostMetrics: likes, comments (replies), shares (reposts + quotes, as verified),
+   impressions; saves/clicks ONLY if the verified endpoint serves them under granted scopes; reach is null
+   ALWAYS. withFreshToken for the token, the existing error mapping, the provider never sleeps.
+3. LinkedInProvider.fetchPostMetrics: likes, comments, shares ONLY if step 1 verified them readable. Otherwise
+   it KEEPS throwing NOT_IMPLEMENTED and Amendment A records that the loop runs on X alone. saves, clicks,
+   reach, impressions are null ALWAYS.
+4. MockProvider: deterministic metric fixtures for both platforms, including a permanently-null field, an
+   eligible field returned null, and an X impressions = 0 case (J2.7 needs all three).
+5. supabase/migrations/<ts>_metrics_sync_cadence.sql: CREATE OR REPLACE list_posts_for_metrics_sync so a post
+   is due when (age >= 1 day AND last_synced_at < published_at + 1 day) OR the same at 3 days OR at 7 days. No
+   new column. Keep its signature, grants, ORDER BY and limit. lib/config.ts: METRICS_MAX_AGE_DAYS default 9.
+   The hourly schedule and the tick line (kind 'metrics-sync-tick') are UNCHANGED in shape.
+
+TESTS:
+- lib/social/__tests__/: fetchPostMetrics per provider over mocked HTTP shaped from the cited docs - each
+  verified field mapped; reach (and LinkedIn's four) null, NEVER 0; a field absent from the response -> null,
+  not 0; the LinkedIn NOT_IMPLEMENTED path if that is the outcome.
+- supabase/__tests__/metrics-sync-cadence.test.ts (live Postgres): with seeded published_at/last_synced_at, a
+  post is returned at day 1, 3 and 7 and NOT at day 2 or 5 once that stage's sync has landed, and not after its
+  day-7 sync; a post older than 9 days never.
+- the metrics orchestrator test: tick-line keys unchanged.
+
+CONSTRAINTS CLOSED: OUTCOME-METRICS-FETCH-REAL (1, Tier 2 + the verification-log citation),
+OUTCOME-METRICS-CADENCE-BOUNDED (2, Tier 1 + 2). Redden: return 0 for a null field; drop the day-3 clause.
+Revert both.
+
+NO LIVE API CALL. Record a live smoke against a founder-owned X account in Amendment A as "NOT YET RUN".
+
+Commit: "J2.1 OUTCOME-METRICS-FETCH-REAL OUTCOME-METRICS-CADENCE-BOUNDED (ADR 0028 Amendment A)".
+```
+
+#### J2.2 — `lib/outcomes/` constants and the boundary scans  ·  before the code they fence
+
+```
+BUILDER - Session 33 - J2.2. /ecc:plan then /ecc:tdd-workflow then /ecc:verification-loop.
+
+SHIP: lib/outcomes/constants.ts and the Tier-3 boundary scans, BEFORE any code they fence (the ADR 0023 G1b.2
+precedent). lib/outcomes/ is created here, so the scans have a real, non-empty target and cannot pass
+vacuously.
+
+1. lib/outcomes/constants.ts - transcribe ADR 6.4's block exactly, each constant with a comment citing its ADR
+   section: OUTCOME_MIN_N 10, OUTCOME_MIN_DISTINCT_CAMPAIGNS 3, OUTCOME_WILSON_Z 1.96, OUTCOME_PROVISIONAL_N 5,
+   OUTCOME_CONFIDENCE_SHRINK_K 10, OUTCOME_WINDOW_DAYS 180, OUTCOME_PATTERN_TTL_DAYS 90,
+   OUTCOME_FAST_CONTRA_LAST 5, OUTCOME_FAST_CONTRA_MIN 4, OUTCOME_CAP 3, OUTCOME_MATURITY_DAYS 7,
+   OUTCOME_MATURITY_GRACE_DAYS 2. Add, citing their sections: OUTCOME_TAXONOMY_VERSION 1 (4.2),
+   OUTCOME_BASELINE_MIN 8, OUTCOME_X_BASELINE_DAYS 90, OUTCOME_LINKEDIN_BASELINE_LAST 20, OUTCOME_LOG_LIFT_CLIP 3
+   (6.3), OUTCOME_RETRO_MIN_N 5 (8.2), OUTCOME_HYPOTHESIS_TTL_DAYS 365 (8.4), the length-band thresholds (4.4),
+   and the PROMOTABLE and DESCRIPTIVE_ONLY dimension sets (4.1).
+2. lib/outcomes/__tests__/source-scans.test.ts:
+   - OUTCOME-DETERMINISTIC-NO-LLM (28): no import of the lib/ai runner or client, or of @anthropic-ai, under
+     lib/outcomes/** or app/api/cron/extract-outcomes/**. Assert the glob matched >= 1 file.
+   - OUTCOME-NO-RETRO-TAGGING (6): no TS write to post_dimensions anywhere (a .from('post_dimensions') chained
+     to insert/upsert/update, or an .rpc that writes it); and in supabase/migrations/ an INSERT INTO
+     public.post_dimensions appears ONLY in an allowlist of migration file names. The allowlist is EMPTY now;
+     J2.3 adds exactly two names and nothing else ever may.
+   - OUTCOME-NO-EXTRA-WRITER (31): the set of literal source values written by any migration's INSERT INTO
+     public.performance_memory or RPC body is exactly {distilled, import} today, plus the authenticated
+     'manual' path. J2.5/J2.6 add 'outcome'.
+   - the scan half of OUTCOME-NO-ZERO-METRICS-REINTRODUCED (16): pin the MINOR-2 lines recorded in J2.0
+     premise 9 - a governed row's rendered object carries no likes or impressions key.
+3. scripts/check-adr0018-unchanged.ts: OUTCOME-ADR0018-UNCHANGED (29) - `git diff BASE..HEAD -- lib/learning/
+   <the ADR 0018 migrations named in J2.0 premise 5>` must be empty, non-zero exit otherwise. This is a PATH
+   check by ADR decision ([test-3b]); the unmodified lib/learning/*.test.ts suite is the behavioural backstop.
+   State in the commit body whether it runs inside app-tests or as a recorded Tier-3 command re-run in J2.13
+   and by the Reviewer.
+
+REDDEN EACH against a planted violation, show the hit, revert: an @anthropic-ai import in
+lib/outcomes/probe.ts; a .from('post_dimensions').insert in a fake lib/backfill/classify.ts; a migration
+writing source 'manual2'; a likes: 0 in the governed render; a whitespace edit in lib/learning/promote.ts.
+
+CONSTRAINTS CLOSED (Tier 3): OUTCOME-NO-RETRO-TAGGING (6), OUTCOME-DETERMINISTIC-NO-LLM (28),
+OUTCOME-ADR0018-UNCHANGED (29), OUTCOME-NO-EXTRA-WRITER (31). The scan half of 16 lands here; 16 closes in
+J2.9.
+
+Commit: "J2.2 OUTCOME-NO-RETRO-TAGGING OUTCOME-DETERMINISTIC-NO-LLM OUTCOME-ADR0018-UNCHANGED
+OUTCOME-NO-EXTRA-WRITER".
+```
+
+#### J2.3 — Migration: three tables, the tagging trigger, the history copy, §D2.5 rows
+
+```
+BUILDER - Session 33 - J2.3. /ecc:plan then /ecc:tdd-workflow then /ecc:verification-loop. Use
+supabase:supabase-postgres-best-practices.
+
+SHIP: the three business-scoped tables, the tagging trigger, the history copy and the three D2.5 rows - the
+rows IN THE SAME COMMIT as the migration (L-8, CLAUDE.md erasure-cascade rule).
+
+1. supabase/migrations/<ts>_outcome_tables.sql:
+   - post_dimensions exactly as ADR 4.2: ai_original_id uuid PK -> post_ai_originals ON DELETE CASCADE;
+     business_id, post_id, campaign_id NOT NULL, each ON DELETE CASCADE; platform; taxonomy_version; role,
+     format, origin_mode, hook_type, proof_type nullable, each CHECK (col IS NULL OR col IN (...)); created_at.
+     Indexes (post_id), (campaign_id), (business_id, platform).
+   - post_outcomes exactly as ADR 6.1, including metric_basis CHECK IN ('rate','count'), baseline_source CHECK
+     IN ('own','import_seed'), length_band, cta_present, hook_survived, measured_at NOT NULL. Indexes
+     (business_id, platform, published_at DESC) and (campaign_id).
+   - campaign_retrospectives exactly as ADR 8.3: campaign_id UNIQUE; hypothesis_source CHECK IN
+     ('brief','implicit'); verdict CHECK; status CHECK IN ('completed','acknowledged'); note <= 500;
+     acknowledged_by -> auth.users ON DELETE SET NULL. Index (business_id, acknowledged_at DESC).
+   - RLS on all three: ONE SELECT policy each, business_id = ANY (SELECT unnest(public.get_user_business_ids())).
+     NO authenticated INSERT, UPDATE or DELETE policy (ADR 11).
+   - BEFORE UPDATE triggers rejecting every UPDATE on post_dimensions and post_outcomes. NO BEFORE DELETE
+     trigger on any of the three (ADR 0018 [db-BLOCKER-1]: it fires on FK cascades and aborts purge_business).
+2. The tagging trigger, in the same migration: AFTER INSERT ON post_ai_originals, SECURITY DEFINER, search_path
+   pinned. Body = reads plus ONE INSERT INTO post_dimensions ... ON CONFLICT (ai_original_id) DO NOTHING:
+   role from posts.role; format from NEW.format; origin_mode from campaigns.origin; hook_type from
+   NEW.payload->>'hookType' (NULL when absent or not one of the six values - never an error); proof_type from
+   the frozen brief's pinnedEvidence kinds; platform; taxonomy_version 1. NO EXCEPTION block - a genuine defect
+   must fail loudly. Name it so it cannot collide with the triggers listed in J2.0 premise 5.
+3. supabase/migrations/<ts>_post_dimensions_history_copy.sql: for EXISTING post_ai_originals rows, copy role,
+   format and origin_mode only (facts assigned at generation); hook_type and proof_type NULL. Imports are never
+   touched (ADR 4.5). Idempotent via ON CONFLICT DO NOTHING.
+4. Add BOTH migration file names to J2.2's OUTCOME-NO-RETRO-TAGGING allowlist, and nothing else.
+5. docs/decisions/0010-legal-surface.md Amendment 2 Section D2.5: the three rows from ADR 0026 Section 11,
+   VERBATIM.
+
+TESTS (supabase/__tests__/, live Postgres):
+- outcome-tagging-trigger.test.ts: a RAW INSERT INTO post_ai_originals issued by no application code produces
+  the expected post_dimensions row; a post with role NULL and no brief still inserts (NULLs, no error); a
+  payload with hookType 'nonsense' yields hook_type NULL; a second revision gets its own row; the history copy
+  wrote role/format/origin_mode and left hook_type NULL.
+- outcome-tables-write-once.test.ts: UPDATE on post_dimensions and post_outcomes rejected, service-role
+  included.
+- outcome-tables-rls.test.ts: cross-tenant SELECT denied on all three; authenticated INSERT, UPDATE and DELETE
+  denied on all three.
+- outcome-tables-purge.test.ts: purge_business over a business with rows in all three tables SUCCEEDS and
+  leaves zero.
+- The existing post_ai_originals / post_edit_signals Tier-1 tests pass UNMODIFIED.
+
+CONSTRAINTS CLOSED: OUTCOME-DIMENSIONS-TAGGED-AT-GENERATION (3), OUTCOME-TAG-ALL-CALLERS (4),
+OUTCOME-DIMENSIONS-WRITE-ONCE (5), OUTCOME-RLS-ISOLATED (33), OUTCOME-CASCADE-COMPLETE (34 - the Tier-1 erasure
+test plus the Tier-3 D2.5 rows). Redden: drop the trigger; make the trigger RAISE when role IS NULL (the
+role-NULL test must fail); add a BEFORE DELETE trigger (purge must fail); remove the business predicate from
+one SELECT policy. Revert all.
+
+Commit: "J2.3 OUTCOME-DIMENSIONS-TAGGED-AT-GENERATION OUTCOME-TAG-ALL-CALLERS OUTCOME-DIMENSIONS-WRITE-ONCE
+OUTCOME-RLS-ISOLATED OUTCOME-CASCADE-COMPLETE".
+```
+
+#### J2.4 — `hookType`, additive  ·  ruling A-6, ADR 0024 note
+
+```
+BUILDER - Session 33 - J2.4. /ecc:plan then /ecc:tdd-workflow then /ecc:verification-loop.
+
+SHIP: hookType in the output schemas, additively (ADR 4.3).
+
+1. lib/ai/prompts/formats/schemas.ts: SinglePostOutputSchema, ThreadOutputSchema and CarouselOutputSchema each
+   gain hookType: z.enum(['question','statistic','contrarian','story','announcement','how_to']).nullish() - the
+   scriptBrief precedent (schemas.ts:18). Export the value list from ONE place.
+2. The generation prompt(s) that produce these schemas ask the model to state the opening type it used. No new
+   model call; no model or tier change.
+3. AI_ORIGINAL_SCHEMA_VERSION stays 1. Nothing under lib/learning/ changes.
+4. If a frozen prompt table or golden test covers the changed prompt text, update it in this commit and name it
+   in the commit body.
+
+TESTS:
+- a v1 payload WITH and WITHOUT hookType parses under all three schemas; state and test what an unknown
+  hookType does.
+- ADR 0018's classifier, imported unmodified, produces identical output for a v1 payload with and without
+  hookType.
+- the TS value list equals the post_dimensions hook_type CHECK list (read the J2.3 migration file).
+- J2.2's OUTCOME-ADR0018-UNCHANGED check still passes.
+
+CONSTRAINT CLOSED: OUTCOME-HOOKTYPE-ADDITIVE (8). Redden: make hookType required (the without-hookType parse
+must fail); drop a value from the TS list (the CHECK-equality test must fail). Revert.
+
+Commit: "J2.4 OUTCOME-HOOKTYPE-ADDITIVE (ADR 0024 note)".
+```
+
+#### J2.5 — Migration: `performance_memory` Amendment C schema and write protection  ·  ruling A-2
+
+```
+BUILDER - Session 33 - J2.5. /ecc:plan then /ecc:tdd-workflow then /ecc:verification-loop. Use
+supabase:supabase-postgres-best-practices.
+
+SHIP: the schema half of ADR 0016 Amendment C (ADR 0026 5.1, 5.3, 5.5). The existing distilled partial UNIQUE
+index is UNCHANGED.
+
+1. supabase/migrations/<ts>_performance_memory_outcome_schema.sql:
+   - Widen the source CHECK to add 'outcome', and the dimension CHECK to add 'role', 'origin_mode',
+     'length_band', 'cta', 'hypothesis'. Find each CHECK in pg_constraint BY DEFINITION (the lookup from J2.0
+     premise 3); RAISE unless exactly one matches; drop it by that name; re-add it EXPLICITLY NAMED with NOT
+     VALID; VALIDATE CONSTRAINT in a separate statement ([db-7]).
+   - Stats columns (ADR 5.3): outcome_n, outcome_wins, outcome_distinct_campaigns int; interval_low,
+     interval_high numeric(4,3); metric_basis text CHECK IN ('rate','count'); baseline_seeded boolean - each
+     with CHECK ((col IS NOT NULL) = (source = 'outcome')). contradicted_at timestamptz, nullable for all rows.
+   - CHECK (source <> 'outcome' OR pattern_key IS NOT NULL). Namespace CHECKs: (source <> 'outcome' OR
+     pattern_key LIKE 'outcome:%') and (source <> 'distilled' OR pattern_key IS NULL OR pattern_key NOT LIKE
+     'outcome:%').
+   - performance_memory_outcome_pattern_key_uq ON (business_id, dimension, coalesce(platform,''), pattern_key)
+     WHERE source = 'outcome' AND deleted_at IS NULL.
+   - Write protection ([db-3], ADR 5.5): performance_memory_insert_own's WITH CHECK gains AND source = 'manual'.
+     A BEFORE UPDATE trigger in the shape of enforce_voice_write_preference_only's retirement branch
+     (20260726020000:85-88): for a non-service role, a change to a non-manual row is allowed ONLY to
+     status = 'retired' or to deleted_at; on an outcome row, any change to source, pattern_key, dimension or a
+     stats column is rejected ([db-2]). The header records the J2.0 grep that found no authenticated app writer.
+   - The voice-write guard is untouched; the header states why no outcome row can fire it (ADR 5.1).
+2. J2.2's OUTCOME-NO-EXTRA-WRITER expected set becomes {distilled, import, outcome} plus manual.
+3. lib/db/types.ts: the performance_memory row type gains the new columns; the *Update type EXCLUDES source,
+   pattern_key and every stats column.
+
+TESTS (supabase/__tests__/performance-memory-outcome-schema.test.ts, live Postgres):
+- source='outcome' with a non-'outcome:' key rejected; source='distilled' with an 'outcome:' key rejected;
+  source='outcome' with a NULL key rejected; a stats column set on a distilled row rejected; each new dimension
+  value accepted and 'topic' rejected.
+- cross-writer isolation: upsert_distilled_performance_pattern beside an outcome row with identical (business,
+  dimension, platform) touches only the distilled row; a service-role INSERT ... ON CONFLICT on the sibling
+  index dedupes outcome rows and never matches a distilled one.
+- as authenticated: INSERT with source <> 'manual' rejected; UPDATE of an outcome row's outcome_n, pattern or
+  source rejected; retiring it allowed; a manual row still editable.
+- the existing performance-memory-pattern-key and performance-memory-promotion suites pass UNMODIFIED.
+
+CONSTRAINTS CLOSED (Tier 1): OUTCOME-TWO-WRITERS-DISTINGUISHED (18), OUTCOME-KEY-COLLISION-DEFINED (19),
+OUTCOME-WRITE-PROTECTED (20). Redden: drop each namespace CHECK in turn; drop the INSERT source predicate;
+remove the trigger's stats-column branch. Revert all.
+
+Commit: "J2.5 OUTCOME-TWO-WRITERS-DISTINGUISHED OUTCOME-KEY-COLLISION-DEFINED OUTCOME-WRITE-PROTECTED (ADR 0016
+Amendment C)".
+```
+
+#### J2.6 — Migration: the outcome RPCs, the floor, and the north-star  ·  database review
+
+```
+BUILDER - Session 33 - J2.6. /ecc:plan then /ecc:tdd-workflow then /ecc:verification-loop. Use
+supabase:supabase-postgres-best-practices.
+
+SHIP: every SQL path that writes or transitions an outcome row, plus the north-star function (ADR 5.4, 7,
+8.4, 8.5). The floor lives HERE, in SQL, so the first promotion that ever runs is gated by construction.
+
+1. supabase/migrations/<ts>_outcome_rpcs.sql. Every function: SECURITY DEFINER, search_path pinned, REVOKE ALL
+   FROM public, anon, authenticated; GRANT EXECUTE TO service_role.
+   - wilson_bounds(p_wins int, p_n int, p_z numeric) RETURNS (low, high), IMMUTABLE. THE ONE COPY of the
+     formula ([db-5]); every RPC below calls it and none inlines it.
+   - upsert_outcome_performance_pattern(p_business_id, p_dimension, p_value, p_platform, p_direction,
+     p_pattern_text). Takes NO stats parameters. Recomputes n, wins, distinct campaigns and bounds from
+     post_outcomes JOIN post_dimensions (latest revision per post) over published_at >= now() - 180 days, with
+     EVERY table read filtered by business_id. Generation-time dimensions come from post_dimensions, measured
+     ones (length_band, cta) from post_outcomes. Writes only when n >= 5. Fixed IN SQL: source 'outcome',
+     status 'candidate' on insert (an existing active row keeps its status), sensitivity 'internal',
+     public_use_permission false. Sets baseline_seeded = bool_or(baseline_source = 'import_seed'),
+     metric_basis, confidence per ADR 6.4, last_confirmed_at = newest AGREEING observation's published_at,
+     expires_at = last_confirmed_at + 90 days. ON CONFLICT on the sibling index DO UPDATE. RAISES for dimension
+     hook or proof_type (OUTCOME-DESCRIPTIVE-ONLY at the SQL boundary).
+   - promote_outcome_pattern(p_business_id, p_pattern_key): ONE conditional UPDATE SET status = 'active' WHERE
+     status = 'candidate' AND source = 'outcome' AND <recomputed n >= 10 AND distinct campaigns >= 3 AND
+     (above: wilson low > 0.5 | below: wilson high < 0.5)>, evaluated under the row lock (the [db-Q6] property
+     of promote_performance_pattern, 20260726030000:102-131).
+   - demote_outcome_pattern(p_business_id, p_pattern_key): ONE conditional UPDATE SET status = 'candidate',
+     contradicted_at = now() WHERE status = 'active' AND source = 'outcome' AND (<recomputed window bound
+     fails> OR <>= 4 of the last 5 observations by published_at, in a ROW_NUMBER()-ordered subquery, go against
+     the direction>). It recomputes its own inputs (the 20260728220000 lesson).
+   - acknowledge_campaign_retrospective(p_business_id, p_campaign_id, p_user_id, p_pattern_text): the ADR 0025
+     ratify shape. p_user_id is checked against business_members (active, non-viewer), else RAISE. A
+     conditional UPDATE moves completed -> acknowledged. For supported / not_supported it writes EXACTLY ONE
+     performance_memory row with ADR 8.4's values: source 'outcome', dimension 'hypothesis', scope 'campaign',
+     key 'outcome:hypothesis:<campaign_id>', status 'active', stats from the retrospective, last_confirmed_at
+     completed_at, expires_at completed_at + 365 days, pattern <= 500 chars. inconclusive writes nothing. A
+     second call is a no-op. ADR 8.4 lists three parameters; p_pattern_text is the fourth because
+     neutralizeWithSentinels is a TS function and ADR 8.4 requires it on this text. The RPC still derives every
+     stat itself. Record this in the migration header.
+   - get_learning_cycles_northstar(p_since timestamptz): ADR 8.5 exactly - cycles / active brands, aggregate
+     output only.
+   Each function documents its SQL twin constants beside the TS constant names (the accepted ADR 0018
+   duplicate-constant trade-off).
+2. lib/db/memory-performance.ts: NEW upsertOutcomePattern, promoteOutcomePattern, demoteOutcomePattern and
+   listOutcomePatterns(businessId, { limit, ... }). Service-role via the lazy-import pattern, no client
+   parameter, neutralizeWithSentinels on the pattern text INSIDE the wrapper. NO existing function gains a
+   caller or a parameter (ADR 5.6). lib/db/campaign-retrospectives.ts: acknowledgeRetrospective,
+   getLearningCyclesNorthstar, a wilsonBounds wrapper, and the insert/list helpers J2.11 needs (bounded,
+   ordered by an existing index).
+
+TESTS (supabase/__tests__/, live Postgres, direct RPC calls over SEEDED post_outcomes/post_dimensions):
+- outcome-promotion-floor.test.ts - each gate independently load-bearing ([test-BLOCKER-1]):
+  (1) 9/10 wins, 3 campaigns -> promotes; (2) the same with 2 campaigns -> does NOT; (3) 8/10, 3 campaigns ->
+  does NOT; (4) 9/9, 3 campaigns -> does NOT; (5) fixture 4 with its stored outcome_n forged to 10 -> still does
+  NOT; (6) promote_performance_pattern called on an outcome row -> does not promote. Plus the below-direction
+  mirror, n = 4 writing no row, and the same result through the upsertOutcomePattern / promoteOutcomePattern
+  wrappers.
+- outcome-demotion.test.ts: a window-bound failure demotes; 4-of-last-5 contrary demotes with an
+  otherwise-passing window; 3-of-5 does not; two CONCURRENT demote calls -> one transition, contradicted_at set
+  once; observations older than 180 days (seeded published_at) leave the recompute; re-promotion only by
+  clearing every gate again.
+- outcome-provenance.test.ts: an observation with baseline_source 'import_seed' sets baseline_seeded true; no
+  source 'import' or 'distilled' row is read or modified.
+- outcome-retrospective-rpc.test.ts: a non-member and a viewer refused; acknowledgement writes exactly one
+  performance_memory row with ADR 8.4's values; a second call is a no-op; inconclusive writes none.
+- outcome-northstar.test.ts: fixtures with an acknowledged supported retrospective, an acknowledged
+  inconclusive one, an unacknowledged supported one, and a supported one whose memory row is missing -> only
+  the first counts; the active-brand denominator comes from published posts in the window.
+- wilson-bounds.test.ts: a (wins, n) table through SQL, including (9,10) low ~0.596 and (8,10) low ~0.490.
+- authenticated EXECUTE refused on every new function.
+
+CONSTRAINTS CLOSED: OUTCOME-MIN-N-ENFORCED (13), OUTCOME-RECOMPUTE-NOT-TRUST (14),
+OUTCOME-NORTHSTAR-COMPUTABLE (26). The Tier-1 halves of 21, 22, 23 and 25 are AUTHORED here; 21, 22 and 23
+close in J2.8 and 25 in J2.11. Redden: remove the campaign gate (case 2 must fail); read the stored outcome_n
+instead of recomputing (case 5); drop the fast-contradiction clause; drop the membership check. Revert all.
+
+THEN - ECC BUDGET INVOCATION 2 of 3, BEFORE THIS STEP COMMITS. Dispatch ecc:database-reviewer ONCE, read-only,
+over exactly the four migrations of J2.1, J2.3, J2.5 and J2.6. Ask it:
+- are grants correct on every SECURITY DEFINER function (a missing REVOKE is a privilege escalation), and is
+  search_path pinned?
+- does every RPC body filter business_id on EVERY table it reads?
+- do promote and demote evaluate against one snapshot under the row lock, and is a concurrent demote truly a
+  single transition?
+- can the by-definition CHECK lookup silently no-op, and are NOT VALID and VALIDATE placed correctly?
+- is there index coverage for the 180-day recompute, the baseline scans and the retrospective list?
+- can the tagging trigger abort a post_ai_originals insert inside ADR 0018's write path?
+- is any BEFORE DELETE trigger present that would block purge_business?
+Fix a finding against J2.1, J2.3 or J2.5 by a FORWARD MIGRATION inside this step, never by editing a committed
+migration. Record each finding and its disposition in the commit body. Do not re-consult.
+
+Commit: "J2.6 OUTCOME-MIN-N-ENFORCED OUTCOME-RECOMPUTE-NOT-TRUST OUTCOME-NORTHSTAR-COMPUTABLE (+ Tier-1 halves of
+21 22 23 25)".
+```
+
+#### J2.7 — The deterministic normaliser: maturity, eligibility, baseline, seed, measured dimensions
+
+```
+BUILDER - Session 33 - J2.7. /ecc:plan then /ecc:tdd-workflow then /ecc:verification-loop.
+
+SHIP: the post_outcomes writer's logic (ADR 4.4, 6.1-6.3). Pure functions in lib/outcomes/, DB only via
+lib/db/post-outcomes.ts, no model call.
+
+1. lib/outcomes/normalise.ts:
+   - eligibleValue(platform, metrics): X -> rate (likes + comments + shares) / impressions; LinkedIn -> count
+     likes + comments + shares. ANY eligible field null -> EXCLUDED with a typed reason, never zeroed. X
+     impressions = 0 -> excluded. reach, saves and clicks are never read.
+   - baseline(platform, priorOutcomes, seed): X = median of the brand's own matured X values published in the
+     90 days before the post, excluding the post, requiring >= 8. LinkedIn = median of the last 20 matured
+     LinkedIn outcomes before the post, requiring >= 8. Below 8, on X ONLY: the most recent
+     social_backfill_runs.summary X baseline IF AND ONLY IF its recorded basis is 'rate' - enforced here at read
+     time, never assumed - with baseline_source 'import_seed'. Neither -> baseline, log_lift and beat_baseline
+     all NULL.
+   - logLift = ln(value / baseline), clipped to [-3, 3], with the baseline floored at 1 for the count basis.
+     beat_baseline = value > baseline. The gate uses beat_baseline; log_lift is descriptive.
+   - measured dimensions: lengthBand per ADR 4.4's table; ctaPresent via ADR 0018's CTA rule function IMPORTED
+     UNMODIFIED (J2.0 premise 7); hookSurvived = the normalised first sentence of posts.content equals that of
+     the latest snapshot's rendered_content.
+2. lib/db/post-outcomes.ts: insertPostOutcome (ON CONFLICT (post_id) DO NOTHING - frozen once);
+   listMaturedOutcomesForBaseline(businessId, platform, { before, limit }) ordered by published_at DESC on the
+   J2.3 index; listPostsDueForOutcome(businessId, { limit }) returning published posts whose day-7 sync has
+   landed and that have no outcome row, plus those past maturity + grace with no day-7 sync as skip
+   candidates (never guessed). Every function takes businessId and filters on it; service-role via lazy import.
+3. An outcome's ai_original_id is the latest revision (max(revision)); NULL for human-written posts.
+
+TESTS (lib/outcomes/__tests__/):
+- normalise.test.ts: golden tables per platform; each eligible field null in turn -> excluded, not 0; X
+  impressions = 0 excluded; LinkedIn never reads impressions even when the fixture carries it; baseline with 7
+  -> null and with exactly 8 -> computed; the post excluded from its own baseline; the seed used on X at 7 own
+  outcomes with basis rate, REFUSED with basis count, never used on LinkedIn; log-lift clipped at both ends;
+  count floor at 1.
+- measured-dimensions.test.ts: every length-band boundary (99/100/220/221 chars; 3/4/6/7 segments;
+  599/600/1300/1301 chars); CTA through the imported function; hookSurvived true and false.
+- lib/db post-outcomes wrapper tests: businessId filter, limit and order passed.
+
+CONSTRAINTS CLOSED (Tier 2): OUTCOME-ELIGIBLE-FIELDS-ONLY (10), OUTCOME-NORMALISED-TO-OWN-BASELINE (11),
+OUTCOME-SEED-BASIS-MATCH (12). Redden: coalesce a null field to 0; drop the self-exclusion; accept a
+count-basis seed. Revert all.
+
+Commit: "J2.7 OUTCOME-ELIGIBLE-FIELDS-ONLY OUTCOME-NORMALISED-TO-OWN-BASELINE OUTCOME-SEED-BASIS-MATCH".
+```
+
+#### J2.8 — The `extract-outcomes` worker
+
+```
+BUILDER - Session 33 - J2.8. /ecc:plan then /ecc:tdd-workflow then /ecc:verification-loop.
+
+SHIP: the extract-outcomes worker - its own daily deterministic tick (ADR 5, 7, 14). The loser is already
+adjudicated: folding it into sync-metrics or lib/learning/* (D-4).
+
+1. lib/outcomes/orchestrator.ts -> runOutcomeTick({ triggeredBy }). Lazy service-role client. Businesses ONE per
+   iteration, with no business_id captured across iterations (ADR 0018 10.3). Per business:
+   (a) freeze due outcomes via J2.7, counting skippedNoMetrics, skippedNoBaseline, skippedIneligibleField;
+   (b) for every touched cell (platform x PROMOTABLE dimension x value x direction) call upsertOutcomePattern,
+       then promoteOutcomePattern and demoteOutcomePattern;
+   (c) a retrospective phase slot that J2.11 fills.
+   Per-item try/catch: one failing business or cell increments errors and never fails the batch. Batch bounded
+   by OUTCOME_BATCH_SIZE (lib/config.ts, default 200).
+   Pattern text comes from ONE closed template in lib/outcomes/template.ts - ADR 6.4's sentence shape
+   (platform, value, beat / were below this brand's usual engagement [count], wins of n posts, campaigns) -
+   never a multiplier, never an imperative. hook_type and proof_type NEVER reach upsertOutcomePattern: filter
+   by the PROMOTABLE set from constants.ts.
+2. app/api/cron/extract-outcomes/route.ts: copy capture-learning's dual-mode QStash/bearer shape
+   (lib/cron/qstash-auth.ts); Sentry.withMonitor with slug 'extract-outcomes' and schedule '0 4 * * *'; the ONE
+   canonical structured-JSON console.log (CLAUDE.md worker carve-out) with EXACTLY ADR 14's keys: kind
+   'outcome.tick', triggeredBy, tick, durationMs, candidates, matured, outcomesWritten, skippedNoMetrics,
+   skippedNoBaseline, skippedIneligibleField, cellsRecomputed, candidatesUpserted, promoted, demoted,
+   retrospectivesCompleted, errors. No content, business id or hypothesis text in the line.
+3. Add the schedule to docs/build-guide/runbooks/qstash-setup.md (the real path, J2.0 premise 11) and a
+   docs/launch-checklist.md row for the QStash schedule and the Sentry monitor.
+
+TESTS:
+- lib/outcomes/__tests__/orchestrator.test.ts: counters over a seeded mix; a REPLAYED tick changes no row; an
+  error on one business does not stop the next; a post past maturity + grace with no day-7 sync writes no
+  outcome and increments skippedNoMetrics; hook_type/proof_type cells never reach the wrapper; decay with fake
+  timers and date-fns (never wall clock): a pattern whose newest agreeing observation is 91 days old is not
+  returned by retrieval.
+- supabase/__tests__/outcome-tick-idempotent.test.ts: the same outcome insert and the same cell upsert applied
+  twice -> one row, identical values.
+- the route test: both auth modes; the log line's key set equals ADR 14's exactly.
+- extend J2.2's scans: no outcome pattern_key or upsert call with dimension hook or proof_type anywhere.
+
+CONSTRAINTS CLOSED: OUTCOME-DESCRIPTIVE-ONLY (7, Tier 2 + 3), OUTCOME-MATURED-SNAPSHOT (9),
+OUTCOME-CONTRADICTION-DEMOTES-ATOMIC (21), OUTCOME-WINDOWED-DECAY (22), OUTCOME-PROVENANCE-PROPAGATED (23) -
+these three with their Tier-1 halves from J2.6 - and OUTCOME-TICK-IDEMPOTENT (32). Redden: pass hook_type
+through; remove ON CONFLICT from the outcome insert (the replay tests must fail); skip the demote call; write a
+row for a post whose day-7 sync never arrived. Revert all.
+
+Commit: "J2.8 OUTCOME-DESCRIPTIVE-ONLY OUTCOME-MATURED-SNAPSHOT OUTCOME-CONTRADICTION-DEMOTES-ATOMIC
+OUTCOME-WINDOWED-DECAY OUTCOME-PROVENANCE-PROPAGATED OUTCOME-TICK-IDEMPOTENT".
+```
+
+#### J2.9 — Separate retrieval and the observed-outcomes block at all three render sites
+
+```
+BUILDER - Session 33 - J2.9. /ecc:plan then /ecc:tdd-workflow then /ecc:verification-loop.
+
+SHIP: outcome retrieval that never competes in the shared ranking, and its own prompt block (ADR 6.4, L-2).
+
+1. listPerformanceMemoryCandidates EXCLUDES source = 'outcome' - one predicate in lib/db. SHARED-FUNCTION
+   CALLERS: it has TWO call paths (lib/memory/performance.ts:51,140 -> lib/ai/context.ts; and
+   studio/actions.ts:136). Each gets a test proving outcome rows never appear.
+2. lib/memory/outcomes.ts: retrieveOutcomePatterns(businessId, { platform? }) -> listOutcomePatterns ->
+   isEligible (active, unexpired) -> rankAndCap with OUTCOME_CAP 3, AMONG OUTCOME ROWS ONLY. Rows with dimension
+   'hypothesis' are EXCLUDED here; only Stage A reads them (J2.10).
+3. CustomerContext gains optional observedOutcomes; lib/ai/context.ts fills it. Render it in its OWN block with
+   the verbatim heading "## Observed outcomes for this brand (probabilistic observations, not rules)", one line
+   per pattern from the stored closed-template text, through neutralize() at render, n and campaigns on EVERY
+   line. Render at lib/ai/prompts/post-generation.ts, post-regeneration.ts AND formats/native-generation-prompt.ts
+   (the live Mode-2 generator, which renders no performance memory today). Empty or absent -> no block at all.
+4. UNTOUCHED: the "Top-Performing Post Snippets" block; MINOR-2 (likes/impressions omitted for governed rows);
+   MINOR-3 (null platform -> "Across platforms"). The outcome block carries n and wins, never per-post metrics.
+5. context-callers.context-equivalence.test.ts: change ONLY what the new optional field requires, and say what
+   in the commit body.
+
+TESTS:
+- retrieval: outcome rows excluded from listPerformanceMemoryCandidates on both call paths;
+  retrieveOutcomePatterns caps at 3 and excludes candidate, expired and hypothesis rows.
+- render: each of the THREE sites renders the block when present and omits it when absent; every line matches
+  /in \d+ of \d+ posts \(\d+ campaigns?\)/; no line contains likes or impressions; a pattern text carrying an
+  injection string arrives neutralised.
+- a governed distilled row with no metrics still renders no 0 (with J2.2's scan half, this closes 16).
+
+CONSTRAINTS CLOSED: OUTCOME-CONFIDENCE-RENDERED (15), OUTCOME-NO-ZERO-METRICS-REINTRODUCED (16, Tier 2 + J2.2's
+Tier-3 scan), OUTCOME-SEPARATE-RETRIEVAL (17). Redden: drop the source predicate; render at two sites only;
+emit likes: 0. Revert all.
+
+Commit: "J2.9 OUTCOME-CONFIDENCE-RENDERED OUTCOME-NO-ZERO-METRICS-REINTRODUCED OUTCOME-SEPARATE-RETRIEVAL".
+```
+
+#### J2.10 — ADR 0017 Amendment C: hypothesis and success criteria in the brief  ·  ruling A-1
+
+```
+BUILDER - Session 33 - J2.10. /ecc:plan then /ecc:tdd-workflow then /ecc:verification-loop.
+
+SHIP: a falsifiable hypothesis and structured success criteria in the frozen brief (ADR 0026 8.1).
+
+1. CampaignBriefContent (lib/db/types.ts:1300-1307) gains hypothesis?: string and successCriteria?: { metric:
+   'win_rate' | 'median_lift'; target: number; evaluationWindowDays: number }. OPTIONAL on the type, because
+   briefs frozen before the amendment have neither. Old briefs are NOT backfilled.
+2. Zod: hypothesis 1..300 chars; target in [0.5, 0.95] for win_rate and [1.0, 3.0] for median_lift (a
+   discriminated refine); evaluationWindowDays an integer in [7, 60].
+3. lib/ai/prompts/brief.ts (Stage A): the model proposes a hypothesis and criteria drawn ONLY from what the loop
+   measures (engagement vs the brand's usual - win rate or median lift). Out-of-range output is rejected by the
+   schema, never clamped. Stage A also receives the brand's last 3 acknowledged hypothesis results
+   (listOutcomePatterns, dimension 'hypothesis', ordered by last_confirmed_at DESC, limit 3), rendered with n,
+   through neutralize(). Stage A is the ONLY reader of hypothesis rows (ADR 8.4).
+4. The brief-review surface: both fields editable BEFORE freeze, validated in the Server Action by the same Zod
+   schema. MODE2-BRIEF-FROZEN-GUARD and every other brief field are UNCHANGED. i18n en/pt/es in this commit.
+5. Append "Amendment C" to docs/decisions/0017-mode-2-upgrade.md, citing ADR 0026 8.1 and ruling A-1.
+
+TESTS:
+- Zod: each range boundary in and out; the metric/target discriminant; a pre-amendment brief with neither field
+  still parses.
+- the brief prompt: out-of-range output rejected; prior hypothesis results rendered with n and neutralised;
+  none -> nothing rendered.
+- the brief-review action: an edit before freeze accepted; after freeze refused. The existing freeze-guard
+  Tier-1 test passes UNMODIFIED - name it in the commit body.
+
+CONSTRAINT CLOSED: OUTCOME-HYPOTHESIS-IN-BRIEF (24, Tier 2 + the existing freeze-guard Tier 1). Redden: widen a
+range; permit an edit after freeze. Revert.
+
+Commit: "J2.10 OUTCOME-HYPOTHESIS-IN-BRIEF (ADR 0017 Amendment C)".
+```
+
+#### J2.11 — The retrospective, the acknowledge action, and the north-star report  ·  security review
+
+```
+BUILDER - Session 33 - J2.11. /ecc:plan then /ecc:tdd-workflow then /ecc:verification-loop.
+
+SHIP: the campaign retrospective and its human-confirmed write-back (ADR 8.2-8.5, L-6).
+
+1. lib/outcomes/retrospective.ts - deterministic:
+   - due(campaign): >= 1 published post; NO post in a not-yet-published status (the exact enum from J2.0
+     premise 12); now >= last published_at + max(7, evaluationWindowDays) days.
+   - verdict over the campaign's matured outcomes WITH a baseline: inconclusive if n < 5; win_rate -> supported
+     iff wins / n >= target; median_lift -> supported iff exp(median(log_lift)) >= target. The Wilson interval
+     comes from SQL wilson_bounds through its lib/db wrapper - NOT a TS re-implementation ([test-5]). by_role is
+     per-role n and wins.
+   - a pre-amendment brief uses the implicit hypothesis "this campaign's posts beat the brand's usual
+     engagement", win_rate 0.5, window 7, hypothesis_source 'implicit'.
+   Fill runOutcomeTick's retrospective slot: INSERT ... ON CONFLICT (campaign_id) DO NOTHING (evaluated once),
+   status 'completed', counting retrospectivesCompleted.
+2. acknowledgeRetrospectiveAction (Server Action beside the campaign detail page): Zod { campaignId: uuid,
+   note?: string <= 500 }. p_user_id from supabase.auth.getUser() on the anon server client - NEVER from form
+   data. Builds ADR 8.4's pattern text from the closed template; neutralizeWithSentinels applies because it
+   embeds member-editable hypothesis text. Calls acknowledgeRetrospective.
+3. scripts/northstar-report.ts - ops only; prints getLearningCyclesNorthstar for the trailing 30 days. No
+   customer surface.
+
+TESTS:
+- retrospective.test.ts: the verdict table for both metrics, including the exact boundary (wins / n == target
+  -> supported); inconclusive at n = 4; the implicit hypothesis labelled; due() false while any post is still
+  scheduled, and false one day before the window ends.
+- the action test: a viewer refused (the RPC error surfaced); a 501-char note rejected; p_user_id taken from the
+  session even when a userId is present in the form data; hypothesis text carrying an injection string
+  neutralised in the written pattern.
+- the tick test: a second tick does not re-evaluate an evaluated campaign.
+
+CONSTRAINT CLOSED: OUTCOME-RETROSPECTIVE-WRITES-BACK (25, Tier 2 here + its Tier-1 half from J2.6). Redden:
+read userId from form data; evaluate on every tick (drop ON CONFLICT). Revert.
+
+THEN - ECC BUDGET INVOCATION 3 of 3, BEFORE THIS STEP COMMITS. Dispatch ecc:security-reviewer ONCE, read-only,
+scoped to exactly: the J2.5 write-protection trigger and INSERT policy; the J2.6
+acknowledge_campaign_retrospective RPC and its grants; the J2.9 render path; the J2.10 brief-review action and
+Stage A prompt; this step's action. Ask ONE question: "can a member - or text a member controls (hypothesis,
+note, campaign name) - forge outcome stats, bypass the membership check, write a non-manual performance_memory
+row, or reach a generation prompt un-neutralised?" Fix findings in this step; a finding against a committed
+migration is fixed by a forward migration. Record dispositions in the commit body. Do not re-consult.
+
+Commit: "J2.11 OUTCOME-RETROSPECTIVE-WRITES-BACK".
+```
+
+#### J2.12 — The campaign-page surfaces and the copy lint  ·  `taste-skill` then `impeccable`, against ADR 0026 §10
+
+```
+BUILDER - Session 33 - J2.12. /ecc:plan then /ecc:tdd-workflow then /ecc:verification-loop. Then taste-skill,
+then impeccable - in THIS step only, against ADR 0026 Section 10.
+
+SHIP: the Retrospective card and the Observed outcomes list on the campaign detail page, and the copy lint
+(ADR 10; L-2, L-7; ruling A-5).
+
+1. Server Component sections under app/[locale]/(dashboard)/campaigns/[id]/: RetrospectiveCard and
+   ObservedOutcomesList. The ONLY Client Component is the acknowledge form (useActionState ->
+   acknowledgeRetrospectiveAction). Data through lib/db and lib/memory only. The list is restricted to cells
+   this campaign's posts contributed to. Every list query is bounded (limit, default 20) and ordered by an
+   existing index ([db-8]).
+2. EVERY ADR 10.2 state rendered, with its copy obligation:
+   - Retrospective: not yet due (with the date); inconclusive ({n} of 5); supported / not supported (hypothesis,
+     verdict, "{wins} of {n} posts beat your usual engagement", interval, per-role table, implicit label where
+     it applies); acknowledged (who, when, note); metrics unavailable for a platform.
+   - Observed outcomes: none yet; provisional ({n} of 10, not used in writing yet); live (the 6.4 sentence);
+     contradicted (paused on {date}); not enough variety.
+   - The LinkedIn count-basis disclosure on every LinkedIn row; "Compared against the history you imported." on
+     every seeded row; "This measures engagement on {platform}, not signups or revenue." on the card.
+3. NOT on the approval gate. No /analytics route.
+4. i18n: a new outcome namespace in en, pt and es in THIS commit, with identical keys.
+5. shadcn v4 / Base UI: NO asChild on Button or DropdownMenu primitives (buttonVariants() on <Link>); Tailwind
+   only; any new colour is a token with a contrast check in both themes.
+6. DESIGN. Run taste-skill FIRST - the card is a new surface and needs a point of view: it is where the product
+   first says what it learned. Then run impeccable to audit every 10.2 state, accessibility, responsive
+   behaviour and copy against the contract. Neither may add a state, drop a disclosure, or introduce framing
+   ADR 10.3 prohibits. Record in the commit body what each one changed.
+
+TESTS:
+- lib/outcomes/__tests__/copy-lint.test.ts over the outcome namespace of ALL THREE locale files AND the rendered
+  prompt template output: numeric and written multipliers (a number followed by x or the multiplication sign;
+  "twice as", "double", "triple", and their pt/es forms); causal verbs ("causes", "drives", "leads to",
+  "results in", "because of", "proven", "guarantees", and their pt/es forms); a percentage or rate without its
+  n; superlatives applied to a pattern. PROVEN TO REDDEN on a planted "2x more" and a planted "leads to" in
+  EACH locale, then reverted.
+- component tests: each 10.2 state renders its obligation; the LinkedIn and seeded disclosures are present; the
+  acknowledge form shows the action's error.
+- i18n parity: the en/pt/es outcome key sets are equal.
+
+CONSTRAINT CLOSED: OUTCOME-ATTRIBUTION-CONFIDENCE-FRAMED (27). Redden as above. Revert.
+
+Commit: "J2.12 OUTCOME-ATTRIBUTION-CONFIDENCE-FRAMED (ADR 0026 Section 10; taste-skill + impeccable)".
+```
+
+#### J2.13 — Cross-business scan, Tier-3 re-verification, amendments, the constraint→CI map, Tier E
+
+```
+BUILDER - Session 33 - J2.13. /ecc:verification-loop. No new product code.
+
+1. OUTCOME-NO-CROSS-BUSINESS (30, Tier 2 + 3). This lands last because its targets exist only now.
+   - Tier 2: every exported function in lib/db/post-outcomes.ts, lib/db/campaign-retrospectives.ts (and
+     lib/db/post-dimensions.ts if it exists), plus the outcome functions in memory-performance.ts, takes
+     businessId and filters on it. Prove it with wrapper tests.
+   - Tier 3: scan the outcome RPC SQL BODIES - not their signatures, the ADR 0025 15.1 lesson - for a
+     business_id predicate on every table each body reads ([test-3c]).
+   - get_learning_cycles_northstar is the ONE declared exception: an ops aggregate, service-role only. Allowlist
+     it BY NAME, with the reason.
+   - Redden: remove one predicate from demote_outcome_pattern's subquery in a scratch migration. Revert.
+2. Re-run and redden every Tier-3 check at HEAD: 6, 7 (scan half), 16 (scan half), 28, 29
+   (`git diff BASE..HEAD -- lib/learning/ <ADR 0018 migrations>` is EMPTY), 30, 31, and 34 (the three D2.5 rows
+   present). Also confirm: no new dependency in package.json, no /analytics route, no experiment or holdout
+   code.
+3. Amendments, each ADDITIVE and citing ADR 0026:
+   - ADR 0016 Amendment C;
+   - an ADR 0018 note: another writer exists; a new AFTER INSERT trigger on post_ai_originals; no line of its
+     pipeline changed, with the path-check command;
+   - an ADR 0024 note: hookType added, schema version unchanged;
+   - an ADR 0025 Section 5.4 correction note: ADR 0026 Section 9's text.
+   Confirm ADR 0028 Amendment A (J2.1) and ADR 0017 Amendment C (J2.10) are present.
+4. ADR 0026: append a "Builder verification (J2.13)" section. DO NOT edit Sections 0-16. The section carries
+   the 35-row constraint -> CI map: constraint; tier; test file, command or protocol; closing step and SHA; the
+   executing CI job (app-tests / db-tests / none-by-decision / out-of-band). Leave the "executed green in CI at
+   <sha>" column EMPTY until the runs for the pushed head have been OPENED and read. Then fill it with run ids
+   and the db-tests skip-guard file and test counts, read FROM THE LOG. Write no total until every cell is
+   filled from a run you opened.
+5. Tier E - OUTCOME-PREDICTION-ACCURACY (35). Record ADR 12.4's protocol as a runnable procedure: the per-arm
+   floor (n >= 15), the "association, not validation" label, and "MEASURED - NOT YET RUN; earliest ~T0 + 150
+   days; T0 undefined today". Run nothing.
+6. docs/backlog.md: deliberate experimentation with its volume trigger; the hook_type kappa check; every ADR 15
+   deferral not already owned elsewhere.
+
+Commit: "J2.13 OUTCOME-NO-CROSS-BUSINESS OUTCOME-PREDICTION-ACCURACY (Tier-3 re-verified, amendments,
+constraint->CI map)". Push. Open the CI runs for the pushed head and read them. Then fill the map as a separate
+commit, "J2.13b constraint->CI map filled at <sha>". If db-tests is red, open the run and distinguish a
+DB-behaviour regression from a stack failure (image tag or SIGSEGV, as in Session 32-D), and say which.
+
+End with one line: "Session 33 Builder complete - range BASE..HEAD, 14 steps, <n>/34 non-E OUTCOME-*
+constraints executed green in CI at <sha> (Tier-1 rows <a>/18, Tier-2 rows <b>/20, Tier-3 rows <c>/8
+re-verified), Tier E recorded not run, LinkedIn metrics <served|NOT_IMPLEMENTED>." Then STOP.
+```
+
+**Gate:** `§3` below was authored alongside this section. It may be pasted once `J2.13b` has pushed and its CI
+runs have been read. `§4` is authored **only after** the Reviewer has run.
+
 ---
 
 ## §3 — Reviewer session (J3)  ·  (paste into Claude Code · Opus)
@@ -571,6 +1634,244 @@ and any founder adjudication is recorded in §0.2. Then author §2/§3 below fro
 > demotion path with no coverage; a key collision between the two writers that the partial UNIQUE index
 > resolves silently and wrongly; a re-introduced literal zero in the governed-pattern read path; and a
 > north-star definition that is prose rather than a computable query.
+
+**✅ AUTHORED 2026-09-19 — the placeholder above is retained as the specification this section was written
+against; everything below is the section itself.** It was authored **alongside §2**, per its own gate. **Only
+the commit range is filled in at run time, by the Reviewer itself.**
+
+**Two corrections to the placeholder, carried into the primer:**
+
+1. **The SHARED-FUNCTION CALLERS target moved.** The placeholder says every `lib/db/memory-performance`
+   function "now has two callers". ADR §5.6 deliberately gives the outcome writer **its own functions**, so
+   **no existing writer gains a caller**. A Builder that routed outcome writes through
+   `upsertDistilledPerformancePattern` or `promotePerformancePattern` has broken ADR §5.6. That is a finding in
+   itself, not a caller-coverage question. The real shared surfaces are:
+   - `listPerformanceMemoryCandidates` — two call paths, both now required to exclude outcome rows;
+   - the three prompt render sites;
+   - every creator of a `post_ai_originals` row, now covered by the trigger rather than by per-caller code;
+   - `list_posts_for_metrics_sync`'s caller;
+   - ADR 0018's CTA function, which has a new importer.
+2. **"Two writers" is three** (ADR §1.1 item 2). The key-collision finding the placeholder predicts now spans
+   `distilled`, `import` and `outcome`.
+
+The placeholder's five predicted findings stand and are sharpened below.
+
+**ECC budget for this phase — one subagent invocation, total.** The Reviewer reads the diff itself. A walk of
+the constraint table against CI logs is not code analysis, and handing it to cold-starting subagents
+re-derives what the Reviewer has already read. **The one exception is `ecc:silent-failure-hunter`,** run once
+over a closed file list:
+- `lib/outcomes/**`
+- `app/api/cron/extract-outcomes/**`
+- `lib/metrics/orchestrator.ts`
+- the two `fetchPostMetrics` bodies
+
+The reason is structural. This worker turns failures into **skip counters by design** (`skippedNoMetrics`,
+`skippedIneligibleField`, per-item `try/catch`). Telling a *decided* skip from a *swallowed* error is exactly
+that agent's lens, and it is the one defect a constraint walk reads straight past, because every test stays
+green.
+
+**Skills are free:**
+- `supabase:supabase-postgres-best-practices` for the four migrations.
+- **`impeccable`, run read-only, as an audit of the `J2.12` surfaces** against ADR 0026 §10. This is the one
+  read-only design-skill use the constitution permits outside a Builder, and its output is evidence for
+  findings, never a patch.
+
+### §3a — Reviewer primer  (paste first · wait for acknowledgement)
+
+```
+Session 33 Track J - REVIEWER phase (J3). You are independent. You MODIFY NOTHING: no source, no tests, no
+migration, no ADR, no build guide. Your single output is docs/reviews/session-33-reviewer.md. This is the ONE
+review pass for this session.
+
+PROC-REVIEW-AT-COMMIT IS ABSOLUTE AND IS YOUR FIRST OBLIGATION.
+Read every artefact AT THE STATED COMMIT RANGE - git diff <base>..<head>, git show <sha>:<path>,
+git log --oneline <base>..<head>. NEVER at HEAD. Reading at HEAD produced a false-positive MAJOR in Session
+21B. Your report MUST OPEN with:
+  "Scope reviewed: <base>..<head>; all citations are git show <sha>:<path> at that range, never HEAD."
+A report that does not name its range is not a valid review.
+Exception (Session 22-F, NEW-12): documents you audit AGAINST are named at their own commits, SEPARATELY:
+  "ADR 0026 read at <sha>; build guide read at <sha>; reviewed artefacts read at <base>..<head>."
+<base> is the docs-only commit that put ADR 0026 into git (Section 2 precondition). If ADR 0026 was not in git
+at <base>, that is your first finding.
+
+WHAT YOU ARE AUDITING AGAINST:
+- docs/decisions/0026-outcome-loop.md - ALL of it; Section 13's 35 constraints are the checklist; Section 16's
+  dispositions are rulings, not open questions.
+- docs/build-guide/session-33.md: Section 0 (L-1..L-9, D-1..D-7), Section 0.2 (A-1..A-6), and Section 2b's
+  step table (which step closes which constraint).
+- The amendments ADR 0026 requires: ADR 0016 C, ADR 0017 C, ADR 0018 note, ADR 0024 note, ADR 0025 5.4 note,
+  ADR 0028 A, ADR 0010 Amendment 2 D2.5 rows.
+- docs/decisions/0015-test-execution-and-ci-gates.md Section 2 and Amendment B; docs/decisions/0018 (which
+  must be behaviourally untouched).
+- CLAUDE.md: test-execution integrity, DB access, three clients, RLS and the erasure cascade, the worker
+  console.log carve-out, UI Component patterns.
+
+KNOWN AND NOT FINDINGS AGAINST THE BUILDER:
+- LinkedInProvider.fetchPostMetrics still throwing NOT_IMPLEMENTED is COMPLIANT if ADR 0028 Amendment A
+  records that the counts were unverifiable under current scopes. A finding is warranted only if a scope was
+  added or LinkedIn impressions/reach/saves/clicks are read.
+- The pattern layer is empty in production (no real customer has published). Not a defect.
+- hook_type and proof_type collected but never promoted is the design (ADR 4.1).
+- origin_mode rarely populating is disclosed (ADR 4.1), not a bug.
+- Human-written posts have no post_dimensions row - correct (ADR 4.2).
+- LinkedIn's count basis is a known, disclosed bias (ADR 6.2); some false-positive promotions are an accepted
+  risk (ADR 6.4). Judge the disclosure, not the statistics.
+- No business attribution and no UTM (ruling A-5).
+- OUTCOME-PREDICTION-ACCURACY not run is correct. A finding is warranted if any number is reported as COVERED
+  or as causal, or if "association, not validation" is missing.
+- acknowledge_campaign_retrospective taking a fourth p_pattern_text parameter is the recorded way ADR 8.4's
+  TS-side neutralisation applies; judge that the RPC still derives every stat itself.
+- A live X smoke recorded NOT YET RUN is correct.
+
+THE TEN THINGS MOST LIKELY TO BE WRONG, in the order I want them checked:
+
+1. AN N-FLOOR TEST THAT CANNOT FAIL. The six cases of ADR 12.1 must each be independently load-bearing. Redden
+   each gate YOURSELF on a scratch branch: remove the campaign gate (only case 2 may fail), weaken the bound
+   (case 3), drop k (case 4), read stored outcome_n (case 5). A case that stays green under its own mutation
+   is a BLOCKER. Confirm the cases call the RPC over seeded rows - a Tier-2 test over a mocked RPC is not the
+   proof.
+
+2. A FLOOR THAT TRUSTS ITS CALLER. upsert_outcome_performance_pattern must take NO stats parameters. grep every
+   migration in the range: the Wilson formula appears ONCE (wilson_bounds) and every RPC calls it. The TS side
+   must not re-implement the gate anywhere a test relies on it.
+
+3. A DEMOTION PATH WITH NO COVERAGE. The window-bound failure, the 4-of-last-5 fast trigger (ordered by
+   published_at, not id or created_at), 3-of-5 NOT demoting, the concurrent single transition, the 180-day
+   exclusion, contradicted_at set once, and demote recomputing its own inputs. A demotion test seeded so that
+   the window bound AND the fast trigger both fire proves neither - check each fires alone.
+
+4. A KEY COLLISION RESOLVED SILENTLY. Across three writers (distilled, import, outcome): both namespace CHECKs
+   exist; the distilled index is byte-identical to before; upsert_distilled_performance_pattern cannot touch an
+   outcome row and vice versa (tested both directions); promote_performance_pattern cannot promote an outcome
+   row. The CHECK widening found the old CHECK by DEFINITION and RAISEd on anything but one match - query
+   pg_constraint at <head> and confirm no stale CHECK survived beside the new one.
+
+5. A FORGEABLE STORE. As authenticated: INSERT with source <> 'manual' rejected; UPDATE of outcome_n, pattern,
+   source, pattern_key or dimension on an outcome row rejected; retire allowed. Tested as the authenticated
+   role against live Postgres - a pg_policies read is not the test. No app/** code writes performance_memory
+   with an authenticated client (git grep at the range).
+
+6. A LITERAL ZERO, REINTRODUCED OR NEW. MINOR-2's lines in lib/memory/performance.ts unchanged at <head>. No
+   null -> 0 in fetchPostMetrics (X reach; LinkedIn's four), in the normaliser (each eligible field), or in the
+   render. X impressions = 0 excluded, not divided.
+
+7. TAGGING THAT A CALLER CAN MISS OR RETRO-FILL. The trigger fires on a RAW post_ai_originals insert (tested);
+   has no EXCEPTION block; no BEFORE DELETE trigger exists on any new table; the history copy wrote only role,
+   format and origin_mode. Run the OUTCOME-NO-RETRO-TAGGING scan yourself and redden it. Run
+   `git diff <base>..<head> -- lib/learning/ <ADR 0018 migrations>` - it must be EMPTY; any line is a BLOCKER
+   against OUTCOME-ADR0018-UNCHANGED, including an added `export`.
+
+8. RETRIEVAL THAT LEAKS. Outcome rows excluded from listPerformanceMemoryCandidates on BOTH call paths; never in
+   the "Top-Performing Post Snippets" block; the observed-outcomes block rendered at ALL THREE sites including
+   native-generation-prompt.ts (the live Mode-2 generator); hypothesis rows reaching per-post generation is a
+   MAJOR - only Stage A may read them.
+
+9. A NORTH-STAR THAT IS PROSE, AND A WRITE-BACK THAT TRUSTS THE FORM. get_learning_cycles_northstar counts only
+   acknowledged supported/not_supported retrospectives WITH their outcome:hypothesis memory row (the four-
+   fixture test). acknowledgeRetrospectiveAction takes p_user_id from supabase.auth.getUser() - find the line;
+   a viewer is refused; exactly one row written; a second call a no-op; inconclusive writes none.
+
+10. A COUNT THAT IS NOT EXECUTED GREEN. OPEN THE CI RUNS for <head>. 34 non-E constraints (rows with a Tier-1
+    component 18, Tier-2 20, Tier-3 8 - they overlap), 1 Tier E recorded not run. Read the db-tests skip-guard
+    line FROM THE LOG and record file and test counts. If db-tests is red, distinguish a DB-behaviour
+    regression from a stack failure (image tag or SIGSEGV, Session 32-D) and say which. pull_request runs never
+    move the promotion tally.
+
+ALSO VERIFY, and do not take the Builder's word for any of it:
+- SHARED-FUNCTION CALLERS at the range, per caller with its test: listPerformanceMemoryCandidates (context.ts
+  path AND studio/actions.ts path); the three render sites; every post_ai_originals creator
+  (generatePostsForCampaign, the regenerate action, Studio promote) covered by the raw-insert trigger test;
+  list_posts_for_metrics_sync's caller; the ADR 0018 CTA function's new importer. A caller with no test is
+  AUTHORED-NOT-EXECUTED for that caller.
+- No existing lib/db/memory-performance writer gained a caller or a parameter (ADR 5.6).
+- Metrics: vendor citations present in ADR 0028 Amendment A for every field read; no scope added in
+  platforms/config.ts; the cadence Tier-1 test covers day 1/3/7 and the gaps; METRICS_MAX_AGE_DAYS 9 via
+  lib/config.ts.
+- The seed: used on X only, only when the run's recorded basis is 'rate', stamped baseline_source, propagated
+  to baseline_seeded; no source='import' row read or written by the outcome path.
+- Constants transcribed exactly (ADR 6.4 block) with SQL twins documented; none read from env.
+- The worker: its own route and orchestrator; the tick line's key set equals ADR 14's; no content or business
+  id in it; per-item try/catch; a replayed tick changes nothing; OUTCOME-DETERMINISTIC-NO-LLM scan reddened.
+- Brief: Zod ranges exactly ADR 8.1's; the freeze guard's existing Tier-1 test unmodified; old briefs parse.
+- GDPR: three tables, SELECT-only RLS, no authenticated write policy, ON DELETE CASCADE, the three D2.5 rows
+  VERBATIM and landed in the SAME commit as the migration; the purge test holds rows in all three.
+- UX: every ADR 10.2 state and disclosure; not on the approval gate; no /analytics route; the copy lint covers
+  en, pt, es AND the rendered template and reddens in each; no asChild on Button or DropdownMenu; i18n parity.
+  Record what taste-skill and impeccable changed per the J2.12 commit body and whether it broke the contract.
+- The Tier-3 set re-run by you at <head>, each reddened: 6, 7, 16, 28, 29, 30, 31, 34.
+- L-1 scope: no experimentation, UTM, conversion ingestion, analytics page, cross-type retrieval, extra memory
+  writer, comment mining, embeddings, new scope, or model call in the extractor.
+- Migrations: none edited after commit (git log --follow per migration file); database-reviewer and
+  security-reviewer findings fixed by forward migration and recorded in the J2.6 / J2.11 commit bodies.
+- ECC budget: at most three Builder subagent invocations, per the commit bodies. Exceeding it is a process
+  finding, not a code defect.
+
+ECC BUDGET FOR YOU: ONE subagent invocation. Dispatch ecc:silent-failure-hunter ONCE, read-only, AT THE RANGE,
+over exactly lib/outcomes/**, app/api/cron/extract-outcomes/**, lib/metrics/orchestrator.ts and the two
+fetchPostMetrics bodies. Ask one question: "which catch, skip counter, null-return or ON CONFLICT DO NOTHING
+here hides an error rather than recording a decided exclusion?" Its output is evidence you verify, not
+findings you copy. Skills are free: supabase:supabase-postgres-best-practices; impeccable READ-ONLY as an audit
+of the J2.12 surfaces.
+
+Acknowledge in ONE line, naming the commit range you have been given and confirming you will read at that
+range and never at HEAD. Then STOP and wait for the review prompt.
+```
+
+### §3b — Reviewer prompt  (paste after the primer is acknowledged)
+
+```
+Review the Session 33 Track J Builder range and write docs/reviews/session-33-reviewer.md.
+
+Open with the range line (PROC-REVIEW-AT-COMMIT), and name SEPARATELY the commits at which you read ADR 0026
+and docs/build-guide/session-33.md.
+
+Organise findings by ADR 0026's own sections so the correction pass can cite them:
+  1. The metrics input and cadence: ADR 0028 Amendment A, verified fields, no scope added (Section 3; A-3)
+  2. The dimension taxonomy: the trigger, write-once, the history copy, hookType (Section 4; L-4, A-6)
+  3. The writers to performance_memory: CHECKs, namespaces, the sibling index, the stats columns, the RPCs,
+     write protection, SHARED-FUNCTION CALLERS (Section 5; D-4, A-2)
+  4. Normalisation, the floor, confidence, retrieval and render (Section 6; L-2, L-3)
+  5. Decay, re-confirmation and contradiction (Section 7)
+  6. The retrospective, the brief amendment and the north-star (Section 8; L-6, A-1)
+  7. Provenance and the seed (Section 9; L-5, A-4)
+  8. The UX contract and attribution honesty, including what taste-skill and impeccable changed (Section 10;
+     L-7, A-5)
+  9. GDPR and tenancy: three tables, RLS, D2.5 rows, purge (Section 11; L-8)
+ 10. The test plan: every constraint's tier, its executing CI job, whether it REDDENS if the property breaks,
+     the Tier-3 set re-run by you, and Tier E framed MEASURED as "association, not validation" (Section 12)
+ 11. The worker, config and amendments (Section 14)
+ 12. Scope: L-1's out-of-scope list not shipped; lib/learning/ untouched
+
+Severities: BLOCKER / MAJOR / MINOR / NIT, each with a STABLE ID (BLOCKER-1, MAJOR-2, ...) that the correction
+pass will cite. For each: what is wrong, file:line AT THE RANGE, why it matters, and what would prove it fixed.
+Do not propose patches - you write no code.
+
+Where you believe ADR 0026 ITSELF is wrong rather than the implementation, say so and mark it an ADR finding,
+not a Builder finding. The ADR already absorbed one advisory round (database-reviewer, mle-reviewer,
+pr-test-analyzer - Section 16); a further defect is entirely possible and you should say so if you find one.
+
+Run the verification yourself rather than trusting the Builder's report:
+  npm run typecheck ; npm run test:app ; npm run test:db
+  the J2.2 source scans and scripts/check-adr0018-unchanged, each reddened
+  the six floor cases and the demotion cases, each gate mutated on a scratch branch
+  the copy lint, reddened in en, pt and es
+  git grep for every SHARED-FUNCTION CALLERS surface and its callers
+Open the CI runs for <head> and read the db-tests skip-guard line from the log. If db-tests is red,
+distinguish a DB-behaviour regression from a stack failure and say which.
+
+State plainly anything you could NOT verify and why. A live X metrics response, LinkedIn's readability under
+current scopes beyond the recorded citation, the production cron actually running daily, and any predictive
+value of a promoted pattern are all unverifiable in this session - saying so is worth more than a confident
+guess. Do not pad the report.
+
+End with one line: "Session 33 review complete - <n> findings (<b> BLOCKER, <m> MAJOR, <mi> MINOR, <ni> NIT)
+over range <base>..<head>; <c>/34 non-E OUTCOME-* constraints verified executed green in CI (Tier-1 rows
+<a>/18, Tier-2 rows <t>/20, Tier-3 rows <d>/8 re-verified); Tier E recorded not run." Then /exit.
+```
+
+**Gate:** `§4` is authored **only after** this Reviewer has actually run and
+`docs/reviews/session-33-reviewer.md` exists. A correction pass is a response to findings; inventing them
+ahead of time produces a fictional resolution log.
 
 ---
 
