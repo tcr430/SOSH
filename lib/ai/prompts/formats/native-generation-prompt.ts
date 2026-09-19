@@ -3,7 +3,7 @@ import type { CustomerContext } from '@/lib/ai/context'
 import type { CampaignPostRole, Platform } from '@/lib/db/types'
 import { PLATFORM_CONSTRAINTS } from '@/lib/ai/prompts/post-generation'
 import type { RenderedEvidence } from '@/lib/ai/wrap-evidence'
-import { SinglePostOutputSchema, ThreadOutputSchema, CarouselOutputSchema, type SinglePostOutput, type ThreadOutput, type CarouselOutput } from './schemas'
+import { SinglePostOutputSchema, ThreadOutputSchema, CarouselOutputSchema, HOOK_TYPES, type SinglePostOutput, type ThreadOutput, type CarouselOutput } from './schemas'
 import type { FormatFamily } from './platform-map'
 import { assertNever } from '@/lib/utils'
 
@@ -32,6 +32,15 @@ export interface NativeGenInput {
   correctionNote?: string
 }
 
+// ADR 0026 §4.3 (Session 33, J2.4) — the model states the OPENING type it used,
+// inside the EXISTING generation call (no new call, no model or tier change). The
+// value list is rendered from HOOK_TYPES (schemas.ts), the one TS source, so the
+// prompt, the schema and — via hooktype.test.ts — the database CHECK cannot drift.
+const HOOK_TYPE_UNION = HOOK_TYPES.map((v) => `"${v}"`).join(' | ')
+const HOOK_TYPE_SHAPE_LINE = `  "hookType": ${HOOK_TYPE_UNION} | null`
+const HOOK_TYPE_INSTRUCTION =
+  'hookType names the type of OPENING you used — the first sentence for a single post, the first post for a thread, the cover slide for a carousel. Use null if none of the listed types fits.'
+
 function buildSystemPrompt(family: FormatFamily) {
   return (ctx: CustomerContext): string => {
     // ADR 0022 §6.5 (Session 29, F1b.6) — ONE exhaustive switch computing
@@ -47,7 +56,8 @@ function buildSystemPrompt(family: FormatFamily) {
 {
   "format": "single",
   "body": "string — the post content",
-  "imageBrief": "string describing a recommended image, or null if none"
+  "imageBrief": "string describing a recommended image, or null if none",
+${HOOK_TYPE_SHAPE_LINE}
 }`
         formatWord = 'post'
         break
@@ -58,7 +68,8 @@ function buildSystemPrompt(family: FormatFamily) {
   "posts": [
     { "text": "string", "role": "hook" | "body" | "pull_quote" | "close" }
   ],
-  "imageBrief": "string describing a recommended image, or null if none"
+  "imageBrief": "string describing a recommended image, or null if none",
+${HOOK_TYPE_SHAPE_LINE}
 }
 The posts array must have 3 to 8 entries. The FIRST post's role must be "hook" (it is the only part visible pre-expansion — it must stand alone). The LAST post's role must be "close". At least one post must have role "pull_quote". Do NOT include an "order" field — array position IS the order.`
         formatWord = 'thread'
@@ -70,7 +81,8 @@ The posts array must have 3 to 8 entries. The FIRST post's role must be "hook" (
   "slides": [
     { "text": "string", "role": "cover" | "body" | "cta", "imageBrief": "string describing a recommended image for THIS slide, or null if none" }
   ],
-  "imageBrief": "string describing a recommended image for the carousel as a whole, or null if none"
+  "imageBrief": "string describing a recommended image for the carousel as a whole, or null if none",
+${HOOK_TYPE_SHAPE_LINE}
 }
 The slides array must have 3 to 10 entries. The FIRST slide's role must be "cover" (it is the only part visible pre-swipe — it must stand alone and earn the swipe). At least one slide must have role "cta". Do NOT include an "order" field — array position IS the order.`
         formatWord = 'carousel'
@@ -78,6 +90,7 @@ The slides array must have 3 to 10 entries. The FIRST slide's role must be "cove
       default:
         return assertNever(family)
     }
+    shapeInstructions = `${shapeInstructions}\n${HOOK_TYPE_INSTRUCTION}`
 
     return `You are a social media content expert helping ${ctx.business.name} write a single, native ${formatWord} for one platform, rendering a pre-approved campaign argument — you are NOT inventing the argument, only expressing it natively for this platform.
 
@@ -137,10 +150,14 @@ Fix it and return ONLY the corrected JSON.`)
 // table takes three rows, one per id, even though the value is shared).
 const NATIVE_GENERATION_TEMPERATURE = 1.0
 
+// ADR 0026 §4.3 (Session 33, J2.4) — all three families move 2 -> 3 in the same
+// commit: the system-prompt TEXT changed (the hookType request), and a prompt whose
+// text changes bumps its version (ADR C-4, the rule prompt-properties.frozen-table
+// makes executable). frozen-table.ts takes the three matching rows.
 function buildSinglePrompt(): Prompt<NativeGenInput, SinglePostOutput> {
   return {
     id: 'native-generation-single',
-    version: 2,
+    version: 3,
     modelKey: 'SONNET_4_6',
     temperature: NATIVE_GENERATION_TEMPERATURE,
     outputSchema: SinglePostOutputSchema,
@@ -152,7 +169,7 @@ function buildSinglePrompt(): Prompt<NativeGenInput, SinglePostOutput> {
 function buildThreadPrompt(): Prompt<NativeGenInput, ThreadOutput> {
   return {
     id: 'native-generation-thread',
-    version: 2,
+    version: 3,
     modelKey: 'SONNET_4_6',
     temperature: NATIVE_GENERATION_TEMPERATURE,
     outputSchema: ThreadOutputSchema,
@@ -164,7 +181,7 @@ function buildThreadPrompt(): Prompt<NativeGenInput, ThreadOutput> {
 function buildCarouselPrompt(): Prompt<NativeGenInput, CarouselOutput> {
   return {
     id: 'native-generation-carousel',
-    version: 2,
+    version: 3,
     modelKey: 'SONNET_4_6',
     temperature: NATIVE_GENERATION_TEMPERATURE,
     outputSchema: CarouselOutputSchema,

@@ -1390,3 +1390,37 @@ OLD table/RPCs being gone, not the absence of a NEW second table) — closing th
 Reviewer named.
 
 **Reference:** `docs/reviews/session-31-reviewer.md`, MINOR-8, closed by this section (D14).
+
+---
+
+## 17. Note — `hookType` on the native output schemas (Session 33, J2.4; ADR 0026 §4.3)
+
+**Additive, and nothing else.** Authority: founder ruling A-6 (`docs/build-guide/session-33.md` §0.2); ADR 0026 §4.3.
+
+- **What changed.** `SinglePostOutputSchema`, `ThreadOutputSchema` and `CarouselOutputSchema` each gain
+  `hookType: z.enum(HOOK_TYPES).nullish()` — the `scriptBrief` precedent (ADR 0022 §7.1). `HOOK_TYPES`
+  (`question`, `statistic`, `contrarian`, `story`, `announcement`, `how_to`) is exported from
+  `lib/ai/prompts/formats/schemas.ts`, the ONE TypeScript place; the prompt renders its value list from it, and
+  `hooktype.test.ts` asserts it equals both database twins (the `post_dimensions.hook_type` CHECK and the tagging
+  trigger's sanitiser) by reading the J2.3 migration. The three native-generation system prompts now ask the model
+  for the opening type it used, **inside the existing call**: no new model call, no model, tier, temperature or
+  sampling change.
+- **§3.2's frozen table.** The system-prompt text changed, so `native-generation-single`, `-thread` and
+  `-carousel` move **version 2 → 3** and `frozen-table.ts` takes the three matching rows (the ADR C-4 rule that
+  table makes executable). The two `MODE2-PROMPT-BYTE-IDENTICAL` fixtures in
+  `native-generation-prompt.test.ts` were re-frozen from the real prompt output by a throwaway script, not by hand.
+- **`AI_ORIGINAL_SCHEMA_VERSION` is NOT bumped, and its value is 2, not 1.** ADR 0026 §4.3 and the Session 33
+  build guide say it "stays 1"; that wording predates §8.2's H2.4, which bumped the constant 1 → 2
+  (`lib/db/post-ai-originals.ts:16`). The requirement — not bumped by this change — is what is tested, against the
+  current value. A bump would make ADR 0018's classifier refuse every new signal (ADR 0018 §2.4).
+- **What an unknown value does.** `z.enum` **rejects** it, failing the whole output; the runner surfaces
+  `invalid_response` and ADR 0017 §4.4's one bounded re-prompt handles it. That is §4.3's stated shape. The prompt
+  offers the closed list and `null`, so it should be rare; a payload that is *already stored* with an unknown value
+  can never abort a generation, because the tagging trigger sanitises it to `NULL`.
+- **Descriptive only.** `hook_type` is the model's self-report about its own opening. It is collected and shown,
+  never promoted to a pattern, until the ADR 0026 §4.1 agreement check (Cohen's κ ≥ 0.6 on ≥ 30 sampled posts) clears it.
+- **ADR 0018 is untouched.** The classifier, imported unmodified, is deep-equal with and without `hookType`, and no
+  `lib/learning` source mentions it.
+
+**Constraint closed:** `OUTCOME-HOOKTYPE-ADDITIVE` (ADR 0026 §13 #8) — `lib/ai/prompts/formats/hooktype.test.ts`, and
+`lib/campaigns/generate.test.ts` (`hookType` rides in the snapshot payload and never in the post content).
