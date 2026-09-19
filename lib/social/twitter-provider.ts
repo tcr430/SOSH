@@ -60,6 +60,12 @@ const X_USER_TWEETS_BASE_URL = 'https://api.x.com/2/users'
 // `expansions` requesting referenced_tweets.id, author_id, or any user
 // object (§2.4/§2.6 obligation 6 — this is the read path's own scope
 // discipline, distinct from publish's).
+// Session 32-D, D10 (NIT-3): `entities` cannot be narrowed to `entities.urls`
+// — X's tweet.fields only selects whole objects — and the parser needs the
+// urls span to decode t.co links. So `entities.mentions` does transit, and is
+// dropped at XTweetEntitiesSchema (which declares urls only, so zod strips
+// the rest) before any RecentPost is built. Exposure recorded for D11's ADR
+// amendment; no expansion is requested to widen it.
 const X_TIMELINE_TWEET_FIELDS = 'id,created_at,text,public_metrics,attachments,referenced_tweets,entities'
 // Session 30.5-D, D3: the bound stated for the disconnect route's revoke
 // call, per the correction pass's own instruction not to block or slow
@@ -534,7 +540,9 @@ export class TwitterProvider implements SocialProvider {
         token_expires_at: newExpiry,
         updated_at: formatISO(new Date()),
         // ADR 0025 §7.4 — persisted on refresh too, not just at connect.
-        scopes_granted: parsed.scope ? parsed.scope.split(' ') : [],
+        // Session 32-D, D10 (NIT-5): omitted entirely when X sends no
+        // `scope`, so a known value is never overwritten with "unknown".
+        ...(parsed.scope ? { scopes_granted: parsed.scope.split(' ') } : {}),
       })
       .eq('id', input.socialAccountId)
     if (bumpError) {

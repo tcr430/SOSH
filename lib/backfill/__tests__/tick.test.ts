@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 
+// Session 32-D, D10 (MINOR-7) — the real lib/social import chain reads
+// lib/config.ts at load; mock it so this file needs no env vars.
+vi.mock('@/lib/config', () => ({ config: { server: {}, public: {} } }))
 vi.mock('@/lib/social', async () => {
   const actual = await vi.importActual<typeof import('@/lib/social')>('@/lib/social')
   return { ...actual, getRegistry: vi.fn() }

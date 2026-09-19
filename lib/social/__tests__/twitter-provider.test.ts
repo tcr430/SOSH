@@ -316,14 +316,15 @@ describe('TwitterProvider', () => {
       )
     })
 
-    it('an absent scope on refresh persists scopes_granted as [] — recorded as unknown, never dropped', async () => {
+    it('an absent scope on refresh leaves scopes_granted out of the UPDATE — the prior value survives (Session 32-D D10, NIT-5)', async () => {
       const updateSpy = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) })
       mockFrom.mockReturnValue({ ...makeAccountQueryStub({ data: ACCOUNT, error: null }), update: updateSpy })
       mockFetch.mockResolvedValueOnce(jsonResponse(200, { access_token: 'new-access', refresh_token: 'new-refresh', expires_in: 7200 }))
 
       await provider.refreshAccessToken({ socialAccountId: 'sa-1' })
 
-      expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ scopes_granted: [] }))
+      expect(updateSpy).toHaveBeenCalled()
+      expect(updateSpy.mock.calls[0]![0]).not.toHaveProperty('scopes_granted')
     })
 
     it('no refresh token on file throws TOKEN_REVOKED before any network call', async () => {

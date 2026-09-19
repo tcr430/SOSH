@@ -28,12 +28,14 @@ jobs:
       # — no `|| true`, vitest's own exit code propagates, and the skip-guard step below is the
       # single authority that can still fail the job on an invisible (empty/all-skipped) suite.
       - name: App-layer test suite (JSON-reportered)
-        # E2.11 fix, corrected Session 31-D (D19, NIT-5) — THREE files import
+        # E2.11 fix, corrected Session 31-D (D19, NIT-5) and Session 32-D (D10, MINOR-7) — FOUR files import
         # the REAL lib/config.ts unmocked: lib/config.test.ts tests
         # serverSchema directly; lib/signals/orchestrator.test.ts transitively
         # imports lib/signals/github-client.ts; lib/campaigns/generate.test.ts
         # transitively imports lib/config.ts via lib/campaigns/generate.ts and
-        # does not mock '@/lib/config'. Every other file mocks '@/lib/config', so this job never needed real
+        # does not mock '@/lib/config'; and
+        # app/[locale]/(dashboard)/onboarding/step-4/BackfillPanel.pipeline.test.tsx drives the real
+        # fetch and extraction path, so it loads the real config too. Every other file mocks '@/lib/config', so this job never needed real
         # values before — but lib/config.ts's top-level publicSchema.parse() and
         # any config.server.* getter both throw on a genuinely missing required
         # field, regardless of whether this job talks to a live Supabase/GitHub

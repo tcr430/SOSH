@@ -39,6 +39,10 @@ import type { CustomerContext } from '@/lib/ai/context'
 // echoes input.text and never touches the context.
 import { postGenerationPrompt } from '@/lib/ai/prompts/post-generation'
 import { postRegenerationPrompt } from '@/lib/ai/prompts/post-regeneration'
+import { briefAssemblyPrompt } from '@/lib/ai/prompts/brief'
+import { studioSuggestionPrompt } from '@/lib/ai/prompts/studio-suggestion'
+import { rubricPrompt } from '@/lib/ai/prompts/rubric'
+import { learningSummarizerPrompt } from '@/lib/ai/prompts/learning-summarizer'
 import { brandVoiceInferencePrompt } from '@/lib/ai/prompts/brand-voice-inference'
 import type { BrandVoiceRow } from '@/lib/db/types'
 // D2/MAJOR-1 — the REAL native-generation factory, not a synthetic prompt
@@ -684,8 +688,6 @@ describe('STUDIO-RUNNER-DEFAULT-PRESERVED (ADR 0019 §4.5 / A-5)', () => {
   it('none of the OTHER existing prompt objects sets maxTokens — the SHARED-FUNCTION CALLERS table for runPrompt, one row per prompt', async () => {
     const { postGenerationPrompt: pg } = await import('@/lib/ai/prompts/post-generation')
     const { postRegenerationPrompt: pr } = await import('@/lib/ai/prompts/post-regeneration')
-    const { rubricPrompt } = await import('@/lib/ai/prompts/rubric')
-    const { learningSummarizerPrompt } = await import('@/lib/ai/prompts/learning-summarizer')
     const { brandVoiceInferencePrompt: bv } = await import('@/lib/ai/prompts/brand-voice-inference')
     const { createNativeGenerationPrompt } = await import('@/lib/ai/prompts/formats/native-generation-prompt')
 
@@ -739,8 +741,6 @@ describe('QUAL-THINKING-BUDGETED (ADR 0024 §3.3/§3.3a)', () => {
   it('no other of the ten prompt ids declares thinking', async () => {
     const { postGenerationPrompt: pg } = await import('@/lib/ai/prompts/post-generation')
     const { postRegenerationPrompt: pr } = await import('@/lib/ai/prompts/post-regeneration')
-    const { rubricPrompt } = await import('@/lib/ai/prompts/rubric')
-    const { learningSummarizerPrompt } = await import('@/lib/ai/prompts/learning-summarizer')
     const { brandVoiceInferencePrompt: bv } = await import('@/lib/ai/prompts/brand-voice-inference')
     const { studioSuggestionPrompt } = await import('@/lib/ai/prompts/studio-suggestion')
     const { createNativeGenerationPrompt } = await import('@/lib/ai/prompts/formats/native-generation-prompt')
@@ -766,8 +766,6 @@ describe('QUAL-THINKING-BUDGETED (ADR 0024 §3.3/§3.3a)', () => {
     const { briefAssemblyPrompt } = await import('@/lib/ai/prompts/brief')
     const { postGenerationPrompt: pg } = await import('@/lib/ai/prompts/post-generation')
     const { postRegenerationPrompt: pr } = await import('@/lib/ai/prompts/post-regeneration')
-    const { rubricPrompt } = await import('@/lib/ai/prompts/rubric')
-    const { learningSummarizerPrompt } = await import('@/lib/ai/prompts/learning-summarizer')
     const { brandVoiceInferencePrompt: bv } = await import('@/lib/ai/prompts/brand-voice-inference')
     const { studioSuggestionPrompt } = await import('@/lib/ai/prompts/studio-suggestion')
     const { createNativeGenerationPrompt } = await import('@/lib/ai/prompts/formats/native-generation-prompt')
@@ -1115,5 +1113,63 @@ describe('QUAL-STRUCTURED-OUTPUT / QUAL-MALFORMED-TOOL-CALL (ADR 0024 §6, H2.10
     expect(result).toEqual({ result: 'from tool — must win' })
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('runner.mixed_tool_text_response'))
     logSpy.mockRestore()
+  })
+})
+
+// Session 32-D, D10 (MINOR-5) — every PRE-EXISTING prompt id, individually,
+// against the real prompt objects (outputSchema and the two message builders
+// swapped so the shared mock input/response validate; id, modelKey and
+// temperature are the real ones, and id is all the classification reads). The four-fixture check above left brief-assembly,
+// learning-summarizer, post-regeneration, studio-suggestion and
+// native-generation-carousel unasserted. This pins CURRENT behaviour; it
+// does not change classification.
+describe('runner trial classification — all ten pre-existing prompt ids (Session 32-D D10, MINOR-5)', () => {
+  type Counter = 'posts' | 'brand-voice' | 'none'
+  const withMockSchema = (p: unknown): Prompt<MockInput, MockOutput> =>
+    ({
+      ...(p as Prompt<MockInput, MockOutput>),
+      outputSchema: mockOutputSchema,
+      useToolOutput: false,
+      buildSystemPrompt: () => 'Short system prompt.',
+      buildUserMessage: (input: MockInput) => input.text,
+    })
+
+  const rows: Array<{ prompt: Prompt<MockInput, MockOutput>; counter: Counter }> = [
+    { prompt: withMockSchema(brandVoiceInferencePrompt), counter: 'brand-voice' },
+    { prompt: withMockSchema(briefAssemblyPrompt), counter: 'posts' },
+    { prompt: withMockSchema(learningSummarizerPrompt), counter: 'posts' },
+    { prompt: withMockSchema(postGenerationPrompt), counter: 'none' },
+    { prompt: withMockSchema(postRegenerationPrompt), counter: 'posts' },
+    { prompt: withMockSchema(rubricPrompt), counter: 'none' },
+    { prompt: withMockSchema(studioSuggestionPrompt), counter: 'posts' },
+    { prompt: withMockSchema(createNativeGenerationPrompt('single')), counter: 'none' },
+    { prompt: withMockSchema(createNativeGenerationPrompt('thread')), counter: 'none' },
+    { prompt: withMockSchema(createNativeGenerationPrompt('carousel')), counter: 'posts' },
+  ]
+
+  const trialExhaustedBoth: CustomerContext = {
+    ...mockContext,
+    trialState: { isTrial: true, postsRemaining: 0, campaignsRemaining: 0, brandVoiceAttemptsRemaining: 0 },
+  }
+
+  it('covers exactly ten distinct ids', () => {
+    expect(new Set(rows.map((r) => r.prompt.id)).size).toBe(10)
+  })
+
+  it.each(rows.map((r) => [r.prompt.id, r] as const))('%s: Step-1 refuses under an exhausted trial', async (_id, { prompt }) => {
+    await expect(runPrompt(prompt, trialExhaustedBoth, { text: 'hi' })).rejects.toMatchObject({ code: 'quota_exceeded' })
+    expect(mockCreate).not.toHaveBeenCalled()
+  })
+
+  it.each(rows.map((r) => [r.prompt.id, r] as const))('%s: Step-8 increments the classified counter (trial with quota)', async (_id, { prompt, counter }) => {
+    await runPrompt(prompt, mockContext, { text: 'hi' })
+    expect(incrementPostsGenerated).toHaveBeenCalledTimes(counter === 'posts' ? 1 : 0)
+    expect(incrementBrandVoiceAttempts).toHaveBeenCalledTimes(counter === 'brand-voice' ? 1 : 0)
+  })
+
+  it.each(rows.map((r) => [r.prompt.id, r] as const))('%s: a paid context is never refused and never increments', async (_id, { prompt }) => {
+    await runPrompt(prompt, paidContext, { text: 'hi' })
+    expect(incrementPostsGenerated).not.toHaveBeenCalled()
+    expect(incrementBrandVoiceAttempts).not.toHaveBeenCalled()
   })
 })
