@@ -530,3 +530,83 @@ the fix was applied and the NIT-5 reddening redone against it. The row above is 
 **Verification:** `lib/db/__tests__/d2.5-backfill-rows.test.ts` green. **Not run:** Tier-1 (`supabase/__tests__`) — Docker is not running on this machine; D11 changes no `.ts`, `.tsx` or `.sql`, so no Tier-1 behaviour can have moved.
 
 **What I did NOT touch:** ADR §§0–14 and A3; §14.2's CI column; `[LEGAL ENTITY]`; any `.ts`/`.tsx`/`.sql`.
+
+### D12 — BLOCKER-1: pushed, CI read; the appendix closing block
+
+| Field | Detail |
+|---|---|
+| **Finding** | BLOCKER-1 |
+| **Fix** | The branch (`origin` was at `7202da89`, 33 commits behind) was pushed to `origin/session-30-5-adr-0028` at `c6f087d2`, non-force. Three workflows ran on PR #9 (`pull_request` event). |
+| **Proof** | **app-tests** [35436353104](https://github.com/tcr430/SOSH/actions/runs/35436353104) green; skip-guard quoted from the log: `277 file(s) under [app, lib, components] all visible, zero failures — green. (3894/3894 tests passed)`. **eval** [35436353102](https://github.com/tcr430/SOSH/actions/runs/35436353102) green. **db-tests** [35436353116](https://github.com/tcr430/SOSH/actions/runs/35436353116) **RED**: `skip-guard: 7 failing test(s)` and three suites skipped as invisible; the container log shows `server process (PID 3717) was terminated by signal 11: Segmentation fault` inside the test window, `OOMKilled=false`. Analysis and what it does not establish: ADR 0025 §15.10. |
+| **Reddening** | Not applicable. |
+| **Commit** | `c6f087d2` (head pushed) |
+
+**BLOCKER-1 is closed for what it asked: the range was pushed and the runs exist and were read. It is NOT closed to
+"green" for db-tests.** The rule of this pass is that Tier 1 stays uncovered unless db-tests itself is green; it is
+not, so it stays uncovered.
+
+#### All 31 findings
+
+| Finding | Disposition | Proving test | SHA(s) |
+|---|---|---|---|
+| BLOCKER-1 | Pushed; app-tests and eval green, db-tests red (crash), Tier 1 uncovered | CI runs above | `c6f087d2` |
+| BLOCKER-2 | Fixed | `npm run lint` 0 errors; `linkedin-provider.test.ts`; each original line reintroduced and shown to fail lint | `2867dd34` |
+| BLOCKER-3 | Fixed (writer, then panel reachability) | `BackfillPanel.pipeline.test.tsx`; `backfill-resolve-posts.test.ts` | `98753597`, `661d8240` |
+| MAJOR-1 | Fixed | `backfill-actions.test.ts:239/:268/:302` | `62516773` |
+| MAJOR-2 | Fixed | `ratify-backfill-run.test.ts:258` | `98753597` |
+| MAJOR-3 | Fixed | `fetch-phase.test.ts:427` | `d4755442` |
+| MAJOR-4 | Fixed | `backfill-resume.test.ts:230` | `8042870f` |
+| MAJOR-5 | Fixed | `memory-import-rpcs.test.ts:241` | `98753597` |
+| MAJOR-6 | Fixed | `source-scans.test.ts` (six plants shown RED) | `aa69063b` |
+| MAJOR-7 | Fixed (documentation) | ADR §15.1 commands with planted violations | `747246b3` |
+| MAJOR-8 | Fixed (documentation) | Evidence Pack A3.1; `privacy.en.mdx` rows | `747246b3`, `c6f087d2` |
+| MAJOR-9 | Fixed | `backfill-accounts-separate.test.ts:206` | `62516773` |
+| MAJOR-10 | Fixed | `backfill-staging-purge.test.ts:103/:115/:131/:157` | `8042870f` |
+| MAJOR-11 | Fixed | `extract.test.ts:199/:241/:469/:485` | `ef76a1af` |
+| MAJOR-12 | Fixed | `BackfillPanel.test.tsx:295`; `stats.test.ts:76` | `458eb55f`, `c9b81b4f` |
+| MINOR-1 | Fixed | `extract.test.ts:485` | `ef76a1af` |
+| MINOR-2 | Fixed | `extract.test.ts:199/:259` | `ef76a1af` |
+| MINOR-3 | Fixed | `memory-import-rpcs.test.ts` (discard-then-import) | `98753597` |
+| MINOR-4 | Fixed (code and ADR) | `backfill-discard-guard.test.ts:89`; ADR §15.4 | `98753597`, `747246b3` |
+| MINOR-5 | Fixed | `runner.test.ts:1126` | `b54c8ec4` |
+| MINOR-6 | Fixed per founder ruling A-7 (reuse `VoiceEditor`) | `step-2/page.test.tsx` | `458eb55f`, `c9b81b4f` |
+| MINOR-7 | Fixed | `fetch-phase.test.ts:6`, `tick.test.ts:5` pass in a bare shell | `b54c8ec4` |
+| MINOR-8 | Fixed (code and ADR) | `social-accounts-identity-lock.test.ts:130/:145`; ADR §15.2 | `98753597`, `747246b3` |
+| MINOR-9 | Fixed per founder ruling A-8 (code and ADR) | `backfill-candidate-retention.test.ts:100/:128`; ADR §15.3 | `98753597`, `747246b3` |
+| MINOR-10 | Fixed (code half D8, ADR half D11) | `backfill-accounts-separate.test.ts:206`; ADR §15.4 | `62516773`, `747246b3` |
+| NIT-1 | **Recorded closure** — no code change can express it | ADR §15.5 | `747246b3` |
+| NIT-2 | Fixed | `backfill-runs.test.ts:49/:61` | `d4755442` |
+| NIT-3 | Recorded, not narrowed (X cannot select `entities.urls` alone) | ADR §15.7 | `b54c8ec4`, `747246b3` |
+| NIT-4 | Fixed | `social-accounts-identity-lock.test.ts` (`id` case) | `98753597` |
+| NIT-5 | Fixed | `twitter-provider.test.ts:319` | `b54c8ec4` |
+| NIT-6 | Fixed | `source-scans.test.ts` (missing `fetchRecentPosts` RED) | `aa69063b` |
+
+Count check (run at close-out over this table): **31 rows, 31 distinct IDs**. The single recorded closure is NIT-1;
+NIT-3 is a recorded decision rather than a code change. The adjudicated executions are MINOR-6 (A-7) and MINOR-9
+(A-8). The four code-plus-ADR closures are MINOR-4, MINOR-8, MINOR-9 and MINOR-10.
+
+#### The Reviewer's "could NOT verify" list
+
+- **CI results and skip-guard counts** — now cited above. app-tests: 277 files, 3894/3894. db-tests: red, so its
+  skip-guard counts are a failure report, not coverage.
+- **Tier-1 execution** — db-tests ran and crashed (§15.10). Local Tier-1 runs are recorded in the D3, D7 and D8
+  blocks but are not CI coverage. Still unverified in CI.
+- **Live X API response shape; the LinkedIn read body; the 10-minute latency target** — still unverifiable. No live
+  call was made in this pass.
+- **What `ecc:database-reviewer` and `ecc:security-reviewer` reported** — D3's reviews are recorded in full in its
+  block above. The I2.4 and I2.6 reviews remain known only from their commit-body summaries.
+
+#### Reviewer "Verified" entries that have since changed (the entries themselves are untouched)
+
+- **§14.1's "Zero hits" for constraint 52** is superseded by ADR §15.1.
+- **Every entry that described the disconnect path or `social_accounts` grants** now sits over a changed schema:
+  `vault_access_token_id` is nullable (D7's migration) and INSERT/DELETE are revoked from `authenticated` (D3).
+- **Entries on `scopes_granted` refresh behaviour (§6)** are changed by D10: an absent `scope` no longer writes `[]`.
+- **Entries on the step-2 voice surface and the §10.4 hierarchy** are changed by D8/D9: `BackfillVoiceReview.tsx`
+  no longer exists.
+
+#### Not solved, not run
+
+LinkedIn cold start is **not solved** (A-1; the provider still reports `historicalReadAvailable = false`). Tier E
+(#55, `BACKFILL-POPULATED-MEMORY-EVAL`) is **MEASURED — NOT YET RUN**, though it is now performable through the
+product. No claim is made here about the quality or memory yield of the backfill.

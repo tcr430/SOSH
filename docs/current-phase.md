@@ -1486,6 +1486,26 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
 
 - Session 0: Environment setup complete
 
+- **Session 32 — Track I close-out (Session 32-D correction pass, D0–D12), pushed at `c6f087d2`:** the 31-finding
+  correction pass over the cold-start backfill (ADR 0025) is complete; the appendix in
+  `docs/reviews/session-32-reviewer.md` records all 31 findings (NIT-1 the single recorded closure; NIT-3 a recorded
+  decision; MINOR-6 and MINOR-9 per founder rulings A-7 and A-8). Range fixed: `3914a31c..c6f087d2`.
+  - **CI at `c6f087d2` (all `pull_request` on PR #9):** app-tests
+    [35436353104](https://github.com/tcr430/SOSH/actions/runs/35436353104) **green**, 277 files / 3894 tests, all
+    visible; eval [35436353102](https://github.com/tcr430/SOSH/actions/runs/35436353102) green; db-tests
+    [35436353116](https://github.com/tcr430/SOSH/actions/runs/35436353116) **RED** — skip-guard `7 failing test(s)`,
+    3 suites skipped as invisible, and the Postgres log shows `terminated by signal 11: Segmentation fault`
+    (`OOMKilled=false`), the known supautils crash. Attribution of each of the 7 failures to the crash is **not**
+    proven (ADR 0025 §15.10). **Tier 1 is not covered.**
+  - **`db-tests` promotion tally: unchanged.** Only consecutive green `master` **push** runs move it; every run
+    above is a `pull_request` run, and the last `master` push run on record is green
+    ([33748764506](https://github.com/tcr430/SOSH/actions/runs/33748764506), `cd363476`, 2026-09-03). This pass
+    neither advances nor resets it.
+  - **Not solved / not run:** LinkedIn cold start is not solved (A-1). Tier E (#55) is MEASURED — NOT YET RUN, and
+    is now performable through the product. No quality or memory-yield claim is made.
+  - **Still open before launch:** a green db-tests (the segfault), and an isolated CI re-run of the seven failing
+    tests once it is.
+
 ## What's next
 
 Session 19D correction pass is applied. Voice model core is merge-ready. One open decision required before closing Session 19:

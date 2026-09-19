@@ -2921,3 +2921,19 @@ Then stop.
 **Next:** `docs/build-guide/session-33.md` — Track J, the outcome loop (ADR 0026): dimension tagging at
 generation, pattern extraction from real metrics into `performance_memory`, and the campaign retrospective
 that finally closes the loop the north-star metric is named after.
+
+### §5 close-out note (D12, Session 32-D)
+
+Appended, not edited in place. **What was verified at D12, with evidence:**
+- `docs/reviews/session-32-reviewer.md` exists, names its commit range, and carries one appended correction-pass
+  section (D1–D12 blocks; closing block records all 31 findings).
+- `docs/decisions/0025-social-read-path-and-backfill.md` — §15 appended (§15.9 is the constraint map dated to
+  `c6f087d2`; §14.2 left as written because §14 is append-only). **Not "final":** Tier 1 rows are uncovered while
+  db-tests is red.
+- `docs/current-phase.md` — the Session 32 close-out entry, with the tally and each run's event type, is written.
+
+**Not verified or touched at D12 (left unticked):** the `0002` Amendment, the `0011` 19D-5 resolution, removal of
+19D-5 from the open-decisions list, `launch-checklist.md` §16, the `0010` cascade row, the brainstorm document, and
+`backlog.md`. Whether each applied to this pass was not re-established here.
+
+**Stale references:** this section's "Amendment A" refers to what §0's sign-off ruled **Amendment B**; read them as B.

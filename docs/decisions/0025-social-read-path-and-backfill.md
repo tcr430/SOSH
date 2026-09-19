@@ -1391,3 +1391,91 @@ staged or stored. `referenced_tweets` stays (§2.4 quote-dropping). No expansion
 ### 15.8 What this section does not do
 
 It does not fill §14.2's CI column — that is D12's, from the run logs.
+
+### 15.9 The constraint → CI map, dated to `c6f087d2` (BLOCKER-1, D12)
+
+§14.2 is append-only and its CI column stays as written; this table is the executed-green record. Head: `c6f087d2` (D11). Runs, all `pull_request`-event on PR #9: **app-tests** [35436353104](https://github.com/tcr430/SOSH/actions/runs/35436353104) green — skip-guard quoted: `277 file(s) under [app, lib, components] all visible, zero failures — green. (3894/3894 tests passed)`; **eval** [35436353102](https://github.com/tcr430/SOSH/actions/runs/35436353102) green; **db-tests** [35436353116](https://github.com/tcr430/SOSH/actions/runs/35436353116) **RED** — see §15.10. **Tier 1 is therefore not covered for any row**, whatever a local run showed.
+
+| # | Constraint | Tier | Status at `c6f087d2` |
+|---|---|---|---|
+| 1 | BACKFILL-READ-ON-ABSTRACTION | 2 | executed green — app-tests run 35436353104 (277 files, 3894/3894) |
+| 2 | BACKFILL-READ-FLAG-CONSISTENT | 2 | executed green — app-tests run 35436353104 (277 files, 3894/3894) |
+| 3 | BACKFILL-PROVIDER-BOUNDED | 2 | executed green — app-tests run 35436353104 (277 files, 3894/3894) |
+| 4 | BACKFILL-CURSOR-ACCOUNT-BOUND | 2 | executed green — app-tests run 35436353104 (277 files, 3894/3894) |
+| 5 | BACKFILL-OWN-POSTS-ONLY | 2 | executed green — app-tests run 35436353104 (277 files, 3894/3894) |
+| 6 | BACKFILL-IDENTITY-VERIFIED | 2 | executed green — app-tests run 35436353104 (277 files, 3894/3894) |
+| 7 | BACKFILL-NO-COMMENT-READ | 2 | executed green — app-tests run 35436353104 (277 files, 3894/3894) |
+| 8 | BACKFILL-PROVIDER-NEVER-SLEEPS | 2 | executed green — app-tests run 35436353104 (277 files, 3894/3894) |
+| 9 | BACKFILL-ERROR-DETAILS-CONTENT-FREE | 2 | executed green — app-tests run 35436353104 (277 files, 3894/3894) |
+| 10 | BACKFILL-MOCK-FIXTURES-MEANINGFUL | 2 | executed green — app-tests run 35436353104 (277 files, 3894/3894) |
+| 11 | BACKFILL-NO-PROVIDER-IMPORT-OUTSIDE-SOCIAL | 2 | executed green — app-tests run 35436353104 (277 files, 3894/3894) |
+| 12 | BACKFILL-VAULT-PATH-REUSED | 2 | executed green — app-tests run 35436353104 (277 files, 3894/3894) |
+| 13 | BACKFILL-NO-RAW-TOKEN | 3 | diff-verified; commands corrected in §15.1 (not a CI row) |
+| 14 | BACKFILL-SOCIAL-ACCOUNT-IDENTITY-LOCKED | 1 | **NOT covered** — db-tests red (Postgres segfault, signal 11), run 35436353116 |
+| 15 | BACKFILL-SCOPES-PERSISTED | 2 | executed green — app-tests run 35436353104 (277 files, 3894/3894) |
+| 16 | BACKFILL-RUN-BOUNDED | 2 | executed green — app-tests run 35436353104 (277 files, 3894/3894) |
+| 17 | BACKFILL-X-READ-BOUNDED | 2 | executed green — app-tests run 35436353104 (277 files, 3894/3894) |
+| 18 | BACKFILL-ONCE-PER-ACCOUNT | 1 | **NOT covered** — db-tests red (Postgres segfault, signal 11), run 35436353116 |
+| 19 | BACKFILL-CLAIM-ATOMIC | 1 | **NOT covered** — db-tests red (Postgres segfault, signal 11), run 35436353116 |
+| 20 | BACKFILL-RESUMABLE-OR-DISCARDED | 2 | executed green — app-tests run 35436353104 (277 files, 3894/3894) |
+| 21 | BACKFILL-NOTHING-ACTIVE-BEFORE-RATIFY | 1 | **NOT covered** — db-tests red (Postgres segfault, signal 11), run 35436353116 |
+| 22 | BACKFILL-COST-CEILINGED | 1 | **NOT covered** — db-tests red (Postgres segfault, signal 11), run 35436353116 |
+| 23 | BACKFILL-BUDGET-PURPOSE | 1 | **NOT covered** — db-tests red (Postgres segfault, signal 11), run 35436353116 |
+| 24 | BACKFILL-TRIAL-CAPS-UNTOUCHED | 2 | executed green — app-tests run 35436353104 (277 files, 3894/3894) |
+| 25 | BACKFILL-AFTER-CONNECT-CLOCK-UNTOUCHED | 3 | diff-verified; commands corrected in §15.1 (not a CI row) |
+| 26 | BACKFILL-LATENCY-BOUNDED | 2 | executed green — app-tests run 35436353104 (277 files, 3894/3894) |
+| 27 | BACKFILL-DISCONNECT-CANCELS | 2 | executed green — app-tests run 35436353104 (277 files, 3894/3894) |
+| 28 | BACKFILL-STAGING-PURGED | 2 | executed green — app-tests run 35436353104 (277 files, 3894/3894) |
+| 29 | BACKFILL-UNSUPPORTED-PLATFORM-HONEST | 2 | executed green — app-tests run 35436353104 (277 files, 3894/3894) |
+| 30 | BACKFILL-DETERMINISTIC-FIRST | 2 | executed green — app-tests run 35436353104 (277 files, 3894/3894) |
+| 31 | BACKFILL-PERFORMANCE-WEIGHTED | 2 | executed green — app-tests run 35436353104 (277 files, 3894/3894) |
+| 32 | BACKFILL-CONFIDENCE-CAPPED | 2 | executed green — app-tests run 35436353104 (277 files, 3894/3894) |
+| 33 | BACKFILL-EVIDENCE-VERBATIM | 2 | executed green — app-tests run 35436353104 (277 files, 3894/3894) |
+| 34 | BACKFILL-EVIDENCE-NOT-PUBLIC | 1 | **NOT covered** — db-tests red (Postgres segfault, signal 11), run 35436353116 |
+| 35 | BACKFILL-SENTINEL-GUARDED | 2 | executed green — app-tests run 35436353104 (277 files, 3894/3894) |
+| 36 | BACKFILL-WRITE-CAPS | 2 | executed green — app-tests run 35436353104 (277 files, 3894/3894) |
+| 37 | BACKFILL-NO-URL-FETCH | 2 | executed green — app-tests run 35436353104 (277 files, 3894/3894) |
+| 38 | BACKFILL-PROVENANCE-MARKED | 1 | **NOT covered** — db-tests red (Postgres segfault, signal 11), run 35436353116 |
+| 39 | BACKFILL-PROVENANCE-IMMUTABLE | 1 | **NOT covered** — db-tests red (Postgres segfault, signal 11), run 35436353116 |
+| 40 | BACKFILL-PROVENANCE-SURVIVES-PROMOTION | 1 | **NOT covered** — db-tests red (Postgres segfault, signal 11), run 35436353116 |
+| 41 | BACKFILL-SOURCE-DATED | 2 | executed green — app-tests run 35436353104 (277 files, 3894/3894) |
+| 42 | BACKFILL-ACCOUNTS-SEPARATE | 2 | executed green — app-tests run 35436353104 (277 files, 3894/3894) |
+| 43 | BACKFILL-PER-POST-REMOVABLE | 1 | **NOT covered** — db-tests red (Postgres segfault, signal 11), run 35436353116 |
+| 44 | BACKFILL-VOICE-RATIFIED | 2 | executed green — app-tests run 35436353104 (277 files, 3894/3894) |
+| 45 | BACKFILL-RATIFY-ATOMIC | 1 | **NOT covered** — db-tests red (Postgres segfault, signal 11), run 35436353116 |
+| 46 | BACKFILL-VOICE-RETRYABLE | 2 | executed green — app-tests run 35436353104 (277 files, 3894/3894) |
+| 47 | BACKFILL-RLS-ISOLATED | 1 | **NOT covered** — db-tests red (Postgres segfault, signal 11), run 35436353116 |
+| 48 | BACKFILL-CASCADE-COMPLETE | 1 | **NOT covered** — db-tests red (Postgres segfault, signal 11), run 35436353116 |
+| 49 | BACKFILL-PURGE-COVERED | 1 | **NOT covered** — db-tests red (Postgres segfault, signal 11), run 35436353116 |
+| 50 | BACKFILL-NO-RELATIONSHIP-MEMORY | 3 | diff-verified; commands corrected in §15.1 (not a CI row) |
+| 51 | BACKFILL-NO-GENERATION-CHANGE | 3 | diff-verified; commands corrected in §15.1 (not a CI row) |
+| 52 | BACKFILL-NO-CROSS-CUSTOMER-LEARNING | 3 | diff-verified; commands corrected in §15.1 (not a CI row) |
+| 53 | BACKFILL-UX-STATES | 2 | executed green — app-tests run 35436353104 (277 files, 3894/3894) |
+| 54 | BACKFILL-I18N-PARITY | 2 | executed green — app-tests run 35436353104 (277 files, 3894/3894) |
+| 55 | BACKFILL-POPULATED-MEMORY-EVAL | E | MEASURED — NOT YET RUN |
+| 56 | BACKFILL-IMPORT-IDEMPOTENT | 1 | **NOT covered** — db-tests red (Postgres segfault, signal 11), run 35436353116 |
+
+56 rows.
+
+### 15.10 db-tests at `c6f087d2` — red, read from the log (run 35436353116)
+
+The job failed at its skip-guard. Quoted from the log: `skip-guard: 7 failing test(s) — a RED suite must fail the
+job, never be swallowed`, and three files skipped as invisible (`market-responsive-business-enumeration`,
+`post-ai-originals-latest-per-post`, `signals3-triage-tools`). The seven failing tests are all EXECUTE-privilege
+checks: `ai-budget-generation-posts` (2), `vault-update-secret` (3), `backfill-candidate-retention` (1),
+`memory-import-rpcs` (1).
+
+**Deciding evidence that this is the known Postgres crash and not a proven behaviour regression:** the container
+log records, at `10:06:43.631`, `server process (PID 3717) was terminated by signal 11: Segmentation fault`,
+followed by `all server processes terminated; reinitializing` and a run of `the database system is in recovery
+mode` refusals to `authenticator` and `supabase_auth_admin` — inside the test window (`10:05:10`–`10:06:54`).
+`docker inspect` reports `OOMKilled=false`, so this is the segfault (the Session 31-D D20 supautils signature),
+not an OOM kill. The previous head, `7202da89`, was red the same way: it failed `ai-budget-generation-posts` (1)
+and `vault-update-secret` (3) and skipped a different set of three files — file sets that vary between runs.
+
+**What is NOT established:** that each of the seven failures was caused by the crash. Two of them
+(`backfill-candidate-retention`, `memory-import-rpcs`) are tests added in this pass (D3/D7 era), they passed
+locally (`test:db` 452/452 at D8, per that commit body), and they are the same test shape as the four that failed
+at the previous head; but I have not re-run them in isolation on CI. **Consequence, per the step's own rule: Tier
+1 stays uncovered.** Resolving it needs the supautils/Postgres image fix or a green rerun; a rerun of the same
+job is not evidence either way until it is read.
