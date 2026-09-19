@@ -2,7 +2,14 @@ import type { BusinessRow, BrandVoiceRow, CampaignRow, Platform } from '@/lib/db
 import { getBusinessById } from '@/lib/db/businesses'
 import { listCampaigns } from '@/lib/db/campaigns'
 import { getTrialStateMaybe } from '@/lib/db/trial-state'
-import { retrievePerformancePatterns, retrieveVoice, type PerformancePattern, type MemoryQueryContext } from '@/lib/memory'
+import {
+  retrieveOutcomePatterns,
+  retrievePerformancePatterns,
+  retrieveVoice,
+  type OutcomeObservation,
+  type PerformancePattern,
+  type MemoryQueryContext,
+} from '@/lib/memory'
 
 export type BrandVoiceContext = BrandVoiceRow & { readonly descriptor: string }
 
@@ -20,6 +27,10 @@ export interface CustomerContext {
     likes?: number
     impressions?: number
   }>
+  // ADR 0026 §6.4 (J2.9, L-2) — optional and ABSENT (not []) when the brand has no promoted outcome pattern, so
+  // every existing consumer of this shape is unchanged. Rendered in its OWN block, never merged into
+  // recentPostPerformance. Carries the SQL-computed n / wins / campaigns and never any per-post metric.
+  observedOutcomes?: OutcomeObservation[]
   trialState: {
     isTrial: boolean
     postsRemaining: number
@@ -74,12 +85,14 @@ export async function buildCustomerContext(
   // depends on. The variation fetch now happens inside this Promise.all
   // rather than sequentially after it — same calls, same arguments, one
   // fewer round-trip.
-  const [business, resolvedBrandVoice, campaigns, recentPostPerformance, trialStateRow] = await Promise.all([
+  const [business, resolvedBrandVoice, campaigns, recentPostPerformance, trialStateRow, observedOutcomes] = await Promise.all([
     getBusinessById(client, businessId),
     retrieveVoice(client, businessId, voiceVariationId),
     listCampaigns(client, businessId, 5),
     retrievePerformancePatterns(client, businessId, queryContext),
     getTrialStateMaybe(client, businessId),
+    // ADR 0026 J2.9 — retrieved SEPARATELY from recentPostPerformance (OUTCOME-SEPARATE-RETRIEVAL).
+    retrieveOutcomePatterns(businessId, { platform: queryContext.platform }),
   ])
 
   let trialState: CustomerContext['trialState'] = null
@@ -133,6 +146,7 @@ export async function buildCustomerContext(
     // it — this is the fix, not a workaround; lib/ai/context.test.ts's
     // literal-shape assertions are what caught the gap.
     recentPostPerformance: toRecentPostPerformance(recentPostPerformance),
+    ...(observedOutcomes.length > 0 ? { observedOutcomes } : {}),
     trialState,
   }
 }
@@ -171,10 +185,17 @@ export async function withPostQueryContext(
   const { createServiceRoleClient } = await import('@/lib/supabase/service')
   const client = createServiceRoleClient()
 
-  const recentPostPerformance = await retrievePerformancePatterns(client, ctx.business.id, postContext)
+  const [recentPostPerformance, observedOutcomes] = await Promise.all([
+    retrievePerformancePatterns(client, ctx.business.id, postContext),
+    // Platform-scoped, so a LinkedIn post is never shown what happened on X (ADR 0026 J2.9).
+    retrieveOutcomePatterns(ctx.business.id, { platform: postContext.platform }),
+  ])
 
+  const { observedOutcomes: _campaignLevel, ...rest } = ctx
+  void _campaignLevel
   return {
-    ...ctx,
+    ...rest,
     recentPostPerformance: toRecentPostPerformance(recentPostPerformance),
+    ...(observedOutcomes.length > 0 ? { observedOutcomes } : {}),
   }
 }

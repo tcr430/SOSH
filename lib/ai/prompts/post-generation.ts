@@ -3,6 +3,7 @@ import type { Prompt } from './types'
 import type { CustomerContext } from '@/lib/ai/context'
 import type { CampaignRow, Platform } from '@/lib/db/types'
 import { neutralize } from '@/lib/ai/wrap-evidence'
+import { renderObservedOutcomes } from './observed-outcomes'
 
 function sanitizeDataField(value: string): string {
   return value.replace(/\[\/DATA\]/gi, '[/data-blocked]')
@@ -183,6 +184,10 @@ ${campaignList}
 ${perfList}
 [/DATA]`)
     }
+
+    // ADR 0026 §6.4 (J2.9) — its OWN block, never merged into the snippets above; omitted when absent or empty.
+    const observed = renderObservedOutcomes(ctx.observedOutcomes, input.targetPlatform)
+    if (observed) sections.push(observed)
 
     if (input.alreadyGeneratedTopics.length > 0) {
       sections.push(`## Topics Already Generated This Session (do not repeat these angles)

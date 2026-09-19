@@ -59,7 +59,7 @@ vi.mock('@/lib/db/posts', () => ({
 vi.mock('@/lib/db/brand-voices', () => ({ getBrandVoice: vi.fn() }))
 vi.mock('@/lib/db/voice', () => ({ getVariationForBusiness: vi.fn() }))
 vi.mock('@/lib/db/post-metrics', () => ({ listTopPostMetrics: vi.fn() }))
-vi.mock('@/lib/db/memory-performance', () => ({ listPerformanceMemoryCandidates: vi.fn() }))
+vi.mock('@/lib/db/memory-performance', () => ({ listPerformanceMemoryCandidates: vi.fn(), listOutcomePatterns: vi.fn(async () => []) }))
 vi.mock('@/lib/db/trial-state', () => ({
   getTrialStateMaybe: vi.fn(),
   incrementPostsGenerated: vi.fn().mockResolvedValue(undefined),

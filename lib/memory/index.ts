@@ -21,6 +21,7 @@ export {
   type PerformancePattern,
   type GovernedPerformancePattern,
 } from './performance'
+export { retrieveOutcomePatterns, type OutcomeObservation } from './outcomes'
 export { retrieveVoice, type CoreVoiceRules } from './voice'
 
 export type { MemoryQueryContext } from './scoring'

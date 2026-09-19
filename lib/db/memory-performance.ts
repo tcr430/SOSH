@@ -31,6 +31,11 @@ export async function listPerformanceMemoryCandidates(
     .select('*')
     .eq('business_id', businessId)
     .eq('status', 'active')
+    // ADR 0026 §6.4 (J2.9, OUTCOME-SEPARATE-RETRIEVAL): outcome rows NEVER compete in this shared ranking — their
+    // confidence is a Wilson bound shrunk by n, a different quantity from a distilled confidence. They are read
+    // only by lib/memory/outcomes.ts (retrieveOutcomePatterns) through listOutcomePatterns. This is the ONE
+    // predicate, so both call paths (lib/ai/context.ts and Studio) inherit it.
+    .neq('source', 'outcome')
     .is('deleted_at', null)
     // [Session 25-D correction, MINOR-6] upsert_distilled_performance_pattern
     // writes expires_at = now() + 90 days on every upsert (ADR §7.1), but

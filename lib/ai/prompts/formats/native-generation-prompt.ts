@@ -6,6 +6,7 @@ import type { RenderedEvidence } from '@/lib/ai/wrap-evidence'
 import { SinglePostOutputSchema, ThreadOutputSchema, CarouselOutputSchema, HOOK_TYPES, type SinglePostOutput, type ThreadOutput, type CarouselOutput } from './schemas'
 import type { FormatFamily } from './platform-map'
 import { assertNever } from '@/lib/utils'
+import { renderObservedOutcomes } from '../observed-outcomes'
 
 function sanitizeDataField(value: string): string {
   return value.replace(/\[\/DATA\]/gi, '[/data-blocked]')
@@ -131,6 +132,11 @@ Keywords to use: ${bv.keywords.join(', ')}
 Words to avoid: ${bv.avoid_words.join(', ')}
 [/DATA]`)
   }
+
+  // ADR 0026 §6.4 (J2.9) — the live Mode-2 generator renders no performance memory today; it gains ONLY this
+  // block. Omitted when absent or empty.
+  const observed = renderObservedOutcomes(ctx.observedOutcomes, input.platform)
+  if (observed) sections.push(observed)
 
   if (input.correctionNote) {
     sections.push(`## Correction Needed

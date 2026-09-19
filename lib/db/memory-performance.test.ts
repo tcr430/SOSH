@@ -67,6 +67,12 @@ describe('listPerformanceMemoryCandidates', () => {
     expect(builder.order).not.toHaveBeenCalledWith('last_confirmed_at', expect.anything())
   })
 
+  it("excludes source = 'outcome' — outcome rows never compete in the shared ranking (ADR 0026 J2.9)", async () => {
+    const { client, builder } = createMockClient([makeRow()], null)
+    await listPerformanceMemoryCandidates(client, 'biz-1')
+    expect(builder.neq).toHaveBeenCalledWith('source', 'outcome')
+  })
+
   it('scopes the read to business_id — the sole tenancy guard on this service-role query (MINOR-1)', async () => {
     // The generation path reads via service-role, which BYPASSES RLS (ADR
     // 0016 §4), so this .eq('business_id') is the ONLY thing preventing a
