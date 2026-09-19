@@ -1502,3 +1502,15 @@ change:** the earlier caveat that the crash was not proven to explain each of th
 rerun — the same seven tests pass on the fixed image with no code change to them. Tier 3 still cites §15.1; Tier E
 (#55) is still MEASURED — NOT YET RUN. This remains a `pull_request` run: it does not move the `db-tests` promotion
 tally.
+
+### 15.12 Final head: `ceb302fd` (D12 close)
+
+Re-read from the run logs at the branch head after the Vercel fix (the MDX comment in `privacy.en.mdx`; no code
+changed), all `pull_request` on PR #9: **db-tests**
+[35437471255](https://github.com/tcr430/SOSH/actions/runs/35437471255) green — `62 file(s) under [supabase/__tests__]
+all visible, zero failures — green. (452/452 tests passed)`, image check equal (`sha256:bd620fdea28b…` both sides),
+no `signal 11`; **app-tests** [35437471297](https://github.com/tcr430/SOSH/actions/runs/35437471297) green —
+`277 file(s) under [app, lib, components] all visible, zero failures — green. (3894/3894 tests passed)`; **eval**
+[35437471258](https://github.com/tcr430/SOSH/actions/runs/35437471258) green; **Vercel** deployment succeeded. The
+§15.9/§15.11 tier statuses therefore hold at `ceb302fd` as well as at `15beb540`. The `db-tests` promotion tally is
+unchanged (no `master` push run).

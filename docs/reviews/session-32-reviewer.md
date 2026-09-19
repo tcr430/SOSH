@@ -622,3 +622,11 @@ app-tests [35436865152](https://github.com/tcr430/SOSH/actions/runs/35436865152)
 [35436865175](https://github.com/tcr430/SOSH/actions/runs/35436865175) green. The seven tests that failed pass with no
 change to them. **Tier 1 is now executed green in CI** (ADR 0025 §15.11); "Tier-1 execution" in the Reviewer's could-not-verify
 list is answered. All three runs are `pull_request` events, so the promotion tally is unchanged.
+
+#### D12 final head (author: correction pass)
+
+CI re-read at `ceb302fd`, after the Vercel fix (an invalid `<!-- -->` comment at `privacy.en.mdx:80` had failed every
+Vercel build of the branch; converted to an MDX comment, no prose change): db-tests
+[35437471255](https://github.com/tcr430/SOSH/actions/runs/35437471255) `62 file(s) … (452/452 tests passed)`, app-tests
+[35437471297](https://github.com/tcr430/SOSH/actions/runs/35437471297) `277 file(s) … (3894/3894 tests passed)`, eval
+[35437471258](https://github.com/tcr430/SOSH/actions/runs/35437471258): all green; Vercel green. Detail: ADR 0025 §15.12.
