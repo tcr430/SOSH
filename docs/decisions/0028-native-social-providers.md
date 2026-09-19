@@ -887,3 +887,57 @@ merge.
   (3), unmigratable existing connections (4), a failed-revocation-leaves-a-live-token acceptance (5), the
   empty-§14-at-merge risk (7, restated in §17.6 above), and the unavoidable future re-authorisation (8) —
   none of these are proven false or resolved by N2.13; they remain exactly as stated.
+
+---
+
+## Amendment A — real `fetchPostMetrics` (X) and a day-1/3/7 cadence (Session 33, J2.1)
+
+- **Authority:** founder ruling **A-3** (`docs/build-guide/session-33.md` §0.2); ADR 0026 §3. Additive: §6's "Q5 — metrics" decision (no schema change) and §13's verification rule bind unchanged.
+- **Date / range:** 2026-09-19, Builder step J2.1, on branch `session-33-adr-0026` (BASE `75cae307`).
+- **Scope of this amendment:** `TwitterProvider.fetchPostMetrics` is real. `LinkedInProvider.fetchPostMetrics` **stays `NOT_IMPLEMENTED`** — verified, not assumed. `list_posts_for_metrics_sync` becomes stage-based. `METRICS_MAX_AGE_DAYS` defaults to 9. **No scope is added, no live call was made.**
+
+### A.1 Outcome, stated plainly
+
+| Platform | `fetchPostMetrics` | Fields | Permanently null (never fetched, never zeroed) |
+|---|---|---|---|
+| X | **implemented** — `GET https://api.x.com/2/tweets/{id}?tweet.fields=public_metrics`, one read per call, bearer via `withFreshToken`, no sleep, no retry | `likes` (`like_count`), `comments` (`reply_count`), `shares` (`retweet_count` + `quote_count`), `saves` (`bookmark_count`), `impressions` (`impression_count`) | `reach` (no such field), `clicks` (`url_link_clicks` is `non_public_metrics`: owner + user-context + 30 days — **not requested**) |
+| LinkedIn | **`NOT_IMPLEMENTED` retained** (`details.reason = 'r_member_social_feed_restricted'`) | — | `likes`, `comments`, `shares` (unreadable under granted scopes), and `saves`, `clicks`, `reach`, `impressions` (§13 item 8, §16 item 11) |
+
+**Consequence: the outcome loop runs on X alone until LinkedIn grants a restricted read permission.** The orchestrator already short-circuits a `NOT_IMPLEMENTED` platform per tick (`lib/metrics/orchestrator.ts:59-62`, `:100-102`), so LinkedIn posts cost nothing and are counted as `skippedNotImplemented`. This degrades LinkedIn outcome learning and the LinkedIn half of "advanced analytics" until approval; it is tracked with §16 item 11.
+
+**Null discipline (ADR 0026 rule 6).** An absent field is `null`, never `0`. `shares` is `null` unless **both** halves (reposts and quotes) are present — never a partial sum. When `data` or `public_metrics` is absent the method returns `null` (nothing measured), so the orchestrator writes no row and the post stays due; it does not advance the sync stage with an empty row.
+
+### A.2 Verification log (§13 binds: nothing below is from memory)
+
+| # | Claim | Source (read 2026-09-19) | Exact finding |
+|---|---|---|---|
+| 1 | X endpoint and auth | `https://docs.x.com/x-api/posts/post-lookup-by-post-id` | `GET /2/tweets/{id}`; auth `OAuth2UserToken` with scopes `users.read`, `tweet.read`, or `UserToken`, or `BearerToken`. Both `tweet.read` and `users.read` are already granted (`platforms/config.ts:29`). |
+| 2 | X `public_metrics` fields | `https://docs.x.com/x-api/fundamentals/metrics` | `retweet_count`, `quote_count`, `like_count`, `reply_count`, `impression_count`, `bookmark_count`, `view_count` (videos only). Auth: any Bearer; ownership not required; time limit not stated. |
+| 3 | X non-public / organic metrics | same page | `non_public_metrics` (`url_link_clicks`, `user_profile_clicks`, `engagements`, `playback_*`) and `organic_metrics`: OAuth 1.0a or OAuth 2.0 user context, **owned posts only**, **30 days**. Deliberately not requested (see A.1). |
+| 4 | **Field-name conflict — UNRESOLVED** | #1 vs #2 | Page #1's schema summary lists the repost count in `public_metrics` as **`repost_count`**; page #2 and the shipped Session 32 parser (`twitter-provider.ts` `XTweetSchema`, requires `retweet_count`) say **`retweet_count`**. The raw OpenAPI document (`https://api.x.com/2/openapi.json`) returned **HTTP 402**, so the conflict could not be adjudicated from source. **Decision:** `fetchPostMetrics` accepts either (`retweet_count ?? repost_count`). Resolve at the first live smoke (A.5) and delete the alias. |
+| 5 | LinkedIn read permission | `https://learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/network-update-social-actions` and `.../social-metadata-api` | Reading likes/comments on a member's posts needs `r_member_social_feed`: **"Restricted … This permission is granted to select developers only."** `w_member_social_feed` covers posting/commenting/liking only. |
+| 6 | LinkedIn count endpoints and fields | same pages | `GET /rest/socialActions/{urn}` → `likesSummary.totalLikes` / `aggregatedTotalLikes`, `commentsSummary.aggregatedTotalComments` / `totalFirstLevelComments`; `GET /rest/socialMetadata/{urn}` → `reactionSummaries.*.count`, `commentSummary.count` / `topLevelCount`. Not called. |
+| 7 | Granted LinkedIn scopes | `lib/social/platforms/config.ts:22` | `openid`, `profile`, `email`, `w_member_social`. The docs' current names carry a `_feed` suffix (`w_member_social_feed`); the naming difference is recorded, not resolved — the granted set contains no read permission under either name. |
+
+A `404` on the first LinkedIn URL tried (`.../shares/social-actions-api`) is why the pages in #5/#6 are the ones cited.
+
+### A.3 Cadence (ADR 0026 §3.2)
+
+`supabase/migrations/20260919100000_metrics_sync_cadence.sql` replaces the body of `list_posts_for_metrics_sync` in place (same signature — no overload). A post is due when `(age ≥ 1d ∧ last_synced_at < published_at + 1d) ∨ (… 3d) ∨ (… 7d)`, `last_synced_at IS NULL` counting as before every stage; a missed stage is caught up; **three reads per post is the ceiling**. `p_stale_before` stays in the signature and is ignored. `METRICS_MAX_AGE_DAYS` defaults to **9** (day 7 plus the 2-day `OUTCOME_MATURITY_GRACE_DAYS`); `METRICS_STALE_MINUTES` is now unused by the predicate but still passed. The tick keeps its hourly schedule and its `metrics-sync-tick` line's exact key set. **Supersedes** ADR 0006's `METRICS_MAX_AGE_DAYS = 90` and its staleness predicate; it remains a sync-window filter, never a deletion.
+
+### A.4 Other changes this amendment makes, so nothing is a surprise
+
+- `MockProvider.fetchPostMetrics` no longer returns all zeros (which conflated "never available" with `0`); it serves named fixtures (`MOCK_METRICS_FIXTURE_POST_IDS`), including a permanently-null field, an eligible field returned `null`, and an X `impressions = 0` post, for J2.7.
+- `provider-contract.test.ts`'s `fetchPostMetrics` assertion is widened from "`NOT_IMPLEMENTED`" to "a result, or any valid `SocialProviderError`" — the same widening `fetchRecentPosts` got at I2.3 — because `TwitterProvider` now legitimately fails with `TOKEN_REVOKED` against the suite's stubbed empty account.
+- `TwitterProvider.mapReadErrorResponse` / `mapReadNetworkError` gain an optional `operation` label (default `'fetchRecentPosts'`, so existing messages are byte-identical).
+- The ADR 0025 read-path scan (`lib/backfill/__tests__/source-scans.test.ts`) needed **no edit**: it excises the whole `fetchPostMetrics` method and forbids only endpoint/`fetchEngagement` tokens, none of which the new code uses.
+
+### A.5 Not verified / not run
+
+- **Live smoke against a founder-owned X account: NOT YET RUN.** It must confirm the response shape, resolve the `repost_count` / `retweet_count` conflict (A.2 #4), and observe the real behaviour for a deleted post (the code returns `null` on a `200` with no `data`, the standard partial-error shape — **not** confirmed against X's docs).
+- **X rate limits and per-read billing for `GET /2/tweets/{id}`** are unverified; §14.3's read-cost concern stands. Three reads per post is the mitigation.
+- **§14's manual verification log stays empty**: no connect-and-publish was performed.
+
+### A.6 Constraints closed
+
+`OUTCOME-METRICS-FETCH-REAL` (ADR 0026 §13 #1) — Tier 2: `lib/social/__tests__/twitter-provider.test.ts` (`fetchPostMetrics`), `mock-provider.test.ts`, `linkedin-provider.test.ts`. `OUTCOME-METRICS-CADENCE-BOUNDED` (#2) — Tier 1: `supabase/__tests__/metrics-sync-cadence.test.ts`; Tier 2: `lib/metrics/orchestrator.test.ts` (tick-line keys unchanged).

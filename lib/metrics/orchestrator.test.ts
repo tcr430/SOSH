@@ -19,7 +19,7 @@ vi.mock('@/lib/config', () => ({
     server: {
       METRICS_SYNC_BATCH_SIZE: 50,
       METRICS_STALE_MINUTES: 360,
-      METRICS_MAX_AGE_DAYS: 90,
+      METRICS_MAX_AGE_DAYS: 9,
     },
   },
 }))
@@ -368,4 +368,30 @@ describe('runMetricsSyncTick — B6 observability', () => {
       expect(tickLine!.triggeredBy).toBe(triggeredBy)
     },
   )
+
+  // ADR 0026 §3.2 (J2.1): the cadence moved into SQL (day 1/3/7), but the
+  // tick keeps its hourly schedule and its log line UNCHANGED IN SHAPE — the
+  // operator dashboards and the Sentry monitor read exactly these keys.
+  it('the metrics-sync-tick log line keeps exactly its pre-J2.1 keys', async () => {
+    const logSpy = vi.spyOn(console, 'log')
+    vi.mocked(listPostsForMetricsSync).mockResolvedValue([])
+    await runMetricsSyncTick({ now: NOW, triggeredBy: 'secret' })
+    const tickLine = logSpy.mock.calls
+      .map(c => { try { return JSON.parse(String(c[0])) } catch { return null } })
+      .find(p => p?.kind === 'metrics-sync-tick')
+    expect(Object.keys(tickLine!).sort()).toEqual(
+      [
+        'candidates',
+        'durationMs',
+        'errors',
+        'kind',
+        'skippedNoAccount',
+        'skippedNoData',
+        'skippedNotImplemented',
+        'synced',
+        'tick',
+        'triggeredBy',
+      ].sort(),
+    )
+  })
 })

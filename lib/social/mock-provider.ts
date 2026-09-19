@@ -38,6 +38,50 @@ export const MOCK_FIXTURE_ACCOUNT_IDS = {
   TWO_ACCOUNTS_COMPANY: 'mock-fixture-two-accounts-company',
 } as const
 
+// ADR 0026 J2.1 step 4 — deterministic fetchPostMetrics fixtures, addressed
+// by platformPostId the way the account fixtures above are addressed by
+// socialAccountId. Between them they cover what J2.7's normalisation needs: a
+// permanently-null field (reach, clicks; LinkedIn's four), an ELIGIBLE field
+// returned null, and an X impressions = 0 post. Any other id — including
+// mock_post_* from publish() — gets the X full shape. Null is never 0.
+export const MOCK_METRICS_FIXTURE_POST_IDS = {
+  X_FULL: 'mock-metrics-x-full',
+  X_ELIGIBLE_FIELD_NULL: 'mock-metrics-x-eligible-field-null',
+  X_ZERO_IMPRESSIONS: 'mock-metrics-x-zero-impressions',
+  X_NO_IMPRESSIONS: 'mock-metrics-x-no-impressions',
+  LINKEDIN_COUNTS: 'mock-metrics-linkedin-counts',
+  NONE: 'mock-metrics-none',
+} as const
+
+type MockMetricsBody = Omit<PostMetrics, 'fetchedAt'>
+
+const MOCK_X_FULL_METRICS: MockMetricsBody = {
+  likes: 12,
+  comments: 3,
+  shares: 4,
+  saves: 2,
+  clicks: null,
+  reach: null,
+  impressions: 1500,
+}
+
+const MOCK_METRICS_BY_POST_ID: Record<string, MockMetricsBody | null> = {
+  [MOCK_METRICS_FIXTURE_POST_IDS.X_FULL]: MOCK_X_FULL_METRICS,
+  [MOCK_METRICS_FIXTURE_POST_IDS.X_ELIGIBLE_FIELD_NULL]: { ...MOCK_X_FULL_METRICS, comments: null },
+  [MOCK_METRICS_FIXTURE_POST_IDS.X_ZERO_IMPRESSIONS]: { ...MOCK_X_FULL_METRICS, impressions: 0 },
+  [MOCK_METRICS_FIXTURE_POST_IDS.X_NO_IMPRESSIONS]: { ...MOCK_X_FULL_METRICS, impressions: null },
+  [MOCK_METRICS_FIXTURE_POST_IDS.LINKEDIN_COUNTS]: {
+    likes: 20,
+    comments: 5,
+    shares: 2,
+    saves: null,
+    clicks: null,
+    reach: null,
+    impressions: null,
+  },
+  [MOCK_METRICS_FIXTURE_POST_IDS.NONE]: null,
+}
+
 // A FIXED reference instant, never real Date.now() — determinism (ADR
 // §2.9: "the same seed gives byte-identical pages twice") requires every
 // fixture's publishedAt to be computed from a constant, not wall-clock time.
@@ -179,16 +223,12 @@ export class MockProvider implements SocialProvider {
   async fetchPostMetrics(input: FetchMetricsInput): Promise<PostMetrics | null> {
     this.calls.fetchPostMetrics.push(input)
     this.maybeThrow()
-    return {
-      likes: 0,
-      comments: 0,
-      shares: 0,
-      saves: 0,
-      clicks: 0,
-      reach: 0,
-      impressions: 0,
-      fetchedAt: formatISO(new Date()),
-    }
+    const fixture =
+      input.platformPostId in MOCK_METRICS_BY_POST_ID
+        ? MOCK_METRICS_BY_POST_ID[input.platformPostId]
+        : MOCK_X_FULL_METRICS
+    if (fixture === null) return null
+    return { ...fixture, fetchedAt: formatISO(new Date()) }
   }
 
   async fetchEngagement(input: FetchEngagementInput): Promise<EngagementItem[]> {

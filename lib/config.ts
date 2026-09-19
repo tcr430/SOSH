@@ -63,7 +63,9 @@ export const serverSchema = z.object({
   PUBLISH_STUCK_MINUTES: z.coerce.number().int().positive().default(10),
   METRICS_SYNC_BATCH_SIZE: z.coerce.number().int().positive().default(50),
   METRICS_STALE_MINUTES: z.coerce.number().int().positive().default(360),
-  METRICS_MAX_AGE_DAYS: z.coerce.number().int().positive().default(90),
+  // ADR 0026 §3.2 / ADR 0028 Amendment A: 9 = the day-7 outcome read plus the
+  // 2-day OUTCOME_MATURITY_GRACE_DAYS. A sync-window filter, never a deletion.
+  METRICS_MAX_AGE_DAYS: z.coerce.number().int().positive().default(9),
   POST_GENERATION_SESSION_STALE_MINUTES: z.coerce.number().int().positive().default(15),
   // ADR 0022 §3.4 (Session 29, F1b.3) — promote's claim staleness window.
   // Unlike POST_GENERATION_SESSION_STALE_MINUTES (which spans an LLM call),

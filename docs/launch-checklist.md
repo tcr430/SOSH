@@ -55,7 +55,7 @@ Verification command (per row): `vercel env ls production | grep <VAR>`
 | `PUBLISH_STUCK_MINUTES` | Default `10` — set only if overriding | ☐ `vercel env ls production \| grep '^PUBLISH_STUCK_MINUTES' \|\| echo 'not set (default 10)'` |
 | `METRICS_SYNC_BATCH_SIZE` | Default `50` — set only if overriding | ☐ `vercel env ls production \| grep '^METRICS_SYNC_BATCH_SIZE' \|\| echo 'not set (default 50)'` |
 | `METRICS_STALE_MINUTES` | Default `360` — set only if overriding | ☐ `vercel env ls production \| grep '^METRICS_STALE_MINUTES' \|\| echo 'not set (default 360)'` |
-| `METRICS_MAX_AGE_DAYS` | Default `90` — set only if overriding | ☐ `vercel env ls production \| grep '^METRICS_MAX_AGE_DAYS' \|\| echo 'not set (default 90)'` |
+| `METRICS_MAX_AGE_DAYS` | Default `9` (ADR 0028 Amendment A; was `90`) — set only if overriding | ☐ `vercel env ls production \| grep '^METRICS_MAX_AGE_DAYS' \|\| echo 'not set (default 9)'` |
 | `AI_RATE_LIMIT_BRAND_VOICE_PER_MIN` | Default `10` — set only if overriding | ☐ `vercel env ls production \| grep '^AI_RATE_LIMIT_BRAND_VOICE_PER_MIN' \|\| echo 'not set (default 10)'` |
 | `AI_RATE_LIMIT_POST_GENERATION_PER_MIN` | Default `30` — set only if overriding | ☐ `vercel env ls production \| grep '^AI_RATE_LIMIT_POST_GENERATION_PER_MIN' \|\| echo 'not set (default 30)'` |
 | `AI_TRIAL_BRAND_VOICE_ATTEMPTS` | Default `3` — set only if overriding | ☐ `vercel env ls production \| grep '^AI_TRIAL_BRAND_VOICE_ATTEMPTS' \|\| echo 'not set (default 3)'` |
