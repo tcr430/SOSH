@@ -1616,3 +1616,25 @@ export type SocialBackfillPostRow = {
   claimed_at: string | null
   created_at: string
 }
+
+// ADR 0026 §6.1 (Session 33 J2.7) — the day-7 frozen outcome. Written ONLY by the service-role worker.
+export type PostOutcomeRow = {
+  post_id: string
+  business_id: string
+  campaign_id: string
+  platform: string
+  published_at: string
+  ai_original_id: string | null
+  metric_basis: 'rate' | 'count'
+  value: number
+  baseline: number | null
+  baseline_n: number | null
+  baseline_source: 'own' | 'import_seed' | null
+  log_lift: number | null
+  beat_baseline: boolean | null
+  length_band: 'short' | 'medium' | 'long' | null
+  cta_present: boolean | null
+  hook_survived: boolean | null
+  measured_at: string
+}
+export type PostOutcomeInsert = PostOutcomeRow
