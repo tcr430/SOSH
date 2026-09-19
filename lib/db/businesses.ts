@@ -104,6 +104,18 @@ export async function completeOnboarding(businessId: string): Promise<void> {
   if (error) throw new Error(getErrorMessage(error))
 }
 
+// Keyset page of live business ids for the service-role workers (ADR 0026 J2.8: the outcome tick visits one
+// business per iteration). Ordered on the primary key; bounded.
+export async function listBusinessIdsPage(afterId: string | null, limit = 100): Promise<string[]> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  let query = client.from('businesses').select('id').is('deleted_at', null)
+  if (afterId !== null) query = query.gt('id', afterId)
+  const { data, error } = await query.order('id', { ascending: true }).limit(Math.min(Math.max(limit, 1), 500))
+  if (error) throw new Error(getErrorMessage(error))
+  return (data ?? []).map((r) => r.id as string)
+}
+
 export async function softDeleteBusiness(
   client: SupabaseClient,
   id: string,

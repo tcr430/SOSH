@@ -15,14 +15,15 @@ function chain(table: string) {
     calls.push([`${table}.${name}`, ...args])
     return c
   }
-  for (const m of ['select', 'eq', 'lt', 'lte', 'not', 'is', 'in', 'order', 'limit', 'upsert']) c[m] = rec(m)
+  for (const m of ['select', 'eq', 'lt', 'lte', 'gt', 'gte', 'not', 'is', 'in', 'order', 'limit', 'upsert']) c[m] = rec(m)
   c.maybeSingle = () => Promise.resolve(next())
   c.then = (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) => Promise.resolve(next()).then(res, rej)
   return c
 }
 vi.mock('@/lib/supabase/service', () => ({ createServiceRoleClient: () => ({ from: chain }) }))
 
-import { getEngagementSeed, insertPostOutcome, listMaturedOutcomesForBaseline, listPostsDueForOutcome } from './post-outcomes'
+import { getEngagementSeed, insertPostOutcome, listMaturedOutcomesForBaseline, listPostDimensionsBySnapshot, listPostsDueForOutcome } from './post-outcomes'
+import { listBusinessIdsPage } from './businesses'
 
 beforeEach(() => {
   calls.length = 0
@@ -73,6 +74,30 @@ describe('post-outcomes wrappers', () => {
     const out = await listPostsDueForOutcome('biz', { now: '2026-09-19T00:00:00Z' })
     const byId = Object.fromEntries(out.map((d) => [d.post.id, d.due]))
     expect(byId).toEqual({ ready: 'ready', nosync: 'no_metrics' })
+  })
+
+  it('listPostsDueForOutcome bounds the scan with lookbackDays when given', async () => {
+    await listPostsDueForOutcome('biz', { now: '2026-09-19T00:00:00Z', lookbackDays: 30 })
+    const gte = calls.find((c) => c[0] === 'posts.gte')
+    expect(gte?.[1]).toBe('published_at')
+    expect(String(gte?.[2])).toMatch(/^2026-08-20T/)
+  })
+
+  it('listPostDimensionsBySnapshot filters on business and short-circuits an empty id list', async () => {
+    expect(await listPostDimensionsBySnapshot('biz', [])).toEqual([])
+    expect(calls).toHaveLength(0)
+    await listPostDimensionsBySnapshot('biz', ['a', 'b'])
+    expect(calls).toContainEqual(['post_dimensions.eq', 'business_id', 'biz'])
+    expect(calls).toContainEqual(['post_dimensions.in', 'ai_original_id', ['a', 'b']])
+  })
+
+  it('listBusinessIdsPage is a keyset page over live businesses, ordered by id and bounded', async () => {
+    queue = [{ data: [{ id: 'b1' }, { id: 'b2' }], error: null }]
+    expect(await listBusinessIdsPage('b0', 1e9)).toEqual(['b1', 'b2'])
+    expect(calls).toContainEqual(['businesses.is', 'deleted_at', null])
+    expect(calls).toContainEqual(['businesses.gt', 'id', 'b0'])
+    expect(calls).toContainEqual(['businesses.order', 'id', { ascending: true }])
+    expect(calls).toContainEqual(['businesses.limit', 500])
   })
 
   it('insertPostOutcome upserts ignoring duplicates on post_id and reports whether it wrote', async () => {

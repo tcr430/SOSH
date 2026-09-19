@@ -89,6 +89,29 @@ Note the **Schedule ID** for your ops log.
 
 ---
 
+## Step 2d — Create QStash schedule: extract-outcomes route
+
+Create a fifth schedule for the outcome loop's daily deterministic tick (ADR 0026 §7/§14, Session 33 J2.8):
+
+| Field       | Value                                                   |
+|-------------|----------------------------------------------------------|
+| Destination | `https://<prod-domain>/api/cron/extract-outcomes`       |
+| Method      | `POST`                                                  |
+| Cron        | `0 4 * * *`                                             |
+| Retries     | `3` (default)                                           |
+| Body        | _(empty)_                                               |
+
+> **Why retries=3?** The tick is idempotent by construction (OUTCOME-TICK-IDEMPOTENT): the outcome
+> insert is `ON CONFLICT (post_id) DO NOTHING`, the due-list excludes posts that already have an
+> outcome, and the cell upsert / promote / demote recompute the floor in SQL, so a redelivery
+> changes no row. It makes **no model call** — it is pure arithmetic over `post_metrics`. It runs at
+> 04:00 UTC, after `process-deletions` (03:00) and well after the hourly `sync-metrics` has landed
+> each post's day-7 snapshot. The tick emits ONE structured line, `{"kind":"outcome.tick",...}`.
+
+Note the **Schedule ID** for your ops log.
+
+---
+
 ## Step 3 — Set production environment variables
 
 Add these in a single Vercel deployment (all three must be present before the deploy goes live):
@@ -183,8 +206,8 @@ The `@upstash/qstash` `Receiver` singleton accepts **either** `CURRENT_SIGNING_K
 ## Step 7 — Alerting
 
 **Primary alert path:** Sentry Cron Monitors (ADR 0007).
-Sentry tracks `publish-tick`, `metrics-sync-tick`, `process-deletions`, and `capture-learning`
-(ADR 0018 §9.2/§11) by monitor slug.
+Sentry tracks `publish-tick`, `metrics-sync-tick`, `process-deletions`, `capture-learning`
+(ADR 0018 §9.2/§11) and `extract-outcomes` (ADR 0026 §14, crontab `0 4 * * *`) by monitor slug.
 A missed tick (no check-in within the expected window) pages via the Sentry alert rule —
 regardless of whether the trigger source is QStash or Vercel Cron.
 

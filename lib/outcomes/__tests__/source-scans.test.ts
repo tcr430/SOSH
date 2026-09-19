@@ -415,3 +415,42 @@ describe('OUTCOME-NO-ZERO-METRICS-REINTRODUCED — scan half (ADR 0026 §12.3, c
     expect(clean).toMatch(/impressions\?:\s*number/)
   })
 })
+
+// ═══ OUTCOME-DESCRIPTIVE-ONLY — Tier-3 half (ADR 0026 §4.1, constraint 7) ═══
+// hook_type and proof_type are collected and shown, NEVER promoted. No outcome pattern key and no
+// upsertOutcomePattern call may name them anywhere in production TS.
+
+function findDescriptiveOnlyOutcomeWrites(source: string): string[] {
+  const clean = stripTsComments(source)
+  const hits: string[] = []
+  if (/outcome:(hook|hook_type|proof_type)\b/.test(clean)) hits.push('an outcome:<hook|proof_type> pattern key')
+  if (/dimension\s*:\s*['"](hook|hook_type|proof_type)['"]/.test(clean)) hits.push("a dimension: 'hook' / 'proof_type' literal")
+  for (const call of clean.matchAll(/upsertOutcomePattern\s*\(([\s\S]{0,400}?)\)/g)) {
+    if (/\b(hook|hook_type|proof_type)\b/.test(call[1])) hits.push('an upsertOutcomePattern call naming hook / proof_type')
+  }
+  return hits
+}
+
+describe('OUTCOME-DESCRIPTIVE-ONLY — scan half (ADR 0026 §4.1, constraint 7)', () => {
+  it('the detector flags a planted hook / proof_type pattern key, dimension literal and upsert call', () => {
+    expect(findDescriptiveOnlyOutcomeWrites("const k = 'outcome:hook:question:above:twitter'")).toHaveLength(1)
+    expect(findDescriptiveOnlyOutcomeWrites("upsert({ dimension: 'proof_type', value: 'quote' })")).toHaveLength(1)
+    expect(findDescriptiveOnlyOutcomeWrites('await upsertOutcomePattern({ dimension: cell.hook_type, value: v })')).toHaveLength(1)
+  })
+
+  it('the detector ignores promotable dimensions and comments', () => {
+    expect(findDescriptiveOnlyOutcomeWrites("upsertOutcomePattern({ dimension: 'role', value: 'customer_proof' })")).toEqual([])
+    expect(findDescriptiveOnlyOutcomeWrites("// never dimension: 'hook' or outcome:hook: here\nconst x = 1")).toEqual([])
+  })
+
+  it('no production TS names hook / proof_type in an outcome pattern key or upsert call', () => {
+    const files = ['lib', 'app'].flatMap((d) => collect(path.join(ROOT, d), isProdTs))
+    expect(files.length, 'scanned suspiciously few files').toBeGreaterThan(200)
+    const offenders: string[] = []
+    for (const file of files) {
+      const hits = findDescriptiveOnlyOutcomeWrites(fs.readFileSync(file, 'utf8'))
+      if (hits.length > 0) offenders.push(`${toRel(file)}: ${hits.join('; ')}`)
+    }
+    expect(offenders).toEqual([])
+  })
+})

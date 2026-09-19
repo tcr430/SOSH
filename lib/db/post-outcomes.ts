@@ -69,13 +69,13 @@ export type PostDueForOutcome = {
 // A post inside the grace window without a day-7 sync is left for a later tick.
 export async function listPostsDueForOutcome(
   businessId: string,
-  opts: { now: string; limit?: number },
+  opts: { now: string; limit?: number; lookbackDays?: number },
 ): Promise<PostDueForOutcome[]> {
   const { createServiceRoleClient } = await import('@/lib/supabase/service')
   const client = createServiceRoleClient()
   const now = parseISO(opts.now)
   const cutoff = formatISO(addDays(now, -OUTCOME_MATURITY_DAYS))
-  const { data: posts, error } = await client
+  let query = client
     .from('posts')
     .select('*, post_metrics(*)')
     .eq('business_id', businessId)
@@ -83,8 +83,9 @@ export async function listPostsDueForOutcome(
     .is('deleted_at', null)
     .not('published_at', 'is', null)
     .lte('published_at', cutoff)
-    .order('published_at', { ascending: true })
-    .limit(bound(opts.limit))
+  // Bounds the scan: a post that never got a day-7 sync stays a skip candidate only inside this window.
+  if (opts.lookbackDays !== undefined) query = query.gte('published_at', formatISO(addDays(now, -opts.lookbackDays)))
+  const { data: posts, error } = await query.order('published_at', { ascending: true }).limit(bound(opts.limit))
   if (error) throw new Error(getErrorMessage(error))
   const rows = (posts ?? []) as Array<PostRow & { post_metrics: PostMetricsRow | PostMetricsRow[] | null }>
   if (rows.length === 0) return []
@@ -137,7 +138,31 @@ export async function listLatestSnapshotsForPosts(businessId: string, postIds: s
   return [...latest.values()]
 }
 
-export type EngagementSeed = { value: number; basis: 'rate' | 'count' }
+export type PostDimensionsForTagging = {
+  ai_original_id: string
+  role: string | null
+  format: string | null
+  origin_mode: string | null
+}
+
+// The generation-time dimensions (ADR 0026 s4.2) of the given snapshots, business-scoped. Read only —
+// post_dimensions is written by the AFTER INSERT trigger and nothing else.
+export async function listPostDimensionsBySnapshot(businessId: string, aiOriginalIds: string[]): Promise<PostDimensionsForTagging[]> {
+  if (aiOriginalIds.length === 0) return []
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client
+    .from('post_dimensions')
+    .select('ai_original_id, role, format, origin_mode')
+    .eq('business_id', businessId)
+    .in('ai_original_id', aiOriginalIds)
+    .order('ai_original_id', { ascending: true })
+    .limit(Math.min(aiOriginalIds.length, 2000))
+  if (error) throw new Error(getErrorMessage(error))
+  return (data ?? []) as PostDimensionsForTagging[]
+}
+
+export type EngagementSeed ={ value: number; basis: 'rate' | 'count' }
 
 // The imported X engagement baseline (ADR 0026 §6.3). Maps social_backfill_runs.summary's vocabulary:
 // 'impressions' -> 'rate', 'raw' -> 'count', 'none' -> no seed. The normaliser enforces the basis match.
