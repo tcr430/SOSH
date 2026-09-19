@@ -88,8 +88,29 @@ jobs:
       # fix lives in supabase/config.toml ([analytics] enabled = false),
       # which is the layer that actually takes effect -- see that file for
       # the full root-cause writeup. Left as plain `supabase start` here.
+      # Session 32-D, D12 — option (c) above, implemented. The CLI resolves the DB image to
+      # ghcr.io/supabase/postgres:17.6.1.111 (broken supautils 3.2.x, SIGSEGV on any
+      # EXECUTE-permission-denied SECURITY DEFINER call; run 35436353116 log:
+      # "server process ... was terminated by signal 11", OOMKilled=false). The CLI only pulls
+      # an image that is absent locally, so pre-pulling the fixed 17.6.1.113 (supautils 3.2.2)
+      # and re-pointing the .111 tag at it makes `supabase start` run the fixed image. 17.6.1.113
+      # is the version the local test:db runs used (Session 32-D D3/D7/D8, 452/452).
+      - name: Shadow the broken Postgres image tag with the fixed one
+        run: |
+          docker pull ghcr.io/supabase/postgres:17.6.1.113
+          docker tag ghcr.io/supabase/postgres:17.6.1.113 ghcr.io/supabase/postgres:17.6.1.111
+
       - name: Start local Supabase stack (applies supabase/migrations M1-M9)
         run: supabase start
+
+      # Fail loudly if the retag did not take (e.g. the CLI pulled its own image): a green run on
+      # the broken image would be luck, not coverage.
+      - name: Verify the DB container runs the fixed image
+        run: |
+          want=$(docker image inspect ghcr.io/supabase/postgres:17.6.1.113 --format '{{.Id}}')
+          got=$(docker inspect supabase_db_SOSH --format '{{.Image}}')
+          echo "want=$want got=$got"
+          test "$want" = "$got"
 
       - name: Export Supabase connection env vars
         run: |
