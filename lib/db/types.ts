@@ -1191,10 +1191,37 @@ export type AudienceMemoryRow = MemoryGovernanceRow & {
 
 export type PerformanceMemoryDimension = 'topic' | 'hook' | 'format' | 'proof_type'
 
-export type PerformanceMemoryRow = MemoryGovernanceRow & {
-  dimension: PerformanceMemoryDimension
+// ADR 0026 §5.1 / ADR 0016 Amendment C (Session 33 J2.5) — the dimensions an OUTCOME row may
+// carry (performance_memory_outcome_dimension_check). 'format' is shared with the distilled
+// vocabulary; 'hook', 'proof_type' and 'topic' can never be outcome dimensions.
+export type PerformanceMemoryOutcomeDimension =
+  | 'role'
+  | 'format'
+  | 'length_band'
+  | 'cta'
+  | 'origin_mode'
+  | 'hypothesis'
+
+export type PerformanceMemoryMetricBasis = 'rate' | 'count'
+
+export type PerformanceMemoryRow = Omit<MemoryGovernanceRow, 'source'> & {
+  // ADR 0026 §5.1 — the THIRD writer. 'outcome' rows are read only through lib/memory/outcomes
+  // (J2.9); the shared ranking (listPerformanceMemoryCandidates) excludes them.
+  source: MemorySource | 'outcome'
+  dimension: PerformanceMemoryDimension | PerformanceMemoryOutcomeDimension
   pattern: string
   platform: Platform | null
+  // ADR 0026 §5.3 — typed stats columns. Each is NOT NULL exactly when source = 'outcome'
+  // (CHECK ((col IS NOT NULL) = (source = 'outcome'))), so they are null on every
+  // manual/distilled/import row. contradicted_at is nullable for ALL rows.
+  outcome_n: number | null
+  outcome_wins: number | null
+  outcome_distinct_campaigns: number | null
+  interval_low: number | null
+  interval_high: number | null
+  metric_basis: PerformanceMemoryMetricBasis | null
+  baseline_seeded: boolean | null
+  contradicted_at: string | null
   // ADR 0016 Amendment B / ADR 0018 §7.2 (Session 25 C2.3 migration,
   // C2.6 type addition) — the deterministic dedup/aggregation key for
   // distilled rows; NULL for source='manual'/'import' rows, which have no
@@ -1222,6 +1249,40 @@ export type PerformanceMemoryInsert = {
   confidence: number
   observation_count: number
 }
+
+// ADR 0026 §5.5 / CLAUDE.md "*Update types exclude tenancy-critical fields" (Session 33 J2.5) —
+// what a caller may PATCH on an existing performance_memory row. It EXCLUDES:
+//   * identity and provenance: id, business_id, source, pattern_key (source is immutable on
+//     every row; pattern_key is the dedup identity);
+//   * EVERY outcome stats column and contradicted_at — written only by the outcome RPCs (J2.6),
+//     and rejected by the database for a client role (trg_performance_memory_outcome_write_protect);
+//   * import provenance (import_run_id, import_source_post_ids — immutable) and lifecycle/derived
+//     columns (deleted_at, created_at, updated_at, recency_at).
+// Nothing in the codebase PATCHes performance_memory with an authenticated client today (the J2.0
+// grep), so this is the type a future member-facing edit MUST go through, not one in use.
+export type PerformanceMemoryUpdate = Partial<
+  Omit<
+    PerformanceMemoryRow,
+    | 'id'
+    | 'business_id'
+    | 'source'
+    | 'pattern_key'
+    | 'outcome_n'
+    | 'outcome_wins'
+    | 'outcome_distinct_campaigns'
+    | 'interval_low'
+    | 'interval_high'
+    | 'metric_basis'
+    | 'baseline_seeded'
+    | 'contradicted_at'
+    | 'import_run_id'
+    | 'import_source_post_ids'
+    | 'deleted_at'
+    | 'created_at'
+    | 'updated_at'
+    | 'recency_at'
+  >
+>
 
 // ADR 0025 §9.4 (Session 32 I2.7) — inputs to the import_{evidence,audience,
 // performance}_memory RPCs (20260913140000/150000). Deliberately has NO

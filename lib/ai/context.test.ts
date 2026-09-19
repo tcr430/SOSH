@@ -198,6 +198,7 @@ const makeGovernedPerfRow = (
   pattern: 'a distilled pattern',
   platform: 'linkedin',
   pattern_key: null,
+  outcome_n: null, outcome_wins: null, outcome_distinct_campaigns: null, interval_low: null, interval_high: null, metric_basis: null, baseline_seeded: null, contradicted_at: null,
   ...overrides,
 })
 
@@ -613,6 +614,7 @@ describe('buildCustomerContext — B3 behaviour-equivalence (ADR 0016 §6, MEM-C
         pattern: 'technical-comparison posts perform well for CTO audiences',
         platform: 'linkedin',
         pattern_key: null,
+        outcome_n: null, outcome_wins: null, outcome_distinct_campaigns: null, interval_low: null, interval_high: null, metric_basis: null, baseline_seeded: null, contradicted_at: null,
       },
     ])
 

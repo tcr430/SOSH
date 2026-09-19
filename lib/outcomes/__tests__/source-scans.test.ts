@@ -205,7 +205,13 @@ describe('OUTCOME-NO-RETRO-TAGGING (ADR 0026 §12.3, constraint 6)', () => {
 // The authenticated 'manual' path is RLS, not a migration insert, so it never
 // appears here. J2.5/J2.6 add 'outcome' to the allowlist — and nothing else may.
 
-export const PERFORMANCE_MEMORY_WRITER_SOURCES: readonly string[] = ['distilled', 'import']
+// J2.5 adds 'outcome' to the ALLOWED set (the schema now admits it). No migration INSERTs an
+// outcome row yet — the writer RPCs are J2.6 — so the real-tree check below asserts "nothing
+// outside the allowlist, and the two existing writers still present" rather than exact
+// equality; J2.6 tightens it back to exact once 'outcome' is actually written.
+export const PERFORMANCE_MEMORY_WRITER_SOURCES: readonly string[] = ['distilled', 'import', 'outcome']
+// The writers that exist in migrations TODAY and must keep existing.
+export const PERFORMANCE_MEMORY_WRITERS_PRESENT_TODAY: readonly string[] = ['distilled', 'import']
 
 // Skips a single-quoted SQL string starting at `i` (handles '' escapes); returns
 // the index just past its closing quote.
@@ -355,7 +361,8 @@ describe('OUTCOME-NO-EXTRA-WRITER (ADR 0026 §12.3, constraint 31)', () => {
     }
     expect(inserts, 'no performance_memory INSERT was found — the extractor would pass vacuously').toBeGreaterThanOrEqual(4)
     expect(nonLiteral).toBe(0)
-    expect([...written].sort()).toEqual([...PERFORMANCE_MEMORY_WRITER_SOURCES].sort())
+    expect([...written].filter((s) => !PERFORMANCE_MEMORY_WRITER_SOURCES.includes(s))).toEqual([])
+    for (const present of PERFORMANCE_MEMORY_WRITERS_PRESENT_TODAY) expect(written.has(present), `${present} writer vanished`).toBe(true)
   })
 })
 
