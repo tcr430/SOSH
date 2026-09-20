@@ -6,10 +6,10 @@
   records every required workflow green (db-tests 62 files / 452 tests, app-tests 277 / 3894, eval, Vercel) on
   `session-30-5-adr-0028` (PR #9, not yet merged to `master`).
 - **Amends (each additive, recorded in its owning ADR by the Builder, §14):**
-  - **ADR 0016** — Amendment C: `performance_memory.source` gains `'outcome'`; `dimension` gains `'role'`,
+  - **ADR 0016** — Amendment C → landed as **Amendment D**, see §V.5: `performance_memory.source` gains `'outcome'`; `dimension` gains `'role'`,
     `'origin_mode'`, `'length_band'`, `'cta'`, `'hypothesis'`; namespace CHECKs; outcome stats columns; narrowed
     authenticated write surface (§5).
-  - **ADR 0017** — Amendment C: `CampaignBriefContent` gains `hypothesis` and `successCriteria` (§8.1,
+  - **ADR 0017** — Amendment C → landed as **Amendment E**, see §V.5: `CampaignBriefContent` gains `hypothesis` and `successCriteria` (§8.1,
     founder ruling A-1).
   - **ADR 0018** — a note only: `performance_memory` gains another writer, and a new `AFTER INSERT` trigger reads
     `post_ai_originals`. **No line of ADR 0018's pipeline changes** (§4.2, `OUTCOME-ADR0018-UNCHANGED`).
@@ -1010,7 +1010,7 @@ and read (see V.6).
 | 26 | OUTCOME-NORTHSTAR-COMPUTABLE | 1 | `supabase/__tests__/outcome-northstar.test.ts` | J2.6 (`d7cbda3d`) | db-tests | `eebe96da`, db-tests run 35508922333 |
 | 27 | OUTCOME-ATTRIBUTION-CONFIDENCE-FRAMED | 2 | `lib/outcomes/__tests__/copy-lint.test.ts`; `app/[locale]/(dashboard)/campaigns/[id]/outcome-surfaces.test.tsx`; `lib/i18n/outcome-parity.test.ts` | J2.12 (`c03fa2e2`) | app-tests | `eebe96da`, app-tests run 35508922278 |
 | 28 | OUTCOME-DETERMINISTIC-NO-LLM | 3 | `lib/outcomes/__tests__/source-scans.test.ts` (import scan) | J2.2 (`c63e59ad`) | app-tests | `eebe96da`, app-tests run 35508922278 |
-| 29 | OUTCOME-ADR0018-UNCHANGED | 3 | `npx tsx scripts/check-adr0018-unchanged.ts`; `lib/outcomes/__tests__/adr0018-guard.test.ts`; the unmodified `lib/learning` suite | J2.2 (`c63e59ad`) | app-tests | `eebe96da`, app-tests run 35508922278 |
+| 29 | OUTCOME-ADR0018-UNCHANGED | 3 | `npx tsx scripts/check-adr0018-unchanged.ts`; `lib/outcomes/__tests__/adr0018-guard.test.ts`; the unmodified `lib/learning` suite | J2.2 (`c63e59ad`) | none - recorded Tier-3 command, re-run per session (see V.3); app-tests runs the detector's unit tests and the unmodified lib/learning suite only | `eebe96da`, app-tests run 35508922278 |
 | 30 | OUTCOME-NO-CROSS-BUSINESS | 2 + 3 | `lib/outcomes/__tests__/no-cross-business.test.ts` (wrapper tests + RPC-body scan; `get_learning_cycles_northstar` allowlisted by name) | J2.13 (this step's commit) | app-tests | `eebe96da`, app-tests run 35508922278 |
 | 31 | OUTCOME-NO-EXTRA-WRITER | 3 | `lib/outcomes/__tests__/source-scans.test.ts` (source-value scan) | J2.2 (`c63e59ad`) | app-tests | `eebe96da`, app-tests run 35508922278 |
 | 32 | OUTCOME-TICK-IDEMPOTENT | 1 + 2 | `supabase/__tests__/outcome-tick-idempotent.test.ts`; `lib/outcomes/__tests__/orchestrator.test.ts`, `retrospective.test.ts`; `lib/db/campaign-retrospectives.test.ts` | J2.8 (`c0a76dc2`) | db-tests + app-tests | `eebe96da`, app-tests run 35508922278; `eebe96da`, db-tests run 35508922333 |
@@ -1084,3 +1084,109 @@ The known `corpus-v2-schema` flake did not fail in CI.
 Tier-1 rows 18/18 (2, 3, 4, 5, 13, 14, 18, 19, 20, 21, 22, 23, 24, 25, 26, 32, 33, 34), Tier-2 rows 20/20 (1, 2, 7, 8, 9, 10, 11, 12, 13,
 15, 16, 17, 21, 22, 23, 24, 25, 27, 30, 32), Tier-3 rows 8/8 re-verified (6, 7, 16, 28, 29, 30, 31, 34; the reddening is V.3, local).
 Row 30 was authored in J2.13 (`eebe96da`), so it is covered by that same run.
+
+---
+
+## VI. Correction pass verification (Session 33-D)
+
+Appended after the Session 33 review (`docs/reviews/session-33-reviewer.md`, range `75cae307..879737c7`). Sections 0 to V are
+unchanged except **one cell of the V.2 map (row 29, "Executing CI job")** and **the two header lines that name the amendment
+letters**, both recorded below with their prior text quoted in the review's appendix. Steps and commits: D1 `414e3ca8`,
+D2 `143fd377`, D3 `580eef53`, D4 `6be135e7`, D5 `13cbfcad`, D6 `38f0e0ad`, D7 `b1f62ad3`; this section is D8.
+**No "executed green in CI" cell is filled for the corrected range here; that is D9's, from the logs.**
+Every `file:line` citation in this section is at **`b1f62ad3`** (D7's commit), where each resolves to the named line.
+
+### VI.1 Constraint 29 (`OUTCOME-ADR0018-UNCHANGED`) is a recorded Tier-3 command, not an `app-tests` job
+
+`scripts/check-adr0018-unchanged.ts:1-6` says in its own header that it is "a recorded Tier-3 command, NOT part of
+app-tests": it needs the BASE commit in git history, which a shallow CI checkout does not guarantee (a missing BASE would be a
+false RED; silently skipping it a false GREEN). What `app-tests` actually runs is
+`lib/outcomes/__tests__/adr0018-guard.test.ts` (the decision logic over synthetic path lists) and the unmodified
+`lib/learning` suite. A reader of the V.2 map could therefore conclude that CI would catch a change to ADR 0018. **It would
+not.** The V.2 row 29 cell now says so; the property itself holds and was re-checked at this head:
+
+```
+$ npx tsx scripts/check-adr0018-unchanged.ts
+OUTCOME-ADR0018-UNCHANGED: OK — lib/learning/ and 8 ADR 0018 migrations are identical to 75cae307        (exit 0)
+$ git diff --stat 75cae307 -- lib/learning                                                               (empty)
+$ npx tsx scripts/check-adr0018-unchanged.ts 0205286a          # an older base
+OUTCOME-ADR0018-UNCHANGED: FAILED — 1 path(s) differ from 0205286a. …
+  lib/learning/classify.test.ts                                                                          (exit 1)
+$ npx tsx scripts/check-adr0018-unchanged.ts deadbeefdeadbeefdeadbeefdeadbeefdeadbeef
+OUTCOME-ADR0018-UNCHANGED: cannot run — commit deadbeef… is not in this repository's history            (exit 2)
+```
+
+Because the row's last cell (`eebe96da`, `app-tests run 35508922278`) records that run, read it as evidence for the detector's
+unit tests only, never for the property.
+
+### VI.2 `hook_type`, `proof_type` and `hook_survived`: descriptive display is deferred
+
+§4.1 says `hook_type` "is collected … and shown, never promoted", and §4.4 says a `hook_type` whose opening did not survive
+the human edit is "excluded even from descriptive display". **Both presuppose a display surface that does not exist.** §10.2's
+state table, which this ADR presents as exhaustive, has no row for either dimension, and the Builder followed §10.2:
+nothing displays `hook_type` or `proof_type`. The deviation was not listed in §V.5. The reading the Builder took was the safe
+one (a surface not specified is a surface not built).
+
+Recorded decision: **descriptive display of `hook_type` and `proof_type` is DEFERRED.** §10.2's table remains exhaustive for
+what ships. `hook_survived` is computed (`lib/outcomes/measured.ts:52`), stored (`lib/outcomes/orchestrator.ts`, the
+`post_outcomes` insert) and declared (`lib/db/types.ts`) so the future surface has the data, and is read by nothing today.
+**Owner:** the analytics surface, i.e. the **T1-B analytics session** named in §15 ("Analytics surface and board report"). A
+descriptive display of a dimension that is never promoted belongs in the surface that reports on outcomes, not on the
+campaign page. `docs/backlog.md` row `S33-HOOK-KAPPA` (which says `hook_type` is "collected and shown") describes promotion,
+not display, and its "shown" is likewise not yet true.
+
+### VI.3 Amendment letters (NIT-1)
+
+The header's "ADR 0016 — Amendment C" and "ADR 0017 — Amendment C" now read "→ landed as **Amendment D** / **Amendment E**,
+see §V.5". §V.5 (the lettering deviation) and the head of each target amendment already recorded it; the header a reader
+meets first now does too.
+
+### VI.4 The canonical tick line grows by one key (amends §14, from MAJOR-2)
+
+§14's key list is amended to **seventeen** keys: the sixteen above plus **`skippedNeverSynced`**, placed after
+`skippedNoMetrics`.
+
+- **What it counts:** posts past maturity plus grace that have **no `post_metrics` row at all**, i.e. the sync has never
+  succeeded for them (`lib/db/post-outcomes.ts`, `due: 'never_synced'`). A quiet week leaves a stale row; an auth outage, a
+  revoked token or a provider fault leaves none.
+- **What `skippedNoMetrics` now excludes: nothing.** It keeps its exact prior meaning (§6.1: the day-7 sync did not land) and
+  value, and `skippedNeverSynced` is a **subset** of it. No existing reader of the line sees a number or a definition change;
+  the new key is the outage signal.
+- **The line's zeros.** When `runOutcomeTick` itself throws, the route now captures the error and emits the line with the
+  tick's counters as **`null`** (unknown) rather than `0`, and `errors: 1`; the key set is unchanged (MINOR-2).
+- **Proof:** `app/api/cron/extract-outcomes/route.test.ts:135-136` asserts the emitted key set equals the seventeen exactly and
+  pins the size; `:152` asserts the throwing-tick line reports null counters and is captured;
+  `lib/outcomes/__tests__/orchestrator.test.ts:118` (the two counters differ) and `:128` (the summary's sixteen-key surface).
+
+### VI.5 What D1, D4, D5 and D7 changed against this ADR's obligations
+
+- **§12.1 Tier-1, `OUTCOME-WRITE-PROTECTED` (D4, MINOR-3).** §12.1 lists "UPDATE of an outcome row's
+  `outcome_n`/`pattern`/`source` rejected". The suite covered `pattern` alone and `retire + outcome_n`, never `retire +
+  pattern`, which was the one combination that passed. Forward migration
+  `supabase/migrations/20260921000000_outcome_write_protect_pattern.sql` (the earlier migration is untouched) widens branch C's
+  immutable tuple with `pattern`, `platform`, `scope`, `scope_ref`. Proof, as the authenticated role against live Postgres:
+  `supabase/__tests__/performance-memory-outcome-schema.test.ts:422` (retire / soft-delete + forged `pattern`), `:440`
+  (`platform`, `scope`, `scope_ref`), `:447` (retire alone still succeeds; un-retiring still rejected), `:456` (the service role
+  is not frozen out). The two namespace CHECKs and the partial unique indexes are unchanged; `pg_constraint` still holds exactly
+  one source CHECK and one dimension CHECK.
+- **§10.2 "metrics unavailable" state source (D5, MINOR-5).** The state no longer comes from a platform name written in the
+  campaign view. `lib/social/platforms/config.ts` declares `metricsReadAvailable` per platform (`twitter` true; `linkedin`,
+  `instagram`, `facebook`, `threads` false), exported through `lib/social/index.ts` as `metricsReadAvailableFor`, and
+  `lib/outcomes/campaign-view.ts` reads it. "Cannot measure" is a property of the platform, so a new campaign that has not
+  measured anything is not "unavailable". The §10.2 copy and its i18n keys are unchanged. Proof:
+  `lib/outcomes/__tests__/campaign-view.test.ts:81-` and `campaign-view.load.test.ts:32,39` (the tests flip the capability).
+- **MINOR-7 (D7), closed in part.** An X response carrying an `errors[]` block and no `public_metrics` is now a thrown
+  `PLATFORM_REJECTED` (captured by D2's handler, counted as an error), not a silent `null`. **The half that is not closed is
+  which shape X returns for a deleted post or an entitlement loss;** that is recorded as an owed item in ADR 0028 Amendment A
+  A.5. Proof: `lib/social/__tests__/twitter-provider.test.ts:350-`; `lib/metrics/orchestrator.test.ts:253`.
+- **§8 / §11 read path (D1, MAJOR-1).** The six campaign-learning readers take the caller's authenticated client, so the SELECT
+  policies `OUTCOME-RLS-ISOLATED` proves are evaluated by the production read path; the AI/worker path keeps service-role
+  through separately named functions. Proof: `supabase/__tests__/outcome-campaign-view-rls.test.ts`.
+- **§14 observability (D2, D3; MAJOR-2, MINOR-1, MINOR-2).** The metrics orchestrator's live error branch, the retrospective
+  phase and the route's catch each capture their error with a `cron` / `phase` tag; the seed (D6, NIT-3) reads only a backfill
+  run whose extraction finished (`awaiting_ratification`, `ratified`).
+
+### VI.6 What is still owed
+
+The `executed green in CI` state of every constraint touched by D1 to D7 for the corrected range is **not asserted here**; it
+is D9's, from the logs. The §V.6 cells describe `eebe96da` and `879737c7`, which no longer describe the head.

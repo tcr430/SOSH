@@ -937,6 +937,8 @@ A `404` on the first LinkedIn URL tried (`.../shares/social-actions-api`) is why
 - **Live smoke against a founder-owned X account: NOT YET RUN.** It must confirm the response shape, resolve the `repost_count` / `retweet_count` conflict (A.2 #4), and observe the real behaviour for a deleted post (the code returns `null` on a `200` with no `data`, the standard partial-error shape — **not** confirmed against X's docs).
 - **X rate limits and per-read billing for `GET /2/tweets/{id}`** are unverified; §14.3's read-cost concern stands. Three reads per post is the mitigation.
 - **§14's manual verification log stays empty**: no connect-and-publish was performed.
+- **Owed to the first live smoke (added Session 33-D, MINOR-7):** which response shape X returns for **(i) a deleted post** and **(ii) an account or app tier that can no longer read `public_metrics`**. `fetchPostMetrics` now throws `PLATFORM_REJECTED` when a response carries an `errors[]` block and no `public_metrics`, and returns `null` only when it carries neither; that distinguishes only what the response itself reports. If X reports either case some other way, the two remain conflated as `null` (`skippedNoData`). The smoke must record the raw shape of each and say which arrives as an `errors[]` block; if a deleted post does, every deleted post now costs one captured error per sync tick until it ages out of `METRICS_MAX_AGE_DAYS` — measure that noise. This sits beside the `retweet_count` / `repost_count` alias item (A.2 #4); proof of the current behaviour is `lib/social/__tests__/twitter-provider.test.ts:350-`. A.2 is not edited.
+
 
 ### A.6 Constraints closed
 

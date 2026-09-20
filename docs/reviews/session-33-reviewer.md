@@ -1099,3 +1099,66 @@ after it, at D0 (`37aba2d4`).
 - **Commit:** D7 — SHA recorded at D9 close-out.
 - **What I did NOT touch:** no new OAuth scope, no live call, no change to the `retweet_count ?? repost_count` alias, and
   ADR 0028 Amendment A A.2 (the owed A.5 item is D8's, appended below A.5, never an edit to A.2).
+
+### MINOR-4 — V.2 row 29 no longer names `app-tests` as the executing job for `OUTCOME-ADR0018-UNCHANGED`
+
+- **Finding:** MINOR-4 (a labelling defect; the property itself holds).
+- **Fix:** `docs/decisions/0026-outcome-loop.md` §V.2, row 29, the **"Executing CI job" cell only**. Its prior text is
+  quoted here before it was replaced:
+
+  > Prior row (line 1013, whole row, for context): `| 29 | OUTCOME-ADR0018-UNCHANGED | 3 | `npx tsx scripts/check-adr0018-unchanged.ts`; `lib/outcomes/__tests__/adr0018-guard.test.ts`; the unmodified `lib/learning` suite | J2.2 (`c63e59ad`) | app-tests | `eebe96da`, app-tests run 35508922278 |`
+  >
+  > **Prior text of the one cell that changed:** `app-tests`
+  >
+  > **New text:** `none - recorded Tier-3 command, re-run per session (see V.3); app-tests runs the detector's unit tests and the unmodified lib/learning suite only`
+
+  Every other cell of the row is byte-identical (checked by comparing the row's other five cells before and after). The
+  row's last cell still records `app-tests run 35508922278`; ADR 0026 §VI.1 says to read that run as evidence for the
+  detector's unit tests only.
+- **Proof:** ADR 0026 §VI.1 records the command re-run at this head, exit codes as run:
+  `check-adr0018-unchanged.ts` → **0** (`lib/learning/ and 8 ADR 0018 migrations are identical to 75cae307`); the raw
+  `git diff --stat 75cae307 -- lib/learning` is empty; against an older base (`0205286a`) → **1**, naming the offender
+  `lib/learning/classify.test.ts`; against a nonexistent SHA → **2** (`cannot run — commit … is not in this repository's history`).
+- **Commit:** D8 — SHA recorded at D9 close-out.
+
+### MINOR-6 — `hook_type` / `proof_type` descriptive display is deferred by recorded decision, with an owner
+
+- **Finding:** MINOR-6.
+- **Fix:** ADR 0026 §VI.2 (appended). It records that §4.1 and §4.4 presuppose a display surface that does not exist, that
+  §10.2's table remains exhaustive for what ships, that the Builder's reading (build nothing that is not specified) was the
+  safe one, that `hook_survived` is computed (`lib/outcomes/measured.ts:52`), stored and declared so a future surface has the
+  data, and names the **owner: the T1-B analytics session**, via the existing §15 row "Analytics surface and board report".
+  No new `docs/backlog.md` row was written. The existing row `S33-HOOK-KAPPA` is about *promotion*, and its phrase "collected
+  and shown" is noted in §VI.2 as not yet true; it was not edited.
+- **Proof:** documentation only; the three cited code sites resolve at `b1f62ad3` (`measured.ts:52` is `hookSurvived`).
+- **Commit:** D8 — SHA recorded at D9 close-out.
+
+### NIT-1 — the ADR header names the amendment letters that actually landed
+
+- **Finding:** NIT-1.
+- **Fix:** ADR 0026's header, two lines. Prior text quoted (each line's first physical line):
+
+  > `  - **ADR 0016** — Amendment C: `performance_memory.source` gains `'outcome'`; `dimension` gains `'role'`,`
+  > `  - **ADR 0017** — Amendment C: `CampaignBriefContent` gains `hypothesis` and `successCriteria` (§8.1,`
+
+  Each now reads "Amendment C → landed as **Amendment D**, see §V.5" (ADR 0016) and "→ landed as **Amendment E**, see §V.5"
+  (ADR 0017); the rest of each line is unchanged. §V.5 (`:1059-1060` before this pass) already recorded the lettering.
+- **Proof:** documentation only; `git diff` of the ADR shows exactly these two lines and the one V.2 cell as changed lines.
+- **Commit:** D8 — SHA recorded at D9 close-out.
+
+### NIT-2 — RECORDED CLOSURE: the ECC budget was not exceeded
+
+- **Finding:** NIT-2.
+- **Why no code or commit can express the fix:** the Reviewer found no commit body in the range containing "ECC BUDGET 1 of 3".
+  Commit bodies in a pushed range cannot be rewritten (the range `75cae307..879737c7` is already on the remote and green), so
+  this is closed here, in the appendix, as a **recorded closure**, not by any change.
+- **What the range does declare** (read with `git log --format=%B 75cae307..879737c7`, and re-checked this step):
+  - `d7cbda3d` (J2.6) declares **"ECC BUDGET 2 of 3 - ecc:database-reviewer, read-only, over the J2.1/J2.3/J2.5/J2.6 …"**;
+  - `fb28e6c6` (J2.11) declares **"ECC BUDGET 3 of 3 - ecc:security-reviewer, read-only, over the J2.5 trigger and INSERT policy, …"**.
+  A grep for "ECC BUDGET" over the range returns exactly those two lines and none reading "1 of 3".
+- **Conclusion:** two invocations are declared by SHA and **no third is attributable** from the range, so the ceiling of **≤ 3**
+  was not exceeded. The unlabelled "1 of 3" is a numbering gap in a declaration, not an extra invocation.
+- **Commit:** none — a recorded closure. D8 carries this paragraph.
+
+- **What I did NOT touch:** no `docs/backlog.md` row (rule 5); no `executed green in CI` cell (D9's); ADR 0028 Amendment A
+  A.2 (the owed A.5 item was appended below A.5 only); no code, SQL or i18n.
