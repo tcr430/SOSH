@@ -27,6 +27,8 @@ vi.mock('@/lib/config', () => ({
   },
 }))
 vi.mock('@/lib/cron/qstash-auth', () => ({ verifyQStashRequest: mockVerifyQStash, QStashAuthError: MockQStashAuthError }))
+const captureException = vi.hoisted(() => vi.fn())
+vi.mock('@sentry/nextjs', () => ({ captureException }))
 vi.mock('@/lib/outcomes/orchestrator', () => ({ runOutcomeTick: vi.fn() }))
 
 import { GET, POST } from './route'
@@ -146,13 +148,36 @@ describe('the canonical tick line', () => {
     expect(Object.keys(tickLines(log)[0]).sort()).toEqual(ADR_14_KEYS)
   })
 
-  it('a throwing tick still answers 200 and logs a zeroed line with errors 1', async () => {
+  // MINOR-2: the throw is CAPTURED, and the line does not ASSERT that nothing was due or written.
+  it('a throwing tick is captured, still answers 200, and its line reports UNKNOWN counters (null), never fabricated zeros', async () => {
     vi.stubEnv('NODE_ENV', 'development')
-    vi.mocked(runOutcomeTick).mockRejectedValue(new Error('tick boom'))
+    const boom = new Error('OUTCOME_BATCH_SIZE is not a number')
+    vi.mocked(runOutcomeTick).mockRejectedValue(boom)
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})
     const res = await GET(makeRequest({ authorization: `Bearer ${SECRET}` }))
     expect(res.status).toBe(200)
-    expect(Object.keys(tickLines(log)[0]).sort()).toEqual(ADR_14_KEYS)
-    expect(tickLines(log)[0]).toMatchObject({ errors: 1, outcomesWritten: 0 })
+
+    expect(captureException).toHaveBeenCalledTimes(1)
+    expect(captureException).toHaveBeenCalledWith(boom, { tags: { cron: 'extract-outcomes', phase: 'route' } })
+
+    const lines = tickLines(log)
+    expect(lines).toHaveLength(1) // still the ONE canonical line
+    const line = lines[0]
+    expect(Object.keys(line).sort()).toEqual(ADR_14_KEYS)
+    expect(line).toMatchObject({ kind: 'outcome.tick', triggeredBy: 'secret', errors: 1 })
+    // Every counter the tick did not report is null — and NONE is a number that reads as a fact.
+    const counters = ADR_14_KEYS.filter((k) => !['kind', 'triggeredBy', 'tick', 'durationMs', 'errors'].includes(k))
+    expect(counters).toHaveLength(12)
+    for (const k of counters) expect(line[k], `${k} must be null (unknown), not a fabricated number`).toBeNull()
+    expect(line.candidates).not.toBe(0)
+    expect(line.outcomesWritten).not.toBe(0)
+  })
+
+  it('a tick that returns a summary is NOT captured and its counters pass through untouched', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    await GET(makeRequest({ authorization: `Bearer ${SECRET}` }))
+    expect(captureException).not.toHaveBeenCalled()
+    expect(tickLines(log)[0]).toMatchObject({ candidates: 4, matured: 3, outcomesWritten: 2, errors: 0 })
   })
 })

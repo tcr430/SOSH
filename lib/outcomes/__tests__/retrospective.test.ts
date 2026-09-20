@@ -11,14 +11,24 @@ const store = vi.hoisted(() => ({
   brief: {} as Record<string, Record<string, unknown> | null>,
   retros: [] as Array<Record<string, unknown>>,
   inserts: 0,
+  failWilsonOnce: false,
+  captured: [] as Array<{ err: unknown; ctx: unknown }>,
 }))
+
+vi.mock('@sentry/nextjs', () => ({ captureException: (err: unknown, ctx: unknown) => { store.captured.push({ err, ctx }) } }))
 
 vi.mock('@/lib/db/campaign-retrospectives', () => ({
   listCampaignsAwaitingRetrospective: async () => store.campaigns.filter((c) => !store.retros.some((r) => r.campaign_id === c.id)),
   listCampaignPostStatesForWorker: async (_b: string, id: string) => store.posts[id] ?? [],
   listOutcomesForCampaign: async (_b: string, id: string) => store.outcomes[id] ?? [],
   getFrozenBriefContentForWorker: async (_b: string, id: string) => store.brief[id] ?? null,
-  wilsonBounds: async () => ({ low: 0.5, high: 0.9 }),
+  wilsonBounds: async () => {
+    if (store.failWilsonOnce) {
+      store.failWilsonOnce = false
+      throw new Error('function public.wilson_bounds does not exist')
+    }
+    return { low: 0.5, high: 0.9 }
+  },
   insertCampaignRetrospective: async (row: Record<string, unknown>) => {
     store.inserts += 1
     if (store.retros.some((r) => r.campaign_id === row.campaign_id)) return false
@@ -135,6 +145,8 @@ describe('runRetrospectivePhase — evaluated ONCE', () => {
     store.brief = {}
     store.retros = []
     store.inserts = 0
+    store.failWilsonOnce = false
+    store.captured = []
   })
 
   it('writes a completed retrospective for a due campaign, with the implicit label and the SQL interval', async () => {
@@ -153,6 +165,25 @@ describe('runRetrospectivePhase — evaluated ONCE', () => {
   it('a campaign that is not yet due writes nothing', async () => {
     expect(await runRetrospectivePhase('b1', new Date('2026-09-03T00:00:00Z'))).toEqual({ completed: 0, errors: 0 })
     expect(store.retros).toHaveLength(0)
+  })
+
+  // MINOR-1: a campaign that fails evaluation stays "awaiting" and would look exactly like "not due yet".
+  it('a throwing reader is CAPTURED with phase retrospective-campaign AND counted, and the next campaign still completes', async () => {
+    store.campaigns = [{ id: 'c1', name: 'Q3' }, { id: 'c2', name: 'Q4' }]
+    store.posts.c2 = store.posts.c1
+    store.outcomes.c2 = obs(6, 5)
+    store.failWilsonOnce = true // the first evaluation's wilson_bounds RPC throws
+
+    expect(await runRetrospectivePhase('b1', NOW)).toEqual({ completed: 1, errors: 1 })
+    expect(store.captured).toHaveLength(1)
+    expect(store.captured[0].err).toEqual(expect.objectContaining({ message: expect.stringContaining('wilson_bounds') }))
+    expect(store.captured[0].ctx).toEqual({ tags: { cron: 'extract-outcomes', phase: 'retrospective-campaign' } })
+    expect(store.retros.map((r) => r.campaign_id)).toEqual(['c2'])
+  })
+
+  it('a clean phase captures nothing', async () => {
+    await runRetrospectivePhase('b1', NOW)
+    expect(store.captured).toEqual([])
   })
 
   it('a due campaign with too few outcomes is recorded as inconclusive (never dropped, never a verdict)', async () => {

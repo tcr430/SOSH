@@ -883,3 +883,47 @@ after it, at D0 (`37aba2d4`).
   ADR key-set amendment.
 - **What I did NOT touch:** no second console line; `twitter-provider.ts` is untouched (MINOR-7 is D7); no ADR text
   changed (D8).
+
+### MINOR-1 — the retrospective phase captures its per-campaign error
+
+- **Finding:** MINOR-1.
+- **Fix:** `lib/outcomes/retrospective.ts` `runRetrospectivePhase`'s per-campaign `catch` now binds the error and calls
+  `Sentry.captureException(err, { tags: { cron: 'extract-outcomes', phase: 'retrospective-campaign' } })` beside
+  `result.errors += 1` — the same shape as D2 and as `orchestrator.ts`'s other handlers.
+- **Proof:** `lib/outcomes/__tests__/retrospective.test.ts:171` — a `wilson_bounds` failure on the first of two campaigns
+  yields `{ completed: 1, errors: 1 }`, exactly one capture with that tag set, and the second campaign still written;
+  the test after it asserts a clean phase captures nothing.
+- **Reddening:** the capture line deleted (`cmp` clean after restore) → `a throwing reader is CAPTURED … and the next
+  campaign still completes` — `AssertionError: expected [] to have a length of 1 but got +0`.
+- **Commit:** D3 — SHA recorded at D9 close-out.
+
+### MINOR-2 — the cron route no longer fabricates a zeroed summary
+
+- **Finding:** MINOR-2.
+- **Fix:** `app/api/cron/extract-outcomes/route.ts` binds the tick's throw and calls
+  `Sentry.captureException(err, { tags: { cron: 'extract-outcomes', phase: 'route' } })`. `outcomes` is now
+  `OutcomeTickSummary | null`. The single canonical line keeps **all seventeen keys** but, when the tick threw, every
+  counter it did not report (twelve of them) is **`null`** — "unknown" — instead of `0`; `triggeredBy`, `tick` and
+  `durationMs` are known and kept, and `errors` is `1` because the throw is itself the error. The response body is
+  `{ outcomes: null }` in that case.
+- **Status code:** still **200**, unchanged and now argued in the code: the tick is idempotent and owns its error
+  accounting, and a non-2xx would only make the scheduler retrigger a tick whose failure is catastrophic and
+  deterministic (a config or module-load fault), not transient. The failure is carried by the Sentry capture and the
+  line's `errors: 1` / null counters, not the status.
+- **Proof:** `app/api/cron/extract-outcomes/route.test.ts:152` asserts on the **emitted line**, not on the mock: one
+  `outcome.tick` line, the exact key set, `errors: 1`, all twelve counters `toBeNull()` (with the key named in the
+  failure message), `candidates` and `outcomesWritten` `not.toBe(0)`, the capture called once with the error and the
+  tag set, and the status 200. `:176` — a tick that returns a summary is **not** captured and its counters pass through.
+- **Reddening** (restored from byte copies, `cmp` clean):
+
+  | Mutation | RED, verbatim |
+  |---|---|
+  | delete the route's `Sentry.captureException(…)` | `expected "vi.fn()" to be called 1 times, but got 0 times` |
+  | restore the fabricated zeros (`candidates` / `outcomesWritten` `?? 0`) | `candidates must be null (unknown), not a fabricated number: expected +0 to be null` |
+
+- **Loop at this state:** `tsc` clean; `lint` 0 errors (110 pre-existing warnings — two I introduced in a test mock
+  were removed before commit); `test:app` 4336 tests with one failure, `lib/signals/__fixtures__/eval/corpus-v2-schema.test.ts`,
+  the named pre-existing flake, which passes in isolation; `check-adr0018-unchanged.ts` exit 0.
+- **Commit:** D3 — SHA recorded at D9 close-out.
+- **What I did NOT touch:** the status code (deliberately kept at 200, stated above); the canonical line's key set (still
+  seventeen, as D2 left it); `orchestrator.ts`'s own handlers.

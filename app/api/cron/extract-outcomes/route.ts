@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import * as Sentry from '@sentry/nextjs'
 import { timingSafeEqual } from 'node:crypto'
 import { formatISO } from 'date-fns'
 import { config } from '@/lib/config'
@@ -54,41 +55,42 @@ async function extractOutcomesTick(request: NextRequest): Promise<NextResponse> 
 
   const triggeredBy = config.server.CRON_TRIGGER
   const startedAt = Date.now()
-  let outcomes: OutcomeTickSummary
+  // null = the tick threw before it could report. runOutcomeTick absorbs almost everything itself, so a throw
+  // here is catastrophic (a serverOnly()/config failure, a module-load failure, a withMonitor failure) and the
+  // counters it reached are UNKNOWN — never zero (MINOR-2).
+  let outcomes: OutcomeTickSummary | null = null
   try {
     outcomes = await runOutcomeTick({ triggeredBy })
-  } catch {
-    outcomes = {
-      triggeredBy, tick: formatISO(new Date()), durationMs: Date.now() - startedAt,
-      candidates: 0, matured: 0, outcomesWritten: 0, skippedNoMetrics: 0, skippedNeverSynced: 0, skippedNoBaseline: 0,
-      skippedIneligibleField: 0, cellsRecomputed: 0, candidatesUpserted: 0, promoted: 0, demoted: 0,
-      retrospectivesCompleted: 0, errors: 1,
-    }
+  } catch (err) {
+    Sentry.captureException(err, { tags: { cron: 'extract-outcomes', phase: 'route' } })
   }
 
   // The ONE canonical structured-JSON line (CLAUDE.md worker carve-out). EXACTLY ADR 0026 §14's keys, picked
-  // by name so nothing else can leak in: no content, no business id, no hypothesis text.
+  // by name so nothing else can leak in: no content, no business id, no hypothesis text. When the tick threw,
+  // every counter it did not report is `null` (unknown) rather than a fabricated 0 that would assert "nothing was
+  // due and nothing was written"; `errors` is 1 because the throw itself is the error.
   console.log(JSON.stringify({
     kind: 'outcome.tick',
-    triggeredBy: outcomes.triggeredBy,
-    tick: outcomes.tick,
-    durationMs: outcomes.durationMs,
-    candidates: outcomes.candidates,
-    matured: outcomes.matured,
-    outcomesWritten: outcomes.outcomesWritten,
-    skippedNoMetrics: outcomes.skippedNoMetrics,
-    skippedNeverSynced: outcomes.skippedNeverSynced,
-    skippedNoBaseline: outcomes.skippedNoBaseline,
-    skippedIneligibleField: outcomes.skippedIneligibleField,
-    cellsRecomputed: outcomes.cellsRecomputed,
-    candidatesUpserted: outcomes.candidatesUpserted,
-    promoted: outcomes.promoted,
-    demoted: outcomes.demoted,
-    retrospectivesCompleted: outcomes.retrospectivesCompleted,
-    errors: outcomes.errors,
+    triggeredBy: outcomes?.triggeredBy ?? triggeredBy,
+    tick: outcomes?.tick ?? formatISO(new Date()),
+    durationMs: outcomes?.durationMs ?? Date.now() - startedAt,
+    candidates: outcomes?.candidates ?? null,
+    matured: outcomes?.matured ?? null,
+    outcomesWritten: outcomes?.outcomesWritten ?? null,
+    skippedNoMetrics: outcomes?.skippedNoMetrics ?? null,
+    skippedNeverSynced: outcomes?.skippedNeverSynced ?? null,
+    skippedNoBaseline: outcomes?.skippedNoBaseline ?? null,
+    skippedIneligibleField: outcomes?.skippedIneligibleField ?? null,
+    cellsRecomputed: outcomes?.cellsRecomputed ?? null,
+    candidatesUpserted: outcomes?.candidatesUpserted ?? null,
+    promoted: outcomes?.promoted ?? null,
+    demoted: outcomes?.demoted ?? null,
+    retrospectivesCompleted: outcomes?.retrospectivesCompleted ?? null,
+    errors: outcomes?.errors ?? 1,
   }))
 
   // Always 200 — the tick is idempotent and owns its own error accounting; a non-2xx would only retrigger it.
+  // The failure is carried by the Sentry capture and the line's `errors: 1` / null counters, not the status.
   return NextResponse.json({ outcomes })
 }
 

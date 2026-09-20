@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/nextjs'
 import { addDays, formatISO, parseISO } from 'date-fns'
 import {
   getFrozenBriefContentForWorker,
@@ -144,8 +145,11 @@ export async function runRetrospectivePhase(businessId: string, now: Date): Prom
         completed_at: formatISO(now),
       })
       if (written) result.completed += 1
-    } catch {
+    } catch (err) {
+      // A campaign that fails evaluation stays in listCampaignsAwaitingRetrospective and would otherwise look
+      // exactly like "not due yet"; the capture is what names the failing reader or RPC (MINOR-1).
       result.errors += 1
+      Sentry.captureException(err, { tags: { cron: 'extract-outcomes', phase: 'retrospective-campaign' } })
     }
   }
   return result
