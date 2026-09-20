@@ -927,3 +927,54 @@ after it, at D0 (`37aba2d4`).
 - **Commit:** D3 — SHA recorded at D9 close-out.
 - **What I did NOT touch:** the status code (deliberately kept at 200, stated above); the canonical line's key set (still
   seventeen, as D2 left it); `orchestrator.ts`'s own handlers.
+
+### MINOR-3 — an outcome row's sentence can no longer be rewritten in the statement that retires it
+
+- **Finding:** MINOR-3.
+- **Fix:** a **forward** migration, `supabase/migrations/20260921000000_outcome_write_protect_pattern.sql`
+  (`20260919130000` is untouched). It `CREATE OR REPLACE`s `enforce_performance_memory_write_protection()` with
+  branch C's immutable tuple widened from the eight statistics columns to those **plus `pattern`, `platform`,
+  `scope` and `scope_ref`**. Branches A and B, the `search_path`, the language and the `REVOKE` are identical.
+  The service role and the SECURITY DEFINER RPCs stay exempt (`current_user` is not a client role), so a recompute
+  still rewrites `pattern`.
+- **Proof** (Tier-1, as the **authenticated** role against live Postgres, in
+  `supabase/__tests__/performance-memory-outcome-schema.test.ts`):
+  - `:422` — `{status:'retired', pattern:'forged'}` and `{deleted_at: now(), status:'active', pattern:'forged'}`
+    are both rejected and the row is unchanged;
+  - `:440` — a `platform`, `scope` or `scope_ref` forge alongside a retire is rejected (three cases);
+  - `:447` — `{status:'retired'}` alone **still succeeds**, and un-retiring / clearing `deleted_at` while
+    `status <> 'retired'` is still rejected by branch A (the pre-existing test at `:405` also stays green);
+  - `:456` — the service role can still rewrite `pattern`.
+  Run **before** the migration was applied, the four forge cases failed with `expected null not to be null` (the
+  defect reproduced); after `supabase migration up --local`, 59 of 59 pass.
+- **Reddening:** the function was re-created with `pattern` alone dropped from the tuple, applied to the local
+  database, and the file run: exactly the pattern case went RED — `AssertionError: retire + pattern: expected null
+  not to be null` (58 of 59 pass; the other three forge cases stay guarded by the columns still in the tuple). The
+  original SQL was then re-applied and the function's `md5(pg_get_functiondef(...))` compared: mutated
+  `f5459d87123a7512d8cb8b32789c6c34`, restored `0a790fcd361545d2f95f3ce46eacde93`, identical to the value recorded
+  before the mutation.
+- **`pg_constraint` after the migration** — still exactly one source CHECK and one dimension CHECK, both validated,
+  and the same three partial unique indexes:
+
+  ```
+                conname               | convalidated | def
+  ------------------------------------+--------------+-----------------------------------------------------------
+   performance_memory_dimension_check | t            | CHECK ((dimension = ANY (ARRAY['topic'::text, 'hook'::text, 'format'::text, 'proof_type'::
+   performance_memory_source_check    | t            | CHECK ((source = ANY (ARRAY['manual'::text, 'distilled'::text, 'import'::text, 'outcome'::
+  (2 rows)
+  performance_memory_distilled_pattern_key_uq
+  performance_memory_import_pattern_uq
+  performance_memory_outcome_pattern_key_uq
+  ```
+- **`database-reviewer` (once, after the plan and before the commit):** no findings. It confirmed the function is
+  otherwise byte-equivalent, the DEFINER RPCs are unaffected, row-wise `IS DISTINCT FROM` treats NULL as equal so an
+  unchanged nullable `scope_ref` does not trip it, the trigger is the only column guard on the table, and the
+  migration sorts after the last one and touches no constraint, index or policy. One NIT, **reported and not
+  actioned**: the original migration's branch C comment still describes only the statistics columns — history is not
+  edited, and the forward file's header explains the widening.
+- **Loop at this state:** `tsc` clean; `lint` 0 errors (110 pre-existing warnings); `test:app` 4336 / 4336;
+  `test:db` **80 files / 687 tests** green (the earlier 681 plus these six), which includes
+  `outcome-promotion-floor.test.ts` and `outcome-tables-rls.test.ts`; `check-adr0018-unchanged.ts` exit 0.
+- **Commit:** D4 — SHA recorded at D9 close-out.
+- **What I did NOT touch:** the two namespace CHECKs, the two partial unique indexes and the distilled index; no
+  policy; `20260919130000` itself.

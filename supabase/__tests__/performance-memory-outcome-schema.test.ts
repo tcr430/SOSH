@@ -416,6 +416,51 @@ describe('performance_memory â€” outcome schema and write protection (ADR 0026 Â
       expect(data).toEqual({ status: 'candidate', outcome_n: 11 })
     })
 
+    // Session 33-D D4 (MINOR-3): branch A lets a retire / soft-delete through outright, so branch C's immutable tuple
+    // is the only thing that stops the sentence being rewritten in the SAME statement. Each case below passes
+    // branch A and fails only on the widened tuple. As the AUTHENTICATED role against live Postgres.
+    it("retire + a forged pattern is REJECTED, and so is soft-delete + a forged pattern; the row is unchanged", async () => {
+      const retireId = await mustInsert(outcomeRow({ pattern: 'original outcome text' }))
+      expect(await authUpdate(retireId, { status: 'retired', pattern: 'forged' }), 'retire + pattern').not.toBeNull()
+      const deleteId = await mustInsert(outcomeRow({ pattern: 'original outcome text' }))
+      expect(
+        await authUpdate(deleteId, { deleted_at: new Date().toISOString(), status: 'active', pattern: 'forged' }),
+        'soft-delete + status active + pattern',
+      ).not.toBeNull()
+      for (const id of [retireId, deleteId]) {
+        const { data } = await admin.from('performance_memory').select('pattern, status, deleted_at').eq('id', id).single()
+        expect(data).toEqual({ pattern: 'original outcome text', status: 'candidate', deleted_at: null })
+      }
+    })
+
+    it.each([
+      ['platform', { platform: 'twitter' }],
+      ['scope', { scope: 'platform' }],
+      ['scope_ref', { scope_ref: 'forged-ref' }],
+    ])('retire + a forged %s is REJECTED (every remaining identity column is in the tuple)', async (_label, patch) => {
+      const id = await mustInsert(outcomeRow())
+      expect(await authUpdate(id, { status: 'retired', ...patch })).not.toBeNull()
+      const { data } = await admin.from('performance_memory').select('status, platform, scope, scope_ref').eq('id', id).single()
+      expect(data).toEqual({ status: 'candidate', platform: 'linkedin', scope: 'brand', scope_ref: null })
+    })
+
+    it('retire ALONE still succeeds (the legitimate path), and un-retiring is still rejected by branch A', async () => {
+      const id = await mustInsert(outcomeRow())
+      expect(await authUpdate(id, { status: 'retired' })).toBeNull()
+      const { data } = await admin.from('performance_memory').select('status, pattern').eq('id', id).single()
+      expect(data.status).toBe('retired')
+      expect(await authUpdate(id, { status: 'active' })).not.toBeNull()
+      expect(await authUpdate(id, { deleted_at: null, status: 'candidate' })).not.toBeNull()
+    })
+
+    it('the service role is NOT frozen out: a recompute-style pattern rewrite still succeeds (the RPCs are DEFINER, current_user is not a client role)', async () => {
+      const id = await mustInsert(outcomeRow({ pattern: 'v1 text' }))
+      const { error } = await admin.from('performance_memory').update({ pattern: 'v2 text' }).eq('id', id)
+      expect(error).toBeNull()
+      const { data } = await admin.from('performance_memory').select('pattern').eq('id', id).single()
+      expect(data.pattern).toBe('v2 text')
+    })
+
     it('a DISTILLED row: content edits and promotion are rejected, retirement is allowed', async () => {
       const id = await mustInsert(distilledRow())
       expect(await authUpdate(id, { pattern: 'edited' })).not.toBeNull()
