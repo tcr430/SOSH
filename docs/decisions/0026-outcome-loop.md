@@ -977,45 +977,45 @@ hypothesis fields absent → added by ADR 0017 Amendment C (ruling A-1).
 
 ### V.2 The constraint → CI map
 
-Tier E (row 35) is MEASURED, never COVERED. The final column is intentionally **empty** until filled from a run that was
-opened and read (`J2.13b`).
+Tier E (row 35) is MEASURED, never COVERED. The final column was left **empty** in J2.13 and is filled in J2.13b from the runs for the pushed head, each opened
+and read (see V.6).
 
 | # | Constraint | Tier | Test file, command or protocol | Closing step (SHA) | Executing CI job | Executed green in CI at |
 |---|---|---|---|---|---|---|
-| 1 | OUTCOME-METRICS-FETCH-REAL | 2 | `lib/social/__tests__/twitter-provider.test.ts`, `mock-provider.test.ts`, `linkedin-provider.test.ts`; ADR 0028 Amendment A | J2.1 (`c787e633`) | app-tests | |
-| 2 | OUTCOME-METRICS-CADENCE-BOUNDED | 1 + 2 | `supabase/__tests__/metrics-sync-cadence.test.ts`; `lib/metrics/orchestrator.test.ts` | J2.1 (`c787e633`) | db-tests + app-tests | |
-| 3 | OUTCOME-DIMENSIONS-TAGGED-AT-GENERATION | 1 | `supabase/__tests__/outcome-tagging-trigger.test.ts` | J2.3 (`e0ca8cab`) | db-tests | |
-| 4 | OUTCOME-TAG-ALL-CALLERS | 1 | `supabase/__tests__/outcome-tagging-trigger.test.ts` (raw `post_ai_originals` insert, no app code) | J2.3 (`e0ca8cab`) | db-tests | |
-| 5 | OUTCOME-DIMENSIONS-WRITE-ONCE | 1 | `supabase/__tests__/outcome-tables-write-once.test.ts` | J2.3 (`e0ca8cab`) | db-tests | |
-| 6 | OUTCOME-NO-RETRO-TAGGING | 3 | `lib/outcomes/__tests__/source-scans.test.ts` (NO-RETRO-TAGGING) | J2.2 (`c63e59ad`) | app-tests | |
-| 7 | OUTCOME-DESCRIPTIVE-ONLY | 2 + 3 | `lib/outcomes/__tests__/orchestrator.test.ts`, `template.test.ts`; `source-scans.test.ts` (DESCRIPTIVE-ONLY scan half) | J2.8 (`c0a76dc2`) | app-tests | |
-| 8 | OUTCOME-HOOKTYPE-ADDITIVE | 2 | `lib/ai/prompts/formats/hooktype.test.ts` | J2.4 (`1c0ef470`) | app-tests | |
-| 9 | OUTCOME-MATURED-SNAPSHOT | 2 | `lib/outcomes/__tests__/orchestrator.test.ts`, `lib/db/post-outcomes.test.ts` | J2.8 (`c0a76dc2`) | app-tests | |
-| 10 | OUTCOME-ELIGIBLE-FIELDS-ONLY | 2 | `lib/outcomes/__tests__/normalise.test.ts` | J2.7 (`85394986`) | app-tests | |
-| 11 | OUTCOME-NORMALISED-TO-OWN-BASELINE | 2 | `lib/outcomes/__tests__/normalise.test.ts`, `measured-dimensions.test.ts` | J2.7 (`85394986`) | app-tests | |
-| 12 | OUTCOME-SEED-BASIS-MATCH | 2 | `lib/outcomes/__tests__/normalise.test.ts` (count-basis seed refused) | J2.7 (`85394986`) | app-tests | |
-| 13 | OUTCOME-MIN-N-ENFORCED | 1 + 2 | `supabase/__tests__/outcome-promotion-floor.test.ts`; `supabase/__tests__/outcome-wrappers.test.ts`; `lib/db/memory-performance.test.ts` | J2.6 (`d7cbda3d`) | db-tests + app-tests | |
-| 14 | OUTCOME-RECOMPUTE-NOT-TRUST | 1 | `supabase/__tests__/outcome-promotion-floor.test.ts` (forged `outcome_n`) | J2.6 (`d7cbda3d`) | db-tests | |
-| 15 | OUTCOME-CONFIDENCE-RENDERED | 2 | `lib/ai/prompts/observed-outcomes.test.ts` (three sites); `lib/ai/context.test.ts` | J2.9 (`f82c22e2`) | app-tests | |
-| 16 | OUTCOME-NO-ZERO-METRICS-REINTRODUCED | 2 + 3 | `lib/ai/prompts/observed-outcomes.test.ts`; `lib/memory/performance.test.ts`; `source-scans.test.ts` (scan half) | J2.9 (`f82c22e2`) | app-tests | |
-| 17 | OUTCOME-SEPARATE-RETRIEVAL | 2 | `lib/memory/outcome-separation.test.ts`, `lib/memory/outcomes.test.ts`, `lib/db/memory-performance.test.ts` | J2.9 (`f82c22e2`) | app-tests | |
-| 18 | OUTCOME-TWO-WRITERS-DISTINGUISHED | 1 | `supabase/__tests__/performance-memory-outcome-schema.test.ts` | J2.5 (`5d9c426a`) | db-tests | |
-| 19 | OUTCOME-KEY-COLLISION-DEFINED | 1 | `supabase/__tests__/performance-memory-outcome-schema.test.ts` | J2.5 (`5d9c426a`) | db-tests | |
-| 20 | OUTCOME-WRITE-PROTECTED | 1 | `supabase/__tests__/performance-memory-outcome-schema.test.ts`; `supabase/__tests__/outcome-delete-guard.test.ts` (forward migration `20260919160000`, J2.11) | J2.5 (`5d9c426a`); hardened J2.11 (`fb28e6c6`) | db-tests | |
-| 21 | OUTCOME-CONTRADICTION-DEMOTES-ATOMIC | 1 + 2 | `supabase/__tests__/outcome-demotion.test.ts`; `lib/outcomes/__tests__/orchestrator.test.ts` | J2.8 (`c0a76dc2`); Tier-1 half J2.6 (`d7cbda3d`) | db-tests + app-tests | |
-| 22 | OUTCOME-WINDOWED-DECAY | 1 + 2 | `supabase/__tests__/outcome-demotion.test.ts`; `lib/outcomes/__tests__/orchestrator.test.ts` | J2.8 (`c0a76dc2`); Tier-1 half J2.6 (`d7cbda3d`) | db-tests + app-tests | |
-| 23 | OUTCOME-PROVENANCE-PROPAGATED | 1 + 2 | `supabase/__tests__/outcome-provenance.test.ts`; `lib/outcomes/__tests__/normalise.test.ts` | J2.8 (`c0a76dc2`); Tier-1 half J2.6 (`d7cbda3d`) | db-tests + app-tests | |
-| 24 | OUTCOME-HYPOTHESIS-IN-BRIEF | 1 + 2 | `lib/outcomes/__tests__/hypothesis.test.ts`; `lib/ai/prompts/brief-hypothesis.test.ts`; `app/[locale]/(dashboard)/campaigns/[id]/brief/actions.hypothesis.test.ts`; existing `supabase/__tests__/mode2-brief-rls.test.ts` (unmodified) | J2.10 (`d286aaad`) | db-tests + app-tests | |
-| 25 | OUTCOME-RETROSPECTIVE-WRITES-BACK | 1 + 2 | `supabase/__tests__/outcome-retrospective-rpc.test.ts`; `lib/outcomes/__tests__/retrospective.test.ts`; `app/[locale]/(dashboard)/campaigns/[id]/retrospective-actions.test.ts` | J2.11 (`fb28e6c6`); Tier-1 half J2.6 (`d7cbda3d`) | db-tests + app-tests | |
-| 26 | OUTCOME-NORTHSTAR-COMPUTABLE | 1 | `supabase/__tests__/outcome-northstar.test.ts` | J2.6 (`d7cbda3d`) | db-tests | |
-| 27 | OUTCOME-ATTRIBUTION-CONFIDENCE-FRAMED | 2 | `lib/outcomes/__tests__/copy-lint.test.ts`; `app/[locale]/(dashboard)/campaigns/[id]/outcome-surfaces.test.tsx`; `lib/i18n/outcome-parity.test.ts` | J2.12 (`c03fa2e2`) | app-tests | |
-| 28 | OUTCOME-DETERMINISTIC-NO-LLM | 3 | `lib/outcomes/__tests__/source-scans.test.ts` (import scan) | J2.2 (`c63e59ad`) | app-tests | |
-| 29 | OUTCOME-ADR0018-UNCHANGED | 3 | `npx tsx scripts/check-adr0018-unchanged.ts`; `lib/outcomes/__tests__/adr0018-guard.test.ts`; the unmodified `lib/learning` suite | J2.2 (`c63e59ad`) | app-tests | |
-| 30 | OUTCOME-NO-CROSS-BUSINESS | 2 + 3 | `lib/outcomes/__tests__/no-cross-business.test.ts` (wrapper tests + RPC-body scan; `get_learning_cycles_northstar` allowlisted by name) | J2.13 (this step's commit) | app-tests | |
-| 31 | OUTCOME-NO-EXTRA-WRITER | 3 | `lib/outcomes/__tests__/source-scans.test.ts` (source-value scan) | J2.2 (`c63e59ad`) | app-tests | |
-| 32 | OUTCOME-TICK-IDEMPOTENT | 1 + 2 | `supabase/__tests__/outcome-tick-idempotent.test.ts`; `lib/outcomes/__tests__/orchestrator.test.ts`, `retrospective.test.ts`; `lib/db/campaign-retrospectives.test.ts` | J2.8 (`c0a76dc2`) | db-tests + app-tests | |
-| 33 | OUTCOME-RLS-ISOLATED | 1 | `supabase/__tests__/outcome-tables-rls.test.ts` | J2.3 (`e0ca8cab`) | db-tests | |
-| 34 | OUTCOME-CASCADE-COMPLETE | 1 + 3 | `supabase/__tests__/outcome-tables-purge.test.ts`; `lib/db/__tests__/d2.5-outcome-rows.test.ts` (§D2.5 rows) | J2.3 (`e0ca8cab`) | db-tests + app-tests | |
+| 1 | OUTCOME-METRICS-FETCH-REAL | 2 | `lib/social/__tests__/twitter-provider.test.ts`, `mock-provider.test.ts`, `linkedin-provider.test.ts`; ADR 0028 Amendment A | J2.1 (`c787e633`) | app-tests | `eebe96da`, app-tests run 35508922278 |
+| 2 | OUTCOME-METRICS-CADENCE-BOUNDED | 1 + 2 | `supabase/__tests__/metrics-sync-cadence.test.ts`; `lib/metrics/orchestrator.test.ts` | J2.1 (`c787e633`) | db-tests + app-tests | `eebe96da`, app-tests run 35508922278; `eebe96da`, db-tests run 35508922333 |
+| 3 | OUTCOME-DIMENSIONS-TAGGED-AT-GENERATION | 1 | `supabase/__tests__/outcome-tagging-trigger.test.ts` | J2.3 (`e0ca8cab`) | db-tests | `eebe96da`, db-tests run 35508922333 |
+| 4 | OUTCOME-TAG-ALL-CALLERS | 1 | `supabase/__tests__/outcome-tagging-trigger.test.ts` (raw `post_ai_originals` insert, no app code) | J2.3 (`e0ca8cab`) | db-tests | `eebe96da`, db-tests run 35508922333 |
+| 5 | OUTCOME-DIMENSIONS-WRITE-ONCE | 1 | `supabase/__tests__/outcome-tables-write-once.test.ts` | J2.3 (`e0ca8cab`) | db-tests | `eebe96da`, db-tests run 35508922333 |
+| 6 | OUTCOME-NO-RETRO-TAGGING | 3 | `lib/outcomes/__tests__/source-scans.test.ts` (NO-RETRO-TAGGING) | J2.2 (`c63e59ad`) | app-tests | `eebe96da`, app-tests run 35508922278 |
+| 7 | OUTCOME-DESCRIPTIVE-ONLY | 2 + 3 | `lib/outcomes/__tests__/orchestrator.test.ts`, `template.test.ts`; `source-scans.test.ts` (DESCRIPTIVE-ONLY scan half) | J2.8 (`c0a76dc2`) | app-tests | `eebe96da`, app-tests run 35508922278 |
+| 8 | OUTCOME-HOOKTYPE-ADDITIVE | 2 | `lib/ai/prompts/formats/hooktype.test.ts` | J2.4 (`1c0ef470`) | app-tests | `eebe96da`, app-tests run 35508922278 |
+| 9 | OUTCOME-MATURED-SNAPSHOT | 2 | `lib/outcomes/__tests__/orchestrator.test.ts`, `lib/db/post-outcomes.test.ts` | J2.8 (`c0a76dc2`) | app-tests | `eebe96da`, app-tests run 35508922278 |
+| 10 | OUTCOME-ELIGIBLE-FIELDS-ONLY | 2 | `lib/outcomes/__tests__/normalise.test.ts` | J2.7 (`85394986`) | app-tests | `eebe96da`, app-tests run 35508922278 |
+| 11 | OUTCOME-NORMALISED-TO-OWN-BASELINE | 2 | `lib/outcomes/__tests__/normalise.test.ts`, `measured-dimensions.test.ts` | J2.7 (`85394986`) | app-tests | `eebe96da`, app-tests run 35508922278 |
+| 12 | OUTCOME-SEED-BASIS-MATCH | 2 | `lib/outcomes/__tests__/normalise.test.ts` (count-basis seed refused) | J2.7 (`85394986`) | app-tests | `eebe96da`, app-tests run 35508922278 |
+| 13 | OUTCOME-MIN-N-ENFORCED | 1 + 2 | `supabase/__tests__/outcome-promotion-floor.test.ts`; `supabase/__tests__/outcome-wrappers.test.ts`; `lib/db/memory-performance.test.ts` | J2.6 (`d7cbda3d`) | db-tests + app-tests | `eebe96da`, app-tests run 35508922278; `eebe96da`, db-tests run 35508922333 |
+| 14 | OUTCOME-RECOMPUTE-NOT-TRUST | 1 | `supabase/__tests__/outcome-promotion-floor.test.ts` (forged `outcome_n`) | J2.6 (`d7cbda3d`) | db-tests | `eebe96da`, db-tests run 35508922333 |
+| 15 | OUTCOME-CONFIDENCE-RENDERED | 2 | `lib/ai/prompts/observed-outcomes.test.ts` (three sites); `lib/ai/context.test.ts` | J2.9 (`f82c22e2`) | app-tests | `eebe96da`, app-tests run 35508922278 |
+| 16 | OUTCOME-NO-ZERO-METRICS-REINTRODUCED | 2 + 3 | `lib/ai/prompts/observed-outcomes.test.ts`; `lib/memory/performance.test.ts`; `source-scans.test.ts` (scan half) | J2.9 (`f82c22e2`) | app-tests | `eebe96da`, app-tests run 35508922278 |
+| 17 | OUTCOME-SEPARATE-RETRIEVAL | 2 | `lib/memory/outcome-separation.test.ts`, `lib/memory/outcomes.test.ts`, `lib/db/memory-performance.test.ts` | J2.9 (`f82c22e2`) | app-tests | `eebe96da`, app-tests run 35508922278 |
+| 18 | OUTCOME-TWO-WRITERS-DISTINGUISHED | 1 | `supabase/__tests__/performance-memory-outcome-schema.test.ts` | J2.5 (`5d9c426a`) | db-tests | `eebe96da`, db-tests run 35508922333 |
+| 19 | OUTCOME-KEY-COLLISION-DEFINED | 1 | `supabase/__tests__/performance-memory-outcome-schema.test.ts` | J2.5 (`5d9c426a`) | db-tests | `eebe96da`, db-tests run 35508922333 |
+| 20 | OUTCOME-WRITE-PROTECTED | 1 | `supabase/__tests__/performance-memory-outcome-schema.test.ts`; `supabase/__tests__/outcome-delete-guard.test.ts` (forward migration `20260919160000`, J2.11) | J2.5 (`5d9c426a`); hardened J2.11 (`fb28e6c6`) | db-tests | `eebe96da`, db-tests run 35508922333 |
+| 21 | OUTCOME-CONTRADICTION-DEMOTES-ATOMIC | 1 + 2 | `supabase/__tests__/outcome-demotion.test.ts`; `lib/outcomes/__tests__/orchestrator.test.ts` | J2.8 (`c0a76dc2`); Tier-1 half J2.6 (`d7cbda3d`) | db-tests + app-tests | `eebe96da`, app-tests run 35508922278; `eebe96da`, db-tests run 35508922333 |
+| 22 | OUTCOME-WINDOWED-DECAY | 1 + 2 | `supabase/__tests__/outcome-demotion.test.ts`; `lib/outcomes/__tests__/orchestrator.test.ts` | J2.8 (`c0a76dc2`); Tier-1 half J2.6 (`d7cbda3d`) | db-tests + app-tests | `eebe96da`, app-tests run 35508922278; `eebe96da`, db-tests run 35508922333 |
+| 23 | OUTCOME-PROVENANCE-PROPAGATED | 1 + 2 | `supabase/__tests__/outcome-provenance.test.ts`; `lib/outcomes/__tests__/normalise.test.ts` | J2.8 (`c0a76dc2`); Tier-1 half J2.6 (`d7cbda3d`) | db-tests + app-tests | `eebe96da`, app-tests run 35508922278; `eebe96da`, db-tests run 35508922333 |
+| 24 | OUTCOME-HYPOTHESIS-IN-BRIEF | 1 + 2 | `lib/outcomes/__tests__/hypothesis.test.ts`; `lib/ai/prompts/brief-hypothesis.test.ts`; `app/[locale]/(dashboard)/campaigns/[id]/brief/actions.hypothesis.test.ts`; existing `supabase/__tests__/mode2-brief-rls.test.ts` (unmodified) | J2.10 (`d286aaad`) | db-tests + app-tests | `eebe96da`, app-tests run 35508922278; `eebe96da`, db-tests run 35508922333 |
+| 25 | OUTCOME-RETROSPECTIVE-WRITES-BACK | 1 + 2 | `supabase/__tests__/outcome-retrospective-rpc.test.ts`; `lib/outcomes/__tests__/retrospective.test.ts`; `app/[locale]/(dashboard)/campaigns/[id]/retrospective-actions.test.ts` | J2.11 (`fb28e6c6`); Tier-1 half J2.6 (`d7cbda3d`) | db-tests + app-tests | `eebe96da`, app-tests run 35508922278; `eebe96da`, db-tests run 35508922333 |
+| 26 | OUTCOME-NORTHSTAR-COMPUTABLE | 1 | `supabase/__tests__/outcome-northstar.test.ts` | J2.6 (`d7cbda3d`) | db-tests | `eebe96da`, db-tests run 35508922333 |
+| 27 | OUTCOME-ATTRIBUTION-CONFIDENCE-FRAMED | 2 | `lib/outcomes/__tests__/copy-lint.test.ts`; `app/[locale]/(dashboard)/campaigns/[id]/outcome-surfaces.test.tsx`; `lib/i18n/outcome-parity.test.ts` | J2.12 (`c03fa2e2`) | app-tests | `eebe96da`, app-tests run 35508922278 |
+| 28 | OUTCOME-DETERMINISTIC-NO-LLM | 3 | `lib/outcomes/__tests__/source-scans.test.ts` (import scan) | J2.2 (`c63e59ad`) | app-tests | `eebe96da`, app-tests run 35508922278 |
+| 29 | OUTCOME-ADR0018-UNCHANGED | 3 | `npx tsx scripts/check-adr0018-unchanged.ts`; `lib/outcomes/__tests__/adr0018-guard.test.ts`; the unmodified `lib/learning` suite | J2.2 (`c63e59ad`) | app-tests | `eebe96da`, app-tests run 35508922278 |
+| 30 | OUTCOME-NO-CROSS-BUSINESS | 2 + 3 | `lib/outcomes/__tests__/no-cross-business.test.ts` (wrapper tests + RPC-body scan; `get_learning_cycles_northstar` allowlisted by name) | J2.13 (this step's commit) | app-tests | `eebe96da`, app-tests run 35508922278 |
+| 31 | OUTCOME-NO-EXTRA-WRITER | 3 | `lib/outcomes/__tests__/source-scans.test.ts` (source-value scan) | J2.2 (`c63e59ad`) | app-tests | `eebe96da`, app-tests run 35508922278 |
+| 32 | OUTCOME-TICK-IDEMPOTENT | 1 + 2 | `supabase/__tests__/outcome-tick-idempotent.test.ts`; `lib/outcomes/__tests__/orchestrator.test.ts`, `retrospective.test.ts`; `lib/db/campaign-retrospectives.test.ts` | J2.8 (`c0a76dc2`) | db-tests + app-tests | `eebe96da`, app-tests run 35508922278; `eebe96da`, db-tests run 35508922333 |
+| 33 | OUTCOME-RLS-ISOLATED | 1 | `supabase/__tests__/outcome-tables-rls.test.ts` | J2.3 (`e0ca8cab`) | db-tests | `eebe96da`, db-tests run 35508922333 |
+| 34 | OUTCOME-CASCADE-COMPLETE | 1 + 3 | `supabase/__tests__/outcome-tables-purge.test.ts`; `lib/db/__tests__/d2.5-outcome-rows.test.ts` (§D2.5 rows) | J2.3 (`e0ca8cab`) | db-tests + app-tests | `eebe96da`, app-tests run 35508922278; `eebe96da`, db-tests run 35508922333 |
 | 35 | OUTCOME-PREDICTION-ACCURACY | E | §V.4 below: MEASURED, NOT YET RUN | J2.13 (protocol recorded, nothing run) | none-by-decision (Tier E) | not applicable |
 
 ### V.3 Tier-3 re-verification at HEAD (local, before push)
@@ -1065,3 +1065,22 @@ real metrics; today it is undefined (production OAuth apps are unregistered, ADR
   the transition) is accepted: the reviewer found no impact and rewriting a committed trigger adds more risk than it removes.
 - **"Not enough variety"** in the campaign-page list is computed from the brand's outcome patterns, so a value with
   fewer than 5 observations is invisible to it and variety can be over-reported (recorded in `docs/backlog.md`).
+
+### V.6 CI verification (J2.13b): filled from runs that were opened and read
+
+Head `eebe96da901af9668853b78d9677ba573779f122`, draft PR #12, read from the run logs (not from the status badge):
+
+| Job | Run | Skip-guard line, verbatim from the log |
+|---|---|---|
+| app-tests (tsc + eslint + vitest) | 35508922278 | `skip-guard: 304 file(s) under [app, lib, components] all visible, zero failures - green. (4322/4322 tests passed)` |
+| db-tests (live Postgres, `supabase/__tests__`) | 35508922333 | `skip-guard: 79 file(s) under [supabase/__tests__] all visible, zero failures - green. (674/674 tests passed)` |
+| eval-triage | 35508922348 | success (not an OUTCOME-* job) |
+
+No OOM or SIGSEGV appears in the db-tests log. The workflow runs `vitest run supabase/__tests__ --no-file-parallelism --retry=2`;
+the per-test retry counts live in the JSON artifact, which was not inspected, so "zero failures" is the skip-guard's own statement.
+The known `corpus-v2-schema` flake did not fail in CI.
+
+**Tally.** 34 of the 34 non-E constraints have every executing job green at `eebe96da`; row 35 is Tier E, recorded and not run.
+Tier-1 rows 18/18 (2, 3, 4, 5, 13, 14, 18, 19, 20, 21, 22, 23, 24, 25, 26, 32, 33, 34), Tier-2 rows 20/20 (1, 2, 7, 8, 9, 10, 11, 12, 13,
+15, 16, 17, 21, 22, 23, 24, 25, 27, 30, 32), Tier-3 rows 8/8 re-verified (6, 7, 16, 28, 29, 30, 31, 34; the reddening is V.3, local).
+Row 30 was authored in J2.13 (`eebe96da`), so it is covered by that same run.
