@@ -131,3 +131,104 @@ export async function wilsonBounds(wins: number, n: number): Promise<{ low: numb
   const row = (Array.isArray(data) ? data[0] : data) as { low: number | string; high: number | string }
   return { low: Number(row.low), high: Number(row.high) }
 }
+
+// ─── Retrospective inputs (ADR 0026 §8.2, Session 33 J2.11) ───────────────────
+// Every function below is service-role (lazy import, NO client parameter), takes a businessId and filters on it,
+// and is bounded and ordered on an existing index.
+
+export interface CampaignForRetrospective {
+  id: string
+  name: string
+}
+
+// The business's newest campaigns that have NO retrospective yet. Bounded (default 50) and ordered by
+// created_at DESC; a campaign with a retrospective row is never returned again, which is half of
+// OUTCOME-TICK-IDEMPOTENT for this phase (the insert's ON CONFLICT is the other half).
+export async function listCampaignsAwaitingRetrospective(businessId: string, limit = 50): Promise<CampaignForRetrospective[]> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const bounded = Math.min(Math.max(limit, 1), 100)
+  const { data: campaigns, error } = await client
+    .from('campaigns')
+    .select('id, name')
+    .eq('business_id', businessId)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+    .limit(bounded)
+  if (error) throw new Error(getErrorMessage(error))
+  const rows = (campaigns ?? []) as CampaignForRetrospective[]
+  if (rows.length === 0) return []
+  const { data: done, error: doneError } = await client
+    .from('campaign_retrospectives')
+    .select('campaign_id')
+    .eq('business_id', businessId)
+    .in('campaign_id', rows.map((c) => c.id))
+  if (doneError) throw new Error(getErrorMessage(doneError))
+  const finished = new Set((done ?? []).map((d) => d.campaign_id as string))
+  return rows.filter((c) => !finished.has(c.id))
+}
+
+export interface CampaignPostState {
+  id: string
+  status: string
+  published_at: string | null
+  role: string | null
+}
+
+export async function listCampaignPostStates(businessId: string, campaignId: string, limit = 200): Promise<CampaignPostState[]> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client
+    .from('posts')
+    .select('id, status, published_at, role')
+    .eq('business_id', businessId)
+    .eq('campaign_id', campaignId)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+    .limit(Math.min(Math.max(limit, 1), 500))
+  if (error) throw new Error(getErrorMessage(error))
+  return (data ?? []) as CampaignPostState[]
+}
+
+export interface CampaignOutcomeForVerdict {
+  post_id: string
+  beat_baseline: boolean | null
+  log_lift: number | null
+  metric_basis: 'rate' | 'count'
+}
+
+// A campaign's frozen outcomes, on post_outcomes_campaign_id_idx.
+export async function listOutcomesForCampaign(businessId: string, campaignId: string, limit = 200): Promise<CampaignOutcomeForVerdict[]> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client
+    .from('post_outcomes')
+    .select('post_id, beat_baseline, log_lift, metric_basis')
+    .eq('business_id', businessId)
+    .eq('campaign_id', campaignId)
+    .order('published_at', { ascending: false })
+    .limit(Math.min(Math.max(limit, 1), 500))
+  if (error) throw new Error(getErrorMessage(error))
+  return ((data ?? []) as Array<CampaignOutcomeForVerdict & { log_lift: number | string | null }>).map((r) => ({
+    ...r,
+    log_lift: r.log_lift === null ? null : Number(r.log_lift),
+  }))
+}
+
+// The campaign's FROZEN brief content (hypothesis and criteria live there). null when there is none.
+export async function getFrozenBriefContent(businessId: string, campaignId: string): Promise<Record<string, unknown> | null> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client
+    .from('campaign_briefs')
+    .select('content')
+    .eq('business_id', businessId)
+    .eq('campaign_id', campaignId)
+    .is('deleted_at', null)
+    .not('frozen_at', 'is', null)
+    .order('version', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) throw new Error(getErrorMessage(error))
+  return ((data as { content: Record<string, unknown> } | null)?.content) ?? null
+}

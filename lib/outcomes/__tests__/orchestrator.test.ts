@@ -27,6 +27,8 @@ const db = vi.hoisted(() => ({
 
 vi.mock('@sentry/nextjs', () => ({ withMonitor: (_s: string, fn: () => Promise<void>) => fn(), captureException: vi.fn() }))
 vi.mock('@/lib/config', () => ({ config: { server: { get OUTCOME_BATCH_SIZE() { return db.batch } } } }))
+// The retrospective phase is proved in retrospective.test.ts; here it is a no-op so these counters are the outcome pass's.
+vi.mock('../retrospective', () => ({ runRetrospectivePhase: async () => ({ completed: 0, errors: 0 }) }))
 vi.mock('@/lib/db/businesses', () => ({
   listBusinessIdsPage: async (after: string | null, limit: number) =>
     db.businesses.filter((b) => after === null || b > after).sort().slice(0, limit),

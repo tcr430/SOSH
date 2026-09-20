@@ -23,6 +23,7 @@ import type { PostOutcomeInsert } from '@/lib/db/types'
 import { OUTCOME_PROMOTABLE_DIMENSIONS } from './constants'
 import { ctaPresent, hookSurvived, lengthBand } from './measured'
 import { normaliseOutcome, type OutcomePlatform, type PriorOutcome } from './normalise'
+import { runRetrospectivePhase } from './retrospective'
 import { renderOutcomePattern } from './template'
 
 // ADR 0026 §7 / §14 (Session 33 J2.8) — the extract-outcomes tick. DETERMINISTIC: no model call anywhere in
@@ -126,12 +127,6 @@ async function recomputeCell(cell: Cell, businessId: string, summary: OutcomeTic
       Sentry.captureException(err, { tags: { cron: 'extract-outcomes', phase: 'cell' } })
     }
   }
-}
-
-// The retrospective phase slot (ADR 0026 §8) — filled by J2.10/J2.11. Returns how many were completed.
-async function retrospectivePhase(businessId: string): Promise<number> {
-  void businessId
-  return 0
 }
 
 // Freezes this business's due outcomes and recomputes the touched cells. Returns how many `ready` posts it
@@ -248,10 +243,18 @@ export async function runOutcomeTick(opts: { triggeredBy: 'qstash' | 'secret' })
             after = businessId
             try {
               if (budget > 0) budget -= await processBusiness(businessId, now, budget, summary)
-              summary.retrospectivesCompleted += await retrospectivePhase(businessId)
             } catch (err) {
               summary.errors += 1
               Sentry.captureException(err, { tags: { cron: 'extract-outcomes', phase: 'business' } })
+            }
+            // ADR 0026 §8.2 — the retrospective phase: its own try, so a failing outcome pass never skips it.
+            try {
+              const retro = await runRetrospectivePhase(businessId, now)
+              summary.retrospectivesCompleted += retro.completed
+              summary.errors += retro.errors
+            } catch (err) {
+              summary.errors += 1
+              Sentry.captureException(err, { tags: { cron: 'extract-outcomes', phase: 'retrospective' } })
             }
           }
         }
