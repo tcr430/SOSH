@@ -29,12 +29,13 @@ function makeChain(table: string): Record<string, unknown> {
   return c
 }
 
-vi.mock('@/lib/supabase/service', () => ({
-  createServiceRoleClient: () => ({
-    from: (table: string) => makeChain(table),
-    rpc: (fn: string, args: Record<string, unknown>) => { rpcs.push({ fn, args }); return Promise.resolve({ data: null, error: null }) },
-  }),
-}))
+// ONE recording client. The service-role factory returns it (worker functions), and the page readers are HANDED it
+// (MAJOR-1: they take the caller's client first) — so every query either path issues is recorded the same way.
+const recordingClient = {
+  from: (table: string) => makeChain(table),
+  rpc: (fn: string, args: Record<string, unknown>) => { rpcs.push({ fn, args }); return Promise.resolve({ data: null, error: null }) },
+} as never
+vi.mock('@/lib/supabase/service', () => ({ createServiceRoleClient: () => recordingClient }))
 
 import * as postOutcomes from '@/lib/db/post-outcomes'
 import * as retros from '@/lib/db/campaign-retrospectives'
@@ -55,15 +56,18 @@ const CALLS: Array<[string, () => Promise<unknown>, { rpc?: string }]> = [
   ['post-outcomes.listLatestSnapshotsForPosts', () => postOutcomes.listLatestSnapshotsForPosts(BIZ, ['p1']), {}],
   ['post-outcomes.listPostDimensionsBySnapshot', () => postOutcomes.listPostDimensionsBySnapshot(BIZ, ['s1']), {}],
   ['post-outcomes.getEngagementSeed', () => postOutcomes.getEngagementSeed(BIZ, 'twitter'), {}],
-  ['campaign-retrospectives.getCampaignRetrospective', () => retros.getCampaignRetrospective(BIZ, 'c1'), {}],
+  ['campaign-retrospectives.getCampaignRetrospective', () => retros.getCampaignRetrospective(recordingClient, BIZ, 'c1'), {}],
   ['campaign-retrospectives.listCampaignRetrospectives', () => retros.listCampaignRetrospectives(BIZ), {}],
   ['campaign-retrospectives.listCampaignsAwaitingRetrospective', () => { rows = [{ id: 'c1', name: 'n' }]; return retros.listCampaignsAwaitingRetrospective(BIZ) }, {}],
-  ['campaign-retrospectives.listCampaignPostStates', () => retros.listCampaignPostStates(BIZ, 'c1'), {}],
+  ['campaign-retrospectives.listCampaignPostStates', () => retros.listCampaignPostStates(recordingClient, BIZ, 'c1'), {}],
   ['campaign-retrospectives.listOutcomesForCampaign', () => retros.listOutcomesForCampaign(BIZ, 'c1'), {}],
-  ['campaign-retrospectives.getFrozenBriefContent', () => retros.getFrozenBriefContent(BIZ, 'c1'), {}],
-  ['campaign-retrospectives.listCampaignOutcomeCellSources', () => { rows = [{ platform: 'twitter', length_band: null, cta_present: null, ai_original_id: 'a1' }]; return retros.listCampaignOutcomeCellSources(BIZ, 'c1') }, {}],
+  ['campaign-retrospectives.getFrozenBriefContent', () => retros.getFrozenBriefContent(recordingClient, BIZ, 'c1'), {}],
+  ['campaign-retrospectives.listCampaignOutcomeCellSources', () => { rows = [{ platform: 'twitter', length_band: null, cta_present: null, ai_original_id: 'a1' }]; return retros.listCampaignOutcomeCellSources(recordingClient, BIZ, 'c1') }, {}],
   ['campaign-retrospectives.acknowledgeRetrospective', () => retros.acknowledgeRetrospective({ businessId: BIZ, campaignId: 'c1', userId: 'u1', patternText: null }), { rpc: 'acknowledge_campaign_retrospective' }],
-  ['memory-performance.listOutcomePatterns', () => memory.listOutcomePatterns(BIZ), {}],
+  ['campaign-retrospectives.listCampaignPostStatesForWorker', () => retros.listCampaignPostStatesForWorker(BIZ, 'c1'), {}],
+  ['campaign-retrospectives.getFrozenBriefContentForWorker', () => retros.getFrozenBriefContentForWorker(BIZ, 'c1'), {}],
+  ['memory-performance.listOutcomePatterns', () => memory.listOutcomePatterns(recordingClient, BIZ), {}],
+  ['memory-performance.listOutcomePatternsForGeneration', () => memory.listOutcomePatternsForGeneration(BIZ), {}],
   ['memory-performance.upsertOutcomePattern', () => memory.upsertOutcomePattern({ business_id: BIZ, dimension: 'role', value: 'customer_proof', platform: 'linkedin', direction: 'above', pattern: 'p' }), { rpc: 'upsert_outcome_performance_pattern' }],
   ['memory-performance.promoteOutcomePattern', () => memory.promoteOutcomePattern(BIZ, 'k'), { rpc: 'promote_outcome_pattern' }],
   ['memory-performance.demoteOutcomePattern', () => memory.demoteOutcomePattern(BIZ, 'k'), { rpc: 'demote_outcome_pattern' }],

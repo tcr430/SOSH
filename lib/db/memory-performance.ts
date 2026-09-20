@@ -33,7 +33,7 @@ export async function listPerformanceMemoryCandidates(
     .eq('status', 'active')
     // ADR 0026 §6.4 (J2.9, OUTCOME-SEPARATE-RETRIEVAL): outcome rows NEVER compete in this shared ranking — their
     // confidence is a Wilson bound shrunk by n, a different quantity from a distilled confidence. They are read
-    // only by lib/memory/outcomes.ts (retrieveOutcomePatterns) through listOutcomePatterns. This is the ONE
+    // only by lib/memory/outcomes.ts (retrieveOutcomePatterns) through listOutcomePatternsForGeneration. This is the ONE
     // predicate, so both call paths (lib/ai/context.ts and Studio) inherit it.
     .neq('source', 'outcome')
     .is('deleted_at', null)
@@ -384,12 +384,17 @@ export interface ListOutcomePatternsOptions {
 
 // Outcome rows ONLY (source = 'outcome'), business-scoped, bounded and ordered on the retrieval index
 // (business_id, confidence DESC, recency_at DESC). Active rows exclude the expired, like the shared reader.
+//
+// TWO functions over ONE query body (Session 33-D D1, MAJOR-1), each named for its caller — never one function
+// whose client silently defaults to service-role:
+//  - listOutcomePatterns(client, ...)       the campaign PAGE, handed the user's authenticated client, so the
+//                                           performance_memory SELECT policy is what scopes the read.
+//  - listOutcomePatternsForGeneration(...)  the AI/generation path (lib/memory/outcomes.ts): service-role, no client.
 export async function listOutcomePatterns(
+  client: SupabaseClient,
   businessId: string,
   options: ListOutcomePatternsOptions = {},
 ): Promise<PerformanceMemoryRow[]> {
-  const { createServiceRoleClient } = await import('@/lib/supabase/service')
-  const client = createServiceRoleClient()
   const status = options.status ?? 'active'
   let query = client
     .from('performance_memory')
@@ -407,4 +412,12 @@ export async function listOutcomePatterns(
   const { data, error } = await ordered.limit(options.limit ?? MEMORY_CANDIDATE_LIMIT)
   if (error) throw new Error(getErrorMessage(error))
   return (data as PerformanceMemoryRow[]) ?? []
+}
+
+export async function listOutcomePatternsForGeneration(
+  businessId: string,
+  options: ListOutcomePatternsOptions = {},
+): Promise<PerformanceMemoryRow[]> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  return listOutcomePatterns(createServiceRoleClient(), businessId, options)
 }

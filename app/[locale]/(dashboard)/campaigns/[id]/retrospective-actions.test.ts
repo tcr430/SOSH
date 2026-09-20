@@ -6,6 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const rpc = vi.hoisted(() => vi.fn())
 const retroRow = vi.hoisted(() => ({ value: null as Record<string, unknown> | null }))
+const sessionFrom = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }))
 vi.mock('@/lib/supabase/service', () => ({
@@ -49,10 +50,20 @@ const act = (fields: Record<string, string> = {}) => acknowledgeRetrospectiveAct
 
 beforeEach(() => {
   vi.clearAllMocks()
-  vi.mocked(createClient).mockResolvedValue({ auth: { getUser: vi.fn().mockResolvedValue({ data: { user: SESSION_USER } }) } } as never)
+  // The retrospective is read through the SESSION's own client (MAJOR-1: RLS scopes it), so the stub serves the row.
+  vi.mocked(createClient).mockResolvedValue({
+    auth: { getUser: vi.fn().mockResolvedValue({ data: { user: SESSION_USER } }) },
+    from: sessionFrom,
+  } as never)
   vi.mocked(getBusinessForUser).mockResolvedValue(business)
   vi.mocked(getCampaignById).mockResolvedValue(campaign())
   retroRow.value = retro()
+  sessionFrom.mockImplementation(() => {
+    const b: Record<string, unknown> = {}
+    for (const m of ['select', 'eq']) b[m] = () => b
+    b.maybeSingle = () => Promise.resolve({ data: retroRow.value, error: null })
+    return b
+  })
   rpc.mockResolvedValue({ data: retro({ status: 'acknowledged' }), error: null })
 })
 
@@ -64,6 +75,11 @@ describe('acknowledgeRetrospectiveAction', () => {
       p_pattern_text: expect.stringContaining("Result: supported — 9 of 11 posts beat this brand's usual engagement"),
       p_note: 'looks right',
     })
+  })
+
+  it('the retrospective is read through the SESSION client, not a service-role client (MAJOR-1)', async () => {
+    await act()
+    expect(sessionFrom).toHaveBeenCalledWith('campaign_retrospectives')
   })
 
   it('p_user_id comes from the SESSION even when a userId (or user_id) is present in the form data', async () => {

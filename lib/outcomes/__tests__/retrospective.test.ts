@@ -15,9 +15,9 @@ const store = vi.hoisted(() => ({
 
 vi.mock('@/lib/db/campaign-retrospectives', () => ({
   listCampaignsAwaitingRetrospective: async () => store.campaigns.filter((c) => !store.retros.some((r) => r.campaign_id === c.id)),
-  listCampaignPostStates: async (_b: string, id: string) => store.posts[id] ?? [],
+  listCampaignPostStatesForWorker: async (_b: string, id: string) => store.posts[id] ?? [],
   listOutcomesForCampaign: async (_b: string, id: string) => store.outcomes[id] ?? [],
-  getFrozenBriefContent: async (_b: string, id: string) => store.brief[id] ?? null,
+  getFrozenBriefContentForWorker: async (_b: string, id: string) => store.brief[id] ?? null,
   wilsonBounds: async () => ({ low: 0.5, high: 0.9 }),
   insertCampaignRetrospective: async (row: Record<string, unknown>) => {
     store.inserts += 1

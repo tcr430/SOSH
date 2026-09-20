@@ -67,7 +67,7 @@ export async function acknowledgeRetrospectiveAction(
     const campaign = await getCampaignById(client, parsed.data.campaignId)
     if (!campaign || campaign.business_id !== business.id) return { status: 'error', error: 'not_found' }
 
-    const retro = await getCampaignRetrospective(business.id, parsed.data.campaignId)
+    const retro = await getCampaignRetrospective(client, business.id, parsed.data.campaignId)
     if (!retro) return { status: 'error', error: 'not_found' }
     if (retro.status === 'acknowledged') return { status: 'error', error: 'already_acknowledged' }
 

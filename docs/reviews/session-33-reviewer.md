@@ -758,3 +758,82 @@ Stated plainly rather than guessed:
 ---
 
 Session 33 review complete - 12 findings (0 BLOCKER, 2 MAJOR, 7 MINOR, 3 NIT) over range 75cae307..879737c7; 34/34 non-E OUTCOME-* constraints verified executed green in CI (Tier-1 rows 18/18, Tier-2 rows 20/20, Tier-3 rows 8/8 re-verified); Tier E recorded not run.
+
+---
+
+## CORRECTION PASS (Session 33-D)
+
+**Author:** Session 33-D correction pass · **Date:** 2026-09-20 · **Range fixed:** `879737c7..<D9-sha>`
+**Reviewed head:** `879737c7` — the head the Reviewer read; only this pass's §4 and the report itself landed
+after it, at D0 (`37aba2d4`).
+**Founder adjudications consumed:** none — A-1…A-6 stand; MAJOR-1 option (b) was available and not taken
+(build-guide §4).
+**Everything above this line is the Reviewer's. Everything below it is this pass's.**
+
+### MAJOR-1 — the campaign page reads the outcome tables through the caller's client
+
+- **Finding:** MAJOR-1.
+- **Rule restored:** CLAUDE.md's three-client table ("`/lib/supabase/service.ts` … AI layer, webhook handlers,
+  vault writes, scheduler — never imported into a Server Component or Client Component") and build-guide §0 L-9,
+  verbatim: "**service-role never in a user-facing read path**". Option (b) (keep service-role and argue that the
+  `businessId` filter suffices) was available and **not taken**; no founder ruling was needed or invented.
+- **Fix:** `lib/db/campaign-retrospectives.ts` (`getCampaignRetrospective`, `listCampaignPostStates`,
+  `getFrozenBriefContent`, `listCampaignOutcomeCellSources`) and `lib/db/memory-performance.ts`
+  (`listOutcomePatterns`) now take `client: SupabaseClient` first; `lib/outcomes/campaign-view.ts`
+  `loadCampaignLearningView(client, …)` threads it to all six calls; `campaigns/[id]/page.tsx` passes the
+  authenticated anon client it already had. The generation and worker callers keep service-role through **separate
+  named functions over the same query body**: `listOutcomePatternsForGeneration` (`lib/memory/outcomes.ts`, both
+  retrievers), `listCampaignPostStatesForWorker` and `getFrozenBriefContentForWorker` (`lib/outcomes/retrospective.ts`).
+  There is no optional client that defaults to service-role.
+- **One call site beyond the six, stated openly:** `retrospective-actions.ts` also called
+  `getCampaignRetrospective`, a user-facing Server Action that already held the session client. Leaving it on a
+  service-role sibling would have needed a fifth named function for a read the user's own policy can serve, so it
+  now passes the session client. Its ownership re-check (`getCampaignById(client, …)` then the `business_id`
+  comparison) is unchanged and runs first; `acknowledgeRetrospective`'s write stays service-role because the three
+  tables grant `authenticated` no write privilege.
+- **Proof:**
+  - NEW Tier-1 `supabase/__tests__/outcome-campaign-view-rls.test.ts` — positive control as a member of A
+    (`:73`, both tests), then as an authenticated member of B handed A's business and campaign ids: zero rows from
+    `campaign_retrospectives` (`:95`), `post_outcomes` (`:99`), `post_dimensions` (second hop issued directly with
+    A's real ids, `:105-111`, since a non-leaking first hop never reaches it), `posts` (`:115`), `campaign_briefs`
+    (`:116`), `performance_memory` active and candidate (`:120-121`), and the composed
+    `loadCampaignLearningView` (`:124-129`).
+  - Tier-2 `lib/outcomes/__tests__/no-cross-business.test.ts` — the recording client is now handed to the page
+    readers (`:34`, `:59-69`) and the three new siblings are entries in `CALLS`, so the completeness check covers
+    them; the enumerated list was **updated to the new names, not widened**.
+  - `lib/db/campaign-retrospectives.test.ts:73-` — a page reader queries through the client it is handed
+    (service-role acquired 0 times), and each `ForWorker` sibling acquires it and runs the same body.
+  - `supabase/__tests__/outcome-wrappers.test.ts:30` — pins the shapes: `listOutcomePatternsForGeneration.length`
+    is 1, `listOutcomePatterns.length` is 2.
+  - `app/[locale]/(dashboard)/campaigns/[id]/retrospective-actions.test.ts:80` — the retrospective is read through
+    the session client. The file's other tests changed only in that the session stub now serves the row (`:53-67`);
+    no expectation was loosened.
+- **Reddening:** in one reader at a time, the passed client was replaced with
+  `(await import('@/lib/supabase/service')).createServiceRoleClient()`; each went RED naming its table, and the file
+  was restored from a byte copy (`cmp` clean) before the next.
+
+  | Reader swapped to service-role | RED, verbatim |
+  |---|---|
+  | `getCampaignRetrospective` | `campaign_retrospectives leaked across tenants: expected { …(18) } to be null` (and the composed view) |
+  | `listOutcomePatterns` | `performance_memory (active) leaked across tenants: expected [ { …(30) } ] to deeply equal []` |
+  | `listCampaignPostStates` | `posts leaked across tenants: expected [ { …(4) }, … ] to deeply equal []` (and the composed view's `dueAt`) |
+  | `getFrozenBriefContent` | `campaign_briefs leaked across tenants: expected { hypothesis: 'Proof posts win' } to be null` |
+  | `listCampaignOutcomeCellSources` | `post_outcomes leaked across tenants: expected [ Array(4) ] to deeply equal []` |
+
+  Not mutated: the `post_dimensions` assertion (the reader cannot reach it under a non-leaking first hop, so the
+  test queries it directly; a swap in `listCampaignOutcomeCellSources` leaks `post_outcomes` first) and the
+  `retrospective-actions.ts` one-line change (its test asserts the session stub was queried; it was not
+  separately reddened).
+- **`security-reviewer` (once, after the plan, before the commit):** no BLOCKER, MAJOR or MINOR. It confirmed
+  the six tables each carry a member-scoped `FOR SELECT TO authenticated` policy with no role or column
+  restriction, so a legitimate member is neither emptied nor over-served. Two NITs, **reported and not actioned**
+  (out of this pass's scope, L-1): (1) `listOutcomesForCampaign`, `listCampaignRetrospectives` and
+  `listCampaignsAwaitingRetrospective` are still service-role without a `ForWorker` name — their only non-test caller
+  is the worker; (2) it checked the migrations for `GRANT`/`REVOKE` but not column-level grants, which the
+  positive control would expose.
+- **Loop at this state:** `tsc` clean; `lint` 0 errors (110 pre-existing warnings); `test:app` 4327 of 4328, the one
+  failure being `lib/signals/__fixtures__/eval/corpus-v2-schema.test.ts`, the named pre-existing order-dependent
+  flake, which passes in isolation (5/5); `test:db` 80 files / 681 tests green; `check-adr0018-unchanged.ts` exit 0.
+- **Commit:** D1 — SHA recorded at D9 close-out (a commit cannot name itself).
+- **What I did NOT touch:** the `.eq('business_id', …)` filters and the source / status / `deleted_at` predicates
+  (OUTCOME-NO-CROSS-BUSINESS); the enumerated export list was updated, not widened.

@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 import { formatISO } from 'date-fns'
 import type { CampaignRetrospectiveInsert, CampaignRetrospectiveRow } from './types'
@@ -6,9 +7,14 @@ import { neutralizeWithSentinels } from '@/lib/ai/wrap-evidence'
 
 // ADR 0026 §8 (Session 33 J2.6) — the campaign retrospective and the north-star.
 //
-// Every function here is SERVICE-ROLE, lazy-imported, with NO `client` parameter (CLAUDE.md): the worker
-// writes retrospectives, and the human acknowledgement runs through a SECURITY DEFINER RPC that checks
-// membership itself. Every list is bounded and ordered on an existing index. The statistics are
+// Two kinds of function live here, and they never share a signature (Session 33-D D1, MAJOR-1):
+//  - WORKER functions (the writes, the tick's reads, and every `...ForWorker`) are SERVICE-ROLE, lazy-imported,
+//    with NO `client` parameter (CLAUDE.md); the human acknowledgement runs through a SECURITY DEFINER RPC that
+//    checks membership itself.
+//  - PAGE readers take `client: SupabaseClient` FIRST (the house split, lib/db/insight-cards.ts) and are handed the
+//    caller's AUTHENTICATED client, so the SELECT policies OUTCOME-RLS-ISOLATED proves are what a user reads
+//    through. Their `...ForWorker` siblings acquire service-role and delegate to the same query body.
+// Every list is bounded and ordered on an existing index. The statistics are
 // computed in SQL (wilson_bounds, the RPCs) — nothing here re-implements the Wilson formula.
 
 // Same 500-char bound the pattern column CHECK enforces (ADR 0018 Amd A.2, MEM-PATTERN-PROMOTER-BOUNDED).
@@ -65,11 +71,10 @@ export async function acknowledgeRetrospective(input: {
 }
 
 export async function getCampaignRetrospective(
+  client: SupabaseClient,
   businessId: string,
   campaignId: string,
 ): Promise<CampaignRetrospectiveRow | null> {
-  const { createServiceRoleClient } = await import('@/lib/supabase/service')
-  const client = createServiceRoleClient()
   const { data, error } = await client
     .from('campaign_retrospectives')
     .select('*')
@@ -133,8 +138,9 @@ export async function wilsonBounds(wins: number, n: number): Promise<{ low: numb
 }
 
 // ─── Retrospective inputs (ADR 0026 §8.2, Session 33 J2.11) ───────────────────
-// Every function below is service-role (lazy import, NO client parameter), takes a businessId and filters on it,
-// and is bounded and ordered on an existing index.
+// Every function below takes a businessId and filters on it, and is bounded and ordered on an existing index.
+// listCampaignPostStates, getFrozenBriefContent and listCampaignOutcomeCellSources are PAGE readers (they take the
+// caller's client); the worker's copies are the `...ForWorker` siblings — service-role, NO client parameter.
 
 export interface CampaignForRetrospective {
   id: string
@@ -175,9 +181,12 @@ export interface CampaignPostState {
   role: string | null
 }
 
-export async function listCampaignPostStates(businessId: string, campaignId: string, limit = 200): Promise<CampaignPostState[]> {
-  const { createServiceRoleClient } = await import('@/lib/supabase/service')
-  const client = createServiceRoleClient()
+export async function listCampaignPostStates(
+  client: SupabaseClient,
+  businessId: string,
+  campaignId: string,
+  limit = 200,
+): Promise<CampaignPostState[]> {
   const { data, error } = await client
     .from('posts')
     .select('id, status, published_at, role')
@@ -188,6 +197,11 @@ export async function listCampaignPostStates(businessId: string, campaignId: str
     .limit(Math.min(Math.max(limit, 1), 500))
   if (error) throw new Error(getErrorMessage(error))
   return (data ?? []) as CampaignPostState[]
+}
+
+export async function listCampaignPostStatesForWorker(businessId: string, campaignId: string, limit = 200): Promise<CampaignPostState[]> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  return listCampaignPostStates(createServiceRoleClient(), businessId, campaignId, limit)
 }
 
 export interface CampaignOutcomeForVerdict {
@@ -216,9 +230,11 @@ export async function listOutcomesForCampaign(businessId: string, campaignId: st
 }
 
 // The campaign's FROZEN brief content (hypothesis and criteria live there). null when there is none.
-export async function getFrozenBriefContent(businessId: string, campaignId: string): Promise<Record<string, unknown> | null> {
-  const { createServiceRoleClient } = await import('@/lib/supabase/service')
-  const client = createServiceRoleClient()
+export async function getFrozenBriefContent(
+  client: SupabaseClient,
+  businessId: string,
+  campaignId: string,
+): Promise<Record<string, unknown> | null> {
   const { data, error } = await client
     .from('campaign_briefs')
     .select('content')
@@ -233,6 +249,11 @@ export async function getFrozenBriefContent(businessId: string, campaignId: stri
   return ((data as { content: Record<string, unknown> } | null)?.content) ?? null
 }
 
+export async function getFrozenBriefContentForWorker(businessId: string, campaignId: string): Promise<Record<string, unknown> | null> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  return getFrozenBriefContent(createServiceRoleClient(), businessId, campaignId)
+}
+
 export interface CampaignOutcomeCellSource {
   platform: string
   length_band: string | null
@@ -245,9 +266,12 @@ export interface CampaignOutcomeCellSource {
 // The dimension values of the campaign's frozen outcomes, for the "cells this campaign's posts contributed to"
 // list (ADR 0026 §10.1). Generation-time values come from post_dimensions by the outcome's snapshot id, measured
 // ones from the outcome row itself. Business-scoped, bounded, ordered on post_outcomes_campaign_id_idx.
-export async function listCampaignOutcomeCellSources(businessId: string, campaignId: string, limit = 200): Promise<CampaignOutcomeCellSource[]> {
-  const { createServiceRoleClient } = await import('@/lib/supabase/service')
-  const client = createServiceRoleClient()
+export async function listCampaignOutcomeCellSources(
+  client: SupabaseClient,
+  businessId: string,
+  campaignId: string,
+  limit = 200,
+): Promise<CampaignOutcomeCellSource[]> {
   const { data, error } = await client
     .from('post_outcomes')
     .select('platform, length_band, cta_present, ai_original_id')

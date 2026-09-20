@@ -63,7 +63,7 @@ export default async function CampaignDetailPage({ params }: Props) {
 
   // ADR 0026 §10.1 — the Retrospective card and the Observed outcomes list. Read-only; never on the approval gate.
   const learning = campaign.status !== 'draft'
-    ? await loadCampaignLearningView(business.id, id, campaign.platforms)
+    ? await loadCampaignLearningView(client, business.id, id, campaign.platforms)
     : null
 
   const startDate = format(parseISO(campaign.start_date), 'PP')

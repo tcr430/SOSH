@@ -5,8 +5,8 @@ import type { PerformanceMemoryRow } from '@/lib/db/types'
 // ADR 0026 §6.4 (J2.9) — retrieveOutcomePatterns: only active, unexpired, non-hypothesis outcome rows, ranked
 // and capped at OUTCOME_CAP (3) AMONG OUTCOME ROWS ONLY.
 
-const listOutcomePatterns = vi.hoisted(() => vi.fn())
-vi.mock('@/lib/db/memory-performance', () => ({ listOutcomePatterns }))
+const listOutcomePatternsForGeneration = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/db/memory-performance', () => ({ listOutcomePatternsForGeneration }))
 
 import { retrieveOutcomePatterns, retrieveHypothesisResults } from './outcomes'
 
@@ -30,7 +30,7 @@ function row(over: Partial<PerformanceMemoryRow> & { id: string }): PerformanceM
 beforeEach(() => {
   vi.useFakeTimers()
   vi.setSystemTime(NOW)
-  listOutcomePatterns.mockReset()
+  listOutcomePatternsForGeneration.mockReset()
 })
 afterEach(() => vi.useRealTimers())
 
@@ -40,35 +40,35 @@ describe('retrieveHypothesisResults', () => {
     row({ id, dimension: 'hypothesis' as never, pattern: `Campaign ${id} tested: 'x'. Result: supported.`, pattern_key: `outcome:hypothesis:${id}`, ...over })
 
   it('asks the reader for hypothesis rows only, and returns the last three with their n', async () => {
-    listOutcomePatterns.mockResolvedValue([hyp('a'), hyp('b'), hyp('c'), hyp('d')])
+    listOutcomePatternsForGeneration.mockResolvedValue([hyp('a'), hyp('b'), hyp('c'), hyp('d')])
     const out = await retrieveHypothesisResults('biz-1')
-    expect(listOutcomePatterns).toHaveBeenCalledWith('biz-1', expect.objectContaining({ dimension: 'hypothesis', status: 'active' }))
+    expect(listOutcomePatternsForGeneration).toHaveBeenCalledWith('biz-1', expect.objectContaining({ dimension: 'hypothesis', status: 'active' }))
     expect(out).toHaveLength(3)
     expect(out[0]).toMatchObject({ n: 11, wins: 9 })
   })
 
   it('drops expired rows and any non-hypothesis row the reader might return', async () => {
-    listOutcomePatterns.mockResolvedValue([hyp('old', { expires_at: formatISO(addDays(NOW, -1)) }), row({ id: 'fmt' }), hyp('ok')])
+    listOutcomePatternsForGeneration.mockResolvedValue([hyp('old', { expires_at: formatISO(addDays(NOW, -1)) }), row({ id: 'fmt' }), hyp('ok')])
     expect((await retrieveHypothesisResults('biz-1')).map((o) => o.pattern)).toEqual(["Campaign ok tested: 'x'. Result: supported."])
   })
 
   it('retrieveOutcomePatterns never returns a hypothesis row (post prompts cannot see them)', async () => {
-    listOutcomePatterns.mockResolvedValue([hyp('a')])
+    listOutcomePatternsForGeneration.mockResolvedValue([hyp('a')])
     expect(await retrieveOutcomePatterns('biz-1')).toEqual([])
   })
 })
 
 describe('retrieveOutcomePatterns', () => {
   it('returns the closed-template text with the SQL-computed wins / n / campaigns', async () => {
-    listOutcomePatterns.mockResolvedValue([row({ id: 'a' })])
+    listOutcomePatternsForGeneration.mockResolvedValue([row({ id: 'a' })])
     expect(await retrieveOutcomePatterns('biz-1')).toEqual([
       { platform: 'twitter', pattern: "On X, thread posts beat this brand's usual engagement.", wins: 9, n: 11, campaigns: 3 },
     ])
-    expect(listOutcomePatterns).toHaveBeenCalledWith('biz-1', { status: 'active', platform: undefined })
+    expect(listOutcomePatternsForGeneration).toHaveBeenCalledWith('biz-1', { status: 'active', platform: undefined })
   })
 
   it('caps at OUTCOME_CAP (3), keeping the highest-ranked three', async () => {
-    listOutcomePatterns.mockResolvedValue(
+    listOutcomePatternsForGeneration.mockResolvedValue(
       [0.9, 0.8, 0.7, 0.6, 0.5].map((confidence, i) => row({ id: `r${i}`, confidence, pattern: `P${i}.`, pattern_key: `outcome:format:k${i}:above:twitter` })),
     )
     const out = await retrieveOutcomePatterns('biz-1', { platform: 'twitter' })
@@ -76,7 +76,7 @@ describe('retrieveOutcomePatterns', () => {
   })
 
   it('excludes candidate, expired and hypothesis rows', async () => {
-    listOutcomePatterns.mockResolvedValue([
+    listOutcomePatternsForGeneration.mockResolvedValue([
       row({ id: 'cand', status: 'candidate', pattern: 'CANDIDATE.' }),
       row({ id: 'exp', expires_at: formatISO(addDays(NOW, -1)), pattern: 'EXPIRED.' }),
       row({ id: 'hyp', dimension: 'hypothesis' as never, pattern: 'HYPOTHESIS.' }),
@@ -86,7 +86,7 @@ describe('retrieveOutcomePatterns', () => {
   })
 
   it('drops a row that lacks its counts rather than rendering an observation without evidence', async () => {
-    listOutcomePatterns.mockResolvedValue([row({ id: 'x', outcome_n: null })])
+    listOutcomePatternsForGeneration.mockResolvedValue([row({ id: 'x', outcome_n: null })])
     expect(await retrieveOutcomePatterns('biz-1')).toEqual([])
   })
 })

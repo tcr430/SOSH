@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { formatISO } from 'date-fns'
 import type { CampaignRetrospectiveRow, PerformanceMemoryRow } from '@/lib/db/types'
 import {
@@ -120,14 +121,21 @@ export interface CampaignLearningView {
 
 const OBSERVED_LIST_LIMIT = 20
 
-export async function loadCampaignLearningView(businessId: string, campaignId: string, platforms: readonly string[]): Promise<CampaignLearningView> {
+// `client` MUST be the caller's AUTHENTICATED client (never service-role): this is a user-facing read, so the
+// SELECT policies on the outcome tables, not the businessId argument alone, are what scope it (MAJOR-1, L-9).
+export async function loadCampaignLearningView(
+  client: SupabaseClient,
+  businessId: string,
+  campaignId: string,
+  platforms: readonly string[],
+): Promise<CampaignLearningView> {
   const [retro, posts, brief, sources, active, candidate] = await Promise.all([
-    getCampaignRetrospective(businessId, campaignId),
-    listCampaignPostStates(businessId, campaignId),
-    getFrozenBriefContent(businessId, campaignId),
-    listCampaignOutcomeCellSources(businessId, campaignId),
-    listOutcomePatterns(businessId, { status: 'active', limit: 100 }),
-    listOutcomePatterns(businessId, { status: 'candidate', limit: 100 }),
+    getCampaignRetrospective(client, businessId, campaignId),
+    listCampaignPostStates(client, businessId, campaignId),
+    getFrozenBriefContent(client, businessId, campaignId),
+    listCampaignOutcomeCellSources(client, businessId, campaignId),
+    listOutcomePatterns(client, businessId, { status: 'active', limit: 100 }),
+    listOutcomePatterns(client, businessId, { status: 'candidate', limit: 100 }),
   ])
 
   const dueAt = retrospectiveDueAt(posts, resolveHypothesis(brief).criteria)

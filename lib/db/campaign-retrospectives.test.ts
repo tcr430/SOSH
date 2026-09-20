@@ -15,14 +15,19 @@ function chain(table: string) {
   c.then = (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) => Promise.resolve(next()).then(res, rej)
   return c
 }
-vi.mock('@/lib/supabase/service', () => ({ createServiceRoleClient: () => ({ from: chain }) }))
+let serviceAcquired = 0
+vi.mock('@/lib/supabase/service', () => ({ createServiceRoleClient: () => { serviceAcquired += 1; return { from: chain } } }))
+// The AUTHENTICATED client a page hands in (a distinct object from the service-role mock above).
+const pageClient = { from: chain } as never
 
 import {
-  getFrozenBriefContent, insertCampaignRetrospective, listCampaignPostStates, listCampaignsAwaitingRetrospective, listOutcomesForCampaign,
+  getFrozenBriefContent, getFrozenBriefContentForWorker, insertCampaignRetrospective, listCampaignPostStates, listCampaignPostStatesForWorker,
+  listCampaignsAwaitingRetrospective, listOutcomesForCampaign,
 } from './campaign-retrospectives'
 
 beforeEach(() => {
   calls.length = 0
+  serviceAcquired = 0
   queue = [{ data: [], error: null }]
 })
 
@@ -48,7 +53,7 @@ describe('campaign-retrospectives readers', () => {
   })
 
   it('listCampaignPostStates and listOutcomesForCampaign filter on business AND campaign, ordered and bounded', async () => {
-    await listCampaignPostStates('biz', 'camp')
+    await listCampaignPostStates(pageClient, 'biz', 'camp')
     await listOutcomesForCampaign('biz', 'camp', 5)
     expect(calls).toContainEqual(['posts.eq', 'business_id', 'biz'])
     expect(calls).toContainEqual(['posts.eq', 'campaign_id', 'camp'])
@@ -60,8 +65,26 @@ describe('campaign-retrospectives readers', () => {
 
   it('getFrozenBriefContent reads only a FROZEN, business-scoped brief', async () => {
     queue = [{ data: { content: { hypothesis: 'h' } }, error: null }]
-    expect(await getFrozenBriefContent('biz', 'camp')).toEqual({ hypothesis: 'h' })
+    expect(await getFrozenBriefContent(pageClient, 'biz', 'camp')).toEqual({ hypothesis: 'h' })
     expect(calls).toContainEqual(['campaign_briefs.eq', 'business_id', 'biz'])
+    expect(calls).toContainEqual(['campaign_briefs.not', 'frozen_at', 'is', null])
+  })
+
+  // MAJOR-1: the page reader queries through the client it is HANDED; the worker sibling acquires service-role.
+  it('a page reader queries through the client it is handed, never the service-role client', async () => {
+    const served: string[] = []
+    const handed = { from: (t: string) => { served.push(t); return chain(t) } } as never
+    await listCampaignPostStates(handed, 'biz', 'camp')
+    await getFrozenBriefContent(handed, 'biz', 'camp')
+    expect(served).toEqual(['posts', 'campaign_briefs'])
+    expect(serviceAcquired).toBe(0)
+  })
+
+  it('the ForWorker siblings acquire service-role and run the same query body', async () => {
+    await listCampaignPostStatesForWorker('biz', 'camp')
+    await getFrozenBriefContentForWorker('biz', 'camp')
+    expect(serviceAcquired).toBe(2)
+    expect(calls).toContainEqual(['posts.eq', 'business_id', 'biz'])
     expect(calls).toContainEqual(['campaign_briefs.not', 'frozen_at', 'is', null])
   })
 })

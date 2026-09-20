@@ -1,8 +1,8 @@
 import { addDays, formatISO, parseISO } from 'date-fns'
 import {
-  getFrozenBriefContent,
+  getFrozenBriefContentForWorker,
   insertCampaignRetrospective,
-  listCampaignPostStates,
+  listCampaignPostStatesForWorker,
   listCampaignsAwaitingRetrospective,
   listOutcomesForCampaign,
   wilsonBounds,
@@ -119,8 +119,8 @@ export async function runRetrospectivePhase(businessId: string, now: Date): Prom
   const campaigns = await listCampaignsAwaitingRetrospective(businessId)
   for (const campaign of campaigns) {
     try {
-      const posts = await listCampaignPostStates(businessId, campaign.id)
-      const resolved = resolveHypothesis(await getFrozenBriefContent(businessId, campaign.id))
+      const posts = await listCampaignPostStatesForWorker(businessId, campaign.id)
+      const resolved = resolveHypothesis(await getFrozenBriefContentForWorker(businessId, campaign.id))
       if (!isDue(posts, resolved.criteria, now)) continue
 
       const outcomes = await listOutcomesForCampaign(businessId, campaign.id)

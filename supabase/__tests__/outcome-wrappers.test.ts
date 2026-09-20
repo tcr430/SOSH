@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { createWorld, destroyWorld, seedCell, createCampaign, createRetrospective, addMember, outcomeKey, type World } from '../__helpers__/outcome-fixtures'
 import {
-  upsertOutcomePattern, promoteOutcomePattern, demoteOutcomePattern, listOutcomePatterns,
+  upsertOutcomePattern, promoteOutcomePattern, demoteOutcomePattern, listOutcomePatternsForGeneration, listOutcomePatterns,
 } from '@/lib/db/memory-performance'
 import {
   acknowledgeRetrospective, getLearningCyclesNorthstar, wilsonBounds, insertCampaignRetrospective,
@@ -27,23 +27,24 @@ describe('the outcome wrappers over the real RPCs (ADR 0026 §5.6)', () => {
     direction: 'above' as const, pattern: 'Customer-proof posts beat usual engagement in 9 of 10 posts (3 campaigns)', ...over,
   })
 
-  it('takes NO client parameter (a caller cannot hand in an authenticated client)', () => {
+  it('the writers and the generation reader take NO client; the page reader takes one FIRST (MAJOR-1)', () => {
     expect(upsertOutcomePattern.length).toBe(1)
     expect(promoteOutcomePattern.length).toBe(2)
     expect(demoteOutcomePattern.length).toBe(2)
-    expect(listOutcomePatterns.length).toBeLessThanOrEqual(2)
+    expect(listOutcomePatternsForGeneration.length).toBe(1) // businessId; options is defaulted
+    expect(listOutcomePatterns.length).toBe(2) // client, businessId; options is defaulted
   })
 
   it('9/10 across 3 campaigns: upsert -> candidate, promote -> active, list -> found; 2 campaigns -> promote returns null', async () => {
     await seedCell(w, { role: 'customer_proof', wins: 9, losses: 1, campaigns: 3 })
     const row = await upsertOutcomePattern(input())
     expect(row).toMatchObject({ status: 'candidate', source: 'outcome', pattern_key: KEY, outcome_n: 10 })
-    expect((await listOutcomePatterns(w.businessId)).map((r) => r.pattern_key)).toEqual([]) // candidates are not active
-    expect((await listOutcomePatterns(w.businessId, { status: 'candidate' })).map((r) => r.pattern_key)).toEqual([KEY])
+    expect((await listOutcomePatternsForGeneration(w.businessId)).map((r) => r.pattern_key)).toEqual([]) // candidates are not active
+    expect((await listOutcomePatternsForGeneration(w.businessId, { status: 'candidate' })).map((r) => r.pattern_key)).toEqual([KEY])
 
     const promoted = await promoteOutcomePattern(w.businessId, KEY)
     expect(promoted?.status).toBe('active')
-    expect((await listOutcomePatterns(w.businessId)).map((r) => r.pattern_key)).toEqual([KEY])
+    expect((await listOutcomePatternsForGeneration(w.businessId)).map((r) => r.pattern_key)).toEqual([KEY])
     expect(await promoteOutcomePattern(w.businessId, KEY)).toBeNull() // already active
 
     const w2 = await createWorld('wrappers-2c')
@@ -91,10 +92,10 @@ describe('the outcome wrappers over the real RPCs (ADR 0026 §5.6)', () => {
     await seedCell(w, { role: 'customer_proof', wins: 10, losses: 0, campaigns: 3 })
     await upsertOutcomePattern(input())
     await promoteOutcomePattern(w.businessId, KEY)
-    const rows = await listOutcomePatterns(w.businessId, { limit: 50 })
+    const rows = await listOutcomePatternsForGeneration(w.businessId, { limit: 50 })
     expect(rows.every((r) => r.source === 'outcome' && r.business_id === w.businessId)).toBe(true)
     expect(rows).toHaveLength(1)
-    expect(await listOutcomePatterns(w.businessId, { limit: 1 })).toHaveLength(1)
+    expect(await listOutcomePatternsForGeneration(w.businessId, { limit: 1 })).toHaveLength(1)
   })
 
   describe('campaign-retrospectives.ts', () => {
@@ -107,7 +108,7 @@ describe('the outcome wrappers over the real RPCs (ADR 0026 §5.6)', () => {
       }
       expect(await insertCampaignRetrospective(row)).toBe(true)
       expect(await insertCampaignRetrospective({ ...row, wins: 1 })).toBe(false)
-      expect((await getCampaignRetrospective(w.businessId, campaignId))?.wins).toBe(6)
+      expect((await getCampaignRetrospective(w.admin, w.businessId, campaignId))?.wins).toBe(6)
       expect((await listCampaignRetrospectives(w.businessId, { limit: 5 })).length).toBe(1)
     })
 

@@ -1,5 +1,5 @@
 import type { Platform } from '@/lib/db/types'
-import { listOutcomePatterns } from '@/lib/db/memory-performance'
+import { listOutcomePatternsForGeneration } from '@/lib/db/memory-performance'
 import { OUTCOME_CAP } from '@/lib/outcomes/constants'
 import { isEligible, rankAndCap } from './scoring'
 
@@ -8,7 +8,7 @@ import { isEligible, rankAndCap } from './scoring'
 // excludes source = 'outcome', so a Wilson-derived, n-shrunk confidence is never compared with a distilled
 // one (the cross-type calibration question is never asked of this data — ADR §15).
 //
-// Reads ONLY through listOutcomePatterns (lib/db), like every lib/memory reader (MEM-NO-DIRECT-TABLE-ACCESS).
+// Reads ONLY through listOutcomePatternsForGeneration (lib/db), like every lib/memory reader (MEM-NO-DIRECT-TABLE-ACCESS).
 
 // What reaches a prompt: the closed-template sentence plus the counts the SQL floor computed. n and campaigns
 // are ALWAYS present (OUTCOME-CONFIDENCE-RENDERED) — a pattern is an observation with its evidence, never a rule.
@@ -26,7 +26,7 @@ export type OutcomeObservation = {
 export const HYPOTHESIS_RESULTS_LIMIT = 3
 
 export async function retrieveHypothesisResults(businessId: string): Promise<OutcomeObservation[]> {
-  const rows = await listOutcomePatterns(businessId, { status: 'active', dimension: 'hypothesis', limit: HYPOTHESIS_RESULTS_LIMIT * 4 })
+  const rows = await listOutcomePatternsForGeneration(businessId, { status: 'active', dimension: 'hypothesis', limit: HYPOTHESIS_RESULTS_LIMIT * 4 })
   const now = new Date()
   return rows
     .filter((r) => r.dimension === 'hypothesis' && isEligible(r, now) && r.outcome_n !== null && r.outcome_wins !== null)
@@ -46,7 +46,7 @@ export async function retrieveOutcomePatterns(
   // simply matches no row.
   options: { platform?: string } = {},
 ): Promise<OutcomeObservation[]> {
-  const rows = await listOutcomePatterns(businessId, { status: 'active', platform: options.platform })
+  const rows = await listOutcomePatternsForGeneration(businessId, { status: 'active', platform: options.platform })
   const now = new Date()
   // 'hypothesis' rows are campaign-level retrospective results, read only by the brief stage (J2.10) — never here.
   const eligible = rows.filter(

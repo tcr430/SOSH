@@ -44,7 +44,7 @@ vi.mock('@/lib/db/memory-performance', () => ({
   listPerformanceMemoryCandidates: vi.fn(),
   // ADR 0026 J2.9 — outcome patterns are read through their OWN reader (defaulted to [] below, so every
   // existing test sees no observedOutcomes key).
-  listOutcomePatterns: vi.fn(),
+  listOutcomePatternsForGeneration: vi.fn(),
 }))
 
 vi.mock('@/lib/db/trial-state', () => ({
@@ -63,7 +63,7 @@ import { listTopPostMetrics } from '@/lib/db/post-metrics'
 import { listPostsByIds } from '@/lib/db/posts'
 import { getTrialStateMaybe } from '@/lib/db/trial-state'
 import { getVariationForBusiness } from '@/lib/db/voice'
-import { listPerformanceMemoryCandidates, listOutcomePatterns } from '@/lib/db/memory-performance'
+import { listPerformanceMemoryCandidates, listOutcomePatternsForGeneration } from '@/lib/db/memory-performance'
 import type {
   BusinessRow,
   BrandVoiceRow,
@@ -244,7 +244,7 @@ beforeEach(() => {
   vi.mocked(getTrialStateMaybe).mockResolvedValue(mockTrialState)
   vi.mocked(getVariationForBusiness).mockResolvedValue(null)
   vi.mocked(listPerformanceMemoryCandidates).mockResolvedValue([])
-  vi.mocked(listOutcomePatterns).mockResolvedValue([])
+  vi.mocked(listOutcomePatternsForGeneration).mockResolvedValue([])
 })
 
 describe('buildCustomerContext', () => {
@@ -730,7 +730,7 @@ describe('withPostQueryContext', () => {
 })
 
 // ADR 0026 J2.9 (OUTCOME-SEPARATE-RETRIEVAL, SHARED-FUNCTION CALLERS) — observedOutcomes on BOTH context call
-// paths: buildCustomerContext and withPostQueryContext. Outcome rows arrive ONLY through listOutcomePatterns,
+// paths: buildCustomerContext and withPostQueryContext. Outcome rows arrive ONLY through listOutcomePatternsForGeneration,
 // never through recentPostPerformance, and the key is ABSENT when there are none.
 describe('observedOutcomes (ADR 0026 J2.9)', () => {
   const outcomeRow = (over: Record<string, unknown> = {}) => ({
@@ -740,7 +740,7 @@ describe('observedOutcomes (ADR 0026 J2.9)', () => {
   })
 
   it('buildCustomerContext: fills observedOutcomes from the outcome reader, and NOT recentPostPerformance', async () => {
-    vi.mocked(listOutcomePatterns).mockResolvedValue([outcomeRow()] as never)
+    vi.mocked(listOutcomePatternsForGeneration).mockResolvedValue([outcomeRow()] as never)
     const ctx = await buildCustomerContext('biz-1')
     expect(ctx.observedOutcomes).toEqual([
       { platform: 'twitter', pattern: "On X, thread posts beat this brand's usual engagement.", wins: 9, n: 11, campaigns: 3 },
@@ -754,15 +754,15 @@ describe('observedOutcomes (ADR 0026 J2.9)', () => {
   })
 
   it('withPostQueryContext: refreshes observedOutcomes for the post platform, and drops the campaign-level copy when none', async () => {
-    vi.mocked(listOutcomePatterns).mockResolvedValue([outcomeRow()] as never)
+    vi.mocked(listOutcomePatternsForGeneration).mockResolvedValue([outcomeRow()] as never)
     const ctx = await buildCustomerContext('biz-1')
     const { withPostQueryContext } = await import('./context')
 
     const forX = await withPostQueryContext(ctx, { platform: 'twitter', role: 'anchor_thesis' })
     expect(forX.observedOutcomes).toHaveLength(1)
-    expect(vi.mocked(listOutcomePatterns)).toHaveBeenLastCalledWith('biz-1', expect.objectContaining({ platform: 'twitter' }))
+    expect(vi.mocked(listOutcomePatternsForGeneration)).toHaveBeenLastCalledWith('biz-1', expect.objectContaining({ platform: 'twitter' }))
 
-    vi.mocked(listOutcomePatterns).mockResolvedValue([])
+    vi.mocked(listOutcomePatternsForGeneration).mockResolvedValue([])
     const forLi = await withPostQueryContext(ctx, { platform: 'linkedin', role: 'anchor_thesis' })
     expect('observedOutcomes' in forLi).toBe(false)
   })
