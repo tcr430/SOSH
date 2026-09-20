@@ -1509,6 +1509,47 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
     quoted in ADR 0025 §15.11); app-tests and eval green at the same head. **Tier 1 is now executed green in CI.**
     All `pull_request` events — the promotion tally is still unchanged. Still open: LinkedIn cold start, Tier E.
 
+- **Session 33 — Track J close-out (ADR 0026, the outcome loop; Session 33-D correction pass, D0–D9), corrected head
+  `321911b1`, on PR #12 (`session-33-adr-0026`).** The Builder shipped J2.1–J2.13b (`c787e633`…`879737c7`); the Reviewer
+  (`docs/reviews/session-33-reviewer.md`, scope `75cae307..879737c7`) found **12 findings — 0 BLOCKER, 2 MAJOR, 7 MINOR, 3
+  NIT**; the correction pass (range `879737c7..` the D9 commit) closes all twelve, in the appendix of that same file.
+  **NIT-2 is the single recorded closure** (a pushed commit body cannot be rewritten; the ECC budget was not exceeded) and
+  **MINOR-7 is the single partial closure** (an X `errors[]` block is now a captured provider error; X's actual
+  deleted-post shape is owed to the first live smoke, ADR 0028 Amendment A A.5).
+  - **What the pass changed:** the campaign page now reads the outcome tables through the user's own client, so the RLS
+    policies are what scope the read (MAJOR-1); the metrics failure branch and the retrospective phase capture their errors,
+    the canonical tick line grows to **seventeen** keys (`skippedNeverSynced`) and reports *unknown* counters as `null` when
+    the tick itself throws (MAJOR-2, MINOR-1, MINOR-2); one forward migration
+    (`20260921000000_outcome_write_protect_pattern.sql`) closes a member's ability to rewrite an outcome row's sentence while
+    retiring it (MINOR-3); the "metrics unavailable" state is read from a `/lib/social/` capability (MINOR-5); the engagement
+    seed reads only a finished backfill run (NIT-3); and ADR 0026 gains §VI (Tier-3 labelling, the deferred
+    `hook_type`/`proof_type` display, the amendment letters, the tick key, this CI table).
+  - **CI at `321911b1` — real post-correction counts, all `pull_request` events on PR #12, read from the logs:**
+    app-tests [35545282401](https://github.com/tcr430/SOSH/actions/runs/35545282401) **green**, `skip-guard: 306 file(s)
+    under [app, lib, components] all visible, zero failures — green. (4362/4362 tests passed)`; db-tests
+    [35545282403](https://github.com/tcr430/SOSH/actions/runs/35545282403) **green**, `skip-guard: 80 file(s) under
+    [supabase/__tests__] all visible, zero failures — green. (687/687 tests passed)`, no `SIGSEGV`/`signal 11`/`OOMKilled`/
+    out-of-memory line in the log; eval [35545282393](https://github.com/tcr430/SOSH/actions/runs/35545282393) green
+    (`eval-triage: not applicable — PR touches none of lib/signals/triage/**, lib/ai/prompts/triage*, or the eval corpus`);
+    Vercel preview passed. **Tier 1 is executed green in CI** because db-tests itself is green. All **34 non-E** `OUTCOME-*`
+    constraints are re-dated to this head in ADR 0026 §VI.7 (33 executed green in CI; row 29 is a recorded Tier-3 command,
+    re-run at this head, exit 0). Tier E `OUTCOME-PREDICTION-ACCURACY` is **MEASURED — NOT YET RUN**.
+  - **`db-tests` promotion tally: unchanged by this pass.** Only consecutive green `master` **push** runs move it; every run
+    above (and the pre-correction PR runs `35508922333`, `35509193408`) is a `pull_request` run. The last `master` push run
+    on record is green ([35438035387](https://github.com/tcr430/SOSH/actions/runs/35438035387), `39e71ad7`, 2026-09-19).
+    This pass neither advances nor resets it, and no new streak figure is asserted here.
+  - **The north-star metric is computable, and not yet meaningful.** "Completed learning cycles per active brand"
+    (ADR 0026 §8.5) is computable today from `scripts/northstar-report.ts` over `get_learning_cycles_northstar`. It becomes
+    *meaningful* only once a real brand has published through a connected X account, its posts have matured (7 days), a
+    campaign's evaluation window has closed and a human has acknowledged the retrospective — so **not before the first
+    production X connection**, which does not exist (below). No calendar date is asserted, because that connection has no date.
+  - **Prediction accuracy is framed as MEASURED, not covered.** `OUTCOME-PREDICTION-ACCURACY` (Tier E, ADR 0026 §V.4) cannot
+    run until roughly **T0 + 150 days**; T0 is not yet defined, so no earliest-useful calendar date exists today.
+  - **The pattern layer is EMPTY in production.** No production OAuth app is registered with X or LinkedIn (see Session
+    30.5), so no customer has connected an account, so no post has been measured, so no outcome pattern exists. Everything in
+    Track J is proved by tests and is inert in production until that changes. X's live response shape (including a deleted
+    post) and LinkedIn readability are **still unverified** — owed to the first live smoke (ADR 0028 Amendment A A.5).
+
 ## What's next
 
 Session 19D correction pass is applied. Voice model core is merge-ready. One open decision required before closing Session 19:

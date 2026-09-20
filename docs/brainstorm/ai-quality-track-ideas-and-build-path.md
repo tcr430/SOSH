@@ -29,6 +29,12 @@ retrieval/context (T1.1, T1.4 — still open) and is left unedited above the not
 > entries for the CI evidence. **T1.1** (voice exemplars) and the embeddings ruling in §4 remain open;
 > nothing in Session 31 touched retrieval/context beyond conditioning it on the task (T1.4, below).
 
+> **Session 33 correction (2026-09-21):** wherever this section (or §3, §10) describes performance memory as fed **only**
+> by editing behaviour, or as never reaching the prompt from *published results*, that is the pre-Session-33 state. ADR 0026
+> added a third, outcome-derived writer and a separate retrieval path for it (see the note at §11). The description of
+> *retrieval and context* above is otherwise unchanged. The pattern layer is still empty in production until a production
+> OAuth app exists, so this remains a statement about the code, not about customer data.
+
 The AI layer's *governance* is genuinely strong — one entry point, versioned prompt programs, priced
 model routing, trial caps and rate limits ahead of the call, typed errors, and prompt-injection defense
 enforced by branded types (`lib/ai/wrap-evidence.ts`). None of that is the limiter.
@@ -579,7 +585,16 @@ competed. It will be.
 
 ---
 
-## 11. The outcome loop — measured but never learned from
+## 11. The outcome loop — measured but never learned from — **SHIPPED (Session 33, ADR 0026)**
+
+> **Session 33 correction (2026-09-21):** the three "verified facts" below describe the state *before* Session 33 and are
+> left unedited. Since then: `fetchPostMetrics` is real for X (LinkedIn's is still `NOT_IMPLEMENTED`, ADR 0028 Amendment A);
+> `performance_memory` has a **third writer**, `source = 'outcome'`, written by the daily `extract-outcomes` tick and by the
+> human-acknowledged campaign retrospective — through SQL that owns the sample-size floor (ADR 0026 §5.6, ADR 0016
+> Amendment D); outcome patterns are retrieved **separately** from every other performance record (`lib/memory/outcomes.ts`),
+> never in the shared ranking; and every pattern renders with the number of posts behind it. **What is *not* true yet:** no
+> production OAuth app is registered, so in production the pattern layer is **empty** — the loop is proved by tests, not by
+> customer data (`docs/current-phase.md`, Session 33).
 
 **This is the largest single gap between what the product claims and what it does.**
 
@@ -803,6 +818,11 @@ degrades each:
 
 > **§12 backfill fills memory → §11 gives it enough n to learn from outcomes → §10 lets every feature
 > read and write it → §13 turns it into daily proposals → the feed is never empty → the habit holds.**
+
+> **Session 33 update (2026-09-21):** §11 has shipped (ADR 0026), and §12's backfill shipped before it (Session 32, ADR 0025).
+> The chain's *code* is therefore in place through §11; what gates its value is not a missing session but **data**: the
+> outcome loop needs a connected production account with published, matured posts, and no production OAuth app is registered
+> yet. §13's later steps still follow the ordering above.
 
 ### The rulings that gate it
 

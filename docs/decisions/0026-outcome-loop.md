@@ -1190,3 +1190,95 @@ meets first now does too.
 
 The `executed green in CI` state of every constraint touched by D1 to D7 for the corrected range is **not asserted here**; it
 is D9's, from the logs. The §V.6 cells describe `eebe96da` and `879737c7`, which no longer describe the head.
+
+### VI.7 CI verification of the corrected range (D9): filled from runs that were opened and read
+
+Corrected head **`321911b1ab797298b9a662976a23388bb5ecb3cf`** (D8), branch `session-33-adr-0026`, PR #12. All three workflows
+ran on the **`pull_request`** event, and were read from their run logs, not from the status badge. The D9 commit itself only
+adds documentation over this head, exactly as `879737c7` did over `eebe96da`; the claims below are dated to `321911b1`.
+
+| Job | Run | Result | Skip-guard line, verbatim from the log |
+|---|---|---|---|
+| app-tests (tsc + eslint + vitest) | [35545282401](https://github.com/tcr430/SOSH/actions/runs/35545282401) | success (3m25s) | `skip-guard: 306 file(s) under [app, lib, components] all visible, zero failures — green. (4362/4362 tests passed)` |
+| db-tests (live Postgres, `supabase/__tests__`) | [35545282403](https://github.com/tcr430/SOSH/actions/runs/35545282403) | success (3m58s) | `skip-guard: 80 file(s) under [supabase/__tests__] all visible, zero failures — green. (687/687 tests passed)` |
+| eval (signal triage quality) | [35545282393](https://github.com/tcr430/SOSH/actions/runs/35545282393) | success (`eval-reported`, `eval-threshold`) | `eval-triage: not applicable — PR touches none of lib/signals/triage/**, lib/ai/prompts/triage*, or the eval corpus` |
+| Vercel | preview deployment | pass ("Deployment has completed") | not an OUTCOME-* job |
+
+Against the `eebe96da` runs in §V.6: app-tests 304 files / 4322 tests → **306 / 4362**; db-tests 79 files / 674 tests →
+**80 / 687** (the correction pass added the new Tier-1 file `outcome-campaign-view-rls.test.ts`, seven tests, and six tests
+in `performance-memory-outcome-schema.test.ts`).
+
+**db-tests: no crash or memory signature.** The log was searched for `SIGSEGV`, `signal 11`, `OOMKilled=true`, `out of
+memory`, `57P03` and `terminating connection`: **zero of each**. The step "Upload failure diagnostics" was skipped (nothing
+failed). The workflow runs `vitest run supabase/__tests__ --no-file-parallelism --retry=2`.
+
+**Retry counts.** Because `--retry=2` is in force, "zero failures" is the skip-guard's own statement. The only artifact this
+workflow uploads is the memory-pressure watch log (`db-tests-mem-watch`); **no test-results JSON is uploaded**, so per-test
+retry counts **cannot be inspected from CI** and were not inspected. That is a property of the workflow, not an oversight of
+this pass.
+
+**Tier-3 commands re-run at this head (local):**
+
+```
+$ npx tsx scripts/check-adr0018-unchanged.ts                                     → exit 0 (identical to 75cae307)
+$ npx vitest run lib/outcomes/__tests__/source-scans.test.ts lib/db/__tests__/d2.5-outcome-rows.test.ts \
+    lib/outcomes/__tests__/no-cross-business.test.ts lib/outcomes/__tests__/adr0018-guard.test.ts \
+    lib/ai/prompts/observed-outcomes.test.ts lib/memory/performance.test.ts      → 6 files, 102 tests passed
+```
+
+**The constraint → CI map, re-dated** (generated from the rows of §V.2, whose job column it repeats). Every one of the 34
+non-E rows below reads "executed green in CI at `321911b1`", except row 29, which by §VI.1 is a recorded Tier-3 command and
+cites the command re-run at this head, and row 35, which is Tier E.
+
+| # | Constraint | Tier | Executing job (§V.2) | At the corrected head |
+|---|---|---|---|---|
+| 1 | OUTCOME-METRICS-FETCH-REAL | 2 | app-tests | executed green in CI at `321911b1`: app-tests run 35545282401 |
+| 2 | OUTCOME-METRICS-CADENCE-BOUNDED | 1 + 2 | db-tests + app-tests | executed green in CI at `321911b1`: app-tests run 35545282401; db-tests run 35545282403 |
+| 3 | OUTCOME-DIMENSIONS-TAGGED-AT-GENERATION | 1 | db-tests | executed green in CI at `321911b1`: db-tests run 35545282403 |
+| 4 | OUTCOME-TAG-ALL-CALLERS | 1 | db-tests | executed green in CI at `321911b1`: db-tests run 35545282403 |
+| 5 | OUTCOME-DIMENSIONS-WRITE-ONCE | 1 | db-tests | executed green in CI at `321911b1`: db-tests run 35545282403 |
+| 6 | OUTCOME-NO-RETRO-TAGGING | 3 | app-tests | executed green in CI at `321911b1`: app-tests run 35545282401; Tier-3 scan re-run locally at `321911b1` |
+| 7 | OUTCOME-DESCRIPTIVE-ONLY | 2 + 3 | app-tests | executed green in CI at `321911b1`: app-tests run 35545282401; Tier-3 scan re-run locally at `321911b1` |
+| 8 | OUTCOME-HOOKTYPE-ADDITIVE | 2 | app-tests | executed green in CI at `321911b1`: app-tests run 35545282401 |
+| 9 | OUTCOME-MATURED-SNAPSHOT | 2 | app-tests | executed green in CI at `321911b1`: app-tests run 35545282401 |
+| 10 | OUTCOME-ELIGIBLE-FIELDS-ONLY | 2 | app-tests | executed green in CI at `321911b1`: app-tests run 35545282401 |
+| 11 | OUTCOME-NORMALISED-TO-OWN-BASELINE | 2 | app-tests | executed green in CI at `321911b1`: app-tests run 35545282401 |
+| 12 | OUTCOME-SEED-BASIS-MATCH | 2 | app-tests | executed green in CI at `321911b1`: app-tests run 35545282401 |
+| 13 | OUTCOME-MIN-N-ENFORCED | 1 + 2 | db-tests + app-tests | executed green in CI at `321911b1`: app-tests run 35545282401; db-tests run 35545282403 |
+| 14 | OUTCOME-RECOMPUTE-NOT-TRUST | 1 | db-tests | executed green in CI at `321911b1`: db-tests run 35545282403 |
+| 15 | OUTCOME-CONFIDENCE-RENDERED | 2 | app-tests | executed green in CI at `321911b1`: app-tests run 35545282401 |
+| 16 | OUTCOME-NO-ZERO-METRICS-REINTRODUCED | 2 + 3 | app-tests | executed green in CI at `321911b1`: app-tests run 35545282401; Tier-3 scan re-run locally at `321911b1` |
+| 17 | OUTCOME-SEPARATE-RETRIEVAL | 2 | app-tests | executed green in CI at `321911b1`: app-tests run 35545282401 |
+| 18 | OUTCOME-TWO-WRITERS-DISTINGUISHED | 1 | db-tests | executed green in CI at `321911b1`: db-tests run 35545282403 |
+| 19 | OUTCOME-KEY-COLLISION-DEFINED | 1 | db-tests | executed green in CI at `321911b1`: db-tests run 35545282403 |
+| 20 | OUTCOME-WRITE-PROTECTED | 1 | db-tests | executed green in CI at `321911b1`: db-tests run 35545282403 |
+| 21 | OUTCOME-CONTRADICTION-DEMOTES-ATOMIC | 1 + 2 | db-tests + app-tests | executed green in CI at `321911b1`: app-tests run 35545282401; db-tests run 35545282403 |
+| 22 | OUTCOME-WINDOWED-DECAY | 1 + 2 | db-tests + app-tests | executed green in CI at `321911b1`: app-tests run 35545282401; db-tests run 35545282403 |
+| 23 | OUTCOME-PROVENANCE-PROPAGATED | 1 + 2 | db-tests + app-tests | executed green in CI at `321911b1`: app-tests run 35545282401; db-tests run 35545282403 |
+| 24 | OUTCOME-HYPOTHESIS-IN-BRIEF | 1 + 2 | db-tests + app-tests | executed green in CI at `321911b1`: app-tests run 35545282401; db-tests run 35545282403 |
+| 25 | OUTCOME-RETROSPECTIVE-WRITES-BACK | 1 + 2 | db-tests + app-tests | executed green in CI at `321911b1`: app-tests run 35545282401; db-tests run 35545282403 |
+| 26 | OUTCOME-NORTHSTAR-COMPUTABLE | 1 | db-tests | executed green in CI at `321911b1`: db-tests run 35545282403 |
+| 27 | OUTCOME-ATTRIBUTION-CONFIDENCE-FRAMED | 2 | app-tests | executed green in CI at `321911b1`: app-tests run 35545282401 |
+| 28 | OUTCOME-DETERMINISTIC-NO-LLM | 3 | app-tests | executed green in CI at `321911b1`: app-tests run 35545282401; Tier-3 scan re-run locally at `321911b1` |
+| 29 | OUTCOME-ADR0018-UNCHANGED | 3 | none - recorded Tier-3 command | `check-adr0018-unchanged.ts` re-run at `321911b1`: exit 0 (plus `adr0018-guard.test.ts` and the unmodified `lib/learning` suite in app-tests run 35545282401) |
+| 30 | OUTCOME-NO-CROSS-BUSINESS | 2 + 3 | app-tests | executed green in CI at `321911b1`: app-tests run 35545282401; Tier-3 scan re-run locally at `321911b1` |
+| 31 | OUTCOME-NO-EXTRA-WRITER | 3 | app-tests | executed green in CI at `321911b1`: app-tests run 35545282401; Tier-3 scan re-run locally at `321911b1` |
+| 32 | OUTCOME-TICK-IDEMPOTENT | 1 + 2 | db-tests + app-tests | executed green in CI at `321911b1`: app-tests run 35545282401; db-tests run 35545282403 |
+| 33 | OUTCOME-RLS-ISOLATED | 1 | db-tests | executed green in CI at `321911b1`: db-tests run 35545282403 |
+| 34 | OUTCOME-CASCADE-COMPLETE | 1 + 3 | db-tests + app-tests | executed green in CI at `321911b1`: app-tests run 35545282401; db-tests run 35545282403; Tier-3 scan re-run locally at `321911b1` |
+| 35 | OUTCOME-PREDICTION-ACCURACY | E | none by decision | **MEASURED - NOT YET RUN**; earliest ~T0 + 150 days; T0 undefined |
+
+
+**Tally.** 34 of the 34 non-E constraints are accounted for at `321911b1`: **33 executed green in CI** and row 29 verified by
+its recorded command (exit 0) plus the unit tests app-tests runs. Tier-1 rows **18/18** (2, 3, 4, 5, 13, 14, 18, 19, 20, 21,
+22, 23, 24, 25, 26, 32, 33, 34) are covered because **db-tests itself is green** at this head; Tier-2 rows **20/20** (1, 2, 7,
+8, 9, 10, 11, 12, 13, 15, 16, 17, 21, 22, 23, 24, 25, 27, 30, 32); Tier-3 rows **8/8** re-verified at this head (6, 7, 16, 28,
+29, 30, 31, 34). Row **35** (`OUTCOME-PREDICTION-ACCURACY`, Tier E) is **MEASURED — NOT YET RUN**; it cannot run until
+roughly T0 + 150 days, and T0 is undefined today.
+
+**What this pass changed under those rows, so a reader knows which claims were re-earned and not merely re-dated:** row 1 (D7,
+`twitter-provider.test.ts`), rows 2 and 9 (D2 and D7, `lib/metrics/orchestrator.test.ts`,
+`lib/outcomes/__tests__/orchestrator.test.ts`, `lib/db/post-outcomes.test.ts`), row 12 (D6, the seed read), row 20 (D4,
+`performance-memory-outcome-schema.test.ts`), row 30 (D1, whose `no-cross-business` scan now hands the page readers a client)
+and row 33 (D1, the new Tier-1 `outcome-campaign-view-rls.test.ts`), plus the §10.2 surface rows (D5). Each was exercised by
+its own file in the runs above.

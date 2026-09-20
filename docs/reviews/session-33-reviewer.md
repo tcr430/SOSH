@@ -1162,3 +1162,90 @@ after it, at D0 (`37aba2d4`).
 
 - **What I did NOT touch:** no `docs/backlog.md` row (rule 5); no `executed green in CI` cell (D9's); ADR 0028 Amendment A
   A.2 (the owed A.5 item was appended below A.5 only); no code, SQL or i18n.
+
+---
+
+### CLOSING BLOCK (Session 33-D · D9)
+
+**Corrected head `321911b1`** (D8), pushed to PR #12; required workflows read from their logs (ADR 0026 §VI.7): app-tests
+[35545282401](https://github.com/tcr430/SOSH/actions/runs/35545282401) `skip-guard: 306 file(s) under [app, lib, components]
+all visible, zero failures — green. (4362/4362 tests passed)`; db-tests
+[35545282403](https://github.com/tcr430/SOSH/actions/runs/35545282403) `skip-guard: 80 file(s) under [supabase/__tests__] all
+visible, zero failures — green. (687/687 tests passed)`; eval
+[35545282393](https://github.com/tcr430/SOSH/actions/runs/35545282393) green (`eval-triage: not applicable`). All three are
+`pull_request` events. **Steps and commits:** D0 `37aba2d4` (the Reviewer's report and the build guide's §4 enter git before
+any resolution row), D1 `414e3ca8`, D2 `143fd377`, D3 `580eef53`, D4 `6be135e7`, D5 `13cbfcad`, D6 `38f0e0ad`, D7 `b1f62ad3`, D8
+`321911b1`, and D9 — the commit that carries this block. Every "SHA recorded at D9 close-out" in the rows above is filled by this table.
+
+#### All 12 findings, by ID
+
+| ID | Disposition | Proving test (file:line, at `b1f62ad3` unless noted) | SHA(s) |
+|---|---|---|---|
+| MAJOR-1 | Fixed | `supabase/__tests__/outcome-campaign-view-rls.test.ts` (Tier-1; five reader mutations RED) | `414e3ca8` |
+| MAJOR-2 | Fixed — **two SHAs**, new key `skippedNeverSynced` | `lib/metrics/orchestrator.test.ts:222`; `lib/outcomes/__tests__/orchestrator.test.ts:118,128`; `app/api/cron/extract-outcomes/route.test.ts:135-136` | `143fd377` (code), `321911b1` (ADR §VI.4) |
+| MINOR-1 | Fixed | `lib/outcomes/__tests__/retrospective.test.ts:171` | `580eef53` |
+| MINOR-2 | Fixed | `app/api/cron/extract-outcomes/route.test.ts:152` | `580eef53` |
+| MINOR-3 | Fixed (forward migration) | `supabase/__tests__/performance-memory-outcome-schema.test.ts:422,440,447,456` | `6be135e7` |
+| MINOR-4 | Fixed (a labelling defect; ADR-only) | ADR 0026 §VI.1 — `check-adr0018-unchanged.ts` exit 0 / 1 / 2 re-run | `321911b1` |
+| MINOR-5 | Fixed | `lib/outcomes/__tests__/campaign-view.test.ts:81`; `campaign-view.load.test.ts:32,39` | `13cbfcad` |
+| MINOR-6 | Fixed as a **recorded deferral with a named owner** (ADR-only) | ADR 0026 §VI.2 | `321911b1` |
+| MINOR-7 | **PARTIAL closure** | `lib/social/__tests__/twitter-provider.test.ts:350`; `lib/metrics/orchestrator.test.ts:253` | `b1f62ad3` (+ `321911b1` for the owed A.5 item) |
+| NIT-1 | Fixed (ADR-only) | ADR 0026 header, two lines | `321911b1` |
+| NIT-2 | **RECORDED CLOSURE** — no code, no commit can express it | the two declared invocations, `d7cbda3d` and `fb28e6c6` | none (the paragraph is in D8's `321911b1`) |
+| NIT-3 | Fixed | `lib/db/post-outcomes.seed.test.ts:37` | `38f0e0ad` |
+
+**Count check** (run over the table above — the pass is not closed if it fails):
+
+```
+rows=12 distinct_ids=12  MAJOR=2 MINOR=7 NIT=3  expected 12 / 12 / 2 / 7 / 3  -> OK
+```
+
+**The one recorded closure:** NIT-2 — a pushed commit body cannot be rewritten; the range declares `ECC BUDGET 2 of 3`
+(`d7cbda3d`, database-reviewer) and `3 of 3` (`fb28e6c6`, security-reviewer), no third is attributable, so the ceiling of ≤ 3 was not exceeded.
+**The one partial closure:** MINOR-7 — the half the response itself can express is closed (an `errors[]` block is a captured
+`PLATFORM_REJECTED`); the half that needs X (the deleted-post shape and the entitlement-loss shape) is owed to the first live
+smoke, recorded in ADR 0028 Amendment A A.5.
+
+#### The Reviewer's "What I could NOT verify" list, answered one item at a time
+
+1. **A live X metrics response — STILL UNVERIFIED.** No live call was made in this pass either. The `retweet_count` /
+   `repost_count` conflict and X's deleted-post shape remain unconfirmed from source. D7 narrowed what the code can
+   distinguish, and D8 wrote the owed item into ADR 0028 Amendment A A.5, beside the alias item, as the first thing the smoke confirms.
+2. **LinkedIn's readability under current scopes — STILL UNVERIFIED.** D5 made the unreadable state a *declared capability*
+   (`metricsReadAvailable: false`) in `lib/social/`; that is a declaration of what is believed, not a test that LinkedIn refuses.
+3. **That the production cron runs daily — STILL NOT deterministically testable.** D2 and D3 made the tick's failures
+   visible in Sentry (with `cron` / `phase` tags) and stopped the route logging fabricated zeros, but the control is still the
+   Sentry monitor, and **neither the QStash schedule nor the Sentry monitor exists in production yet**. Nothing in this pass changes that.
+4. **Any predictive value of a promoted pattern — NOT RUN and cannot run.** Tier E (`OUTCOME-PREDICTION-ACCURACY`) is
+   MEASURED — NOT YET RUN; earliest roughly T0 + 150 days, T0 undefined, and the pattern layer is empty in production.
+5. **The db-tests per-test retry counts — NOT INSPECTED, and not inspectable from CI.** I looked for the JSON artifact this
+   time: the workflow uploads only `db-tests-mem-watch` (the memory-pressure log), and the failure-diagnostics artifact only
+   on failure. No test-results JSON is uploaded, so "zero failures" is still the skip-guard's own statement under `--retry=2`.
+   (Locally, `npm run test:db` was run with the same flag at D1 and D4 and passed; retry counts were not inspected there either.)
+6. **Whether app-tests is green on a cold first-attempt local run — NO, not reliably.** The full local suite was run nine
+   times in this pass (D1 twice, then D2 to D8 once each). It was green at D2, D4, D6 and D8. It failed at D3, D5 and D7 and on
+   D1's second run with the same single pre-existing flake, `lib/signals/__fixtures__/eval/corpus-v2-schema.test.ts`, which
+   passes in isolation every time it was checked; D1's first run also failed one test of mine (the retrospective action's
+   stub), which D1 fixed. It is green in CI at `321911b1` (4362/4362). It remains order- or timing-dependent and **was not
+   bisected**; it is not this pass's to fix (primer rule 8).
+
+#### Reviewer "Verified" entries that have since CHANGED (their text above is untouched)
+
+- **§3's caller table** (`:147`) lists `listOutcomePatterns` callers as `lib/memory/outcomes.ts:29,49` and
+  `lib/outcomes/campaign-view.ts:129,130`, both on one service-role function. D1 changed it: the generation path now calls
+  `listOutcomePatternsForGeneration`, and the campaign view calls `listOutcomePatterns(client, …)`. The same is true of the
+  other readers §3 and the SHARED-FUNCTION-CALLERS discipline enumerate (`listCampaignPostStates`, `getFrozenBriefContent`
+  each now have a page form and a `ForWorker` form).
+- **§8's service-role reading and §9's** ("the SELECT policies … are never exercised by the only production reader", `:326`,
+  `:346`) were true at `879737c7` and are **not true now**: the page reads through the authenticated client, and
+  `outcome-campaign-view-rls.test.ts` proves the policies are what scope it.
+- **§11's canonical tick line** (`:386-387`, "exactly ADR §14's sixteen keys") — now **seventeen** (D2), and its throw path
+  reports `null` counters, not zeros (D3).
+- **§0's "What I ran" counts** (`:27`, `:41`: 184 suites / 674 tests; 79 files / 674; app-tests 304 / 4322) — now **80 / 687**
+  and **306 / 4362** at the corrected head.
+- **§1 / MINOR-7's reading of `fetchPostMetrics`** — `null` on `errors[]` is no longer what the provider does.
+- **`getEngagementSeed`'s reading** (NIT-3) — it now filters on run status. **ADR 0026's V.2 row 29 and its header lines** —
+  reworded by D8; the Reviewer's quotation of them is what the appendix's MINOR-4 and NIT-1 rows quote as *prior* text.
+
+**What is still true, unchanged:** `lib/learning/` and the eight ADR 0018 migrations are byte-identical to `75cae307`; no new
+dependency; no `/analytics` route; no model call in `lib/outcomes/`; no experimentation or holdout code.

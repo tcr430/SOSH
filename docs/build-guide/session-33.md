@@ -2557,24 +2557,42 @@ and the diff proves nothing above the appendix changed. Track J closed." Then st
 
 ## §5 — Docs to update at close-out (Track J done)
 
-- [ ] `docs/decisions/0026-outcome-loop.md` — Accepted, final constraint table, real post-correction counts
-      verified executed green in CI at the head they are dated to.
-- [ ] `docs/decisions/0018-diff-based-learning-capture.md` — a note recording that `performance_memory` now
-      has a second writer and that ADR 0018's own behaviour is unchanged, with the test that proves it.
-- [ ] `docs/decisions/0017-mode-2-upgrade.md` — **only if** the hypothesis/success-criteria fields were
-      added under a founder adjudication; otherwise a note recording that they were flagged and deferred.
-- [ ] `docs/current-phase.md` — Session 33 entry; the `db-tests` tally with its event type; the north-star
+- [x] `docs/decisions/0026-outcome-loop.md` — Accepted, final constraint table, real post-correction counts
+      verified executed green in CI at the head they are dated to. **Applied.** §VI.7 re-dates all 34 non-E rows to
+      `321911b1` (app-tests 306 files / 4362, db-tests 80 files / 687, both skip-guard lines quoted verbatim; runs
+      35545282401 / 35545282403); Tier E stays MEASURED — NOT YET RUN.
+- [x] `docs/decisions/0018-diff-based-learning-capture.md` — a note recording that `performance_memory` now
+      has a second writer and that ADR 0018's own behaviour is unchanged, with the test that proves it. **Applied**
+      (J2.13, `## Note — ADR 0026 adds a writer and a trigger beside this pipeline`, `docs/decisions/0018…:1250`); still
+      true at the corrected head — `check-adr0018-unchanged.ts` exit 0 at `321911b1` and after every correction step.
+- [x] `docs/decisions/0017-mode-2-upgrade.md` — **only if** the hypothesis/success-criteria fields were
+      added under a founder adjudication; otherwise a note recording that they were flagged and deferred. **Applied, the
+      first branch:** the fields were added under founder ruling A-1 and recorded as ADR 0017 **Amendment E** (`:882`; the
+      ADR 0026 header now says "landed as Amendment E", D8 NIT-1).
+- [x] `docs/current-phase.md` — Session 33 entry; the `db-tests` tally with its event type; the north-star
       metric restated as **computable**, with the date from which it is meaningful; prediction accuracy
-      framed as `MEASURED` with its earliest-useful date.
-- [ ] `docs/decisions/0010-legal-surface.md` Amendment 2 §D2.5 — cascade row(s), or an explicit
-      no-new-row note.
-- [ ] `docs/brainstorm/ai-quality-track-ideas-and-build-path.md` — §11 marked shipped; §1's diagnosis
+      framed as `MEASURED` with its earliest-useful date. **Applied** (the Session 33 entry after Session 32's). Two
+      "dates" are stated as *conditions*, not calendar dates, because none exists: the north-star is meaningful from the
+      first production X connection, and prediction accuracy from ~T0 + 150 days with T0 undefined. Tally unchanged; every
+      run is a `pull_request` event.
+- [x] `docs/decisions/0010-legal-surface.md` Amendment 2 §D2.5 — cascade row(s), or an explicit
+      no-new-row note. **Applied** — three rows (`post_dimensions`, `post_outcomes`, `campaign_retrospectives`) landed in
+      the same commit as the migration (`e0ca8cab`); pinned by `lib/db/__tests__/d2.5-outcome-rows.test.ts`. The correction
+      pass added **no table**, so no new row was owed (D4's migration replaces one function only).
+- [x] `docs/brainstorm/ai-quality-track-ideas-and-build-path.md` — §11 marked shipped; §1's diagnosis
       corrected (it describes the pre-Session-33 state and becomes wrong the moment this lands); §14's
-      dependency chain updated.
-- [ ] `docs/backlog.md` — deliberate experimentation with its volume trigger; anything else J1 deferred.
-- [ ] `.wolf/anatomy.md`, `.wolf/memory.md`, `.wolf/cerebrum.md`.
-- [ ] `docs/reviews/session-33-reviewer.md` — exists, names its commit range, carries one appended
-      correction-pass section.
+      dependency chain updated. **Applied at D9**, as dated notes beside the unedited text (the same convention as its
+      Session 31 correction): §11's heading is tagged SHIPPED with a correction note, §1 gained a note, §14's chain a
+      status note. The one honest qualifier is stated in each: the pattern layer is empty in production.
+- [x] `docs/backlog.md` — deliberate experimentation with its volume trigger; anything else J1 deferred. **Applied**
+      (J2.13): `S33-EXPERIMENT` and the other `S33-*` rows. **No row was added for any finding of the correction pass**
+      (rule 5); the two reviewer NITs that D1's and D4's specialists raised are reported in the appendix, not backlogged.
+- [x] `.wolf/anatomy.md`, `.wolf/memory.md`, `.wolf/cerebrum.md`. **Applied** (`.wolf/` is gitignored, so these are
+      local working notes, not part of the pushed range); the bug log `.wolf/buglog.json` was also updated.
+- [x] `docs/reviews/session-33-reviewer.md` — exists, names its commit range, carries one appended
+      correction-pass section. **Applied** — the range is named at the top of the report, and the single
+      `## CORRECTION PASS (Session 33-D)` section is appended; `git diff <D0>..<D9> -- docs/reviews/session-33-reviewer.md`
+      shows additions only.
 
 **Next:** `docs/build-guide/session-34.md` — Track K, agency in generation (ADR 0027): read-only tools for
 the generator, claim verification against evidence memory, and the campaign planner that reasons about the
