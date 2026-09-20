@@ -232,3 +232,56 @@ export async function getFrozenBriefContent(businessId: string, campaignId: stri
   if (error) throw new Error(getErrorMessage(error))
   return ((data as { content: Record<string, unknown> } | null)?.content) ?? null
 }
+
+export interface CampaignOutcomeCellSource {
+  platform: string
+  length_band: string | null
+  cta_present: boolean | null
+  role: string | null
+  format: string | null
+  origin_mode: string | null
+}
+
+// The dimension values of the campaign's frozen outcomes, for the "cells this campaign's posts contributed to"
+// list (ADR 0026 §10.1). Generation-time values come from post_dimensions by the outcome's snapshot id, measured
+// ones from the outcome row itself. Business-scoped, bounded, ordered on post_outcomes_campaign_id_idx.
+export async function listCampaignOutcomeCellSources(businessId: string, campaignId: string, limit = 200): Promise<CampaignOutcomeCellSource[]> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client
+    .from('post_outcomes')
+    .select('platform, length_band, cta_present, ai_original_id')
+    .eq('business_id', businessId)
+    .eq('campaign_id', campaignId)
+    .not('beat_baseline', 'is', null)
+    .order('published_at', { ascending: false })
+    .limit(Math.min(Math.max(limit, 1), 500))
+  if (error) throw new Error(getErrorMessage(error))
+  const rows = (data ?? []) as Array<{ platform: string; length_band: string | null; cta_present: boolean | null; ai_original_id: string | null }>
+  const ids = rows.map((r) => r.ai_original_id).filter((v): v is string => v !== null)
+  const dims = new Map<string, { role: string | null; format: string | null; origin_mode: string | null }>()
+  if (ids.length > 0) {
+    const { data: d, error: dError } = await client
+      .from('post_dimensions')
+      .select('ai_original_id, role, format, origin_mode')
+      .eq('business_id', businessId)
+      .in('ai_original_id', ids)
+      .order('ai_original_id', { ascending: true })
+      .limit(500)
+    if (dError) throw new Error(getErrorMessage(dError))
+    for (const r of (d ?? []) as Array<{ ai_original_id: string; role: string | null; format: string | null; origin_mode: string | null }>) {
+      dims.set(r.ai_original_id, r)
+    }
+  }
+  return rows.map((r) => {
+    const dim = r.ai_original_id ? dims.get(r.ai_original_id) : undefined
+    return {
+      platform: r.platform,
+      length_band: r.length_band,
+      cta_present: r.cta_present,
+      role: dim?.role ?? null,
+      format: dim?.format ?? null,
+      origin_mode: dim?.origin_mode ?? null,
+    }
+  })
+}

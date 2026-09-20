@@ -1,0 +1,96 @@
+{
+  "platform": {
+    "twitter": "X",
+    "linkedin": "LinkedIn",
+    "instagram": "Instagram",
+    "facebook": "Facebook",
+    "threads": "Threads"
+  },
+  "role": {
+    "anchor_thesis": "Anchor thesis",
+    "founder_perspective": "Founder perspective",
+    "customer_proof": "Customer proof",
+    "objection_response": "Objection response",
+    "conversation_starter": "Conversation starter",
+    "follow_up": "Follow-up",
+    "unassigned": "No role"
+  },
+  "retrospective": {
+    "title": "What this campaign showed",
+    "measures": "This measures engagement on {platform}, not signups or revenue.",
+    "not_due": "Results are evaluated 7 days after the last post (on {date}).",
+    "not_due_pending": "Results appear once every post is published and 7 days have passed.",
+    "inconclusive": "Not enough measured posts to judge ({n} of 5).",
+    "metrics_unavailable": "Metrics aren't available for {platform} yet.",
+    "hypothesis_label": "Your hypothesis",
+    "hypothesis_implicit": "No hypothesis was set for this campaign, so it was judged against a default: that its posts beat your usual engagement.",
+    "verdict_supported": "Supported",
+    "verdict_not_supported": "Not supported",
+    "posts_beat": "{wins} of {n} posts beat your usual engagement.",
+    "interval": "With {n} posts, the plausible range for the share that beat it is {low} to {high}.",
+    "by_role_title": "By post role",
+    "by_role_col_role": "Role",
+    "by_role_col_result": "Posts that beat your usual engagement",
+    "by_role_result": "{wins} of {n}",
+    "acknowledged": "Reviewed by {who} on {date}.",
+    "acknowledged_note": "Note: {note}",
+    "who_you": "you",
+    "who_member": "a team member",
+    "acknowledge_intro": "Confirming saves this result to your brand memory, with the number of posts behind it, so future briefs can take it into account.",
+    "acknowledge_intro_inconclusive": "Nothing is saved to memory for a result that is not conclusive.",
+    "note_label": "Note (optional)",
+    "acknowledge_button": "Confirm result",
+    "acknowledge_pending": "Saving",
+    "error_invalid_input": "Check the note. It can be up to 500 characters.",
+    "error_unauthorized": "Sign in again to confirm this result.",
+    "error_not_found": "This result could not be found.",
+    "error_forbidden": "Only members who can edit this workspace can confirm results.",
+    "error_already_acknowledged": "This result was already confirmed.",
+    "error_generic": "Something went wrong. Try again."
+  },
+  "observed": {
+    "title": "What your posts have shown so far",
+    "none": "Nothing learned yet. Patterns need at least 10 measured posts across 3 campaigns.",
+    "provisional": "{n} of 10 posts so far. Not used in writing yet.",
+    "contradicted": "Recent posts no longer support this. Paused on {date}.",
+    "no_variety": "All your posts share this value. Nothing to compare yet.",
+    "live": "On {platform}, {subject} {verb} in {wins} of {n} posts ({campaigns, plural, one {# campaign} other {# campaigns}}).",
+    "provisional_line": "On {platform}, {subject} {verb}.",
+    "verb_above": "beat your usual engagement",
+    "verb_below": "were below your usual engagement",
+    "verb_above_count": "beat your usual engagement count",
+    "verb_below_count": "were below your usual engagement count",
+    "linkedin_basis": "On LinkedIn this counts likes, comments and shares, because impressions are not available. It compares posts with your own history.",
+    "seeded": "Compared against the history you imported.",
+    "subject": {
+      "role": {
+        "anchor_thesis": "anchor thesis posts",
+        "founder_perspective": "founder perspective posts",
+        "customer_proof": "customer proof posts",
+        "objection_response": "objection response posts",
+        "conversation_starter": "conversation starter posts",
+        "follow_up": "follow-up posts"
+      },
+      "format": {
+        "single": "single posts",
+        "thread": "thread posts",
+        "carousel": "carousel posts"
+      },
+      "length_band": {
+        "short": "short posts",
+        "medium": "medium-length posts",
+        "long": "long posts"
+      },
+      "cta": {
+        "true": "posts with a call to action",
+        "false": "posts without a call to action"
+      },
+      "origin_mode": {
+        "manual": "manually briefed posts",
+        "objective_generated": "objective-generated posts",
+        "signal_generated": "signal-generated posts",
+        "studio_promoted": "studio-promoted posts"
+      }
+    }
+  }
+}

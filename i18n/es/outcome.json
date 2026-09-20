@@ -1,0 +1,96 @@
+{
+  "platform": {
+    "twitter": "X",
+    "linkedin": "LinkedIn",
+    "instagram": "Instagram",
+    "facebook": "Facebook",
+    "threads": "Threads"
+  },
+  "role": {
+    "anchor_thesis": "Tesis central",
+    "founder_perspective": "Perspectiva del fundador",
+    "customer_proof": "Prueba de cliente",
+    "objection_response": "Respuesta a objeciones",
+    "conversation_starter": "Inicio de conversación",
+    "follow_up": "Seguimiento",
+    "unassigned": "Sin rol"
+  },
+  "retrospective": {
+    "title": "Lo que mostró esta campaña",
+    "measures": "Esto mide la interacción en {platform}, no registros ni ingresos.",
+    "not_due": "Los resultados se evalúan 7 días después de la última publicación (el {date}).",
+    "not_due_pending": "Los resultados aparecen cuando todas las publicaciones estén publicadas y hayan pasado 7 días.",
+    "inconclusive": "No hay suficientes publicaciones medidas para evaluar ({n} de 5).",
+    "metrics_unavailable": "Las métricas aún no están disponibles para {platform}.",
+    "hypothesis_label": "Tu hipótesis",
+    "hypothesis_implicit": "No se definió ninguna hipótesis para esta campaña, así que se evaluó frente a una por defecto: que sus publicaciones superan tu interacción habitual.",
+    "verdict_supported": "Confirmada",
+    "verdict_not_supported": "No confirmada",
+    "posts_beat": "{wins} de {n} publicaciones superaron tu interacción habitual.",
+    "interval": "Con {n} publicaciones, el rango plausible de la proporción que la superó va de {low} a {high}.",
+    "by_role_title": "Por rol de la publicación",
+    "by_role_col_role": "Rol",
+    "by_role_col_result": "Publicaciones que superaron tu interacción habitual",
+    "by_role_result": "{wins} de {n}",
+    "acknowledged": "Revisado por {who} el {date}.",
+    "acknowledged_note": "Nota: {note}",
+    "who_you": "ti",
+    "who_member": "un miembro del equipo",
+    "acknowledge_intro": "Al confirmar, este resultado se guarda en la memoria de tu marca, con el número de publicaciones que lo respaldan, para que los próximos briefs puedan tenerlo en cuenta.",
+    "acknowledge_intro_inconclusive": "No se guarda nada en la memoria cuando el resultado no es concluyente.",
+    "note_label": "Nota (opcional)",
+    "acknowledge_button": "Confirmar resultado",
+    "acknowledge_pending": "Guardando",
+    "error_invalid_input": "Revisa la nota. Puede tener hasta 500 caracteres.",
+    "error_unauthorized": "Inicia sesión de nuevo para confirmar este resultado.",
+    "error_not_found": "No se pudo encontrar este resultado.",
+    "error_forbidden": "Solo los miembros que pueden editar este espacio de trabajo pueden confirmar resultados.",
+    "error_already_acknowledged": "Este resultado ya fue confirmado.",
+    "error_generic": "Algo salió mal. Inténtalo de nuevo."
+  },
+  "observed": {
+    "title": "Lo que han mostrado tus publicaciones hasta ahora",
+    "none": "Aún no se ha aprendido nada. Los patrones necesitan al menos 10 publicaciones medidas en 3 campañas.",
+    "provisional": "{n} de 10 publicaciones hasta ahora. Aún no se usa al escribir.",
+    "contradicted": "Las publicaciones recientes ya no respaldan esto. En pausa desde el {date}.",
+    "no_variety": "Todas tus publicaciones comparten este valor. Aún no hay nada que comparar.",
+    "live": "En {platform}, {subject} {verb} en {wins} de {n} publicaciones ({campaigns, plural, one {# campaña} other {# campañas}}).",
+    "provisional_line": "En {platform}, {subject} {verb}.",
+    "verb_above": "superaron tu interacción habitual",
+    "verb_below": "quedaron por debajo de tu interacción habitual",
+    "verb_above_count": "superaron tu recuento habitual de interacción",
+    "verb_below_count": "quedaron por debajo de tu recuento habitual de interacción",
+    "linkedin_basis": "En LinkedIn cuenta me gusta, comentarios y compartidos, porque las impresiones no están disponibles. Compara las publicaciones con tu propio historial.",
+    "seeded": "Comparado con el historial que importaste.",
+    "subject": {
+      "role": {
+        "anchor_thesis": "publicaciones de tesis central",
+        "founder_perspective": "publicaciones de perspectiva del fundador",
+        "customer_proof": "publicaciones de prueba de cliente",
+        "objection_response": "publicaciones de respuesta a objeciones",
+        "conversation_starter": "publicaciones de inicio de conversación",
+        "follow_up": "publicaciones de seguimiento"
+      },
+      "format": {
+        "single": "publicaciones simples",
+        "thread": "publicaciones en hilo",
+        "carousel": "publicaciones en carrusel"
+      },
+      "length_band": {
+        "short": "publicaciones cortas",
+        "medium": "publicaciones de extensión media",
+        "long": "publicaciones largas"
+      },
+      "cta": {
+        "true": "publicaciones con llamada a la acción",
+        "false": "publicaciones sin llamada a la acción"
+      },
+      "origin_mode": {
+        "manual": "publicaciones con brief manual",
+        "objective_generated": "publicaciones generadas a partir del objetivo",
+        "signal_generated": "publicaciones generadas a partir de señales",
+        "studio_promoted": "publicaciones promovidas desde Studio"
+      }
+    }
+  }
+}
