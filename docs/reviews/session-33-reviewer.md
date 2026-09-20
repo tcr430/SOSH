@@ -1018,3 +1018,32 @@ after it, at D0 (`37aba2d4`).
 - **What I did NOT touch:** the §10.2 "metrics unavailable" copy and its i18n keys; the many existing importers of
   `@/lib/social/platforms/config` outside `lib/social/` (pre-existing, not this finding); `page.tsx`, which already
   passes `unavailablePlatforms` through to the card.
+
+### NIT-3 — the engagement seed comes from a backfill run whose extraction finished
+
+- **Finding:** NIT-3.
+- **Which status, and why it is a set of two:** ADR 0025 §6 (`docs/decisions/0025-social-read-path-and-backfill.md:620`) and
+  `lib/db/types.ts` `BackfillRunStatus` define the run states `queued → fetching → extracting → awaiting_ratification →
+  ratified`, plus `unsupported`, `failed` and `discarded`. There is **no `completed`**. The extraction summary — which is
+  where `engagementBaseline` lives — is written *during* extraction (`lib/backfill/extract.ts:133`), so it can already be
+  on a run that later fails or is discarded, or that is still running. The states that mean the extraction finished are
+  `awaiting_ratification` and `ratified`, so the predicate is `status IN ('awaiting_ratification','ratified')`. This is
+  the reading I chose where the build step named a single "terminal success status"; the narrower alternative
+  (`ratified` only) would withhold every brand's baseline until a founder ratifies the import, which is a behaviour
+  change the finding did not ask for.
+- **Fix:** `lib/db/post-outcomes.ts` `getEngagementSeed` adds `.in('status', [...SEED_RUN_STATUSES])` (exported constant,
+  `['awaiting_ratification','ratified']`), keeping the `created_at DESC` order and the business + platform scoping. The
+  basis mapping (`impressions → rate`, `raw → count`, else `null`) and the `baseline()` guard are untouched.
+- **Proof:** `lib/db/post-outcomes.seed.test.ts` (new) runs against a fake that **really applies** `eq` / `in` / `order` /
+  `limit`, so a missing predicate changes the result rather than a recorded call: `:37` — a newer `failed` run carrying
+  `engagementBaseline: 0.99` is ignored in favour of the older finished run's `0.02`; `:45` — a business whose only run is
+  `queued`, `fetching`, `extracting`, `failed`, `discarded` or `unsupported` gets **no** seed; both finished states seed and
+  the newest finished run wins; scoping and the basis mapping are unchanged. The existing seed/basis test in
+  `lib/db/post-outcomes.test.ts` stays green.
+- **Reddening:** the `.in('status', …)` line deleted (restored from a byte copy, `cmp` clean) — 7 of 11 RED, first
+  `expected { value: 0.99, basis: 'rate' } to deeply equal { value: 0.02, basis: 'rate' }` (the failed run seeding the
+  baseline) and `expected { value: 0.5, basis: 'rate' } to be null` for the only-non-terminal cases.
+- **Loop at this state:** `tsc` clean; `lint` 0 errors (110 pre-existing warnings); `test:app` 4355 / 4355;
+  `check-adr0018-unchanged.ts` exit 0. `test:db` is not part of D6's loop and was not run.
+- **Commit:** D6 — SHA recorded at D9 close-out.
+- **What I did NOT touch:** the basis mapping and the `baseline()` guard; no migration; no `social_backfill_runs` schema.

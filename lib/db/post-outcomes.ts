@@ -1,5 +1,5 @@
 import { addDays, formatISO, parseISO } from 'date-fns'
-import type { PostMetricsRow, PostOutcomeInsert, PostRow } from './types'
+import type { BackfillRunStatus, PostMetricsRow, PostOutcomeInsert, PostRow } from './types'
 import { getErrorMessage } from './utils'
 import { OUTCOME_MATURITY_DAYS, OUTCOME_MATURITY_GRACE_DAYS } from '@/lib/outcomes/constants'
 
@@ -168,6 +168,13 @@ export type EngagementSeed ={ value: number; basis: 'rate' | 'count' }
 
 // The imported X engagement baseline (ADR 0026 §6.3). Maps social_backfill_runs.summary's vocabulary:
 // 'impressions' -> 'rate', 'raw' -> 'count', 'none' -> no seed. The normaliser enforces the basis match.
+//
+// The seed comes only from a run whose extraction FINISHED (Session 33-D D6, NIT-3). ADR 0025 §6 defines the run
+// states queued -> fetching -> extracting -> awaiting_ratification -> ratified (plus unsupported / failed / discarded);
+// it has no 'completed'. The summary is written DURING extraction, so a run that later failed, was discarded or is
+// still running can already carry an engagementBaseline — that must never seed a brand's baseline.
+export const SEED_RUN_STATUSES: readonly BackfillRunStatus[] = ['awaiting_ratification', 'ratified']
+
 export async function getEngagementSeed(businessId: string, platform: string): Promise<EngagementSeed | null> {
   const { createServiceRoleClient } = await import('@/lib/supabase/service')
   const client = createServiceRoleClient()
@@ -176,6 +183,7 @@ export async function getEngagementSeed(businessId: string, platform: string): P
     .select('summary')
     .eq('business_id', businessId)
     .eq('platform', platform)
+    .in('status', [...SEED_RUN_STATUSES])
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
