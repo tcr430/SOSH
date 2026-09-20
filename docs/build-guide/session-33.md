@@ -1894,6 +1894,665 @@ ahead of time produces a fictional resolution log.
 > argued in the appendix, not erased**. The Session 22-D failure (RESOLVED verdicts written *into* the
 > reviewer's findings) remains prohibited under condition 1.
 
+**✅ AUTHORED 2026-09-20 — the placeholder above is retained as the specification this section was written
+against; everything below is the section itself.**
+
+**Filled in from `docs/reviews/session-33-reviewer.md`** (Reviewer range **`75cae307..879737c7`**, 14 commits
+`J2.1` `c787e633` … `J2.13b` `879737c7`, on branch `session-33-adr-0026`). **Ten steps: D0–D9.** Correction
+passes are normal, not failures (constitution). **There is no independent re-review pass this session**
+(mirroring 23-D…32-D): this pass fixes the Reviewer's findings, records its own resolutions in the Reviewer's
+own file, and the founder adjudicates close-out.
+
+**Reviewer's tally: 0 BLOCKER, 2 MAJOR, 7 MINOR, 3 NIT — 12 findings.** Every one appears **exactly once** in
+the disposition table below. **Two are ADR findings** (MINOR-4, MINOR-6), where the Reviewer judged ADR 0026
+itself wrong or silent; each closes with an **appended** ADR 0026 §VI entry as well as, where applicable, code.
+
+> **No finding is deferred by this guide.** There is no deferral column and no `docs/backlog.md` row for any
+> finding. A step that cannot close its finding **REPORTS and STOPS**; only a founder ruling can move a
+> finding out of this pass. This is the guide's posture, not a founder instruction — if the founder issues
+> one, record it here verbatim beside this note.
+
+**This pass starts from a green, pushed range — that is the unusual part, and it changes the shape of the
+close-out.** Unlike 32-D there is no `BLOCKER-1` equivalent: `879737c7` is pushed to
+`origin/session-33-adr-0026` and all three required workflows are green at it (app-tests `35509193435`,
+db-tests `35509193408` with its skip-guard quoted, eval `35509193581`), and 34/34 non-E constraints are
+verified executed green. **So D9 does not rescue an unexecuted range; it re-greens a range this pass has
+changed, and re-dates every constraint claim to the corrected head.** A claim dated to `879737c7` after
+D1–D8 have landed is stale, and re-dating it is the whole point of the step.
+
+**The two MAJORs are different kinds of defect and only one is behavioural.**
+- **MAJOR-1 is an architectural divergence that is silent.** Six `lib/db/` readers behind the campaign detail
+  page self-acquire the **service-role** client, so `OUTCOME-RLS-ISOLATED` — 24 Tier-1 tests, green in CI —
+  protects nothing in production. Nothing leaks today; the layer that would catch a future leak was removed
+  without a ruling saying so. CLAUDE.md's three-client table and build-guide §0 **L-9** (*"service-role never
+  in a user-facing read path"*) both forbid it.
+- **MAJOR-2 is a live failure path with no observer.** J2.1 made `fetchPostMetrics` real, which turned
+  `lib/metrics/orchestrator.ts:99-106`'s `else` branch from unreachable into the primary failure path for
+  every X token expiry, revocation, rate limit and shape mismatch — and that branch binds nothing, logs
+  nothing and captures nothing. Seven days later the outcome tick launders the result into the benign
+  `skippedNoMetrics`. **An ongoing auth outage is indistinguishable from a quiet week, on the one input this
+  whole session exists to consume.**
+
+---
+
+### Founder adjudications — **none required; one remedy would have needed one and was NOT taken**
+
+A-1…A-6 (§0.2) stand untouched and are **not** reopened. **No step in this pass is gated on a pending
+ruling.** One remedy in the Reviewer's report would have been a founder decision, and this guide records why
+it is not the one taken:
+
+| # | The remedy that would need a ruling | Why this pass does not take it |
+|---|---|---|
+| **MAJOR-1 option (b)** | Keep service-role on the campaign detail page, recorded as an amendment to CLAUDE.md's three-client table **and** to build-guide L-9, with ADR 0026 §10.4 stating why RLS is not the guard on this surface. | It **weakens two binding rules to match code written without noticing them**. Option (a) — the six readers take a `client` and the page passes the authenticated anon client — restores the rule rather than amending it, needs no ruling, and is what every comparable page read already does (`opportunities/page.tsx:48-50`, `settings/signals/page.tsx:47-50`). **If the founder prefers (b), D1 STOPS and the ruling is recorded here before anything is written.** |
+
+**Engineering decisions this pass takes without a ruling, with the reason:**
+
+| Finding | Remedy chosen | Why no ruling is needed |
+|---|---|---|
+| **MAJOR-1** | Option (a): page reads take a `client`; the AI-layer and worker paths keep service-role through **separate** functions | This is the established `lib/db/` split the Reviewer named (`insight-cards.ts:67,91,110` take a client; `:148,187,210` self-acquire). It conforms to L-9 rather than amending it. |
+| **MAJOR-2** | Capture the bound error with platform and post id tags, **and** split `skippedNoMetrics` into "no metrics row ever written" versus "written but staler than day 7" | The capture shape is already this session's own (`lib/outcomes/orchestrator.ts:125-127`). The counter split changes ADR §14's canonical sixteen-key set, so it lands **with** its appended ADR amendment at D8 — never silently. |
+| **MINOR-6** | Record at ADR 0026 §VI that descriptive display of `hook_type` / `proof_type` is **deferred**, and that `hook_survived` is stored for that future surface, naming its owner | Shipping the display surface in a correction pass is new scope and L-1 forbids it. The Builder already took the safe reading; the defect is that it was taken **silently**. |
+| **MINOR-7** | Distinguish the two X shapes that are distinguishable **from the response**, and leave the rest owed to the first live smoke in ADR 0028 Amendment A A.5 | The Reviewer states plainly this cannot be closed from documentation. Half of it is closable in code today; claiming the other half would be a fabrication. |
+| **NIT-2** | **Recorded closure, no code** | Commit bodies in a pushed range cannot be rewritten. The budget was not exceeded (≤ 3 declared, 2 attributable); the appendix names the unattributed first invocation. |
+
+---
+
+### What the Reviewer found — disposition of all 12 findings (`session-33-reviewer.md` is authoritative)
+
+| ID | Tier | One line | Disposition | Step |
+|---|---|---|---|---|
+| **MAJOR-1** | MAJOR | Six page readers self-acquire service-role; the three tables' SELECT policies are never evaluated in production | FIX (option a) | **D1** |
+| **MAJOR-2** | MAJOR | The now-live metrics `else` branch records no diagnostic; a real X failure becomes `skippedNoMetrics` | FIX (+ ADR §14 key-set amendment at D8) | **D2** |
+| **MINOR-1** | MINOR | `retrospective.ts:147-149` swallows its error without capturing it | FIX | **D3** |
+| **MINOR-2** | MINOR | The cron route's bare catch fabricates a zeroed summary and logs it as fact, returning 200 | FIX | **D3** |
+| **MINOR-3** | MINOR | A member may rewrite an outcome row's `pattern` in the same UPDATE that retires or soft-deletes it | FIX (migration) | **D4** |
+| **MINOR-5** | MINOR | `unavailablePlatforms` hard-codes platform capability outside `/lib/social/` | FIX | **D5** |
+| **NIT-3** | NIT | `getEngagementSeed` does not filter the backfill run by status | FIX | **D6** |
+| **MINOR-7** | MINOR | X's `return null` conflates "post deleted" with "this account can no longer read `public_metrics`" | FIX (partial, by recorded decision) + owed item | **D7** |
+| **MINOR-4** | MINOR (**ADR**, §V.2) | The constraint→CI map names `app-tests` for row 29; CI runs only its detector | FIX (ADR) | **D8** |
+| **MINOR-6** | MINOR (**ADR**, §4.1/§4.4 vs §10.2) | ADR 0026 is internally inconsistent; the Builder took the safe reading silently | FIX (ADR) | **D8** |
+| **NIT-1** | NIT | ADR 0026's header still cites ADR 0016 Amendment C / ADR 0017 Amendment C; they landed as D / E | FIX (ADR) | **D8** |
+| **NIT-2** | NIT | The ECC budget cannot be fully audited from the range — no commit body says "1 of 3" | RECORDED CLOSURE | **D8** |
+
+**Count check, re-run at D9:** 12 rows, 12 distinct IDs, every ID from the Reviewer's findings index exactly
+once. If it fails, the pass is not closed.
+
+---
+
+### Ordering rationale
+
+1. **D0 first.** `docs/reviews/session-33-reviewer.md` is **untracked**, and it must enter git exactly as
+   written so the appendix diff proves itself additive. `docs/build-guide/session-33.md` is tracked but its
+   committed version (last touched `0c79d118`, before BASE) predates this §4 — the pass's own work order —
+   so it lands in the same commit. ADR 0026 is already tracked (`75cae307`).
+2. **D1 (MAJOR-1) is the first code step and the largest.** It changes six function signatures and the page
+   that calls them; every later step's test run should already be against the corrected read path. It is also
+   the only step whose remedy the founder could overrule, so it runs while the pass still has nothing to undo.
+3. **D2 before D3.** MAJOR-2 defines the observability shape (bound error, `Sentry.captureException`, `cron`
+   and `phase` tags) that D3 then applies twice. Writing D3 first would pin a second, unrelated shape.
+4. **D3 groups the two remaining silent-failure findings** (MINOR-1, MINOR-2): same class, same proof
+   standard, neither behavioural beyond what it makes visible.
+5. **D4 is the only migration, and it runs alone** (the 31-D D5 / 32-D D3 precedent). A second migration
+   mid-pass makes every earlier `test:db` run meaningless. It follows D1 because D1's Tier-1 RLS test seeds
+   the same tables and must be green before the write-protection trigger changes underneath it.
+6. **D5 and D6 are independent single-file fixes** and could run in either order; D5 first because it touches
+   `/lib/social/`'s published shape and D6 does not.
+7. **D7 is deliberately last among the code steps**, because it is the only one that closes **partially** by
+   decision, and the appendix must say so beside a finished record of everything that closed fully.
+8. **D8 is documentation truth, after every code step**, because every amendment cites the test that now
+   proves it — including MAJOR-2's key-set change, which is not permitted to exist in code without it.
+9. **D9 pushes last**, producing green runs for the corrected range and re-dating every constraint claim that
+   D1–D8 invalidated.
+
+---
+
+### Where resolutions go (CLAUDE.md — `REVIEWER-REPORT APPEND-ONLY`, revised Session 23-D)
+
+Resolutions go **into `docs/reviews/session-33-reviewer.md`**, under one appended, attributed
+`## CORRECTION PASS (Session 33-D)` section at the end; there is no separate corrections file.
+
+**The Reviewer's text is immutable:**
+- Not one character is edited.
+- No verdict is flipped, and no `RESOLVED` is stamped.
+- This includes every "Verified" section, §0's "What I ran" table, the mutation tables in §4.1 and §5, the
+  Tier-3 reddening table in §10, the "What I could NOT verify" list and the closing tally line.
+
+**The appendix itself:**
+- It references findings **by ID** and records *finding → fix → proving test → SHA*.
+- A disputed finding is argued in the appendix, never erased.
+
+**Never weaken a test to reach green.** Amend ADR 0026 (appended, as a new §VI) if a constraint proves
+infeasible. Every correction lands as a **new** section, never as an edit to §§0–V — with the single
+exception of the one §V.2 cell MINOR-4 names, whose prior text is **quoted in the appendix before it is
+replaced**. **Do not fold D0 and the first resolution row into one commit.**
+
+**ECC budget: ≤ 1 subagent per step, and only where the finding names one.**
+- **D1** → `security-reviewer` (a tenancy boundary moving from an argument to a policy).
+- **D4** → `database-reviewer` (a `BEFORE UPDATE` trigger on a table with two writers).
+- **All other steps carry none.** Do not re-run the J2.6 / J2.11 reviewers; the proving test is the
+  confirmation. `taste-skill` and `impeccable` are **not** invoked in this pass — no §10.2 state changes.
+
+**The highest-risk classes:**
+- **(a) D1.** Passing an anon client into a reader the **worker** also uses would silently empty the worker's
+  reads. `listOutcomePatterns` has two kinds of caller — the page (anon) and `lib/memory/outcomes.ts`'s
+  retrieval in the generation path (service-role). They must end up as **two functions**, not one with an
+  optional parameter that defaults to service-role.
+- **(b) D2.** The counter split must not change what `skippedNoMetrics` **means** for an existing dashboard
+  reader without the ADR amendment landing with it.
+- **(c) D4.** Widening branch C's immutable tuple must not break the legitimate retire/soft-delete path that
+  `performance-memory-outcome-schema.test.ts:405` already proves.
+- **(d) D5.** The capability flag must make a real LinkedIn implementation flip the disclosure off, and must
+  not suppress the disclosure for a campaign that simply has no outcomes yet.
+
+Each step ends by re-running the full existing suite for its files and confirming no previously-green
+assertion changed.
+
+---
+
+### §4.0 — Correction primer  (paste first · wait for acknowledgement)
+
+```
+You are the Session 33-D correction pass (Track J, ADR 0026, the outcome loop). You fix the findings in
+docs/reviews/session-33-reviewer.md - you do not re-review, and you do not re-litigate the Reviewer's
+verdicts. Acknowledge these ten rules, then stop and wait for D0.
+
+1. THE REVIEWER'S TEXT IS IMMUTABLE. Resolutions go in ONE appended, attributed
+   "## CORRECTION PASS (Session 33-D)" section at the END of docs/reviews/session-33-reviewer.md, opening
+   with author, date and the commit range fixed. Not one character above it changes. A disputed finding is
+   argued in the appendix, never erased.
+2. ONE STEP, ONE COMMIT, THEN STOP. Each step's commit message is given; use it.
+3. EVERY FIX IS PROVED BY MUTATION. Break the fix, watch the new test go RED, restore, confirm
+   `git diff --stat` is empty. Record the exact mutation in the appendix.
+4. NEVER WEAKEN A TEST TO REACH GREEN. Amend ADR 0026 as an APPENDED section if a constraint is infeasible.
+   Never edit a committed migration; correct it with a forward migration.
+5. ALL 12 FINDINGS ARE ACCOUNTED FOR; NOTHING IS DEFERRED BY THIS GUIDE. A finding you cannot close, you
+   REPORT and STOP. No docs/backlog.md row for any finding. MINOR-7 closes PARTIALLY and NIT-2 is a RECORDED
+   CLOSURE - the build-guide section 4 tables say exactly how each closes; follow them, and invent no others.
+6. A-1..A-6 ARE RULED AND NOT REOPENED. NO STEP IS GATED ON A PENDING RULING. If you believe a remedy needs
+   one - in particular MAJOR-1 option (b), keeping service-role on a user-facing read path - STOP and report.
+   Never invent a ruling.
+7. ONE MIGRATION, AT D4 ONLY. If another step appears to need SQL, STOP.
+8. EVERY STEP'S LOOP: npx tsc --noEmit --skipLibCheck; npm run lint; npm run test:app with app-tests.yml's
+   env block; and for D1 and D4, npm run test:db against a running local Supabase stack. If the stack cannot
+   start, STOP - a Tier-1 change is never committed unexecuted.
+   lib/signals/__fixtures__/eval/corpus-v2-schema.test.ts is a KNOWN pre-existing order-dependent flake that
+   passes in isolation, is unchanged since before BASE and is green in CI; it is not yours to fix and not a
+   reason to stop.
+9. DO NOT PUSH BEFORE D9. The range is already pushed and green at 879737c7; that green is about to become
+   stale, and D9 is what makes it true again.
+10. SCOPE IS THE FINDINGS. L-1 binds: no experimentation or holdout, no UTM tagging, no conversion ingestion,
+    no analytics route, no cross-type retrieval, no additional memory writer, no comment mining, no
+    embeddings, no new OAuth scope, no model call anywhere in lib/outcomes/, and lib/learning/ stays
+    byte-identical to 75cae307 (npx tsx scripts/check-adr0018-unchanged.ts must still exit 0 at every step).
+```
+
+---
+
+### §4.1 — Correction steps
+
+#### D0 — land the governing documents in git  ·  FIRST, by design  ·  no code
+
+```
+CORRECTION - Session 33-D · D0. No .ts/.tsx/.sql. No specialist.
+
+THE STATE: docs/reviews/session-33-reviewer.md is UNTRACKED. docs/build-guide/session-33.md is tracked but
+its committed version (last touched 0c79d118, before BASE 75cae307) predates this section 4, which is this
+pass's work order. ADR 0026 is already tracked (75cae307; its section V at 879737c7).
+
+DO - commit exactly these two paths, AS THEY STAND:
+- docs/reviews/session-33-reviewer.md  (EXACTLY as the Reviewer left it)
+- docs/build-guide/session-33.md       (with section 4 authored - say so in the commit message)
+Do NOT append the CORRECTION PASS section. Do NOT stage any code file; report any present and leave it.
+supabase/.temp/cli-latest is untracked noise - do not stage it.
+
+VERIFY: `git show <D0-sha>:docs/reviews/session-33-reviewer.md` byte-identical to the working tree and
+containing no "CORRECTION PASS"; `git show <D0-sha>:docs/build-guide/session-33.md | grep -c "### §4.1"`
+non-zero; no code file in the commit.
+On commit: "D0 - Session 33-D audit trail: the Reviewer's report enters git exactly as written (range
+75cae307..879737c7, 12 findings) before any resolution row, so the appendix is provably additive;
+session-33.md lands with section 4 authored, since section 4 is this pass's work order." Then stop.
+```
+
+#### D1 — MAJOR-1: the campaign page reads through RLS, and a Tier-1 test proves the policy does the work
+
+```
+CORRECTION - Session 33-D · D1. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. Invoke
+security-reviewer ONCE, after the plan and before the commit. Requires a running local Supabase stack.
+
+THE DEFECT (MAJOR-1): app/[locale]/(dashboard)/campaigns/[id]/page.tsx:66 calls loadCampaignLearningView(),
+and lib/outcomes/campaign-view.ts:125-130 fans out to six readers that EACH acquire their own service-role
+client: lib/db/campaign-retrospectives.ts getCampaignRetrospective (:71-72), listCampaignPostStates
+(:179-180), getFrozenBriefContent (:220-221), listCampaignOutcomeCellSources, and
+lib/db/memory-performance.ts listOutcomePatterns (:391-392, called TWICE). createServiceRoleClient() bypasses
+RLS, so the post_dimensions / post_outcomes / campaign_retrospectives SELECT policies proved by
+OUTCOME-RLS-ISOLATED (24 Tier-1 tests) are never evaluated by the only production code that reads them.
+CLAUDE.md's three-client table and section 0's L-9 ("service-role never in a user-facing read path") both
+forbid it. Tenancy on this surface currently rests on ONE argument.
+
+BUILD - option (a) from the report; option (b) needs a founder ruling, so if you think it is right, STOP:
+1. The SIX readers used by loadCampaignLearningView take `client: SupabaseClient` as their FIRST parameter,
+   matching the house split the Reviewer named: page reads take a client (lib/db/insight-cards.ts:67,91,110),
+   writes and worker reads self-acquire (:148,187,210). listOutcomePatterns then matches its own sibling
+   listPerformanceMemoryCandidates(client, businessId, limit) in the very same file.
+2. loadCampaignLearningView takes the client and threads it to all six. page.tsx passes the AUTHENTICATED
+   anon client it already has.
+3. THE TRAP: lib/memory/outcomes.ts (retrieveOutcomePatterns at :29 and retrieveHypothesisResults at :49) is
+   the GENERATION path and legitimately runs service-role. Do NOT give it an anon client, and do NOT add an
+   optional parameter that silently defaults to service-role - that reintroduces exactly the bug. TWO
+   functions, each named for its caller, with the shared query body factored once.
+4. Nothing else changes: the .eq('business_id', businessId) filters stay (OUTCOME-NO-CROSS-BUSINESS), the
+   source/status/deleted_at predicates stay, and the Tier-3 wrapper scan's enumerated export list is UPDATED
+   to the new names rather than widened.
+
+VERIFY:
+- NEW Tier-1 (supabase/__tests__): as an AUTHENTICATED member of business B, through THIS EXACT PATH, a
+  campaign of business A returns ZERO rows from all three tables - the RLS policy doing the work, not the
+  argument. Seed with the existing supabase/__helpers__/outcome-fixtures.ts.
+- REDDEN IT: swap the anon client back to createServiceRoleClient() in one reader -> the new test goes RED
+  naming that table. Restore; `git diff --stat` empty. Paste the transcript into the appendix.
+- lib/memory/outcome-separation.test.ts still exercises BOTH listPerformanceMemoryCandidates call paths by
+  name and stays green. lib/outcomes/__tests__/campaign-view.test.ts, outcome-tables-rls.test.ts and the
+  Tier-3 cross-business wrapper scan all green.
+- Full loop: tsc; lint; test:app (CI env); test:db.
+Append the appendix opening block (section 4.2) and the MAJOR-1 row.
+On commit: "D1 - MAJOR-1 closed: the six campaign-learning readers take an authenticated client and the page
+passes the anon client, so OUTCOME-RLS-ISOLATED's policies are evaluated by the production read path; the
+AI/worker path keeps service-role through a separate named function. A Tier-1 cross-tenant test through the
+page path returns zero rows and reddens when a reader is switched back." Then stop.
+```
+
+#### D2 — MAJOR-2: the live metrics failure path gets an observer, and stops laundering into a benign counter
+
+```
+CORRECTION - Session 33-D · D2. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+
+THE DEFECT (MAJOR-2): lib/metrics/orchestrator.ts:99-106's else branch does `summary.errors++` with the error
+never bound, never logged, never captured. The line is unchanged in the range - but before J2.1 (c787e633)
+BOTH providers' fetchPostMetrics threw NOT_IMPLEMENTED, so the branch was unreachable for the only two
+platforms the worker syncs. J2.1 made it the live path for every X token expiry, revocation, rate limit,
+network error and Zod shape mismatch (twitter-provider.ts:459-465 throws UNKNOWN). The receiving end,
+lib/outcomes/orchestrator.ts:139, then counts those posts as skippedNoMetrics - the counter ADR section 6.1
+defines as the BENIGN "a post whose day-7 sync never arrived" - and after CANDIDATE_LOOKBACK_DAYS = 30 they
+leave the candidate scan and are never frozen.
+
+BUILD:
+1. Bind the error and capture it in the shape this session already uses (lib/outcomes/orchestrator.ts:
+   125-127): Sentry.captureException(err, { tags: { cron: 'sync-metrics', phase: <the phase>, platform:
+   post.platform }, extra: { postId: post.id } }). Keep summary.errors++. Do NOT add a console line - the one
+   canonical tick line per invocation is the house carve-out and it stays one.
+2. Separate "no metrics row was EVER written" from "a metrics row exists but is older than day 7" in the
+   outcome tick, so an auth outage and a quiet week are not one counter. This ADDS a key to ADR section 14's
+   canonical sixteen-key set, so: name the new key here, update the tick line, and D8 appends the ADR
+   amendment. If the two cases are not distinguishable from what is stored, STOP and report rather than
+   guessing.
+3. Do not touch twitter-provider.ts in this step - MINOR-7 is D7.
+
+VERIFY:
+- Tier-2 in lib/metrics/orchestrator.test.ts: a non-NOT_IMPLEMENTED SocialProviderError produces a Sentry
+  capture carrying the platform and post id AS WELL AS the errors increment; a NOT_IMPLEMENTED error still
+  takes the unsupportedPlatforms path and captures NOTHING.
+- Tier-2 in lib/outcomes/__tests__/orchestrator.test.ts: a post with no metrics row and a post with a stale
+  metrics row land in DIFFERENT counters, and the canonical tick line's key set is asserted EXACTLY (not as a
+  subset) against its new size.
+- REDDEN: delete the captureException call -> the first test RED; collapse the two counters -> the second
+  RED. Restore each; `git diff --stat` empty.
+- Full loop: tsc; lint; test:app (CI env).
+Append the MAJOR-2 row, naming the new key.
+On commit: "D2 - MAJOR-2 closed: the metrics orchestrator's now-live error branch binds and captures its
+error with platform and post id, and the outcome tick no longer counts a real X failure as the benign
+skippedNoMetrics. The canonical tick key set grows by one key, amended in ADR 0026 at D8." Then stop.
+```
+
+#### D3 — MINOR-1 + MINOR-2: the last two silent failures in the tick
+
+```
+CORRECTION - Session 33-D · D3. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+
+THE DEFECTS:
+- MINOR-1: lib/outcomes/retrospective.ts:147-149 is `catch { result.errors += 1 }` - no binding, no capture.
+  The caller (orchestrator.ts:253-254) folds retro.errors into summary.errors without capturing either, so
+  listCampaignPostStates, getFrozenBriefContent, the wilsonBounds RPC, insertCampaignRetrospective and the
+  deliberate throw at retrospective.ts:57 are ALL invisible. A campaign that fails evaluation looks exactly
+  like "not due yet". It is the only per-item handler this session wrote with no Sentry capture.
+- MINOR-2: app/api/cron/extract-outcomes/route.ts:60-67 is a bare catch that REPLACES the real summary with
+  candidates: 0, matured: 0, outcomesWritten: 0, ... errors: 1, emits that as the canonical outcome.tick
+  line, and returns 200. The zeros are not "unknown" - the line ASSERTS that nothing was due and nothing was
+  written. The only throws that reach here are the catastrophic ones (a serverOnly() failure, a module-load
+  failure, a Sentry.withMonitor failure), which are exactly the ones that need a reason.
+
+BUILD:
+1. retrospective.ts: catch (err) { result.errors += 1; Sentry.captureException(err, { tags: { cron:
+   'extract-outcomes', phase: 'retrospective-campaign' } }) } - the same shape as D2 and as
+   orchestrator.ts:125-127, 202-205, 244-258.
+2. route.ts: bind the error, Sentry.captureException it, and emit the line with the counters the tick
+   actually reached - or an explicit unknown marker for each - NEVER fabricated zeros. Keep the single
+   canonical console line; state in the commit which status code it returns and why.
+
+VERIFY:
+- Tier-2: a throwing reader inside the retrospective phase produces a capture with phase
+  'retrospective-campaign' AND increments errors.
+- Tier-2: a throwing runOutcomeTick produces a capture AND does not report candidates: 0 as a fact - assert
+  on the EMITTED LINE, not on the mock.
+- REDDEN each by removing the capture / restoring the fabricated zeros; restore; `git diff --stat` empty.
+- Full loop: tsc; lint; test:app (CI env).
+Append the MINOR-1 and MINOR-2 rows.
+On commit: "D3 - MINOR-1 and MINOR-2 closed: the retrospective phase captures its error with a phase tag, and
+the extract-outcomes route no longer fabricates a zeroed summary - it captures the throw and reports what the
+tick actually reached." Then stop.
+```
+
+#### D4 — MINOR-3: the SQL  ·  THE ONLY MIGRATION
+
+```
+CORRECTION - Session 33-D · D4. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. Invoke
+database-reviewer ONCE, after the plan and before the commit. Requires a running local Supabase stack.
+
+THE DEFECT (MINOR-3): supabase/migrations/20260919130000_performance_memory_outcome_schema.sql:224-247.
+Branch B guards pattern_key and dimension. Branch A (:230) allows the update outright when NEW.status =
+'retired' OR NEW.deleted_at IS NOT NULL. Branch C (:234-245) guards only the eight stats columns. `pattern`
+is in NO branch. So an authenticated member may run
+  UPDATE ... SET status = 'retired', pattern = '<anything>'
+on an outcome row, and likewise SET deleted_at = now(), status = 'active', pattern = '<anything>'. ADR
+section 12.1 lists "UPDATE of an outcome row's outcome_n/pattern/source rejected" as a Tier-1 obligation; the
+suite covers `pattern` alone (:386) and retire + outcome_n (:413) - never retire + pattern, which is the one
+combination that passes. No such row can reach a prompt (listOutcomePatterns filters status and deleted_at),
+so the damage is to the integrity of the stored record of what the system observed.
+
+BUILD - a FORWARD migration only; never edit 20260919130000:
+1. Add `pattern`, `platform`, `scope` and `scope_ref` to branch C's immutable tuple for outcome rows.
+2. Preserve the legitimate paths: {status: 'retired'} alone still succeeds; clearing deleted_at while status
+   <> 'retired' stays rejected by branch A (performance-memory-outcome-schema.test.ts:405 must stay green).
+3. Change nothing about the two namespace CHECKs, the two partial unique indexes, or the distilled index -
+   the Reviewer verified the distilled index is byte-identical to 20260726020000:26-28 and that pg_constraint
+   holds exactly one source CHECK and one dimension CHECK. If your migration would alter either, STOP.
+
+VERIFY:
+- Tier-1, as the AUTHENTICATED role against live Postgres, never a pg_policies read:
+  {status: 'retired', pattern: 'forged'} REJECTED; {status: 'retired'} alone SUCCEEDS;
+  {deleted_at: now(), status: 'active', pattern: 'forged'} REJECTED; a platform/scope/scope_ref forge
+  REJECTED.
+- REDDEN: drop `pattern` from the tuple -> the forge succeeds, i.e. the new test goes RED. Restore.
+- Re-run the whole outcome Tier-1 set (17 files / 222 tests per the Reviewer) plus
+  outcome-promotion-floor.test.ts and outcome-tables-rls.test.ts.
+- After the migration, re-query pg_constraint and confirm STILL exactly one source CHECK and one dimension
+  CHECK; paste the output into the appendix.
+- Full loop: tsc; lint; test:app (CI env); test:db.
+Append the MINOR-3 row.
+On commit: "D4 - MINOR-3 closed by forward migration: pattern, platform, scope and scope_ref join branch C's
+immutable tuple for outcome rows, so a member can no longer rewrite an outcome row's sentence in the same
+UPDATE that retires or soft-deletes it. Retire-alone still succeeds; the resurrection guard is unchanged."
+Then stop.
+```
+
+#### D5 — MINOR-5: platform capability belongs to `/lib/social/`
+
+```
+CORRECTION - Session 33-D · D5. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+
+THE DEFECT (MINOR-5): lib/outcomes/campaign-view.ts:139 reads
+  unavailablePlatforms: platforms.filter((p) => p === 'linkedin' && !measured.has(p))
+"Which platforms can return metrics" is /lib/social/'s knowledge; CLAUDE.md's native-provider rule exists so
+consumers talk to the abstraction rather than re-deriving provider facts. Two consequences: when LinkedIn
+grants r_member_social_feed, every campaign page keeps printing "Metrics aren't available for LinkedIn yet."
+until someone remembers this line; and the !measured.has(p) half shows the same message for a brand-new
+LinkedIn campaign with no frozen outcomes yet, indefinitely.
+
+BUILD:
+1. lib/social/platforms/config.ts: PlatformOAuthConfig gains an explicit capability field (e.g.
+   metricsReadAvailable: boolean) - twitter true, linkedin false, the three unserved platforms false - each
+   with the one-line reason comment the file already uses for tokenExpirySeconds. Export it through
+   lib/social/index.ts; nothing outside /lib/social/ imports platforms/config directly.
+2. campaign-view.ts derives the unavailable set from that capability for the campaign's platforms, and drops
+   the !measured.has(p) condition, which conflates "cannot measure" with "has not measured yet".
+3. The ADR section 10.2 "metrics unavailable" copy and its i18n keys do NOT change - this step changes where
+   the state comes from, not what it says.
+
+VERIFY:
+- Tier-2 in lib/outcomes/__tests__/campaign-view.test.ts: with the capability false, a LinkedIn campaign
+  reports the disclosure whether or not it has measured rows; FLIP the capability to true and the disclosure
+  disappears - the test flips the flag, it does not assert a literal.
+- Tier-2: a twitter-only campaign reports no unavailable platform in either state.
+- The section 10.2 surface tests (outcome-surfaces.test.tsx, 24 tests) and the copy lint stay green in all
+  three locales.
+- REDDEN: restore the string literal -> the flip test RED. Restore; `git diff --stat` empty.
+- Full loop: tsc; lint; test:app (CI env).
+Append the MINOR-5 row.
+On commit: "D5 - MINOR-5 closed: metrics-read capability is declared in lib/social/platforms/config.ts and
+read through lib/social/index.ts; campaign-view no longer hard-codes 'linkedin' and no longer shows the
+unavailable disclosure merely because a campaign has not measured anything yet." Then stop.
+```
+
+#### D6 — NIT-3: the seed must come from a run that finished
+
+```
+CORRECTION - Session 33-D · D6. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+
+THE DEFECT (NIT-3): lib/db/post-outcomes.ts:172-179 takes the newest social_backfill_runs row for the
+business and platform by created_at DESC with NO predicate on the run's status. A failed or partially
+completed run whose summary already carries an engagementBaseline would seed a brand's X baseline. The basis
+guard (OUTCOME-SEED-BASIS-MATCH) still applies and the row is stamped import_seed, so the seed is labelled
+and disclosed - which is why the Reviewer graded it NIT, not higher.
+
+BUILD:
+1. Filter on the terminal success status ADR 0025 defines for a backfill run - READ ADR 0025 and
+   lib/db/types.ts for the exact value; do not guess the string. Keep the created_at DESC ordering and the
+   business+platform scoping.
+2. Change nothing about the basis mapping (impressions -> rate, raw -> count, anything else -> null) or the
+   baseline() guard that refuses a count-basis seed for a rate-basis post.
+
+VERIFY:
+- Tier-2: a newer non-terminal run carrying an engagementBaseline is IGNORED in favour of the older completed
+  run; a business with only a non-terminal run gets NO seed (the post is then unseeded, not mis-seeded).
+- REDDEN: drop the status predicate -> the first case RED. Restore; `git diff --stat` empty.
+- The seed/basis tests and the "Compared against the history you imported" surface tests stay green.
+- Full loop: tsc; lint; test:app (CI env).
+Append the NIT-3 row.
+On commit: "D6 - NIT-3 closed: getEngagementSeed reads the newest COMPLETED backfill run only, so a failed or
+partial run's summary can no longer seed a brand's baseline." Then stop.
+```
+
+#### D7 — MINOR-7: distinguish what the response can distinguish, and owe the rest to the smoke
+
+```
+CORRECTION - Session 33-D · D7. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+THIS IS THE ONE STEP THAT CLOSES PARTIALLY BY RECORDED DECISION. Read the disposition table before you start.
+
+THE DEFECT (MINOR-7): lib/social/twitter-provider.ts:467 (`if (!pm) return null`) and the call site
+lib/metrics/orchestrator.ts:81-84 (`if (result === null) { summary.skippedNoData++; continue }`) together
+turn TWO different facts into one benign skip: "this post was deleted" and "this account or app tier can no
+longer read public_metrics". The method's own comment claims only the first. If X changes the entitlement,
+every post returns null forever, skippedNoData climbs, errors stays 0, Sentry is silent, no post_metrics row
+is ever written, and the outcome tick records skippedNoMetrics - a total, permanent loss of the only working
+metrics input, indistinguishable from "these tweets were deleted".
+
+WHAT CAN AND CANNOT BE CLOSED TODAY. ADR 0028 Amendment A A.5 concedes the partial-error shape is "NOT
+confirmed against X's docs" and api.x.com/2/openapi.json returns HTTP 402. So:
+1. CLOSABLE NOW - distinguish on what the response itself carries: a response with a present errors[] block
+   (or any documented partial-error marker) becomes a captured SocialProviderError rather than null; a
+   response whose data is genuinely absent stays null. Add NO new scope; make NO live call.
+2. NOT CLOSABLE NOW - which shape X actually returns for a deleted post. Record it as an owed item in ADR
+   0028 Amendment A A.5 at D8, named as the first thing the live smoke confirms, alongside the existing
+   retweet_count / repost_count alias item.
+
+VERIFY:
+- Tier-2 per shape in the provider's test file: (a) errors[] present -> SocialProviderError thrown, captured
+  at the orchestrator by D2's handler, errors incremented, NOT skippedNoData; (b) data absent with no errors
+  block -> null -> skippedNoData; (c) a normal response still maps every field with ?? null and no ?? 0.
+- REDDEN: collapse (a) back into `return null` -> the first test RED. Restore; `git diff --stat` empty.
+- Full loop: tsc; lint; test:app (CI env).
+Append the MINOR-7 row, stating PLAINLY which half closed and which is owed to the smoke, and quoting A.5.
+On commit: "D7 - MINOR-7 closed in part: an X response carrying an errors[] block is now a captured provider
+error rather than a silent null, so an entitlement loss is no longer indistinguishable from a deleted post.
+X's actual deleted-post shape remains unconfirmed from documentation and is recorded as owed to the first
+live smoke (ADR 0028 Amendment A A.5)." Then stop.
+```
+
+#### D8 — documentation truth: MINOR-4, MINOR-6, NIT-1, NIT-2, and the amendments D2's key set requires  ·  no code
+
+```
+CORRECTION - Session 33-D · D8. No .ts/.tsx/.sql. No specialist. Every statement cites the test (file:line)
+that now proves it, at D1..D7's SHAs.
+
+THE DEFECTS:
+- MINOR-4 (ADR): section V.2 row 29 names app-tests as the executing job for OUTCOME-ADR0018-UNCHANGED, but
+  scripts/check-adr0018-unchanged.ts:1-6 says in its own header it is "a recorded Tier-3 command, NOT part of
+  app-tests" - it needs the BASE commit, which a shallow CI checkout does not guarantee. What app-tests runs
+  is lib/outcomes/__tests__/adr0018-guard.test.ts (pure decision logic over synthetic path lists) plus the
+  unmodified lib/learning suite. A reader of the map concludes CI would catch an ADR 0018 change; it would
+  not. This is a LABELLING defect - the Reviewer ran the command at head (exit 0), ran the raw git diff
+  (empty) and proved it reddens, so the property itself holds.
+- MINOR-6 (ADR): section 4.1 says hook_type "is collected ... and shown, never promoted" and section 4.4 says
+  a hook_type whose opening did not survive the edit is "excluded even from descriptive display" - both
+  presuppose a display surface. Section 10.2's state table, which the ADR presents as exhaustive, has NO row
+  for hook_type or proof_type. The Builder followed 10.2 (nothing displays either) and hook_survived is
+  written and never read - measured.ts:52 computes it, orchestrator.ts:189 stores it, db/types.ts:1642
+  declares it, no consumer exists. The safer reading, chosen SILENTLY: section V.5's deviations list has
+  three items and not this one.
+- NIT-1: docs/decisions/0026-outcome-loop.md:9,12 still read "ADR 0016 - Amendment C" and "ADR 0017 -
+  Amendment C". They landed as ADR 0016 Amendment D and ADR 0017 Amendment E. The discrepancy IS recorded at
+  section V.5 (:1059-1060) and at the head of each target amendment - but not in the header a reader meets
+  first.
+- NIT-2: no commit body in the range contains "ECC BUDGET 1 of 3"; d7cbda3d declares 2 of 3
+  (database-reviewer) and fb28e6c6 declares 3 of 3 (security-reviewer). The budget was NOT exceeded.
+
+DO - ADR 0026 gains ONE appended section, "## VI. Correction pass verification (Session 33-D)". Never edit
+sections 0-V except the single V.2 cell MINOR-4 names, and QUOTE that cell's prior text in the appendix
+before replacing it:
+1. MINOR-4: row 29's "Executing CI job" cell becomes "none - recorded Tier-3 command, re-run per session (see
+   V.3); app-tests runs the detector's unit tests and the unmodified lib/learning suite only". Re-run the
+   command yourself at this head, paste the output, and record that it reddens against an older base (exit 1,
+   naming the offender) and exits 2 on a missing base.
+2. MINOR-6: record that descriptive display of hook_type and proof_type is DEFERRED, that section 10.2's
+   table remains exhaustive for what ships, that hook_survived is stored for that future surface, and NAME
+   the owner (the session or backlog row that would ship it). State that sections 4.1 and 4.4 presuppose a
+   surface that does not exist and that the Builder's reading was the safe one.
+3. NIT-1: the two header lines become "C -> landed as D / E, see section V.5".
+4. D2's key set: amend section 14's canonical key list to include the new counter, naming it, saying what it
+   counts and what skippedNoMetrics now excludes, and citing D2's exact-key-set test (file:line).
+5. D4, D5, D7: record the forward migration and the widened immutable tuple against section 12.1's Tier-1
+   obligation; the capability source for the section 10.2 "metrics unavailable" state; and MINOR-7's partial
+   closure. For MINOR-7 also APPEND the owed item to ADR 0028 Amendment A A.5, beside the existing
+   retweet_count / repost_count item - never an edit to A.2.
+6. NIT-2: RECORDED CLOSURE in the appendix only - a pushed commit body cannot be rewritten. State the two
+   declared invocations with their SHAs, that no third is attributable, and that <= 3 was not exceeded.
+7. Do NOT fill any "executed green in CI" cell for the corrected range - that is D9's, from the logs.
+
+VERIFY: `git diff <D7-sha>..HEAD -- docs/decisions/0026-outcome-loop.md` shows additions only, plus the one
+named V.2 cell; the same for ADR 0028 (additions below A.5 only). Every citation resolves to a real file:line
+at a real SHA - check three at random with `git show`.
+Append the MINOR-4, MINOR-6, NIT-1 and NIT-2 rows.
+On commit: "D8 - MINOR-4, MINOR-6 and NIT-1 closed and NIT-2 recorded: ADR 0026 section VI records row 29 as
+a Tier-3 command rather than an app-tests job, the deferral of hook_type / proof_type display with
+hook_survived's owner named, the corrected amendment letters, and D2's new tick key; ADR 0028 Amendment A A.5
+gains MINOR-7's owed smoke item." Then stop.
+```
+
+---
+
+### §4.2 — Resolution log (the appendix's required shape)
+
+The appendix in `docs/reviews/session-33-reviewer.md` is written **incrementally, one block per step**. D1
+opens it, D2…D8 append, and D9 closes it. It is never assembled from memory at the end.
+
+**Opening block (written at D1):**
+
+```
+## CORRECTION PASS (Session 33-D)
+
+**Author:** Session 33-D correction pass · **Date:** <YYYY-MM-DD> · **Range fixed:** `879737c7..<D9-sha>`
+**Reviewed head:** `879737c7` — the head the Reviewer read; only this pass's §4 and the report itself landed
+after it, at D0 (`<D0-sha>`).
+**Founder adjudications consumed:** none — A-1…A-6 stand; MAJOR-1 option (b) was available and not taken
+(build-guide §4).
+**Everything above this line is the Reviewer's. Everything below it is this pass's.**
+```
+
+**Per-finding row shape.** All five fields; a row missing one is not complete:
+
+| Field | What it must say |
+|---|---|
+| **Finding** | The ID, and nothing restated from the Reviewer's text |
+| **Fix** | What changed, in one sentence, naming the file |
+| **Proof** | The test file **and line**, never "covered by the suite" |
+| **Reddening** | The exact mutation, and the clean tree confirmed afterwards |
+| **Commit** | The step's SHA(s) |
+
+**Rows that are not ordinary fixes:**
+- **NIT-2** is the only **recorded closure**. It states why no code change can express the fix (a pushed
+  commit body cannot be rewritten) and names the two declared invocations with their SHAs.
+- **MINOR-7** is the only **partial** closure. It names the half that closed in code, the half owed to the
+  first live X smoke, and the ADR 0028 A.5 paragraph that now owes it.
+- **MAJOR-2** carries two SHAs (D2's code, D8's ADR key-set amendment) and states the new counter's name.
+- **MINOR-4, MINOR-6, NIT-1** are ADR-only closures and cite their §VI sub-item.
+- **MAJOR-1** quotes the rule it restored (CLAUDE.md's three-client table, and L-9 verbatim) and records that
+  option (b) was available and not taken.
+
+**Every step appends a "what I did NOT touch" line** where it had a tempting adjacent target:
+- D1: no change to the `.eq('business_id', …)` filters, and no widening of the Tier-3 wrapper scan's
+  enumerated export list.
+- D2: no second console line; `twitter-provider.ts` untouched.
+- D3: no status-code change beyond the one stated and justified.
+- D4: no change to the two namespace CHECKs, the partial unique indexes or the distilled index.
+- D5: no §10.2 copy or i18n key change.
+- D7: no new OAuth scope and no live call.
+- D8: no `executed green in CI` cell filled — left for D9 — and no edit to ADR 0028 §A.2.
+
+---
+
+### §4.3 — Close-out
+
+#### D9 — push the corrected range, re-green CI, re-date every constraint claim, close Track J
+
+```
+CORRECTION - Session 33-D · D9. No specialist. THE POINT OF THIS STEP: 879737c7 was green and 34/34 non-E
+constraints were verified executed green AT THAT HEAD. D1..D8 changed code, SQL, a provider, a tick key set
+and the ADR. Every one of those claims is now dated to a head that no longer exists. This step makes them
+true again - it is not a formality.
+
+DO:
+1. Push D0..D8; run every required workflow to green at the corrected head:
+   - app-tests (tsc + eslint + vitest) - REQUIRED; lint must be green.
+   - db-tests INCLUDING THE SKIP-GUARD. If red, OPEN THE RUN and distinguish a DB-behaviour regression from a
+     stack OOM (grep the log for SIGSEGV, signal 11, OOMKilled=true, out of memory - the Reviewer found ZERO
+     of each at 879737c7), quoting the deciding log line.
+   - eval.
+2. Record FROM THE LOGS: each workflow's run URL and counts; the db-tests skip-guard line and the app-tests
+   skip-guard line QUOTED VERBATIM, as the Reviewer did. Then re-date ADR 0026's constraint->CI map: every
+   one of the 34 non-E rows reads "executed green in CI at <corrected head>", not at 879737c7 or eebe96da.
+   Tier 1 stays uncovered unless db-tests ITSELF is green. Tier 3 cites the commands re-run at this head,
+   including check-adr0018-unchanged.ts (exit 0) per D8's corrected row 29. Tier E
+   (OUTCOME-PREDICTION-ACCURACY) stays MEASURED - NOT YET RUN, earliest ~T0 + 150 days, T0 undefined.
+3. db-tests PROMOTION TALLY: pull_request runs never move it; only consecutive green master PUSH runs do. The
+   Reviewer's runs at 879737c7 were pull_request events and did NOT move it. Record the tally in
+   docs/current-phase.md with each run's event type.
+4. docs/current-phase.md - Session 33 close-out entry: this pass and its range; real post-correction counts at
+   the head they are dated to, never claimed; the tally; the north-star metric restated as COMPUTABLE with the
+   date from which it is meaningful; prediction accuracy framed as MEASURED with its earliest-useful date; and
+   the fact that the pattern layer is EMPTY in production because no production OAuth app is registered.
+5. Section 5 of docs/build-guide/session-33.md - tick each row with evidence, stating per item whether it
+   applied.
+6. THE APPENDIX CLOSING BLOCK: all 12 findings by ID -> disposition -> proving test -> SHA(s); re-run the
+   count check (12 rows, 12 distinct IDs) - if it fails, the pass is not closed. Name the recorded closure
+   (NIT-2) and the partial closure (MINOR-7). Answer the Reviewer's "What I could NOT verify" list one item at
+   a time: the live X response and LinkedIn readability (STILL unverified - say so, and point at D7's owed A.5
+   item); the production cron cadence (still not deterministically testable; the Sentry monitor is the control
+   and does not exist in production yet); Tier E (not run, cannot run until ~T0 + 150 days); the db-tests
+   per-test retry counts (inspect the JSON artifact this time, or state again that you did not); and whether
+   app-tests is green on a cold first-attempt local run (the corpus-v2-schema flake). State which Reviewer
+   "Verified" entries have since CHANGED - in particular section 8's service-role reading and section 3's
+   caller table, both of which D1 altered - WITHOUT editing them.
+7. .wolf/anatomy.md, .wolf/memory.md, .wolf/cerebrum.md; log every bug from this pass to .wolf/buglog.json.
+
+VERIFY: `git diff <D0-sha>..<D9-sha> -- docs/reviews/session-33-reviewer.md` shows additions BELOW the
+appendix marker and NOTHING ELSE. Required workflows green at the corrected head, or their red explained from
+the log with evidence in the appendix.
+On commit: "D9 - Session 33-D closed: D0..D8 pushed; app-tests green at <sha> (<URL>); db-tests <state>
+(<URL>, skip-guard <n> files / <n> tests quoted from the log); all 34 non-E OUTCOME-* rows re-dated to the
+corrected head per tier, Tier E still MEASURED - NOT YET RUN; db-tests tally recorded per run with event type.
+The 33-D appendix records all 12 findings - NIT-2 the single recorded closure, MINOR-7 the single partial -
+and the diff proves nothing above the appendix changed. Track J closed." Then stop.
+```
+
 ---
 
 ## §5 — Docs to update at close-out (Track J done)
