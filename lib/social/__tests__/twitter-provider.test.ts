@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { formatISO } from 'date-fns'
 import { TwitterProvider } from '../twitter-provider'
 import { SOCIAL_READ_TIMEOUT_MS } from '../constants'
+import { SocialProviderError } from '../errors'
 
 vi.mock('@/lib/config', () => ({
   config: {
@@ -343,9 +344,55 @@ describe('TwitterProvider', () => {
       expect(result!.shares).toBe(4)
     })
 
-    it('returns null (nothing measured, so the orchestrator writes nothing) when data is absent — a deleted post', async () => {
-      mockFetch.mockResolvedValueOnce(jsonResponse(200, { errors: [{ title: 'Not Found Error' }] }))
-      await expect(provider.fetchPostMetrics(INPUT)).resolves.toBeNull()
+    // MINOR-7 (Session 33-D D7). This test used to assert that an errors[]-only response is a null "deleted post".
+    // That conflated two facts — X's real deleted-post shape is UNCONFIRMED (ADR 0028 Amd A A.5) — so the three
+    // response shapes the provider can distinguish are asserted separately below.
+    describe('shapes the response itself distinguishes (MINOR-7)', () => {
+      it('(a) an errors[] block with no public_metrics THROWS a SocialProviderError — never a silent null', async () => {
+        mockFetch.mockResolvedValueOnce(
+          jsonResponse(200, { errors: [{ title: 'Client Forbidden', type: 'https://api.twitter.com/2/problems/client-forbidden', detail: 'tier cannot read public_metrics' }] }),
+        )
+        const failure = await provider.fetchPostMetrics(INPUT).catch((e: unknown) => e)
+        expect(failure).toBeInstanceOf(SocialProviderError)
+        expect(failure).toMatchObject({ code: 'PLATFORM_REJECTED', platform: 'twitter', message: expect.stringContaining('fetchPostMetrics') })
+        // The block is carried (bounded, string fields only) so the first live smoke can tell entitlement from not-found.
+        expect((failure as SocialProviderError).details).toMatchObject({
+          errors: [{ title: 'Client Forbidden', detail: 'tier cannot read public_metrics' }],
+        })
+      })
+
+      it('(a) the same holds with data present but empty, and the carried block is bounded to five entries of at most 200 chars', async () => {
+        const many = Array.from({ length: 9 }, (_, i) => ({ title: `t${i}`, detail: 'x'.repeat(500) }))
+        mockFetch.mockResolvedValueOnce(jsonResponse(200, { data: { id: INPUT.platformPostId }, errors: many }))
+        const failure = (await provider.fetchPostMetrics(INPUT).catch((e: unknown) => e)) as SocialProviderError
+        expect(failure).toBeInstanceOf(SocialProviderError)
+        const carried = failure.details.errors as Array<{ detail: string | null }>
+        expect(carried).toHaveLength(5)
+        expect(carried[0].detail).toHaveLength(200)
+      })
+
+      it('(b) data absent with NO errors block is still null — nothing measured, the orchestrator writes nothing', async () => {
+        mockFetch.mockResolvedValueOnce(jsonResponse(200, {}))
+        await expect(provider.fetchPostMetrics(INPUT)).resolves.toBeNull()
+      })
+
+      it('(b) an empty errors[] array is not a failure either', async () => {
+        mockFetch.mockResolvedValueOnce(jsonResponse(200, { errors: [] }))
+        await expect(provider.fetchPostMetrics(INPUT)).resolves.toBeNull()
+      })
+
+      it('(c) a normal response still maps every field with ?? null and no ?? 0', async () => {
+        mockFetch.mockResolvedValueOnce(metricsResponse({ like_count: 4, retweet_count: 1, quote_count: 1 }))
+        const result = await provider.fetchPostMetrics(INPUT)
+        expect(result).toMatchObject({ likes: 4, comments: null, shares: 2, saves: null, impressions: null, clicks: null, reach: null })
+      })
+
+      it('(c) a REAL measurement is never discarded because an errors[] block rides along with it', async () => {
+        mockFetch.mockResolvedValueOnce(
+          jsonResponse(200, { data: { id: INPUT.platformPostId, public_metrics: { like_count: 7, reply_count: 1, retweet_count: 0, quote_count: 0 } }, errors: [{ title: 'Warning' }] }),
+        )
+        await expect(provider.fetchPostMetrics(INPUT)).resolves.toMatchObject({ likes: 7, comments: 1, shares: 0 })
+      })
     })
 
     it('returns null when the post carries no public_metrics object at all', async () => {

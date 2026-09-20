@@ -137,8 +137,14 @@ const XTweetSchema = z.object({
 // absent field is NULL in PostMetrics, never 0 (ADR 0026 rule 6).
 // repost_count is accepted beside retweet_count because X's own pages
 // disagree on the name (ADR 0028 Amendment A records the conflict); `data`
-// is optional because X answers a deleted post with 200 + `errors`.
+// is optional because X is DOCUMENTED to answer some failures with 200 + `errors`
+// — which failures, and in particular what a DELETED post returns, is NOT
+// confirmed (ADR 0028 Amendment A A.5, owed to the first live smoke). `errors`
+// is therefore parsed so an errors[] block is never mistaken for "no data".
 const XTweetMetricsSchema = z.object({
+  errors: z
+    .array(z.object({ title: z.string().optional(), type: z.string().optional(), detail: z.string().optional() }).passthrough())
+    .optional(),
   data: z
     .object({
       id: z.string().optional(),
@@ -428,9 +434,12 @@ export class TwitterProvider implements SocialProvider {
   // ADR 0026 §3.1 / ADR 0028 Amendment A (J2.1, founder ruling A-3): ONE read
   // per call, GET /2/tweets/:id?tweet.fields=public_metrics, bearer from
   // withFreshToken. No sleep, no retry loop — cadence belongs to the
-  // orchestrator (a 429 is one request, then RATE_LIMITED). Returns null when
-  // nothing was measured (deleted post, no public_metrics) so the orchestrator
-  // writes no row and the post stays due. reach and clicks are ALWAYS null.
+  // orchestrator (a 429 is one request, then RATE_LIMITED). Returns null ONLY
+  // when the response carries neither public_metrics nor an errors[] block, so
+  // the orchestrator writes no row and the post stays due; an errors[] block
+  // with no metrics throws PLATFORM_REJECTED instead (MINOR-7). What X returns
+  // for a DELETED post is unconfirmed (ADR 0028 Amd A A.5). reach and clicks
+  // are ALWAYS null.
   async fetchPostMetrics(input: FetchMetricsInput): Promise<PostMetrics | null> {
     return withFreshToken(
       input.socialAccountId,
@@ -464,7 +473,28 @@ export class TwitterProvider implements SocialProvider {
         }
 
         const pm = parsed.data?.public_metrics
-        if (!pm) return null
+        if (!pm) {
+          // An errors[] block with nothing to measure is a FAILURE THE RESPONSE ITSELF REPORTS, not "no data": an
+          // account or app tier that can no longer read public_metrics would otherwise look, forever and silently,
+          // like a deleted post (MINOR-7). It is thrown so the orchestrator captures it and counts an error.
+          // Only a response with NEITHER usable metrics NOR an errors[] block stays null.
+          if (parsed.errors && parsed.errors.length > 0) {
+            throw new SocialProviderError({
+              code: 'PLATFORM_REJECTED',
+              message: 'fetchPostMetrics: X returned an errors[] block and no public_metrics',
+              platform: 'twitter',
+              details: {
+                // Bounded, string-only fields: enough to tell entitlement from not-found at the first live smoke.
+                errors: parsed.errors.slice(0, 5).map((e) => ({
+                  title: e.title?.slice(0, 200) ?? null,
+                  type: e.type?.slice(0, 200) ?? null,
+                  detail: e.detail?.slice(0, 200) ?? null,
+                })),
+              },
+            })
+          }
+          return null
+        }
 
         const reposts = pm.retweet_count ?? pm.repost_count
         return {

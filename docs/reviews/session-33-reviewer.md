@@ -1047,3 +1047,55 @@ after it, at D0 (`37aba2d4`).
   `check-adr0018-unchanged.ts` exit 0. `test:db` is not part of D6's loop and was not run.
 - **Commit:** D6 — SHA recorded at D9 close-out.
 - **What I did NOT touch:** the basis mapping and the `baseline()` guard; no migration; no `social_backfill_runs` schema.
+
+### MINOR-7 — CLOSED IN PART: an `errors[]` block is a captured provider error; X's deleted-post shape is OWED to the live smoke
+
+**Which half closed, and which is owed — stated plainly.**
+
+- **CLOSED (in code, this step):** the provider now distinguishes what *the response itself carries*. A response with an
+  `errors[]` block and no `public_metrics` is no longer a silent `null`; it is a thrown `SocialProviderError`. A response
+  whose `data` is genuinely absent with **no** `errors[]` block stays `null`. So an account or app tier that loses the
+  ability to read `public_metrics` — if X reports it through an `errors[]` block — is no longer indistinguishable from
+  a deleted post: it lands in D2's captured, counted `errors` path instead of `skippedNoData`.
+- **NOT CLOSED (owed to the first live smoke):** which shape X *actually* returns for a deleted post, and which for an
+  entitlement loss. That cannot be determined from documentation — the raw OpenAPI document returned HTTP 402 — and this
+  step makes no live call and adds no scope. If X answers an entitlement loss with something *other* than an
+  `errors[]` block (for example a bare `data` with no `public_metrics`, or an HTTP 200 with an empty body), the two facts
+  are still conflated as `null`, and only the smoke can say. This is recorded as an owed item at D8, beside the existing
+  `retweet_count` / `repost_count` alias item, in ADR 0028 Amendment A A.5.
+- **Quoting A.5 as it stands** (`docs/decisions/0028*.md`, "A.5 Not verified / not run", first bullet): *"Live smoke
+  against a founder-owned X account: NOT YET RUN. It must confirm the response shape, resolve the `repost_count` /
+  `retweet_count` conflict (A.2 #4), and observe the real behaviour for a deleted post (the code returns `null` on a `200`
+  with no `data`, the standard partial-error shape — **not** confirmed against X's docs)."* — that sentence stays
+  exactly true for the deleted-post case, and is what D8 extends.
+
+- **Finding:** MINOR-7.
+- **Fix:** `lib/social/twitter-provider.ts` — `XTweetMetricsSchema` now parses `errors` (title / type / detail, passthrough),
+  and `fetchPostMetrics` throws `SocialProviderError({ code: 'PLATFORM_REJECTED', platform: 'twitter', … })` when there
+  is no `public_metrics` **and** a non-empty `errors[]`. The error carries a **bounded** summary (at most five entries, each
+  string field at most 200 characters) so the smoke can tell entitlement from not-found. Two refinements the build step
+  did not spell out, stated openly: (1) **valid `public_metrics` with an `errors[]` block riding along are still
+  mapped** — a real measurement is never discarded; (2) the code is `PLATFORM_REJECTED`, the existing code for "the
+  platform declined", chosen over `UNKNOWN`.
+- **A test I rewrote, and why:** `lib/social/__tests__/twitter-provider.test.ts` had *"returns null … when data is absent — a
+  deleted post"* feeding `{ errors: [{ title: 'Not Found Error' }] }`. That is exactly shape (a), and its name asserted the
+  conflation this finding disputes, so it could not stay green unchanged. It was replaced — not weakened — by the three
+  shapes below, which assert strictly more.
+- **Proof:** `lib/social/__tests__/twitter-provider.test.ts:350-` — (a) `:351` an `errors[]` block with no metrics throws a
+  `SocialProviderError` (`PLATFORM_REJECTED`, platform `twitter`, the block carried) and a second case pins the bound;
+  (b) `:374` data absent with no `errors[]` (and an empty `errors: []`) is still `null`; (c) `:384` a normal response
+  maps every field with `?? null` and no `?? 0`, and a real measurement survives a co-present `errors[]`.
+  `lib/metrics/orchestrator.test.ts:253` — the thrown error is captured at the orchestrator by D2's handler, increments
+  `errors`, and is **not** `skippedNoData`; a `null` result is still the benign `skippedNoData` with no capture.
+- **Reddening:** the throw block deleted so shape (a) collapses back to `return null` (restored from a byte copy, `cmp`
+  clean) — both (a) tests RED: `AssertionError: expected null to be an instance of SocialProviderError`.
+- **Consequence to watch at the smoke, not hidden:** if X does answer a deleted post with 200 + `errors[]` (the very shape
+  the earlier comment assumed), each such post now produces one captured error per sync tick until it ages out of
+  `METRICS_MAX_AGE_DAYS`, where before it was a silent skip. That noise is the price of not being blind to an
+  entitlement loss, and it is the first thing the smoke should measure.
+- **Loop at this state:** `tsc` clean; `lint` 0 errors (110 pre-existing warnings); `test:app` 4362 tests, one failure,
+  `lib/signals/__fixtures__/eval/corpus-v2-schema.test.ts` (the named pre-existing flake); `check-adr0018-unchanged.ts`
+  exit 0. `test:db` is not part of D7's loop and was not run.
+- **Commit:** D7 — SHA recorded at D9 close-out.
+- **What I did NOT touch:** no new OAuth scope, no live call, no change to the `retweet_count ?? repost_count` alias, and
+  ADR 0028 Amendment A A.2 (the owed A.5 item is D8's, appended below A.5, never an edit to A.2).

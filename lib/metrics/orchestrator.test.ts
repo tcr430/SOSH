@@ -247,6 +247,30 @@ describe('runMetricsSyncTick', () => {
     }))
   })
 
+  // MINOR-7 (Session 33-D D7): an X errors[] block with no metrics now arrives here as a provider error, so an
+  // entitlement loss is a captured error and an increment of `errors` — NOT the benign skippedNoData that a genuinely
+  // absent `data` (provider returns null) still is.
+  it('a PLATFORM_REJECTED (errors[] block) is captured and counted as an error, and is NOT skippedNoData', async () => {
+    vi.mocked(listPostsForMetricsSync).mockResolvedValue([makePost({ id: 'tw-3', platform: 'twitter' })])
+    const failure = new SocialProviderError({ code: 'PLATFORM_REJECTED', message: 'fetchPostMetrics: X returned an errors[] block and no public_metrics', platform: 'twitter' })
+    mockFetchPostMetrics.mockRejectedValue(failure)
+
+    const summary = await runMetricsSyncTick({ now: NOW })
+
+    expect(summary).toMatchObject({ errors: 1, skippedNoData: 0, synced: 0 })
+    expect(vi.mocked(Sentry.captureException)).toHaveBeenCalledWith(failure, expect.objectContaining({ tags: expect.objectContaining({ platform: 'twitter' }) }))
+  })
+
+  it('a provider that returns null (data genuinely absent, no errors block) is still the benign skippedNoData with no capture', async () => {
+    vi.mocked(listPostsForMetricsSync).mockResolvedValue([makePost({ id: 'tw-4', platform: 'twitter' })])
+    mockFetchPostMetrics.mockResolvedValue(null)
+
+    const summary = await runMetricsSyncTick({ now: NOW })
+
+    expect(summary).toMatchObject({ errors: 0, skippedNoData: 1 })
+    expect(vi.mocked(Sentry.captureException)).not.toHaveBeenCalled()
+  })
+
   it('NOT_IMPLEMENTED is an expected skip: it takes the unsupported path and captures NOTHING', async () => {
     vi.mocked(listPostsForMetricsSync).mockResolvedValue([makePost({ id: 'li-1', platform: 'linkedin' })])
     mockFetchPostMetrics.mockRejectedValue(new SocialProviderError({ code: 'NOT_IMPLEMENTED', message: 'nope' }))
