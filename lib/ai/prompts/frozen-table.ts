@@ -46,7 +46,7 @@ export const FROZEN_TABLE: Record<string, FrozenRow> = {
     useToolOutput: undefined,
   },
   'brief-assembly': {
-    version: 2,
+    version: 3,
     modelKey: 'SONNET_4_6',
     temperature: undefined,
     thinking: 4000,

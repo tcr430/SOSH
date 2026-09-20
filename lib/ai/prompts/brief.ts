@@ -4,6 +4,7 @@ import type { CustomerContext } from '@/lib/ai/context'
 import type { Platform } from '@/lib/db/types'
 import type { RenderedEvidence } from '@/lib/ai/wrap-evidence'
 import { neutralize } from '@/lib/ai/wrap-evidence'
+import { HypothesisSchema, SuccessCriteriaSchema } from '@/lib/outcomes/hypothesis'
 
 // Local, ASCII-literal-only guard — matches the established special_instructions
 // pattern (post-generation.ts, post-regeneration.ts) for genuinely
@@ -43,6 +44,12 @@ export const CampaignBriefContentSchema = z.object({
   proofPlan: z.string().min(1),
   pinnedEvidence: z.array(PINNED_EVIDENCE_SCHEMA),
   roleSequence: z.array(ROLE_SEQUENCE_ENTRY_SCHEMA).min(1),
+  // ADR 0017 Amendment C / ADR 0026 §8.1 (J2.10). OPTIONAL so a brief frozen before the amendment still parses;
+  // both or neither. Out-of-range values are REJECTED by the shared schema, never clamped.
+  hypothesis: HypothesisSchema.optional(),
+  successCriteria: SuccessCriteriaSchema.optional(),
+}).refine((v) => (v.hypothesis === undefined) === (v.successCriteria === undefined), {
+  message: 'hypothesis and successCriteria must be provided together',
 })
 
 export type CampaignBriefContentOutput = z.infer<typeof CampaignBriefContentSchema>
@@ -65,11 +72,14 @@ export interface BriefAssemblyInput {
   evidenceCandidates: Array<{ id: string; guardedContent: RenderedEvidence }>
   audienceCandidates: Array<{ statement: string; kind: string }>
   brandCandidates: Array<{ statement: string; category: string }>
+  // ADR 0026 §8.4 (J2.10) — the brand's last acknowledged hypothesis results, each with its n. Stage A is the
+  // ONLY reader of these. Absent or empty -> nothing is rendered.
+  priorHypotheses?: Array<{ pattern: string; n: number }>
 }
 
 export const briefAssemblyPrompt: Prompt<BriefAssemblyInput, CampaignBriefContentOutput> = {
   id: 'brief-assembly',
-  version: 2,
+  version: 3,
   modelKey: 'SONNET_4_6',
   outputSchema: CampaignBriefContentSchema,
   // ADR 0024 §3.3/§3.3a — founder ruling A-4. Stage A brief assembly is the
@@ -93,13 +103,17 @@ Produce:
 - proofPlan: how the argument will be substantiated (what evidence backs it).
 - pinnedEvidence: cite ONLY evidence ids that were shown to you under "Evidence Candidates" below — never invent an id. Omit if no candidate is genuinely relevant; do not force a citation.
 - roleSequence: one entry per planned post, each with order (0-based, matching array position), role, platform (must be one of the campaign's platforms below), and angle (this post's specific take on the narrative). Cover every campaign platform with at least one entry. Use each role you can genuinely justify — do not just repeat 'anchor_thesis' for every entry.
+- hypothesis: ONE falsifiable claim this campaign tests, in at most 300 characters, about how its posts will perform.
+- successCriteria: how that claim will be judged, drawn ONLY from what is measured — engagement compared with this brand's own usual. metric is "win_rate" (the share of posts that beat the brand's usual; target between 0.5 and 0.95) or "median_lift" (the typical ratio to the brand's usual; target between 1.0 and 3.0); evaluationWindowDays is a whole number of days from 7 to 60. Stay inside these ranges — out-of-range values are rejected.
 
 Return ONLY valid JSON — no markdown, no code fences, no explanation. Return a JSON object with this exact structure:
 {
   "narrative": "string",
   "proofPlan": "string",
   "pinnedEvidence": [{ "evidenceMemoryId": "string", "note": "string (optional)" }],
-  "roleSequence": [{ "order": 0, "role": "anchor_thesis" | "founder_perspective" | "customer_proof" | "objection_response" | "conversation_starter" | "follow_up", "platform": "linkedin" | "twitter" | "instagram" | "facebook" | "threads", "angle": "string" }]
+  "roleSequence": [{ "order": 0, "role": "anchor_thesis" | "founder_perspective" | "customer_proof" | "objection_response" | "conversation_starter" | "follow_up", "platform": "linkedin" | "twitter" | "instagram" | "facebook" | "threads", "angle": "string" }],
+  "hypothesis": "string",
+  "successCriteria": { "metric": "win_rate" | "median_lift", "target": 0.6, "evaluationWindowDays": 14 }
 }
 
 Respond in ${ctx.business.language}.`
@@ -134,6 +148,11 @@ ${input.specialInstructions ? `Special instructions: ${sanitizeDataField(input.s
         .map((c) => `- (${c.category}) ${neutralize(c.statement)}`)
         .join('\n')
       sections.push(`## Brand Facts\n[DATA]\n${brandList}\n[/DATA]`)
+    }
+
+    if (input.priorHypotheses && input.priorHypotheses.length > 0) {
+      const results = input.priorHypotheses.map((h) => `- ${neutralize(h.pattern)} (n=${h.n})`).join('\n')
+      sections.push(`## Results of this brand's previous hypotheses (observations, not rules)\n[DATA]\n${results}\n[/DATA]`)
     }
 
     const bv = ctx.brandVoice

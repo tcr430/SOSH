@@ -377,6 +377,9 @@ export interface ListOutcomePatternsOptions {
   // 'active' (the default) is what generation may read; 'candidate' is the UI's provisional state.
   status?: 'active' | 'candidate'
   platform?: string
+  // Narrow to one dimension (ADR 0026 J2.10: Stage A reads ONLY dimension 'hypothesis'). When set, rows are
+  // ordered by recency_at DESC (= COALESCE(last_confirmed_at, created_at)) instead of confidence.
+  dimension?: string
 }
 
 // Outcome rows ONLY (source = 'outcome'), business-scoped, bounded and ordered on the retrieval index
@@ -396,11 +399,12 @@ export async function listOutcomePatterns(
     .eq('status', status)
     .is('deleted_at', null)
   if (options.platform) query = query.eq('platform', options.platform)
+  if (options.dimension) query = query.eq('dimension', options.dimension)
   if (status === 'active') query = query.or('expires_at.is.null,expires_at.gt.now()')
-  const { data, error } = await query
-    .order('confidence', { ascending: false })
-    .order('recency_at', { ascending: false })
-    .limit(options.limit ?? MEMORY_CANDIDATE_LIMIT)
+  const ordered = options.dimension
+    ? query.order('recency_at', { ascending: false }).order('confidence', { ascending: false })
+    : query.order('confidence', { ascending: false }).order('recency_at', { ascending: false })
+  const { data, error } = await ordered.limit(options.limit ?? MEMORY_CANDIDATE_LIMIT)
   if (error) throw new Error(getErrorMessage(error))
   return (data as PerformanceMemoryRow[]) ?? []
 }

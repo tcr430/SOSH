@@ -8,7 +8,7 @@ import type { PerformanceMemoryRow } from '@/lib/db/types'
 const listOutcomePatterns = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/db/memory-performance', () => ({ listOutcomePatterns }))
 
-import { retrieveOutcomePatterns } from './outcomes'
+import { retrieveOutcomePatterns, retrieveHypothesisResults } from './outcomes'
 
 const NOW = new Date('2026-09-19T12:00:00Z')
 
@@ -33,6 +33,30 @@ beforeEach(() => {
   listOutcomePatterns.mockReset()
 })
 afterEach(() => vi.useRealTimers())
+
+// ADR 0026 §8.4 / J2.10 — Stage A is the ONLY reader of hypothesis rows.
+describe('retrieveHypothesisResults', () => {
+  const hyp = (id: string, over: Partial<PerformanceMemoryRow> = {}) =>
+    row({ id, dimension: 'hypothesis' as never, pattern: `Campaign ${id} tested: 'x'. Result: supported.`, pattern_key: `outcome:hypothesis:${id}`, ...over })
+
+  it('asks the reader for hypothesis rows only, and returns the last three with their n', async () => {
+    listOutcomePatterns.mockResolvedValue([hyp('a'), hyp('b'), hyp('c'), hyp('d')])
+    const out = await retrieveHypothesisResults('biz-1')
+    expect(listOutcomePatterns).toHaveBeenCalledWith('biz-1', expect.objectContaining({ dimension: 'hypothesis', status: 'active' }))
+    expect(out).toHaveLength(3)
+    expect(out[0]).toMatchObject({ n: 11, wins: 9 })
+  })
+
+  it('drops expired rows and any non-hypothesis row the reader might return', async () => {
+    listOutcomePatterns.mockResolvedValue([hyp('old', { expires_at: formatISO(addDays(NOW, -1)) }), row({ id: 'fmt' }), hyp('ok')])
+    expect((await retrieveHypothesisResults('biz-1')).map((o) => o.pattern)).toEqual(["Campaign ok tested: 'x'. Result: supported."])
+  })
+
+  it('retrieveOutcomePatterns never returns a hypothesis row (post prompts cannot see them)', async () => {
+    listOutcomePatterns.mockResolvedValue([hyp('a')])
+    expect(await retrieveOutcomePatterns('biz-1')).toEqual([])
+  })
+})
 
 describe('retrieveOutcomePatterns', () => {
   it('returns the closed-template text with the SQL-computed wins / n / campaigns', async () => {

@@ -20,6 +20,26 @@ export type OutcomeObservation = {
   readonly campaigns: number
 }
 
+// ADR 0026 §8.4 / J2.10 — a brand's acknowledged hypothesis results. Read ONLY by Stage A (brief assembly), and
+// ONLY here: retrieveOutcomePatterns above excludes 'hypothesis' rows, so a result about one campaign's claim
+// never reaches a post prompt. The last three, newest first, each with the n the SQL wrote on the row.
+export const HYPOTHESIS_RESULTS_LIMIT = 3
+
+export async function retrieveHypothesisResults(businessId: string): Promise<OutcomeObservation[]> {
+  const rows = await listOutcomePatterns(businessId, { status: 'active', dimension: 'hypothesis', limit: HYPOTHESIS_RESULTS_LIMIT * 4 })
+  const now = new Date()
+  return rows
+    .filter((r) => r.dimension === 'hypothesis' && isEligible(r, now) && r.outcome_n !== null && r.outcome_wins !== null)
+    .slice(0, HYPOTHESIS_RESULTS_LIMIT)
+    .map((r) => ({
+      platform: r.platform,
+      pattern: r.pattern,
+      wins: r.outcome_wins as number,
+      n: r.outcome_n as number,
+      campaigns: r.outcome_distinct_campaigns ?? 1,
+    }))
+}
+
 export async function retrieveOutcomePatterns(
   businessId: string,
   // MemoryQueryContext.platform is a plain string, so this accepts one; a value that is not a real platform

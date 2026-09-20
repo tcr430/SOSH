@@ -1397,6 +1397,11 @@ export type CampaignBriefContent = {
   // bytes are re-fetched and guarded at render time.
   pinnedEvidence: Array<{ evidenceMemoryId: string; note?: string }>
   roleSequence: Array<{ order: number; role: CampaignPostRole; platform: Platform; angle: string }>
+  // ADR 0017 Amendment C / ADR 0026 §8.1 (Session 33 J2.10, ruling A-1). OPTIONAL: a brief frozen before the
+  // amendment has neither, and old briefs are NOT backfilled (the retrospective uses an implicit hypothesis).
+  // Both or neither — see lib/outcomes/hypothesis.ts, the one schema for both.
+  hypothesis?: string
+  successCriteria?: { metric: 'win_rate' | 'median_lift'; target: number; evaluationWindowDays: number }
 }
 
 export type CampaignBriefRow = {
