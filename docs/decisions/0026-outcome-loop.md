@@ -947,3 +947,121 @@ extractor runs as its own daily deterministic worker `extract-outcomes`, retrosp
 max(7, evaluation window) days with human acknowledgement writing it to memory, north-star cycle defined as an
 acknowledged supported/not-supported retrospective with its `outcome:hypothesis:<campaign_id>` memory row,
 hypothesis fields absent → added by ADR 0017 Amendment C (ruling A-1).
+
+
+---
+
+## Builder verification (J2.13)
+
+> Appended by the Session 33 Builder. **Sections 0-16 above are unchanged.** Range read: `75cae307..HEAD` on branch
+> `session-33-adr-0026`. "Covered" means executed green in CI at the head it is dated to (ADR 0015 §2); nothing in
+> the last column is claimed until the runs for the pushed head have been opened and read.
+
+### V.1 Steps and commits
+
+| Step | Commit | Ships |
+|---|---|---|
+| J2.1 | `c787e633` | real X `fetchPostMetrics`, day-1/3/7 cadence (ADR 0028 Amendment A) |
+| J2.2 | `c63e59ad` | `lib/outcomes/constants.ts` + the boundary scans |
+| J2.3 | `e0ca8cab` | three tables, RLS, write-once triggers, the tagging trigger, history copy, §D2.5 rows |
+| J2.4 | `1c0ef470` | `hookType` on the three native output schemas (ADR 0024 §17) |
+| J2.5 | `5d9c426a` | `performance_memory` outcome schema + write protection (ADR 0016 Amendment D) |
+| J2.6 | `d7cbda3d` | Wilson / upsert / promote / demote / acknowledge / north-star RPCs + wrappers |
+| J2.7 | `85394986` | the deterministic normaliser and its DB wrappers |
+| J2.8 | `c0a76dc2` | the `extract-outcomes` worker, tick line, runbook |
+| J2.9 | `f82c22e2` | separate retrieval and the observed-outcomes block at three render sites |
+| J2.10 | `d286aaad` | hypothesis and success criteria in the brief (ADR 0017 Amendment E) |
+| J2.11 | `fb28e6c6` | the retrospective, the acknowledge action, the north-star script; security review |
+| J2.12 | `c03fa2e2` | campaign-page surfaces, the outcome i18n namespace, the copy lint |
+| J2.13 | (this step) | cross-business scan, Tier-3 re-verification, amendments, this map |
+
+### V.2 The constraint → CI map
+
+Tier E (row 35) is MEASURED, never COVERED. The final column is intentionally **empty** until filled from a run that was
+opened and read (`J2.13b`).
+
+| # | Constraint | Tier | Test file, command or protocol | Closing step (SHA) | Executing CI job | Executed green in CI at |
+|---|---|---|---|---|---|---|
+| 1 | OUTCOME-METRICS-FETCH-REAL | 2 | `lib/social/__tests__/twitter-provider.test.ts`, `mock-provider.test.ts`, `linkedin-provider.test.ts`; ADR 0028 Amendment A | J2.1 (`c787e633`) | app-tests | |
+| 2 | OUTCOME-METRICS-CADENCE-BOUNDED | 1 + 2 | `supabase/__tests__/metrics-sync-cadence.test.ts`; `lib/metrics/orchestrator.test.ts` | J2.1 (`c787e633`) | db-tests + app-tests | |
+| 3 | OUTCOME-DIMENSIONS-TAGGED-AT-GENERATION | 1 | `supabase/__tests__/outcome-tagging-trigger.test.ts` | J2.3 (`e0ca8cab`) | db-tests | |
+| 4 | OUTCOME-TAG-ALL-CALLERS | 1 | `supabase/__tests__/outcome-tagging-trigger.test.ts` (raw `post_ai_originals` insert, no app code) | J2.3 (`e0ca8cab`) | db-tests | |
+| 5 | OUTCOME-DIMENSIONS-WRITE-ONCE | 1 | `supabase/__tests__/outcome-tables-write-once.test.ts` | J2.3 (`e0ca8cab`) | db-tests | |
+| 6 | OUTCOME-NO-RETRO-TAGGING | 3 | `lib/outcomes/__tests__/source-scans.test.ts` (NO-RETRO-TAGGING) | J2.2 (`c63e59ad`) | app-tests | |
+| 7 | OUTCOME-DESCRIPTIVE-ONLY | 2 + 3 | `lib/outcomes/__tests__/orchestrator.test.ts`, `template.test.ts`; `source-scans.test.ts` (DESCRIPTIVE-ONLY scan half) | J2.8 (`c0a76dc2`) | app-tests | |
+| 8 | OUTCOME-HOOKTYPE-ADDITIVE | 2 | `lib/ai/prompts/formats/hooktype.test.ts` | J2.4 (`1c0ef470`) | app-tests | |
+| 9 | OUTCOME-MATURED-SNAPSHOT | 2 | `lib/outcomes/__tests__/orchestrator.test.ts`, `lib/db/post-outcomes.test.ts` | J2.8 (`c0a76dc2`) | app-tests | |
+| 10 | OUTCOME-ELIGIBLE-FIELDS-ONLY | 2 | `lib/outcomes/__tests__/normalise.test.ts` | J2.7 (`85394986`) | app-tests | |
+| 11 | OUTCOME-NORMALISED-TO-OWN-BASELINE | 2 | `lib/outcomes/__tests__/normalise.test.ts`, `measured-dimensions.test.ts` | J2.7 (`85394986`) | app-tests | |
+| 12 | OUTCOME-SEED-BASIS-MATCH | 2 | `lib/outcomes/__tests__/normalise.test.ts` (count-basis seed refused) | J2.7 (`85394986`) | app-tests | |
+| 13 | OUTCOME-MIN-N-ENFORCED | 1 + 2 | `supabase/__tests__/outcome-promotion-floor.test.ts`; `supabase/__tests__/outcome-wrappers.test.ts`; `lib/db/memory-performance.test.ts` | J2.6 (`d7cbda3d`) | db-tests + app-tests | |
+| 14 | OUTCOME-RECOMPUTE-NOT-TRUST | 1 | `supabase/__tests__/outcome-promotion-floor.test.ts` (forged `outcome_n`) | J2.6 (`d7cbda3d`) | db-tests | |
+| 15 | OUTCOME-CONFIDENCE-RENDERED | 2 | `lib/ai/prompts/observed-outcomes.test.ts` (three sites); `lib/ai/context.test.ts` | J2.9 (`f82c22e2`) | app-tests | |
+| 16 | OUTCOME-NO-ZERO-METRICS-REINTRODUCED | 2 + 3 | `lib/ai/prompts/observed-outcomes.test.ts`; `lib/memory/performance.test.ts`; `source-scans.test.ts` (scan half) | J2.9 (`f82c22e2`) | app-tests | |
+| 17 | OUTCOME-SEPARATE-RETRIEVAL | 2 | `lib/memory/outcome-separation.test.ts`, `lib/memory/outcomes.test.ts`, `lib/db/memory-performance.test.ts` | J2.9 (`f82c22e2`) | app-tests | |
+| 18 | OUTCOME-TWO-WRITERS-DISTINGUISHED | 1 | `supabase/__tests__/performance-memory-outcome-schema.test.ts` | J2.5 (`5d9c426a`) | db-tests | |
+| 19 | OUTCOME-KEY-COLLISION-DEFINED | 1 | `supabase/__tests__/performance-memory-outcome-schema.test.ts` | J2.5 (`5d9c426a`) | db-tests | |
+| 20 | OUTCOME-WRITE-PROTECTED | 1 | `supabase/__tests__/performance-memory-outcome-schema.test.ts`; `supabase/__tests__/outcome-delete-guard.test.ts` (forward migration `20260919160000`, J2.11) | J2.5 (`5d9c426a`); hardened J2.11 (`fb28e6c6`) | db-tests | |
+| 21 | OUTCOME-CONTRADICTION-DEMOTES-ATOMIC | 1 + 2 | `supabase/__tests__/outcome-demotion.test.ts`; `lib/outcomes/__tests__/orchestrator.test.ts` | J2.8 (`c0a76dc2`); Tier-1 half J2.6 (`d7cbda3d`) | db-tests + app-tests | |
+| 22 | OUTCOME-WINDOWED-DECAY | 1 + 2 | `supabase/__tests__/outcome-demotion.test.ts`; `lib/outcomes/__tests__/orchestrator.test.ts` | J2.8 (`c0a76dc2`); Tier-1 half J2.6 (`d7cbda3d`) | db-tests + app-tests | |
+| 23 | OUTCOME-PROVENANCE-PROPAGATED | 1 + 2 | `supabase/__tests__/outcome-provenance.test.ts`; `lib/outcomes/__tests__/normalise.test.ts` | J2.8 (`c0a76dc2`); Tier-1 half J2.6 (`d7cbda3d`) | db-tests + app-tests | |
+| 24 | OUTCOME-HYPOTHESIS-IN-BRIEF | 1 + 2 | `lib/outcomes/__tests__/hypothesis.test.ts`; `lib/ai/prompts/brief-hypothesis.test.ts`; `app/[locale]/(dashboard)/campaigns/[id]/brief/actions.hypothesis.test.ts`; existing `supabase/__tests__/mode2-brief-rls.test.ts` (unmodified) | J2.10 (`d286aaad`) | db-tests + app-tests | |
+| 25 | OUTCOME-RETROSPECTIVE-WRITES-BACK | 1 + 2 | `supabase/__tests__/outcome-retrospective-rpc.test.ts`; `lib/outcomes/__tests__/retrospective.test.ts`; `app/[locale]/(dashboard)/campaigns/[id]/retrospective-actions.test.ts` | J2.11 (`fb28e6c6`); Tier-1 half J2.6 (`d7cbda3d`) | db-tests + app-tests | |
+| 26 | OUTCOME-NORTHSTAR-COMPUTABLE | 1 | `supabase/__tests__/outcome-northstar.test.ts` | J2.6 (`d7cbda3d`) | db-tests | |
+| 27 | OUTCOME-ATTRIBUTION-CONFIDENCE-FRAMED | 2 | `lib/outcomes/__tests__/copy-lint.test.ts`; `app/[locale]/(dashboard)/campaigns/[id]/outcome-surfaces.test.tsx`; `lib/i18n/outcome-parity.test.ts` | J2.12 (`c03fa2e2`) | app-tests | |
+| 28 | OUTCOME-DETERMINISTIC-NO-LLM | 3 | `lib/outcomes/__tests__/source-scans.test.ts` (import scan) | J2.2 (`c63e59ad`) | app-tests | |
+| 29 | OUTCOME-ADR0018-UNCHANGED | 3 | `npx tsx scripts/check-adr0018-unchanged.ts`; `lib/outcomes/__tests__/adr0018-guard.test.ts`; the unmodified `lib/learning` suite | J2.2 (`c63e59ad`) | app-tests | |
+| 30 | OUTCOME-NO-CROSS-BUSINESS | 2 + 3 | `lib/outcomes/__tests__/no-cross-business.test.ts` (wrapper tests + RPC-body scan; `get_learning_cycles_northstar` allowlisted by name) | J2.13 (this step's commit) | app-tests | |
+| 31 | OUTCOME-NO-EXTRA-WRITER | 3 | `lib/outcomes/__tests__/source-scans.test.ts` (source-value scan) | J2.2 (`c63e59ad`) | app-tests | |
+| 32 | OUTCOME-TICK-IDEMPOTENT | 1 + 2 | `supabase/__tests__/outcome-tick-idempotent.test.ts`; `lib/outcomes/__tests__/orchestrator.test.ts`, `retrospective.test.ts`; `lib/db/campaign-retrospectives.test.ts` | J2.8 (`c0a76dc2`) | db-tests + app-tests | |
+| 33 | OUTCOME-RLS-ISOLATED | 1 | `supabase/__tests__/outcome-tables-rls.test.ts` | J2.3 (`e0ca8cab`) | db-tests | |
+| 34 | OUTCOME-CASCADE-COMPLETE | 1 + 3 | `supabase/__tests__/outcome-tables-purge.test.ts`; `lib/db/__tests__/d2.5-outcome-rows.test.ts` (§D2.5 rows) | J2.3 (`e0ca8cab`) | db-tests + app-tests | |
+| 35 | OUTCOME-PREDICTION-ACCURACY | E | §V.4 below: MEASURED, NOT YET RUN | J2.13 (protocol recorded, nothing run) | none-by-decision (Tier E) | not applicable |
+
+### V.3 Tier-3 re-verification at HEAD (local, before push)
+
+Each check was run at HEAD and then **reddened against the real tree** (a planted violation, the check failed, the
+plant was removed and the check went green again). Local runs, not CI.
+
+| # | Check | Plant that made it fail |
+|---|---|---|
+| 6 | no TS writes `post_dimensions` | a `.from('post_dimensions').insert(` in `lib/outcomes` |
+| 7 | no outcome key or upsert names `hook` / `proof_type` | `'outcome:hook:question:above:twitter'` |
+| 16 | MINOR-2 intact (no `likes: 0` in the governed render) | `likes: 0` added to the governed row (J2.9) |
+| 28 | `lib/outcomes` and the cron route import nothing from `lib/ai` or the Anthropic SDK | an `@anthropic-ai/sdk` import |
+| 29 | `lib/learning/` and the 8 ADR 0018 migrations identical to BASE | a comment appended to `lib/learning/diff.ts` |
+| 30 | every outcome wrapper and RPC body is business-scoped | a predicate removed from `demote_outcome_pattern` (scratch migration) and a filter removed from `getFrozenBriefContent` |
+| 31 | the `performance_memory` writer set is exactly {distilled, import, outcome} | a scratch migration inserting `source = 'manual2'` |
+| 34 | the three §D2.5 rows are present and agree with §11 | a row's table name changed in ADR 0010 |
+
+Also confirmed against BASE: **no new dependency** (`package.json` and the lockfile are unchanged), **no `/analytics`
+route** (no path under `app/` contains `analytics`), and **no experiment or holdout code** in production TypeScript.
+
+### V.4 Tier E: `OUTCOME-PREDICTION-ACCURACY`, a runnable procedure. **MEASURED - NOT YET RUN; earliest ~T0 + 150 days; T0 undefined today.**
+
+Nothing was run for this step and nothing is claimed. T0 is the first real customer's first published post with
+real metrics; today it is undefined (production OAuth apps are unregistered, ADR 0026 §3 not yet exercised).
+
+1. **Snapshot at promotion.** For every `performance_memory` row that becomes `active` with `source = 'outcome'`,
+   record its key, direction, promotion date and `outcome_n`.
+2. **Compare over the next 60 days,** on that brand and platform: the win rate (share of matured posts with
+   `beat_baseline = true`) of new posts that MATCH the pattern's value versus those that do not.
+3. **Report the difference with its interval,** pooled across patterns and brands as an evaluation statistic only.
+4. **Per-arm floor: n >= 15 in each arm**, otherwise the output is exactly "insufficient data".
+5. **Label: "association, not validation".** Once promoted, the pattern is in the prompt, so the matching arm is
+   generated more often and the non-matching arm is a self-selected residual; patterns are promoted because they ran
+   hot, so reversion toward the average is expected even for a real pattern. A post-promotion decline is never read
+   as disproof on its own. A causal number needs a randomized holdout, which is deliberate experimentation and is
+   deferred (§15; `docs/backlog.md`).
+
+### V.5 Deviations and decisions recorded during the build
+
+- **Amendment lettering.** ADR 0016 already had Amendments A-C, so ADR 0026's "Amendment C" is ADR 0016 **Amendment D**;
+  ADR 0017 already had A-D, so it is ADR 0017 **Amendment E**. Both headings say so.
+- **`OUTCOME-NO-RETRO-TAGGING` allowlist** is three migration names (the original, the history copy, and the forward
+  migration that redefines the same trigger body), not two.
+- **Session 33 security review** (ecc:security-reviewer, read-only): no BLOCKER and no MAJOR. MINOR-2 (a member could
+  hard-DELETE an outcome row) is fixed by forward migration `20260919160000`; MINOR-1 (trigger branch A checks `NEW`, not
+  the transition) is accepted: the reviewer found no impact and rewriting a committed trigger adds more risk than it removes.
+- **"Not enough variety"** in the campaign-page list is computed from the brand's outcome patterns, so a value with
+  fewer than 5 observations is invisible to it and variety can be over-reported (recorded in `docs/backlog.md`).
