@@ -60,7 +60,9 @@ export type PostDueForOutcome = {
   post: PostRow
   // null when no metrics row exists or the day-7 sync never landed: a skip candidate.
   metrics: PostMetricsRow | null
-  due: 'ready' | 'no_metrics'
+  // 'no_metrics'   — the day-7 sync did not land (a row exists but is older, or none exists): the skip candidates.
+  // 'never_synced' — the SUBSET of those with NO post_metrics row at all (the sync has never succeeded).
+  due: 'ready' | 'no_metrics' | 'never_synced'
 }
 
 // Published posts past maturity that have no outcome row yet, oldest first, bounded.
@@ -107,7 +109,7 @@ export async function listPostsDueForOutcome(
     if (metrics && parseISO(metrics.last_synced_at) >= day7) {
       due.push({ post: post as PostRow, metrics, due: 'ready' })
     } else if (now >= addDays(publishedAt, OUTCOME_MATURITY_DAYS + OUTCOME_MATURITY_GRACE_DAYS)) {
-      due.push({ post: post as PostRow, metrics: null, due: 'no_metrics' })
+      due.push({ post: post as PostRow, metrics: null, due: metrics ? 'no_metrics' : 'never_synced' })
     }
   }
   return due

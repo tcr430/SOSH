@@ -60,7 +60,7 @@ async function extractOutcomesTick(request: NextRequest): Promise<NextResponse> 
   } catch {
     outcomes = {
       triggeredBy, tick: formatISO(new Date()), durationMs: Date.now() - startedAt,
-      candidates: 0, matured: 0, outcomesWritten: 0, skippedNoMetrics: 0, skippedNoBaseline: 0,
+      candidates: 0, matured: 0, outcomesWritten: 0, skippedNoMetrics: 0, skippedNeverSynced: 0, skippedNoBaseline: 0,
       skippedIneligibleField: 0, cellsRecomputed: 0, candidatesUpserted: 0, promoted: 0, demoted: 0,
       retrospectivesCompleted: 0, errors: 1,
     }
@@ -77,6 +77,7 @@ async function extractOutcomesTick(request: NextRequest): Promise<NextResponse> 
     matured: outcomes.matured,
     outcomesWritten: outcomes.outcomesWritten,
     skippedNoMetrics: outcomes.skippedNoMetrics,
+    skippedNeverSynced: outcomes.skippedNeverSynced,
     skippedNoBaseline: outcomes.skippedNoBaseline,
     skippedIneligibleField: outcomes.skippedIneligibleField,
     cellsRecomputed: outcomes.cellsRecomputed,

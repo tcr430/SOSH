@@ -34,16 +34,17 @@ import { runOutcomeTick } from '@/lib/outcomes/orchestrator'
 
 const SECRET = 'test-secret-that-is-at-least-32-chars!!'
 
-// EXACTLY ADR 0026 §14's keys — no more, no fewer.
+// EXACTLY ADR 0026 §14's keys — no more, no fewer. Seventeen since Session 33-D D2 (MAJOR-2) added
+// skippedNeverSynced to the original sixteen; ADR 0026 §VI amends §14 to match (D8).
 const ADR_14_KEYS = [
   'kind', 'triggeredBy', 'tick', 'durationMs', 'candidates', 'matured', 'outcomesWritten', 'skippedNoMetrics',
-  'skippedNoBaseline', 'skippedIneligibleField', 'cellsRecomputed', 'candidatesUpserted', 'promoted', 'demoted',
+  'skippedNeverSynced', 'skippedNoBaseline', 'skippedIneligibleField', 'cellsRecomputed', 'candidatesUpserted', 'promoted', 'demoted',
   'retrospectivesCompleted', 'errors',
 ].sort()
 
 const summary = {
   triggeredBy: 'secret' as const, tick: '2026-09-19T04:00:00Z', durationMs: 9, candidates: 4, matured: 3,
-  outcomesWritten: 2, skippedNoMetrics: 1, skippedNoBaseline: 1, skippedIneligibleField: 1, cellsRecomputed: 10,
+  outcomesWritten: 2, skippedNoMetrics: 1, skippedNeverSynced: 1, skippedNoBaseline: 1, skippedIneligibleField: 1, cellsRecomputed: 10,
   candidatesUpserted: 2, promoted: 1, demoted: 1, retrospectivesCompleted: 0, errors: 0,
 }
 
@@ -130,6 +131,8 @@ describe('the canonical tick line', () => {
     const lines = tickLines(log)
     expect(lines).toHaveLength(1)
     expect(Object.keys(lines[0]).sort()).toEqual(ADR_14_KEYS)
+    expect(ADR_14_KEYS).toHaveLength(17) // the size is pinned too: a key cannot be swapped for another unnoticed
+    expect(lines[0].skippedNeverSynced).toBe(1)
     expect(lines[0]).toMatchObject({ kind: 'outcome.tick', candidates: 4, outcomesWritten: 2, errors: 0 })
   })
 

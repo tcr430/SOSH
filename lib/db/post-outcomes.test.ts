@@ -64,6 +64,7 @@ describe('post-outcomes wrappers', () => {
         data: [
           post('ready', '2026-09-01T00:00:00Z', '2026-09-09T00:00:00Z'),
           post('nosync', '2026-09-01T00:00:00Z', '2026-09-03T00:00:00Z'), // synced before day 7, past grace
+          post('never', '2026-09-01T00:00:00Z', null), // NO metrics row at all, past grace: the sync never succeeded
           post('grace', '2026-09-11T12:00:00Z', null), // 7.5 days old: inside grace, left for a later tick
           post('done', '2026-09-01T00:00:00Z', '2026-09-09T00:00:00Z'),
         ],
@@ -73,7 +74,8 @@ describe('post-outcomes wrappers', () => {
     ]
     const out = await listPostsDueForOutcome('biz', { now: '2026-09-19T00:00:00Z' })
     const byId = Object.fromEntries(out.map((d) => [d.post.id, d.due]))
-    expect(byId).toEqual({ ready: 'ready', nosync: 'no_metrics' })
+    // MAJOR-2: a stale row and no row at all are DIFFERENT classes, so an auth outage is not a quiet week.
+    expect(byId).toEqual({ ready: 'ready', nosync: 'no_metrics', never: 'never_synced' })
   })
 
   it('listPostsDueForOutcome bounds the scan with lookbackDays when given', async () => {

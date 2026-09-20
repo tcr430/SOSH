@@ -8,7 +8,7 @@ import { addDays, formatISO } from 'date-fns'
 
 interface FakePost {
   id: string; business_id: string; campaign_id: string; platform: 'twitter' | 'linkedin'
-  content: string; published_at: string; due: 'ready' | 'no_metrics'
+  content: string; published_at: string; due: 'ready' | 'no_metrics' | 'never_synced'
   metrics: Record<string, number | null> | null
 }
 
@@ -114,12 +114,34 @@ function seedMix() {
 }
 
 describe('runOutcomeTick counters', () => {
+  // MAJOR-2: an auth outage (no metrics row ever) and a quiet week (a stale row) are different signals.
+  it('counts a never-synced post separately from a stale-metrics post; skippedNoMetrics keeps counting both', async () => {
+    db.posts = [
+      post({ id: 'p-stale', due: 'no_metrics', metrics: null }), // a row exists but is older than day 7
+      post({ id: 'p-never-1', due: 'never_synced', metrics: null }), // no row at all
+      post({ id: 'p-never-2', due: 'never_synced', metrics: null }),
+    ]
+    const s = await runOutcomeTick({ triggeredBy: 'secret' })
+    expect(s).toMatchObject({ candidates: 3, matured: 0, skippedNoMetrics: 3, skippedNeverSynced: 2, errors: 0 })
+  })
+
+  it('the summary has EXACTLY sixteen keys (the route adds `kind` for the seventeen-key tick line)', async () => {
+    const s = await runOutcomeTick({ triggeredBy: 'secret' })
+    const keys = Object.keys(s).sort()
+    expect(keys).toHaveLength(16)
+    expect(keys).toEqual([
+      'candidates', 'candidatesUpserted', 'cellsRecomputed', 'demoted', 'durationMs', 'errors', 'matured', 'outcomesWritten',
+      'promoted', 'retrospectivesCompleted', 'skippedIneligibleField', 'skippedNeverSynced', 'skippedNoBaseline', 'skippedNoMetrics',
+      'tick', 'triggeredBy',
+    ])
+  })
+
   it('counts a seeded mix exactly', async () => {
     seedMix()
     const s = await runOutcomeTick({ triggeredBy: 'secret' })
     expect(s).toMatchObject({
       triggeredBy: 'secret', candidates: 4, matured: 3, outcomesWritten: 2,
-      skippedNoMetrics: 1, skippedNoBaseline: 1, skippedIneligibleField: 1, errors: 0, retrospectivesCompleted: 0,
+      skippedNoMetrics: 1, skippedNeverSynced: 0, skippedNoBaseline: 1, skippedIneligibleField: 1, errors: 0, retrospectivesCompleted: 0,
     })
     // p-win: role, format, origin_mode, length_band, cta = 5 cells x 2 directions.
     expect(s.cellsRecomputed).toBe(10)

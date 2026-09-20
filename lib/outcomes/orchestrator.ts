@@ -54,6 +54,10 @@ export interface OutcomeTickSummary {
   matured: number
   outcomesWritten: number
   skippedNoMetrics: number
+  // A SUBSET of skippedNoMetrics: posts with NO metrics row at all, i.e. the sync has never succeeded for them.
+  // A quiet week leaves a stale row (counted only in skippedNoMetrics); an auth outage, a revoked token or a
+  // provider fault leaves none, so a non-zero value here is the signal to look at sync-metrics (MAJOR-2).
+  skippedNeverSynced: number
   skippedNoBaseline: number
   skippedIneligibleField: number
   cellsRecomputed: number
@@ -137,6 +141,7 @@ async function processBusiness(businessId: string, now: Date, budget: number, su
 
   const ready = due.filter((d) => d.due === 'ready')
   summary.skippedNoMetrics += due.length - ready.length
+  summary.skippedNeverSynced += due.filter((d) => d.due === 'never_synced').length
   if (ready.length === 0) return 0
 
   const postIds = ready.map((d) => d.post.id)
@@ -220,6 +225,7 @@ export async function runOutcomeTick(opts: { triggeredBy: 'qstash' | 'secret' })
     matured: 0,
     outcomesWritten: 0,
     skippedNoMetrics: 0,
+    skippedNeverSynced: 0,
     skippedNoBaseline: 0,
     skippedIneligibleField: 0,
     cellsRecomputed: 0,

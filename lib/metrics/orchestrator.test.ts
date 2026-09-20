@@ -48,6 +48,7 @@ vi.mock('@/lib/db/cron-health', () => ({
 
 vi.mock('@sentry/nextjs', () => ({
   withMonitor: vi.fn().mockImplementation((_slug: string, fn: () => unknown) => fn()),
+  captureException: vi.fn(),
 }))
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -214,6 +215,47 @@ describe('runMetricsSyncTick', () => {
     expect(summary.synced).toBe(0)
     expect(mockRefreshAccessToken).not.toHaveBeenCalled()
     expect(vi.mocked(upsertPostMetrics)).not.toHaveBeenCalled()
+  })
+
+  // MAJOR-2: since J2.1 this branch is live for every X failure, and the outcome tick reads a missing sync as a
+  // benign skip — so the error must be OBSERVABLE here, carrying the platform and the post.
+  it('a provider failure is captured with cron, phase, platform and post id, AND still increments errors', async () => {
+    vi.mocked(listPostsForMetricsSync).mockResolvedValue([makePost({ id: 'tw-1', platform: 'twitter' })])
+    const failure = new SocialProviderError({ code: 'TOKEN_EXPIRED', message: 'Token expired' })
+    mockFetchPostMetrics.mockRejectedValue(failure)
+
+    const summary = await runMetricsSyncTick({ now: NOW })
+
+    expect(summary.errors).toBe(1)
+    expect(vi.mocked(Sentry.captureException)).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(Sentry.captureException)).toHaveBeenCalledWith(failure, {
+      tags: { cron: 'sync-metrics', phase: 'fetch', platform: 'twitter' },
+      extra: { postId: 'tw-1' },
+    })
+  })
+
+  it('a failure of our own upsert is tagged phase=persist, not fetch', async () => {
+    vi.mocked(listPostsForMetricsSync).mockResolvedValue([makePost({ id: 'tw-2', platform: 'twitter' })])
+    mockFetchPostMetrics.mockResolvedValue({ likes: 1, comments: 0, shares: 0, saves: null, clicks: null, reach: null, impressions: 10, fetchedAt: NOW.toISOString() })
+    vi.mocked(upsertPostMetrics).mockRejectedValue(new Error('db down'))
+
+    const summary = await runMetricsSyncTick({ now: NOW })
+
+    expect(summary.errors).toBe(1)
+    expect(vi.mocked(Sentry.captureException)).toHaveBeenCalledWith(expect.any(Error), expect.objectContaining({
+      tags: { cron: 'sync-metrics', phase: 'persist', platform: 'twitter' },
+    }))
+  })
+
+  it('NOT_IMPLEMENTED is an expected skip: it takes the unsupported path and captures NOTHING', async () => {
+    vi.mocked(listPostsForMetricsSync).mockResolvedValue([makePost({ id: 'li-1', platform: 'linkedin' })])
+    mockFetchPostMetrics.mockRejectedValue(new SocialProviderError({ code: 'NOT_IMPLEMENTED', message: 'nope' }))
+
+    const summary = await runMetricsSyncTick({ now: NOW })
+
+    expect(summary.skippedNotImplemented).toBe(1)
+    expect(summary.errors).toBe(0)
+    expect(vi.mocked(Sentry.captureException)).not.toHaveBeenCalled()
   })
 
   it('TOKEN_REVOKED: counted as error — no mutation', async () => {

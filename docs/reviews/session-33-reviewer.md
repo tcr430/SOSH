@@ -837,3 +837,49 @@ after it, at D0 (`37aba2d4`).
 - **Commit:** D1 — SHA recorded at D9 close-out (a commit cannot name itself).
 - **What I did NOT touch:** the `.eq('business_id', …)` filters and the source / status / `deleted_at` predicates
   (OUTCOME-NO-CROSS-BUSINESS); the enumerated export list was updated, not widened.
+
+### MAJOR-2 — the live metrics failure path is observed, and a never-synced post is no longer indistinguishable from a quiet week
+
+- **Finding:** MAJOR-2.
+- **Fix:**
+  - **Capture.** `lib/metrics/orchestrator.ts` binds the error in its `else` branch and calls
+    `Sentry.captureException(e, { tags: { cron: 'sync-metrics', phase, platform: post.platform }, extra: { postId: post.id } })`
+    (the shape `lib/outcomes/orchestrator.ts` already uses). `phase` is `'fetch'` until the provider returns and
+    `'persist'` once our own upsert starts, so a provider failure and a database failure are tagged apart.
+    `summary.errors++` stays; no console line was added, so the tick still emits its one canonical line.
+  - **Split.** `lib/db/post-outcomes.ts` `listPostsDueForOutcome` now classifies a past-grace post with **no
+    `post_metrics` row at all** as `due: 'never_synced'`, and one whose row exists but is older than day 7 stays
+    `'no_metrics'`. `lib/outcomes/orchestrator.ts` counts the former into the new key **`skippedNeverSynced`**.
+- **The new key, and what it does not change:** `skippedNeverSynced` is a **subset** of `skippedNoMetrics`.
+  `skippedNoMetrics` keeps its exact prior meaning and value for every post ("the day-7 sync did not land"), so no
+  existing dashboard reader sees a number move or a definition shift; only the new key is the outage signal.
+  The two cases *were* distinguishable from what is stored — `listPostsDueForOutcome` already held the raw row
+  before nulling it — so no STOP was needed. The canonical tick line grows from sixteen keys to **seventeen**
+  (`app/api/cron/extract-outcomes/route.ts`); the ADR 0026 §14 amendment is **D8's**, not this step's.
+- **Proof:**
+  - `lib/metrics/orchestrator.test.ts:222` — a non-`NOT_IMPLEMENTED` `SocialProviderError` is captured with the
+    platform and post id **and** increments `errors`; `:237` — an upsert failure is tagged `phase: 'persist'`;
+    `:250` — `NOT_IMPLEMENTED` still takes the unsupported-platform path and captures **nothing**.
+  - `lib/outcomes/__tests__/orchestrator.test.ts:118` — one stale-row post and two never-synced posts give
+    `skippedNoMetrics: 3, skippedNeverSynced: 2`; `:128` — the summary's key set is asserted **exactly**, sixteen.
+  - `lib/db/post-outcomes.test.ts:58` — a stale row is `no_metrics` and a post with no row is `never_synced`.
+  - `app/api/cron/extract-outcomes/route.test.ts:134` — the tick line's key set equals the expected list exactly
+    and the list's size is pinned at **17**, on all three paths (normal, leak-attempt, throwing tick).
+- **Reddening** (each restored from a byte copy, `cmp` clean):
+
+  | Mutation | RED, verbatim |
+  |---|---|
+  | delete the `Sentry.captureException(…)` call | `a provider failure is captured … AND still increments errors` — `expected "vi.fn()" to be called 1 times, but got 0 times`; and `a failure of our own upsert is tagged phase=persist` |
+  | delete the `summary.skippedNeverSynced += …` line (counters collapse) | `counts a never-synced post separately from a stale-metrics post …` — `expected { triggeredBy: 'secret', …(15) } to match object` |
+  | classify every past-grace post `no_metrics` (`due` collapse) | `classifies ready / no_metrics / waiting …` — `expected { ready: 'ready', …(2) } to deeply equal { ready: 'ready', …(2) }` |
+  | drop `skippedNeverSynced` from the route's tick line | three tests RED — `expected [ 'candidates', …(15) ] to deeply equal [ 'candidates', …(16) ]` |
+
+  A first attempt at the capture mutation used a pattern that matched nothing and so proved nothing; it was
+  discarded and redone by deleting the call's four lines (the row above). Not mutated: the
+  `NOT_IMPLEMENTED captures NOTHING` assertion, which only fails if a capture is added to that branch.
+- **Loop at this state:** `tsc` clean; `lint` 0 errors (110 pre-existing warnings); `test:app` 4333 / 4333;
+  `check-adr0018-unchanged.ts` exit 0. `test:db` is not part of D2's loop and was not run.
+- **Commit:** D2 — SHA recorded at D9 close-out (a commit cannot name itself); D8 carries the second SHA for the
+  ADR key-set amendment.
+- **What I did NOT touch:** no second console line; `twitter-provider.ts` is untouched (MINOR-7 is D7); no ADR text
+  changed (D8).
