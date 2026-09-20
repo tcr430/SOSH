@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { campaignCellKeys, classifyObservedRows } from '../campaign-view'
+import { campaignCellKeys, classifyObservedRows, unavailableMetricsPlatforms } from '../campaign-view'
+import { PLATFORM_CONFIGS, metricsReadAvailableFor } from '@/lib/social'
 import type { PerformanceMemoryRow } from '@/lib/db/types'
 
 // ADR 0026 §10.1 (J2.12) — the list is restricted to cells THIS campaign's posts contributed to; one line per cell;
@@ -72,5 +73,43 @@ describe('classifyObservedRows', () => {
     const out = classifyObservedRows(rows, new Set(['format:thread:linkedin']))
     expect(out).toHaveLength(1)
     expect(out[0]).toMatchObject({ seeded: true, basis: 'count', platform: 'linkedin' })
+  })
+})
+
+// MINOR-5 (Session 33-D D5) — "which platforms can return metrics" is /lib/social/'s knowledge. The campaign view asks
+// the declared capability; it never names a platform, and "has not measured yet" is not "cannot measure".
+describe('unavailableMetricsPlatforms — the state comes from the platform capability', () => {
+  // The capability is a mutable map the test FLIPS; nothing here asserts a literal 'linkedin'.
+  const capability: Record<string, boolean> = { linkedin: false, twitter: true, instagram: false, facebook: false, threads: false }
+  const canRead = (p: string) => capability[p]
+
+  it('with the capability false, a LinkedIn campaign reports the disclosure — it never consults whether anything was measured', () => {
+    capability.linkedin = false
+    expect(unavailableMetricsPlatforms(['linkedin'], canRead)).toEqual(['linkedin'])
+  })
+
+  it('FLIPPING the capability to true removes the disclosure (the moment the provider can read metrics)', () => {
+    capability.linkedin = true
+    try {
+      expect(unavailableMetricsPlatforms(['linkedin'], canRead)).toEqual([])
+      expect(unavailableMetricsPlatforms(['linkedin', 'twitter'], canRead)).toEqual([])
+    } finally {
+      capability.linkedin = false
+    }
+  })
+
+  it('a twitter-only campaign reports nothing unavailable', () => {
+    expect(unavailableMetricsPlatforms(['twitter'], canRead)).toEqual([])
+  })
+
+  it('a mixed campaign lists exactly the platforms that cannot read metrics, in order', () => {
+    expect(unavailableMetricsPlatforms(['twitter', 'linkedin', 'threads'], canRead)).toEqual(['linkedin', 'threads'])
+  })
+
+  it('the DEFAULT capability is /lib/social/\'s declaration: every platform the config marks unreadable is reported', () => {
+    const all = Object.keys(PLATFORM_CONFIGS) as Array<keyof typeof PLATFORM_CONFIGS>
+    expect(unavailableMetricsPlatforms(all)).toEqual(all.filter((p) => !PLATFORM_CONFIGS[p].metricsReadAvailable))
+    for (const p of all) expect(metricsReadAvailableFor(p)).toBe(PLATFORM_CONFIGS[p].metricsReadAvailable)
+    expect(PLATFORM_CONFIGS.twitter.metricsReadAvailable).toBe(true)
   })
 })

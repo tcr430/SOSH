@@ -14,6 +14,10 @@ export interface PlatformOAuthConfig {
   // falsehood is still a falsehood.
   tokenExpirySeconds: number | null
   publishingAvailable: boolean
+  // Session 33-D D5 (MINOR-5): whether this platform's provider can READ post metrics today. Platform capability is
+  // /lib/social/'s knowledge — consumers (the campaign page's "metrics unavailable" state) ask this, they never
+  // re-derive it from a platform name. It follows the provider's fetchPostMetrics reality (ADR 0028 Amd A).
+  metricsReadAvailable: boolean
 }
 
 export const PLATFORM_CONFIGS: Record<Platform, PlatformOAuthConfig> = {
@@ -23,6 +27,7 @@ export const PLATFORM_CONFIGS: Record<Platform, PlatformOAuthConfig> = {
     supportsRefreshToken: false,
     tokenExpirySeconds: 60 * 86400, // 60 days, verified N2.1
     publishingAvailable: true,
+    metricsReadAvailable: false, // r_member_social_feed not granted; fetchPostMetrics is NOT_IMPLEMENTED (ADR 0028 Amd A)
   },
   twitter: {
     displayName: 'X (Twitter)',
@@ -30,6 +35,7 @@ export const PLATFORM_CONFIGS: Record<Platform, PlatformOAuthConfig> = {
     supportsRefreshToken: true,
     tokenExpirySeconds: 2 * 3600, // 2 hours, verified N2.1 — the reason this field was renamed
     publishingAvailable: true,
+    metricsReadAvailable: true, // fetchPostMetrics reads public_metrics under the existing tweet.read scope (ADR 0026 J2.1)
   },
   instagram: {
     displayName: 'Instagram',
@@ -38,6 +44,7 @@ export const PLATFORM_CONFIGS: Record<Platform, PlatformOAuthConfig> = {
     supportsRefreshToken: false,
     tokenExpirySeconds: 60 * 86400,
     publishingAvailable: false,
+    metricsReadAvailable: false, // no provider yet; Meta App Review pending
   },
   facebook: {
     displayName: 'Facebook',
@@ -46,6 +53,7 @@ export const PLATFORM_CONFIGS: Record<Platform, PlatformOAuthConfig> = {
     supportsRefreshToken: false,
     tokenExpirySeconds: 60 * 86400,
     publishingAvailable: false,
+    metricsReadAvailable: false, // no provider yet; Meta App Review pending
   },
   threads: {
     displayName: 'Threads',
@@ -54,6 +62,7 @@ export const PLATFORM_CONFIGS: Record<Platform, PlatformOAuthConfig> = {
     supportsRefreshToken: false,
     tokenExpirySeconds: 60 * 86400,
     publishingAvailable: false,
+    metricsReadAvailable: false, // no provider yet
   },
 }
 
@@ -63,6 +72,10 @@ export function getPlatformConfig(platform: Platform): PlatformOAuthConfig {
 
 export function publishingAvailableFor(platform: Platform): boolean {
   return PLATFORM_CONFIGS[platform].publishingAvailable
+}
+
+export function metricsReadAvailableFor(platform: Platform): boolean {
+  return PLATFORM_CONFIGS[platform].metricsReadAvailable
 }
 
 type PublishingPlatform = 'linkedin' | 'twitter'

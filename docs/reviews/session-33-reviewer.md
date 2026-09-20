@@ -978,3 +978,43 @@ after it, at D0 (`37aba2d4`).
 - **Commit:** D4 — SHA recorded at D9 close-out.
 - **What I did NOT touch:** the two namespace CHECKs, the two partial unique indexes and the distilled index; no
   policy; `20260919130000` itself.
+
+### MINOR-5 — "which platforms can return metrics" is read from `/lib/social/`, not written in the campaign view
+
+- **Finding:** MINOR-5.
+- **Fix:**
+  - `lib/social/platforms/config.ts` — `PlatformOAuthConfig` gains `metricsReadAvailable: boolean`, with a one-line reason
+    comment per platform in the file's existing style: `twitter` true; `linkedin` false (`r_member_social_feed` not
+    granted, `fetchPostMetrics` NOT_IMPLEMENTED, ADR 0028 Amd A); `instagram`, `facebook`, `threads` false — plus a
+    `metricsReadAvailableFor(platform)` helper, exported through `lib/social/index.ts`.
+  - `lib/outcomes/campaign-view.ts` — a new `unavailableMetricsPlatforms(platforms, metricsRead)` derives the unavailable
+    set from that capability (injected, defaulting to `metricsReadAvailableFor` imported from `@/lib/social`), and
+    `loadCampaignLearningView` uses it. The `p === 'linkedin'` literal is gone and so is the `!measured.has(p)` half,
+    which conflated "cannot measure" with "has not measured yet".
+  - **Behaviour that follows, stated openly:** a campaign that includes `instagram`, `facebook` or `threads` would now
+    also report the unavailable state, because those platforms declare no metrics read; previously only LinkedIn ever
+    did. That is what the build step specifies ("the three unserved platforms false") and is the true statement.
+- **Proof:**
+  - `lib/outcomes/__tests__/campaign-view.test.ts:81-` — the capability is a map the test **flips**: false reports the
+    disclosure without consulting any measured row; flipped to true it disappears; a twitter-only campaign reports
+    nothing; a mixed campaign lists exactly the unreadable platforms in order; and the default capability equals
+    `PLATFORM_CONFIGS[p].metricsReadAvailable` for every platform.
+  - `lib/outcomes/__tests__/campaign-view.load.test.ts:32,39` (new) — the same through `loadCampaignLearningView` with
+    the readers stubbed: with the capability false a LinkedIn campaign reports it **with and without measured rows**;
+    flipped true it disappears in both states; twitter-only reports nothing in either.
+  - The §10.2 surface tests (`app/[locale]/(dashboard)/campaigns/[id]/outcome-surfaces.test.tsx`) and the copy lint
+    stay green in all three locales; no §10.2 copy or i18n key was changed.
+- **Reddening** (each restored from a byte copy, `cmp` clean):
+
+  | Mutation | RED, verbatim |
+  |---|---|
+  | restore `p === 'linkedin' && !measured` in the loader | `expected [] to deeply equal [ 'linkedin' ]` and `expected [ 'linkedin' ] to deeply equal []` (two loader tests) |
+  | restore `filter((p) => p === 'linkedin')` in the helper | the flip test, the mixed-campaign test and the default-capability test — `expected [ 'linkedin' ] to deeply equal []` |
+
+- **Loop at this state:** `tsc` clean; `lint` 0 errors (110 pre-existing warnings); `test:app` 4344 tests, one failure,
+  `lib/signals/__fixtures__/eval/corpus-v2-schema.test.ts` (the named pre-existing flake); `check-adr0018-unchanged.ts`
+  exit 0. `test:db` is not part of D5's loop and was not run.
+- **Commit:** D5 — SHA recorded at D9 close-out.
+- **What I did NOT touch:** the §10.2 "metrics unavailable" copy and its i18n keys; the many existing importers of
+  `@/lib/social/platforms/config` outside `lib/social/` (pre-existing, not this finding); `page.tsx`, which already
+  passes `unavailablePlatforms` through to the card.

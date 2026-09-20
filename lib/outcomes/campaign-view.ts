@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { formatISO } from 'date-fns'
-import type { CampaignRetrospectiveRow, PerformanceMemoryRow } from '@/lib/db/types'
+import type { CampaignRetrospectiveRow, Platform, PerformanceMemoryRow } from '@/lib/db/types'
 import {
   getCampaignRetrospective,
   getFrozenBriefContent,
@@ -9,6 +9,7 @@ import {
   type CampaignOutcomeCellSource,
 } from '@/lib/db/campaign-retrospectives'
 import { listOutcomePatterns } from '@/lib/db/memory-performance'
+import { metricsReadAvailableFor } from '@/lib/social'
 import { resolveHypothesis, retrospectiveDueAt } from './retrospective'
 
 // ADR 0026 §10 (Session 33 J2.12) — the campaign page's view models. Deterministic and read-only: the retrospective
@@ -115,11 +116,21 @@ export interface CampaignLearningView {
   // When the retrospective becomes due; null while posts are still unpublished or none is published.
   dueAt: string | null
   observed: ObservedRowView[]
-  // Campaign platforms whose metrics are unavailable (LinkedIn's provider is NOT_IMPLEMENTED, ADR 0028 Amd A).
-  unavailablePlatforms: string[]
+  // Campaign platforms whose provider cannot read metrics at all, from /lib/social/'s declared capability
+  // (metricsReadAvailable, ADR 0028 Amd A) — never a platform name written here, and never "has not measured yet".
+  unavailablePlatforms: Platform[]
 }
 
 const OBSERVED_LIST_LIMIT = 20
+
+// "Cannot measure" is a property of the platform, not of the campaign: a brand-new campaign that has not measured
+// anything yet is NOT unavailable. The capability is injected so a test can flip it (MINOR-5).
+export function unavailableMetricsPlatforms(
+  platforms: readonly Platform[],
+  metricsRead: (platform: Platform) => boolean = metricsReadAvailableFor,
+): Platform[] {
+  return platforms.filter((p) => !metricsRead(p))
+}
 
 // `client` MUST be the caller's AUTHENTICATED client (never service-role): this is a user-facing read, so the
 // SELECT policies on the outcome tables, not the businessId argument alone, are what scope it (MAJOR-1, L-9).
@@ -127,7 +138,7 @@ export async function loadCampaignLearningView(
   client: SupabaseClient,
   businessId: string,
   campaignId: string,
-  platforms: readonly string[],
+  platforms: readonly Platform[],
 ): Promise<CampaignLearningView> {
   const [retro, posts, brief, sources, active, candidate] = await Promise.all([
     getCampaignRetrospective(client, businessId, campaignId),
@@ -139,11 +150,10 @@ export async function loadCampaignLearningView(
   ])
 
   const dueAt = retrospectiveDueAt(posts, resolveHypothesis(brief).criteria)
-  const measured = new Set(sources.map((s) => s.platform))
   return {
     retro,
     dueAt: dueAt ? formatISO(dueAt) : null,
     observed: classifyObservedRows([...active, ...candidate], campaignCellKeys(sources)).slice(0, OBSERVED_LIST_LIMIT),
-    unavailablePlatforms: platforms.filter((p) => p === 'linkedin' && !measured.has(p)),
+    unavailablePlatforms: unavailableMetricsPlatforms(platforms),
   }
 }

@@ -29,6 +29,7 @@ export {
   PLATFORM_CONFIGS,
   getPlatformConfig,
   publishingAvailableFor,
+  metricsReadAvailableFor,
   isPublishingPlatform,
 } from './platforms/config'
 export { VALID_PLATFORMS, isPlatform } from './platforms/guards'
