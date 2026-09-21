@@ -598,6 +598,57 @@ describe('AGENCY-NO-SECOND-BUDGET-TABLE (ADR 0027 §7.4, constraint 43)', () => 
   })
 })
 
+// ═══ AGENCY-LOOP-SCHEMA-STRICT (11) — Tier 3 half (added K2.2) ════════════════
+// ADR 0021 §7.4: the ABSENCE of a `status` field in TriageDecisionSchema is the control that stops "approved"
+// being a value the model can emit; ADR 0027 §3.1 makes every schema passed to runToolLoop inherit that duty.
+// The Tier-2 half (lib/ai/tool-runner-generic.test.ts) rejects such a schema at loop entry; this half scans the
+// decision schemas THEMSELVES, so the violation reddens in CI before any run reaches the guard. Roots are the
+// loop and its two consumers.
+
+const VERDICT_SHAPED_FIELD = /(?:^|[\s,{])(applied|status|approved|verified)\s*:/
+
+export function findVerdictShapedSchemaFields(source: string): string[] {
+  const clean = stripComments(source)
+  const hits: string[] = []
+  for (const m of clean.matchAll(/z\.strictObject\(\{([\s\S]*?)\}\)/g)) {
+    const field = VERDICT_SHAPED_FIELD.exec(m[1])
+    if (field) hits.push(`z.strictObject carries a verdict-shaped field: ${field[1]}`)
+  }
+  return hits
+}
+
+export function countStrictObjectSchemas(source: string): number {
+  return [...stripComments(source).matchAll(/z\.strictObject\(\{/g)].length
+}
+
+describe('AGENCY-LOOP-SCHEMA-STRICT — Tier 3 half (ADR 0027 §3.1, constraint 11)', () => {
+  it('the detector flags each verdict-shaped field in a strictObject (planted)', () => {
+    for (const f of ['applied', 'status', 'approved', 'verified']) {
+      expect(findVerdictShapedSchemaFields(`const S = z.strictObject({ reason: z.string(), ${f}: z.boolean() })`)).toHaveLength(1)
+    }
+    expect(findVerdictShapedSchemaFields('const S = z.strictObject({\n  status: z.enum(["a"]),\n})')).toHaveLength(1)
+  })
+
+  it('the detector ignores clean schemas, comments, and words that merely contain a forbidden one (planted negatives)', () => {
+    expect(findVerdictShapedSchemaFields('const S = z.strictObject({ verdict: z.string(), reason: z.string() })')).toEqual([])
+    expect(findVerdictShapedSchemaFields('const S = z.strictObject({ reason: z.string() }) // no status field, by design')).toEqual([])
+    expect(findVerdictShapedSchemaFields('const S = z.strictObject({ approvedBy: z.string(), statusText: z.string() })')).toEqual([])
+  })
+
+  it('no decision schema under the loop or its consumers carries a verdict-shaped field, and the scan saw at least one', () => {
+    const roots = [
+      path.join(ROOT, 'lib', 'ai', 'tool-runner.ts'),
+      path.join(ROOT, 'lib', 'signals', 'triage'),
+      PLANNER_ROOT,
+    ]
+    const files = roots.flatMap((r) => (r.endsWith('.ts') ? [r] : collect(r, isProdTs)))
+    const strictObjects = files.reduce((n, f) => n + countStrictObjectSchemas(fs.readFileSync(f, 'utf8')), 0)
+    expect(strictObjects, 'no z.strictObject decision schema was found — the scan would pass vacuously').toBeGreaterThanOrEqual(1)
+    const offenders = files.flatMap((f) => findVerdictShapedSchemaFields(fs.readFileSync(f, 'utf8')).map((h) => `${toRel(f)}: ${h}`))
+    expect(offenders).toEqual([])
+  })
+})
+
 // ═══ constants.ts — ADR 0027 §3.2 / §7.4 / §2.3 transcription ════════════════
 // Not a numbered constraint: the literals the later steps import. Pinned so a drive-by edit is a red test with
 // the ADR section in its name, not a silent behaviour change (the bound tests in K2.2 import these constants and
