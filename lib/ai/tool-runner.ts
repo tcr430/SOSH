@@ -5,6 +5,7 @@ import { safeParseOrAiError } from './parsers'
 import { getAnthropicClient, type AiClientLike } from './client'
 import type { CustomerContext } from './context'
 import { countRecentCalls, recordAiUsage } from '@/lib/db/ai-usage'
+import { assertGuardedToolResult, type GuardedJson } from './wrap-evidence'
 
 // ADR 0021 §2.1 (Session 28 E5.4) — a SIBLING of runPrompt (lib/ai/runner.ts),
 // not an extension of it. runPrompt is NOT modified: a tool-dispatch branch
@@ -167,7 +168,11 @@ export interface TriageTool {
   name: string
   description: string
   inputSchema: Anthropic.Tool.InputSchema
-  execute: (input: unknown) => Promise<unknown>
+  // ADR 0027 §6.2 (Session 34 K2.3) — was `Promise<unknown>`, under which NO field of any tool result was ever
+  // type-checked (how a new field reaches the prompt unwrapped). GuardedJson's only string members are a
+  // guarded render or an id, so adding a raw `html_url: string` to a tool result now fails tsc. The runtime
+  // twin is assertGuardedToolResult at the dispatch below.
+  execute: (input: unknown) => Promise<GuardedJson>
 }
 
 // ADR 0027 §3.1 hardcode #6 — the output schema. This parameter is a SECURITY CONTROL, not a refactor
@@ -495,10 +500,22 @@ export async function runToolLoop<S extends DecisionSchema = typeof TriageDecisi
 
         try {
           const toolResult = await tool.execute(toolUseBlock.input)
+          // ADR 0027 §6.3 (K2.3) — the runtime envelope assertion lives HERE, the one point every tool's
+          // output passes through: every string is UUID-shaped or [DATA]-enveloped, or it throws into the
+          // catch below and the model sees only TOOL_EXECUTION_ERROR_MESSAGE. A new tool can forget the
+          // tool boundary; it cannot forget the dispatcher.
+          //
+          // The assertion runs over the SERIALISED FORM, and that same string is what the model receives
+          // (typescript-reviewer, K2.3 finding 4): asserting on the live object and then stringifying it
+          // lets a non-enumerable toJSON, a getter or a Proxy make the two diverge. Parsing our own
+          // JSON.stringify output removes that whole class — what was asserted IS what is sent. A result
+          // that does not serialise (undefined, a cycle, a bigint) throws here and fails closed.
+          const serialised = JSON.stringify(toolResult)
+          assertGuardedToolResult(JSON.parse(serialised))
           toolCallsUsed += 1
           messages.push({
             role: 'user',
-            content: [{ type: 'tool_result', tool_use_id: toolUseBlock.id, content: JSON.stringify(toolResult) }],
+            content: [{ type: 'tool_result', tool_use_id: toolUseBlock.id, content: serialised }],
           })
         } catch (toolErr: unknown) {
           // security-reviewer (LOW-2): the raw error (DB/Supabase internals

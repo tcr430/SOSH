@@ -24,6 +24,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { getAnthropicClient } from '../../lib/ai/client'
 import type { TriageTool } from '../../lib/ai/tool-runner'
+import { toToolResultId, wrapToolResultForPrompt } from '../../lib/ai/wrap-evidence'
 import { buildTriageSystemPrompt, buildTriageUserMessage } from '../../lib/signals/triage/orchestrator'
 import { toFakeCandidate, runBoundedTriageLoop, type BoundedLoopResult } from './live-triage-run'
 
@@ -56,24 +57,35 @@ interface CorpusFile {
 // returns (list_evidence: {ids, evidence}; the other three: array of rows) —
 // a stand-in for "a business with real memory," not tuned per-example (that
 // would make this a hand-crafted result, not a test of the hypothesis).
+//
+// Session 34 K2.3 (ADR 0027 §6.2): TriageTool.execute now returns GuardedJson, so these stubs pass their strings
+// through the SAME wrapToolResultForPrompt the real tools use and brand their ids with toToolResultId — which is
+// also what makes them faithful to "the exact shapes lib/signals/triage/tools.ts returns". (They previously
+// returned raw fixture strings; no live run was made in this change.)
 const POPULATED_EVIDENCE = {
-  ids: ['ev-pop-1', 'ev-pop-2'],
-  evidence:
+  ids: ['ev-pop-1', 'ev-pop-2'].map(toToolResultId),
+  evidence: wrapToolResultForPrompt(
     'Customer quote (Acme Corp, enterprise plan): "We chose this product specifically for its integration ecosystem and compliance posture." ' +
-    'Usage data: our top-tier accounts cite platform reliability and third-party integrations as the leading reasons for renewal, per the most recent quarterly account-health review.',
+      'Usage data: our top-tier accounts cite platform reliability and third-party integrations as the leading reasons for renewal, per the most recent quarterly account-health review.',
+  ),
 }
 const POPULATED_AUDIENCE = [
   { id: 'aud-pop-1', statement: 'Enterprise IT and security buyers evaluating vendor risk, compliance posture, and integration breadth before renewal or expansion.' },
   { id: 'aud-pop-2', statement: 'Growth-stage marketing and ops teams tracking competitor feature parity and industry regulatory shifts that could affect their own roadmap.' },
-]
+].map((row) => ({ id: toToolResultId(row.id), statement: wrapToolResultForPrompt(row.statement) }))
 const POPULATED_BRAND_CLAIMS = [
   { id: 'brand-pop-1', statement: 'We have previously positioned ourselves as the most compliance-forward option in this category, with a stated commitment to transparent data handling.' },
   { id: 'brand-pop-2', statement: 'Our public messaging emphasizes reliability and platform stability as a key differentiator against faster-moving but less stable competitors.' },
-]
+].map((row) => ({ id: toToolResultId(row.id), statement: wrapToolResultForPrompt(row.statement) }))
 const POPULATED_CAMPAIGNS = [
   { id: 'camp-pop-1', name: 'Q3 Compliance & Trust Campaign', objective: 'Reinforce our compliance-forward positioning ahead of enterprise renewal season.', specialInstructions: null },
   { id: 'camp-pop-2', name: 'Competitive Displacement Push', objective: 'Highlight reliability and integration breadth against a named competitor category.', specialInstructions: null },
-]
+].map((row) => ({
+  id: toToolResultId(row.id),
+  name: wrapToolResultForPrompt(row.name),
+  objective: wrapToolResultForPrompt(row.objective),
+  specialInstructions: null,
+}))
 
 function buildPopulatedStubTools(): TriageTool[] {
   return [

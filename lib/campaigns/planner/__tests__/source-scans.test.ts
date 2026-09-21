@@ -649,6 +649,86 @@ describe('AGENCY-LOOP-SCHEMA-STRICT — Tier 3 half (ADR 0027 §3.1, constraint 
   })
 })
 
+// ═══ AGENCY-TOOL-RESULT-BRANDED (38) — the cast scan (added K2.3) ═════════════
+// ADR 0027 §6.2: WITHOUT THIS SCAN THE BRAND IS DECORATION. Two honesty caveats, recorded where the scan lives
+// (they are also at the brand's minting site, lib/ai/wrap-evidence.ts):
+//   1. a branded string still drops into ANY template-literal hole with no error, brand or no brand;
+//   2. a bare `as RenderedToolResult` cast is compile-legal.
+// The brand kills STRUCTURAL FORGERY; it does not kill a cast. So the cast is closed here: no cast to
+// RenderedToolResult, ToolResultId or GuardedJson (the type whose narrowing is the whole point) outside the
+// module that mints them. The precedent is lib/signals/source-scans.test.ts:385-406 (RenderedSignalText).
+// Blind spot: a cast through an alias (`type X = RenderedToolResult; ... as X`) — the scan bounds accidental
+// regression, not a determined author.
+
+// RenderedEvidence and RenderedSignalText are included (typescript-reviewer, K2.3 finding 2): both are members of
+// GuardedJson, and the weak `_brand` string-literal RenderedEvidence in particular would otherwise be the one way
+// to mint an accepted-by-tsc string with a cast the scan could not see.
+const BRANDED_TOOL_RESULT_TYPES = '(?:RenderedToolResult|ToolResultId|GuardedJson|RenderedEvidence|RenderedSignalText)'
+
+export function findBrandCasts(source: string): string[] {
+  const code = stripCode(source)
+  const hits: string[] = []
+  // `as <any type expression that mentions a brand>` — catches `as Record<string, GuardedJson>`,
+  // `as readonly GuardedJson[]` and `as { [k: string]: GuardedJson }`, not only the bare `as Brand` (finding 6).
+  for (const m of code.matchAll(new RegExp(`\\bas\\s+[^;,)\\n=<]*?\\b${BRANDED_TOOL_RESULT_TYPES}\\b`, 'g'))) hits.push(m[0])
+  // …and the generic form, where a comma is legitimately inside the brackets: `as Record<string, GuardedJson>`.
+  for (const m of code.matchAll(new RegExp(`\\bas\\s+\\w+<[^>\\n]*\\b${BRANDED_TOOL_RESULT_TYPES}\\b`, 'g'))) hits.push(m[0])
+  // An aliasing import (`import { RenderedToolResult as R }`) would hide a later `as R` from the scan.
+  for (const m of stripComments(source).matchAll(new RegExp(`\\b${BRANDED_TOOL_RESULT_TYPES}\\s+as\\s+\\w+`, 'g'))) hits.push(m[0])
+  // A legacy angle-bracket cast `<Brand>value`, but NOT a generic argument: `Promise<GuardedJson>`, `useX<GuardedJson>(`
+  // follow an identifier or `>`/`]`/`)`, a cast never does.
+  for (const m of code.matchAll(new RegExp(`(?<![\\w>\\])])<${BRANDED_TOOL_RESULT_TYPES}>\\s*[\\w(\\[{'"\`]`, 'g'))) hits.push(m[0])
+  return hits
+}
+
+export const BRAND_MINTING_MODULE = 'lib/ai/wrap-evidence.ts'
+
+describe('AGENCY-TOOL-RESULT-BRANDED — cast scan, Tier 3 half (ADR 0027 §6.2, constraint 38)', () => {
+  it('the detector flags every cast shape to a tool-result brand (planted)', () => {
+    expect(findBrandCasts("const r = raw as RenderedToolResult")).toEqual(['as RenderedToolResult'])
+    expect(findBrandCasts("const r = raw as unknown as RenderedToolResult")).toContain('as unknown as RenderedToolResult')
+    expect(findBrandCasts("const id = row.id as ToolResultId")).toEqual(['as ToolResultId'])
+    expect(findBrandCasts("const j = value as GuardedJson")).toEqual(['as GuardedJson'])
+    expect(findBrandCasts("const r = <RenderedToolResult>raw")).toHaveLength(1)
+    expect(findBrandCasts("return { evidence: '' as RenderedToolResult }")).toEqual(['as RenderedToolResult'])
+    // the members of GuardedJson that are NOT the new brands (finding 2)
+    expect(findBrandCasts("const e = `[DATA]\\n${raw}\\n[/DATA]` as RenderedEvidence")).toEqual(['as RenderedEvidence'])
+    expect(findBrandCasts('const s = raw as RenderedSignalText')).toEqual(['as RenderedSignalText'])
+    // composite target types that mention a brand (finding 6)
+    expect(findBrandCasts('const j = v as Record<string, GuardedJson>')).toHaveLength(1)
+    expect(findBrandCasts('const j = v as readonly GuardedJson[]')).toHaveLength(1)
+    expect(findBrandCasts('const j = v as { [k: string]: GuardedJson }')).toHaveLength(1)
+    // an aliasing import would hide a later `as R`
+    expect(findBrandCasts("import { RenderedToolResult as R } from '@/lib/ai/wrap-evidence'")).toEqual(['RenderedToolResult as R'])
+  })
+
+  it('the detector allows a type annotation, an import, and other brands, and ignores comments and strings (planted negatives)', () => {
+    expect(findBrandCasts("import type { RenderedToolResult } from '@/lib/ai/wrap-evidence'")).toEqual([])
+    expect(findBrandCasts('const r: RenderedToolResult = wrapToolResultForPrompt(x)')).toEqual([])
+    expect(findBrandCasts('const rows: Array<Record<string, RenderedToolResult>> = []')).toEqual([])
+    // generic arguments are NOT casts (finding 6's false positives, which would push authors toward aliases)
+    expect(findBrandCasts('async function f(): Promise<GuardedJson> {\n  return null\n}')).toEqual([])
+    expect(findBrandCasts('const x = useThing<GuardedJson>(a)')).toEqual([])
+    expect(findBrandCasts('type Row = { id: ToolResultId; s: RenderedToolResult }')).toEqual([])
+    expect(findBrandCasts('const r = x as string; const t: GuardedJson = null')).toEqual([])
+    expect(findBrandCasts('// never `as RenderedToolResult` outside wrap-evidence.ts')).toEqual([])
+    expect(findBrandCasts("const s = 'as GuardedJson'")).toEqual([])
+  })
+
+  it('no cast to a tool-result brand exists outside the minting module, and the module DOES mint them (anti-stale)', () => {
+    const { files, offenders } = scanRoot(
+      ['lib', 'app', 'components', 'scripts'].map((d) => path.join(ROOT, d)),
+      isProdTs,
+      (src, rel) => (rel === BRAND_MINTING_MODULE ? [] : findBrandCasts(src)),
+    )
+    expect(files.length, 'scanned suspiciously few files').toBeGreaterThan(200)
+    expect(offenders).toEqual([])
+
+    const minting = fs.readFileSync(path.join(ROOT, BRAND_MINTING_MODULE), 'utf8')
+    expect(findBrandCasts(minting).length, 'the minting module no longer casts — the brand was renamed or moved; update this scan').toBeGreaterThanOrEqual(2)
+  })
+})
+
 // ═══ constants.ts — ADR 0027 §3.2 / §7.4 / §2.3 transcription ════════════════
 // Not a numbered constraint: the literals the later steps import. Pinned so a drive-by edit is a red test with
 // the ADR section in its name, not a silent behaviour change (the bound tests in K2.2 import these constants and
