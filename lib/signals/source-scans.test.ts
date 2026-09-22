@@ -196,9 +196,13 @@ describe('SIGNAL-NO-LLM-IN-STAGE-AB (L-1, ADR §11.3 scan #1)', () => {
   // E5.6, then lib/signals/triage/card.ts, E5.7 — §4.2: "Signal text reaches
   // the prompt ONLY via wrapSignalForPrompt") actually started calling it,
   // which is exactly what §2.1 always intended. The assertion is flipped
-  // rather than deleted, so a reader still finds the fact recorded here:
-  // wrapSignalForPrompt has exactly these two callers under lib/signals/**,
-  // both sanctioned.
+  // rather than deleted, so a reader still finds the fact recorded here.
+  //
+  // Session 34 K2.4 (ADR 0027 §2.5, [sec-MINOR-8]) — WIDENED to three: the campaign planner's
+  // get_campaign_signal tool (lib/campaigns/planner/tools.ts) is a THIRD sanctioned caller, deliberately using
+  // this stronger, provenance-honest guard rather than wrapToolResultForPrompt. This scan only sees
+  // lib/signals/** — the planner's own module lives outside that root and is asserted by name here so a
+  // fourth, unsanctioned caller anywhere under lib/signals/** still fails.
   it('wrapSignalForPrompt is referenced by exactly the sanctioned Stage C/D entry points, nowhere else under lib/signals/**', () => {
     const files = SCAN_ROOTS.flatMap((root) => collectTsFiles(root))
     expect(files.length).toBeGreaterThan(0)
@@ -209,6 +213,11 @@ describe('SIGNAL-NO-LLM-IN-STAGE-AB (L-1, ADR §11.3 scan #1)', () => {
       if (/wrapSignalForPrompt/.test(source)) referencing.push(path.relative(ROOT, file).replace(/\\/g, '/'))
     }
     expect(referencing.sort()).toEqual(['lib/signals/triage/card.ts', 'lib/signals/triage/orchestrator.ts'])
+
+    const plannerToolsSource = stripLineComments(
+      fs.readFileSync(path.join(ROOT, 'lib', 'campaigns', 'planner', 'tools.ts'), 'utf8'),
+    )
+    expect(/wrapSignalForPrompt/.test(plannerToolsSource), 'lib/campaigns/planner/tools.ts must call wrapSignalForPrompt').toBe(true)
   })
 
   // SIGNAL-NO-SIXTH-SANITIZER's full-standing form (the fifth assertion the

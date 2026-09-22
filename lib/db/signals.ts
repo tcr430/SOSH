@@ -102,6 +102,49 @@ export async function listRecentSignalsByBusinessAndSource(
   return ((data as unknown[]) ?? []).map(asSignalRow)
 }
 
+// ADR 0027 §2.3/§6.3 (K2.4) — the campaign planner's get_campaign_signal tool backs onto this. CALLER-CLIENT
+// PARAMETER (no lazy service-role import here — AGENCY-NO-SERVICE-ROLE-IN-TOOLS extends to every lib/db
+// function a planner tool names, not just the tool module's own text). campaigns has no signal_id column; the
+// link is insight_cards.campaign_id -> signal_candidates.signal_id -> signals, so this is a three-hop walk with
+// an EXPLICIT .eq('business_id', businessId) on every hop — a single trailing tenancy check at the end would
+// still leak WHICH insight_cards/signal_candidates rows exist cross-tenant via timing/error shape, and getting
+// business_id wrong on an intermediate hop is exactly the single-layer pattern getCampaignById was never
+// hardened out of (do not follow that precedent here). Returns null when the campaign has no linked signal
+// (the common case — most campaigns are not signal-originated), never throws for that case.
+export async function getSignalForCampaign(
+  client: SupabaseClient,
+  businessId: string,
+  campaignId: string,
+): Promise<SignalRow | null> {
+  const { data: card, error: cardError } = await client
+    .from('insight_cards')
+    .select('signal_candidate_id')
+    .eq('campaign_id', campaignId)
+    .eq('business_id', businessId)
+    .maybeSingle()
+  if (cardError) throw new Error(getErrorMessage(cardError))
+  if (!card) return null
+
+  const { data: candidate, error: candidateError } = await client
+    .from('signal_candidates')
+    .select('signal_id')
+    .eq('id', card.signal_candidate_id as string)
+    .eq('business_id', businessId)
+    .maybeSingle()
+  if (candidateError) throw new Error(getErrorMessage(candidateError))
+  if (!candidate) return null
+
+  const { data: signal, error: signalError } = await client
+    .from('signals')
+    .select('*')
+    .eq('id', candidate.signal_id as string)
+    .eq('business_id', businessId)
+    .maybeSingle()
+  if (signalError) throw new Error(getErrorMessage(signalError))
+  if (!signal) return null
+  return asSignalRow(signal)
+}
+
 export type InsertSignalResult =
   | { status: 'inserted'; signal: SignalRow }
   | { status: 'duplicate' }

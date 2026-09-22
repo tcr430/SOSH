@@ -16,8 +16,13 @@ import type { CardCitableContext } from './verify'
 // / retrieveAudienceMemory / retrieveBrandMemory read through the
 // lib/memory barrel, MEM-NO-DIRECT-TABLE-ACCESS; listCampaigns reads through
 // lib/db directly, matching the ADR's own §2.2 citation). No tool calls
-// .insert/.update/.upsert/.delete/.rpc — proven by the source scan in
-// tools.test.ts, not by this comment alone.
+// .insert/.update/.upsert/.delete/.rpc — proven by the source scan at
+// lib/signals/triage/source-scans.test.ts:35-48, not by this comment alone.
+//
+// CROSS-REFERENCE (ADR 0027 §2.3, K2.4): lib/campaigns/planner/tools.ts re-implements this module's first
+// four tools (list_evidence, list_brand_claims, list_audience_notes, list_recent_campaigns), rather than
+// importing them — lib/campaigns importing lib/signals/triage is a module-boundary violation. This is a
+// documented duplication, not an oversight; the twin comment lives in that module.
 //
 // retrievePerformancePatterns is deliberately EXCLUDED — not an oversight.
 // Its derived_from_metrics fallback arm (lib/memory/performance.ts:73-96)

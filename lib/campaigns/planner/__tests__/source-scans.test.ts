@@ -173,11 +173,6 @@ describe('AGENCY-TOOLS-READ-ONLY / AGENCY-NO-WRITE-TOOL (ADR 0027 §2.6, constra
 // The planner root never reaches the service-role client, statically OR dynamically. The dynamic
 // `await import('@/lib/supabase/service')` form is ESSENTIAL — it is the real shape in this repo
 // (lib/db/memory-evidence.ts:74-76 and siblings).
-//
-// TODO(K2.4, ADR 0027 §2.6): extend this to EVERY lib/db function a planner tool names, which is the half a scan
-// over the tool module cannot see (lib/db/memory-evidence.ts:74-76, memory-audience.ts:41-42 and
-// memory-performance.ts:266,342 all hold a service-role import as a SIBLING of the functions the tools call).
-// Constraint 4 CLOSES in K2.4, not here.
 
 export function findServiceRoleReach(source: string, fileRel: string): string[] {
   const hits: string[] = []
@@ -211,6 +206,114 @@ describe('AGENCY-NO-SERVICE-ROLE-IN-TOOLS — first half (ADR 0027 §2.6, constr
   it('lib/campaigns/planner/** reaches no service-role client', () => {
     const { files, offenders } = scanRoot([PLANNER_ROOT], isProdTs, findServiceRoleReach)
     expect(files.length, 'the planner root matched zero files — the scan would pass vacuously').toBeGreaterThanOrEqual(1)
+    expect(offenders).toEqual([])
+  })
+})
+
+// ═══ AGENCY-NO-SERVICE-ROLE-IN-TOOLS (4) — SECOND HALF (closes here, K2.4) ═══
+// The read-only property rests on WHICH FUNCTION a planner tool imports, not on the tool module's own text
+// (ADR 0027 §2.6): lib/db/memory-evidence.ts, memory-audience.ts and others hold a service-role import as a
+// SIBLING of the caller-client function the tools actually call (importEvidenceMemory next to
+// listEvidenceMemoryCandidates, importAudienceMemory next to listAudienceMemoryCandidates). A file-wide scan
+// (the first half, above) cannot see this — it would flag the whole file for a sibling it never reaches. This
+// half extracts EACH NAMED FUNCTION'S OWN BODY (brace-counted, not regex-bounded, so a nested `{}` in a
+// template literal or object literal doesn't truncate early) and checks only that slice.
+
+// LENGTH-PRESERVING mask: comments and string-literal interiors become spaces (same character COUNT), so an
+// index found in the mask points at the identical offset in the ORIGINAL source — unlike stripCode's blanked
+// strings, which collapse a string literal down to two characters and therefore cannot be used to slice back
+// into the original text. This is what makes it safe to return the function's REAL body (import specifiers,
+// string content and all) rather than a comment/string-stripped approximation of it.
+function maskForBraceMatching(source: string): string {
+  let out = ''
+  let i = 0
+  while (i < source.length) {
+    const c = source[i]
+    const n = source[i + 1]
+    if (c === '/' && n === '*') {
+      const end = source.indexOf('*/', i + 2)
+      const stop = end === -1 ? source.length : end + 2
+      out += ' '.repeat(stop - i)
+      i = stop
+    } else if (c === '/' && n === '/') {
+      let j = i
+      while (j < source.length && source[j] !== '\n') j += 1
+      out += ' '.repeat(j - i)
+      i = j
+    } else if (c === "'" || c === '"' || c === '`') {
+      let j = i + 1
+      while (j < source.length && source[j] !== c) {
+        if (source[j] === '\\') j += 1
+        else if (c !== '`' && source[j] === '\n') break
+        j += 1
+      }
+      const end = Math.min(j + 1, source.length)
+      out += ' '.repeat(end - i)
+      i = end
+    } else {
+      out += c
+      i += 1
+    }
+  }
+  return out
+}
+
+export function extractFunctionBody(source: string, functionName: string): string | null {
+  const mask = maskForBraceMatching(source)
+  const re = new RegExp(`\\bfunction\\s+${functionName}\\s*\\(`)
+  const m = re.exec(mask)
+  if (!m) return null
+  const openBrace = mask.indexOf('{', m.index)
+  if (openBrace === -1) return null
+  let depth = 0
+  for (let i = openBrace; i < mask.length; i += 1) {
+    if (mask[i] === '{') depth += 1
+    else if (mask[i] === '}') {
+      depth -= 1
+      if (depth === 0) return source.slice(openBrace, i + 1)
+    }
+  }
+  return null
+}
+
+// The exact (file, function) pairs a planner tool imports and calls, per lib/campaigns/planner/tools.ts.
+const PLANNER_CALLED_DB_FUNCTIONS: ReadonlyArray<{ file: string; fn: string }> = [
+  { file: 'lib/db/memory-evidence.ts', fn: 'listEvidenceMemoryCandidates' },
+  { file: 'lib/db/memory-audience.ts', fn: 'listAudienceMemoryCandidates' },
+  { file: 'lib/db/memory-brand.ts', fn: 'listBrandMemoryCandidates' },
+  { file: 'lib/db/campaigns.ts', fn: 'listCampaigns' },
+  { file: 'lib/db/signals.ts', fn: 'getSignalForCampaign' },
+  { file: 'lib/db/posts.ts', fn: 'listRecentPublishedPostTexts' },
+]
+
+describe('AGENCY-NO-SERVICE-ROLE-IN-TOOLS — second half (ADR 0027 §2.6, constraint 4, closes here)', () => {
+  it('extractFunctionBody isolates a named function from its service-role-using siblings (planted)', () => {
+    const source = `
+      export async function readOne(client) { return client.from('t').select('*') }
+      export async function writeOne() { const { createServiceRoleClient } = await import('@/lib/supabase/service') }
+    `
+    const body = extractFunctionBody(source, 'readOne')
+    expect(body).not.toBeNull()
+    expect(body).not.toContain('createServiceRoleClient')
+    const siblingBody = extractFunctionBody(source, 'writeOne')
+    expect(siblingBody).toContain('createServiceRoleClient')
+  })
+
+  it('reports null for a function name that is not present (planted negative)', () => {
+    expect(extractFunctionBody('export async function a() { return 1 }', 'doesNotExist')).toBeNull()
+  })
+
+  it('every lib/db function a planner tool calls has a body, and that body reaches no service-role client', () => {
+    const offenders: string[] = []
+    for (const { file, fn } of PLANNER_CALLED_DB_FUNCTIONS) {
+      const full = path.join(ROOT, file)
+      expect(fs.existsSync(full), `${file} is missing — the scan would pass vacuously`).toBe(true)
+      const source = fs.readFileSync(full, 'utf8')
+      const body = extractFunctionBody(source, fn)
+      expect(body, `${file}#${fn} not found by name — the extractor or the PLANNER_CALLED_DB_FUNCTIONS list drifted`).not.toBeNull()
+      const hits = findServiceRoleReach(body as string, file)
+      if (hits.length > 0) offenders.push(`${file}#${fn}: ${hits.join('; ')}`)
+    }
     expect(offenders).toEqual([])
   })
 })
