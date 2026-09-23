@@ -42,6 +42,8 @@ function makeBrief(overrides: Partial<CampaignBriefRow> = {}): CampaignBriefRow 
     deleted_at: null,
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
+    plan_analysis_status: 'not_run',
+    plan_analysis_reason: null,
     ...overrides,
   }
 }

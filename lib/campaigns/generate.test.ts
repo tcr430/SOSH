@@ -140,6 +140,8 @@ const mockBrief: CampaignBriefRow = {
   deleted_at: null,
   created_at: '2026-05-15T00:00:00.000Z',
   updated_at: '2026-06-01T00:00:00.000Z',
+  plan_analysis_status: 'not_run',
+  plan_analysis_reason: null,
 }
 
 const mockCtx: CustomerContext = {

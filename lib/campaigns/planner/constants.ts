@@ -27,6 +27,25 @@ export const AI_PLANNER_MAX_WALL_CLOCK_MS = 30_000
 // §3.2 — a retry costs RETRY_DELAY_MS the user feels; the deadline, not this knob, caps how many attempts fit.
 export const AI_PLANNER_RETRY_BUDGET = 1
 
+// The seven bounds as ONE object, the shape runToolLoop takes. Built from the literals above so a test can
+// redden each bound by importing the constant, never a duplicated number (AGENCY-LOOP-BOUNDED).
+export const PLANNER_LOOP_BOUNDS = {
+  maxToolCalls: AI_PLANNER_MAX_TOOL_CALLS,
+  maxTurns: AI_PLANNER_MAX_TURNS,
+  maxCumulativeInputTokens: AI_PLANNER_MAX_CUMULATIVE_INPUT_TOKENS,
+  maxOutputTokensPerTurn: AI_PLANNER_MAX_OUTPUT_TOKENS_PER_TURN,
+  maxCumulativeOutputTokens: AI_PLANNER_MAX_CUMULATIVE_OUTPUT_TOKENS,
+  maxWallClockMs: AI_PLANNER_MAX_WALL_CLOCK_MS,
+  retryBudget: AI_PLANNER_RETRY_BUDGET,
+} as const
+
+// A proposal list a human must read. Beyond this the model is enumerating, not judging; excess is dropped
+// (never silently truncated mid-proposal — whole proposals only) and counted.
+export const PLANNER_MAX_PROPOSALS = 12
+
+// campaign_plan_proposals_reason_length_check (K2.5): char_length(reason) BETWEEN 1 AND 1000.
+export const PLANNER_REASON_MAX_CHARS = 1000
+
 // §7.4 — the worst case at the bounds (§7.1: 15 c input + 9 c output), reserved up front and reconciled to
 // actual spend on EVERY outcome including failure.
 export const PLANNER_RESERVATION_CENTS = 24

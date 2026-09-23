@@ -29,7 +29,8 @@ const CONTENT = {
 }
 const brief = (over: Partial<CampaignBriefRow> = {}): CampaignBriefRow => ({
   id: 'brief-1', business_id: 'biz-1', campaign_id: 'camp-1', content: CONTENT, status: 'critiqued', version: 1,
-  overall_score: 85, critique: null, frozen_at: null, deleted_at: null, created_at: '2026-07-01T00:00:00Z', updated_at: '2026-07-01T00:00:00Z', ...over,
+  overall_score: 85, critique: null, frozen_at: null, deleted_at: null, created_at: '2026-07-01T00:00:00Z', updated_at: '2026-07-01T00:00:00Z',
+  plan_analysis_status: 'not_run', plan_analysis_reason: null, ...over,
 })
 
 const fd = (fields: Record<string, string>) => {

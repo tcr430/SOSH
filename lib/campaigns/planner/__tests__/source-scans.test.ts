@@ -743,6 +743,9 @@ describe('AGENCY-LOOP-SCHEMA-STRICT — Tier 3 half (ADR 0027 §3.1, constraint 
       path.join(ROOT, 'lib', 'ai', 'tool-runner.ts'),
       path.join(ROOT, 'lib', 'signals', 'triage'),
       PLANNER_ROOT,
+      // K2.7 — the planner's own decision schema lives with its prompt family, outside PLANNER_ROOT. Without this
+      // root the ONE schema this constraint exists to police would be the one the scan never opened.
+      path.join(ROOT, 'lib', 'ai', 'prompts', 'campaign-planner.ts'),
     ]
     const files = roots.flatMap((r) => (r.endsWith('.ts') ? [r] : collect(r, isProdTs)))
     const strictObjects = files.reduce((n, f) => n + countStrictObjectSchemas(fs.readFileSync(f, 'utf8')), 0)
@@ -829,6 +832,183 @@ describe('AGENCY-TOOL-RESULT-BRANDED — cast scan, Tier 3 half (ADR 0027 §6.2,
 
     const minting = fs.readFileSync(path.join(ROOT, BRAND_MINTING_MODULE), 'utf8')
     expect(findBrandCasts(minting).length, 'the minting module no longer casts — the brand was renamed or moved; update this scan').toBeGreaterThanOrEqual(2)
+  })
+})
+
+// ═══ AGENCY-PLANNER-PROPOSES-ONLY (25) — Tier 3 half (added K2.7) ══════════════
+// ADR 0027 §5.10: the planner writes ONLY proposal rows. The sole writer of brief content is the K2.6 apply RPC,
+// behind a human. Own describe, own root (lib/campaigns/planner), own floor.
+//
+// The write-verb scan above cannot see this: the planner delegates writes to lib/db helpers, so a `.update(` never
+// appears in the planner root even if it wrote a brief. This scan therefore names the brief WRITERS, the brief
+// TABLE and the four brief-mutating RPCs, and pins the one legitimate reader import.
+//
+// BLIND SPOT, recorded: a brief write laundered through a NEW lib/db helper the scan does not list. The reader
+// allowlist below closes that from the other side — the planner may import exactly one name from
+// lib/db/campaign-briefs.
+
+const BRIEF_WRITERS = [
+  'createBrief',
+  'submitBriefForCritique',
+  'approveBrief',
+  'reviseBrief',
+  'markBriefGenerated',
+  'setBriefPlanAnalysis',
+  'approveBriefIfQualified',
+  'critiqueBrief',
+  'assembleBrief',
+] as const
+const BRIEF_WRITE_RPCS = [
+  'apply_brief_proposals',
+  'decide_plan_proposal',
+  'approve_brief_and_supersede_proposals',
+  'revise_brief_and_supersede_proposals',
+] as const
+const PLANNER_BRIEF_READER_ALLOWLIST = ['getBriefByCampaign']
+
+export function findBriefWritePath(source: string): string[] {
+  const hits: string[] = []
+  const code = stripCode(source)
+  for (const name of BRIEF_WRITERS) if (new RegExp(`\\b${name}\\b`).test(code)) hits.push(name)
+  const withStrings = stripComments(source)
+  if (/['"`]campaign_briefs['"`]/.test(withStrings)) hits.push("'campaign_briefs'")
+  for (const rpc of BRIEF_WRITE_RPCS) if (withStrings.includes(rpc)) hits.push(rpc)
+  for (const m of withStrings.matchAll(/import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*['"](?:@\/lib\/db|\.{1,2}\/(?:\.\.\/)*db)\/campaign-briefs['"]/g)) {
+    for (const raw of m[1].split(',')) {
+      const name = raw.trim().split(/\s+as\s+/)[0]
+      if (name && !PLANNER_BRIEF_READER_ALLOWLIST.includes(name)) hits.push(`imports ${name} from lib/db/campaign-briefs`)
+    }
+  }
+  return hits
+}
+
+describe('AGENCY-PLANNER-PROPOSES-ONLY — Tier 3 half (ADR 0027 §5.10, constraint 25)', () => {
+  it('the detector flags a brief writer, the brief table, a brief RPC and a non-reader import (planted)', () => {
+    expect(findBriefWritePath('await approveBrief(client, id)')).toEqual(['approveBrief'])
+    expect(findBriefWritePath('await setBriefPlanAnalysis(client, id, x)')).toEqual(['setBriefPlanAnalysis'])
+    expect(findBriefWritePath("client.from('campaign_briefs')")).toEqual(["'campaign_briefs'"])
+    expect(findBriefWritePath("client.rpc('apply_brief_proposals', {})")).toEqual(['apply_brief_proposals'])
+    expect(findBriefWritePath("import { reviseBrief } from '@/lib/db/campaign-briefs'")).toEqual([
+      'reviseBrief',
+      'imports reviseBrief from lib/db/campaign-briefs',
+    ])
+  })
+
+  it('the detector allows the one reader import, and ignores comments and near-miss names (planted negatives)', () => {
+    expect(findBriefWritePath("import { getBriefByCampaign } from '@/lib/db/campaign-briefs'")).toEqual([])
+    expect(findBriefWritePath('// approveBrief(client, id) and campaign_briefs')).toEqual([])
+    expect(findBriefWritePath('const approveBriefLabel = 1')).toEqual([])
+  })
+
+  it('lib/campaigns/planner/** has no write path to campaign_briefs, and the scan saw the module set', () => {
+    const { files, offenders } = scanRoot([PLANNER_ROOT], isProdTs, (src) => findBriefWritePath(src))
+    // constants, tools, persist, orchestrator — a floor of four so an emptied or moved root cannot pass vacuously.
+    expect(files.length, 'the planner root matched fewer than four files — the scan would pass vacuously').toBeGreaterThanOrEqual(4)
+    expect(offenders).toEqual([])
+  })
+
+  it('setBriefPlanAnalysis is referenced in exactly its definition and the one recorder (the column has one writer)', () => {
+    const files = [path.join(ROOT, 'lib'), path.join(ROOT, 'app')].flatMap((r) => collect(r, isProdTs))
+    const users = files.filter((f) => /\bsetBriefPlanAnalysis\b/.test(stripCode(fs.readFileSync(f, 'utf8')))).map(toRel).sort()
+    expect(users).toEqual(['lib/campaigns/plan-brief.ts', 'lib/db/campaign-briefs.ts'])
+  })
+})
+
+// ═══ AGENCY-PLANNER-REQUEST-PATH-ONLY (9) — Tier 3 half (added K2.7) ═══════════
+// ADR 0027 §2.7, founder ruling A-8. The planner is request-path only: its tools' tenant boundary is the CALLER'S
+// authenticated client, a premise a worker holding service-role breaks (ADR 0021 §2.3's reasoning would apply
+// verbatim). "No planner import under a service-role-acquiring module" is the property, stated as a scan; the
+// Tier-2 half asserts promote.ts and seed.ts leave the column at 'not_run'.
+//
+// BLIND SPOT, recorded: a TRANSITIVE import (a service-role module importing a module that imports the planner)
+// is not seen; the property is checked one hop, which is the shape every real worker in this repo has.
+
+export function importsPlanner(source: string, fileRel: string): boolean {
+  return moduleSpecifiers(source).some((spec) => {
+    const r = resolveSpec(spec, fileRel)
+    return r === 'lib/campaigns/planner' || r.startsWith('lib/campaigns/planner/') || r === 'lib/campaigns/plan-brief'
+  })
+}
+
+describe('AGENCY-PLANNER-REQUEST-PATH-ONLY — Tier 3 half (ADR 0027 §2.7, constraint 9)', () => {
+  it('the detector flags a planner import by relative path, alias and dynamic import (planted)', () => {
+    expect(importsPlanner("import { runPlannerForCampaign } from '@/lib/campaigns/planner/orchestrator'", 'lib/x.ts')).toBe(true)
+    expect(importsPlanner("import { planBrief } from '@/lib/campaigns/plan-brief'", 'lib/x.ts')).toBe(true)
+    expect(importsPlanner("const m = await import('./planner/orchestrator')", 'lib/campaigns/x.ts')).toBe(true)
+  })
+
+  it('the detector ignores unrelated modules and comments (planted negatives)', () => {
+    expect(importsPlanner("import { assembleBrief } from '@/lib/campaigns/brief'", 'lib/x.ts')).toBe(false)
+    expect(importsPlanner("// import { planBrief } from '@/lib/campaigns/plan-brief'", 'lib/x.ts')).toBe(false)
+  })
+
+  it('no module that acquires the service-role client imports the planner, and both sets are non-empty', () => {
+    const files = [path.join(ROOT, 'lib'), path.join(ROOT, 'app')]
+      .flatMap((r) => collect(r, isProdTs))
+      .filter((f) => !toRel(f).startsWith('lib/campaigns/planner/'))
+    const serviceRole = files.filter((f) => findServiceRoleReach(fs.readFileSync(f, 'utf8'), toRel(f)).length > 0)
+    const plannerImporters = files.filter((f) => importsPlanner(fs.readFileSync(f, 'utf8'), toRel(f)))
+    expect(serviceRole.length, 'no service-role-acquiring module found — the scan would pass vacuously').toBeGreaterThanOrEqual(5)
+    expect(plannerImporters.length, 'nothing imports the planner — the scan would pass vacuously').toBeGreaterThanOrEqual(1)
+    const both = plannerImporters.filter((f) => serviceRole.includes(f)).map(toRel)
+    expect(both).toEqual([])
+  })
+
+  it('the two worker-side assembleBrief callers do not import the planner', () => {
+    for (const rel of ['lib/campaigns/promote.ts', 'lib/signals/seed.ts']) {
+      const src = fs.readFileSync(path.join(ROOT, rel), 'utf8')
+      expect(importsPlanner(src, rel), `${rel} imports the planner — a worker must render 'not_run'`).toBe(false)
+    }
+  })
+})
+
+// ═══ AGENCY-TOOLS-ONCE-PER-CAMPAIGN (8) — Tier 3 half (added K2.7) ═════════════
+// ADR 0027 §7.2: tools are built once per campaign, BEFORE the fan-out. Per candidate, a 6-post campaign would
+// carry 18 tool loops (~200 cents of lookups against ~60 of generation). The Tier-2 half counts constructions
+// behaviourally; this half scans generate.ts (the fan-out) and the call sites.
+
+export function findPlannerToolConstruction(source: string): number {
+  return [...stripCode(source).matchAll(/\bbuildPlannerTools\s*\(/g)].length
+}
+
+// buildPlannerTools( inside a callback handed to a fan-out primitive, or inside a for/while body.
+export function findToolsInFanOut(source: string): string[] {
+  const code = stripCode(source)
+  const hits: string[] = []
+  if (/(?:\.map|\.forEach|Array\.from|Promise\.all|Promise\.allSettled)\s*\([^;]*?\bbuildPlannerTools\s*\(/.test(code)) hits.push('fan-out callback')
+  if (/\b(?:for|while)\s*\([^)]*\)\s*\{[^}]*\bbuildPlannerTools\s*\(/.test(code)) hits.push('loop body')
+  return hits
+}
+
+describe('AGENCY-TOOLS-ONCE-PER-CAMPAIGN — Tier 3 half (ADR 0027 §7.2, constraint 8)', () => {
+  it('the detectors count constructions and flag a fan-out or loop placement (planted)', () => {
+    expect(findPlannerToolConstruction('const t = buildPlannerTools(c, b, id)')).toBe(1)
+    expect(findToolsInFanOut('await Promise.allSettled(Array.from({ length: 3 }, () => buildPlannerTools(c, b, id)))')).not.toEqual([])
+    expect(findToolsInFanOut('for (const p of posts) { const t = buildPlannerTools(c, b, id) }')).toEqual(['loop body'])
+  })
+
+  it('the detectors ignore a top-level construction and comments (planted negatives)', () => {
+    expect(findToolsInFanOut('const tools = buildPlannerTools(c, b, id)\nawait Promise.all(posts.map((p) => run(p, tools)))')).toEqual([])
+    expect(findPlannerToolConstruction('// buildPlannerTools(c, b, id)')).toBe(0)
+  })
+
+  it('generate.ts (the candidate fan-out) neither builds planner tools nor runs the loop', () => {
+    const src = stripCode(fs.readFileSync(path.join(ROOT, 'lib', 'campaigns', 'generate.ts'), 'utf8'))
+    expect(src.length, 'generate.ts read as empty — the scan would pass vacuously').toBeGreaterThan(1000)
+    expect(findPlannerToolConstruction(src)).toBe(0)
+    expect(/\brunToolLoop\b/.test(src)).toBe(false)
+    expect(src.includes('Promise.allSettled'), 'the fan-out this scan guards is no longer in generate.ts — re-point it').toBe(true)
+  })
+
+  it('buildPlannerTools is constructed at exactly one production site, outside any fan-out', () => {
+    const files = [path.join(ROOT, 'lib'), path.join(ROOT, 'app')].flatMap((r) => collect(r, isProdTs)).filter((f) => toRel(f) !== 'lib/campaigns/planner/tools.ts')
+    const sites = files.flatMap((f) => {
+      const n = findPlannerToolConstruction(fs.readFileSync(f, 'utf8'))
+      return n > 0 ? [{ file: toRel(f), n }] : []
+    })
+    expect(sites).toEqual([{ file: 'lib/campaigns/planner/orchestrator.ts', n: 1 }])
+    const orch = fs.readFileSync(path.join(ROOT, 'lib', 'campaigns', 'planner', 'orchestrator.ts'), 'utf8')
+    expect(findToolsInFanOut(orch)).toEqual([])
   })
 })
 

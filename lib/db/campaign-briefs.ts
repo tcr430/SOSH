@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { CampaignBriefContent, CampaignBriefRow } from './types'
+import type { CampaignBriefContent, CampaignBriefRow, PlanAnalysisReason } from './types'
 import { getErrorMessage } from './utils'
 import { getCampaignById } from './campaigns'
 import { toUtcIso } from '@/lib/utils'
@@ -109,6 +109,29 @@ export async function reviseBrief(
     .eq('id', id)
     .eq('status', 'critiqued')
     .eq('version', expectedVersion)
+    .is('deleted_at', null)
+    .select()
+    .maybeSingle()
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as CampaignBriefRow | null) ?? null
+}
+
+// ADR 0027 §3.3 (Session 34 K2.7) — records whether/why the campaign planner ran. The ONLY writer of these two
+// columns. The atomic guard is `plan_analysis_status = 'not_run'`: an outcome is recorded ONCE, so a duplicate
+// or racing recorder can never overwrite an 'ok' with 'unavailable' (or the reverse). It touches neither
+// `status` nor `content`, so it cannot collide with critiqueBrief's draft->critiqued transition running
+// concurrently (each is a single-statement UPDATE of disjoint columns), and it never touches a frozen brief's
+// content. Returns null when the guard excluded the row (already recorded).
+export async function setBriefPlanAnalysis(
+  client: SupabaseClient,
+  campaignId: string,
+  analysis: { status: 'ok' | 'unavailable' | 'capped'; reason: PlanAnalysisReason | null },
+): Promise<CampaignBriefRow | null> {
+  const { data, error } = await client
+    .from('campaign_briefs')
+    .update({ plan_analysis_status: analysis.status, plan_analysis_reason: analysis.reason })
+    .eq('campaign_id', campaignId)
+    .eq('plan_analysis_status', 'not_run')
     .is('deleted_at', null)
     .select()
     .maybeSingle()
