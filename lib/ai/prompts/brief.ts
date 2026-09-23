@@ -5,6 +5,7 @@ import type { Platform } from '@/lib/db/types'
 import type { RenderedEvidence } from '@/lib/ai/wrap-evidence'
 import { neutralize } from '@/lib/ai/wrap-evidence'
 import { HypothesisSchema, SuccessCriteriaSchema } from '@/lib/outcomes/hypothesis'
+import { RoleSequenceSchema } from '@/lib/campaigns/role-sequence'
 
 // Local, ASCII-literal-only guard — matches the established special_instructions
 // pattern (post-generation.ts, post-regeneration.ts) for genuinely
@@ -25,25 +26,14 @@ const PINNED_EVIDENCE_SCHEMA = z.object({
   note: z.string().optional(),
 })
 
-const ROLE_SEQUENCE_ENTRY_SCHEMA = z.object({
-  order: z.number().int().min(0),
-  role: z.enum([
-    'anchor_thesis',
-    'founder_perspective',
-    'customer_proof',
-    'objection_response',
-    'conversation_starter',
-    'follow_up',
-  ]),
-  platform: z.enum(['linkedin', 'twitter', 'instagram', 'facebook', 'threads']),
-  angle: z.string().min(1),
-})
-
+// ADR 0027 §5.9 (K2.8) — the role-sequence entry schema moved to a NEUTRAL module shared with the apply path
+// (lib/campaigns/role-sequence.ts, the Amendment E pattern) and gained a unique-`order` refine. It is imported,
+// never redefined here: a second copy is how one import path ends up without the refine.
 export const CampaignBriefContentSchema = z.object({
   narrative: z.string().min(1),
   proofPlan: z.string().min(1),
   pinnedEvidence: z.array(PINNED_EVIDENCE_SCHEMA),
-  roleSequence: z.array(ROLE_SEQUENCE_ENTRY_SCHEMA).min(1),
+  roleSequence: RoleSequenceSchema,
   // ADR 0017 Amendment C / ADR 0026 §8.1 (J2.10). OPTIONAL so a brief frozen before the amendment still parses;
   // both or neither. Out-of-range values are REJECTED by the shared schema, never clamped.
   hypothesis: HypothesisSchema.optional(),

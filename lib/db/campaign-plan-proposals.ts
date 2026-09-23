@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { CampaignPlanProposalInsert, CampaignPlanProposalRow } from './types'
+import type { CampaignBriefRow, CampaignPlanProposalInsert, CampaignPlanProposalRow } from './types'
 import { getErrorMessage } from './utils'
 
 // ADR 0027 §5.3/§9.2 (Session 34 K2.7) — the planner's persistence path. INSERT is service-role only (the
@@ -40,4 +40,37 @@ export async function listPendingPlanProposals(
     .limit(limit)
   if (error) throw new Error(getErrorMessage(error))
   return (data as CampaignPlanProposalRow[] | null) ?? []
+}
+
+// ADR 0027 §5.5 (Session 34 K2.8) — the typed wrapper over apply_brief_proposals. SERVICE-ROLE by construction
+// (the RPC is granted to service_role only and verifies `p_user_id` itself — auth.uid() does not exist inside
+// it), so this takes no client and acquires its own via the lazy import. The typed outcomes are the RPC's, one
+// for one: a refusal is a value, never an exception.
+//
+// Callers go through lib/campaigns/apply-proposals.ts, which validates the resulting roleSequence against the
+// shared schema. This function alone does NOT — that is deliberate: the DB layer returns what the database
+// said, and the one place that judges it is the campaigns-layer wrapper.
+export type ApplyBriefProposalsRpcResult =
+  | { outcome: 'ok'; brief: CampaignBriefRow; acceptedIds: string[] }
+  | { outcome: 'not_found' | 'frozen' | 'concurrent_edit' | 'no_proposals_applied' }
+  | { outcome: 'stale_target_order' | 'conflicting_proposals'; proposalId: string }
+
+export async function applyBriefProposalsRpc(args: {
+  businessId: string
+  briefId: string
+  expectedVersion: number
+  userId: string
+  proposalIds: string[]
+}): Promise<ApplyBriefProposalsRpcResult> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client.rpc('apply_brief_proposals', {
+    p_business_id: args.businessId,
+    p_brief_id: args.briefId,
+    p_expected_version: args.expectedVersion,
+    p_user_id: args.userId,
+    p_proposal_ids: args.proposalIds,
+  })
+  if (error) throw new Error(getErrorMessage(error))
+  return data as ApplyBriefProposalsRpcResult
 }

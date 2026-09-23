@@ -22,7 +22,7 @@ import { createPostAiOriginal, AI_ORIGINAL_SCHEMA_VERSION } from '@/lib/db/post-
 import { updateGenerationSessionStatus } from '@/lib/db/post-generation-sessions'
 import { incrementPostsGeneratedBy } from '@/lib/db/trial-state'
 import { schedulePosts } from '@/lib/campaigns/schedule'
-import { checkRoleCoverage, checkLinkPlacement } from '@/lib/campaigns/consistency'
+import { checkRoleCoverage, checkLinkPlacement, checkSetRedundancy } from '@/lib/campaigns/consistency'
 import type { Platform, PostInsert, AiGenerationMetadata, CampaignPostRole } from '@/lib/db/types'
 import type { SinglePostOutput, ThreadOutput } from '@/lib/ai/prompts/formats/schemas'
 
@@ -515,6 +515,30 @@ export async function generatePostsForCampaign(
         completed_at: formatISO(new Date()),
       })
       return { sessionId, postsCreated: 0 }
+    }
+
+    // ADR 0027 §5.8 half (b), MODE2-REDUNDANCY-UNDEFER — a deterministic, zero-LLM structural check over the
+    // GENERATED set. FLAGGED, NEVER BLOCKED, NEVER EDITED: this neither fails the session nor touches a post,
+    // unlike the two checks above. Structural, not semantic — see checkSetRedundancy for the recorded residual.
+    // Inputs are the campaign-level pinned evidence ids (every post gets the same set today) and a null
+    // proofType (the DB derives proof_type AFTER insert, from that same campaign-level evidence).
+    const pinnedEvidenceIdsForSet = frozenBrief.content.pinnedEvidence.map((e) => e.evidenceMemoryId)
+    const redundancy = checkSetRedundancy(
+      generated.map((g) => ({
+        order: g.order,
+        role: g.role,
+        proofType: null,
+        citedEvidenceIds: pinnedEvidenceIdsForSet,
+        text: joinContent(g.output),
+      })),
+    )
+    if (!redundancy.ok) {
+      console.log(JSON.stringify({
+        kind: 'campaign.generate.redundancy_flagged',
+        level: 'warn',
+        campaign_id: campaignId,
+        flags: redundancy.flags,
+      }))
     }
 
     // STEP 8 — Build insert rows, role assigned from the brief (write-once,
