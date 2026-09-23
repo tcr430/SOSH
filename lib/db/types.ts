@@ -1026,6 +1026,22 @@ export type GenerationSessionUpdate = Partial<
 // AI generation metadata — stored in posts.ai_generation_metadata (JSONB)
 // ---------------------------------------------------------------------------
 
+// ADR 0027 §4.2/§4.8 (Session 34 K2.9) — the claim-verification verdict persisted on the post for the approval
+// gate to render. Plain JSON, nothing model-authored: an outcome per claim, a span into the post's OWN text
+// (so every rendered byte comes from the draft, never from the model's claim string), and — for a `supported`
+// claim only — the evidence id taken from the set that was sent to the model. `supported` is the ADR table's
+// internal word for "the cited id was in the sent set"; user-facing copy says "cited" (provenance, not support).
+export type PersistedClaimCheck =
+  | { status: 'no_claims' | 'no_corpus' }
+  | {
+      status: 'checked'
+      claims: Array<{
+        outcome: 'supported' | 'unsupported' | 'fabricated'
+        span: { start: number; end: number } | null
+        evidenceMemoryId?: string
+      }>
+    }
+
 export interface AiGenerationMetadata {
   promptId: string
   promptVersion: number
@@ -1041,6 +1057,9 @@ export interface AiGenerationMetadata {
     regeneratedAt: string
   }>
   generatedAt: string
+  // ADR 0027 §4 (K2.9). Absent on posts generated before it, on regenerations, and on any post whose
+  // verification was not run — absence means "not checked", never "clean".
+  claimCheck?: PersistedClaimCheck
 }
 
 // ---------------------------------------------------------------------------

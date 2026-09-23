@@ -1,0 +1,19 @@
+{
+  "claims": {
+    "heading": "Afirmaciones de este post",
+    "cited": "Citada",
+    "uncited": "Sin cita",
+    "cited_unknown": "Cita evidencia que no se proporcionó",
+    "no_corpus": "Sin evidencia guardada — afirmaciones no analizadas",
+    "not_checked": "Las afirmaciones de este post no se analizaron",
+    "no_claims": "Este post no contiene afirmaciones con datos concretos",
+    "cited_explainer": "“Citada” significa que la afirmación apunta a evidencia que se dio a la IA. No garantiza que la frase coincida con esa evidencia: léela y decide.",
+    "summary": "{cited} citadas · {uncited} sin cita · {unknown} con evidencia desconocida",
+    "actions": {
+      "accept": "Aceptar tal cual",
+      "edit": "Editar el texto",
+      "cite": "Citar evidencia existente",
+      "dismiss": "Descartar el aviso"
+    }
+  }
+}

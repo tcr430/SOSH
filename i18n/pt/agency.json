@@ -1,0 +1,19 @@
+{
+  "claims": {
+    "heading": "Afirmações neste post",
+    "cited": "Citada",
+    "uncited": "Sem citação",
+    "cited_unknown": "Cita evidência que não foi fornecida",
+    "no_corpus": "Sem evidência guardada — afirmações não analisadas",
+    "not_checked": "As afirmações deste post não foram analisadas",
+    "no_claims": "Este post não contém afirmações com dados concretos",
+    "cited_explainer": "“Citada” significa que a afirmação aponta para evidência que foi dada à IA. Não garante que a frase corresponda a essa evidência — leia-a e decida.",
+    "summary": "{cited} citadas · {uncited} sem citação · {unknown} com evidência desconhecida",
+    "actions": {
+      "accept": "Aceitar como está",
+      "edit": "Editar o texto",
+      "cite": "Citar evidência existente",
+      "dismiss": "Ignorar o alerta"
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "claims": {
+    "heading": "Claims in this post",
+    "cited": "Cited",
+    "uncited": "No citation",
+    "cited_unknown": "Cites evidence that wasn't provided",
+    "no_corpus": "No evidence corpus — claims not checked",
+    "not_checked": "Claims in this post were not checked",
+    "no_claims": "No checkable claims in this post",
+    "cited_explainer": "“Cited” means the claim points to evidence that was given to the AI. It does not guarantee the sentence matches that evidence — read it and decide.",
+    "summary": "{cited} cited · {uncited} without a citation · {unknown} citing unknown evidence",
+    "actions": {
+      "accept": "Accept as written",
+      "edit": "Edit the text",
+      "cite": "Cite existing evidence",
+      "dismiss": "Dismiss the flag"
+    }
+  }
+}

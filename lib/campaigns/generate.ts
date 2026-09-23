@@ -1,13 +1,13 @@
 import * as Sentry from '@sentry/nextjs'
 import { formatISO } from 'date-fns'
 import { buildCustomerContext, withPostQueryContext } from '@/lib/ai/context'
-import type { MemoryQueryContext } from '@/lib/memory'
+import { retrieveEvidenceMemory, type MemoryQueryContext } from '@/lib/memory'
 import { runPrompt } from '@/lib/ai/runner'
 import { rubricPrompt, BRIEF_QUALITY_THRESHOLD } from '@/lib/ai/prompts/rubric'
 import type { RubricOutput } from '@/lib/ai/prompts/rubric'
 import { PLATFORM_CONSTRAINTS, getPlatformConstraintsVersion } from '@/lib/ai/prompts/post-generation'
 import { generateNativeContent } from '@/lib/ai/generate-native'
-import { neutralize } from '@/lib/ai/wrap-evidence'
+import { neutralize, bindEvidenceForPrompt } from '@/lib/ai/wrap-evidence'
 import { MODELS } from '@/lib/ai/models'
 import { AiError } from '@/lib/ai/errors'
 import { config } from '@/lib/config'
@@ -23,6 +23,7 @@ import { updateGenerationSessionStatus } from '@/lib/db/post-generation-sessions
 import { incrementPostsGeneratedBy } from '@/lib/db/trial-state'
 import { schedulePosts } from '@/lib/campaigns/schedule'
 import { checkRoleCoverage, checkLinkPlacement, checkSetRedundancy } from '@/lib/campaigns/consistency'
+import { verifyClaims, toPersistedClaimCheck } from '@/lib/campaigns/verify-claims'
 import type { Platform, PostInsert, AiGenerationMetadata, CampaignPostRole } from '@/lib/db/types'
 import type { SinglePostOutput, ThreadOutput } from '@/lib/ai/prompts/formats/schemas'
 
@@ -264,6 +265,15 @@ export async function generatePostsForCampaign(
     // frozen brief (ADR §5, MODE2-BRIEF-FROZEN) — not one joint call.
     const generated: GeneratedItem[] = []
 
+    // ADR 0027 §4.2 (K2.9) — the evidence the model is SHOWN and the set of ids behind it, from ONE fetch, bound
+    // ONCE per campaign (never per candidate: 3N identical reads, and a window in which candidates could be shown
+    // different sets). Claim verification below intersects a cited id with THIS set and never re-reads the store.
+    const boundEvidence = await bindEvidenceForPrompt(
+      client,
+      businessId,
+      frozenBrief.content.pinnedEvidence.map((e) => e.evidenceMemoryId),
+    )
+
     // Session 31-D, D6 (MINOR-1). ADR §7.5a names two outcomes for a
     // reserved unit — hard fail releases, success keeps — but did not name
     // a third: a MID-CAMPAIGN reservation refusal, which left every EARLIER
@@ -292,6 +302,7 @@ export async function generatePostsForCampaign(
           platform: entry.platform,
           narrative: frozenBrief.content.narrative,
           pinnedEvidenceIds,
+          evidence: boundEvidence,
           scheduledAt,
           estimatedTweetsWorth: estimateTweetsWorth(entry.angle),
         })
@@ -554,6 +565,23 @@ export async function generatePostsForCampaign(
     // post_ai_originals row belongs to which post would be a silent
     // correctness risk. Knowing the id up front removes that dependency
     // entirely — the snapshot write below never reads `inserted`.
+    // ADR 0027 §4 (K2.9) — CLAIM VERIFICATION over the generated set: FLAGGED, NEVER EDITED, NEVER WITHHELD (L-4).
+    // The verdict rides in ai_generation_metadata.claimCheck (jsonb — no migration); posts.content is not
+    // touched, and no post is dropped or blocked. Verification proves PROVENANCE (the cited id was in the set
+    // sent to the model), not support.
+    //
+    // The corpus lookup is only needed when nothing was pinned/sent AND some post actually made a claim — the
+    // "no evidence corpus" state (§4.4). It goes through lib/memory (MEM-NO-DIRECT-TABLE-ACCESS). Advisory: if it
+    // fails, claimCheck is simply absent ("not checked"), never a failed generation and never a false "clean".
+    let hasEvidenceCorpus: boolean | null = true
+    if (boundEvidence.sentIds.size === 0 && generated.some((g) => (g.output.claims?.length ?? 0) > 0)) {
+      try {
+        hasEvidenceCorpus = (await retrieveEvidenceMemory(client, businessId, {})).length > 0
+      } catch {
+        hasEvidenceCorpus = null
+      }
+    }
+
     const generatedAt = formatISO(new Date())
     const generatedWithIds = generated.map((g) => ({
       g,
@@ -584,6 +612,13 @@ export async function generatePostsForCampaign(
         // appends its own, user-supplied rejectionNote to it.
         previousVersions: [],
         generatedAt,
+        ...(hasEvidenceCorpus === null
+          ? {}
+          : {
+              claimCheck: toPersistedClaimCheck(
+                verifyClaims({ claims: g.output.claims, content: renderedContent, bound: boundEvidence, hasEvidenceCorpus }),
+              ),
+            }),
       }
       return {
         id,

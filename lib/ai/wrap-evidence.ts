@@ -183,6 +183,45 @@ export async function wrapEvidenceForPrompt(
   return rows.map((row) => guard(row.content)).join('\n\n') as RenderedEvidence
 }
 
+// ─── The bound evidence set (ADR 0027 §4.2/§4.5, Session 34 K2.9) ───────────
+//
+// ONE fetch produces BOTH the text the model is shown AND the set of ids it was shown — the CitableContext of
+// lib/studio/verify.ts:77-84, "bound at send time". Claim verification (lib/campaigns/verify-claims.ts)
+// intersects a cited id with THIS set and never re-reads the database: a fresh read is a different transaction
+// and could legitimise a row promoted AFTER the prompt was sent (a citation the model provably could not have
+// seen), or race a demotion. Deriving the render and the oracle from the same rows makes that drift
+// unrepresentable rather than merely tested.
+//
+// Every id in `sentIds` came out of getEvidenceMemoryByIds, so it is business-scoped, status='active' and
+// not soft-deleted — a cross-tenant id can never be a member.
+//
+// Non-exported `unique symbol` brand with a REAL runtime initializer (the Session 31 BLOCKER-1 lesson: an
+// ambient `declare const` throws at runtime), so an object literal cannot be passed off as a bound set. The
+// brand kills structural forgery, not a bare cast — the same honest limit as the tool-result brands above.
+const boundEvidenceBrand: unique symbol = Symbol('wrap-evidence-bound-evidence')
+
+export type BoundEvidence = {
+  // What goes into the prompt: `Evidence id: <uuid>` then the guarded [DATA] block, per row, so the model has a
+  // real id to cite. The id is a database uuid, never model or third-party text.
+  readonly rendered: RenderedEvidence
+  readonly sentIds: ReadonlySet<string>
+  readonly [boundEvidenceBrand]: true
+}
+
+export async function bindEvidenceForPrompt(
+  client: SupabaseClient,
+  businessId: string,
+  evidenceIds: string[],
+): Promise<BoundEvidence> {
+  const rows = evidenceIds.length === 0 ? [] : await getEvidenceMemoryByIds(client, businessId, evidenceIds)
+  const rendered = rows.map((row) => `Evidence id: ${row.id}\n${guard(row.content)}`).join('\n\n') as RenderedEvidence
+  return Object.freeze({
+    rendered,
+    sentIds: new Set(rows.map((row) => row.id)),
+    [boundEvidenceBrand]: true as const,
+  })
+}
+
 // ─── Signal text (ADR 0020 §7.3/§7.4) ───────────────────────────────────────
 
 // A DISTINCT brand from RenderedEvidence, deliberately — NOT a reuse.

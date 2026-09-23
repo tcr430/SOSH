@@ -42,6 +42,16 @@ const HOOK_TYPE_SHAPE_LINE = `  "hookType": ${HOOK_TYPE_UNION} | null`
 const HOOK_TYPE_INSTRUCTION =
   'hookType names the type of OPENING you used — the first sentence for a single post, the first post for a thread, the cover slide for a carousel. Use null if none of the listed types fits.'
 
+// ADR 0027 §4.1 (Session 34 K2.9) — the model lists the CHECKABLE ASSERTIONS in its own draft and, for each, the
+// id of the pinned evidence it says supports it. Extraction rides on THIS call (no second pass, no second model
+// judgment). The id is the model's unverified CLAIM about provenance; lib/campaigns/verify-claims.ts intersects
+// it with the set actually sent. A claim is deliberately narrow — a number, a percentage, a named customer, a
+// comparative/superlative, a dated fact — because prose opinion flagged as a claim is what makes reviewers
+// dismiss flags by reflex and kills the feature (ADR §4.3).
+const CLAIMS_SHAPE_LINE = `  "claims": [ { "text": "string", "evidenceMemoryId": "string" } ]`
+const CLAIMS_INSTRUCTION =
+  'claims lists every CHECKABLE ASSERTION your draft makes — a number, a percentage, a named customer, a comparative or superlative ("fastest", "most"), a dated fact — with "text" quoted exactly as written in your draft. Set "evidenceMemoryId" to the "Evidence id" of the Pinned Evidence that states it; omit "evidenceMemoryId" if no pinned evidence does. Never invent an id. Opinion and general prose are NOT claims. Use an empty array if the draft makes no checkable assertion.'
+
 function buildSystemPrompt(family: FormatFamily) {
   return (ctx: CustomerContext): string => {
     // ADR 0022 §6.5 (Session 29, F1b.6) — ONE exhaustive switch computing
@@ -58,7 +68,8 @@ function buildSystemPrompt(family: FormatFamily) {
   "format": "single",
   "body": "string — the post content",
   "imageBrief": "string describing a recommended image, or null if none",
-${HOOK_TYPE_SHAPE_LINE}
+${HOOK_TYPE_SHAPE_LINE},
+${CLAIMS_SHAPE_LINE}
 }`
         formatWord = 'post'
         break
@@ -70,7 +81,8 @@ ${HOOK_TYPE_SHAPE_LINE}
     { "text": "string", "role": "hook" | "body" | "pull_quote" | "close" }
   ],
   "imageBrief": "string describing a recommended image, or null if none",
-${HOOK_TYPE_SHAPE_LINE}
+${HOOK_TYPE_SHAPE_LINE},
+${CLAIMS_SHAPE_LINE}
 }
 The posts array must have 3 to 8 entries. The FIRST post's role must be "hook" (it is the only part visible pre-expansion — it must stand alone). The LAST post's role must be "close". At least one post must have role "pull_quote". Do NOT include an "order" field — array position IS the order.`
         formatWord = 'thread'
@@ -83,7 +95,8 @@ The posts array must have 3 to 8 entries. The FIRST post's role must be "hook" (
     { "text": "string", "role": "cover" | "body" | "cta", "imageBrief": "string describing a recommended image for THIS slide, or null if none" }
   ],
   "imageBrief": "string describing a recommended image for the carousel as a whole, or null if none",
-${HOOK_TYPE_SHAPE_LINE}
+${HOOK_TYPE_SHAPE_LINE},
+${CLAIMS_SHAPE_LINE}
 }
 The slides array must have 3 to 10 entries. The FIRST slide's role must be "cover" (it is the only part visible pre-swipe — it must stand alone and earn the swipe). At least one slide must have role "cta". Do NOT include an "order" field — array position IS the order.`
         formatWord = 'carousel'
@@ -91,7 +104,7 @@ The slides array must have 3 to 10 entries. The FIRST slide's role must be "cove
       default:
         return assertNever(family)
     }
-    shapeInstructions = `${shapeInstructions}\n${HOOK_TYPE_INSTRUCTION}`
+    shapeInstructions = `${shapeInstructions}\n${HOOK_TYPE_INSTRUCTION}\n${CLAIMS_INSTRUCTION}`
 
     return `You are a social media content expert helping ${ctx.business.name} write a single, native ${formatWord} for one platform, rendering a pre-approved campaign argument — you are NOT inventing the argument, only expressing it natively for this platform.
 
@@ -163,7 +176,7 @@ const NATIVE_GENERATION_TEMPERATURE = 1.0
 function buildSinglePrompt(): Prompt<NativeGenInput, SinglePostOutput> {
   return {
     id: 'native-generation-single',
-    version: 3,
+    version: 4,
     modelKey: 'SONNET_4_6',
     temperature: NATIVE_GENERATION_TEMPERATURE,
     outputSchema: SinglePostOutputSchema,
@@ -175,7 +188,7 @@ function buildSinglePrompt(): Prompt<NativeGenInput, SinglePostOutput> {
 function buildThreadPrompt(): Prompt<NativeGenInput, ThreadOutput> {
   return {
     id: 'native-generation-thread',
-    version: 3,
+    version: 4,
     modelKey: 'SONNET_4_6',
     temperature: NATIVE_GENERATION_TEMPERATURE,
     outputSchema: ThreadOutputSchema,
@@ -187,7 +200,7 @@ function buildThreadPrompt(): Prompt<NativeGenInput, ThreadOutput> {
 function buildCarouselPrompt(): Prompt<NativeGenInput, CarouselOutput> {
   return {
     id: 'native-generation-carousel',
-    version: 3,
+    version: 4,
     modelKey: 'SONNET_4_6',
     temperature: NATIVE_GENERATION_TEMPERATURE,
     outputSchema: CarouselOutputSchema,

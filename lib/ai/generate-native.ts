@@ -3,7 +3,7 @@ import type { CustomerContext } from './context'
 import type { CampaignPostRole, Platform } from '@/lib/db/types'
 import { AiError } from './errors'
 import { runPrompt } from './runner'
-import { wrapEvidenceForPrompt } from './wrap-evidence'
+import { bindEvidenceForPrompt, type BoundEvidence } from './wrap-evidence'
 import { selectFormatFamily } from './prompts/formats/platform-map'
 import { createNativeGenerationPrompt, type NativeGenInput } from './prompts/formats/native-generation-prompt'
 import { validateThreadPolicy } from './prompts/formats/policy'
@@ -17,6 +17,9 @@ export interface GenerateNativeContentInput {
   platform: Platform
   narrative: string
   pinnedEvidenceIds: string[]
+  // ADR 0027 §4.2 (K2.9) — when present, used INSTEAD of fetching (pinnedEvidenceIds is then only what it was
+  // bound from). See the comment at its use below.
+  evidence?: BoundEvidence
   scheduledAt: string
   estimatedTweetsWorth: number
 }
@@ -104,7 +107,12 @@ export async function generateNativeContent(
   // is exactly the "already safe" compile error §6.5 says to leave alone).
   // Every call that exists today resolves byte-identically (L-10, A-4).
   const family = selectFormatFamily(input.platform, input.estimatedTweetsWorth, false)
-  const renderedEvidence = await wrapEvidenceForPrompt(client, input.businessId, input.pinnedEvidenceIds)
+  // ADR 0027 §4.2 (K2.9) — the prompt's evidence text and the SET OF IDS behind it come from ONE fetch
+  // (bindEvidenceForPrompt). A caller that will verify claims afterwards binds ONCE per campaign and passes it in
+  // (generate.ts), so every candidate is shown — and verified against — the identical set, and verification never
+  // re-reads the store. A caller that does not (regeneration) gets a private binding and discards it.
+  const bound = input.evidence ?? (await bindEvidenceForPrompt(client, input.businessId, input.pinnedEvidenceIds))
+  const renderedEvidence = bound.rendered
 
   const genInput: NativeGenInput = {
     angle: input.angle,
