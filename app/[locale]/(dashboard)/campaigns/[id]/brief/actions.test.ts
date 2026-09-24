@@ -14,7 +14,7 @@ vi.mock('@/lib/db/campaigns', () => ({
 }))
 vi.mock('@/lib/db/campaign-briefs', () => ({
   getBriefByCampaign: vi.fn(),
-  reviseBrief: vi.fn(),
+  reviseBriefAndSupersedeProposals: vi.fn(),
 }))
 vi.mock('@/lib/campaigns/brief', () => ({
   approveBriefIfQualified: vi.fn(),
@@ -27,7 +27,7 @@ import { approveBriefAction, rejectBriefAction, editBriefAction } from './action
 import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
 import { getCampaignById } from '@/lib/db/campaigns'
-import { getBriefByCampaign, reviseBrief } from '@/lib/db/campaign-briefs'
+import { getBriefByCampaign, reviseBriefAndSupersedeProposals } from '@/lib/db/campaign-briefs'
 import { approveBriefIfQualified } from '@/lib/campaigns/brief'
 import type { CampaignRow, CampaignBriefRow, BusinessRow } from '@/lib/db/types'
 
@@ -161,20 +161,20 @@ describe('rejectBriefAction — Zod validation', () => {
 })
 
 describe('rejectBriefAction — revises with UNCHANGED content, bumps version', () => {
-  it('calls reviseBrief with the brief\'s own content, not a modified one', async () => {
-    vi.mocked(reviseBrief).mockResolvedValue(makeBrief({ status: 'draft', version: 2 }))
+  it('calls reviseBriefAndSupersedeProposals with the brief\'s own content, not a modified one', async () => {
+    vi.mocked(reviseBriefAndSupersedeProposals).mockResolvedValue(makeBrief({ status: 'draft', version: 2 }))
 
     const result = await rejectBriefAction(
       { status: 'idle' },
       formDataOf({ campaignId: '11111111-1111-4111-8111-111111111111', expectedVersion: '1' }),
     )
 
-    expect(reviseBrief).toHaveBeenCalledWith(expect.anything(), 'brief-1', 1, MOCK_CONTENT)
+    expect(reviseBriefAndSupersedeProposals).toHaveBeenCalledWith('biz-1', 'brief-1', 1, MOCK_CONTENT)
     expect(result).toEqual({ status: 'rejected' })
   })
 
-  it('surfaces a concurrent_edit error when reviseBrief\'s guard rejects (version mismatch)', async () => {
-    vi.mocked(reviseBrief).mockResolvedValue(null)
+  it('surfaces a concurrent_edit error when reviseBriefAndSupersedeProposals\'s guard rejects (version mismatch)', async () => {
+    vi.mocked(reviseBriefAndSupersedeProposals).mockResolvedValue(null)
     const result = await rejectBriefAction(
       { status: 'idle' },
       formDataOf({ campaignId: '11111111-1111-4111-8111-111111111111', expectedVersion: '1' }),
@@ -195,7 +195,7 @@ describe('editBriefAction — Zod validation', () => {
       }),
     )
     expect(result).toEqual({ status: 'error', error: 'invalid_input' })
-    expect(reviseBrief).not.toHaveBeenCalled()
+    expect(reviseBriefAndSupersedeProposals).not.toHaveBeenCalled()
   })
 
   it('rejects an oversized narrative (>2000 chars)', async () => {
@@ -213,8 +213,8 @@ describe('editBriefAction — Zod validation', () => {
 })
 
 describe('editBriefAction — revises with NEW narrative/proofPlan, preserves the rest of content', () => {
-  it('calls reviseBrief with updated narrative/proofPlan and unchanged pinnedEvidence/roleSequence', async () => {
-    vi.mocked(reviseBrief).mockResolvedValue(makeBrief({ status: 'draft', version: 2 }))
+  it('calls reviseBriefAndSupersedeProposals with updated narrative/proofPlan and unchanged pinnedEvidence/roleSequence', async () => {
+    vi.mocked(reviseBriefAndSupersedeProposals).mockResolvedValue(makeBrief({ status: 'draft', version: 2 }))
 
     const result = await editBriefAction(
       { status: 'idle' },
@@ -226,7 +226,7 @@ describe('editBriefAction — revises with NEW narrative/proofPlan, preserves th
       }),
     )
 
-    expect(reviseBrief).toHaveBeenCalledWith(expect.anything(), 'brief-1', 1, {
+    expect(reviseBriefAndSupersedeProposals).toHaveBeenCalledWith('biz-1', 'brief-1', 1, {
       ...MOCK_CONTENT,
       narrative: 'Updated narrative',
       proofPlan: 'Updated proof plan',

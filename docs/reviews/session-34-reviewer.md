@@ -620,3 +620,70 @@ option (b) were available and not taken (build-guide §4).
 - **What I did NOT touch:** no second UUID regex; no tool behaviour change beyond the mint's throw.
   Note for the record: `lib/signals/triage/tools.test.ts` was edited for FIXTURE IDS ONLY (rule 9 names
   `tool-runner.test.ts` and `triage/orchestrator.test.ts` as the byte-identical pair; neither was touched).
+
+### D4 — BLOCKER-1
+
+- **Finding:** BLOCKER-1.
+- **Fix:** `lib/db/campaign-briefs.ts` gains `approveBriefAndSupersedeProposals(businessId, briefId)` and
+  `reviseBriefAndSupersedeProposals(businessId, briefId, expectedVersion, content)` — service-role via the
+  CLAUDE.md lazy import, NO client parameter, mapping the RPC's typed outcome (`ok` → the row; `invalid_state` /
+  `concurrent_edit` → `null`; anything else, or an RPC error, throws) onto the predecessors' `row | null`
+  contract. `approveBriefIfQualified` (`lib/campaigns/brief.ts`) keeps its status check and
+  `BRIEF_QUALITY_THRESHOLD` gate BEFORE the write, then calls the approve wrapper with the LOADED brief's
+  `business_id`; `rejectBriefAction` and `editBriefAction` (`brief/actions.ts`) call the revise wrapper with
+  `loaded.brief.business_id`. `approveBrief` and `reviseBrief` are DELETED (`git grep` at D4 start: no caller
+  besides the three above and their tests), the now-dead `serviceClient` field of the loader and its
+  `SupabaseClient` import are removed, and the stale caller comment in `brief.ts` is rewritten.
+- **Per-caller table (SHARED-FUNCTION CALLERS):**
+
+  | Caller | Reaches | Test (file:line) |
+  |---|---|---|
+  | `approveBriefAction` | `approveBriefIfQualified` (REAL) → `approveBriefAndSupersedeProposals('biz-loaded','brief-1')` | `app/[locale]/(dashboard)/campaigns/[id]/brief/actions.supersede-callers.test.ts:85` |
+  | `approveBriefAction`, below threshold | never reaches the wrapper | `actions.supersede-callers.test.ts:95` |
+  | `approveBriefIfQualified` (direct) | wrapper with `('biz-1','brief-1')`; below threshold never | `lib/campaigns/brief.test.ts:307`, `:283` |
+  | `rejectBriefAction` | `reviseBriefAndSupersedeProposals('biz-loaded','brief-1',1, own content)` | `actions.supersede-callers.test.ts:104` (and `actions.test.ts:172`) |
+  | `editBriefAction` | `reviseBriefAndSupersedeProposals('biz-loaded','brief-1',1, edited content)` | `actions.supersede-callers.test.ts:114` (and `actions.test.ts:229`, `actions.hypothesis.test.ts:57,90,97`) |
+  | both revise callers, `null` | `concurrent_edit` surfaced | `actions.supersede-callers.test.ts:132` |
+
+  The pre-existing `actions.test.ts`, `actions.hypothesis.test.ts` and `brief.test.ts` were renamed to the new
+  wrapper names and their argument assertions changed from `expect.anything()` (the old client) to
+  `'biz-1'` (the loaded brief's business id) — stricter, not weaker. `lib/db/campaign-briefs.test.ts`'s
+  `approveBrief`/`reviseBrief` describes were replaced by wrapper tests (`:148`, `:180`) pinning the outcome
+  mapping, since the functions they tested no longer exist.
+- **Proof (Tier-1, through the production functions, not the raw RPC):**
+  `supabase/__tests__/plan-proposals-approve-revise-path.test.ts:51` (`approveBriefIfQualified`: an
+  above-threshold critiqued brief with two pending proposals → approved, `frozen_at` set, BOTH proposals
+  `superseded`/`brief_frozen`, `decided_by` NULL), `:71` (below threshold: refused before any write, proposals
+  stay pending), `:84` (revise wrapper: superseded `version_advanced`, brief at N+1), `:102` (stale
+  `expectedVersion` → `null`, nothing superseded). **Tier-3:** `lib/campaigns/__tests__/brief-write-paths.test.ts:74`
+  (no module under `lib/` or `app/` issues a PostgREST `.update()` on `campaign_briefs` setting status
+  `'approved'` or advancing `version`; floor: >200 files and `lib/db/campaign-briefs.ts` must be in the set),
+  `:88` (both wrappers exist, `approveBrief`/`reviseBrief` are gone, and ONLY `lib/campaigns/brief.ts` calls the
+  approve wrapper and ONLY `brief/actions.ts` the revise wrapper), `:54`/`:67` (detector planted positives and
+  negatives). The planner root's `BRIEF_WRITERS` list (`planner/__tests__/source-scans.test.ts`) additionally
+  forbids the two wrapper names to the planner — additive; the old names stay listed.
+  `plan-proposals-freeze-supersede.test.ts` is unchanged and green.
+- **Reddening** (each restored from a saved copy; the mutated file confirmed back to its pre-mutation state):
+  1. `lib/campaigns/brief.ts:219` — the wrapper call replaced by the old direct PostgREST
+     `client.from('campaign_briefs').update({ status: 'approved', frozen_at: … }).eq('id', brief.id).eq('status','critiqued')…`.
+     Tier-1: `× approveBriefIfQualified: an above-threshold critiqued brief is approved and frozen, and BOTH
+     pending proposals supersede brief_frozen … AssertionError: expected 'pending' to be 'superseded'`
+     (1 failed | 3 passed). Tier-3 scan, same mutation: `× no production module under lib/ or app/ issues one …
+     AssertionError: expected [ Array(1) ] to deeply equal []`.
+  2. `brief/actions.ts` (`rejectBriefAction`) — `loaded.brief.business_id` → `parsed.data.campaignId`:
+     `× rejectBriefAction -> reviseBriefAndSupersedeProposals(biz-loaded, brief-1, …)` (1 failed | 4 passed).
+- **Specialist:** `ecc:security-reviewer`, invoked ONCE after the plan and before the commit, read-only over the
+  uncommitted diff at `b6e76bb6`. **No blocking finding.** Two LOW/informational notes, recorded not actioned
+  (neither is a regression and neither is in this step's scope): (a) `approveBriefIfQualified` does no ownership
+  check itself — the same trust model as before, safe while `approveBriefAction` (which runs
+  `loadOwnedCampaignAndBrief` first) is its only non-test caller, and the wrapper-caller pin at
+  `brief-write-paths.test.ts:88` now fails if a second caller appears; (b) the RPC re-checks
+  `status='critiqued'` but not `overall_score`, so the threshold gate lives in code before the RPC — the
+  predecessor had the same shape, and the RPC is only changed at D5 (the one migration), where no ruling
+  requires it. The specialist also confirmed tenant isolation (`getCampaignById` on the user's client,
+  `campaign.business_id === ctx.business.id`, `UNIQUE(campaign_id)`, the RPC re-matching `business_id`), no static
+  service-role import, and that the outcome mapping cannot treat a forged outcome as success.
+- **Commit:** this commit (D4; SHA back-filled by D12's sweep).
+- **What I did NOT touch:** `approveBriefIfQualified`'s threshold gate is unchanged;
+  `plan-proposals-freeze-supersede.test.ts` is unchanged. The ADR text that still names `approveBrief` /
+  `reviseBrief` (`docs/decisions/0027-…`, §5.7 and the caller tables) is D11's, not this step's.

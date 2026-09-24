@@ -941,6 +941,10 @@ const BRIEF_WRITERS = [
   'submitBriefForCritique',
   'approveBrief',
   'reviseBrief',
+  // Session 34-D D4 (BLOCKER-1): the two RPC wrappers that REPLACED approveBrief/reviseBrief — the planner
+  // proposes only, so it may call neither.
+  'approveBriefAndSupersedeProposals',
+  'reviseBriefAndSupersedeProposals',
   'markBriefGenerated',
   'setBriefPlanAnalysis',
   'approveBriefIfQualified',

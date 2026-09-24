@@ -5,11 +5,10 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
 import { getCampaignById } from '@/lib/db/campaigns'
-import { getBriefByCampaign, reviseBrief } from '@/lib/db/campaign-briefs'
+import { getBriefByCampaign, reviseBriefAndSupersedeProposals } from '@/lib/db/campaign-briefs'
 import { approveBriefIfQualified } from '@/lib/campaigns/brief'
 import { HypothesisFieldsSchema } from '@/lib/outcomes/hypothesis'
 import type { CampaignRow, CampaignBriefRow } from '@/lib/db/types'
-import type { SupabaseClient } from '@supabase/supabase-js'
 
 async function getAuthContext() {
   const client = await createClient()
@@ -23,7 +22,7 @@ async function getAuthContext() {
 }
 
 type LoadResult =
-  | { ok: true; serviceClient: SupabaseClient; campaign: CampaignRow; brief: CampaignBriefRow }
+  | { ok: true; campaign: CampaignRow; brief: CampaignBriefRow }
   | { ok: false; error: 'unauthorized' | 'not_found' }
 
 // Every action re-checks campaign ownership itself (never trusts a
@@ -45,7 +44,7 @@ async function loadOwnedCampaignAndBrief(campaignId: string): Promise<LoadResult
   const brief = await getBriefByCampaign(serviceClient, campaignId)
   if (!brief) return { ok: false, error: 'not_found' }
 
-  return { ok: true, serviceClient, campaign, brief }
+  return { ok: true, campaign, brief }
 }
 
 // ─── approve ─────────────────────────────────────────────────────────────
@@ -128,8 +127,10 @@ export async function rejectBriefAction(
     if (!loaded.ok) return { status: 'error', error: loaded.error }
     if (loaded.brief.status !== 'critiqued') return { status: 'error', error: 'invalid_brief_state' }
 
-    const updated = await reviseBrief(
-      loaded.serviceClient,
+    // Session 34-D D4 (BLOCKER-1): the revise RPC advances the version AND supersedes the brief's pending plan
+    // proposals ('version_advanced') in one transaction. business_id is the LOADED brief's, never the input's.
+    const updated = await reviseBriefAndSupersedeProposals(
+      loaded.brief.business_id,
       loaded.brief.id,
       parsed.data.expectedVersion,
       loaded.brief.content, // unchanged — reject just sends it back for reconsideration
@@ -214,7 +215,7 @@ export async function editBriefAction(
     // carries through unchanged.
     const { hypothesis: _oldHypothesis, successCriteria: _oldCriteria, ...unchanged } = loaded.brief.content
     const carried = hypothesisFields === null ? { hypothesis: _oldHypothesis, successCriteria: _oldCriteria } : hypothesisFields
-    const updated = await reviseBrief(loaded.serviceClient, loaded.brief.id, parsed.data.expectedVersion, {
+    const updated = await reviseBriefAndSupersedeProposals(loaded.brief.business_id, loaded.brief.id, parsed.data.expectedVersion, {
       ...unchanged,
       narrative: parsed.data.narrative,
       proofPlan: parsed.data.proofPlan,

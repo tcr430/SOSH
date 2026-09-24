@@ -1,11 +1,11 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createMockClient, createSequentialMockClient } from './__test-utils__/mock-client'
 import {
   getBriefByCampaign,
   createBrief,
   submitBriefForCritique,
-  approveBrief,
-  reviseBrief,
+  approveBriefAndSupersedeProposals,
+  reviseBriefAndSupersedeProposals,
   markBriefGenerated,
 } from './campaign-briefs'
 import type { CampaignBriefRow, CampaignBriefContent, CampaignRow } from './types'
@@ -138,63 +138,71 @@ describe('submitBriefForCritique (draft -> critiqued)', () => {
   })
 })
 
-describe('approveBrief (critiqued -> approved)', () => {
-  it('succeeds when the brief is critiqued and sets frozen_at', async () => {
+// ADR 0027 §5.7 (Session 34-D D4, BLOCKER-1) — the approve and revise writers are RPC wrappers (service-role,
+// no client parameter). The RPC itself is exercised against live Postgres by
+// supabase/__tests__/plan-proposals-approve-revise-path.test.ts; here the mapping of its typed outcome onto the
+// predecessors' row | null contract is pinned.
+const rpcMock = vi.fn()
+vi.mock('@/lib/supabase/service', () => ({ createServiceRoleClient: () => ({ rpc: rpcMock }) }))
+
+describe('approveBriefAndSupersedeProposals (critiqued -> approved + supersede, ONE RPC)', () => {
+  beforeEach(() => rpcMock.mockReset())
+
+  it('calls approve_brief_and_supersede_proposals with the business and brief ids and returns the frozen row', async () => {
     const approved = { ...mockBrief, status: 'approved' as const, frozen_at: '2026-07-23T01:00:00Z' }
-    const { client, builder } = createMockClient(approved)
-    const result = await approveBrief(client, 'brief-1')
+    rpcMock.mockResolvedValue({ data: { outcome: 'ok', brief: approved }, error: null })
+    const result = await approveBriefAndSupersedeProposals('biz-1', 'brief-1')
     expect(result).toEqual(approved)
-    expect(builder.eq).toHaveBeenCalledWith('status', 'critiqued')
-    expect(builder.update).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'approved', frozen_at: expect.any(String) }),
-    )
+    expect(rpcMock).toHaveBeenCalledWith('approve_brief_and_supersede_proposals', {
+      p_business_id: 'biz-1',
+      p_brief_id: 'brief-1',
+    })
   })
 
-  it('is a no-op (returns null) when the brief is not critiqued', async () => {
-    const { client } = createMockClient(null, null)
-    const result = await approveBrief(client, 'brief-1')
-    expect(result).toBeNull()
+  it("returns null on 'invalid_state' (the brief is not critiqued) — the predecessor's no-op contract", async () => {
+    rpcMock.mockResolvedValue({ data: { outcome: 'invalid_state' }, error: null })
+    expect(await approveBriefAndSupersedeProposals('biz-1', 'brief-1')).toBeNull()
   })
 
-  it('throws when supabase returns an error', async () => {
-    const { client } = createMockClient(null, { message: 'Update error' })
-    await expect(approveBrief(client, 'brief-1')).rejects.toThrow('Update error')
+  it('throws on an outcome it does not know, rather than treating it as a refusal', async () => {
+    rpcMock.mockResolvedValue({ data: { outcome: 'surprise' }, error: null })
+    await expect(approveBriefAndSupersedeProposals('biz-1', 'brief-1')).rejects.toThrow('unexpected outcome')
+    rpcMock.mockResolvedValue({ data: null, error: null })
+    await expect(approveBriefAndSupersedeProposals('biz-1', 'brief-1')).rejects.toThrow('unexpected outcome')
+  })
+
+  it('throws when the RPC returns an error', async () => {
+    rpcMock.mockResolvedValue({ data: null, error: { message: 'Update error' } })
+    await expect(approveBriefAndSupersedeProposals('biz-1', 'brief-1')).rejects.toThrow('Update error')
   })
 })
 
-describe('reviseBrief (critiqued -> draft, human revise)', () => {
-  it('bumps version and guards on both status and the expected version', async () => {
+describe('reviseBriefAndSupersedeProposals (critiqued -> draft, version + 1, ONE RPC)', () => {
+  beforeEach(() => rpcMock.mockReset())
+
+  it('calls revise_brief_and_supersede_proposals with the expected version and content and returns the new row', async () => {
     const revised = { ...mockBrief, status: 'draft' as const, version: 2, content: mockContent }
-    const { client, builder } = createMockClient(revised)
-    const result = await reviseBrief(client, 'brief-1', 1, mockContent)
+    rpcMock.mockResolvedValue({ data: { outcome: 'ok', brief: revised }, error: null })
+    const result = await reviseBriefAndSupersedeProposals('biz-1', 'brief-1', 1, mockContent)
     expect(result).toEqual(revised)
-    expect(builder.eq).toHaveBeenCalledWith('status', 'critiqued')
-    expect(builder.eq).toHaveBeenCalledWith('version', 1)
-    expect(builder.update).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'draft', version: 2, content: mockContent }),
-    )
+    expect(rpcMock).toHaveBeenCalledWith('revise_brief_and_supersede_proposals', {
+      p_business_id: 'biz-1',
+      p_brief_id: 'brief-1',
+      p_expected_version: 1,
+      p_content: mockContent,
+    })
   })
 
-  it('leaves frozen_at untouched (stays NULL — revise only happens pre-freeze)', async () => {
-    const revised = { ...mockBrief, status: 'draft' as const, version: 2 }
-    const { client, builder } = createMockClient(revised)
-    await reviseBrief(client, 'brief-1', 1, mockContent)
-    const updateCall = (builder.update as unknown as { mock: { calls: unknown[][] } }).mock.calls[0][0] as Record<
-      string,
-      unknown
-    >
-    expect(updateCall).not.toHaveProperty('frozen_at')
+  it("returns null on 'concurrent_edit' (status or version did not match)", async () => {
+    rpcMock.mockResolvedValue({ data: { outcome: 'concurrent_edit' }, error: null })
+    expect(await reviseBriefAndSupersedeProposals('biz-1', 'brief-1', 1, mockContent)).toBeNull()
   })
 
-  it('is a no-op (returns null) when status or version does not match (concurrent edit)', async () => {
-    const { client } = createMockClient(null, null)
-    const result = await reviseBrief(client, 'brief-1', 1, mockContent)
-    expect(result).toBeNull()
-  })
-
-  it('throws when supabase returns an error', async () => {
-    const { client } = createMockClient(null, { message: 'Update error' })
-    await expect(reviseBrief(client, 'brief-1', 1, mockContent)).rejects.toThrow('Update error')
+  it('throws on an outcome it does not know, and when the RPC returns an error', async () => {
+    rpcMock.mockResolvedValue({ data: { outcome: 'invalid_state' }, error: null })
+    await expect(reviseBriefAndSupersedeProposals('biz-1', 'brief-1', 1, mockContent)).rejects.toThrow('unexpected outcome')
+    rpcMock.mockResolvedValue({ data: null, error: { message: 'Update error' } })
+    await expect(reviseBriefAndSupersedeProposals('biz-1', 'brief-1', 1, mockContent)).rejects.toThrow('Update error')
   })
 })
 

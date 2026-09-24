@@ -2,7 +2,6 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { CampaignBriefContent, CampaignBriefRow, PlanAnalysisReason } from './types'
 import { getErrorMessage } from './utils'
 import { getCampaignById } from './campaigns'
-import { toUtcIso } from '@/lib/utils'
 
 // ADR 0017 §2.1 — UNIQUE(campaign_id) means zero-or-one row per campaign;
 // this IS the by-campaign lookup index, so a plain eq + maybeSingle suffices.
@@ -74,46 +73,60 @@ export async function submitBriefForCritique(
   return (data as CampaignBriefRow | null) ?? null
 }
 
-export async function approveBrief(
-  client: SupabaseClient,
-  id: string,
-): Promise<CampaignBriefRow | null> {
-  const { data, error } = await client
-    .from('campaign_briefs')
-    .update({ status: 'approved', frozen_at: toUtcIso(new Date()) })
-    .eq('id', id)
-    .eq('status', 'critiqued')
-    .is('deleted_at', null)
-    .select()
-    .maybeSingle()
-  if (error) throw new Error(getErrorMessage(error))
-  return (data as CampaignBriefRow | null) ?? null
+// ADR 0027 §5.7 (Session 34-D D4, BLOCKER-1) — the ONLY two paths that approve a brief or advance its version.
+// Each is ONE Postgres function body (approve_/revise_brief_and_supersede_proposals): the guarded
+// campaign_briefs UPDATE and the supersede of the brief's pending proposals commit in ONE transaction, so a
+// frozen or version-advanced brief can never leave a proposal `pending` behind it (AGENCY-FREEZE-SUPERSEDE-ATOMIC).
+// They REPLACE the former PostgREST approveBrief/reviseBrief, which superseded nothing; a Tier-3 scan
+// (lib/campaigns/__tests__/brief-write-paths.test.ts) forbids a replacement writer.
+//
+// Both RPCs are service_role-only (supabase/__tests__/plan-proposals-rpc-grants.test.ts), so — CLAUDE.md's
+// lazy-import pattern — these take NO client parameter: a caller cannot pass an authenticated client and hit a
+// silent permission failure. `businessId` is the LOADED brief row's business_id, never an action input.
+//
+// Return contract is the predecessors': the updated row, or null when the guard excluded the row ('invalid_state'
+// / 'concurrent_edit'), so callers' existing concurrency handling is unchanged. Any other outcome throws.
+function readSupersedeRpcResult(data: unknown, refusedOutcome: string): CampaignBriefRow | null {
+  const result = data as { outcome?: string; brief?: unknown } | null
+  if (result?.outcome === 'ok' && result.brief) return result.brief as CampaignBriefRow
+  if (result?.outcome === refusedOutcome) return null
+  throw new Error(`unexpected outcome from brief supersede RPC: ${String(result?.outcome)}`)
 }
 
-// Human revise (critiqued -> draft). version is caller-supplied as the
-// EXPECTED current version (mirroring activateCampaign's caller-precomputed
-// totalPostsPlanned) and doubles as an optimistic-concurrency guard: the
-// conditional UPDATE matches only status=critiqued AND version=expectedVersion,
-// so a concurrent revise loses the race safely (returns null) instead of
-// silently clobbering or double-bumping. frozen_at is never touched here —
-// revise only ever happens pre-freeze, so it is already NULL.
-export async function reviseBrief(
-  client: SupabaseClient,
-  id: string,
+// critiqued -> approved + frozen_at, superseding every pending proposal 'brief_frozen'.
+export async function approveBriefAndSupersedeProposals(
+  businessId: string,
+  briefId: string,
+): Promise<CampaignBriefRow | null> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client.rpc('approve_brief_and_supersede_proposals', {
+    p_business_id: businessId,
+    p_brief_id: briefId,
+  })
+  if (error) throw new Error(getErrorMessage(error))
+  return readSupersedeRpcResult(data, 'invalid_state')
+}
+
+// Human revise (critiqued -> draft, version + 1), superseding every pending proposal 'version_advanced'.
+// expectedVersion doubles as the optimistic-concurrency guard: the conditional UPDATE inside the RPC matches only
+// status=critiqued AND version=expectedVersion, so a concurrent revise loses the race safely (null).
+export async function reviseBriefAndSupersedeProposals(
+  businessId: string,
+  briefId: string,
   expectedVersion: number,
   content: CampaignBriefContent,
 ): Promise<CampaignBriefRow | null> {
-  const { data, error } = await client
-    .from('campaign_briefs')
-    .update({ status: 'draft', version: expectedVersion + 1, content })
-    .eq('id', id)
-    .eq('status', 'critiqued')
-    .eq('version', expectedVersion)
-    .is('deleted_at', null)
-    .select()
-    .maybeSingle()
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client.rpc('revise_brief_and_supersede_proposals', {
+    p_business_id: businessId,
+    p_brief_id: briefId,
+    p_expected_version: expectedVersion,
+    p_content: content,
+  })
   if (error) throw new Error(getErrorMessage(error))
-  return (data as CampaignBriefRow | null) ?? null
+  return readSupersedeRpcResult(data, 'concurrent_edit')
 }
 
 // ADR 0027 §3.3 (Session 34 K2.7) — records whether/why the campaign planner ran. The ONLY writer of these two
