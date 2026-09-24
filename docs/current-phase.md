@@ -1551,7 +1551,7 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
     post) and LinkedIn readability are **still unverified** — owed to the first live smoke (ADR 0028 Amendment A A.5).
 
 - **Session 34 — Track K Builder close-out (ADR 0027, agency in generation), K2.1–K2.11 (`8c21b052`…the K2.11 commit), branch
-  `session-34-adr-0027`. NOT PUSHED, no PR, no Reviewer yet.** The Reviewer (K3, with `security-reviewer` as a mandatory
+  `session-34-adr-0027`. PUSHED as PR #13 (base `session-33-adr-0026`), CI green at `998030e8`, no Reviewer yet.** The Reviewer (K3, with `security-reviewer` as a mandatory
   second pass) has not run; nothing below has been read by anyone but the Builder.
   - **What shipped:** a closed inventory of six read-only, tenant-bound generation tools on a parameterised `runToolLoop`
     (Stage C triage is byte-identical: its tests are unmodified); claim verification that says "cited", never "verified";
@@ -1569,17 +1569,17 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
     whose brief failed at submit has a retry. The choice of a separate control over auto-start was deliberate: generation spends trial
     post quota and runs long, so it stays an explicit customer action. **The full path has never been run in a browser or against a
     real model** (`S34-E2E-UNVERIFIED`, launch sign-off): creation latency and per-campaign LLM cost at creation are the two things to
-    watch. Full app suite, CI's dummy env, at this tree: 336 files, 4837 tests passed. Still not pushed.
+    watch. Full app suite, CI's dummy env, at this tree: 336 files, 4837 tests passed locally; CI at `998030e8` below.
   - **Measured p95 latency against ADR 0027 §7.3's predicted 30 000 ms: NOT MEASURED.** No planner run has ever been
     observed, in tests or elsewhere, so there is no measurement. The 30 000 ms figure remains a prediction and is not
     reported as anything else here.
-  - **CI: no run exists for this branch.** LOCAL runs only, at the K2.11 tree: `tsc` clean; `test:app` equivalent with CI's
-    dummy env 330 files passed / 1 failed, 4780 tests passed / 1 failed (the known `corpus-v2-schema` full-suite flake, 5/5
-    alone); `test:db` equivalent against the local stack **93 files / 782 tests, all passed**. **No coverage total is
-    claimed:** the "executed green in CI at" column of the constraint map is empty until a run for the pushed head is opened.
-  - **`db-tests` promotion tally: unchanged, and no event to record.** Nothing has been pushed, so no run exists. When the
-    branch is pushed its runs will be `pull_request` events, which do not move the tally (only consecutive green `master`
-    push runs do; the last on record is the one cited in the Session 33 entry above).
+  - **CI at `998030e8` (PR #13, `pull_request` events), read from the logs:** `app-tests`
+    [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) green, `skip-guard: 333 file(s) ... zero failures — green. (4837/4837 tests passed)`;
+    `db-tests` [35985368440](https://github.com/tcr430/SOSH/actions/runs/35985368440) green, `skip-guard: 93 file(s) ... zero failures — green. (782/782 tests passed)`,
+    no `signal 11`/`SIGSEGV`/`OOMKilled` line in the log; `eval-reported`/`eval-threshold` green; Vercel preview deployed. The ADR 0027 constraint
+    map's "executed green in CI at" column is filled from these two runs (ADR 0027 §V.10), as a per-file fact. **No total is claimed.**
+  - **`db-tests` promotion tally: unchanged.** Both runs are `pull_request` events; only consecutive green `master` push runs move it
+    (the last on record is the one cited in the Session 33 entry above). This pass neither advances nor resets it.
   - **What the Builder found and fixed while closing** (ADR 0027 §V.7): ADR 0024's fourth-purpose amendment, claimed in
     K2.6's commit subject, had never been written (now ADR 0024 §18); constraint 29 had no source-side half (a real-tree
     scan added); a stale caller claim in `plan-brief.test.ts` corrected. **Found and not fixed:** the posts trigger gates
@@ -1589,7 +1589,7 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
   - **Amendments (each additive):** ADR 0017 Amendment F, ADR 0021 §18 (Amendment C), ADR 0024 §18, ADR 0027 "Builder
     verification (K2.11)". ADR 0010 §D2.5's `campaign_plan_proposals` row landed in the same commit as its migration
     (`09dbd445`), confirmed.
-  - **Next:** push and open the PR, read the CI runs, then the Reviewer (K3).
+  - **Next:** the Reviewer (K3, `security-reviewer` mandatory), reading at the commit range `origin/session-33-adr-0026..998030e8`, never HEAD.
 
 ## What's next
 

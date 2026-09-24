@@ -1721,52 +1721,52 @@ file column (30, 44, and the halves noted on 9, 10, 26, 29, 37).
 
 | # | Constraint | Tier | Test file(s) | Closing step (SHA) | Executing CI job | Executed green in CI at |
 |---|---|---|---|---|---|---|
-| 1 | `AGENCY-TOOLS-READ-ONLY` | 3 | `lib/campaigns/planner/__tests__/source-scans.test.ts` | K2.1 (`8c21b052`) | app-tests | |
-| 2 | `AGENCY-TOOLS-CLOSED-INVENTORY` | 2 | `lib/campaigns/planner/__tests__/tools.test.ts` | K2.4 (`b741c078`) | app-tests | |
-| 3 | `AGENCY-TOOLS-TENANT-BOUND` | 1+2 | `lib/campaigns/planner/__tests__/tools.test.ts`; `supabase/__tests__/planner-tools-tenancy.test.ts` | K2.4 (`b741c078`) | db-tests + app-tests | |
-| 4 | `AGENCY-NO-SERVICE-ROLE-IN-TOOLS` | 3 | `lib/campaigns/planner/__tests__/source-scans.test.ts`; `supabase/__tests__/planner-tools-tenancy.test.ts` | K2.1 (`8c21b052`) | db-tests + app-tests | |
-| 5 | `AGENCY-NO-WRITE-TOOL` | 3 | `lib/campaigns/planner/__tests__/source-scans.test.ts` | K2.1 (`8c21b052`) | app-tests | |
-| 6 | `AGENCY-NO-EGRESS-IN-TOOLS` | 3 | `lib/campaigns/planner/__tests__/source-scans.test.ts` | K2.1 (`8c21b052`) | app-tests | |
-| 7 | `AGENCY-QUERY-CONTEXT-NOT-A-PREDICATE` | 3 | `lib/campaigns/planner/__tests__/source-scans.test.ts` | K2.1 (`8c21b052`) | app-tests | |
-| 8 | `AGENCY-TOOLS-ONCE-PER-CAMPAIGN` | 2+3 | `lib/campaigns/planner/__tests__/orchestrator.test.ts`; `lib/campaigns/planner/__tests__/source-scans.test.ts` | K2.7 (`9f7c44e6`) | app-tests | |
-| 9 | `AGENCY-PLANNER-REQUEST-PATH-ONLY` | 2+3 | `lib/campaigns/planner/__tests__/source-scans.test.ts` (Tier 3); Tier-2 half is the rendered `not_run` state: `app/[locale]/(dashboard)/campaigns/[id]/brief/PlanReviewPanel.test.tsx`, `page.test.tsx`, and the column DEFAULT (row 15) | K2.7 (`9f7c44e6`) | app-tests | |
-| 10 | `AGENCY-LOOP-BOUNDS-PARAMETERISED` | 2 | lib/ai/tool-runner-generic.test.ts; lib/ai/tool-runner.test.ts and lib/signals/triage/orchestrator.test.ts run UNMODIFIED | K2.2 (`a28c5ea8`) | app-tests | |
-| 11 | `AGENCY-LOOP-SCHEMA-STRICT` | 2+3 | `lib/ai/tool-runner-generic.test.ts`; `lib/campaigns/planner/__tests__/source-scans.test.ts` | K2.2 (`a28c5ea8`) | app-tests | |
-| 12 | `AGENCY-LOOP-BOUNDED` | 2 | `lib/campaigns/planner/__tests__/orchestrator.test.ts` | K2.7 (`9f7c44e6`) | app-tests | |
-| 13 | `AGENCY-BOUND-FAILURE-DEFINED` | 2 | `lib/campaigns/planner/__tests__/orchestrator.test.ts` | K2.7 (`9f7c44e6`) | app-tests | |
-| 14 | `AGENCY-FAILURE-REASONS-RUNTIME` | 2 | `lib/ai/tool-runner-generic.test.ts` | K2.2 (`a28c5ea8`) | app-tests | |
-| 15 | `AGENCY-PLAN-STATUS-DEFAULT-NOT-OK` | 1 | `supabase/__tests__/plan-analysis-default.test.ts` | K2.5 (`09dbd445`) | db-tests | |
-| 16 | `AGENCY-PLANNER-TRIAL-EXEMPT` | 2 | `lib/ai/tool-runner-generic.test.ts`; `lib/campaigns/planner/__tests__/orchestrator.test.ts` | K2.2 (`a28c5ea8`) | app-tests | |
-| 17 | `AGENCY-PLANNER-PROMPT-ID-DISTINCT` | 2 | `lib/ai/tool-runner-generic.test.ts` | K2.2 (`a28c5ea8`) | app-tests | |
-| 18 | `AGENCY-CLAIMS-FLAGGED-NEVER-EDITED` | 2+3 | `lib/campaigns/generate.test.ts`; `lib/campaigns/verify-claims.test.ts`; `lib/db/posts.claims.test.ts` | K2.9 (`86657e06`) | app-tests | |
-| 19 | `AGENCY-CLAIM-EVIDENCE-TRACEABLE` | 2 | `lib/campaigns/generate.test.ts`; `lib/campaigns/verify-claims.test.ts` | K2.9 (`86657e06`) | app-tests | |
-| 20 | `AGENCY-CLAIM-NO-CORPUS-DISTINCT` | 2 | `lib/campaigns/generate.test.ts`; `lib/campaigns/verify-claims.test.ts` | K2.9 (`86657e06`) | app-tests | |
-| 21 | `AGENCY-CLAIM-CITED-NOT-SUPPORTED` | 2 | `app/[locale]/(dashboard)/approvals/ClaimFlags.test.tsx`; `app/[locale]/(dashboard)/campaigns/[id]/brief/PlanReviewPanel.test.tsx`; `lib/i18n/agency-parity.test.ts` | K2.10 (`980ff0ae`) | app-tests | |
-| 22 | `AGENCY-NO-ELEVENTH-DIMENSION` | 3 | `lib/campaigns/planner/__tests__/source-scans.test.ts` | K2.1 (`8c21b052`) | app-tests | |
-| 23 | `AGENCY-VERIFY-CROSS-REFERENCED` | 3 | `lib/campaigns/verify-claims.test.ts` | K2.9 (`86657e06`) | app-tests | |
-| 24 | `AGENCY-NO-EVIDENCE-WRITE-SURFACE` | 3 | `lib/campaigns/planner/__tests__/source-scans.test.ts` | K2.1 (`8c21b052`) | app-tests | |
-| 25 | `AGENCY-PLANNER-PROPOSES-ONLY` | 2+3 | `lib/campaigns/planner/__tests__/source-scans.test.ts` | K2.7 (`9f7c44e6`) | app-tests | |
-| 26 | `AGENCY-FROZEN-BRIEF-CONTRACT-INTACT` | 1+2 | supabase/__tests__/mode2-brief-rls.test.ts (MODE2-BRIEF-FROZEN-GUARD, unmodified since BASE); lib/campaigns/role-sequence.test.ts | K2.8 (`28cf8a0e`) | db-tests + app-tests | |
-| 27 | `AGENCY-ROLE-SEQUENCE-ORDER-UNIQUE` | 2 | `lib/campaigns/role-sequence.test.ts` | K2.8 (`28cf8a0e`) | app-tests | |
-| 28 | `AGENCY-PROPOSAL-TRANSITION-ATOMIC` | 1 | `supabase/__tests__/plan-proposals-atomic.test.ts`; `supabase/__tests__/plan-proposals-transition.test.ts` | K2.6 (`26e732fc`) | db-tests | |
-| 29 | `AGENCY-PROPOSAL-DECIDE-VIA-RPC` | 1+3 | supabase/__tests__/plan-proposals-decide-rpc.test.ts; lib/db/campaign-plan-proposals.decide-scan.test.ts (Tier-3 half, added K2.11) | K2.6 (`26e732fc`) | db-tests + app-tests | |
-| 30 | `AGENCY-PROPOSAL-WRITE-ONCE` | 1 | supabase/__tests__/plan-proposals-transition.test.ts (the write-once cases; the file does not name the constraint) | K2.5 (`09dbd445`) | db-tests | |
-| 31 | `AGENCY-PROPOSAL-ROLE-VOCABULARY` | 1 | `supabase/__tests__/plan-proposals-constraints.test.ts` | K2.5 (`09dbd445`) | db-tests | |
-| 32 | `AGENCY-PROPOSAL-PROVENANCE` | 1 | `supabase/__tests__/plan-proposals-constraints.test.ts` | K2.5 (`09dbd445`) | db-tests | |
-| 33 | `AGENCY-PROPOSAL-BOUNDED-QUERY` | 2 | `lib/db/campaign-plan-proposals.test.ts` | K2.10 (`980ff0ae`) | app-tests | |
-| 34 | `AGENCY-FREEZE-SUPERSEDE-ATOMIC` | 1 | `supabase/__tests__/plan-proposals-freeze-supersede.test.ts` | K2.6 (`26e732fc`) | db-tests | |
-| 35 | `AGENCY-SET-REDUNDANCY-CHECKED` | 2 | `lib/campaigns/consistency.redundancy.test.ts` | K2.8 (`28cf8a0e`) | app-tests | |
-| 36 | `AGENCY-PROPOSAL-PAYLOAD-NEUTRALISED` | 2 | `lib/campaigns/planner/__tests__/persist.test.ts`; `supabase/__tests__/planner-persistence.test.ts` | K2.7 (`9f7c44e6`) | db-tests + app-tests | |
-| 37 | `AGENCY-TOOL-RESULTS-GUARDED` | 2+3 | lib/campaigns/planner/__tests__/tools.test.ts (deep-walk); dispatcher half is ADR 0021's: lib/signals/triage/source-scans.test.ts | K2.4 (`b741c078`) | app-tests | |
-| 38 | `AGENCY-TOOL-RESULT-BRANDED` | 2+3 | `lib/ai/tool-result-guard.test.ts`; `lib/campaigns/planner/__tests__/source-scans.test.ts` | K2.3 (`5107c6df`) | app-tests | |
-| 39 | `AGENCY-NO-SEVENTH-SANITIZER` | 3 | `lib/campaigns/planner/__tests__/source-scans.test.ts` | K2.1 (`8c21b052`) | app-tests | |
-| 40 | `AGENCY-NO-UNSAFE-HTML` | 3 | `app/[locale]/(dashboard)/approvals/source-scans.test.ts` | K2.10 (`980ff0ae`) | app-tests | |
-| 41 | `AGENCY-COST-CEILING-EXTENDED` | 1 | `supabase/__tests__/ai-budget-purpose.test.ts` | K2.6 (`26e732fc`) | db-tests | |
-| 42 | `AGENCY-BUDGET-PURPOSE-ISOLATED` | 1 | `supabase/__tests__/ai-budget-purpose.test.ts` | K2.6 (`26e732fc`) | db-tests | |
-| 43 | `AGENCY-NO-SECOND-BUDGET-TABLE` | 3 | `lib/campaigns/planner/__tests__/source-scans.test.ts` | K2.1 (`8c21b052`) | app-tests | |
-| 44 | `AGENCY-GATES-UNCHANGED` | 1+2+3 | lib/campaigns/planner/__tests__/gates-unchanged.test.ts; supabase/__tests__/agency-gates-unchanged.test.ts; Tier-3 transcript in §V.4 | K2.11 (this commit) | db-tests + app-tests | |
-| 45 | `AGENCY-RLS-ISOLATED` | 1 | `supabase/__tests__/plan-proposals-rls.test.ts` | K2.5 (`09dbd445`) | db-tests | |
-| 46 | `AGENCY-CASCADE-COMPLETE` | 1 | `supabase/__tests__/plan-proposals-purge.test.ts` | K2.5 (`09dbd445`) | db-tests | |
+| 1 | `AGENCY-TOOLS-READ-ONLY` | 3 | `lib/campaigns/planner/__tests__/source-scans.test.ts` | K2.1 (`8c21b052`) | app-tests | `998030e8`: app-tests [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) |
+| 2 | `AGENCY-TOOLS-CLOSED-INVENTORY` | 2 | `lib/campaigns/planner/__tests__/tools.test.ts` | K2.4 (`b741c078`) | app-tests | `998030e8`: app-tests [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) |
+| 3 | `AGENCY-TOOLS-TENANT-BOUND` | 1+2 | `lib/campaigns/planner/__tests__/tools.test.ts`; `supabase/__tests__/planner-tools-tenancy.test.ts` | K2.4 (`b741c078`) | db-tests + app-tests | `998030e8`: app-tests [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) + db-tests [35985368440](https://github.com/tcr430/SOSH/actions/runs/35985368440) |
+| 4 | `AGENCY-NO-SERVICE-ROLE-IN-TOOLS` | 3 | `lib/campaigns/planner/__tests__/source-scans.test.ts`; `supabase/__tests__/planner-tools-tenancy.test.ts` | K2.1 (`8c21b052`) | db-tests + app-tests | `998030e8`: app-tests [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) + db-tests [35985368440](https://github.com/tcr430/SOSH/actions/runs/35985368440) |
+| 5 | `AGENCY-NO-WRITE-TOOL` | 3 | `lib/campaigns/planner/__tests__/source-scans.test.ts` | K2.1 (`8c21b052`) | app-tests | `998030e8`: app-tests [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) |
+| 6 | `AGENCY-NO-EGRESS-IN-TOOLS` | 3 | `lib/campaigns/planner/__tests__/source-scans.test.ts` | K2.1 (`8c21b052`) | app-tests | `998030e8`: app-tests [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) |
+| 7 | `AGENCY-QUERY-CONTEXT-NOT-A-PREDICATE` | 3 | `lib/campaigns/planner/__tests__/source-scans.test.ts` | K2.1 (`8c21b052`) | app-tests | `998030e8`: app-tests [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) |
+| 8 | `AGENCY-TOOLS-ONCE-PER-CAMPAIGN` | 2+3 | `lib/campaigns/planner/__tests__/orchestrator.test.ts`; `lib/campaigns/planner/__tests__/source-scans.test.ts` | K2.7 (`9f7c44e6`) | app-tests | `998030e8`: app-tests [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) |
+| 9 | `AGENCY-PLANNER-REQUEST-PATH-ONLY` | 2+3 | `lib/campaigns/planner/__tests__/source-scans.test.ts` (Tier 3); Tier-2 half is the rendered `not_run` state: `app/[locale]/(dashboard)/campaigns/[id]/brief/PlanReviewPanel.test.tsx`, `page.test.tsx`, and the column DEFAULT (row 15) | K2.7 (`9f7c44e6`) | app-tests | `998030e8`: app-tests [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) |
+| 10 | `AGENCY-LOOP-BOUNDS-PARAMETERISED` | 2 | lib/ai/tool-runner-generic.test.ts; lib/ai/tool-runner.test.ts and lib/signals/triage/orchestrator.test.ts run UNMODIFIED | K2.2 (`a28c5ea8`) | app-tests | `998030e8`: app-tests [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) |
+| 11 | `AGENCY-LOOP-SCHEMA-STRICT` | 2+3 | `lib/ai/tool-runner-generic.test.ts`; `lib/campaigns/planner/__tests__/source-scans.test.ts` | K2.2 (`a28c5ea8`) | app-tests | `998030e8`: app-tests [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) |
+| 12 | `AGENCY-LOOP-BOUNDED` | 2 | `lib/campaigns/planner/__tests__/orchestrator.test.ts` | K2.7 (`9f7c44e6`) | app-tests | `998030e8`: app-tests [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) |
+| 13 | `AGENCY-BOUND-FAILURE-DEFINED` | 2 | `lib/campaigns/planner/__tests__/orchestrator.test.ts` | K2.7 (`9f7c44e6`) | app-tests | `998030e8`: app-tests [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) |
+| 14 | `AGENCY-FAILURE-REASONS-RUNTIME` | 2 | `lib/ai/tool-runner-generic.test.ts` | K2.2 (`a28c5ea8`) | app-tests | `998030e8`: app-tests [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) |
+| 15 | `AGENCY-PLAN-STATUS-DEFAULT-NOT-OK` | 1 | `supabase/__tests__/plan-analysis-default.test.ts` | K2.5 (`09dbd445`) | db-tests | `998030e8`: db-tests [35985368440](https://github.com/tcr430/SOSH/actions/runs/35985368440) |
+| 16 | `AGENCY-PLANNER-TRIAL-EXEMPT` | 2 | `lib/ai/tool-runner-generic.test.ts`; `lib/campaigns/planner/__tests__/orchestrator.test.ts` | K2.2 (`a28c5ea8`) | app-tests | `998030e8`: app-tests [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) |
+| 17 | `AGENCY-PLANNER-PROMPT-ID-DISTINCT` | 2 | `lib/ai/tool-runner-generic.test.ts` | K2.2 (`a28c5ea8`) | app-tests | `998030e8`: app-tests [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) |
+| 18 | `AGENCY-CLAIMS-FLAGGED-NEVER-EDITED` | 2+3 | `lib/campaigns/generate.test.ts`; `lib/campaigns/verify-claims.test.ts`; `lib/db/posts.claims.test.ts` | K2.9 (`86657e06`) | app-tests | `998030e8`: app-tests [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) |
+| 19 | `AGENCY-CLAIM-EVIDENCE-TRACEABLE` | 2 | `lib/campaigns/generate.test.ts`; `lib/campaigns/verify-claims.test.ts` | K2.9 (`86657e06`) | app-tests | `998030e8`: app-tests [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) |
+| 20 | `AGENCY-CLAIM-NO-CORPUS-DISTINCT` | 2 | `lib/campaigns/generate.test.ts`; `lib/campaigns/verify-claims.test.ts` | K2.9 (`86657e06`) | app-tests | `998030e8`: app-tests [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) |
+| 21 | `AGENCY-CLAIM-CITED-NOT-SUPPORTED` | 2 | `app/[locale]/(dashboard)/approvals/ClaimFlags.test.tsx`; `app/[locale]/(dashboard)/campaigns/[id]/brief/PlanReviewPanel.test.tsx`; `lib/i18n/agency-parity.test.ts` | K2.10 (`980ff0ae`) | app-tests | `998030e8`: app-tests [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) |
+| 22 | `AGENCY-NO-ELEVENTH-DIMENSION` | 3 | `lib/campaigns/planner/__tests__/source-scans.test.ts` | K2.1 (`8c21b052`) | app-tests | `998030e8`: app-tests [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) |
+| 23 | `AGENCY-VERIFY-CROSS-REFERENCED` | 3 | `lib/campaigns/verify-claims.test.ts` | K2.9 (`86657e06`) | app-tests | `998030e8`: app-tests [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) |
+| 24 | `AGENCY-NO-EVIDENCE-WRITE-SURFACE` | 3 | `lib/campaigns/planner/__tests__/source-scans.test.ts` | K2.1 (`8c21b052`) | app-tests | `998030e8`: app-tests [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) |
+| 25 | `AGENCY-PLANNER-PROPOSES-ONLY` | 2+3 | `lib/campaigns/planner/__tests__/source-scans.test.ts` | K2.7 (`9f7c44e6`) | app-tests | `998030e8`: app-tests [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) |
+| 26 | `AGENCY-FROZEN-BRIEF-CONTRACT-INTACT` | 1+2 | supabase/__tests__/mode2-brief-rls.test.ts (MODE2-BRIEF-FROZEN-GUARD, unmodified since BASE); lib/campaigns/role-sequence.test.ts | K2.8 (`28cf8a0e`) | db-tests + app-tests | `998030e8`: app-tests [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) + db-tests [35985368440](https://github.com/tcr430/SOSH/actions/runs/35985368440) |
+| 27 | `AGENCY-ROLE-SEQUENCE-ORDER-UNIQUE` | 2 | `lib/campaigns/role-sequence.test.ts` | K2.8 (`28cf8a0e`) | app-tests | `998030e8`: app-tests [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) |
+| 28 | `AGENCY-PROPOSAL-TRANSITION-ATOMIC` | 1 | `supabase/__tests__/plan-proposals-atomic.test.ts`; `supabase/__tests__/plan-proposals-transition.test.ts` | K2.6 (`26e732fc`) | db-tests | `998030e8`: db-tests [35985368440](https://github.com/tcr430/SOSH/actions/runs/35985368440) |
+| 29 | `AGENCY-PROPOSAL-DECIDE-VIA-RPC` | 1+3 | supabase/__tests__/plan-proposals-decide-rpc.test.ts; lib/db/campaign-plan-proposals.decide-scan.test.ts (Tier-3 half, added K2.11) | K2.6 (`26e732fc`) | db-tests + app-tests | `998030e8`: app-tests [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) + db-tests [35985368440](https://github.com/tcr430/SOSH/actions/runs/35985368440) |
+| 30 | `AGENCY-PROPOSAL-WRITE-ONCE` | 1 | supabase/__tests__/plan-proposals-transition.test.ts (the write-once cases; the file does not name the constraint) | K2.5 (`09dbd445`) | db-tests | `998030e8`: db-tests [35985368440](https://github.com/tcr430/SOSH/actions/runs/35985368440) |
+| 31 | `AGENCY-PROPOSAL-ROLE-VOCABULARY` | 1 | `supabase/__tests__/plan-proposals-constraints.test.ts` | K2.5 (`09dbd445`) | db-tests | `998030e8`: db-tests [35985368440](https://github.com/tcr430/SOSH/actions/runs/35985368440) |
+| 32 | `AGENCY-PROPOSAL-PROVENANCE` | 1 | `supabase/__tests__/plan-proposals-constraints.test.ts` | K2.5 (`09dbd445`) | db-tests | `998030e8`: db-tests [35985368440](https://github.com/tcr430/SOSH/actions/runs/35985368440) |
+| 33 | `AGENCY-PROPOSAL-BOUNDED-QUERY` | 2 | `lib/db/campaign-plan-proposals.test.ts` | K2.10 (`980ff0ae`) | app-tests | `998030e8`: app-tests [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) |
+| 34 | `AGENCY-FREEZE-SUPERSEDE-ATOMIC` | 1 | `supabase/__tests__/plan-proposals-freeze-supersede.test.ts` | K2.6 (`26e732fc`) | db-tests | `998030e8`: db-tests [35985368440](https://github.com/tcr430/SOSH/actions/runs/35985368440) |
+| 35 | `AGENCY-SET-REDUNDANCY-CHECKED` | 2 | `lib/campaigns/consistency.redundancy.test.ts` | K2.8 (`28cf8a0e`) | app-tests | `998030e8`: app-tests [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) |
+| 36 | `AGENCY-PROPOSAL-PAYLOAD-NEUTRALISED` | 2 | `lib/campaigns/planner/__tests__/persist.test.ts`; `supabase/__tests__/planner-persistence.test.ts` | K2.7 (`9f7c44e6`) | db-tests + app-tests | `998030e8`: app-tests [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) + db-tests [35985368440](https://github.com/tcr430/SOSH/actions/runs/35985368440) |
+| 37 | `AGENCY-TOOL-RESULTS-GUARDED` | 2+3 | lib/campaigns/planner/__tests__/tools.test.ts (deep-walk); dispatcher half is ADR 0021's: lib/signals/triage/source-scans.test.ts | K2.4 (`b741c078`) | app-tests | `998030e8`: app-tests [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) |
+| 38 | `AGENCY-TOOL-RESULT-BRANDED` | 2+3 | `lib/ai/tool-result-guard.test.ts`; `lib/campaigns/planner/__tests__/source-scans.test.ts` | K2.3 (`5107c6df`) | app-tests | `998030e8`: app-tests [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) |
+| 39 | `AGENCY-NO-SEVENTH-SANITIZER` | 3 | `lib/campaigns/planner/__tests__/source-scans.test.ts` | K2.1 (`8c21b052`) | app-tests | `998030e8`: app-tests [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) |
+| 40 | `AGENCY-NO-UNSAFE-HTML` | 3 | `app/[locale]/(dashboard)/approvals/source-scans.test.ts` | K2.10 (`980ff0ae`) | app-tests | `998030e8`: app-tests [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) |
+| 41 | `AGENCY-COST-CEILING-EXTENDED` | 1 | `supabase/__tests__/ai-budget-purpose.test.ts` | K2.6 (`26e732fc`) | db-tests | `998030e8`: db-tests [35985368440](https://github.com/tcr430/SOSH/actions/runs/35985368440) |
+| 42 | `AGENCY-BUDGET-PURPOSE-ISOLATED` | 1 | `supabase/__tests__/ai-budget-purpose.test.ts` | K2.6 (`26e732fc`) | db-tests | `998030e8`: db-tests [35985368440](https://github.com/tcr430/SOSH/actions/runs/35985368440) |
+| 43 | `AGENCY-NO-SECOND-BUDGET-TABLE` | 3 | `lib/campaigns/planner/__tests__/source-scans.test.ts` | K2.1 (`8c21b052`) | app-tests | `998030e8`: app-tests [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) |
+| 44 | `AGENCY-GATES-UNCHANGED` | 1+2+3 | lib/campaigns/planner/__tests__/gates-unchanged.test.ts; supabase/__tests__/agency-gates-unchanged.test.ts; Tier-3 transcript in §V.4 | K2.11 (this commit) | db-tests + app-tests | `998030e8`: app-tests [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) + db-tests [35985368440](https://github.com/tcr430/SOSH/actions/runs/35985368440) |
+| 45 | `AGENCY-RLS-ISOLATED` | 1 | `supabase/__tests__/plan-proposals-rls.test.ts` | K2.5 (`09dbd445`) | db-tests | `998030e8`: db-tests [35985368440](https://github.com/tcr430/SOSH/actions/runs/35985368440) |
+| 46 | `AGENCY-CASCADE-COMPLETE` | 1 | `supabase/__tests__/plan-proposals-purge.test.ts` | K2.5 (`09dbd445`) | db-tests | `998030e8`: db-tests [35985368440](https://github.com/tcr430/SOSH/actions/runs/35985368440) |
 
 `db-tests` is advisory-but-must-be-read until its promotion rule is met (`docs/current-phase.md` holds the tally).
 Constraints 3, 4, 29, 36 span both jobs; each half is a separate obligation.
@@ -2054,4 +2054,23 @@ in front of it, rather than a side effect of clicking Approve.
   run, the alternative considered at K2.12 was to return immediately and prepare the brief in the background with a "preparing
   your brief" state.
 
-_End of Builder verification (K2.11, with the K2.12 and K2.13 addenda). Sections 0-14 above were not modified._
+### V.10 Addendum: CI read at `998030e8` (PR #13). The V.2 last column is now filled; V.6's "CI: not run" is the K2.11 record.
+
+The branch was pushed at K2.13 and both required jobs ran on the head `998030e8` (event `pull_request`, PR #13, base
+`session-33-adr-0026`). Read from the run logs, not the check summary:
+
+| Job | Run | Result |
+|---|---|---|
+| `app-tests` | [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) | `skip-guard: 333 file(s) under [app, lib, components] all visible, zero failures — green. (4837/4837 tests passed)` |
+| `db-tests` | [35985368440](https://github.com/tcr430/SOSH/actions/runs/35985368440) | `skip-guard: 93 file(s) under [supabase/__tests__] all visible, zero failures — green. (782/782 tests passed)`; no `signal 11`, `SIGSEGV`, `OOMKilled` or out-of-memory line in the log |
+
+`eval-reported` and `eval-threshold` also passed, and the Vercel preview deployed. The db-tests count (93 files / 782 tests)
+equals the local run recorded in V.6, and K2.12/K2.13 add no migration, so the K2.11 Tier-1 evidence still describes this head.
+
+**What the last column of V.2 now means, and does not.** Each row names the job(s) that ran its test file(s) green at that head:
+a FILE-level fact, backed by the skip-guard (no file invisible, none red). It is not a claim that every named case inside the
+file is exercised, and constraint 44's Tier-3 part (c) is a pasted transcript, not something CI executes. **No total is
+asserted**; the column is the evidence, row by row, for the Reviewer to check.
+
+**`db-tests` promotion tally: unchanged.** Both runs are `pull_request` events; only consecutive green `master` push runs move it.
+_End of Builder verification (K2.11, with the K2.12, K2.13 and CI addenda). Sections 0-14 above were not modified._
