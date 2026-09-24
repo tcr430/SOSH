@@ -1681,3 +1681,308 @@ when run concurrently with Stage B).
 
 
 
+
+
+---
+
+## Builder verification (K2.11)
+
+> Appended by the Session 34 Builder. **Sections 0-14 above are unchanged.** Range read: `dab25f86..HEAD` on branch
+> `session-34-adr-0027` (BASE `dab25f86` is Session 33-D's D9; the ADR itself entered at `28aa23c6`). "Covered" means
+> executed green in CI at the head it is dated to (ADR 0015 §2). **Nothing in the last column of V.2 is claimed**: the
+> branch had not been pushed when this was written, so no CI run exists for it. Every number in V.6 is a LOCAL run and
+> is labelled as one.
+
+### V.1 Steps and commits
+
+| Step | Commit | Ships |
+|---|---|---|
+| ADR + guide | `28aa23c6` | ADR 0027 (46 constraints) and the Track K build guide |
+| K2.0 | (no commit) | grounding pass: fourteen premises checked against the tree |
+| K2.1 | `8c21b052` | the Tier-3 tripwires first: write-verb, egress, query-context and eleventh-dimension scans |
+| K2.2 | `a28c5ea8` | `runToolLoop` parameterised (bounds, prompt id/version, model, trial flag, strict schema) |
+| K2.3 | `5107c6df` | the `RenderedToolResult` brand and the dispatcher's runtime envelope assertion |
+| K2.4 | `b741c078` | the six planner tools, tenant-bound; `triage/tools.ts` citation corrected |
+| K2.5 | `09dbd445` | `campaign_plan_proposals`, RLS, write-once and transition triggers, the ADR 0010 §D2.5 row |
+| K2.6 | `26e732fc` | the decide / apply / freeze-supersede RPCs; the fourth budget purpose; the first-call-of-day cap fix |
+| K2.7 | `9f7c44e6` | the planner orchestrator, prompt family and persistence; **not wired to any caller** (see V.7) |
+| K2.7-fix | `4d447238` | security-review F2 + F3 (version-scoped apply, closed reason set) |
+| K2.8 | `28cf8a0e` | the shared role-sequence schema (unique `order`) and the deterministic set-redundancy check |
+| K2.9 | `86657e06` | claim verification, the three-module cross-reference, claim checks persisted in generation metadata |
+| K2.10 | `980ff0ae` | the plan-review panel and the claim flags at the approval gate; `agency.json` in en/pt/es |
+| K2.11 | (this step) | `AGENCY-GATES-UNCHANGED`, a Tier-3 half for constraint 29, Tier-3 re-verification, the four amendments, this map |
+
+### V.2 The constraint → CI map
+
+Executing job is by file location (`supabase/__tests__` runs in `db-tests.yml`; everything else in `app-tests.yml`).
+The last column is intentionally **empty**: it is filled only from a CI run that was opened and read, at the head the
+row is dated to. **No total is claimed.** Rows whose test file does not carry the constraint's name are marked in the
+file column (30, 44, and the halves noted on 9, 10, 26, 29, 37).
+
+| # | Constraint | Tier | Test file(s) | Closing step (SHA) | Executing CI job | Executed green in CI at |
+|---|---|---|---|---|---|---|
+| 1 | `AGENCY-TOOLS-READ-ONLY` | 3 | `lib/campaigns/planner/__tests__/source-scans.test.ts` | K2.1 (`8c21b052`) | app-tests | |
+| 2 | `AGENCY-TOOLS-CLOSED-INVENTORY` | 2 | `lib/campaigns/planner/__tests__/tools.test.ts` | K2.4 (`b741c078`) | app-tests | |
+| 3 | `AGENCY-TOOLS-TENANT-BOUND` | 1+2 | `lib/campaigns/planner/__tests__/tools.test.ts`; `supabase/__tests__/planner-tools-tenancy.test.ts` | K2.4 (`b741c078`) | db-tests + app-tests | |
+| 4 | `AGENCY-NO-SERVICE-ROLE-IN-TOOLS` | 3 | `lib/campaigns/planner/__tests__/source-scans.test.ts`; `supabase/__tests__/planner-tools-tenancy.test.ts` | K2.1 (`8c21b052`) | db-tests + app-tests | |
+| 5 | `AGENCY-NO-WRITE-TOOL` | 3 | `lib/campaigns/planner/__tests__/source-scans.test.ts` | K2.1 (`8c21b052`) | app-tests | |
+| 6 | `AGENCY-NO-EGRESS-IN-TOOLS` | 3 | `lib/campaigns/planner/__tests__/source-scans.test.ts` | K2.1 (`8c21b052`) | app-tests | |
+| 7 | `AGENCY-QUERY-CONTEXT-NOT-A-PREDICATE` | 3 | `lib/campaigns/planner/__tests__/source-scans.test.ts` | K2.1 (`8c21b052`) | app-tests | |
+| 8 | `AGENCY-TOOLS-ONCE-PER-CAMPAIGN` | 2+3 | `lib/campaigns/planner/__tests__/orchestrator.test.ts`; `lib/campaigns/planner/__tests__/source-scans.test.ts` | K2.7 (`9f7c44e6`) | app-tests | |
+| 9 | `AGENCY-PLANNER-REQUEST-PATH-ONLY` | 2+3 | `lib/campaigns/planner/__tests__/source-scans.test.ts` (Tier 3); Tier-2 half is the rendered `not_run` state: `app/[locale]/(dashboard)/campaigns/[id]/brief/PlanReviewPanel.test.tsx`, `page.test.tsx`, and the column DEFAULT (row 15) | K2.7 (`9f7c44e6`) | app-tests | |
+| 10 | `AGENCY-LOOP-BOUNDS-PARAMETERISED` | 2 | lib/ai/tool-runner-generic.test.ts; lib/ai/tool-runner.test.ts and lib/signals/triage/orchestrator.test.ts run UNMODIFIED | K2.2 (`a28c5ea8`) | app-tests | |
+| 11 | `AGENCY-LOOP-SCHEMA-STRICT` | 2+3 | `lib/ai/tool-runner-generic.test.ts`; `lib/campaigns/planner/__tests__/source-scans.test.ts` | K2.2 (`a28c5ea8`) | app-tests | |
+| 12 | `AGENCY-LOOP-BOUNDED` | 2 | `lib/campaigns/planner/__tests__/orchestrator.test.ts` | K2.7 (`9f7c44e6`) | app-tests | |
+| 13 | `AGENCY-BOUND-FAILURE-DEFINED` | 2 | `lib/campaigns/planner/__tests__/orchestrator.test.ts` | K2.7 (`9f7c44e6`) | app-tests | |
+| 14 | `AGENCY-FAILURE-REASONS-RUNTIME` | 2 | `lib/ai/tool-runner-generic.test.ts` | K2.2 (`a28c5ea8`) | app-tests | |
+| 15 | `AGENCY-PLAN-STATUS-DEFAULT-NOT-OK` | 1 | `supabase/__tests__/plan-analysis-default.test.ts` | K2.5 (`09dbd445`) | db-tests | |
+| 16 | `AGENCY-PLANNER-TRIAL-EXEMPT` | 2 | `lib/ai/tool-runner-generic.test.ts`; `lib/campaigns/planner/__tests__/orchestrator.test.ts` | K2.2 (`a28c5ea8`) | app-tests | |
+| 17 | `AGENCY-PLANNER-PROMPT-ID-DISTINCT` | 2 | `lib/ai/tool-runner-generic.test.ts` | K2.2 (`a28c5ea8`) | app-tests | |
+| 18 | `AGENCY-CLAIMS-FLAGGED-NEVER-EDITED` | 2+3 | `lib/campaigns/generate.test.ts`; `lib/campaigns/verify-claims.test.ts`; `lib/db/posts.claims.test.ts` | K2.9 (`86657e06`) | app-tests | |
+| 19 | `AGENCY-CLAIM-EVIDENCE-TRACEABLE` | 2 | `lib/campaigns/generate.test.ts`; `lib/campaigns/verify-claims.test.ts` | K2.9 (`86657e06`) | app-tests | |
+| 20 | `AGENCY-CLAIM-NO-CORPUS-DISTINCT` | 2 | `lib/campaigns/generate.test.ts`; `lib/campaigns/verify-claims.test.ts` | K2.9 (`86657e06`) | app-tests | |
+| 21 | `AGENCY-CLAIM-CITED-NOT-SUPPORTED` | 2 | `app/[locale]/(dashboard)/approvals/ClaimFlags.test.tsx`; `app/[locale]/(dashboard)/campaigns/[id]/brief/PlanReviewPanel.test.tsx`; `lib/i18n/agency-parity.test.ts` | K2.10 (`980ff0ae`) | app-tests | |
+| 22 | `AGENCY-NO-ELEVENTH-DIMENSION` | 3 | `lib/campaigns/planner/__tests__/source-scans.test.ts` | K2.1 (`8c21b052`) | app-tests | |
+| 23 | `AGENCY-VERIFY-CROSS-REFERENCED` | 3 | `lib/campaigns/verify-claims.test.ts` | K2.9 (`86657e06`) | app-tests | |
+| 24 | `AGENCY-NO-EVIDENCE-WRITE-SURFACE` | 3 | `lib/campaigns/planner/__tests__/source-scans.test.ts` | K2.1 (`8c21b052`) | app-tests | |
+| 25 | `AGENCY-PLANNER-PROPOSES-ONLY` | 2+3 | `lib/campaigns/planner/__tests__/source-scans.test.ts` | K2.7 (`9f7c44e6`) | app-tests | |
+| 26 | `AGENCY-FROZEN-BRIEF-CONTRACT-INTACT` | 1+2 | supabase/__tests__/mode2-brief-rls.test.ts (MODE2-BRIEF-FROZEN-GUARD, unmodified since BASE); lib/campaigns/role-sequence.test.ts | K2.8 (`28cf8a0e`) | db-tests + app-tests | |
+| 27 | `AGENCY-ROLE-SEQUENCE-ORDER-UNIQUE` | 2 | `lib/campaigns/role-sequence.test.ts` | K2.8 (`28cf8a0e`) | app-tests | |
+| 28 | `AGENCY-PROPOSAL-TRANSITION-ATOMIC` | 1 | `supabase/__tests__/plan-proposals-atomic.test.ts`; `supabase/__tests__/plan-proposals-transition.test.ts` | K2.6 (`26e732fc`) | db-tests | |
+| 29 | `AGENCY-PROPOSAL-DECIDE-VIA-RPC` | 1+3 | supabase/__tests__/plan-proposals-decide-rpc.test.ts; lib/db/campaign-plan-proposals.decide-scan.test.ts (Tier-3 half, added K2.11) | K2.6 (`26e732fc`) | db-tests + app-tests | |
+| 30 | `AGENCY-PROPOSAL-WRITE-ONCE` | 1 | supabase/__tests__/plan-proposals-transition.test.ts (the write-once cases; the file does not name the constraint) | K2.5 (`09dbd445`) | db-tests | |
+| 31 | `AGENCY-PROPOSAL-ROLE-VOCABULARY` | 1 | `supabase/__tests__/plan-proposals-constraints.test.ts` | K2.5 (`09dbd445`) | db-tests | |
+| 32 | `AGENCY-PROPOSAL-PROVENANCE` | 1 | `supabase/__tests__/plan-proposals-constraints.test.ts` | K2.5 (`09dbd445`) | db-tests | |
+| 33 | `AGENCY-PROPOSAL-BOUNDED-QUERY` | 2 | `lib/db/campaign-plan-proposals.test.ts` | K2.10 (`980ff0ae`) | app-tests | |
+| 34 | `AGENCY-FREEZE-SUPERSEDE-ATOMIC` | 1 | `supabase/__tests__/plan-proposals-freeze-supersede.test.ts` | K2.6 (`26e732fc`) | db-tests | |
+| 35 | `AGENCY-SET-REDUNDANCY-CHECKED` | 2 | `lib/campaigns/consistency.redundancy.test.ts` | K2.8 (`28cf8a0e`) | app-tests | |
+| 36 | `AGENCY-PROPOSAL-PAYLOAD-NEUTRALISED` | 2 | `lib/campaigns/planner/__tests__/persist.test.ts`; `supabase/__tests__/planner-persistence.test.ts` | K2.7 (`9f7c44e6`) | db-tests + app-tests | |
+| 37 | `AGENCY-TOOL-RESULTS-GUARDED` | 2+3 | lib/campaigns/planner/__tests__/tools.test.ts (deep-walk); dispatcher half is ADR 0021's: lib/signals/triage/source-scans.test.ts | K2.4 (`b741c078`) | app-tests | |
+| 38 | `AGENCY-TOOL-RESULT-BRANDED` | 2+3 | `lib/ai/tool-result-guard.test.ts`; `lib/campaigns/planner/__tests__/source-scans.test.ts` | K2.3 (`5107c6df`) | app-tests | |
+| 39 | `AGENCY-NO-SEVENTH-SANITIZER` | 3 | `lib/campaigns/planner/__tests__/source-scans.test.ts` | K2.1 (`8c21b052`) | app-tests | |
+| 40 | `AGENCY-NO-UNSAFE-HTML` | 3 | `app/[locale]/(dashboard)/approvals/source-scans.test.ts` | K2.10 (`980ff0ae`) | app-tests | |
+| 41 | `AGENCY-COST-CEILING-EXTENDED` | 1 | `supabase/__tests__/ai-budget-purpose.test.ts` | K2.6 (`26e732fc`) | db-tests | |
+| 42 | `AGENCY-BUDGET-PURPOSE-ISOLATED` | 1 | `supabase/__tests__/ai-budget-purpose.test.ts` | K2.6 (`26e732fc`) | db-tests | |
+| 43 | `AGENCY-NO-SECOND-BUDGET-TABLE` | 3 | `lib/campaigns/planner/__tests__/source-scans.test.ts` | K2.1 (`8c21b052`) | app-tests | |
+| 44 | `AGENCY-GATES-UNCHANGED` | 1+2+3 | lib/campaigns/planner/__tests__/gates-unchanged.test.ts; supabase/__tests__/agency-gates-unchanged.test.ts; Tier-3 transcript in §V.4 | K2.11 (this commit) | db-tests + app-tests | |
+| 45 | `AGENCY-RLS-ISOLATED` | 1 | `supabase/__tests__/plan-proposals-rls.test.ts` | K2.5 (`09dbd445`) | db-tests | |
+| 46 | `AGENCY-CASCADE-COMPLETE` | 1 | `supabase/__tests__/plan-proposals-purge.test.ts` | K2.5 (`09dbd445`) | db-tests | |
+
+`db-tests` is advisory-but-must-be-read until its promotion rule is met (`docs/current-phase.md` holds the tally).
+Constraints 3, 4, 29, 36 span both jobs; each half is a separate obligation.
+
+### V.3 Tier-3 re-verification at HEAD (local, before push)
+
+**Step 1, run.** Every scan file was run at `980ff0ae` plus the K2.11 working tree, with the verbose reporter:
+
+| File | Result | Constraints it carries |
+|---|---|---|
+| `lib/campaigns/planner/__tests__/source-scans.test.ts` | 51 passed | 1, 4, 5, 6, 7, 22, 24, 39, 43, and the scan halves of 8, 9, 11, 25, 38 |
+| `lib/campaigns/verify-claims.test.ts` | 27 passed | 23, and the scan half of 18 |
+| `app/[locale]/(dashboard)/approvals/source-scans.test.ts` | 1 passed | 40 |
+| `lib/db/campaign-plan-proposals.decide-scan.test.ts` | 4 passed | the Tier-3 half of 29 (added K2.11, see V.7 item 4) |
+| `lib/signals/triage/source-scans.test.ts` | 3 passed | the dispatcher half of 37 (ADR 0021's, not duplicated) |
+| `lib/ai/tool-result-guard.test.ts` | passed (the first three files plus this one ran together: 4 files, 110 tests) | 38 (type-level brand and runtime envelope) |
+
+**Step 2, redden against the REAL tree.** A scan that has never failed is a comment with a test runner attached.
+Each row: a violation planted in a real production file, the named scan run, the file restored (`git diff --quiet`
+confirmed clean after each). Output is the runner's own.
+
+| Plant | File and size of the plant | Result | Failing test(s) |
+|---|---|---|---|
+| #1/#5 write verb in a planner file | `lib/campaigns/planner/tools.ts` (+2/-0) | 1 failed, 50 passed (51) | × lib/campaigns/planner/** contains no write verb |
+| #4 dynamic service-role import in a planner file | `lib/campaigns/planner/tools.ts` (+2/-0) | 1 failed, 50 passed (51) | × lib/campaigns/planner/** reaches no service-role client |
+| #6 fetch in a planner file | `lib/campaigns/planner/orchestrator.ts` (+2/-0) | 1 failed, 50 passed (51) | × lib/campaigns/planner/** makes no network call and imports no HTTP client or provider |
+| #7 query context named in a lib/db candidate reader | `lib/db/memory-brand.ts` (+2/-0) | 1 failed, 50 passed (51) | × the three lib/db candidate readers never name the query context |
+| #22 an eleventh rubric dimension | `lib/ai/prompts/rubric.ts` (+1/-0) | 1 failed, 50 passed (51) | × lib/ai/prompts/rubric.ts carries exactly the ten dimensions, in order, in the schema AND the prompt |
+| #23 sibling path removed from a cross-reference | `lib/studio/verify.ts` (+1/-1) | 1 failed, 26 passed (27) | × lib/studio/verify.ts carries a cross-reference COMMENT naming BOTH of the other two by current path |
+| #24 an evidence_memory write outside the two named files | `lib/campaigns/generate.ts` (+2/-0) | 2 failed, 49 passed (51) | × production TS touches a write path to evidence_memory ONLY in the two named files, and in BOTH of them; × no planner, campaign or approvals surface carries a create-shaped evidence affordance |
+| #39 a sixth sanitizeDataField | `lib/campaigns/generate.ts` (+2/-0) | 1 failed, 50 passed (51) | × exactly the five known copies exist in production code — a sixth anywhere fails, and so does a stale entry |
+| #25 a brief writer imported by the planner | `lib/campaigns/planner/orchestrator.ts` (+3/-0) | 1 failed, 50 passed (51) | × lib/campaigns/planner/** has no write path to campaign_briefs, and the scan saw the module set |
+| #9 the planner imported by a worker-side assembleBrief caller | `lib/signals/seed.ts` (+3/-0) | 2 failed, 49 passed (51) | × no module that acquires the service-role client imports the planner, and both sets are non-empty; × the two worker-side assembleBrief callers do not import the planner |
+| #38 a cast to RenderedToolResult | `lib/campaigns/generate.ts` (+2/-0) | 1 failed, 50 passed (51) | × no cast to a tool-result brand exists outside the minting module, and the module DOES mint them (anti-stale) |
+| #18 the verifier importing the posts module | `lib/campaigns/verify-claims.ts` (+3/-0) | 1 failed, 26 passed (27) | × imports no database, supabase or posts module (only the bound-evidence TYPE, the claim TYPE and a db TYPE) |
+| #43 a second budget table (scratch migration, deleted) | `supabase/migrations/20990101000000_plant_budget.sql` (scratch, deleted) | 1 failed, 50 passed (51) | × across every migration the budget tables are exactly the allowlist |
+| #11 a status field in the planner decision schema | `lib/ai/prompts/campaign-planner.ts` (+1/-0) | 1 failed, 50 passed (51) | × no decision schema under the loop or its consumers carries a verdict-shaped field, and the scan saw at least one |
+| #8 planner tools CONSTRUCTED in the generation fan-out file (a call, not just an import) | `lib/campaigns/generate.ts` (+3/-0) | 3 failed, 48 passed (51) | × generate.ts (the candidate fan-out) neither builds planner tools nor runs the loop; × buildPlannerTools is constructed at exactly one production site, outside any fan-out; × no module that acquires the service-role client imports the planner |
+| #40 `dangerouslySetInnerHTML` planted in `ClaimFlags.tsx` | `app/[locale]/(dashboard)/approvals/ClaimFlags.tsx` (+1) | 1 failed, 0 passed (1) | × no source file under either surface uses dangerouslySetInnerHTML (run at K2.10 and K2.11, restored) |
+| #29 (new scan) an `.update({ status })` chained off the table | `lib/db/campaign-plan-proposals.ts` (+2) | 1 failed, 3 passed (4) | × exactly one production module names the table, and it issues no update, delete or upsert against it |
+| #29 (new scan) a second module naming the table | `lib/campaigns/generate.ts` (+2) | 1 failed, 3 passed (4) | × exactly one production module names the table, and it issues no update, delete or upsert against it |
+
+Two honest notes on that table. **First**, the first #11 plant used the field name `verdict` and the scan stayed green:
+that was a wrong plant, not a hole. The detector forbids `applied | status | approved | verified` (its own negative
+test allows `verdict`, deliberately). It was re-planted with `status` and reddened. **Second**, the first #8 plant
+was an *import* of `buildPlannerTools` with no call; the constraint's own scans stayed green and a different
+constraint's scan (#9) caught it. Re-planted as an actual construction, all three scans failed. An import is not a
+construction, and the detector counts constructions.
+
+**Not reddened here, and why.** Constraint 29 had **no** source-side scan before K2.11, only the live grant query;
+that gap is closed in V.7 item 4 rather than papered over. The dispatcher half of 37 belongs to ADR 0021 and is run,
+not reddened here, so that two constraints do not own one assertion.
+
+### V.4 `AGENCY-GATES-UNCHANGED` (constraint 44), in three parts, deliberately not a manifest scan
+
+**(a) Tier 2, the real constraint.** `lib/campaigns/planner/__tests__/gates-unchanged.test.ts` (6 tests). A REAL
+`planBrief` run (real `setBriefPlanAnalysis`, real `createBrief`) against a recording client, for each way a planner
+run can end (proposed two, proposed nothing, unavailable, capped): exactly one write to `campaign_briefs`, `update`,
+with the key set exactly `[plan_analysis_reason, plan_analysis_status]`; no write on any table carries an
+approved/scheduled/published status; no `rpc`. `createBrief` writes `status: 'draft'` and has arity 3, so nothing can
+pick another status. **Reddening mutation (run, reverted):** `setBriefPlanAnalysis` made to also write
+`status: 'approved'`:
+
+```
+× a real planBrief run that proposed two writes ONLY the two plan_analysis columns to campaign_briefs
+× a real planBrief run that proposed nothing writes ONLY the two plan_analysis columns to campaign_briefs
+× a real planBrief run that is unavailable writes ONLY the two plan_analysis columns to campaign_briefs
+× a real planBrief run that is capped writes ONLY the two plan_analysis columns to campaign_briefs
+AssertionError: expected [ 'plan_analysis_reason', …(2) ] to deeply equal [ 'plan_analysis_reason', …(1) ]
+      Tests  4 failed | 2 passed (6)
+```
+
+**(b) Tier 1, the invariant the gate rests on.** `supabase/__tests__/agency-gates-unchanged.test.ts` (7 tests, live
+local Postgres). Through the REAL `lib/db/posts.ts` functions, each refusal paired with a positive control (an approved
+twin succeeds): `schedulePost` refuses a draft; `updatePost`'s transition map admits no `draft -> scheduled|published`
+and throws before any write; `claim_posts_for_publishing` claims the due approved post and never the due draft;
+`listPostsDue` likewise; `publish_post_complete` returns null for a draft and for an approved post; an editor cannot
+grant approval; and a draft an editor raw-writes to `scheduled` is **still never claimed**. **Reddening (each run, then
+reverted; the SQL one restored from the migration and verified):**
+
+| Mutant | Failing test |
+|---|---|
+| `schedulePost` loses `.eq('status','approved')` | × schedulePost refuses a draft ... |
+| `listPostsDue` lists drafts too | × listPostsDue lists the due APPROVED post and not the DRAFT |
+| `updatePost`'s map admits `draft -> published` | × the generic updatePost transition map admits no draft -> scheduled / published ... |
+| `claim_posts_for_publishing` selects `IN ('draft','approved')` (local DB, restored) | × claim_posts_for_publishing claims the due APPROVED post and never the due DRAFT |
+
+**What (b) does not claim** (recorded in the test header and in `docs/backlog.md`): the posts trigger
+(`20260702120300`, `enforce_post_transition_capability`) gates only the *grant of approval*. An `author`-capability
+holder CAN raw-write `draft -> scheduled` and `draft -> published` on their own row through RLS (probed live at K2.11:
+both returned the row with the new status). That is a state-integrity gap, **not a publication bypass**: no worker path
+consumes a row because it is `scheduled`, only rows `claim_posts_for_publishing` returned from `approved`. It predates
+this session and is not fixed here.
+
+**(c) Tier 3, honestly labelled: "this diff adds no new path from generation to publication."** Pasted output, not a
+summary. Generated at the K2.11 working tree against BASE `dab25f86`, new test files marked intent-to-add so the diff
+sees them:
+
+```
+$ git rev-parse --short HEAD
+980ff0ae
+
+$ git diff --stat dab25f86 -- lib/social lib/publishing app/api
+(no output above = no file under those paths changed)
+
+$ git diff --name-status dab25f86 -- supabase/migrations   # migrations added by Session 34
+A	supabase/migrations/20260922100000_campaign_plan_proposals.sql
+A	supabase/migrations/20260922110000_campaign_plan_proposal_rpcs.sql
+A	supabase/migrations/20260923100000_plan_proposal_version_scope_and_reason_check.sql
+
+$ git diff dab25f86 -- supabase/migrations | grep -E '^[+-]' | grep -iE 'claim_posts_for_publishing|publish_post_complete|on public.posts|update public.posts|posts_status|enforce_post_transition'
+(no output above = no migration in the range touches the posts gate)
+
+$ git diff -U0 dab25f86 -- lib app components scripts ':!*.test.ts' ':!*.test.tsx' | grep -E '^[+-][^+-]' | grep -nE "<gate patterns>"   # PRODUCTION code only
+(no output above = no production line added or removed at a gate call site)
+
+$ git diff -U0 dab25f86 -- lib app components scripts supabase/__tests__ ':(glob)**/*.test.ts' ':(glob)**/*.test.tsx' | grep -E '^[+-][^+-]' | grep -nE "<gate patterns>"   # TEST code, every hit accounted for
+810:+    expect(PlannerDecisionSchema.safeParse({ proposals: [ok], status: 'approved' }).success).toBe(false)
+1483:+    mockCreate.mockResolvedValueOnce(textResponse(JSON.stringify({ ...PLANNER_DECISION, status: 'approved' })))
+2836:+    expect(findEgress("import { publish } from '@/lib/social'", rel)).toEqual(['social provider import @/lib/social'])
+2837:+    expect(findEgress("import { x } from '@/lib/social/providers/linkedin'", rel)).toEqual([
+5743:+      status: 'published',
+
+$ git diff -U0 dab25f86 -- lib/db/posts.ts | grep -E '^[-+]export|^[-+]\s*\.(eq|in|update|insert|rpc)\('
++export async function listClaimChecksByPostIds(
++    .in('id', postIds)
++export type SetClaimResolutionResult = 'ok' | 'conflict' | 'not_found' | 'not_checked' | 'no_such_claim'
++export async function setPostClaimResolution(
++    .eq('id', postId)
++    .update({ ai_generation_metadata: { ...metadata, claimCheck: { ...check, claims } } })
++    .eq('id', postId)
++    .eq('updated_at', row.updated_at)
+```
+
+The test-code hits, each attributed to a file (`git diff -U0 dab25f86` over the test globs, gate patterns):
+
+```
+lib/ai/prompts/campaign-planner.test.ts	+    expect(PlannerDecisionSchema.safeParse({ proposals: [ok], status: 'approved' }).success).toBe(false)
+lib/ai/tool-runner-generic.test.ts	+    mockCreate.mockResolvedValueOnce(textResponse(JSON.stringify({ ...PLANNER_DECISION, status: 'approved' })))
+lib/campaigns/planner/__tests__/gates-unchanged.test.ts	+// write to campaign_briefs) also write `status: 'approved'` -> every case in the first describe fails.
+lib/campaigns/planner/__tests__/source-scans.test.ts	+    expect(findEgress("import { publish } from '@/lib/social'", rel)).toEqual(['social provider import @/lib/social'])
+lib/campaigns/planner/__tests__/source-scans.test.ts	+    expect(findEgress("import { x } from '@/lib/social/providers/linkedin'", rel)).toEqual([
+supabase/__tests__/agency-gates-unchanged.test.ts	+import { schedulePost, updatePost, listPostsDue, claimPostsForPublishing, publishPostComplete } from '@/lib/db/posts'
+supabase/__tests__/agency-gates-unchanged.test.ts	+//   draft -> approved (approver capability, DB trigger) -> claim_posts_for_publishing (selects ONLY
+supabase/__tests__/agency-gates-unchanged.test.ts	+//   status='approved') -> scheduled -> publish_post_complete (guarded by status='scheduled').
+supabase/__tests__/agency-gates-unchanged.test.ts	+// SHARED-FUNCTION CALLERS (ADR 0015), each `git grep`-ed at K2.11: claimPostsForPublishing <- lib/publishing/
+supabase/__tests__/agency-gates-unchanged.test.ts	+// orchestrator.ts:92 (the publish cron) — asserted here on the real function. schedulePost and listPostsDue have
+supabase/__tests__/agency-gates-unchanged.test.ts	+  it('schedulePost refuses a draft (zero rows, throws) and leaves it draft; its approved twin schedules (positive control)', async () => {
+supabase/__tests__/agency-gates-unchanged.test.ts	+    await expect(schedulePost(admin, draftId)).rejects.toThrow(/Cannot coerce|not found or not in 'approved' status/)
+supabase/__tests__/agency-gates-unchanged.test.ts	+    const scheduled = await schedulePost(admin, approvedId)
+supabase/__tests__/agency-gates-unchanged.test.ts	+  it('claim_posts_for_publishing claims the due APPROVED post and never the due DRAFT (positive control + refusal)', async () => {
+supabase/__tests__/agency-gates-unchanged.test.ts	+    const claimed = await claimPostsForPublishing(admin, 1000, new Date('2026-08-01T00:00:00Z'))
+supabase/__tests__/agency-gates-unchanged.test.ts	+  it("publish_post_complete is guarded by status='scheduled': null for a draft and for an approved post, mutating neither", async () => {
+supabase/__tests__/agency-gates-unchanged.test.ts	+      const row = await publishPostComplete(admin, id, {
+supabase/__tests__/agency-gates-unchanged.test.ts	+      expect(row, `publishPostComplete on ${id}`).toBeNull()
+supabase/__tests__/agency-gates-unchanged.test.ts	+    const { error } = await client.from('posts').update({ status: 'approved' }).eq('id', draftId)
+supabase/__tests__/agency-gates-unchanged.test.ts	+    await client.from('posts').update({ status: 'scheduled' }).eq('id', draftId)
+supabase/__tests__/agency-gates-unchanged.test.ts	+    const claimed = await claimPostsForPublishing(admin, 1000, new Date('2026-08-01T00:00:00Z'))
+supabase/__tests__/planner-tools-tenancy.test.ts	+      status: 'published',
+```
+
+Every hit is accounted for: the first two are assertions that the planner **schema rejects** a `status: 'approved'`
+field; the `source-scans` hits are planted-egress unit tests naming `@/lib/social`; the `gates-unchanged` hit is a
+comment; the `agency-gates-unchanged` hits are constraint 44's own Tier-1 assertions; `planner-tools-tenancy` seeds a
+fixture row. **No production line was added or removed at a gate call site, no migration touches the posts gate, and
+nothing under `lib/social`, `lib/publishing` or `app/api` changed.** `lib/db/posts.ts` grew by two functions, both about
+claim checks; the one `.update` writes only `ai_generation_metadata` and is guarded on `updated_at`.
+
+### V.5 Tier E: none declared
+
+Planner acceptance rate is *instrumented*: it is derivable from `campaign_plan_proposals.status` with no new
+mechanism. It is a **product metric, not a constraint**. Declaring a Tier-E row for it would be the shortcut ADR 0015
+Amendment B(b) forbids. **This is not an omission.** No Tier-E row exists for Session 34.
+
+### V.6 Verification, LOCAL runs only (not CI)
+
+- `npx tsc --noEmit --skipLibCheck`: clean.
+- `npx eslint` on the changed surfaces: 0 errors (warnings pre-existing).
+- `test:app` equivalent (`vitest run app/ lib/ components/ scripts/eval/`) with `app-tests.yml`'s dummy env:
+  **330 files passed, 1 failed; 4780 tests passed, 1 failed (4781).** The one failure is
+  `lib/signals/__fixtures__/eval/corpus-v2-schema.test.ts`, the known full-suite-only flake recorded in
+  `.wolf/buglog.json`; it passes alone (5/5, run twice). Without the dummy env five other files also fail at import on
+  a missing `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`; that is the documented local baseline, not a regression.
+- `test:db` equivalent (`vitest run supabase/__tests__ --no-file-parallelism --retry=2`) against the LOCAL Supabase
+  stack: **93 files, 782 tests, all passed** (K2.7's recorded local run was 91 files / 765 tests).
+- **CI: not run.** The branch is not pushed. The db-tests tally, its event type and the three-green promotion count
+  are recorded in `docs/current-phase.md` only from a run that was opened.
+
+### V.7 What this step found
+
+1. **ADR 0024 §7.5b's amendment did not exist.** K2.6's commit subject says "(+ ADR 0024 Section 7.5b fourth
+   purpose)"; that commit touched no ADR. Fixed here (ADR 0024 §18), with the correction recorded in the section itself.
+2. **K2.6 also fixed a cap bug that affects every budget purpose**: `reserve_ai_budget`'s first reservation of the day
+   was unguarded. ADR 0024 §18 records it, since §7.5b's "the cap check is atomic" was true of the update path only.
+3. **The D2.5 cascade row landed in the same commit as its migration** (`09dbd445`), so there is no GDPR finding
+   against this session's own work.
+4. **Constraint 29 had no source-side half.** Only the live `information_schema` grant assertion existed. Added
+   `lib/db/campaign-plan-proposals.decide-scan.test.ts` (4 tests, two real-tree reddens).
+5. **Constraint 30 is proved by tests that do not carry its name** (`plan-proposals-transition.test.ts`'s write-once
+   cases). Mapped honestly in V.2 rather than left as a false gap.
+6. **`planBrief` has no production caller, and the premise behind ADR §2.7 is false at HEAD.** §2.7 says
+   `assembleBrief` has three production callers, the first a "brief surface". It has two, both worker-side
+   (`promote.ts`, `seed.ts`), and ruling A-8 gives those no planner. K2.7 shipped `planBrief` unwired by user ruling and
+   said so. Consequence: **the planner cannot run on any path in the product today**, every brief renders the `not_run`
+   state, and no p95 has been or can be measured. A stale comment in `plan-brief.test.ts` naming a non-existent caller
+   was corrected. Wiring it is a product decision (which request path produces a brief), recorded in
+   `docs/backlog.md`.
+7. **The posts trigger does not stop an author raw-writing `scheduled` or `published`** (V.4 (b)). Not a bypass;
+   recorded.
+8. **Line references in the build guide have drifted.** §10.3 item 2 cites `posts.ts:226/:418/:492/:654`; at HEAD the
+   map is still at `:226` but the three `.eq('status','approved')` guards are at `:488`, `:562`, `:724`, and of those
+   only `schedulePost` (`:480`) and `listPostsDue` (`:717`) guard publication; `:562` is `unapprovePost`. Neither
+   `schedulePost` nor `listPostsDue` has a production caller; the live publication gate is
+   `claim_posts_for_publishing`, called from `lib/publishing/orchestrator.ts:92`.
+9. **`generate.ts` gained a sixth structured `console.log`** (`campaign.generate.redundancy_flagged`, K2.8). The file
+   already had five at BASE, so this follows its existing pattern; noted against CLAUDE.md's "one canonical line"
+   carve-out.
+
+_End of Builder verification (K2.11). Sections 0-14 above were not modified._

@@ -117,7 +117,7 @@ Schema-enforced output eliminates the bug class rather than hardening against it
 
 ## 3. Tier 2 — Architectural, and where the real jump lives
 
-### T2.1 — Let the generator look things up
+### T2.1 — Let the generator look things up — **SHIPPED (Session 34, ADR 0027)**
 
 **The biggest structural miss in the layer.** `runToolLoop` (`lib/ai/tool-runner.ts:219`) exists, is
 bounded by named constants, and is proven in Stage C triage — and **the generator cannot use it**. The
@@ -133,7 +133,7 @@ being able to check what that company has already said.
 - This is what the strategy doc's "AI research before writing" means in this codebase: **wiring, not new
   infrastructure.**
 
-### T2.2 — Verify claims against evidence, and flag the unsupported ones
+### T2.2 — Verify claims against evidence, and flag the unsupported ones — **SHIPPED (Session 34, ADR 0027)**
 
 Extract every factual claim from a draft, match each against `evidence_memory` — which already carries
 source, date, confidence and permission-to-use — and mark the unsupported ones at the approval gate:
@@ -160,7 +160,7 @@ codebase and it is currently used for one of the three things it could do. It sh
 This is what turns "we store your edits" into "the system measurably converges on you," which is the
 claim the whole product rests on.
 
-### T2.4 — Let the model plan the campaign, not just fill it
+### T2.4 — Let the model plan the campaign, not just fill it — **BUILT, NOT YET REACHABLE (Session 34, ADR 0027)**
 
 **The one failure mode the rubric structurally cannot catch: a well-written post that should not exist.**
 
@@ -910,9 +910,9 @@ not incidental.
 | T1.2 best-of-N judging | reversible + verifiable | rubric scores the candidates; a bad pick is a worse draft, nothing more |
 | T1.3 thinking budgets | reversible + verifiable | changes reasoning, not reach |
 | T1.4 / §10.2 query conditioning | reversible + verifiable | retrieval only |
-| T2.1 generator tools | reversible + verifiable | **read-only**, authenticated client, bounded loop |
-| T2.2 claim verification | reversible + verifiable | flags, never edits |
-| T2.4 campaign planner | reversible + **not** verifiable | proposes against the frozen brief; human ratifies at an existing checkpoint |
+| T2.1 generator tools **(shipped, ADR 0027 §10.5)** | reversible + verifiable | read-only, closed inventory of six, authenticated client, caller-bound tenancy, bounded loop, no egress, no provider. A bad lookup produces a worse proposal, nothing more |
+| T2.2 claim verification **(shipped, ADR 0027 §10.5)** | reversible + verifiable | its only action is to render a flag; the oracle is an id-set intersection (automatic, no human needed to know it was wrong). Full autonomy is correct because it cannot act, and the copy says "cited", not "verified", so the limit of the oracle is disclosed too |
+| T2.4 campaign planner **(built, not yet reachable: ADR 0027 §V.7 item 6)** | reversible + **not** verifiable | autonomy -> human gate. Proposals are inert rows; a human ratifies at a checkpoint that already existed (brief review, before freeze); the accept rate is the graduation signal, derivable from `campaign_plan_proposals.status`. Nothing in Session 34 moves to the irreversible row |
 | T2.5 background agents | reversible + **not** verifiable | proposals only; accept rate is the graduation signal |
 | §11 pattern promotion | reversible + verifiable | n floor and confidence interval are the automatic check |
 | §12 backfill writes | reversible + partly verifiable | own data only; inferred voice routed through onboarding's ratification step |

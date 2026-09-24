@@ -128,6 +128,43 @@ surface (T1-B); cross-type retrieval and any further memory writer (Session 34+)
 
 ---
 
+### 3.2 Session 34 — agency in generation (ADR 0027), filed by K2.11
+
+**With a named un-defer trigger** (ADR 0027 §12, plus what the Builder found):
+
+| ID | Item | Un-defer trigger |
+|----|------|------------------|
+| **S34-WIRE-PLANNER** | Wire `planBrief()` (`lib/campaigns/plan-brief.ts`) onto a request path. It ships tested and scan-guarded but has **no production caller**: ADR 0027 §2.7 assumed a request-path "brief surface" calling `assembleBrief`; only the two worker-side callers exist, and ruling A-8 excludes them. Until wired, every brief renders `not_run` and no p95 can be measured. | **A request-path producer of briefs exists** (a user-initiated brief for a campaign the customer authored), or a founder ruling revises A-8 for a worker path (which reopens ADR 0021 §2.3's service-role reasoning). |
+| **S34-POSTS-TRIGGER-AUTHOR-WRITES** | `enforce_post_transition_capability` (`20260702120300`) gates only the grant of approval. A holder of `author` can raw-write `draft -> scheduled` and `draft -> published` on their own row through RLS (probed live at K2.11). Not a publication bypass (the worker consumes only rows `claim_posts_for_publishing` returned from `approved`), but a post can read `published` that never published. | **Before launch sign-off**, or the first migration touching that trigger, whichever comes first. Fix shape: deny any human `draft -> scheduled|published`, keeping the service-role exemption. |
+| **S34-MEMORY-CARDS-AND-AGENTS** | Memory-driven opportunity cards and background proposal agents (brainstorm T2.5, §13). They belong in the EXISTING opportunity feed; a second inbox is how this class of feature dies. | Founder ruling **R2**. |
+| **S34-CROSS-TYPE-RETRIEVAL** | Cross-type retrieval and additional memory writers. | Track L, memory as a platform substrate. |
+| **S34-EMBEDDINGS** | Embeddings, similarity retrieval, exemplar selection. `SIGNAL-NO-EMBEDDINGS` stays in force for Mode 3 Stage B. | `pre-launch-scope.md` §12.6 unblocks it for `lib/memory/` only; not scheduled into Sessions 31-34, so a candidate for the next memory session. |
+| **S34-COMMENT-MINING** | Comment mining; deliberate experimentation. | Brainstorm Part I; experimentation is `S33-EXPERIMENT`. |
+| **S34-IMAGE-GEN** | Image generation. | T2-D, pre-launch, behind T1-C. |
+| **S34-EGRESS-TOOL** | Any network-egress generation tool ("read the customer's site", "fetch the article by URL"). A **named non-goal** (`AGENCY-NO-EGRESS-IN-TOOLS`), not a note. | Either the customer's site is routed through the existing RSS/Atom source, or a vetted fetcher with its own SSRF review. |
+| **S34-PERF-PATTERNS-TOOL** | `retrievePerformancePatterns` as a planner tool. | A tool that can reach *only* `retrieveOutcomePatterns`' minimum-n-floored arm. |
+| **S34-SEMANTIC-REDUNDANCY** | Semantic cross-set redundancy (`checkSetRedundancy` is structural, not semantic). | Measured edit-distance or manual-review data showing semantic redundancy surviving both halves (ADR 0027 §5.8). |
+| **S34-UNIFY-VERIFY** | Unify the three verify-then-cite modules (`lib/studio/verify.ts`, `lib/signals/triage/verify.ts`, `lib/campaigns/verify-claims.ts`). No owner; `AGENCY-VERIFY-CROSS-REFERENCED` keeps the map so it is a refactor, not archaeology. | No trigger; a refactor when a fourth instantiation is proposed. |
+| **S34-RENAME-TRIAGE-CONSTS** | Rename `runToolLoop`'s `TRIAGE_*` constants now that it has a second consumer. Forbidden in Session 34 (ADR 0027 §3.1); its own tracked piece of work. | Any session that touches `lib/ai/tool-runner.ts` for a third consumer. |
+
+**Found in passing, out of scope for Session 34** (ADR 0027 §12; both re-verified still true at K2.11):
+
+- **`listAiUsageByBusiness`** (`lib/db/ai-usage.ts:87-99`) has **no explicit `ORDER BY`**, against the house rule that every
+  list query has one matching an index. The `.limit(limit)` is present; the ordering is implicit.
+- **`lib/memory/index.ts:8-13`'s "no production consumer yet, by design" comment is stale.** `retrieveBrandMemory`,
+  `retrieveEvidenceMemory` and `retrieveAudienceMemory` now have production consumers: brief assembly
+  (`lib/campaigns/brief.ts`), generation (`lib/campaigns/generate.ts`), the planner and triage tools, the studio action and
+  the approvals page.
+
+**The Builder's own debt:**
+
+- The build guide's `posts.ts` line references (`:226/:418/:492/:654`) have drifted; at HEAD the map is at `:226` and the
+  approved-status guards are at `:488`, `:562`, `:724` (ADR 0027 §V.7 item 8).
+- K2.6's commit subject claimed an ADR 0024 amendment that was not in the commit. Process note for the Reviewer: a
+  commit-subject claim about a document is checked against the commit's file list.
+- `lib/campaigns/generate.ts` has six structured `console.log` lines (five at BASE); CLAUDE.md's carve-out says one per
+  invocation. The file's existing pattern was followed; if the carve-out is to be read strictly, that is a separate cleanup.
+
 ## 4. Filed for visibility — no action intended
 
 | ID | Item | Why it is here |

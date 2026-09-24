@@ -1550,6 +1550,41 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
     Track J is proved by tests and is inert in production until that changes. X's live response shape (including a deleted
     post) and LinkedIn readability are **still unverified** — owed to the first live smoke (ADR 0028 Amendment A A.5).
 
+- **Session 34 — Track K Builder close-out (ADR 0027, agency in generation), K2.1–K2.11 (`8c21b052`…the K2.11 commit), branch
+  `session-34-adr-0027`. NOT PUSHED, no PR, no Reviewer yet.** The Reviewer (K3, with `security-reviewer` as a mandatory
+  second pass) has not run; nothing below has been read by anyone but the Builder.
+  - **What shipped:** a closed inventory of six read-only, tenant-bound generation tools on a parameterised `runToolLoop`
+    (Stage C triage is byte-identical: its tests are unmodified); claim verification that says "cited", never "verified";
+    `campaign_plan_proposals` with RLS, write-once and transition triggers and decide/apply/freeze RPCs; the planner
+    orchestrator; a deterministic set-redundancy check; and the two surfaces (plan review on the brief page, claim flags at
+    the approval gate), in en/pt/es. **46 `AGENCY-*` constraints**, mapped to their proving file and CI job in ADR 0027
+    §V.2. `AGENCY-GATES-UNCHANGED` closes in three parts (ADR 0027 §V.4), deliberately not as a manifest scan.
+  - **What is NOT true, stated first because it matters most: the campaign planner cannot run on any path in the product.**
+    K2.7 shipped `planBrief()` unwired, by user ruling, because ADR 0027 §2.7's premise (a request-path "brief surface"
+    calling `assembleBrief`) is false at HEAD: `assembleBrief` has two production callers, both worker-side, and ruling A-8
+    gives those no planner. So every brief renders the `not_run` state today. Claim verification and the set-redundancy
+    check DO run, inside `generate.ts`. Wiring the planner is filed as `S34-WIRE-PLANNER` in `docs/backlog.md`.
+  - **Measured p95 latency against ADR 0027 §7.3's predicted 30 000 ms: NOT MEASURED.** No planner run has ever been
+    observed, in tests or elsewhere, so there is no measurement. The 30 000 ms figure remains a prediction and is not
+    reported as anything else here.
+  - **CI: no run exists for this branch.** LOCAL runs only, at the K2.11 tree: `tsc` clean; `test:app` equivalent with CI's
+    dummy env 330 files passed / 1 failed, 4780 tests passed / 1 failed (the known `corpus-v2-schema` full-suite flake, 5/5
+    alone); `test:db` equivalent against the local stack **93 files / 782 tests, all passed**. **No coverage total is
+    claimed:** the "executed green in CI at" column of the constraint map is empty until a run for the pushed head is opened.
+  - **`db-tests` promotion tally: unchanged, and no event to record.** Nothing has been pushed, so no run exists. When the
+    branch is pushed its runs will be `pull_request` events, which do not move the tally (only consecutive green `master`
+    push runs do; the last on record is the one cited in the Session 33 entry above).
+  - **What the Builder found and fixed while closing** (ADR 0027 §V.7): ADR 0024's fourth-purpose amendment, claimed in
+    K2.6's commit subject, had never been written (now ADR 0024 §18); constraint 29 had no source-side half (a real-tree
+    scan added); a stale caller claim in `plan-brief.test.ts` corrected. **Found and not fixed:** the posts trigger gates
+    only the grant of approval, so an `author` can raw-write `draft -> scheduled|published` on their own row (not a
+    publication bypass: the worker consumes only rows `claim_posts_for_publishing` returned from `approved`).
+    `S34-POSTS-TRIGGER-AUTHOR-WRITES` in `docs/backlog.md`.
+  - **Amendments (each additive):** ADR 0017 Amendment F, ADR 0021 §18 (Amendment C), ADR 0024 §18, ADR 0027 "Builder
+    verification (K2.11)". ADR 0010 §D2.5's `campaign_plan_proposals` row landed in the same commit as its migration
+    (`09dbd445`), confirmed.
+  - **Next:** push and open the PR, read the CI runs, then the Reviewer (K3).
+
 ## What's next
 
 Session 19D correction pass is applied. Voice model core is merge-ready. One open decision required before closing Session 19:
