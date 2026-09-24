@@ -2316,6 +2316,921 @@ ahead of time produces a fictional resolution log.
 > argued in the appendix, not erased**. The Session 22-D failure (RESOLVED verdicts written *into* the
 > reviewer's findings) remains prohibited under condition 1.
 
+**✅ AUTHORED 2026-09-24 — the placeholder above is retained as the specification this section was written
+against; everything below is the section itself.**
+
+**Filled in from `docs/reviews/session-34-reviewer.md`** (Reviewer range **`28aa23c6..cad8790f`**: 15 commits,
+`K2.1` `8c21b052` … `K2.13` `998030e8` plus the docs-only CI record `cad8790f`, on branch
+`session-34-adr-0027`, PR #13). **Thirteen steps: D0–D12.** Correction passes are normal, not failures
+(constitution). **There is no independent re-review pass this session** (mirroring 23-D…33-D). This pass
+fixes the Reviewer's findings and records its own resolutions in the Reviewer's file. The founder
+adjudicates close-out.
+
+**Reviewer's verdict: NOT READY TO MERGE. 1 BLOCKER, 6 MAJOR, 8 MINOR, 5 NIT, for 20 findings.** Every one
+appears **exactly once** in the disposition table below. **Three are documentation findings** (MINOR-4,
+NIT-5, and the ADR half of MINOR-2). Each closes with an appended ADR entry or a recorded closure, as well as
+code where the table says so.
+
+> **No finding is deferred. This is a founder instruction, not just the guide's posture.** The Reviewer's §7
+> permits it: *"MINORs may be closed in the same correction pass or deferred with a `docs/backlog.md` entry
+> each."* The founder overrode that when commissioning this section (2026-09-24): *"include all items even
+> if some were marked as deferred"*. So there is **no deferral column and no `docs/backlog.md` row for any
+> finding**, MINOR or NIT. A step that cannot close its finding **REPORTS and STOPS**. Only a further founder
+> ruling can move a finding out of this pass.
+
+**This pass starts from a green, pushed range, but the range is not mergeable.** `cad8790f` is pushed and
+all three required workflows are green at it (app-tests `35986048998`, db-tests `35986048987`, eval
+`35986049119`, both skip-guard lines quoted in the report §1). **Green here is not the same as correct.** The
+Reviewer's central point is that the defects are in **wiring and in what is claimed as closed**, and CI
+cannot see them because the tests exercise functions the product never calls. **D12 does not rescue an
+unexecuted range. It re-greens a range this pass has changed, and it re-dates every one of ADR 0027's
+constraint claims (46 today, 47 after D5) to the corrected head.**
+
+**The BLOCKER and the six MAJORs are four different kinds of defect:**
+- **A property proven on a path the product never takes.** BLOCKER-1: the freeze/supersede RPCs have zero
+  production callers. MAJOR-2: four Server Actions have no tests, and three test headers cite test files
+  that do not exist. MAJOR-5: redundancy half (b) is a log line, yet it is recorded as discharged at the gate.
+  This is the `SHARED-FUNCTION CALLERS` failure again, the same root cause as both Session 22 blockers.
+- **Wrong behaviour that a human ratifies.** MAJOR-1: a ratified `reorder` lands one position away from
+  where the human put it, and the brief it writes then freezes and drives N posts.
+- **Stale state presented as current.** MAJOR-3: claim flags keep the old spans after the post text
+  changes, so the gate highlights text the model never wrote.
+- **A guarantee resting on one untested line.** MAJOR-6: the RPC EXECUTE grants. MAJOR-4:
+  `planner_run_id` links to nothing.
+
+---
+
+### Founder adjudications — **one received (no deferral); no remedy below requires another**
+
+A-1…A-9 (§0.2) stand untouched and are **not** reopened. **The founder ruling consumed by this pass is the
+no-deferral instruction quoted above.** Three remedies in the Reviewer's report would have needed a ruling.
+None is taken:
+
+| # | The remedy that would need a ruling | Why this pass does not take it |
+|---|---|---|
+| **MAJOR-5 option (b)** | Amend ADR 0017 F.3 and ADR 0027 V.2 row 35 to record half (b) as **open**. | It **re-defers** `MODE2-REDUNDANCY-UNDEFER`, which ruling **A-3** discharged explicitly as *"a substitution, not a re-deferral"*, and which `docs/pre-launch-scope.md` §12.4 requires un-deferred. Re-opening a founder ruling is not a correction-pass decision. Option (a), persisting the flag and rendering it at the gate, is what A-3 already ruled. **If the founder prefers (b), D9 STOPS and the ruling is recorded here first.** |
+| **MAJOR-4 option (b)** | Amend ADR 0027 §5.3 so that `planner_run_id` is only a grouping key, and fix the migration comment. | It **weakens** a provenance property the ADR justified by name (`[db-MAJOR-B]`: *"without a run id, `planner_cents` spend has no row linking it to what it bought"*) to match code that was written without noticing it. Option (a) needs no migration (below). |
+| **MAJOR-2 option (b)** | Correct the phantom citations and record the four actions as AUTHORED-NOT-EXECUTED. | Under the no-deferral instruction, recording a gap without closing it is a deferral. Option (a), writing the tests, is taken. |
+
+**Engineering decisions this pass takes without a ruling, with the reason:**
+
+| Finding | Remedy chosen | Loser (rationale) |
+|---|---|---|
+| **BLOCKER-1** | Route `approveBriefIfQualified` and both `reviseBrief` callers through the two existing RPCs, using new `lib/db` wrappers. The old PostgREST `approveBrief` / `reviseBrief` writers are **deleted**, and a Tier-3 scan forbids a replacement. | Keeping the old writers "for other callers": there are none (`git grep` at `cad8790f` shows exactly the three production calls), and a live second write path is how this blocker happened. |
+| **MAJOR-1** | A **single stated placement rule**, implemented once in SQL and once as the TypeScript reference in `lib/campaigns/role-sequence.ts`. A Tier-1 test asserts that the two agree on every case. New constraint **`AGENCY-REORDER-RATIFIED-EXACT`** (ADR 0027 count 46 → 47). | Patching the tiebreak alone (`ORDER BY sort_key, idx DESC`): it fixes one direction and breaks the other, and it leaves the rule unstated. |
+| **MAJOR-3** | **Read-side invalidation by content fingerprint.** `claimCheck` records a hash of the exact `posts.content` its spans index into. Every reader treats a mismatch as *"not checked"*, and the resolve action refuses to write against it. Regenerate also drops the key explicitly. | Clearing `claimCheck` in each writer: there are already **three** content writers (`posts/actions.ts:206`, `calendar/actions.ts:262`, regenerate via `updatePostContentAndMetadata`), and the fourth would forget. |
+| **MAJOR-4** | The planner orchestrator **mints the run id before the loop** and passes it to `runToolLoop` as an optional `usageId`. The loop inserts its `ai_usage` row **with that id**. Triage passes none and is unchanged. **No FK, no migration.** A failed `ai_usage` write is captured with the run id as a tag. | An FK to `ai_usage`: the usage write is best-effort in a `finally` block, so an FK would turn a bookkeeping failure into a lost plan. It would also couple the proposal insert to the usage write's ordering. |
+| **MINOR-7** | The page reads **the current `brief_version`'s proposals, every status**, because §8.2 renders decided and `brief_frozen` states. D5's migration adds a **non-partial** index that matches the new query. `AGENCY-PROPOSAL-BOUNDED-QUERY`'s test is retargeted to the function production calls. | Rendering only the pending partial-index query: that drops §8.2's *"the brief was approved"* state, which BLOCKER-1's fix exists to produce. |
+| **MINOR-2** | Add the `status='critiqued'` guard to the RPC with a typed outcome, so that ADR 0017 F.1 becomes true. | Correcting F.1 to match the RPC: that weakens a stated security boundary to match code. |
+| **MINOR-5** | Validate the UUID shape **inside** `toToolResultId`, sharing the dispatcher's pattern. | Scanning call sites: the scan could not see a call routed through a helper. |
+| **NIT-5** | **Recorded closure, no code.** | Commit bodies in a pushed range cannot be rewritten. The budget was not exceeded (four invocations, three labelled). The appendix names the unlabelled first one. |
+
+---
+
+### What the Reviewer found — disposition of all 20 findings (`session-34-reviewer.md` is authoritative)
+
+| ID | Tier | One line | Disposition | Step |
+|---|---|---|---|---|
+| **MAJOR-6** | MAJOR (security) | Nothing pins that `authenticated`/`anon` cannot EXECUTE the SECURITY DEFINER RPCs trusting `p_user_id` | FIX (Tier-1) | **D1** |
+| **MINOR-1** | MINOR (security) | The Tier-1 tenancy test runs every tool under service-role, and a single per-hop `business_id` omission stays green | FIX | **D2** |
+| **NIT-1** | NIT (security) | `tools.test.ts` (c) smuggles `businessId`, not an arbitrary key, and checks `toHaveProperty('issues')` | FIX | **D2** |
+| **MINOR-5** | MINOR (security) | `toToolResultId` is an exported, non-validating mint that bypasses the brand without a cast | FIX | **D3** |
+| **MINOR-6** | MINOR (security) | `PLANNER_CALLED_DB_FUNCTIONS` is a hand list that omits `getEvidenceMemoryByIds` | FIX | **D3** |
+| **NIT-3** | NIT (security) | The `wrapSignalForPrompt` allowlist scan covers only `lib/signals/**` | FIX | **D3** |
+| **BLOCKER-1** | BLOCKER | The approve and revise supersede RPCs have zero production callers, so `AGENCY-FREEZE-SUPERSEDE-ATOMIC` is AUTHORED-NOT-EXECUTED | FIX | **D4** |
+| **MAJOR-1** | MAJOR | A ratified `reorder` lands one slot off, and no test sends a reorder through the RPC | FIX (migration + new constraint) | **D5** |
+| **MINOR-2** | MINOR (+ **ADR**, 0017 F.1) | `apply_brief_proposals` has no `status='critiqued'` guard, although F.1 says it does | FIX (migration) | **D5** |
+| **MINOR-8** | MINOR | A round of drops covering every entry commits an empty `roleSequence` | FIX (migration) | **D5** |
+| **MAJOR-2** | MAJOR | Four new Server Actions are untested, and three test files cite files that do not exist | FIX | **D6** |
+| **NIT-2** | NIT | `decidePlanProposalAction` does not check that the proposal belongs to the submitted campaign's brief | FIX | **D6** |
+| **MAJOR-3** | MAJOR | Claim flags go stale on edit/regenerate and highlight text the model never wrote | FIX | **D7** |
+| **MAJOR-4** | MAJOR | `planner_run_id` is a random UUID with no link to `ai_usage` | FIX | **D8** |
+| **NIT-4** | NIT | A dispatcher envelope violation is indistinguishable from an ordinary tool error | FIX | **D8** |
+| **MAJOR-5** | MAJOR | Redundancy half (b) is a log line, not an approval-gate flag, yet it is recorded as discharged | FIX (option a) | **D9** |
+| **MINOR-3** | MINOR | `planBrief` swallows a failed or no-op status write, so proposals sit behind a brief that reads `not_run` | FIX | **D10** |
+| **MINOR-7** | MINOR | The page's proposal query does not match the partial index, and the constraint's test targets an unused function | FIX (index at D5, code at D10) | **D5 + D10** |
+| **MINOR-4** | MINOR (**ADR**, 0010 §D2.5) | The D2.5 row is not verbatim, and "no third-party content" understates what `reason` holds | FIX (ADR) | **D11** |
+| **NIT-5** | NIT | ECC invocation "1 of 4" is recorded in no commit body | RECORDED CLOSURE | **D11** |
+
+**Count check, re-run at D12:** 20 rows, 20 distinct IDs, and every ID from the Reviewer's §2 exactly once
+(BLOCKER-1; MAJOR-1…6; MINOR-1…8; NIT-1…5). If it fails, the pass is not closed.
+
+---
+
+### Ordering rationale
+
+1. **D0 first.** `docs/reviews/session-34-reviewer.md` is **untracked**. It must enter git exactly as
+   written so that the appendix diff proves itself additive. `docs/build-guide/session-34.md`'s committed
+   version (`28aa23c6`) predates this §4, which is the pass's own work order, so it lands in the same commit.
+2. **Security findings come first, regardless of severity label** (the placeholder's binding rule).
+   **D1 (MAJOR-6) is first of all** because D5 will `CREATE OR REPLACE` `apply_brief_proposals`. The grant
+   test must exist and be green *before* that migration, so that the migration is checked against it rather
+   than trusted.
+3. **D2 → D3 finish the security class.** D2 is the tenancy tests (MINOR-1, NIT-1). D3 hardens the brand
+   and scans (MINOR-5, MINOR-6, NIT-3). None changes production behaviour except `toToolResultId` gaining
+   a throw on an input the dispatcher already rejects.
+4. **D4 (BLOCKER-1) is the first behavioural step.** It changes the approve and revise paths that D6's
+   action tests and D10's page query both sit on top of.
+5. **D5 is the only migration, and it runs alone** (the 31-D D5 / 32-D D3 / 33-D D4 precedent). It carries
+   MAJOR-1, MINOR-2, MINOR-8 and MINOR-7's index, because all four are the same function or the same table.
+   A second migration mid-pass would invalidate every earlier `test:db` run. It follows D4 because
+   `revise_brief_and_supersede_proposals` and the apply RPC write the same `superseded_reason`, and D4's
+   Tier-1 test must be green before the apply body changes underneath it.
+6. **D6 (MAJOR-2, NIT-2) after D4 and D5**, because the actions it tests now call D4's wrappers and map
+   D5's new typed outcomes. Testing them earlier would pin behaviour that is about to change.
+7. **D7 (MAJOR-3) then D9 (MAJOR-5)** both write to `ai_generation_metadata` and render at the approvals
+   gate. D9 reuses D7's content fingerprint, so D7 comes first.
+8. **D8 (MAJOR-4, NIT-4) touches `runToolLoop`, the one function shared with Stage C triage.** It sits
+   between the two gate steps so that its `SHARED-FUNCTION CALLERS` proof runs against a settled planner.
+9. **D10 (MINOR-3, MINOR-7) is last among the code steps.** It changes the brief page's read, which needs
+   D5's index and should render D4's superseded states.
+10. **D11 is documentation truth, after every code step**, because every amendment cites the test that now
+    proves it, including D5's new constraint.
+11. **D12 pushes last.** It produces green runs for the corrected range and re-dates every constraint claim
+    that D1–D11 invalidated.
+
+---
+
+### Where resolutions go (CLAUDE.md — `REVIEWER-REPORT APPEND-ONLY`, revised Session 23-D)
+
+Resolutions go **into `docs/reviews/session-34-reviewer.md`**, under one appended, attributed
+`## CORRECTION PASS (Session 34-D)` section at the end, below the Reviewer's closing line (*"A correction
+pass appends below this line …"*). There is no separate corrections file.
+
+**The Reviewer's text is immutable:**
+- Not one character is edited.
+- No verdict is flipped, and no `RESOLVED` is stamped.
+- This covers §0's verdict line, §1's "What I ran" table, §3's ten checks and caller table, §4's Tier-3
+  reddening table, §5's constraint → status table, §6's silent-failure-hunter evidence and §7's merge list.
+
+**The appendix itself:**
+- It references findings **by ID** and records *finding → fix → proving test → reddening → SHA*.
+- A disputed finding is argued in the appendix, never erased.
+
+**Never weaken a test to reach green.** Amend ADR 0027 as a **new appended section** if a constraint proves
+infeasible. **Never edit a committed migration**: D5 is a forward migration. There is exactly one permitted
+in-place edit, **ADR 0010 §D2.5's Session 34 row** (MINOR-4). It is restored to ADR 0027 §9.3's verbatim
+text, and its prior text is **quoted in the appendix before it is replaced**. ADR 0027's V.2 cells are
+**not** edited. §VI supersedes them by reference, as V.8–V.10 already do. **Do not fold D0 and the first
+resolution row into one commit.**
+
+**ECC budget: ≤ 1 subagent per step, and only where this guide names one.**
+- **D4** → `security-reviewer`: a service-role RPC now carries the user-facing approve path, with a
+  `business_id` that must come from the loaded row and never from input.
+- **D5** → `database-reviewer`: a SECURITY DEFINER function body replaced on a table with a write-once
+  trigger, plus a new index.
+- **All other steps carry none.** Do not re-run the K2.3 / K2.6 / K2.7 reviewers. The proving test is the
+  confirmation. `taste-skill` and `impeccable` are **not** invoked. D9 adds one state that ADR 0027 §5.8(b)
+  already names, rendered in the existing `ClaimFlags` idiom. If it needs a design decision beyond copy,
+  **STOP**.
+
+**The highest-risk classes:**
+- **(a) D4.** `approveBriefIfQualified`'s **code-side hard gate** (`BRIEF_QUALITY_THRESHOLD`, before any
+  write) must still run **before** the RPC, because the RPC checks only `status`. The `business_id` passed
+  to the RPC comes from the **loaded brief row**, never from the action's input.
+- **(b) D5.** A refusal (`not_critiqued`, `empty_sequence`) must leave **zero rows changed**. The apply body
+  marks proposals `accepted` *before* it writes the brief, so a `RETURN` of a typed outcome after that
+  point would commit the acceptances. The refusal checks go **first**, and the Tier-1 test asserts the
+  untouched state.
+- **(c) D7.** The fingerprint is over **exactly** the string the spans index into (`posts.content`, not
+  content plus hashtags). A hash over the wrong string makes every check read *"not checked"* and passes
+  every test that only asserts the stale case.
+- **(d) D8.** Triage's `ai_usage` row must be byte-for-byte what it was. `lib/ai/tool-runner.test.ts` and
+  `lib/signals/triage/orchestrator.test.ts` stay **byte-unchanged**, and new assertions go in new files.
+- **(e) D9.** *"Flagged, never blocked, never edited"* (§5.8(b)). A redundancy flag must not disable
+  Approve, hide the post or reorder the inbox.
+
+Each step ends by re-running the full existing suite for its files and confirming no previously-green
+assertion changed.
+
+---
+
+### §4.0 — Correction primer  (paste first · wait for acknowledgement)
+
+```
+You are the Session 34-D correction pass (Track K, ADR 0027, agency in generation). You fix the findings in
+docs/reviews/session-34-reviewer.md - you do not re-review, and you do not re-litigate the Reviewer's
+verdicts. Acknowledge these twelve rules, then stop and wait for D0.
+
+1. THE REVIEWER'S TEXT IS IMMUTABLE. Resolutions go in ONE appended, attributed
+   "## CORRECTION PASS (Session 34-D)" section at the END of docs/reviews/session-34-reviewer.md, below the
+   Reviewer's closing line, opening with author, date and the commit range fixed. Not one character above
+   it changes. A disputed finding is argued in the appendix, never erased.
+2. ONE STEP, ONE COMMIT, THEN STOP. Each step's commit message is given; use it.
+3. EVERY FIX IS PROVED BY MUTATION. Break the fix, watch the new test go RED, restore, confirm
+   `git diff --stat` is empty. Record the exact mutation in the appendix.
+4. NEVER WEAKEN A TEST TO REACH GREEN. Amend ADR 0027 as an APPENDED section if a constraint is infeasible.
+   Never edit a committed migration; D5 is a forward migration.
+5. ALL 20 FINDINGS ARE CLOSED IN THIS PASS. NOTHING IS DEFERRED - by FOUNDER INSTRUCTION, overriding the
+   Reviewer's section 7 permission to defer MINORs. No docs/backlog.md row for any finding, MINOR or NIT.
+   A finding you cannot close, you REPORT and STOP. NIT-5 is the single RECORDED CLOSURE; every other
+   finding closes in code (plus ADR text where the section 4 tables say so).
+6. A-1..A-9 ARE RULED AND NOT REOPENED. In particular A-3: redundancy half (b) is FLAGGED AT THE APPROVAL
+   GATE - recording it as open instead would re-defer a founder ruling. If you believe any remedy needs a
+   ruling, STOP and report. Never invent one.
+7. SECURITY FIRST, AND ONE MIGRATION, AT D5 ONLY. If another step appears to need SQL, STOP.
+8. EVERY STEP'S LOOP: npx tsc --noEmit --skipLibCheck; npm run lint; npm run test:app with app-tests.yml's
+   env block; and for D1, D2, D4, D5 and D8, npm run test:db against a running LOCAL Supabase stack.
+   THE LOCAL STACK ONLY: env pointed at 127.0.0.1:54321/54322. The repo's .env.local targets the REMOTE
+   project - never run test:db or apply a migration with it. If the local stack cannot start, STOP - a
+   Tier-1 change is never committed unexecuted.
+   lib/signals/__fixtures__/eval/corpus-v2-schema.test.ts is a KNOWN pre-existing order-dependent flake that
+   passes in isolation and is green in CI; it is not yours to fix and not a reason to stop.
+9. SHARED-FUNCTION CALLERS. Before changing any function, `git grep` its production callers and name, per
+   caller, the test that exercises it. runToolLoop has TWO (triage and planner): Stage C must stay
+   byte-identical - lib/ai/tool-runner.test.ts and lib/signals/triage/orchestrator.test.ts are NOT edited;
+   new assertions go in new files.
+10. DO NOT PUSH BEFORE D12. The range is pushed and green at cad8790f; that green is about to become stale,
+    and D12 is what makes it true again.
+11. SCOPE IS THE FINDINGS. L-1 binds: no write tool, no egress, no new provider, no new memory writer, no
+    cross-type retrieval, no embeddings, no eleventh rubric dimension, no background agent, no new API
+    route, and no human gate removed or made skippable (L-7).
+12. taste-skill and impeccable are NOT invoked. ECC subagents: security-reviewer once at D4,
+    database-reviewer once at D5, none anywhere else.
+```
+
+---
+
+### §4.1 — Correction steps
+
+#### D0 — land the governing documents in git  ·  FIRST, by design  ·  no code
+
+```
+CORRECTION - Session 34-D · D0. No .ts/.tsx/.sql. No specialist.
+
+THE STATE: docs/reviews/session-34-reviewer.md is UNTRACKED. docs/build-guide/session-34.md is tracked but
+its committed version (28aa23c6) predates this section 4, which is this pass's work order. ADR 0027 is
+tracked (28aa23c6; its Builder verification appendix V.1-V.10 at cad8790f).
+
+DO - commit exactly these two paths, AS THEY STAND:
+- docs/reviews/session-34-reviewer.md  (EXACTLY as the Reviewer left it)
+- docs/build-guide/session-34.md       (with section 4 authored - say so in the commit message)
+Do NOT append the CORRECTION PASS section. Do NOT stage any code file; report any present and leave it.
+supabase/.temp/cli-latest is local noise - do not stage it.
+
+VERIFY: `git show <D0-sha>:docs/reviews/session-34-reviewer.md` byte-identical to the working tree and
+containing no "CORRECTION PASS"; `git show <D0-sha>:docs/build-guide/session-34.md | grep -c "### §4.1"`
+non-zero; no code file in the commit.
+On commit: "D0 - Session 34-D audit trail: the Reviewer's report enters git exactly as written (range
+28aa23c6..cad8790f, 20 findings) before any resolution row, so the appendix is provably additive;
+session-34.md lands with section 4 authored, since section 4 is this pass's work order." Then stop.
+```
+
+#### D1 — MAJOR-6: pin the SECURITY DEFINER EXECUTE grants before anything replaces a function body
+
+```
+CORRECTION - Session 34-D · D1. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+Requires a running LOCAL Supabase stack. Test-only step: no production code, no migration.
+
+THE DEFECT (MAJOR-6): apply_brief_proposals and decide_plan_proposal take p_user_id as a PARAMETER and check
+the capability of THAT id (assert_plan_proposal_author). The whole authorisation model therefore rests on the
+REVOKE/GRANT lines in supabase/migrations/20260922110000_campaign_plan_proposal_rpcs.sql (:75-77, :259-261,
+:305-307, :353-355, :390-392, :479-480) and 20260923100000_plan_proposal_version_scope_and_reason_check.sql
+(:193-195). They are correct on the live DB, but no test asserts them. A later DROP FUNCTION ... CREATE
+FUNCTION restores the default PUBLIC EXECUTE, and nothing would go red. D5 is about to replace one of these
+bodies, so this test must exist first.
+
+BUILD - a NEW Tier-1 file, supabase/__tests__/plan-proposals-rpc-grants.test.ts:
+1. The function list is DERIVED, not hand-written (MINOR-6 is the same mistake): parse every
+   "CREATE OR REPLACE FUNCTION public.<name>(" in the two migration files above, assert the derived set is
+   NON-EMPTY and contains at least apply_brief_proposals, decide_plan_proposal,
+   approve_brief_and_supersede_proposals, revise_brief_and_supersede_proposals, assert_plan_proposal_author
+   and reserve_ai_budget.
+2. For EACH: (a) information_schema.routine_privileges (or has_function_privilege) shows EXECUTE for
+   neither anon, authenticated nor PUBLIC; (b) an AUTHENTICATED member's client calling rpc(<name>, ...)
+   with plausible arguments - including the OWNER's id as p_user_id where the function takes one - is
+   refused with 42501 / permission denied, and NOT with a business-logic outcome (a refusal from inside the
+   body would mean the caller got in). Use the authenticated-client helper the existing plan-proposals
+   Tier-1 files use; do not write a second.
+3. Follow the precedent's shape: rls-policy-lockdown.test.ts, "purge_business function is executable by
+   service_role only".
+
+VERIFY:
+- REDDEN on the LOCAL DB only: `GRANT EXECUTE ON FUNCTION public.decide_plan_proposal(uuid, uuid, uuid, text)
+  TO authenticated;` -> both arms RED for that function. REVOKE it back; re-run green. Paste both transcripts
+  into the appendix. Repeat once for apply_brief_proposals.
+- The existing plan-proposals-*.test.ts files stay green and unchanged.
+- Full loop: tsc; lint; test:app (CI env); test:db.
+Append the appendix opening block (section 4.2) and the MAJOR-6 row.
+On commit: "D1 - MAJOR-6 closed: a Tier-1 test derives every function the two plan-proposal migrations
+create and asserts, per function, that anon/authenticated/PUBLIC hold no EXECUTE and that an authenticated
+rpc() call - even passing the owner's id - is refused with 42501. Reddens on a planted GRANT." Then stop.
+```
+
+#### D2 — MINOR-1 + NIT-1: the tenancy tests test the scenario the ADR describes
+
+```
+CORRECTION - Session 34-D · D2. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+Requires a running LOCAL Supabase stack. Test-only step (plus one stale comment corrected).
+
+THE DEFECTS:
+- MINOR-1: supabase/__tests__/planner-tools-tenancy.test.ts:18 says "The planner's own `client` parameter is
+  service-role in production". False at cad8790f: the orchestrator threads the caller's AUTHENTICATED
+  client, and prepareBriefForCampaign is called with the request client
+  (app/[locale]/(dashboard)/campaigns/new/actions.ts:154). Every tool call in the file uses `admin`
+  (:195, :222, ...), so user U, who is a member of both A and B, is seeded but never used as the client, and
+  the "RLS arm" (C) is really a second .eq arm. Removing ONE of getSignalForCampaign's three per-hop
+  business_id predicates stays green (hop 1 removed: 4/4 pass). The ADR's "three chances to omit one" has
+  no test that sees a single omission.
+- NIT-1: lib/campaigns/planner/__tests__/tools.test.ts:98-103 case (c) smuggles `businessId` rather than an
+  arbitrary key, and asserts toHaveProperty('issues') rather than instanceof z.ZodError.
+
+BUILD:
+1. planner-tools-tenancy.test.ts: run every tool TWICE - under service-role (the existing arm, kept) AND
+   under U's SIGNED-IN client, bound to business A. Under U's client, a tool bound to A returns only A's
+   rows even though RLS would let U see B's: the .eq('business_id') filter does the work, not RLS. Correct
+   the :18 header to what is true. Keep the positive control first, as now.
+2. A NEW Tier-2 recording-client test for getSignalForCampaign (find its lib/db file with git grep): a fake
+   client records every .eq() per .from(); assert business_id is applied on EACH of the three hops, by
+   table name.
+3. tools.test.ts case (c): smuggle an ARBITRARY key (e.g. `injected: 1`) as well as businessId, and assert
+   `expect(err).toBeInstanceOf(z.ZodError)` with code 'unrecognized_keys'. Do not weaken the existing
+   assertions; add.
+
+VERIFY:
+- REDDEN (a): remove hop 1's .eq('business_id') alone -> the recording test RED naming that hop. Repeat for
+  hops 2 and 3. Restore; `git diff --stat` empty.
+- REDDEN (b): remove listCampaigns' .eq('business_id') -> the signed-in-client arm RED (not only the
+  service-role arm). Restore.
+- REDDEN (c): relax the tool input schema to z.object (non-strict) -> the new case (c) RED. Restore.
+- Full loop: tsc; lint; test:app (CI env); test:db.
+Append the MINOR-1 and NIT-1 rows.
+On commit: "D2 - MINOR-1 and NIT-1 closed: the Tier-1 tenancy test runs every tool under the member's signed-in
+client as well as service-role, a recording-client test sees a single missing business_id on any of
+getSignalForCampaign's three hops, and the schema test smuggles an arbitrary key and asserts a ZodError."
+Then stop.
+```
+
+#### D3 — MINOR-5 + MINOR-6 + NIT-3: the brand's mint validates, and the scans derive rather than enumerate
+
+```
+CORRECTION - Session 34-D · D3. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+
+THE DEFECTS:
+- MINOR-5: lib/ai/wrap-evidence.ts:331 exports toToolResultId, a non-validating mint. The Reviewer planted
+  texts.map((text) => toToolResultId(text)) in list_recent_posts and tsc ACCEPTED it, while a planted raw
+  html_url in the same run was rejected (TS2322). The cast scan cannot see a function call. The dispatcher's
+  UUID-shape assertion catches it at runtime, so this is defence in depth, not a hole.
+- MINOR-6: PLANNER_CALLED_DB_FUNCTIONS (lib/campaigns/planner/__tests__/source-scans.test.ts:280) is a hand
+  list of six. list_evidence also reaches getEvidenceMemoryByIds through wrapEvidenceForPrompt, which is
+  not in the list. It is caller-client today, so there is no live defect, but a new import is covered only
+  if someone remembers to add it.
+- NIT-3: the wrapSignalForPrompt allowlist scan covers only lib/signals/**. A fourth caller outside
+  lib/signals/ would not fail it.
+
+BUILD:
+1. toToolResultId validates the UUID shape and THROWS on anything else, using the SAME pattern constant the
+   dispatcher asserts with. Export the constant once; do not write a second regex. SHARED-FUNCTION CALLERS:
+   git grep every caller (triage and planner) and confirm each passes a real id.
+2. MINOR-6: derive the list. Parse the named imports from '@/lib/db/*' and '@/lib/memory/*' in
+   lib/campaigns/planner/tools.ts AND in every lib/ai module tools.ts imports (one hop - this is what
+   reaches getEvidenceMemoryByIds via wrap-evidence.ts). Run the existing service-role function-body check
+   over the DERIVED set. Assert that the derived set contains getEvidenceMemoryByIds and is non-empty. If
+   you keep the hand list for readability, assert that it EQUALS the derived set.
+3. NIT-3: widen the wrapSignalForPrompt allowlist scan to app/**, lib/** and components/**. The allowlist
+   is the three production callers the Reviewer enumerated (triage/card.ts, triage/orchestrator.ts,
+   planner/tools.ts); a scripts/ caller, if any, is named explicitly as non-production.
+
+VERIFY:
+- Tier-2: toToolResultId('not-a-uuid') throws; a valid uuid round-trips; the planner and triage tools.test.ts
+  deep-walks stay green.
+- REDDEN (a): re-plant the Reviewer's exact mutation (texts.map(toToolResultId) in list_recent_posts) -> the
+  tool's test RED at the mint. Restore.
+- REDDEN (b): add a new '@/lib/db/*' import to tools.ts whose function acquires createServiceRoleClient -> the
+  derived scan RED. Restore.
+- REDDEN (c): call wrapSignalForPrompt from a scratch file under app/ -> the widened scan RED. Delete it.
+- `git diff --stat` empty after each. Full loop: tsc; lint; test:app (CI env).
+Append the MINOR-5, MINOR-6 and NIT-3 rows.
+On commit: "D3 - MINOR-5, MINOR-6 and NIT-3 closed: toToolResultId validates the UUID shape with the
+dispatcher's own pattern, the planner's service-role function-body scan runs over a set derived from
+tools.ts' import graph (now including getEvidenceMemoryByIds), and the wrapSignalForPrompt allowlist scan
+covers app, lib and components." Then stop.
+```
+
+#### D4 — BLOCKER-1: the approve and revise paths go through the supersede RPCs
+
+```
+CORRECTION - Session 34-D · D4. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. Invoke
+security-reviewer ONCE, after the plan and before the commit. Requires a running LOCAL Supabase stack.
+
+THE DEFECT (BLOCKER-1): ADR 0027 section 5.7 calls this "the genuine hole" and fixes it with ONE RPC doing
+approval AND supersede in one function body. The RPCs exist (20260922110000_...sql:323 and :357). NO
+TypeScript at cad8790f names either one. The production paths are unchanged:
+- Approve: approveBriefAction -> approveBriefIfQualified -> lib/campaigns/brief.ts:215
+  approveBrief(client, brief.id), the single PostgREST UPDATE at lib/db/campaign-briefs.ts:77, which
+  supersedes nothing.
+- Version advance: rejectBriefAction and editBriefAction -> reviseBrief
+  (app/[locale]/(dashboard)/campaigns/[id]/brief/actions.ts:131, :217 -> lib/db/campaign-briefs.ts:100),
+  which supersedes nothing.
+plan-proposals-freeze-supersede.test.ts calls the RPCs through w.admin.rpc(...), so it proves a function
+the product never runs. Consequences: approving leaves proposals `pending` against a frozen brief forever,
+and brief_frozen is never written. After an edit or reject, old-version proposals stay pending and,
+once the brief is critiqued again, SELECTABLE; the apply RPC then refuses them as no_proposals_applied.
+
+BUILD:
+1. lib/db/campaign-briefs.ts gains approveBriefAndSupersedeProposals(businessId, briefId) and
+   reviseBriefAndSupersedeProposals(businessId, briefId, expectedVersion, content). The RPCs are
+   service_role-only (D1 proves it), so each wrapper uses the CLAUDE.md lazy-import service-role pattern
+   and takes NO client parameter. Each maps the RPC's typed outcome ('ok' / 'invalid_state' /
+   'concurrent_edit') to the SAME return contract its predecessor had (row | null), so callers' existing
+   concurrency handling is unchanged.
+2. approveBriefIfQualified keeps its code-side HARD gate (status check, BRIEF_QUALITY_THRESHOLD) BEFORE the
+   write, exactly as now, and then calls the approve wrapper. The business_id comes from the LOADED brief
+   row, never from the action's input.
+3. Both reviseBrief call sites in brief/actions.ts call the revise wrapper.
+4. Delete approveBrief and reviseBrief from lib/db/campaign-briefs.ts. At cad8790f they have no other
+   caller - re-run `git grep -n "approveBrief(\|reviseBrief("` and STOP if that has changed. Add a Tier-3
+   scan: no module under lib/ or app/ issues a PostgREST .update() on campaign_briefs that sets
+   status 'approved' or advances `version`. The two RPC wrappers are the only paths.
+5. Update every stale caller comment that names the old functions (git grep them).
+
+VERIFY:
+- NEW Tier-1, through approveBriefIfQualified (NOT the raw RPC): seed a critiqued, above-threshold brief
+  with two pending proposals -> after the call the brief is approved and frozen, and BOTH proposals are
+  superseded with superseded_reason='brief_frozen'.
+- NEW Tier-1 through the revise wrapper: pending proposals at version N -> superseded 'version_advanced'
+  and brief at N+1. A stale expectedVersion -> null, nothing superseded.
+- Tier-2 PER CALLER (SHARED-FUNCTION CALLERS): approveBriefAction, rejectBriefAction and editBriefAction
+  each call the new wrapper with the loaded brief's business_id - assert on the mock's arguments. A
+  below-threshold brief never reaches the wrapper.
+- REDDEN: restore approveBriefIfQualified's direct PostgREST UPDATE (git stash the wrapper call) -> the
+  first Tier-1 test RED (proposals still pending). Restore; `git diff --stat` empty. Paste the transcript.
+- plan-proposals-freeze-supersede.test.ts stays green and unchanged.
+- Full loop: tsc; lint; test:app (CI env); test:db.
+List the per-caller table (caller -> test file:line) in the appendix. Append the BLOCKER-1 row.
+On commit: "D4 - BLOCKER-1 closed: approveBriefIfQualified and both reviseBrief callers go through
+approve_/revise_brief_and_supersede_proposals via lib/db wrappers, so AGENCY-FREEZE-SUPERSEDE-ATOMIC holds on
+the production path; the PostgREST approve/revise writers are deleted and a Tier-3 scan forbids a
+replacement. A Tier-1 test through approveBriefIfQualified reddens when the old UPDATE is restored."
+Then stop.
+```
+
+#### D5 — MAJOR-1 + MINOR-2 + MINOR-8 (+ MINOR-7's index): the apply RPC  ·  THE ONLY MIGRATION
+
+```
+CORRECTION - Session 34-D · D5. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. Invoke
+database-reviewer ONCE, after the plan and before the commit. Requires a running LOCAL Supabase stack.
+
+THE DEFECTS:
+- MAJOR-1: the live apply_brief_proposals (20260923100000_...sql) gives a moved entry
+  sort_key = proposed_order (:157) and ranks with ORDER BY sort_key, idx (:161). The occupant of the target
+  slot has the SAME sort_key and wins the idx tiebreak. The Reviewer reproduced it against live Postgres:
+  entries r0..r3, move 3 -> 0 gives r0,r3,r1,r2 (r3 at 1, not 0); move 0 -> 3 gives r1,r2,r0,r3 (r0 at 2,
+  not 3). The planner prompt tells the model reorder means "move the post at targetOrder to proposedOrder",
+  and the human ratifies that sentence. No Tier-1 test sends a reorder through the RPC.
+- MINOR-2: the RPC checks only frozen_at and version (:62, :173). ADR 0027 section 5.4's diagram and ADR
+  0017 Amendment F.1 (0017:931) both say "the brief must be critiqued". No reachable bypass today; the RPC
+  is the stated boundary.
+- MINOR-8: a round of drops covering every entry commits an empty roleSequence
+  (coalesce(jsonb_agg(...),'[]')). applyRatifiedProposals reports invalid_result AFTER the commit, so the
+  brief is left draft with zero entries.
+- MINOR-7 (index half only; the query changes at D10): the page's non-pending read has no matching index.
+
+BUILD - ONE forward migration; never edit 20260922110000 or 20260923100000:
+1. CREATE OR REPLACE apply_brief_proposals with the SAME signature. RESTATE its REVOKE/GRANT lines verbatim
+   (D1's test must stay green; if it goes red, the migration is wrong, not the test).
+2. MAJOR-1 - ONE stated placement rule. Before writing SQL, write it down in one sentence in the migration
+   header, and make it match the sentence the human ratifies: proposed_order is the entry's position in
+   the RESULTING sequence. Specify deterministically how drops, substitutes and more than one reorder in
+   one round compose, and state it in the header. Implement the SAME rule as a pure TypeScript reference in
+   lib/campaigns/role-sequence.ts (where the hand-built reorder test at role-sequence.test.ts:139 already
+   lives). If the planner prompt's sentence cannot be satisfied for a combination (e.g. two reorders to
+   one slot), the RPC REFUSES that combination with a typed outcome rather than guessing - never a silent
+   reinterpretation.
+3. MINOR-2: the brief UPDATE is guarded AND status = 'critiqued'. A non-critiqued brief returns a typed
+   outcome 'not_critiqued'.
+4. MINOR-8: a result with zero entries returns a typed outcome 'empty_sequence'.
+5. BOTH refusals (and any refusal from item 2) are decided BEFORE the proposals are marked accepted (:120),
+   so a refusal changes ZERO rows. If the body's order makes that impossible, restructure it; do not RAISE
+   after partial writes and rely on the caller.
+6. MINOR-7's index: CREATE INDEX on campaign_plan_proposals (brief_id, brief_version, target_order,
+   created_at, id), NON-partial, for D10's current-version read. Keep the partial review index and the
+   partial unique index exactly as they are.
+7. Name the new constraint AGENCY-REORDER-RATIFIED-EXACT (Tier 1). D11 records it in ADR 0027 (46 -> 47).
+
+VERIFY - Tier-1 in supabase/__tests__/plan-proposals-ratify.test.ts (ADD cases; change none):
+- forward move, backward move, reorder + drop, reorder + substitute, and two reorders in one round: each
+  result EQUALS the TypeScript reference's output for the same input. The Reviewer's two cases (3 -> 0,
+  0 -> 3) are included verbatim.
+- a draft (non-critiqued) brief -> 'not_critiqued', proposals still pending, version unchanged.
+- drop every entry -> 'empty_sequence', proposals still pending, version unchanged, roleSequence unchanged.
+- REDDEN: restore ORDER BY sort_key, idx in a scratch copy of the function on the LOCAL DB -> the 3 -> 0 case
+  RED. Restore by re-running the migration (supabase db reset locally), re-run green. Paste the transcript.
+- After the migration: re-run D1's grant test; re-query pg_indexes for campaign_plan_proposals and paste
+  the output (the two partial indexes unchanged, the new one present).
+- Every plan-proposals-*.test.ts file, D4's tests and role-sequence.test.ts green.
+- Full loop: tsc; lint; test:app (CI env); test:db.
+Append the MAJOR-1, MINOR-2 and MINOR-8 rows, and MINOR-7's index half.
+On commit: "D5 - MAJOR-1, MINOR-2 and MINOR-8 closed by forward migration: apply_brief_proposals places a
+ratified reorder exactly where the ratified sentence says (one rule, matched by a TypeScript reference and
+a Tier-1 agreement test; new constraint AGENCY-REORDER-RATIFIED-EXACT), refuses a non-critiqued brief and an
+empty result with typed outcomes that change zero rows, and restates its grants; a non-partial index serves
+the page's current-version read (MINOR-7)." Then stop.
+```
+
+#### D6 — MAJOR-2 + NIT-2: the four Server Actions get their tests, and the phantom citations become real
+
+```
+CORRECTION - Session 34-D · D6. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+
+THE DEFECTS:
+- MAJOR-2: decidePlanProposalAction (app/[locale]/(dashboard)/campaigns/[id]/brief/plan-actions.ts:78),
+  applyPlanProposalsAction (incl. its two critiqueBrief calls at :181 and :233), recritiqueBriefAction, and
+  resolveClaimAction (app/[locale]/(dashboard)/approvals/claim-actions.ts) have NO test. The components mock
+  them and cite files that do not exist at cad8790f: PlanReviewPanel.test.tsx:28 ("plan-actions.test.ts");
+  ClaimFlags.test.tsx:26, ApprovalsInbox.test.tsx:23, lib/db/posts.claims.test.ts:10
+  ("claim-actions.test.ts"); ClaimFlags.test.tsx:25 ("ApprovalsInbox.claims.test.tsx"). Removing the
+  critiqueBrief call, or letting resolveClaimAction accept any id, would ship green.
+- NIT-2: decidePlanProposalAction does not check that the proposal belongs to the submitted campaign's
+  brief. The RPC scopes by business_id only. Same tenant, same capability, so the only effect is deciding a
+  sibling campaign's proposal.
+
+BUILD:
+1. NIT-2 first, as code: decidePlanProposalAction verifies that the proposal's brief_id is the submitted
+   campaign's brief (a bounded read through the caller's client) BEFORE calling the RPC. A mismatch returns
+   a typed refusal; the RPC is never called.
+2. CREATE app/[locale]/(dashboard)/campaigns/[id]/brief/plan-actions.test.ts:
+   - decide: Zod refusal; capability refusal; NIT-2's mismatch refusal; the typed 'already_decided'
+     re-render (ADR section 5.6); the happy path calls the RPC exactly once.
+   - apply: the critiqued pre-check; each typed outcome from D5 ('not_critiqued', 'empty_sequence',
+     no_proposals_applied, the version race) maps to its user-facing state; on success critiqueBrief is
+     called in the SAME request ([cr-MINOR-2], section 5.5) - assert on BOTH call sites (:181 and :233),
+     naming what each is for.
+   - recritique: its guard and its critiqueBrief call.
+3. CREATE app/[locale]/(dashboard)/approvals/claim-actions.test.ts: resolveClaimAction's "cite SELECTS,
+   never creates" (section 4.8) - an id NOT in the capped retrieveEvidenceMemory set is refused and nothing
+   is written; an id in the set records the resolution; each of the four section 4.8 actions records its
+   resolution and NEVER writes posts.content.
+4. Fix EVERY phantom citation to name the file that now exists. For "ApprovalsInbox.claims.test.tsx": if
+   the behaviour it names is covered by ApprovalsInbox.test.tsx, cite that file:line; if it is covered
+   nowhere, write the test in ApprovalsInbox.test.tsx. Never leave a citation to a missing file:
+   `git grep -n "claim-actions.test\|plan-actions.test\|ApprovalsInbox.claims.test"` - each hit resolves.
+
+VERIFY:
+- REDDEN (a): delete the critiqueBrief call at :181 -> RED; restore; the same for :233.
+- REDDEN (b): let resolveClaimAction skip the retrieveEvidenceMemory membership check -> RED.
+- REDDEN (c): remove NIT-2's brief check -> RED.
+- `git diff --stat` empty after each. Full loop: tsc; lint; test:app (CI env).
+Append the MAJOR-2 row with a per-action table (action -> test file:line), the list of citations corrected,
+and the NIT-2 row.
+On commit: "D6 - MAJOR-2 and NIT-2 closed: plan-actions.test.ts and claim-actions.test.ts exercise all four
+Server Actions (the already_decided re-render, both critiqueBrief call sites, D5's typed outcomes, cite
+selects never creates); every phantom test citation now resolves to a real file; decidePlanProposalAction
+refuses a proposal from another campaign's brief." Then stop.
+```
+
+#### D7 — MAJOR-3: a claim flag is valid only for the text it was computed on
+
+```
+CORRECTION - Session 34-D · D7. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+
+THE DEFECT (MAJOR-3): claimCheck stores SPANS into the post text (verify-claims.ts: "Rendering a claim means
+slicing THE POST"). No content-changing path clears it:
+- Edit: updatePostContentAction -> updatePostContent (lib/db/posts.ts:611) writes content and leaves
+  ai_generation_metadata untouched. calendar/actions.ts:262 is a SECOND caller of updatePostContent.
+- Regenerate: regeneratePostAction builds newMetadata from ...existingMetadata (posts/actions.ts:328), so
+  the old claimCheck rides onto the new text.
+ClaimFlags.tsx:120 (content.slice(c.span.start, c.span.end)) and MarkedPostText then slice the NEW content
+with the OLD offsets. The gate labels arbitrary substrings, and misses a regenerated draft's real claims.
+lib/db/posts.ts:304's comment ("... or regenerated) is simply absent") is FALSE.
+
+BUILD - read-side invalidation (the section 4 decision table; the loser is per-writer clearing):
+1. PersistedClaimCheck gains contentFingerprint: a SHA-256 hex of EXACTLY the posts.content string the
+   spans index into - not content plus hashtags. generate.ts writes it where it writes claimCheck
+   (generate.ts:618). Compute it in ONE server-only helper; nothing else hashes.
+2. listClaimChecksByPostIds also selects `content` and OMITS any check whose fingerprint does not match
+   the current content, or which has no fingerprint. Absence already means "not checked", never "clean"
+   (its own comment). Pre-launch there are no customer rows; state in the appendix that K2.9-era checks now
+   read "not checked".
+3. resolveClaimAction (and the lib/db writer at posts.ts:328-361) refuses to record a resolution against a
+   check whose fingerprint does not match - no resolution is ever written onto stale spans.
+4. regeneratePostAction builds newMetadata WITHOUT claimCheck (explicit omission, belt and braces).
+5. Correct posts.ts:304's comment to what is now true.
+SHARED-FUNCTION CALLERS: git grep updatePostContent, updatePostContentAndMetadata and
+listClaimChecksByPostIds; list each production caller and its test in the appendix.
+
+VERIFY:
+- Tier-2: a post edited through updatePostContentAction after generation -> the approvals read returns NO
+  check for it; the same through the calendar action; a regenerated post -> no check; an unedited post ->
+  its check, unchanged. resolveClaimAction on a stale check -> refused, nothing written.
+- Tier-2: ClaimFlags / ApprovalsInbox render "not checked" (the existing state) for the stale post - never
+  highlighted substrings.
+- REDDEN (a): make the reader ignore the fingerprint -> the edit test RED. Restore.
+- REDDEN (b): hash content + hashtags instead of content -> the UNEDITED-post test RED (this is the trap in
+  risk class (c)). Restore.
+- REDDEN (c): restore ...existingMetadata's claimCheck in regenerate and disable the reader's check -> the
+  regenerate test RED. Restore.
+- `git diff --stat` empty after each. AGENCY-CLAIMS-FLAGGED-NEVER-EDITED's existing tests stay green: the
+  system still never edits the text. Full loop: tsc; lint; test:app (CI env).
+Append the MAJOR-3 row.
+On commit: "D7 - MAJOR-3 closed: claimCheck carries a fingerprint of the exact text its spans index into;
+every reader treats a mismatch as not checked, the resolve path refuses to write against stale spans, and
+regenerate drops the key - so an edited or regenerated post never shows another text's flags." Then stop.
+```
+
+#### D8 — MAJOR-4 + NIT-4: the planner's run id is its `ai_usage` row, and an envelope violation is named
+
+```
+CORRECTION - Session 34-D · D8. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+Requires a running LOCAL Supabase stack. runToolLoop is SHARED with Stage C triage - rule 9 of the primer
+binds this whole step.
+
+THE DEFECTS:
+- MAJOR-4: ADR 0027 section 5.3 says planner_run_id is "the ai_usage row the spend belongs to" ([db-MAJOR-B]:
+  "without a run id, planner_cents spend has no row linking it to what it bought"); the migration comment
+  (20260922100000_...sql:72-73) repeats it. The code sets plannerRunId: crypto.randomUUID()
+  (lib/campaigns/planner/orchestrator.ts:161). runToolLoop writes its ai_usage row in its finally block
+  (lib/ai/tool-runner.ts:566-586) and returns no id. The Tier-1 test proves only NOT NULL. Undisclosed.
+- NIT-4: tool-runner.ts:514 runs the envelope assertion inside the generic catch: console.error only (:525),
+  counted as an ordinary tool error. It fails closed correctly; the gap is an operator signal.
+
+BUILD:
+1. runToolLoop accepts an OPTIONAL `usageId` (a uuid). When present, the finally-block recordAiUsage
+   insert uses it as the ai_usage row's id; when absent, the insert is byte-for-byte what it is today.
+   Triage passes nothing.
+2. The planner orchestrator mints the id BEFORE the loop, passes it as usageId, and persists the SAME value
+   as planner_run_id. No FK, no migration (the section 4 decision table names the FK as the loser).
+3. If the ai_usage write fails, the run id is currently dangling. Make that visible: capture it with
+   Sentry, tagged with the run id and phase 'planner-usage-record'. This replaces nothing in triage's path.
+4. NIT-4: a named error class for the envelope violation, captured with Sentry (tags: the consumer's prompt
+   id, phase 'tool-result-envelope'). The model-facing result is STILL TOOL_EXECUTION_ERROR_MESSAGE, and the
+   call is still counted exactly as today, so fail-closed behaviour is unchanged. No new console line.
+5. The migration comment at 20260922100000:72-73 is now TRUE; it is not edited.
+
+VERIFY:
+- NEW Tier-2 file (NOT tool-runner.test.ts): with usageId, recordAiUsage receives { id: usageId, ... };
+  without it, the insert payload has NO id key and every other field equals the current shape.
+- NEW Tier-2 in lib/campaigns/planner/__tests__/orchestrator.test.ts (ADD cases): the id passed to
+  runToolLoop EQUALS the plannerRunId handed to persistPlannerProposals; a failing usage write produces a
+  capture tagged with that id.
+- NEW Tier-1: insert an ai_usage row with a known id plus proposals via persistPlannerProposals with that
+  id -> campaign_plan_proposals JOIN ai_usage ON planner_run_id = ai_usage.id returns every proposal.
+- NEW Tier-2 for NIT-4: an envelope violation -> the named error is captured AND the model receives
+  TOOL_EXECUTION_ERROR_MESSAGE AND the tool-call count increments exactly as before.
+- REDDEN (a): go back to crypto.randomUUID() for plannerRunId -> the orchestrator test RED. Restore.
+- REDDEN (b): drop the capture from the envelope branch -> the NIT-4 test RED. Restore.
+- STAGE C UNCHANGED: `git diff <D7-sha> -- lib/ai/tool-runner.test.ts lib/signals/triage/orchestrator.test.ts`
+  is EMPTY, and both files are green. Paste the empty diff into the appendix.
+- Full loop: tsc; lint; test:app (CI env); test:db.
+Append the MAJOR-4 and NIT-4 rows, each with the runToolLoop caller table (triage, planner -> test file).
+On commit: "D8 - MAJOR-4 and NIT-4 closed: the planner mints its run id before the loop and runToolLoop
+records the ai_usage row under that id, so planner_run_id joins to its spend (Tier-1 join test); a failed
+usage write is captured with the run id; an envelope violation is a named, captured error that still fails
+closed. Triage passes no id, and its test files are byte-unchanged." Then stop.
+```
+
+#### D9 — MAJOR-5: redundancy half (b) reaches the approval gate
+
+```
+CORRECTION - Session 34-D · D9. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+taste-skill / impeccable NOT invoked. If this needs a design decision beyond copy, STOP.
+
+THE DEFECT (MAJOR-5): ADR 0027 section 5.8(b): "... -> flagged at the approval gate. Never blocked, never
+edited." At cad8790f checkSetRedundancy runs (lib/campaigns/generate.ts:537) and its only output is a
+console.log of campaign.generate.redundancy_flagged (:548). Nothing persists it and nothing renders it.
+K2.8 disclosed this; K2.10 did not surface it; ADR 0017 Amendment F.3 and ADR 0027 V.2 row 35 record
+MODE2-REDUNDANCY-UNDEFER as DISCHARGED anyway. Ruling A-3's substitution is half-delivered.
+
+BUILD - option (a); option (b) re-defers A-3 and needs a founder ruling (STOP if you think it is right):
+1. Persist: each post in a flagged pair gets ai_generation_metadata.redundancy (jsonb, no migration) naming
+   the OTHER post's order/id and the overlap score, plus D7's contentFingerprint of THIS post's content.
+   It is written in the same insert that writes claimCheck.
+2. Read: extend the approvals read in the same bounded, caller-client shape as listClaimChecksByPostIds (or
+   extend that read; do not widen the shared listPendingDraftPosts / CalendarPostRow). A stale fingerprint
+   means the flag is not shown - the same rule as D7.
+3. Render at the approvals gate beside ClaimFlags, in its idiom: which other post in the campaign it
+   repeats, and that it is a structural overlap, not a judgment. Approve stays ENABLED; the post is not
+   hidden or reordered; no auto-edit. i18n keys in en, pt and es simultaneously. Run the existing agency
+   copy lint over the new keys.
+4. The console line stays (operator signal), unchanged.
+5. The null proofType input is a disclosed K2.8 limitation (the Reviewer: "not a separate finding"). Do
+   not change it; D11 restates it beside the closure.
+
+VERIFY:
+- Tier-2 (generate): a set with a flagged pair persists the redundancy key on BOTH posts with the correct
+  counterpart; an unflagged set persists none.
+- Tier-2 (approvals): a flagged post renders the flag AND an enabled Approve control; an edited flagged post
+  renders no flag; all three locales resolve every new key.
+- REDDEN (a): stop persisting (log only, as at cad8790f) -> the approvals render test RED. Restore.
+- REDDEN (b): disable Approve when flagged -> the "never blocked" assertion RED. Restore.
+- `git diff --stat` empty after each. Full loop: tsc; lint; test:app (CI env).
+Append the MAJOR-5 row.
+On commit: "D9 - MAJOR-5 closed: checkSetRedundancy's flags are persisted on both posts of a flagged pair
+and rendered at the approvals gate - never blocking Approve, never editing the text, and invalidated by an
+edit like a claim flag - so ruling A-3's half (b) is delivered where section 5.8(b) puts it." Then stop.
+```
+
+#### D10 — MINOR-3 + MINOR-7: the brief page reads what the planner actually did
+
+```
+CORRECTION - Session 34-D · D10. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+
+THE DEFECTS:
+- MINOR-3 (silent-failure-hunter #1, verified): lib/campaigns/plan-brief.ts:22 - setBriefPlanAnalysis errors
+  are Sentry-only, and a null return (the not_run guard excluded the row) is not even checked. If proposals
+  were persisted and the status write fails, the brief shows not_run - the worker-path state - while real
+  pending rows sit in the table: the indistinguishability section 3.3 exists to prevent.
+- MINOR-7: app/[locale]/(dashboard)/campaigns/[id]/brief/page.tsx:47 uses listPlanProposalsForBrief (every
+  status, every version, brief_id only). listPendingPlanProposals - the query that matches the partial index
+  and the one AGENCY-PROPOSAL-BOUNDED-QUERY's test names - is called only from its test. It is also why
+  BLOCKER-1's stale rows reached the screen.
+
+BUILD:
+1. MINOR-3: planBrief distinguishes three outcomes of the record: written; FAILED (error) -> capture with
+   phase 'plan-analysis-record-failed'; NO-OP (null, the guard excluded the row) -> a separate capture,
+   phase 'plan-analysis-record-noop', including the status that was already there. Still never thrown
+   (fail-soft stands).
+2. MINOR-3: PlanReviewPanel renders proposals as PRESENT whenever rows exist, whatever
+   plan_analysis_status says. not_run with rows is a distinct, honest state, never "the planner did not
+   run".
+3. MINOR-7: the page reads THE CURRENT brief_version's proposals, every status (section 8.2 renders decided
+   and brief_frozen states), bounded, ORDER BY target_order, created_at, id - matching D5's index. Rename or
+   replace listPlanProposalsForBrief accordingly. Re-point AGENCY-PROPOSAL-BOUNDED-QUERY's test at the
+   function the page calls. Then git grep listPendingPlanProposals: if it has no production caller, delete
+   it and its test cases (dead code is how MINOR-7 happened); if it has one, name it.
+
+VERIFY:
+- Tier-2 (plan-brief.test.ts): the failed and no-op records each produce their own capture with distinct
+  phases; neither throws.
+- Tier-2 (PlanReviewPanel / page tests): rows present + status not_run -> proposals rendered, not the
+  not_run copy; after D4's approve, a brief_frozen proposal renders the "the brief was approved" state; an
+  old-version pending proposal is NOT rendered.
+- Tier-1 or EXPLAIN: the page's query uses D5's index on the local DB - paste the plan into the appendix.
+- REDDEN (a): remove the null check -> the no-op test RED. REDDEN (b): drop the brief_version filter -> the
+  old-version test RED. Restore; `git diff --stat` empty.
+- Full loop: tsc; lint; test:app (CI env).
+Append the MINOR-3 and MINOR-7 rows (MINOR-7 cites D5's SHA for the index and D10's for the query).
+On commit: "D10 - MINOR-3 and MINOR-7 closed: planBrief captures a failed and a no-op plan-analysis record
+as distinct alerts, the panel renders proposals whenever rows exist, and the brief page reads the current
+version's proposals through a query matching D5's index, with AGENCY-PROPOSAL-BOUNDED-QUERY's test now on
+the function production calls." Then stop.
+```
+
+#### D11 — documentation truth: MINOR-4, NIT-5, and the amendments D1–D10 require  ·  no code
+
+```
+CORRECTION - Session 34-D · D11. No .ts/.tsx/.sql. No specialist. Every statement cites the test (file:line)
+that now proves it, at D1..D10's SHAs.
+
+THE DEFECTS:
+- MINOR-4: ADR 0010 section D2.5's Session 34 row (0010:1092) landed in the same commit as the migration
+  (09dbd445), but it is not ADR 0027 section 9.3's verbatim text, and it now says "no third-party content".
+  `reason` is model text written AFTER reading evidence_memory (customer quotes, case studies). For a
+  counsel-facing cascade table the wording must not understate what the table holds.
+- NIT-5: no commit body in the range records ECC invocation "1 of 4". It is inferable as K2.0's
+  code-explorer (K2.0 has no commit). The budget was not exceeded.
+
+DO:
+1. MINOR-4 - THE ONLY IN-PLACE EDIT: QUOTE the current D2.5 row verbatim in the appendix, then replace it
+   with ADR 0027 section 9.3's text VERBATIM. Change nothing else in ADR 0010. If content/legal/*.mdx
+   renders this row, apply CLAUDE.md's evidenceRef rule; if none does, say so.
+2. ADR 0027 gains ONE appended section, "## Correction pass verification (Session 34-D)", numbered VI.1...
+   Never edit sections 0-14 or V.1-V.10. It records, each with its test file:line and SHA:
+   - BLOCKER-1: AGENCY-FREEZE-SUPERSEDE-ATOMIC now holds on the production path (D4); V.2 row 34's claim
+     was not true at cad8790f and is superseded here, not edited.
+   - the new constraint AGENCY-REORDER-RATIFIED-EXACT (D5), its placement rule in one sentence, and the
+     constraint count 46 -> 47 (and the tier tallies updated).
+   - MINOR-2's guard and MINOR-8's refusal, with their typed outcomes.
+   - MAJOR-4: planner_run_id = the ai_usage row id, the no-FK decision and its loser.
+   - MAJOR-3's fingerprint rule under AGENCY-CLAIMS-FLAGGED-NEVER-EDITED.
+   - MAJOR-5 under AGENCY-SET-REDUNDANCY-CHECKED: V.2 row 35 superseded; the null-proofType limitation
+     restated as disclosed, not closed by this pass.
+   - MAJOR-6 under AGENCY-PROPOSAL-DECIDE-VIA-RPC; MINOR-7 under AGENCY-PROPOSAL-BOUNDED-QUERY; MINOR-1
+     under AGENCY-TOOLS-TENANT-BOUND; MINOR-6 under AGENCY-NO-SERVICE-ROLE-IN-TOOLS.
+3. ADR 0017 - APPEND an addendum to Amendment F (never edit F.1 or F.3): F.1's "the brief must be
+   critiqued" is TRUE of the RPC from D5's SHA, and was not before; F.3's discharge of
+   MODE2-REDUNDANCY-UNDEFER is delivered at the gate from D9's SHA, and was a log line before.
+4. NIT-5: RECORDED CLOSURE in the appendix only. A pushed commit body cannot be rewritten. Name the four
+   invocations (K2.0 code-explorer, unlabelled; K2.3 typescript-reviewer "2 of 4"; K2.6 database-reviewer
+   "3 of 4"; K2.7 security-reviewer "4 of 4") with their SHAs, and state that 4 was not exceeded.
+5. Do NOT fill any "executed green in CI" cell for the corrected range - that is D12's, from the logs.
+
+VERIFY: `git diff <D10-sha>..HEAD -- docs/decisions/0027-agency-in-generation.md
+docs/decisions/0017-mode-2-upgrade.md` shows ADDITIONS ONLY; `git diff` of ADR 0010 shows exactly the one
+row. Every citation resolves to a real file:line at a real SHA - check three at random with `git show`.
+Append the MINOR-4 and NIT-5 rows, and the ADR half of MINOR-2.
+On commit: "D11 - MINOR-4 closed and NIT-5 recorded: ADR 0010 D2.5's Session 34 row restored to ADR 0027
+section 9.3 verbatim; ADR 0027 gains its Session 34-D verification section (47 constraints, V.2 rows 34 and
+35 superseded by reference); ADR 0017 Amendment F gains an addendum dating F.1 and F.3 to the SHAs that made
+them true." Then stop.
+```
+
+---
+
+### §4.2 — Resolution log (the appendix's required shape)
+
+The appendix in `docs/reviews/session-34-reviewer.md` is written **incrementally, one block per step**. D1
+opens it, D2…D11 append, and D12 closes it. It is never assembled from memory at the end.
+
+**Opening block (written at D1):**
+
+```
+## CORRECTION PASS (Session 34-D)
+
+**Author:** Session 34-D correction pass · **Date:** <YYYY-MM-DD> · **Range fixed:** `cad8790f..<D12-sha>`
+**Reviewed head:** `cad8790f` — the head the Reviewer read; only this pass's §4 and the report itself landed
+after it, at D0 (`<D0-sha>`).
+**Founder adjudications consumed:** one — no finding is deferred (founder, 2026-09-24), overriding the
+Reviewer's §7 permission to defer MINORs. A-1…A-9 stand; MAJOR-5 option (b), MAJOR-4 option (b) and MAJOR-2
+option (b) were available and not taken (build-guide §4).
+**Everything above this line is the Reviewer's. Everything below it is this pass's.**
+```
+
+**Per-finding row shape.** All five fields are required; a row missing one is not complete:
+
+| Field | What it must say |
+|---|---|
+| **Finding** | The ID, and nothing restated from the Reviewer's text |
+| **Fix** | What changed, in one sentence, naming the file |
+| **Proof** | The test file **and line**, never "covered by the suite" |
+| **Reddening** | The exact mutation, and the clean tree confirmed afterwards |
+| **Commit** | The step's SHA(s) |
+
+**Rows that are not ordinary fixes:**
+- **NIT-5** is the only **recorded closure**. It states why no code change can express the fix and names
+  the four invocations with their SHAs.
+- **BLOCKER-1** carries the **per-caller table** (`approveBriefAction`, `rejectBriefAction`,
+  `editBriefAction` → test file:line), because `SHARED-FUNCTION CALLERS` is the failure it closes.
+- **MAJOR-1** names the new constraint `AGENCY-REORDER-RATIFIED-EXACT`, quotes the one-sentence placement
+  rule, and carries two SHAs (D5, and D11's ADR record).
+- **MAJOR-2** carries the per-action table and the list of citations corrected.
+- **MAJOR-4** and **NIT-4** carry the `runToolLoop` caller table and D8's empty Stage C diff.
+- **MAJOR-5** records that option (b) would have re-deferred ruling A-3 and was not taken.
+- **MINOR-7** carries two SHAs (D5's index, D10's query).
+- **MINOR-2** carries two SHAs (D5's guard, D11's ADR 0017 addendum).
+- **MINOR-4** quotes the replaced D2.5 row verbatim before the new text.
+
+**Every step appends a "what I did NOT touch" line** where it had a tempting adjacent target:
+- D1: no production code, no migration.
+- D2: the service-role arm is kept, not replaced; no tool's code changed.
+- D3: no second UUID regex; no tool behaviour change beyond the mint's throw.
+- D4: `approveBriefIfQualified`'s threshold gate unchanged; `plan-proposals-freeze-supersede.test.ts`
+  unchanged.
+- D5: the two partial indexes, the write-once trigger and the other RPC bodies unchanged.
+- D6: no production change beyond NIT-2's brief check.
+- D7: `posts.content` never written by the system; no per-writer clearing added to the calendar path.
+- D8: `lib/ai/tool-runner.test.ts` and `lib/signals/triage/orchestrator.test.ts` byte-unchanged; no FK.
+- D9: Approve never disabled; the `proofType: null` input unchanged; `listPendingDraftPosts` not widened.
+- D10: fail-soft preserved (nothing thrown).
+- D11: no ADR 0027 §0–14 or V.x edit; no `executed green in CI` cell filled.
+
+---
+
+### §4.3 — Close-out
+
+#### D12 — push the corrected range, re-green CI, re-date every constraint claim, close Track K
+
+```
+CORRECTION - Session 34-D · D12. No specialist. THE POINT OF THIS STEP: cad8790f was green, and V.2/V.10
+dated every constraint to 998030e8. D1..D11 changed an RPC body, the approve/revise paths, the tool loop,
+the approvals gate, the brief page and the ADR. Every one of those claims is now dated to a head that no
+longer exists - and two of them (rows 34 and 35) were not true at it. This step makes them true at the
+corrected head. It is not a formality.
+
+DO:
+1. Push D0..D11 to origin/session-34-adr-0027 (PR #13); run every required workflow to green at the
+   corrected head:
+   - app-tests (tsc + eslint + vitest) - REQUIRED; lint must be green.
+   - db-tests INCLUDING THE SKIP-GUARD. If red, OPEN THE RUN and distinguish a DB-behaviour regression from a
+     stack OOM (grep the log for SIGSEGV, signal 11, OOMKilled=true, out of memory - the Reviewer found ZERO
+     of each at cad8790f), quoting the deciding log line.
+   - eval.
+2. Record FROM THE LOGS: each workflow's run URL and counts; the db-tests skip-guard line and the app-tests
+   skip-guard line QUOTED VERBATIM, as the Reviewer did (at cad8790f: 333 files / 4837 tests; 93 files /
+   782 tests - the new counts must be HIGHER, since this pass only adds tests; if either is lower, STOP and
+   explain). Then, in ADR 0027's Session 34-D section, re-date all 47 constraints: each reads "executed
+   green in CI at <corrected head>", per tier. Tier 1 stays uncovered unless db-tests ITSELF is green. Tier 3
+   cites the scans re-run at this head. Tier E: none.
+3. db-tests PROMOTION TALLY: pull_request runs never move it; only consecutive green master PUSH runs do.
+   Record the tally in docs/current-phase.md with each run's event type.
+4. docs/current-phase.md - Session 34 close-out entry: this pass and its range; real post-correction counts
+   at the head they are dated to, never claimed; the tally; p95 latency still NOT MEASURED against ADR
+   section 7.3's predicted 30 000 ms (no planner run has been observed - say so again, do not estimate).
+5. Section 5 of docs/build-guide/session-34.md - tick each row with evidence, stating per item whether it
+   applied (in particular: ADR 0010 D2.5 is now verbatim; MODE2-REDUNDANCY-UNDEFER is discharged AT THE GATE,
+   from D9's SHA; docs/backlog.md receives NO finding row - by founder instruction - only the K1 deferrals
+   section 5 already lists).
+6. THE APPENDIX CLOSING BLOCK: all 20 findings by ID -> disposition -> proving test -> SHA(s); re-run the
+   count check (20 rows, 20 distinct IDs; BLOCKER-1, MAJOR-1..6, MINOR-1..8, NIT-1..5) - if it fails, the
+   pass is not closed. Name the one recorded closure (NIT-5) and state that nothing was deferred. State
+   which Reviewer statements have since CHANGED - WITHOUT editing them: section 3's SHARED-FUNCTION CALLERS
+   table (reviseBrief is gone; critiqueBrief's plan-actions callers are now tested; runToolLoop's usage
+   write takes an id), section 5's rows 3, 4, 18, 29, 32, 33, 34 and 35, and section 1's grant row ("pinned
+   by no test" is no longer true). Correct the silent-failure-hunter's reservationHeld slip only by
+   reference to the Reviewer's own section 6, which already corrected it.
+7. .wolf/anatomy.md, .wolf/memory.md, .wolf/cerebrum.md; log every bug from this pass to .wolf/buglog.json
+   (BLOCKER-1, MAJOR-1 and MAJOR-3 at minimum).
+
+VERIFY: `git diff <D0-sha>..<D12-sha> -- docs/reviews/session-34-reviewer.md` shows additions BELOW the
+Reviewer's closing line and NOTHING ELSE. Required workflows green at the corrected head, or their red
+explained from the log with evidence in the appendix.
+On commit: "D12 - Session 34-D closed: D0..D11 pushed; app-tests green at <sha> (<URL>, skip-guard <n> files
+/ <n> tests quoted from the log); db-tests <state> (<URL>, skip-guard <n> files / <n> tests); eval <state>;
+all 47 AGENCY-* constraints re-dated to the corrected head per tier; db-tests tally recorded per run with
+event type. The 34-D appendix records all 20 findings - none deferred, NIT-5 the single recorded closure -
+and the diff proves nothing above the appendix changed. Track K closed." Then stop.
+```
+
 ---
 
 ## §5 — Docs to update at close-out (Track K done)

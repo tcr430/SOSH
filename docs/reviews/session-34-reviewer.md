@@ -1,0 +1,486 @@
+# Session 34 · Track K — Reviewer report (K3)
+
+**Scope reviewed: `28aa23c6..cad8790f`; all citations are `git show <sha>:<path>` at that range, never HEAD.**
+
+Documents audited *against*, named at their own commits (Session 22-F, NEW-12):
+
+- **ADR 0027 §§0–14** read at **`28aa23c6`**, the docs-only commit that put it into git (`git log --diff-filter=A`
+  returns `28aa23c6` and nothing earlier), so the Section 2 precondition holds. The ADR's **Builder verification
+  appendix (V.1–V.10)** is an artefact *inside* the range and is read at **`cad8790f`**. `git diff 28aa23c6..cad8790f`
+  over the ADR adds only that appendix; §§0–14 are byte-unchanged.
+- **`docs/build-guide/session-34.md`** read at **`28aa23c6`** (unchanged in the range).
+- ADR 0017 / 0021 / 0024 / 0010 amendments are range artefacts, read at `cad8790f`. ADR 0015, ADR 0016 and CLAUDE.md
+  read at `cad8790f`.
+
+Local mutation runs used a **detached scratch worktree at exactly `cad8790f`**, env pointed at the **local** Supabase
+stack only (`127.0.0.1:54321/54322`). The repo's `.env.local` targets the remote project and was deliberately not
+used. The local DB's migration table is at `20260923100000`, the range's last migration. Every plant was restored,
+and `git status` was clean after each one.
+
+---
+
+## 0. Verdict
+
+**NOT READY TO MERGE. 1 BLOCKER, 6 MAJOR, 8 MINOR, 5 NIT.**
+
+The security architecture holds, and I re-ran it rather than re-reading it. Tools are read-only and tenant-bound. The
+brand has a real runtime initializer, and the cast scan reddens. The planner's output schema has no verdict field.
+Claim verification is a pure id-set intersection. Every Tier-3 scan I planted against reddened. CI is green at the
+head.
+
+The defects are in **wiring and in what is claimed as closed**:
+
+- the freeze/supersede RPC this ADR calls "the genuine hole" has no production caller;
+- a ratified `reorder` does not produce the order the human ratified;
+- four new Server Actions have no tests, while three test headers cite test files that do not exist;
+- claim flags go stale the moment a post is edited or regenerated;
+- `planner_run_id` links to nothing;
+- half (b) of the redundancy check never reaches the approval gate.
+
+---
+
+## 1. What I ran, and what it showed
+
+| Check | Result |
+|---|---|
+| CI at head `cad8790f` (event `pull_request`, PR #13) | app-tests **35986048998** ✅, db-tests **35986048987** ✅, eval **35986049119** ✅ |
+| app-tests skip-guard, **verbatim from the log** | `skip-guard: 333 file(s) under [app, lib, components] all visible, zero failures — green. (4837/4837 tests passed)` |
+| db-tests skip-guard, **verbatim from the log** | `skip-guard: 93 file(s) under [supabase/__tests__] all visible, zero failures — green. (782/782 tests passed)` |
+| db-tests stack health | the log shows the known image-tag shadow step (`ghcr.io/supabase/postgres:17.6.1.113` tagged as `.111`); **no** `signal 11` / `SIGSEGV` / `OOMKilled` / out-of-memory line. Green, not a stack failure |
+| Promotion tally | both runs are `pull_request` events, so the tally **does not move**. `docs/current-phase.md` says so correctly |
+| `pg_constraint` on `ai_budget_daily` at head (live local DB) | exactly **one** purpose CHECK, `ai_budget_daily_purpose_check`, with all four values, plus `reserved_units_check`. **No stale CHECK survived** |
+| `information_schema.routine_privileges` for the 5 new SECURITY DEFINER functions + `reserve_ai_budget` | EXECUTE held by `postgres, service_role` only. **Correct live, but pinned by no test** (MAJOR-6) |
+| `authenticated` SELECT on the six tool backing tables | a `*_select_own` policy exists on all eight tables touched (incl. `insight_cards`, `signal_candidates`, `signals`), so the production (authenticated) tool path works |
+| `npx tsc --noEmit --skipLibCheck` at head plus one planted raw field | the **only** error is the plant (below), so head itself is tsc-clean |
+| Tier-3 scans re-run and **reddened by me** at head | §4, every one red on a real plant |
+| `ecc:silent-failure-hunter` (my one invocation, read-only, at `cad8790f`) | 2 findings. Both verified by me and carried as MINOR-3 and NIT-4. One factual slip in its "checked fine" list is corrected in §6 |
+| **ECC budget, Builder** | four invocations: K2.0 `code-explorer` (build guide), typescript-reviewer "2 of 4" (K2.3), database-reviewer "3 of 4" (K2.6), security-reviewer "4 of 4" (K2.7). **Within budget.** Invocation 1 is not labelled in any commit body (NIT-5) |
+| Migrations edited after commit | `git log --follow` per file: each of the three migrations has exactly **one** commit (`09dbd445`, `26e732fc`, `4d447238`). The K2.7 security findings were fixed by **forward** migration `20260923100000` |
+| `MODE2-BRIEF-FROZEN-GUARD` byte-unchanged | `git diff --stat 28aa23c6..cad8790f -- supabase/__tests__/mode2-brief-rls.test.ts` is **empty** ✅ |
+| Stage C byte-identical | `lib/ai/tool-runner.test.ts` and `lib/signals/triage/orchestrator.test.ts`: **empty diff**. The triage tool tests changed only `as` → `as unknown as` on result casts; **no assertion changed**. No `TRIAGE_*` constant renamed ✅ |
+| p95 | `current-phase.md`: *"Measured p95 latency against ADR 0027 §7.3's predicted 30 000 ms: NOT MEASURED. No planner run has ever been observed"*. **Honest; not a finding** |
+
+---
+
+## 2. Findings
+
+### BLOCKER-1 — `approve_brief_and_supersede_proposals` and `revise_brief_and_supersede_proposals` have zero production callers; `AGENCY-FREEZE-SUPERSEDE-ATOMIC` is AUTHORED-NOT-EXECUTED on every real path
+
+ADR 0027 §5.7 calls this "the genuine hole", and says the fix is **one** RPC doing approval *and* supersede in one
+function body. The RPCs exist and are one function body each
+(`20260922110000_campaign_plan_proposal_rpcs.sql:323`, `:357`). **No TypeScript at `cad8790f` names either one.**
+`git grep` for `approve_brief_and_supersede|revise_brief_and_supersede` over `*.ts`/`*.tsx` returns nothing, and
+there is not even a `lib/db` wrapper. The production paths are unchanged:
+
+- **Approve:** `approveBriefAction` → `approveBriefIfQualified` → `lib/campaigns/brief.ts:215`
+  `approveBrief(client, brief.id)`. That is the single PostgREST UPDATE at `lib/db/campaign-briefs.ts:77`, which
+  supersedes nothing.
+- **Version advance:** `rejectBriefAction` and `editBriefAction` → `reviseBrief` (`brief/actions.ts:131`, `:217` →
+  `lib/db/campaign-briefs.ts:100`), which supersedes nothing.
+
+The Tier-1 test `plan-proposals-freeze-supersede.test.ts` calls the RPCs directly through `w.admin.rpc(...)`, so it
+proves a function the product never runs. This is the `SHARED-FUNCTION CALLERS` failure the Session 22 blockers were
+made of.
+
+**Observable consequences at head:**
+
+1. Approving a brief leaves its pending proposals `pending` against a frozen brief. `brief/page.tsx:47` lists them
+   (`listPlanProposalsForBrief`), and `PlanReviewPanel.tsx:104` renders them as pending forever.
+   `superseded_reason='brief_frozen'` is never written, so the §8.2 state *"the brief was approved"* never renders.
+2. After any human edit or reject, the version advances with the old-version proposals still `pending`. The page
+   query spans **every** version, so those proposals are listed as pending and, once the brief is `critiqued` again,
+   **selectable**. The apply RPC then refuses them as `no_proposals_applied`, because it is version-scoped since
+   `4d447238`. That is exactly ADR §5.7's *"If neither fix lands: stale pending proposals stay visible and
+   acceptable"*.
+
+**Disclosure:** none. The K2.6 body describes the RPCs as the fix. ADR 0027 V.2 row 34 and ADR 0017 Amendment F
+treat the property as closed.
+
+**Required:** route `approveBriefIfQualified` and both `reviseBrief` callers through the RPCs (with `lib/db`
+wrappers). Add a per-caller test for each, and a Tier-1 test that goes through `approveBriefIfQualified` rather than
+the raw RPC.
+
+---
+
+### MAJOR-1 — a ratified `reorder` lands one position away from where the human ratified it, and no test sends a reorder through the RPC
+
+`apply_brief_proposals` (the live definition is `20260923100000_…sql`) resolves a reorder by giving the moved entry
+`sort_key = proposed_order` (`:157`) and then ranking with `ORDER BY sort_key, idx` (`:161`). The occupant of the
+target slot has the **same** `sort_key` and wins the `idx` tiebreak, so the moved entry never reaches
+`proposed_order`. I reproduced the exact CTE against the live local Postgres:
+
+```
+entries r0..r3
+move 3 -> 0 : r0,r3,r1,r2     (r3 lands at 1, not 0)
+move 0 -> 3 : r1,r2,r0,r3     (r0 lands at 2, not 3)
+```
+
+The planner prompt tells the model `reorder` means *"move the post at targetOrder to proposedOrder"*, and the human
+ratifies that sentence. The RPC then writes a different brief, which freezes and drives N posts (§6.1's
+*durable, multiplied* effect). **No Tier-1 test covers a reorder through the RPC.**
+`git grep reorder|proposed_order` over `plan-proposals-ratify.test.ts` and `plan-proposals-version-scope.test.ts`
+finds nothing. The only reorder case is a hand-built array in `lib/campaigns/role-sequence.test.ts:139`, which never
+touches the RPC.
+
+**Required:** fix the placement semantics (for example, remove the entry, then insert it at `proposed_order`) and add
+Tier-1 cases for a forward move, a backward move, and a reorder combined with a drop.
+
+---
+
+### MAJOR-2 — the four new Server Actions have no tests, and three test files cite test files that do not exist
+
+The ADR assigns behaviour to these actions: the typed `already_decided` re-render (§5.6), the apply action
+re-critiquing in the same request ([cr-MINOR-2], §5.5), and *"cite selects, never creates"* checked at runtime
+(§4.8). None of it is executed:
+
+| Action | File | Test that exercises it |
+|---|---|---|
+| `decidePlanProposalAction` | `brief/plan-actions.ts:78` | **none** |
+| `applyPlanProposalsAction` (incl. its two `critiqueBrief` calls) | `brief/plan-actions.ts` (`critiqueBrief` at `:181`, `:233`) | **none** |
+| `recritiqueBriefAction` | `brief/plan-actions.ts` | **none** |
+| `resolveClaimAction` | `approvals/claim-actions.ts` | **none** |
+
+The components that call them mock them out (`vi.mock('./plan-actions')`, `vi.mock('./claim-actions')`), and point
+to tests that are not in the tree at `cad8790f` (`git ls-tree` of the directories):
+
+- `PlanReviewPanel.test.tsx:28`: *"plan-actions.test.ts covers the actions themselves"*. **That file does not exist.**
+- `ClaimFlags.test.tsx:26`, `ApprovalsInbox.test.tsx:23`, `lib/db/posts.claims.test.ts:10`: *"claim-actions.test.ts"*.
+  **That file does not exist.**
+- `ClaimFlags.test.tsx:25`: *"ApprovalsInbox.claims.test.tsx"*. **That file does not exist.**
+
+So a SHARED-FUNCTION-CALLERS listing points at phantom coverage, and `critiqueBrief` has two new production callers
+with no test. Removing the `critiqueBrief` call from the apply action, or letting `resolveClaimAction` accept any id,
+would ship green.
+
+**Required:** write the tests, or correct the citations and record the actions as AUTHORED-NOT-EXECUTED.
+
+---
+
+### MAJOR-3 — claim flags go stale when a post is edited or regenerated, and then highlight text the model never wrote
+
+`claimCheck` stores **spans** into the post text (`verify-claims.ts`, *"Rendering a claim means slicing THE POST"*).
+Neither content-changing path clears it:
+
+- **Edit:** `updatePostContentAction` → `updatePostContent` (`lib/db/posts.ts:611`) writes `content` and leaves
+  `ai_generation_metadata` untouched.
+- **Regenerate:** `regeneratePostAction` builds `newMetadata` from `...existingMetadata`
+  (`posts/actions.ts:328`), so the old `claimCheck` rides onto the new text.
+
+`ClaimFlags.tsx:120` (`content.slice(c.span.start, c.span.end)`) and `MarkedPostText` then slice the **new** content
+with the **old** offsets. The gate labels arbitrary new substrings "uncited" or "cited evidence not found", and it
+does not flag a regenerated draft's actual claims at all. ClaimFlags even links "Edit the text" as one of the four
+§4.8 actions, which is the step that corrupts the flag. `lib/db/posts.ts:304` states *"A post with no claimCheck
+(generated before K2.9, **or regenerated**) is simply absent"*. **That is false.**
+
+**Required:** clear or invalidate `claimCheck` on both paths (it would then render "not checked"), and test both.
+
+---
+
+### MAJOR-4 — `planner_run_id` is a random UUID with no link to `ai_usage`, so `AGENCY-PROPOSAL-PROVENANCE` is met in form only
+
+ADR 0027 §5.3 says `planner_run_id` is *"the `ai_usage` row the spend belongs to"*, and gives the reason `[db-MAJOR-B]`:
+*"without a run id, `planner_cents` spend has no row linking it to what it bought"*. The migration comment repeats
+it (`20260922100000_…sql:72-73`). The code sets `plannerRunId: crypto.randomUUID()`
+(`planner/orchestrator.ts:161`). `runToolLoop` writes its `ai_usage` row in its `finally` block and returns no id,
+and there is no FK. The proposals group by run, but nothing joins them to spend. The Tier-1 test proves only
+`NOT NULL`. This deviation is not disclosed (the K2.7 body says *"one planner_run_id per run"*).
+
+**Required:** have the loop return the `ai_usage` row id (or record the run id on the `ai_usage` row) and persist that.
+Otherwise amend the ADR and fix the migration comment.
+
+---
+
+### MAJOR-5 — redundancy half (b) is a log line, not an approval-gate flag; the discharge is claimed complete anyway
+
+ADR 0027 §5.8(b): *"… → **flagged at the approval gate**. Never blocked, never edited."* At head, `checkSetRedundancy`
+runs (`generate.ts:537`) and its only output is a `console.log` of `campaign.generate.redundancy_flagged`
+(`:548`). Nothing persists the flag and nothing renders it. The K2.8 body disclosed this
+(*"surfacing it at the approval gate needs a persistence/UI decision (K2.10 or later)"*), but K2.10 did not surface
+it. ADR 0017 Amendment F.3 and ADR 0027 V.2 row 35 then record `MODE2-REDUNDANCY-UNDEFER` as **discharged**. An
+operator log line is not a human gate, so ruling A-3's substitution is half-delivered. (Separately, the `proofType`
+input is always `null` (`generate.ts`, *"a null proofType"*), so half of the ADR 0026 tuple condition never
+discriminates. That is disclosed in K2.8 and not a separate finding.)
+
+**Required:** persist the flag (for example in `ai_generation_metadata`) and render it in the approvals gate, or amend
+F.3 and V.2 to record half (b) as open.
+
+---
+
+### MAJOR-6 — no test pins that `authenticated`/`anon` cannot EXECUTE the SECURITY DEFINER RPCs that trust a caller-supplied `p_user_id`
+
+`apply_brief_proposals` and `decide_plan_proposal` take `p_user_id` as a **parameter** and check the capability of
+*that* id (`assert_plan_proposal_author`). The whole authorisation model therefore rests on the REVOKE/GRANT lines
+(`…rpcs.sql:261`, `:305-307`, and the others). If an authenticated user could execute them, they could pass the
+owner's id. The grants are correct on the live DB (§1). But no test asserts them. The decide/ratify/version-scope
+tests all call through `w.admin`, and none queries `routine_privileges` or calls an RPC with an authenticated JWT.
+The repo has the precedent (`rls-policy-lockdown.test.ts`: *"purge_business function is executable by service_role
+only"*). A later `DROP FUNCTION … CREATE FUNCTION` restores the default PUBLIC EXECUTE, and nothing would go red.
+
+**Required:** a Tier-1 assertion per function, covering both the grant query and an authenticated
+`rpc(...)` → `42501`/permission denied.
+
+---
+
+### MINOR-1 — the Tier-1 tenancy test runs every tool under service-role; its premise is stale and the "RLS arm" is mislabelled
+
+`planner-tools-tenancy.test.ts:18` says *"The planner's own `client` parameter is service-role in production"*. At
+head that is false. The orchestrator threads the caller's authenticated client, and `prepareBriefForCampaign` is
+called with the request client (`campaigns/new/actions.ts:154`). Every tool call in the file uses `admin`
+(`:195`, `:222`, …). So user U, who reaches both A and B, is seeded but never used as the client, and the "RLS arm"
+(C) is really just a second `.eq` arm.
+
+What the file *does* prove, I mutated: removing `listCampaigns`' `.eq('business_id')` fails 2 tests. What it cannot
+prove: removing **one** of `getSignalForCampaign`'s three per-hop `business_id` predicates stays green (hop 1
+removed: 4/4 pass). Removing all three fails only the no-linked-card case. The ADR's point that there are "three
+chances to omit one" has no test that sees a single omission. The seed rows are `status='active'`,
+`scope='brand'`, and the positive control runs first, so the test is not vacuous.
+
+**Required:** run the tools under U's signed-in client (the ADR's scenario) as well as under service-role, and add a
+recording-client Tier-2 test asserting `business_id` on each hop.
+
+### MINOR-2 — `apply_brief_proposals` has no `status='critiqued'` guard; ADR 0017 F.1 says it has one
+
+ADR 0027 §5.4's diagram gives the RPC `status='critiqued', frozen_at IS NULL, version++`. ADR 0017 Amendment F.1
+(`0017:931`) says *"the brief must be `critiqued`"*. The RPC checks only `frozen_at` and `version`
+(`20260923100000_…sql:62`, `:173`). `applyPlanProposalsAction` checks `critiqued` before calling, and the version
+guard stops two rounds racing, so I found no reachable bypass today. But the RPC is the stated security boundary,
+and the amendment misdescribes it. **Required:** add `AND status='critiqued'` (typed outcome) or correct F.1.
+
+### MINOR-3 — `planBrief` swallows a failed or no-op status write, leaving proposals behind a brief that reads `not_run` (silent-failure-hunter #1, verified)
+
+`plan-brief.ts:22`: `setBriefPlanAnalysis` errors are Sentry-only, and a `null` return (the `not_run` guard excluded
+the row) is not even checked. If proposals were persisted and the status write fails, the brief shows `not_run`,
+which is the worker-path state, while real pending rows sit in the table. That is the indistinguishability §3.3
+exists to prevent. **Required:** treat a failed or no-op record as a distinct alert, and render proposals as present
+whatever the status.
+
+### MINOR-4 — the ADR 0010 §D2.5 row is not verbatim, and its new wording understates what the table holds
+
+The row landed in the **same commit** as the migration (`09dbd445`) ✅. But it differs from ADR 0027 §9.3's verbatim
+text (`0010:1092`), and it now says *"no third-party content"*. `reason` is model text written **after reading
+`evidence_memory`** (customer quotes, case studies), and the planner is invited to say what it found. For a
+counsel-facing cascade table, **required:** restore §9.3's wording verbatim.
+
+### MINOR-5 — `toToolResultId` is an exported, non-validating mint that bypasses the type-level guarantee without a cast
+
+`wrap-evidence.ts:331`. I planted `texts.map((text) => toToolResultId(text))` in `list_recent_posts`, and **tsc
+accepted it**, while the planted raw `html_url` in the same run was rejected (`TS2322`). The cast scan cannot see a
+function call. The dispatcher's UUID-shape assertion catches it at runtime (post text is not UUID-shaped, so the
+model sees `TOOL_EXECUTION_ERROR_MESSAGE`), so this is defence-in-depth, not a hole. **Required:** validate the UUID
+shape inside `toToolResultId`, or scan its call sites.
+
+### MINOR-6 — the service-role function-body scan uses a hand-written list that omits a function the tools reach
+
+`PLANNER_CALLED_DB_FUNCTIONS` (`planner/__tests__/source-scans.test.ts:280`) lists six functions. `list_evidence`
+also reaches **`getEvidenceMemoryByIds`** through `wrapEvidenceForPrompt`, and that function is not in the list. It
+is caller-client today (verified), so this is not a live defect. But the list is not derived from `tools.ts`'
+imports, so a new import is covered only if someone remembers to add it.
+
+### MINOR-7 — the page's proposal query does not match the partial index; the constraint's test targets a function with no production caller
+
+`brief/page.tsx:47` uses `listPlanProposalsForBrief` (every status, every version, `brief_id` only). The partial
+review index is `WHERE status='pending'`. `listPendingPlanProposals`, the query that matches it and the one
+`AGENCY-PROPOSAL-BOUNDED-QUERY`'s test names, is called only from its test. It is bounded and all-ASC, so the house
+rule holds. It is also the reason BLOCKER-1's stale rows reach the screen.
+
+### MINOR-8 — a round of drops covering every entry commits an empty `roleSequence`
+
+The RPC does not refuse it (`coalesce(jsonb_agg(...),'[]')`). `applyRatifiedProposals` then reports `invalid_result`
+*after* the commit (its own "HONEST LIMIT"), so the brief is left `draft` with zero entries. **Required:** refuse in
+the RPC with a typed outcome.
+
+### NIT-1 — `tools.test.ts` (c) smuggles `businessId`, not an arbitrary key, and checks `toHaveProperty('issues')` rather than `instanceof z.ZodError`
+
+`tools.test.ts:98-103`. My mutations (`z.object`, `z.object({businessId: z.never()})` blocklist, extra JSON-schema
+key, missing `properties`) all reddened it, so this is a precision nit, not a hole.
+
+### NIT-2 — `decidePlanProposalAction` does not check that the proposal belongs to the submitted campaign's brief
+
+The RPC scopes by `business_id` only. It is the same tenant and author capability, so the only effect is rejecting a
+sibling campaign's proposal.
+
+### NIT-3 — the `wrapSignalForPrompt` allowlist scan still covers only `lib/signals/**`
+
+It was widened in K2.4's own commit, with the assertion updated ✅. A fourth caller *outside* `lib/signals/` would
+not fail it.
+
+### NIT-4 — a dispatcher envelope violation is indistinguishable from an ordinary tool error (silent-failure-hunter #2, verified)
+
+`tool-runner.ts:514` runs inside the generic catch: `console.error` only (`:525`), counted as a tool call. It fails
+closed correctly. The gap is an operator signal (a named error plus Sentry).
+
+### NIT-5 — ECC invocation "1 of 4" is not recorded in any commit body
+
+It is inferable as K2.0's `code-explorer` (K2.0 has no commit).
+
+---
+
+## 3. The ten checks, in order
+
+1. **Tools / clients.** All six tools read through caller-client functions carrying an explicit `business_id`:
+   `listEvidenceMemoryCandidates`, `listBrandMemoryCandidates`, `listAudienceMemoryCandidates` (plus
+   `getEvidenceMemoryByIds` through `wrapEvidenceForPrompt`), `listCampaigns`, `getSignalForCampaign`,
+   `listRecentPublishedPostTexts`. The service-role imports in `memory-evidence.ts:74-76` and
+   `memory-audience.ts:41-42` are in `import*` **siblings** that are never reached. `getSignalForCampaign` takes a
+   caller client, has `.eq('business_id')` on all three hops, and imports no service-role (`.maybeSingle()` instead of
+   the ADR's `.single()`, which is justified). `getCampaignById` and `listPostsByCampaign` are **not used by any
+   tool**. `getCampaignById` is used by the *orchestrator* on the caller's client with a caller-supplied id, outside
+   the model's reach. The K2.1 scans reddened (§4).
+2. **Tenancy tests.** The Tier-2 schema test passes: `properties` must exist, the key set is exact and Zod-derived,
+   and the code is `unrecognized_keys`. All five of my mutations reddened it. The Tier-1 test: MINOR-1.
+3. **Brand.** `renderedToolResultBrand: unique symbol = Symbol(...)` is non-exported with a real initializer ✅. The
+   cast scan reddens against a plant in `verify-claims.ts` (`as`) and in `claim-actions.ts` (angle-bracket) ✅.
+   `execute`'s `GuardedJson` return fails tsc on a raw field ✅, with the mint caveat in MINOR-5. The runtime
+   assertion runs on the **serialised** form at the single `JSON.stringify` (`tool-runner.ts:513-514`) ✅. The stale
+   comment at `wrap-evidence.ts:241-244` was corrected ✅.
+4. **Injection walkthrough, re-run on code.** First kill: `PlannerDecisionSchema`/`PlannerProposalSchema` are
+   `strictObject` at both levels, with fields `kind, targetOrder, proposedRole?, proposedOrder?, reason`. **No field
+   is read by any code as a verdict**, and `assertDecisionSchemaIsStrict` refuses `applied/status/approved/verified`
+   at loop entry. Second kill: `verifyClaims` is a `Set.has` over `BoundEvidence.sentIds`, minted from the same fetch
+   as the prompt text (`bindEvidenceForPrompt`), with no model in the loop. `reason` is free text, but the ADR
+   accepts it as an unverifiable assessment and nothing consumes it as a verdict. **The residual is the named one.
+   Nothing worse.** (MAJOR-1 widens it slightly: even a *faithful* human ratification of a reorder mis-applies.)
+5. **Laundering.** `persist.ts` → `neutraliseProposalText` → the imported `neutralizeWithSentinels` (not copied) on
+   `reason`, the only text column. It is asserted on the **stored row** (`planner-persistence.test.ts:66-83`). The
+   failure and capped branches write zero rows. The apply RPC copies no proposal text (only enums, integers, and the
+   existing `angle`), which is disclosed in `persist.ts`'s header as a correction to the build guide. The sixth
+   sanitizer scan reddens ✅.
+6. **Frozen brief.** Guard test byte-unchanged ✅. `editBriefAction` not widened (`brief/actions.ts` has an empty
+   diff) ✅. Frozen refused with typed `'frozen'` ✅. The shared refine is imported by both `prompts/brief.ts` and
+   `apply-proposals.ts` ✅. Caveat: `validateRoleSequence` runs *after* the RPC commits (disclosed; see MINOR-8).
+7. **Atomicity.** The approve and revise supersede RPCs are single function bodies ✅, but unwired (**BLOCKER-1**).
+   `decide_plan_proposal` is one guarded UPDATE, `AND status='pending'`, `IF NOT FOUND THEN RETURN NULL` ✅. Apply is
+   guarded on `version = p_expected_version` and re-derives `order` via `row_number()` ✅, but with the placement
+   bug in MAJOR-1. The atomic test issues two genuinely concurrent PostgREST calls (`Promise.all`) against live
+   Postgres ✅.
+8. **Soft failure.** DEFAULT `'not_run'` with a CHECK, Tier-1 ✅. The runtime array
+   `TOOL_LOOP_FAILURE_REASONS`, `satisfies Record<…,'unavailable'>` (so mapping to `ok` is a compile error), and all
+   eleven map to `unavailable` ✅. The reason column has a closed CHECK plus a pairing CHECK ✅. Reconcile happens on
+   every loop outcome, and a pre-loop failure refunds to 0 ✅. The cap returns `capped` without a model call, and
+   `isPlannerBudgetCapped` is a service-role boolean ✅. The distinguishability test renders from the persisted
+   column (`page.tsx` passes `brief.plan_analysis_status`). Gap: MINOR-3.
+9. **Grants / policy / cascade.** One SELECT policy in the InitPlan form ✅. `REVOKE ALL FROM anon`, and
+   `REVOKE INSERT, UPDATE, DELETE, TRUNCATE FROM authenticated`, with the TRUNCATE grant absence asserted ✅. No
+   UPDATE grant, no DELETE policy, no `BEFORE DELETE` trigger ✅. `kind` and `status` NOT NULL ✅. `proposed_role` is
+   the `posts_role_check` six ✅. Partial UNIQUE on pending ✅. All three FKs declare CASCADE ✅. The trigger raises on
+   every write-once payload column ✅. The D2.5 row is in the same commit ✅ but not verbatim (MINOR-4). The purge test
+   covers the root delete, `purge_business`, and `decided_by` SET NULL ✅. `ai_budget_daily` widened by definition
+   lookup plus RAISE, with no stale CHECK ✅. `rls-policy-lockdown.test.ts` is an **enumeration** of write-policy
+   tables. `campaign_plan_proposals` has no write policy, so there was nothing to add there, but the RPC-grant
+   pinning it also models is missing (MAJOR-6).
+10. **CI.** §1. Green at the head, with the skip-guard lines read from the logs. V.2's column cites the prior head
+    `998030e8`; the head itself (`cad8790f`, docs-only) is also green. Tier E: none, which is correct.
+
+**SHARED-FUNCTION CALLERS at head (`git grep`, production only):**
+
+| Function | Callers | Test per caller |
+|---|---|---|
+| `runToolLoop` | `triage/orchestrator.ts:128`, `planner/orchestrator.ts:107` (2) | triage suite (unmodified); `planner/__tests__/orchestrator.test.ts` |
+| `assembleBrief` | `prepare-brief.ts:31`, `promote.ts:154`, `seed.ts:85` (3; only the first plans) | `prepare-brief.test.ts`; worker paths scan-asserted to never import the planner |
+| `reviseBrief` | `brief/actions.ts:131`, `:217` (2; **not** routed through the supersede RPC, BLOCKER-1) | existing `actions.test.ts` |
+| `editBriefAction` | `BriefReviewForm.tsx:37` (1, not widened) | `BriefReviewForm.test.tsx` |
+| `critiqueBrief` | `prepare-brief.ts:37`, `plan-actions.ts:181`, `:233` | `prepare-brief.test.ts`; **plan-actions: none (MAJOR-2)** |
+| `checkRoleCoverage` | `generate.ts:506` (1, unchanged) | existing |
+| `wrapToolResultForPrompt` | `triage/tools.ts`, `planner/tools.ts` (+ `scripts/eval/live-triage-run-populated-memory.ts`, non-production) | both `tools.test.ts` deep-walks |
+| `wrapSignalForPrompt` | `triage/card.ts:192`, `triage/orchestrator.ts:109`, `planner/tools.ts:124` (3) | allowlist widened in K2.4's own commit (NIT-3) |
+
+**Tools are built once per campaign** (`orchestrator.ts`, before `runToolLoop`, outside `generate.ts`), and a planted
+construction in the fan-out fails 3 scans ✅. **Bounds:** each bound has a reddenable case that imports the constant,
+the tool-call cap asserts **withholding**, and the `max_tokens` invariant is asserted for both consumers ✅. **The
+three inherited holes are closed** (`provider_error` non-retryable, `withTimeout` with fake timers, and a tool error
+relaying the constant rather than the DB text) ✅. **Prompt re-freeze:** three frozen rows moved `3 → 4`, both fixtures
+regenerated per the K2.9 body, `AI_ORIGINAL_SCHEMA_VERSION` still `2` ✅. **L-1 scope:** no write tool, no egress,
+no provider, no new memory writer (`cite` checks the id against a capped `retrieveEvidenceMemory`), no embeddings, no
+eleventh dimension, no new API route, no human gate removed (K2.13 keeps Generate as a separate explicit control) ✅.
+
+**UX:** no `asChild`, `console.*`, `dangerouslySetInnerHTML` or inline `style` in any changed `app/` file. No
+select-all/accept-all. The transient `draft` state explains the absent Approve (`PlanReviewPanel.tsx`
+`briefStatus === 'draft'`). `verif*`/`support*`/`suport*`/`comprov*`/`respald*` appear nowhere in
+`i18n/{en,pt,es}/agency.json`. **taste-skill and impeccable changed nothing** (K2.10 body: *"taste-skill: CHANGED
+NOTHING … impeccable: READ-ONLY audit, CHANGED NOTHING. Detector: 0 findings"*), and neither touched the §8
+contract.
+
+---
+
+## 4. Tier-3 scans: re-run and reddened by me at `cad8790f`
+
+Each row: a plant in the scratch worktree, the named file re-run, then restored.
+
+| # | Plant | Result |
+|---|---|---|
+| 1/5 | `.insert(` in `planner/tools.ts` | 1 failed / 51: *"lib/campaigns/planner/** contains no write verb"* |
+| 4 | dynamic `await import('@/lib/supabase/service')` in `planner/persist.ts` | 1 failed / 51: *"reaches no service-role client"* |
+| 6 | `fetch(` in `planner/tools.ts` | 1 failed / 51: *"makes no network call …"* |
+| 7 | `queryContext` passed to `listEvidenceMemoryCandidates` in `lib/memory/evidence.ts` | 1 failed / 51: *"… call their candidate reader without the query context"* |
+| 8 | `buildPlannerTools` constructed in a loop in `generate.ts` | 3 failed / 51 |
+| 9 | `planBrief` imported by `promote.ts` | 1 failed / 51: *"the two worker-side assembleBrief callers do not import the planner"* |
+| 11 | `status` field in a strictObject in `campaign-planner.ts` | 1 failed / 51 |
+| 18 | `@/lib/db/posts` imported by `verify-claims.ts` | 1 failed / 27 |
+| 22 | an eleventh key `claimSupport` in the rubric schema | 1 failed / 51 (my first plant, a comment, stayed green: a bad plant, not a hole) |
+| 23 | `lib/campaigns/verify-claims.ts` path corrupted in `triage/verify.ts`' cross-reference | 1 failed / 27 |
+| 24 | `evidence_memory` `.insert` in `prepare-brief.ts` | 2 failed / 51 |
+| 25 | `reviseBrief` imported under the planner root | 1 failed / 51 |
+| 29 | a second module doing `.from('campaign_plan_proposals').update(...)` | 1 failed / 4 (`decide-scan.test.ts`) |
+| 38 | `'raw' as RenderedToolResult` in `verify-claims.ts`; `<RenderedToolResult>` in `claim-actions.ts` | 1 failed / 51, each |
+| 39 | `function sanitizeDataField` in `prepare-brief.ts` | 1 failed / 51 |
+| 40 | `dangerouslySetInnerHTML` in `PlanReviewPanel.tsx` | 1 failed / 1 |
+| 43 | `CREATE TABLE public.planner_budget_daily` in a scratch migration (deleted) | 1 failed / 51 |
+
+Constraint 44 part (c): the Builder's transcript was generated at `980ff0ae`, **before** K2.12/K2.13. Those two
+commits touch `generate-action.ts` (`startGenerationAction`). I read that diff: it adds a `brief_not_approved` refusal
+and requires `awaiting_brief` plus an approved brief, **adding a precondition, not a path**. Nothing under
+`lib/social`, `lib/publishing` or `app/api` changed across the full range
+(`git diff --name-only 28aa23c6..cad8790f`).
+
+---
+
+## 5. Constraint → status (46; rows are mixed-tier)
+
+Executed green in CI at `cad8790f` at file level (skip-guard: no file invisible, none red): **all 46 rows' named
+files**. That is not the same as *proven*. The rows below have a defect or a gap this review found:
+
+| # | Constraint | Status |
+|---|---|---|
+| 3 | TOOLS-TENANT-BOUND | Tier-2 ✅. Tier-1 runs under service-role only; a single per-hop omission is untestable (MINOR-1) |
+| 4 | NO-SERVICE-ROLE-IN-TOOLS | ✅, with a hand list gap (MINOR-6) |
+| 18 | CLAIMS-FLAGGED-NEVER-EDITED | text never edited ✅. The flag itself goes stale on edit/regenerate (MAJOR-3) |
+| 21 | CLAIM-CITED-NOT-SUPPORTED | ✅ |
+| 29 | PROPOSAL-DECIDE-VIA-RPC | the RPC's capability check ✅. EXECUTE-grant boundary unpinned (MAJOR-6). The action is untested (MAJOR-2) |
+| 32 | PROPOSAL-PROVENANCE | NOT NULL ✅. The link to `ai_usage` is absent (MAJOR-4) |
+| 33 | PROPOSAL-BOUNDED-QUERY | tested function unused in production (MINOR-7) |
+| 34 | FREEZE-SUPERSEDE-ATOMIC | **AUTHORED-NOT-EXECUTED on the production path (BLOCKER-1)** |
+| 35 | SET-REDUNDANCY-CHECKED | half (b) not at the gate (MAJOR-5) |
+| 36 | PROPOSAL-PAYLOAD-NEUTRALISED | ✅ |
+| 26/27 | FROZEN-BRIEF-CONTRACT-INTACT / ORDER-UNIQUE | ✅; reorder placement is wrong (MAJOR-1), a separate property with no constraint and no test |
+| 44 | GATES-UNCHANGED | Tier-1 and Tier-2 ✅. The Tier-3 transcript predates K2.12/13, re-checked above ✅ |
+| all others | | ✅ as mapped in V.2 |
+
+Tier E: none declared, which is correct per ADR §10.4.
+
+---
+
+## 6. The silent-failure-hunter's output, as evidence
+
+It was dispatched once, read-only, at `cad8790f`, over the four scoped paths. It hit a rate limit mid-run and was
+**resumed** (the same invocation, not a second one). Its findings #1 and #2 were verified against the code and are
+carried as MINOR-3 and NIT-4. One statement in its "checked and fine" list is **wrong** and is not relied on: it says
+a persistence failure is refunded because `reservationHeld` is still true. In fact `orchestrator.ts:133` clears
+`reservationHeld` *before* reconcile and persist, so a persistence failure reconciles to the real cost and does not
+refund. The outcome (no double refund, spend recorded) is correct for a different reason than the agent gave.
+
+---
+
+## 7. Required before merge
+
+1. **BLOCKER-1:** wire both supersede RPCs into the approve and revise paths, with tests per caller.
+2. **MAJOR-1:** fix reorder placement; add Tier-1 reorder cases.
+3. **MAJOR-2:** test the four actions, or correct the phantom citations and record them as AUTHORED-NOT-EXECUTED.
+4. **MAJOR-3:** invalidate `claimCheck` on edit and regenerate.
+5. **MAJOR-4:** make `planner_run_id` join to spend, or amend the ADR and the migration comment.
+6. **MAJOR-5:** surface redundancy at the gate, or amend ADR 0017 F.3 and V.2 row 35 to "half (b) open".
+7. **MAJOR-6:** pin the RPC EXECUTE grants with a Tier-1 test.
+
+MINORs may be closed in the same correction pass or deferred with a `docs/backlog.md` entry each.
+
+_End of reviewer findings. A correction pass appends below this line, per REVIEWER-REPORT APPEND-ONLY; nothing above it
+is edited._
