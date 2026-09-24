@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { differenceInDays } from 'date-fns'
-import { MockProvider, MOCK_FIXTURE_ACCOUNT_IDS } from '../mock-provider'
+import { MockProvider, MOCK_FIXTURE_ACCOUNT_IDS, MOCK_METRICS_FIXTURE_POST_IDS } from '../mock-provider'
 import { SocialProviderError } from '../errors'
 import { RECENT_POST_CONTENT_MAX_CHARS } from '../constants'
 import type { RecentPost } from '../types'
@@ -71,15 +71,58 @@ describe('MockProvider', () => {
     })
   })
 
-  describe('fetchPostMetrics', () => {
-    it('returns synthetic zero metrics', async () => {
-      const metrics = await mock.fetchPostMetrics({
-        socialAccountId: 'sa-1',
-        platformPostId: 'post-1',
+  // ADR 0026 J2.1 step 4 — deterministic named fixtures J2.7's normalisation
+  // tests consume. The old all-zeros default conflated "never available" with
+  // 0 (ADR 0026 rule 6); permanently-null fields are null here, never 0.
+  describe('fetchPostMetrics (named metric fixtures)', () => {
+    const fetchFor = (platformPostId: string) =>
+      mock.fetchPostMetrics({ socialAccountId: 'sa-1', platformPostId })
+
+    it('X full fixture: eligible fields populated, reach and clicks permanently null', async () => {
+      const metrics = await fetchFor(MOCK_METRICS_FIXTURE_POST_IDS.X_FULL)
+      expect(metrics).toMatchObject({
+        likes: 12, comments: 3, shares: 4, saves: 2, impressions: 1500, clicks: null, reach: null,
       })
-      expect(metrics).not.toBeNull()
-      expect(metrics!.likes).toBe(0)
+    })
+
+    it('LinkedIn fixture: likes/comments/shares only; saves, clicks, reach, impressions permanently null', async () => {
+      const metrics = await fetchFor(MOCK_METRICS_FIXTURE_POST_IDS.LINKEDIN_COUNTS)
+      expect(metrics).toMatchObject({
+        likes: 20, comments: 5, shares: 2, saves: null, clicks: null, reach: null, impressions: null,
+      })
+    })
+
+    it('an eligible field returned null (comments) is null, not 0', async () => {
+      const metrics = await fetchFor(MOCK_METRICS_FIXTURE_POST_IDS.X_ELIGIBLE_FIELD_NULL)
+      expect(metrics!.comments).toBeNull()
+      expect(metrics).toMatchObject({ likes: 12, shares: 4, impressions: 1500 })
+    })
+
+    it('X impressions = 0 fixture keeps a real zero impressions (the division-undefined case)', async () => {
+      const metrics = await fetchFor(MOCK_METRICS_FIXTURE_POST_IDS.X_ZERO_IMPRESSIONS)
       expect(metrics!.impressions).toBe(0)
+      expect(metrics!.likes).toBe(12)
+    })
+
+    it('X no-impressions fixture leaves impressions null', async () => {
+      const metrics = await fetchFor(MOCK_METRICS_FIXTURE_POST_IDS.X_NO_IMPRESSIONS)
+      expect(metrics!.impressions).toBeNull()
+    })
+
+    it('the none fixture returns null (a post with nothing measurable)', async () => {
+      await expect(fetchFor(MOCK_METRICS_FIXTURE_POST_IDS.NONE)).resolves.toBeNull()
+    })
+
+    it('an unknown post id (including mock_post_* from publish) gets the X full shape, never zeros', async () => {
+      const metrics = await fetchFor('mock_post_abc')
+      expect(metrics).toMatchObject({ likes: 12, impressions: 1500, reach: null, clicks: null })
+    })
+
+    it('is deterministic apart from fetchedAt, and records the call', async () => {
+      const a = await fetchFor(MOCK_METRICS_FIXTURE_POST_IDS.X_FULL)
+      const b = await fetchFor(MOCK_METRICS_FIXTURE_POST_IDS.X_FULL)
+      expect({ ...a, fetchedAt: '' }).toEqual({ ...b, fetchedAt: '' })
+      expect(mock.calls.fetchPostMetrics).toHaveLength(2)
     })
   })
 

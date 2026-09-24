@@ -1243,3 +1243,23 @@ LLM-summarizer row). Correct the "no production caller yet" clause; leave the gu
 stands.
 
 **Evidence:** ADR 0022 §17 and §18.1 (`5e9ed904`); code read at `dd748435`.
+
+
+---
+
+## Note — ADR 0026 adds a writer and a trigger beside this pipeline; no line of it changed (2026-09-20, Session 33, J2.13)
+
+**Additive, and a note only.** Source: ADR 0026 §9, §13 `OUTCOME-ADR0018-UNCHANGED`.
+
+- **Another writer now exists.** ADR 0026's outcome loop writes `performance_memory` rows with `source = 'outcome'`
+  (ADR 0016 Amendment D). The edit-learning pipeline described here still writes only `source = 'distilled'`, and
+  the two never merge.
+- **A new AFTER INSERT trigger on `post_ai_originals`.** `trg_post_ai_originals_tag_dimensions`
+  (`tag_post_dimensions()`, migration `20260919110000`) copies a generation-time tag row into `post_dimensions` when
+  a snapshot is written. It reads the row and inserts into a NEW table with `ON CONFLICT DO NOTHING`; it has no
+  exception block, sanitises every enum so it can never abort the insert that fired it, and does not touch this
+  table's columns, its write-once trigger, or the capture, classification, promotion or summarisation code.
+- **No line of the ADR 0018 pipeline changed.** `lib/learning/` and the eight ADR 0018 migrations are byte-identical
+  to the Session 33 BASE (`75cae307`). Path check, which must print nothing:
+  `git diff 75cae307..HEAD -- lib/learning/ supabase/migrations/20260726010000_learning_capture.sql supabase/migrations/20260726020000_performance_memory_pattern_key.sql supabase/migrations/20260726030000_performance_memory_promotion.sql supabase/migrations/20260728190000_narrow_voice_write_trigger_message.sql supabase/migrations/20260728220000_demote_recomputes_contradictions.sql supabase/migrations/20260822090000_studio_promote_schema.sql supabase/migrations/20260822093000_learning_generation_kind_and_pattern_bound.sql supabase/migrations/20260825190000_post_ai_originals_latest_per_post.sql`
+  (executable as `npx tsx scripts/check-adr0018-unchanged.ts`).

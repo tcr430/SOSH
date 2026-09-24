@@ -129,7 +129,15 @@ describe.each(IMPLEMENTATIONS)('SocialProvider contract: $name', ({ name, makePr
     ).resolves.toBeUndefined()
   })
 
-  it('fetchPostMetrics returns PostMetrics | null, or throws a valid SocialProviderError coded NOT_IMPLEMENTED', async () => {
+  // ADR 0026 J2.1: TwitterProvider now implements fetchPostMetrics, so with
+  // this suite's stubbed service client (no account row) it fails inside
+  // withFreshToken with TOKEN_REVOKED rather than NOT_IMPLEMENTED. The contract
+  // is therefore "a result, or ANY valid SocialProviderError" — the same
+  // widening the fetchRecentPosts assertion below got at I2.3. LinkedIn's
+  // NOT_IMPLEMENTED (its counts need the restricted r_member_social_feed) is
+  // pinned in linkedin-provider.test.ts, and Twitter's real behaviour in
+  // twitter-provider.test.ts.
+  it('fetchPostMetrics returns PostMetrics | null, or throws a valid SocialProviderError', async () => {
     try {
       const result = await provider.fetchPostMetrics({
         socialAccountId: 'sa-1',
@@ -138,7 +146,6 @@ describe.each(IMPLEMENTATIONS)('SocialProvider contract: $name', ({ name, makePr
       expect(result === null || typeof result === 'object').toBe(true)
     } catch (err) {
       assertValidSocialProviderError(err)
-      expect(err.code).toBe('NOT_IMPLEMENTED')
     }
   })
 

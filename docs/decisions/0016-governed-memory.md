@@ -677,3 +677,39 @@ role** is now shipped and hardened, not that the table's shape changed again.
 **Evidence:** `docs/decisions/0018-diff-based-learning-capture.md` §7 (the writer, promotion, demotion),
 Amendment A (MAJOR-1/MAJOR-2 narrowing), Amendment D (consolidated index); `docs/reviews/
 session-25-reviewer.md` CORRECTION PASS D1–D7.
+
+
+---
+
+## Amendment D — `performance_memory` gains a third writer, `source = 'outcome'` (2026-09-20, Session 33, J2.5 / J2.9 / J2.13)
+
+> **Naming.** The Session 33 build guide and ADR 0026 call this "ADR 0016 Amendment C". This ADR already has
+> Amendments A-C, so it is recorded here as **Amendment D**; ADR 0026's references to "Amendment C" mean this section.
+
+**Source:** ADR 0026 §5, §6.4, §9; founder ruling **A-2**. **Additive.** It changes no store, no governance field
+and no rule of §1-§9; it adds one writer to `performance_memory` and one retrieval path beside the existing one.
+
+- **A third writer, distinguished in the row.** `source` gains `'outcome'` beside `'distilled'` (ADR 0018) and
+  `'import'` (ADR 0025); `dimension` gains `role`, `format`, `length_band`, `cta`, `origin_mode` and `hypothesis`.
+  Typed stat columns (`outcome_n`, `outcome_wins`, `outcome_distinct_campaigns`, `interval_low`, `interval_high`,
+  `metric_basis`, `baseline_seeded`) are NOT NULL exactly when `source = 'outcome'`. The pattern key is
+  `outcome:<dimension>:<value>:<direction>:<platform>` (and `outcome:hypothesis:<campaign_id>`), under a namespace
+  CHECK and a sibling partial UNIQUE index. Provenance survives: outcome rows are never merged with imported or
+  distilled rows (rule: *provenance survives*).
+- **Write protection.** A member's INSERT policy is narrowed to `source = 'manual'`; a BEFORE UPDATE trigger stops a
+  member changing any stat column of a non-manual row; every promotion, demotion and upsert runs through a
+  SECURITY DEFINER RPC that RECOMPUTES its inputs from `post_outcomes` and `post_dimensions` and never trusts the
+  caller. Members cannot hard-DELETE an outcome row (forward migration `20260919160000`, from the Session 33
+  security review).
+- **Probabilistic, never a rule.** Promotion requires n >= 10 across >= 3 campaigns and a Wilson lower bound above
+  0.5, enforced in SQL (rule: *patterns are probabilistic claims*, with a stronger floor than the ADR 0018 minimum-n).
+  A pattern is rendered with the number of posts and campaigns behind it.
+- **Separate retrieval.** `listPerformanceMemoryCandidates` excludes `source = 'outcome'`, so an outcome row's
+  Wilson-derived, n-shrunk confidence never competes in the shared ranking. Outcome rows are read only by
+  `lib/memory/outcomes.ts` (`retrieveOutcomePatterns`, capped at 3 among outcome rows only), and `hypothesis` rows
+  only by Stage A (`retrieveHypothesisResults`). All access still goes through `lib/memory/` (`MEM-NO-DIRECT-TABLE-ACCESS`).
+- **Known state (supersedes CLAUDE.md's "effectively one writer").** Memory now has the ADR 0018 edit-learning loop
+  and the ADR 0026 outcome loop as writers; `performance_memory` is fed by published results as well as by editing.
+
+**Constraints:** `OUTCOME-TWO-WRITERS-DISTINGUISHED`, `OUTCOME-KEY-COLLISION-DEFINED`, `OUTCOME-WRITE-PROTECTED`,
+`OUTCOME-SEPARATE-RETRIEVAL`, `OUTCOME-NO-EXTRA-WRITER` (ADR 0026 §13).

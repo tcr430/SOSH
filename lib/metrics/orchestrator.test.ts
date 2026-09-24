@@ -19,7 +19,7 @@ vi.mock('@/lib/config', () => ({
     server: {
       METRICS_SYNC_BATCH_SIZE: 50,
       METRICS_STALE_MINUTES: 360,
-      METRICS_MAX_AGE_DAYS: 90,
+      METRICS_MAX_AGE_DAYS: 9,
     },
   },
 }))
@@ -48,6 +48,7 @@ vi.mock('@/lib/db/cron-health', () => ({
 
 vi.mock('@sentry/nextjs', () => ({
   withMonitor: vi.fn().mockImplementation((_slug: string, fn: () => unknown) => fn()),
+  captureException: vi.fn(),
 }))
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -216,6 +217,71 @@ describe('runMetricsSyncTick', () => {
     expect(vi.mocked(upsertPostMetrics)).not.toHaveBeenCalled()
   })
 
+  // MAJOR-2: since J2.1 this branch is live for every X failure, and the outcome tick reads a missing sync as a
+  // benign skip — so the error must be OBSERVABLE here, carrying the platform and the post.
+  it('a provider failure is captured with cron, phase, platform and post id, AND still increments errors', async () => {
+    vi.mocked(listPostsForMetricsSync).mockResolvedValue([makePost({ id: 'tw-1', platform: 'twitter' })])
+    const failure = new SocialProviderError({ code: 'TOKEN_EXPIRED', message: 'Token expired' })
+    mockFetchPostMetrics.mockRejectedValue(failure)
+
+    const summary = await runMetricsSyncTick({ now: NOW })
+
+    expect(summary.errors).toBe(1)
+    expect(vi.mocked(Sentry.captureException)).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(Sentry.captureException)).toHaveBeenCalledWith(failure, {
+      tags: { cron: 'sync-metrics', phase: 'fetch', platform: 'twitter' },
+      extra: { postId: 'tw-1' },
+    })
+  })
+
+  it('a failure of our own upsert is tagged phase=persist, not fetch', async () => {
+    vi.mocked(listPostsForMetricsSync).mockResolvedValue([makePost({ id: 'tw-2', platform: 'twitter' })])
+    mockFetchPostMetrics.mockResolvedValue({ likes: 1, comments: 0, shares: 0, saves: null, clicks: null, reach: null, impressions: 10, fetchedAt: NOW.toISOString() })
+    vi.mocked(upsertPostMetrics).mockRejectedValue(new Error('db down'))
+
+    const summary = await runMetricsSyncTick({ now: NOW })
+
+    expect(summary.errors).toBe(1)
+    expect(vi.mocked(Sentry.captureException)).toHaveBeenCalledWith(expect.any(Error), expect.objectContaining({
+      tags: { cron: 'sync-metrics', phase: 'persist', platform: 'twitter' },
+    }))
+  })
+
+  // MINOR-7 (Session 33-D D7): an X errors[] block with no metrics now arrives here as a provider error, so an
+  // entitlement loss is a captured error and an increment of `errors` — NOT the benign skippedNoData that a genuinely
+  // absent `data` (provider returns null) still is.
+  it('a PLATFORM_REJECTED (errors[] block) is captured and counted as an error, and is NOT skippedNoData', async () => {
+    vi.mocked(listPostsForMetricsSync).mockResolvedValue([makePost({ id: 'tw-3', platform: 'twitter' })])
+    const failure = new SocialProviderError({ code: 'PLATFORM_REJECTED', message: 'fetchPostMetrics: X returned an errors[] block and no public_metrics', platform: 'twitter' })
+    mockFetchPostMetrics.mockRejectedValue(failure)
+
+    const summary = await runMetricsSyncTick({ now: NOW })
+
+    expect(summary).toMatchObject({ errors: 1, skippedNoData: 0, synced: 0 })
+    expect(vi.mocked(Sentry.captureException)).toHaveBeenCalledWith(failure, expect.objectContaining({ tags: expect.objectContaining({ platform: 'twitter' }) }))
+  })
+
+  it('a provider that returns null (data genuinely absent, no errors block) is still the benign skippedNoData with no capture', async () => {
+    vi.mocked(listPostsForMetricsSync).mockResolvedValue([makePost({ id: 'tw-4', platform: 'twitter' })])
+    mockFetchPostMetrics.mockResolvedValue(null)
+
+    const summary = await runMetricsSyncTick({ now: NOW })
+
+    expect(summary).toMatchObject({ errors: 0, skippedNoData: 1 })
+    expect(vi.mocked(Sentry.captureException)).not.toHaveBeenCalled()
+  })
+
+  it('NOT_IMPLEMENTED is an expected skip: it takes the unsupported path and captures NOTHING', async () => {
+    vi.mocked(listPostsForMetricsSync).mockResolvedValue([makePost({ id: 'li-1', platform: 'linkedin' })])
+    mockFetchPostMetrics.mockRejectedValue(new SocialProviderError({ code: 'NOT_IMPLEMENTED', message: 'nope' }))
+
+    const summary = await runMetricsSyncTick({ now: NOW })
+
+    expect(summary.skippedNotImplemented).toBe(1)
+    expect(summary.errors).toBe(0)
+    expect(vi.mocked(Sentry.captureException)).not.toHaveBeenCalled()
+  })
+
   it('TOKEN_REVOKED: counted as error — no mutation', async () => {
     vi.mocked(listPostsForMetricsSync).mockResolvedValue([makePost()])
     mockFetchPostMetrics.mockRejectedValue(
@@ -368,4 +434,30 @@ describe('runMetricsSyncTick — B6 observability', () => {
       expect(tickLine!.triggeredBy).toBe(triggeredBy)
     },
   )
+
+  // ADR 0026 §3.2 (J2.1): the cadence moved into SQL (day 1/3/7), but the
+  // tick keeps its hourly schedule and its log line UNCHANGED IN SHAPE — the
+  // operator dashboards and the Sentry monitor read exactly these keys.
+  it('the metrics-sync-tick log line keeps exactly its pre-J2.1 keys', async () => {
+    const logSpy = vi.spyOn(console, 'log')
+    vi.mocked(listPostsForMetricsSync).mockResolvedValue([])
+    await runMetricsSyncTick({ now: NOW, triggeredBy: 'secret' })
+    const tickLine = logSpy.mock.calls
+      .map(c => { try { return JSON.parse(String(c[0])) } catch { return null } })
+      .find(p => p?.kind === 'metrics-sync-tick')
+    expect(Object.keys(tickLine!).sort()).toEqual(
+      [
+        'candidates',
+        'durationMs',
+        'errors',
+        'kind',
+        'skippedNoAccount',
+        'skippedNoData',
+        'skippedNotImplemented',
+        'synced',
+        'tick',
+        'triggeredBy',
+      ].sort(),
+    )
+  })
 })

@@ -67,6 +67,12 @@ const X_USER_TWEETS_BASE_URL = 'https://api.x.com/2/users'
 // the rest) before any RecentPost is built. Exposure recorded for D11's ADR
 // amendment; no expansion is requested to widen it.
 const X_TIMELINE_TWEET_FIELDS = 'id,created_at,text,public_metrics,attachments,referenced_tweets,entities'
+// ADR 0026 §3.1 / ADR 0028 Amendment A (J2.1). ONE field, public_metrics: it
+// needs no scope beyond the tweet.read already granted. non_public_metrics and
+// organic_metrics (owner + user-context + 30 days, docs.x.com/x-api/
+// fundamentals/metrics, read 2026-09-19) are deliberately NOT requested —
+// clicks stays null and never enters the outcome metric (ADR 0026 §6.2).
+const X_TWEET_METRICS_FIELDS = 'public_metrics'
 // Session 30.5-D, D3: the bound stated for the disconnect route's revoke
 // call, per the correction pass's own instruction not to block or slow
 // disconnect on a network timeout. 5s is a deliberately short budget for a
@@ -125,6 +131,36 @@ const XTweetSchema = z.object({
   attachments: z.object({ media_keys: z.array(z.string()).optional() }).optional(),
   referenced_tweets: z.array(z.object({ type: z.string(), id: z.string() })).optional(),
   entities: XTweetEntitiesSchema,
+})
+
+// ADR 0026 §3.1 (J2.1) — GET /2/tweets/:id. Every count is optional: an
+// absent field is NULL in PostMetrics, never 0 (ADR 0026 rule 6).
+// repost_count is accepted beside retweet_count because X's own pages
+// disagree on the name (ADR 0028 Amendment A records the conflict); `data`
+// is optional because X is DOCUMENTED to answer some failures with 200 + `errors`
+// — which failures, and in particular what a DELETED post returns, is NOT
+// confirmed (ADR 0028 Amendment A A.5, owed to the first live smoke). `errors`
+// is therefore parsed so an errors[] block is never mistaken for "no data".
+const XTweetMetricsSchema = z.object({
+  errors: z
+    .array(z.object({ title: z.string().optional(), type: z.string().optional(), detail: z.string().optional() }).passthrough())
+    .optional(),
+  data: z
+    .object({
+      id: z.string().optional(),
+      public_metrics: z
+        .object({
+          like_count: z.number().optional(),
+          reply_count: z.number().optional(),
+          retweet_count: z.number().optional(),
+          repost_count: z.number().optional(),
+          quote_count: z.number().optional(),
+          bookmark_count: z.number().optional(),
+          impression_count: z.number().optional(),
+        })
+        .optional(),
+    })
+    .optional(),
 })
 
 const XTweetsListSchema = z.object({
@@ -395,13 +431,84 @@ export class TwitterProvider implements SocialProvider {
     }
   }
 
-  async fetchPostMetrics(_input: FetchMetricsInput): Promise<PostMetrics | null> {
-    throw new SocialProviderError({
-      code: 'NOT_IMPLEMENTED',
-      message: 'TwitterProvider.fetchPostMetrics is not implemented yet',
-      platform: 'twitter',
-      details: { method: 'fetchPostMetrics' },
-    })
+  // ADR 0026 §3.1 / ADR 0028 Amendment A (J2.1, founder ruling A-3): ONE read
+  // per call, GET /2/tweets/:id?tweet.fields=public_metrics, bearer from
+  // withFreshToken. No sleep, no retry loop — cadence belongs to the
+  // orchestrator (a 429 is one request, then RATE_LIMITED). Returns null ONLY
+  // when the response carries neither public_metrics nor an errors[] block, so
+  // the orchestrator writes no row and the post stays due; an errors[] block
+  // with no metrics throws PLATFORM_REJECTED instead (MINOR-7). What X returns
+  // for a DELETED post is unconfirmed (ADR 0028 Amd A A.5). reach and clicks
+  // are ALWAYS null.
+  async fetchPostMetrics(input: FetchMetricsInput): Promise<PostMetrics | null> {
+    return withFreshToken(
+      input.socialAccountId,
+      (id) => this.refreshAccessToken({ socialAccountId: id }),
+      async (token) => {
+        const params = new URLSearchParams({ 'tweet.fields': X_TWEET_METRICS_FIELDS })
+
+        let resp: Response
+        try {
+          resp = await fetch(`${X_TWEETS_URL}/${encodeURIComponent(input.platformPostId)}?${params}`, {
+            headers: { Authorization: `Bearer ${token}` },
+            signal: AbortSignal.timeout(SOCIAL_READ_TIMEOUT_MS),
+          })
+        } catch (err) {
+          throw this.mapReadNetworkError(err, 'fetchPostMetrics')
+        }
+
+        if (!resp.ok) throw await this.mapReadErrorResponse(resp, 'fetchPostMetrics')
+
+        const rawBody = await resp.json()
+        let parsed: z.infer<typeof XTweetMetricsSchema>
+        try {
+          parsed = XTweetMetricsSchema.parse(rawBody)
+        } catch (e) {
+          throw new SocialProviderError({
+            code: 'UNKNOWN',
+            message: 'fetchPostMetrics: X returned an unexpected metrics response shape',
+            platform: 'twitter',
+            details: { zodError: e instanceof Error ? e.message : String(e) },
+          })
+        }
+
+        const pm = parsed.data?.public_metrics
+        if (!pm) {
+          // An errors[] block with nothing to measure is a FAILURE THE RESPONSE ITSELF REPORTS, not "no data": an
+          // account or app tier that can no longer read public_metrics would otherwise look, forever and silently,
+          // like a deleted post (MINOR-7). It is thrown so the orchestrator captures it and counts an error.
+          // Only a response with NEITHER usable metrics NOR an errors[] block stays null.
+          if (parsed.errors && parsed.errors.length > 0) {
+            throw new SocialProviderError({
+              code: 'PLATFORM_REJECTED',
+              message: 'fetchPostMetrics: X returned an errors[] block and no public_metrics',
+              platform: 'twitter',
+              details: {
+                // Bounded, string-only fields: enough to tell entitlement from not-found at the first live smoke.
+                errors: parsed.errors.slice(0, 5).map((e) => ({
+                  title: e.title?.slice(0, 200) ?? null,
+                  type: e.type?.slice(0, 200) ?? null,
+                  detail: e.detail?.slice(0, 200) ?? null,
+                })),
+              },
+            })
+          }
+          return null
+        }
+
+        const reposts = pm.retweet_count ?? pm.repost_count
+        return {
+          likes: pm.like_count ?? null,
+          comments: pm.reply_count ?? null,
+          shares: reposts !== undefined && pm.quote_count !== undefined ? reposts + pm.quote_count : null,
+          saves: pm.bookmark_count ?? null,
+          impressions: pm.impression_count ?? null,
+          clicks: null,
+          reach: null,
+          fetchedAt: formatISO(new Date()),
+        }
+      },
+    )
   }
 
   async fetchEngagement(_input: FetchEngagementInput): Promise<EngagementItem[]> {
@@ -802,11 +909,11 @@ export class TwitterProvider implements SocialProvider {
   // Read-specific error map (ADR §2.5) — separate from mapHttpStatusToErrorCode
   // (error-mapping.ts), which states it covers publish only. `details` never
   // carries the response body — a reason code and numbers only.
-  private async mapReadErrorResponse(resp: Response): Promise<SocialProviderError> {
+  private async mapReadErrorResponse(resp: Response, operation = 'fetchRecentPosts'): Promise<SocialProviderError> {
     if (resp.status === 401) {
       return new SocialProviderError({
         code: 'TOKEN_EXPIRED',
-        message: `fetchRecentPosts: X returned ${resp.status}`,
+        message: `${operation}: X returned ${resp.status}`,
         platform: 'twitter',
       })
     }
@@ -815,7 +922,7 @@ export class TwitterProvider implements SocialProvider {
       const scopeMissing = /scope/i.test(JSON.stringify(body))
       return new SocialProviderError({
         code: 'TOKEN_REVOKED',
-        message: `fetchRecentPosts: X returned ${resp.status}`,
+        message: `${operation}: X returned ${resp.status}`,
         platform: 'twitter',
         details: { reason: scopeMissing ? 'scope_missing' : 'forbidden' },
       })
@@ -823,7 +930,7 @@ export class TwitterProvider implements SocialProvider {
     if (resp.status === 404) {
       return new SocialProviderError({
         code: 'PLATFORM_REJECTED',
-        message: `fetchRecentPosts: X returned ${resp.status}`,
+        message: `${operation}: X returned ${resp.status}`,
         platform: 'twitter',
         details: { reason: 'not_found' },
       })
@@ -833,7 +940,7 @@ export class TwitterProvider implements SocialProvider {
       const guarded = finiteRetryAfterSeconds(raw, 60)
       return new SocialProviderError({
         code: 'RATE_LIMITED',
-        message: 'fetchRecentPosts: rate limited by X',
+        message: `${operation}: rate limited by X`,
         platform: 'twitter',
         retryAfterSeconds: Math.min(guarded, SOCIAL_READ_RETRY_AFTER_CEILING_SECONDS),
       })
@@ -841,13 +948,13 @@ export class TwitterProvider implements SocialProvider {
     if (resp.status >= 500) {
       return new SocialProviderError({
         code: 'NETWORK',
-        message: `fetchRecentPosts: X returned ${resp.status}`,
+        message: `${operation}: X returned ${resp.status}`,
         platform: 'twitter',
       })
     }
     return new SocialProviderError({
       code: 'PLATFORM_REJECTED',
-      message: `fetchRecentPosts: X returned ${resp.status}`,
+      message: `${operation}: X returned ${resp.status}`,
       platform: 'twitter',
       details: { reason: 'unexpected_status', status: resp.status },
     })
@@ -857,11 +964,11 @@ export class TwitterProvider implements SocialProvider {
   // hung request is bounded by SOCIAL_READ_TIMEOUT_MS (AbortSignal.timeout)
   // and mapped straight to NETWORK; retry belongs to the orchestrator's tick
   // cadence, never to the provider.
-  private mapReadNetworkError(err: unknown): SocialProviderError {
+  private mapReadNetworkError(err: unknown, operation = 'fetchRecentPosts'): SocialProviderError {
     const isTimeout = err instanceof Error && err.name === 'TimeoutError'
     return new SocialProviderError({
       code: 'NETWORK',
-      message: isTimeout ? 'fetchRecentPosts: request timed out' : 'fetchRecentPosts: network error',
+      message: isTimeout ? `${operation}: request timed out` : `${operation}: network error`,
       platform: 'twitter',
     })
   }

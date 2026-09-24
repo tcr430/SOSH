@@ -55,7 +55,7 @@ Verification command (per row): `vercel env ls production | grep <VAR>`
 | `PUBLISH_STUCK_MINUTES` | Default `10` — set only if overriding | ☐ `vercel env ls production \| grep '^PUBLISH_STUCK_MINUTES' \|\| echo 'not set (default 10)'` |
 | `METRICS_SYNC_BATCH_SIZE` | Default `50` — set only if overriding | ☐ `vercel env ls production \| grep '^METRICS_SYNC_BATCH_SIZE' \|\| echo 'not set (default 50)'` |
 | `METRICS_STALE_MINUTES` | Default `360` — set only if overriding | ☐ `vercel env ls production \| grep '^METRICS_STALE_MINUTES' \|\| echo 'not set (default 360)'` |
-| `METRICS_MAX_AGE_DAYS` | Default `90` — set only if overriding | ☐ `vercel env ls production \| grep '^METRICS_MAX_AGE_DAYS' \|\| echo 'not set (default 90)'` |
+| `METRICS_MAX_AGE_DAYS` | Default `9` (ADR 0028 Amendment A; was `90`) — set only if overriding | ☐ `vercel env ls production \| grep '^METRICS_MAX_AGE_DAYS' \|\| echo 'not set (default 9)'` |
 | `AI_RATE_LIMIT_BRAND_VOICE_PER_MIN` | Default `10` — set only if overriding | ☐ `vercel env ls production \| grep '^AI_RATE_LIMIT_BRAND_VOICE_PER_MIN' \|\| echo 'not set (default 10)'` |
 | `AI_RATE_LIMIT_POST_GENERATION_PER_MIN` | Default `30` — set only if overriding | ☐ `vercel env ls production \| grep '^AI_RATE_LIMIT_POST_GENERATION_PER_MIN' \|\| echo 'not set (default 30)'` |
 | `AI_TRIAL_BRAND_VOICE_ATTEMPTS` | Default `3` — set only if overriding | ☐ `vercel env ls production \| grep '^AI_TRIAL_BRAND_VOICE_ATTEMPTS' \|\| echo 'not set (default 3)'` |
@@ -128,6 +128,7 @@ Setup runbook: `docs/build-guide/runbooks/qstash-setup.md`
   - sync-metrics (`0 * * * *`)
   - process-deletions (`0 3 * * *`, retries=0 — see `docs/build-guide/runbooks/qstash-setup.md` Step 2b)
   - capture-learning (`0 * * * *`, ADR 0018 §9.2 — see `docs/build-guide/runbooks/qstash-setup.md` Step 2c)
+  - **extract-outcomes (`0 4 * * *`, ADR 0026 §14, Session 33 J2.8 — see `docs/build-guide/runbooks/qstash-setup.md` Step 2d) — NOT YET CREATED as a QStash schedule.** `/api/cron/extract-outcomes` exists; the Upstash schedule and the Sentry cron monitor (slug `extract-outcomes`, crontab `0 4 * * *`) are owed before the outcome loop can run unattended in production.
   - **backfill (`* * * * *`, every minute — ADR 0025 §6.6, Session 32 I2.9) — NOT YET CREATED as a QStash
     schedule.** `/api/cron/backfill` exists and is bounded (one queued/fetching/extracting run's worth
     of work per tick), but no schedule entry has been added to `qstash-setup.md` or provisioned in the
@@ -139,6 +140,7 @@ Setup runbook: `docs/build-guide/runbooks/qstash-setup.md`
   - `/api/cron/drain-email-outbox` — look for `{"kind":"email.drain.tick","triggeredBy":"qstash",...}` within the first minute. Expected on a quiet queue: `claimed=0, sent=0, retried=0, failed=0, suppressed=0`.
   - `/api/cron/process-deletions` — look for `{"kind":"deletion.tick.end","triggeredBy":"qstash",...}` at 03:00 UTC. Expected at launch: `claimed=0, purged=0, retried=0, abandoned=0`.
   - `/api/cron/capture-learning` — look for `{"kind":"learning.tick","triggeredBy":"qstash",...}` within the first hour. Expected on a quiet queue: `claimed=0, classified=0, patternsUpserted=0, summarized=0, abandoned=0, retrying=0`.
+  - `/api/cron/extract-outcomes` — look for `{"kind":"outcome.tick","triggeredBy":"qstash",...}` at 04:00 UTC. Expected with no matured posts: `candidates=0, matured=0, outcomesWritten=0, cellsRecomputed=0, promoted=0, demoted=0, errors=0`. `skippedNoMetrics` above 0 is normal while LinkedIn metrics remain not-implemented.
 - [ ] **Drain-email-outbox smoke test.** Manually insert a row into `email_outbox` (`status='pending'`, `next_attempt_at=now()`, `recipient` = a real address you control, `kind='trial-warning-t3'`). Wait up to 90 seconds for the next cron tick. Confirm `status='sent'` and `provider_message_id IS NOT NULL`:
   ```sql
   select id, status, provider_message_id, sent_at

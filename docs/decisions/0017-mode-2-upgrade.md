@@ -875,3 +875,39 @@ own table would be a false green. Its five test cases map forward individually r
 | regeneration fires at most once | `QUAL-N-CANDIDATE-COUNT` (exactly N, bounded by construction) | `lib/campaigns/generate.test.ts:707` |
 | a scoring failure does not abort a successful generation | `QUAL-THREE-OUTCOMES` (the *unscored* outcome) | `lib/campaigns/generate.test.ts:774` |
 | opener is `neutralize()`'d before scoring | `QUAL-CANDIDATE-NEUTRALIZED` | `lib/campaigns/generate.test.ts:680` |
+
+
+---
+
+## Amendment E — the brief gains a falsifiable hypothesis and success criteria (2026-09-19, Session 33, J2.10)
+
+> **Naming.** The Session 33 build guide and ADR 0026 call this "ADR 0017 Amendment C". This ADR already has
+> Amendments A–D, so it is recorded here as **Amendment E**; ADR 0026 §8.1's references to "Amendment C" mean
+> this section.
+
+**Source:** ADR 0026 §8.1, founder ruling A-1. **Nothing else in this ADR changes** — `MODE2-BRIEF-FROZEN-GUARD`
+and every other brief field are exactly as before.
+
+`CampaignBriefContent` gains two OPTIONAL fields, because briefs frozen before this amendment have neither and
+are **not backfilled**:
+
+- `hypothesis?: string` — one falsifiable claim, 1–300 characters.
+- `successCriteria?: { metric: 'win_rate' | 'median_lift'; target: number; evaluationWindowDays: number }` —
+  drawn only from what the outcome loop measures (engagement against the brand's own usual). `win_rate` target in
+  [0.5, 0.95]; `median_lift` target in [1.0, 3.0]; `evaluationWindowDays` an integer in [7, 60].
+
+Both or neither. One Zod schema (`lib/outcomes/hypothesis.ts`) validates Stage A's output and the human edit;
+out-of-range values are **rejected, never clamped**.
+
+**Stage A** (`brief-assembly`, prompt version 2 → 3) proposes both fields and additionally receives the brand's
+last three acknowledged hypothesis results (`retrieveHypothesisResults`, `performance_memory` rows with
+`dimension = 'hypothesis'`, newest first), each rendered with its n through `neutralize()`. **Stage A is the only
+reader of hypothesis rows**; `retrieveOutcomePatterns` excludes them, so a result about one campaign's claim never
+reaches a post prompt (ADR 0026 §8.4).
+
+**The brief-review surface** makes both fields editable **before freeze** (`editBriefAction`, the same schema).
+The existing status guard (`critiqued` only) and the DB `frozen_at` trigger are untouched: after approval the
+content cannot change.
+
+**Tiers.** `OUTCOME-HYPOTHESIS-IN-BRIEF` (ADR 0026 constraint 24): Tier 2 (schema boundaries, the prompt, the
+action) plus the existing Tier-1 freeze-guard test, run unmodified.

@@ -569,6 +569,34 @@ describe('generatePostsForCampaign — post_ai_originals snapshot write (ADR 001
     }
   })
 
+  // ADR 0026 §4.3 (J2.4, OUTCOME-HOOKTYPE-ADDITIVE) — hookType is a TAG about the
+  // post, never part of it. It must reach the stored snapshot payload (the tagging
+  // trigger reads NEW.payload->>'hookType' from exactly there) and must NEVER leak
+  // into the content a customer approves and publishes.
+  it('hookType rides in the snapshot payload and never in the post content', async () => {
+    const withHook = { ...makeSingleOutput(7), hookType: 'statistic' as const }
+    vi.mocked(generateNativeContent).mockReset()
+    vi.mocked(generateNativeContent).mockResolvedValue(withHook)
+
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+
+    const snapshots = vi.mocked(createPostAiOriginal).mock.calls.map((c) => c[1])
+    expect(snapshots.length).toBeGreaterThan(0)
+    for (const snapshot of snapshots) {
+      expect((snapshot.payload as { hookType?: string }).hookType).toBe('statistic')
+      expect(snapshot.payload).toEqual(withHook)
+      expect(snapshot.rendered_content).toBe(withHook.body)
+      expect(snapshot.rendered_content).not.toMatch(/statistic|hookType/i)
+    }
+
+    const inserted = vi.mocked(createPosts).mock.calls.flatMap((c) => c[1] as Array<{ content: string }>)
+    expect(inserted.length).toBeGreaterThan(0)
+    for (const row of inserted) {
+      expect(row.content).toBe(withHook.body)
+      expect(row.content).not.toMatch(/statistic|hookType/i)
+    }
+  })
+
   // silent-failure-hunter's concern: a snapshot write that fails must not be
   // silently swallowed — it must fail the whole generation session loudly,
   // since it is the ground truth of the entire learning-capture track.

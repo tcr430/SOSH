@@ -42,6 +42,9 @@ vi.mock('@/lib/db/posts', () => ({
 // empty in Track A — ADR 0016 §3.4).
 vi.mock('@/lib/db/memory-performance', () => ({
   listPerformanceMemoryCandidates: vi.fn(),
+  // ADR 0026 J2.9 — outcome patterns are read through their OWN reader (defaulted to [] below, so every
+  // existing test sees no observedOutcomes key).
+  listOutcomePatternsForGeneration: vi.fn(),
 }))
 
 vi.mock('@/lib/db/trial-state', () => ({
@@ -60,7 +63,7 @@ import { listTopPostMetrics } from '@/lib/db/post-metrics'
 import { listPostsByIds } from '@/lib/db/posts'
 import { getTrialStateMaybe } from '@/lib/db/trial-state'
 import { getVariationForBusiness } from '@/lib/db/voice'
-import { listPerformanceMemoryCandidates } from '@/lib/db/memory-performance'
+import { listPerformanceMemoryCandidates, listOutcomePatternsForGeneration } from '@/lib/db/memory-performance'
 import type {
   BusinessRow,
   BrandVoiceRow,
@@ -198,6 +201,7 @@ const makeGovernedPerfRow = (
   pattern: 'a distilled pattern',
   platform: 'linkedin',
   pattern_key: null,
+  outcome_n: null, outcome_wins: null, outcome_distinct_campaigns: null, interval_low: null, interval_high: null, metric_basis: null, baseline_seeded: null, contradicted_at: null,
   ...overrides,
 })
 
@@ -240,6 +244,7 @@ beforeEach(() => {
   vi.mocked(getTrialStateMaybe).mockResolvedValue(mockTrialState)
   vi.mocked(getVariationForBusiness).mockResolvedValue(null)
   vi.mocked(listPerformanceMemoryCandidates).mockResolvedValue([])
+  vi.mocked(listOutcomePatternsForGeneration).mockResolvedValue([])
 })
 
 describe('buildCustomerContext', () => {
@@ -613,6 +618,7 @@ describe('buildCustomerContext — B3 behaviour-equivalence (ADR 0016 §6, MEM-C
         pattern: 'technical-comparison posts perform well for CTO audiences',
         platform: 'linkedin',
         pattern_key: null,
+        outcome_n: null, outcome_wins: null, outcome_distinct_campaigns: null, interval_low: null, interval_high: null, metric_basis: null, baseline_seeded: null, contradicted_at: null,
       },
     ])
 
@@ -723,6 +729,45 @@ describe('withPostQueryContext', () => {
   })
 })
 
+// ADR 0026 J2.9 (OUTCOME-SEPARATE-RETRIEVAL, SHARED-FUNCTION CALLERS) — observedOutcomes on BOTH context call
+// paths: buildCustomerContext and withPostQueryContext. Outcome rows arrive ONLY through listOutcomePatternsForGeneration,
+// never through recentPostPerformance, and the key is ABSENT when there are none.
+describe('observedOutcomes (ADR 0026 J2.9)', () => {
+  const outcomeRow = (over: Record<string, unknown> = {}) => ({
+    ...makeGovernedPerfRow({ id: 'oc-1', pattern: "On X, thread posts beat this brand's usual engagement.", platform: 'twitter', confidence: 0.4 }),
+    source: 'outcome', dimension: 'format', pattern_key: 'outcome:format:thread:above:twitter',
+    outcome_n: 11, outcome_wins: 9, outcome_distinct_campaigns: 3, ...over,
+  })
+
+  it('buildCustomerContext: fills observedOutcomes from the outcome reader, and NOT recentPostPerformance', async () => {
+    vi.mocked(listOutcomePatternsForGeneration).mockResolvedValue([outcomeRow()] as never)
+    const ctx = await buildCustomerContext('biz-1')
+    expect(ctx.observedOutcomes).toEqual([
+      { platform: 'twitter', pattern: "On X, thread posts beat this brand's usual engagement.", wins: 9, n: 11, campaigns: 3 },
+    ])
+    expect(JSON.stringify(ctx.recentPostPerformance)).not.toContain('thread posts')
+  })
+
+  it('buildCustomerContext: the key is ABSENT (not []) when there are no outcome patterns', async () => {
+    const ctx = await buildCustomerContext('biz-1')
+    expect('observedOutcomes' in ctx).toBe(false)
+  })
+
+  it('withPostQueryContext: refreshes observedOutcomes for the post platform, and drops the campaign-level copy when none', async () => {
+    vi.mocked(listOutcomePatternsForGeneration).mockResolvedValue([outcomeRow()] as never)
+    const ctx = await buildCustomerContext('biz-1')
+    const { withPostQueryContext } = await import('./context')
+
+    const forX = await withPostQueryContext(ctx, { platform: 'twitter', role: 'anchor_thesis' })
+    expect(forX.observedOutcomes).toHaveLength(1)
+    expect(vi.mocked(listOutcomePatternsForGeneration)).toHaveBeenLastCalledWith('biz-1', expect.objectContaining({ platform: 'twitter' }))
+
+    vi.mocked(listOutcomePatternsForGeneration).mockResolvedValue([])
+    const forLi = await withPostQueryContext(ctx, { platform: 'linkedin', role: 'anchor_thesis' })
+    expect('observedOutcomes' in forLi).toBe(false)
+  })
+})
+
 // ADR 0017 §5.1 (L-10) — B2.5 wires memory into the BRIEF assembly input
 // only; CustomerContext itself must be byte-for-byte unchanged. A compile-time
 // shape diff (not a runtime check — TS types don't exist at runtime), mirroring
@@ -735,6 +780,6 @@ type Assert<T extends true> = T
 type _CustomerContextShapeUnchanged = Assert<
   Equals<
     keyof CustomerContext,
-    'business' | 'brandVoice' | 'recentCampaigns' | 'recentPostPerformance' | 'trialState'
+    'business' | 'brandVoice' | 'recentCampaigns' | 'recentPostPerformance' | 'observedOutcomes' | 'trialState'
   >
 >

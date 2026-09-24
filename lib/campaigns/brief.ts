@@ -3,7 +3,7 @@ import { runPrompt } from '@/lib/ai/runner'
 import { briefAssemblyPrompt } from '@/lib/ai/prompts/brief'
 import { rubricPrompt, BRIEF_QUALITY_THRESHOLD, type RubricOutput } from '@/lib/ai/prompts/rubric'
 import { wrapEvidenceForPrompt, neutralize } from '@/lib/ai/wrap-evidence'
-import { retrieveEvidenceMemory, retrieveAudienceMemory, retrieveBrandMemory } from '@/lib/memory'
+import { retrieveEvidenceMemory, retrieveAudienceMemory, retrieveBrandMemory, retrieveHypothesisResults } from '@/lib/memory'
 import { getCampaignById, moveCampaignToAwaitingBrief } from '@/lib/db/campaigns'
 import {
   getBriefByCampaign,
@@ -50,6 +50,7 @@ function deepFreezeContent(content: CampaignBriefContent): DeepReadonly<Campaign
   Object.freeze(content.pinnedEvidence)
   content.roleSequence.forEach((r) => Object.freeze(r))
   Object.freeze(content.roleSequence)
+  if (content.successCriteria) Object.freeze(content.successCriteria)
   return Object.freeze(content)
 }
 
@@ -90,10 +91,12 @@ export async function assembleBrief(campaignId: string): Promise<CampaignBriefRo
   }
 
   const queryContext = { objective: campaign.objective }
-  const [evidenceRows, audienceRows, brandRows] = await Promise.all([
+  const [evidenceRows, audienceRows, brandRows, priorHypotheses] = await Promise.all([
     retrieveEvidenceMemory(client, campaign.business_id, queryContext),
     retrieveAudienceMemory(client, campaign.business_id, queryContext),
     retrieveBrandMemory(client, campaign.business_id, queryContext),
+    // ADR 0026 §8.4 (J2.10) — Stage A is the ONLY reader of acknowledged hypothesis results.
+    retrieveHypothesisResults(campaign.business_id),
   ])
 
   // ADR §9 single choke point — called once per evidence id (B2.3's
@@ -117,6 +120,7 @@ export async function assembleBrief(campaignId: string): Promise<CampaignBriefRo
     evidenceCandidates,
     audienceCandidates: audienceRows.map((r) => ({ statement: r.statement, kind: r.kind })),
     brandCandidates: brandRows.map((r) => ({ statement: r.statement, category: r.category })),
+    priorHypotheses: priorHypotheses.map((h) => ({ pattern: h.pattern, n: h.n })),
   })
 
   // Session 24-D (MAJOR-1 correction, acceptance-gap close) — the render-time

@@ -47,6 +47,7 @@ function makeRow(overrides: Partial<PerformanceMemoryRow> = {}): PerformanceMemo
     pattern: 'technical-comparison posts perform well for CTO audiences',
     platform: 'linkedin',
     pattern_key: null,
+    outcome_n: null, outcome_wins: null, outcome_distinct_campaigns: null, interval_low: null, interval_high: null, metric_basis: null, baseline_seeded: null, contradicted_at: null,
     ...overrides,
   }
 }
@@ -64,6 +65,12 @@ describe('listPerformanceMemoryCandidates', () => {
     expect(builder.order).toHaveBeenNthCalledWith(1, 'confidence', { ascending: false })
     expect(builder.order).toHaveBeenNthCalledWith(2, 'recency_at', { ascending: false })
     expect(builder.order).not.toHaveBeenCalledWith('last_confirmed_at', expect.anything())
+  })
+
+  it("excludes source = 'outcome' — outcome rows never compete in the shared ranking (ADR 0026 J2.9)", async () => {
+    const { client, builder } = createMockClient([makeRow()], null)
+    await listPerformanceMemoryCandidates(client, 'biz-1')
+    expect(builder.neq).toHaveBeenCalledWith('source', 'outcome')
   })
 
   it('scopes the read to business_id — the sole tenancy guard on this service-role query (MINOR-1)', async () => {

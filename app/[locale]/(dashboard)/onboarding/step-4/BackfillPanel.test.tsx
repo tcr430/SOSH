@@ -109,6 +109,7 @@ function makePerformanceCandidate(run: SocialBackfillRunRow, id: string, pattern
     last_confirmed_at: null, recency_at: '2026-09-01T00:00:00Z', expires_at: null, deleted_at: null,
     created_at: '2026-09-01T00:00:00Z', updated_at: '2026-09-01T00:00:00Z', import_run_id: run.id,
     import_source_post_ids: ['p1'], dimension: 'topic', pattern, platform: 'twitter', pattern_key: null,
+    outcome_n: null, outcome_wins: null, outcome_distinct_campaigns: null, interval_low: null, interval_high: null, metric_basis: null, baseline_seeded: null, contradicted_at: null,
   }
 }
 
@@ -271,6 +272,7 @@ describe('BackfillPanel — Section 10.2 states', () => {
           pattern: 'Short posts perform best',
           platform: 'twitter',
           pattern_key: null,
+          outcome_n: null, outcome_wins: null, outcome_distinct_campaigns: null, interval_low: null, interval_high: null, metric_basis: null, baseline_seeded: null, contradicted_at: null,
         },
       ],
     })

@@ -36,6 +36,11 @@ export function BriefReviewForm({ campaignId, brief }: BriefReviewFormProps) {
 
   const [narrative, setNarrative] = useState(brief.content.narrative)
   const [proofPlan, setProofPlan] = useState(brief.content.proofPlan)
+  // ADR 0017 Amendment C (J2.10) — optional: a brief frozen before the amendment has neither field.
+  const [hypothesis, setHypothesis] = useState(brief.content.hypothesis ?? '')
+  const [criteriaMetric, setCriteriaMetric] = useState(brief.content.successCriteria?.metric ?? 'win_rate')
+  const [criteriaTarget, setCriteriaTarget] = useState(brief.content.successCriteria ? String(brief.content.successCriteria.target) : '')
+  const [criteriaWindow, setCriteriaWindow] = useState(brief.content.successCriteria ? String(brief.content.successCriteria.evaluationWindowDays) : '')
 
   useEffect(() => {
     if (approveState.status === 'approved' || rejectState.status === 'rejected' || editState.status === 'saved') {
@@ -100,6 +105,12 @@ export function BriefReviewForm({ campaignId, brief }: BriefReviewFormProps) {
           <h2 className="text-sm font-medium text-muted-foreground mb-1">{t('proof_plan_label')}</h2>
           <p className="text-sm leading-relaxed">{brief.content.proofPlan}</p>
         </div>
+        {brief.content.hypothesis && (
+          <div>
+            <h2 className="text-sm font-medium text-muted-foreground mb-1">{t('hypothesis_label')}</h2>
+            <p className="text-sm leading-relaxed">{brief.content.hypothesis}</p>
+          </div>
+        )}
         <div>
           <h2 className="text-sm font-medium text-muted-foreground mb-1">{t('role_sequence_label')}</h2>
           <ul className="space-y-1 text-sm">
@@ -195,6 +206,57 @@ export function BriefReviewForm({ campaignId, brief }: BriefReviewFormProps) {
             rows={4}
             className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
           />
+        </div>
+        <div className="space-y-1.5">
+          <label htmlFor="hypothesis" className="text-sm font-medium">{t('edit_hypothesis_field')}</label>
+          <textarea
+            id="hypothesis"
+            name="hypothesis"
+            value={hypothesis}
+            onChange={(e) => setHypothesis(e.target.value)}
+            rows={2}
+            maxLength={300}
+            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <label htmlFor="criteriaMetric" className="text-sm font-medium">{t('edit_criteria_metric_field')}</label>
+          <select
+            id="criteriaMetric"
+            name="criteriaMetric"
+            value={criteriaMetric}
+            onChange={(e) => setCriteriaMetric(e.target.value as 'win_rate' | 'median_lift')}
+            className="w-full rounded-md border px-3 py-2 bg-background text-sm"
+          >
+            <option value="win_rate">{t('criteria_metric_win_rate')}</option>
+            <option value="median_lift">{t('criteria_metric_median_lift')}</option>
+          </select>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <label htmlFor="criteriaTarget" className="text-sm font-medium">{t('edit_criteria_target_field')}</label>
+            <input
+              id="criteriaTarget"
+              name="criteriaTarget"
+              type="number"
+              step="0.05"
+              value={criteriaTarget}
+              onChange={(e) => setCriteriaTarget(e.target.value)}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="criteriaWindow" className="text-sm font-medium">{t('edit_criteria_window_field')}</label>
+            <input
+              id="criteriaWindow"
+              name="criteriaWindow"
+              type="number"
+              step="1"
+              value={criteriaWindow}
+              onChange={(e) => setCriteriaWindow(e.target.value)}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            />
+          </div>
         </div>
         <button
           type="submit"

@@ -4,6 +4,7 @@ import type { CustomerContext } from '@/lib/ai/context'
 import type { CampaignRow, Platform } from '@/lib/db/types'
 import { PLATFORM_CONSTRAINTS } from './post-generation'
 import { neutralize } from '@/lib/ai/wrap-evidence'
+import { renderObservedOutcomes } from './observed-outcomes'
 
 function sanitizeDataField(value: string): string {
   return value.replace(/\[\/DATA\]/gi, '[/data-blocked]')
@@ -147,6 +148,10 @@ ${ctx.recentCampaigns.map(c => `- ${sanitizeDataField(c.name)}: ${sanitizeDataFi
 ${ctx.recentPostPerformance.map(p => `- ${p.platform ? `On ${p.platform}: ` : 'Across platforms: '}${neutralize(p.topContent)}`).join('\n')}
 [/DATA]`)
     }
+
+    // ADR 0026 §6.4 (J2.9) — its OWN block, never merged into the snippets above; omitted when absent or empty.
+    const observed = renderObservedOutcomes(ctx.observedOutcomes, input.targetPlatform)
+    if (observed) sections.push(observed)
 
     sections.push(`## Business Context
 [DATA]

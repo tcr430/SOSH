@@ -46,7 +46,7 @@ export const FROZEN_TABLE: Record<string, FrozenRow> = {
     useToolOutput: undefined,
   },
   'brief-assembly': {
-    version: 2,
+    version: 3,
     modelKey: 'SONNET_4_6',
     temperature: undefined,
     thinking: 4000,
@@ -95,8 +95,11 @@ export const FROZEN_TABLE: Record<string, FrozenRow> = {
     maxTokens: 12288,
     useToolOutput: undefined,
   },
+  // ADR 0026 §4.3 (Session 33, J2.4) — the three native-generation rows move 2 -> 3:
+  // the system-prompt text now asks for hookType. Nothing else about them changed
+  // (same model, same temperature, no thinking, no tool output).
   'native-generation-single': {
-    version: 2,
+    version: 3,
     modelKey: 'SONNET_4_6',
     temperature: 1.0,
     thinking: undefined,
@@ -104,7 +107,7 @@ export const FROZEN_TABLE: Record<string, FrozenRow> = {
     useToolOutput: undefined,
   },
   'native-generation-thread': {
-    version: 2,
+    version: 3,
     modelKey: 'SONNET_4_6',
     temperature: 1.0,
     thinking: undefined,
@@ -112,7 +115,7 @@ export const FROZEN_TABLE: Record<string, FrozenRow> = {
     useToolOutput: undefined,
   },
   'native-generation-carousel': {
-    version: 2,
+    version: 3,
     modelKey: 'SONNET_4_6',
     temperature: 1.0,
     thinking: undefined,

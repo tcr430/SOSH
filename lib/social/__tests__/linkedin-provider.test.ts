@@ -302,6 +302,20 @@ describe('LinkedInProvider', () => {
   })
 
   describe('fetchPostMetrics / fetchEngagement', () => {
+    // ADR 0026 J2.1: the honest fallback, verified 2026-09-19 — LinkedIn count
+    // reads need the RESTRICTED r_member_social_feed, and no scope is added
+    // (ADR 0028 §14.1). The loop runs on X alone; this must not be "fixed" by
+    // guessing an endpoint under w_member_social.
+    it('fetchPostMetrics keeps throwing NOT_IMPLEMENTED with zero network calls, recording the restricted-scope reason', async () => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch')
+      await expect(provider.fetchPostMetrics({ socialAccountId: 'sa-1', platformPostId: 'p-1' })).rejects.toMatchObject({
+        code: 'NOT_IMPLEMENTED',
+        details: { reason: 'r_member_social_feed_restricted' },
+      })
+      expect(fetchSpy).not.toHaveBeenCalled()
+      fetchSpy.mockRestore()
+    })
+
     it('both throw NOT_IMPLEMENTED', async () => {
       await expect(provider.fetchPostMetrics({ socialAccountId: 'sa-1', platformPostId: 'p-1' })).rejects.toMatchObject({ code: 'NOT_IMPLEMENTED' })
       await expect(provider.fetchEngagement({ socialAccountId: 'sa-1', sinceCursor: null })).rejects.toMatchObject({ code: 'NOT_IMPLEMENTED' })

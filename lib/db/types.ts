@@ -1191,10 +1191,37 @@ export type AudienceMemoryRow = MemoryGovernanceRow & {
 
 export type PerformanceMemoryDimension = 'topic' | 'hook' | 'format' | 'proof_type'
 
-export type PerformanceMemoryRow = MemoryGovernanceRow & {
-  dimension: PerformanceMemoryDimension
+// ADR 0026 §5.1 / ADR 0016 Amendment C (Session 33 J2.5) — the dimensions an OUTCOME row may
+// carry (performance_memory_outcome_dimension_check). 'format' is shared with the distilled
+// vocabulary; 'hook', 'proof_type' and 'topic' can never be outcome dimensions.
+export type PerformanceMemoryOutcomeDimension =
+  | 'role'
+  | 'format'
+  | 'length_band'
+  | 'cta'
+  | 'origin_mode'
+  | 'hypothesis'
+
+export type PerformanceMemoryMetricBasis = 'rate' | 'count'
+
+export type PerformanceMemoryRow = Omit<MemoryGovernanceRow, 'source'> & {
+  // ADR 0026 §5.1 — the THIRD writer. 'outcome' rows are read only through lib/memory/outcomes
+  // (J2.9); the shared ranking (listPerformanceMemoryCandidates) excludes them.
+  source: MemorySource | 'outcome'
+  dimension: PerformanceMemoryDimension | PerformanceMemoryOutcomeDimension
   pattern: string
   platform: Platform | null
+  // ADR 0026 §5.3 — typed stats columns. Each is NOT NULL exactly when source = 'outcome'
+  // (CHECK ((col IS NOT NULL) = (source = 'outcome'))), so they are null on every
+  // manual/distilled/import row. contradicted_at is nullable for ALL rows.
+  outcome_n: number | null
+  outcome_wins: number | null
+  outcome_distinct_campaigns: number | null
+  interval_low: number | null
+  interval_high: number | null
+  metric_basis: PerformanceMemoryMetricBasis | null
+  baseline_seeded: boolean | null
+  contradicted_at: string | null
   // ADR 0016 Amendment B / ADR 0018 §7.2 (Session 25 C2.3 migration,
   // C2.6 type addition) — the deterministic dedup/aggregation key for
   // distilled rows; NULL for source='manual'/'import' rows, which have no
@@ -1222,6 +1249,72 @@ export type PerformanceMemoryInsert = {
   confidence: number
   observation_count: number
 }
+
+// ADR 0026 §5.5 / CLAUDE.md "*Update types exclude tenancy-critical fields" (Session 33 J2.5) —
+// what a caller may PATCH on an existing performance_memory row. It EXCLUDES:
+//   * identity and provenance: id, business_id, source, pattern_key (source is immutable on
+//     every row; pattern_key is the dedup identity);
+//   * EVERY outcome stats column and contradicted_at — written only by the outcome RPCs (J2.6),
+//     and rejected by the database for a client role (trg_performance_memory_outcome_write_protect);
+//   * import provenance (import_run_id, import_source_post_ids — immutable) and lifecycle/derived
+//     columns (deleted_at, created_at, updated_at, recency_at).
+// Nothing in the codebase PATCHes performance_memory with an authenticated client today (the J2.0
+// grep), so this is the type a future member-facing edit MUST go through, not one in use.
+export type PerformanceMemoryUpdate = Partial<
+  Omit<
+    PerformanceMemoryRow,
+    | 'id'
+    | 'business_id'
+    | 'source'
+    | 'pattern_key'
+    | 'outcome_n'
+    | 'outcome_wins'
+    | 'outcome_distinct_campaigns'
+    | 'interval_low'
+    | 'interval_high'
+    | 'metric_basis'
+    | 'baseline_seeded'
+    | 'contradicted_at'
+    | 'import_run_id'
+    | 'import_source_post_ids'
+    | 'deleted_at'
+    | 'created_at'
+    | 'updated_at'
+    | 'recency_at'
+  >
+>
+
+// ADR 0026 §8.3 (Session 33 J2.6) — one row per campaign: the verdict on its hypothesis. Written by
+// the service-role worker (insertCampaignRetrospective, ON CONFLICT DO NOTHING — evaluated once) and
+// transitioned completed -> acknowledged ONLY by acknowledge_campaign_retrospective.
+export type RetrospectiveVerdict = 'supported' | 'not_supported' | 'inconclusive'
+
+export type CampaignRetrospectiveRow = {
+  id: string
+  campaign_id: string
+  business_id: string
+  hypothesis_snapshot: string
+  hypothesis_source: 'brief' | 'implicit'
+  criteria_snapshot: Record<string, unknown>
+  verdict: RetrospectiveVerdict
+  n: number
+  wins: number
+  interval_low: number | null
+  interval_high: number | null
+  median_log_lift: number | null
+  by_role: Record<string, unknown>
+  status: 'completed' | 'acknowledged'
+  completed_at: string
+  acknowledged_at: string | null
+  acknowledged_by: string | null
+  note: string | null
+}
+
+// The worker's insert: no id/status (defaults) and none of the acknowledgement columns.
+export type CampaignRetrospectiveInsert = Omit<
+  CampaignRetrospectiveRow,
+  'id' | 'status' | 'acknowledged_at' | 'acknowledged_by' | 'note'
+>
 
 // ADR 0025 §9.4 (Session 32 I2.7) — inputs to the import_{evidence,audience,
 // performance}_memory RPCs (20260913140000/150000). Deliberately has NO
@@ -1304,6 +1397,11 @@ export type CampaignBriefContent = {
   // bytes are re-fetched and guarded at render time.
   pinnedEvidence: Array<{ evidenceMemoryId: string; note?: string }>
   roleSequence: Array<{ order: number; role: CampaignPostRole; platform: Platform; angle: string }>
+  // ADR 0017 Amendment C / ADR 0026 §8.1 (Session 33 J2.10, ruling A-1). OPTIONAL: a brief frozen before the
+  // amendment has neither, and old briefs are NOT backfilled (the retrospective uses an implicit hypothesis).
+  // Both or neither — see lib/outcomes/hypothesis.ts, the one schema for both.
+  hypothesis?: string
+  successCriteria?: { metric: 'win_rate' | 'median_lift'; target: number; evaluationWindowDays: number }
 }
 
 export type CampaignBriefRow = {
@@ -1523,3 +1621,25 @@ export type SocialBackfillPostRow = {
   claimed_at: string | null
   created_at: string
 }
+
+// ADR 0026 §6.1 (Session 33 J2.7) — the day-7 frozen outcome. Written ONLY by the service-role worker.
+export type PostOutcomeRow = {
+  post_id: string
+  business_id: string
+  campaign_id: string
+  platform: string
+  published_at: string
+  ai_original_id: string | null
+  metric_basis: 'rate' | 'count'
+  value: number
+  baseline: number | null
+  baseline_n: number | null
+  baseline_source: 'own' | 'import_seed' | null
+  log_lift: number | null
+  beat_baseline: boolean | null
+  length_band: 'short' | 'medium' | 'long' | null
+  cta_present: boolean | null
+  hook_survived: boolean | null
+  measured_at: string
+}
+export type PostOutcomeInsert = PostOutcomeRow

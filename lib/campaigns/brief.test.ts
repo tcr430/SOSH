@@ -35,6 +35,8 @@ vi.mock('@/lib/memory', () => ({
   retrieveEvidenceMemory: vi.fn().mockResolvedValue([]),
   retrieveAudienceMemory: vi.fn().mockResolvedValue([]),
   retrieveBrandMemory: vi.fn().mockResolvedValue([]),
+  // ADR 0026 J2.10 — Stage A's acknowledged-hypothesis reader.
+  retrieveHypothesisResults: vi.fn().mockResolvedValue([]),
 }))
 
 vi.mock('@/lib/db/posts', () => ({

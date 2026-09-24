@@ -98,6 +98,34 @@ Ordered loosely by likely value.
 | fetch_failed | error enum | Dead `fetch_failed` value in an error enum. | Session 5D |
 | 21B-n4 | dashboard Server Actions | Multiple call sites each call `getBusinessForUser` independently per request. Latency/query-count only — correctness unaffected. Fix: request-scoped memo (React `cache()`). | ADR 0014 A0 |
 
+### 3.1 Session 33 — the outcome loop (ADR 0026), filed by J2.13
+
+**With a named un-defer trigger** (ADR 0026 §15 items that no other session owns, plus what the Builder found):
+
+| ID | Item | Un-defer trigger |
+|----|------|------------------|
+| **S33-EXPERIMENT** | Deliberate experimentation: organic A/B or a randomized pattern holdout. The only route to a **causal** number for `OUTCOME-PREDICTION-ACCURACY`; excluded by L-1 today, so that number is reported only as "association, not validation". | **Volume:** enough promoted patterns and matured posts that the Tier E protocol (ADR 0026 §V.4) clears its per-arm floor of n >= 15 in each arm on real customers, i.e. after T0 (the first real customer's first published post with real metrics) plus roughly 150 days. |
+| **S33-HOOK-KAPPA** | `hook_type` promotion. `hook_type` is collected and shown but never promoted; its value is the model's own self-report. | An agreement check clears: **Cohen's kappa >= 0.6 on >= 30 sampled posts** (ADR 0026 §4.1), then a follow-on amendment to ADR 0026. |
+| **S33-PROOF-TYPE** | `proof_type` promotion (confounded with campaign identity). | Per-post evidence citation exists in the output schema (Session 34, claim verification). |
+| **S33-LINKEDIN-RATE** | LinkedIn rate metrics and follower-count normalisation. LinkedIn stays on the count basis and `fetchPostMetrics` is still NOT_IMPLEMENTED for it. | `r_member_postAnalytics` approval (ADR 0028 §16 item 11); follower normalisation needs a follower fetch. |
+
+**Post-launch, no trigger:**
+
+| ID | Item | Note |
+|----|------|------|
+| **S33-VARIETY** | "Not enough variety" on the campaign page is computed from the brand's outcome patterns, so a value with fewer than 5 observations is invisible to it and variety can be over-reported. | Needs per-brand dimension-variety data, or a small SQL aggregate. |
+| **S33-INELIGIBLE-RETRY** | A post excluded for a null eligible field writes no `post_outcomes` row, so it is re-examined every tick until it leaves the 30-day lookback, and it consumes batch budget while it does. | Record a typed exclusion, or stop re-listing posts whose day-7 sync is complete but ineligible. |
+| **S33-RETRO-SCAN** | The retrospective phase looks only at a business's newest 50 campaigns without a retrospective, per tick. | Fine at launch volume; page it when a brand can hold more than 50 open campaigns. |
+| **S33-TRIGGER-A** | Security review MINOR-1, accepted: `performance_memory`'s write-protection trigger branch A checks `NEW`, not the transition, so a soft-delete UPDATE can also edit content on a row no reader can see. No impact found. | Fold into the next migration that touches that trigger. |
+| **S33-TOPIC** | A `topic` dimension. | Needs a controlled content-pillar vocabulary; not scheduled. |
+| **S33-IMPORT-OBS** | Imported posts as observations (ADR 0026 ruling A-4 option (b)). | Declined; it would change ADR 0025 §8.3 retention and needs counsel. |
+| **S33-MINING** | Comment mining; embeddings; memory-driven opportunity cards. | Excluded by L-1; unscheduled. |
+| **S33-RETENTION** | Retention policy for `post_outcomes` (mirrors `post_metrics`' no-retention posture). | Belongs to the project retention ADR. |
+| **S33-QSTASH** | The `extract-outcomes` QStash schedule and Sentry monitor are documented but **not created** (`docs/launch-checklist.md`). | Before the outcome loop runs unattended in production. |
+
+Owned elsewhere and therefore not repeated here: UTM auto-tagging, conversion-event ingestion and the analytics
+surface (T1-B); cross-type retrieval and any further memory writer (Session 34+).
+
 ---
 
 ## 4. Filed for visibility — no action intended

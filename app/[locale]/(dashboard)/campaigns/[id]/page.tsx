@@ -12,6 +12,9 @@ import { PLATFORM_CONFIGS } from '@/lib/social'
 import { config } from '@/lib/config'
 import type { CampaignStatus } from '@/lib/db/types'
 import { CampaignDetailActions } from './CampaignDetailActions'
+import { RetrospectiveCard } from './RetrospectiveCard'
+import { ObservedOutcomesList } from './ObservedOutcomesList'
+import { loadCampaignLearningView } from '@/lib/outcomes/campaign-view'
 
 type Props = {
   params: Promise<{ locale: string; id: string }>
@@ -57,6 +60,11 @@ export default async function CampaignDetailPage({ params }: Props) {
   const platformNames = campaign.platforms
     .map((p) => PLATFORM_CONFIGS[p]?.displayName ?? p)
     .join(', ')
+
+  // ADR 0026 §10.1 — the Retrospective card and the Observed outcomes list. Read-only; never on the approval gate.
+  const learning = campaign.status !== 'draft'
+    ? await loadCampaignLearningView(client, business.id, id, campaign.platforms)
+    : null
 
   const startDate = format(parseISO(campaign.start_date), 'PP')
   const endDate = campaign.end_date
@@ -134,6 +142,20 @@ export default async function CampaignDetailPage({ params }: Props) {
           </div>
         </div>
       </section>
+
+      {learning && (
+        <>
+          <RetrospectiveCard
+            retro={learning.retro}
+            dueAt={learning.dueAt}
+            platformNames={platformNames}
+            unavailablePlatformNames={learning.unavailablePlatforms.map((p) => PLATFORM_CONFIGS[p as keyof typeof PLATFORM_CONFIGS]?.displayName ?? p)}
+            campaignId={id}
+            currentUserId={user.id}
+          />
+          <ObservedOutcomesList rows={learning.observed} />
+        </>
+      )}
 
       {/* Interactive: generate posts + danger zone */}
       <CampaignDetailActions

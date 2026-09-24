@@ -339,12 +339,22 @@ export class LinkedInProvider implements SocialProvider {
     }
   }
 
+  // ADR 0026 §3.1 / ADR 0028 Amendment A (J2.1) — VERIFIED, then deliberately
+  // left unimplemented. Reading like/comment counts (GET /rest/socialActions/
+  // {urn} or /rest/socialMetadata/{urn}) needs r_member_social_feed, which
+  // LinkedIn marks "Restricted … granted to select developers only"
+  // (learn.microsoft.com/en-us/linkedin/marketing/community-management/shares/
+  // network-update-social-actions, read 2026-09-19). platforms/config.ts
+  // grants only openid, profile, email, w_member_social, and adding a scope
+  // forces every connected account to re-authorise (ADR 0028 §14.1). So this
+  // keeps throwing NOT_IMPLEMENTED — which the metrics orchestrator already
+  // short-circuits per platform — and the outcome loop runs on X alone.
   async fetchPostMetrics(_input: FetchMetricsInput): Promise<PostMetrics | null> {
     throw new SocialProviderError({
       code: 'NOT_IMPLEMENTED',
       message: 'LinkedInProvider.fetchPostMetrics is not implemented yet',
       platform: 'linkedin',
-      details: { method: 'fetchPostMetrics' },
+      details: { method: 'fetchPostMetrics', reason: 'r_member_social_feed_restricted' },
     })
   }
 

@@ -71,6 +71,8 @@ export async function runMetricsSyncTick(opts?: {
     }
     const account = resolution.account
 
+    // Which half of the try failed, for the Sentry tag: the provider call or our own upsert.
+    let phase: 'fetch' | 'persist' = 'fetch'
     try {
       const provider = registry.get(post.platform)
       const result = await provider.fetchPostMetrics({
@@ -83,6 +85,7 @@ export async function runMetricsSyncTick(opts?: {
         continue
       }
 
+      phase = 'persist'
       await upsertPostMetrics({
         post_id: post.id,
         business_id: post.business_id,
@@ -101,7 +104,14 @@ export async function runMetricsSyncTick(opts?: {
         unsupportedPlatforms.add(post.platform)
         summary.skippedNotImplemented++
       } else {
+        // Live since ADR 0026 J2.1 made fetchPostMetrics real: an expired or revoked token, a rate limit, a
+        // network fault or a shape mismatch all land here. The outcome tick later reads their absence as a
+        // skip, so this is the only place the failure is observable (Session 33-D D2, MAJOR-2).
         summary.errors++
+        Sentry.captureException(e, {
+          tags: { cron: 'sync-metrics', phase, platform: post.platform },
+          extra: { postId: post.id },
+        })
       }
     }
   }

@@ -7,6 +7,7 @@ import { getBusinessForUser } from '@/lib/db/businesses'
 import { getCampaignById } from '@/lib/db/campaigns'
 import { getBriefByCampaign, reviseBrief } from '@/lib/db/campaign-briefs'
 import { approveBriefIfQualified } from '@/lib/campaigns/brief'
+import { HypothesisFieldsSchema } from '@/lib/outcomes/hypothesis'
 import type { CampaignRow, CampaignBriefRow } from '@/lib/db/types'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
@@ -178,17 +179,47 @@ export async function editBriefAction(
     })
     if (!parsed.success) return { status: 'error', error: 'invalid_input' }
 
+    // ADR 0017 Amendment C / ADR 0026 §8.1 (J2.10) — the hypothesis and its success criteria are editable BEFORE
+    // freeze, validated by the SAME Zod schema Stage A's output goes through. A form that does not carry the
+    // fields at all leaves them unchanged; one that carries them all blank clears them; a partial or
+    // out-of-range submission is refused (never clamped).
+    let hypothesisFields: { hypothesis?: string; successCriteria?: { metric: 'win_rate' | 'median_lift'; target: number; evaluationWindowDays: number } } | null = null
+    if (formData.has('hypothesis')) {
+      const hypothesis = String(formData.get('hypothesis') ?? '').trim()
+      const target = String(formData.get('criteriaTarget') ?? '').trim()
+      const window = String(formData.get('criteriaWindow') ?? '').trim()
+      const blank = hypothesis === '' && target === '' && window === ''
+      const fields = HypothesisFieldsSchema.safeParse(
+        blank
+          ? {}
+          : {
+              hypothesis,
+              successCriteria: {
+                metric: formData.get('criteriaMetric'),
+                target: Number(target),
+                evaluationWindowDays: Number(window),
+              },
+            },
+      )
+      if (!fields.success) return { status: 'error', error: 'invalid_input' }
+      hypothesisFields = fields.data
+    }
+
     const loaded = await loadOwnedCampaignAndBrief(parsed.data.campaignId)
     if (!loaded.ok) return { status: 'error', error: loaded.error }
     if (loaded.brief.status !== 'critiqued') return { status: 'error', error: 'invalid_brief_state' }
 
     // pinnedEvidence/roleSequence are NOT editable in this minimal surface
-    // (ADR §10) — only narrative/proofPlan change; the rest of content carries
-    // through unchanged.
+    // (ADR §10) — only narrative/proofPlan and (J2.10) the hypothesis fields change; the rest of content
+    // carries through unchanged.
+    const { hypothesis: _oldHypothesis, successCriteria: _oldCriteria, ...unchanged } = loaded.brief.content
+    const carried = hypothesisFields === null ? { hypothesis: _oldHypothesis, successCriteria: _oldCriteria } : hypothesisFields
     const updated = await reviseBrief(loaded.serviceClient, loaded.brief.id, parsed.data.expectedVersion, {
-      ...loaded.brief.content,
+      ...unchanged,
       narrative: parsed.data.narrative,
       proofPlan: parsed.data.proofPlan,
+      ...(carried.hypothesis !== undefined ? { hypothesis: carried.hypothesis } : {}),
+      ...(carried.successCriteria !== undefined ? { successCriteria: carried.successCriteria } : {}),
     })
     if (!updated) return { status: 'error', error: 'concurrent_edit' }
 

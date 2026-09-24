@@ -63,7 +63,9 @@ export const serverSchema = z.object({
   PUBLISH_STUCK_MINUTES: z.coerce.number().int().positive().default(10),
   METRICS_SYNC_BATCH_SIZE: z.coerce.number().int().positive().default(50),
   METRICS_STALE_MINUTES: z.coerce.number().int().positive().default(360),
-  METRICS_MAX_AGE_DAYS: z.coerce.number().int().positive().default(90),
+  // ADR 0026 §3.2 / ADR 0028 Amendment A: 9 = the day-7 outcome read plus the
+  // 2-day OUTCOME_MATURITY_GRACE_DAYS. A sync-window filter, never a deletion.
+  METRICS_MAX_AGE_DAYS: z.coerce.number().int().positive().default(9),
   POST_GENERATION_SESSION_STALE_MINUTES: z.coerce.number().int().positive().default(15),
   // ADR 0022 §3.4 (Session 29, F1b.3) — promote's claim staleness window.
   // Unlike POST_GENERATION_SESSION_STALE_MINUTES (which spans an LLM call),
@@ -81,6 +83,8 @@ export const serverSchema = z.object({
   // this file's <DOMAIN>_BATCH_SIZE / <DOMAIN>_MAX_ATTEMPTS /
   // <DOMAIN>_RETRY_BACKOFF_SECONDS naming convention.
   LEARNING_BATCH_SIZE: z.coerce.number().int().positive().default(50),
+  // ADR 0026 §14 (Session 33 J2.8) — the extract-outcomes tick: matured posts frozen per tick.
+  OUTCOME_BATCH_SIZE: z.coerce.number().int().positive().default(200),
   LEARNING_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
   LEARNING_RETRY_BACKOFF_SECONDS: z.coerce.number().int().positive().default(300),
   LEARNING_SUMMARY_MIN_SIGNALS: z.coerce.number().int().positive().default(20),
@@ -324,6 +328,7 @@ function parseServerEnv() {
     DELETION_MAX_ATTEMPTS: process.env.DELETION_MAX_ATTEMPTS,
     DELETION_RETRY_BACKOFF_BASE_MINUTES: process.env.DELETION_RETRY_BACKOFF_BASE_MINUTES,
     LEARNING_BATCH_SIZE: process.env.LEARNING_BATCH_SIZE,
+    OUTCOME_BATCH_SIZE: process.env.OUTCOME_BATCH_SIZE,
     LEARNING_MAX_ATTEMPTS: process.env.LEARNING_MAX_ATTEMPTS,
     LEARNING_RETRY_BACKOFF_SECONDS: process.env.LEARNING_RETRY_BACKOFF_SECONDS,
     LEARNING_SUMMARY_MIN_SIGNALS: process.env.LEARNING_SUMMARY_MIN_SIGNALS,
@@ -515,6 +520,9 @@ export const config = {
     },
     get LEARNING_BATCH_SIZE() {
       return serverOnly("LEARNING_BATCH_SIZE", () => server().LEARNING_BATCH_SIZE);
+    },
+    get OUTCOME_BATCH_SIZE() {
+      return serverOnly("OUTCOME_BATCH_SIZE", () => server().OUTCOME_BATCH_SIZE);
     },
     get LEARNING_MAX_ATTEMPTS() {
       return serverOnly("LEARNING_MAX_ATTEMPTS", () => server().LEARNING_MAX_ATTEMPTS);

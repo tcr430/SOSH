@@ -11,11 +11,37 @@ import { z } from 'zod'
 // §8.2-wins ruling and its revival condition) lives there, not here.
 const SCRIPT_BRIEF_MAX_CHARS = 500
 
+// ADR 0026 §4.3 (Session 33, J2.4, founder ruling A-6) — the model's own statement
+// of the OPENING type it used, requested inside the EXISTING generation call (no
+// new model call). Descriptive only: the model's self-report about its own
+// opening is unvalidated, so it is collected and shown but NEVER promoted to a
+// pattern (ADR 0026 §4.1) until a kappa >= 0.6 agreement check clears it.
+//
+// THE ONE PLACE this list is written in TypeScript. The prompt renders it from
+// here, and hooktype.test.ts asserts it equals BOTH database twins — the
+// post_dimensions.hook_type CHECK and the tagging trigger's CASE sanitiser
+// (supabase/migrations/20260919110000_outcome_tables.sql) — so a value added to
+// one place and not the others fails a test instead of silently untagging posts.
+//
+// Additive by construction (the scriptBrief precedent above, ADR 0022 §7.1):
+// .nullish() so a payload written before this field still parses and the prompt
+// may answer null when no type fits. AI_ORIGINAL_SCHEMA_VERSION is NOT bumped: an
+// additive optional key changes no parse, and a bump would make ADR 0018's
+// classifier abandon every new signal (ADR 0018 §2.4).
+//
+// An UNKNOWN value is REJECTED (z.enum), failing the whole output; the runner
+// surfaces it as invalid_response and ADR 0017 §4.4's one bounded re-prompt
+// handles it. That is ADR 0026 §4.3's stated shape, not an accident.
+export const HOOK_TYPES = ['question', 'statistic', 'contrarian', 'story', 'announcement', 'how_to'] as const
+export const HookTypeSchema = z.enum(HOOK_TYPES)
+export type HookType = z.infer<typeof HookTypeSchema>
+
 export const SinglePostOutputSchema = z.object({
   format: z.literal('single'),
   body: z.string().min(1),
   imageBrief: z.string().nullable(),
   scriptBrief: z.string().max(SCRIPT_BRIEF_MAX_CHARS).nullish(),
+  hookType: HookTypeSchema.nullish(),
 })
 
 export type SinglePostOutput = z.infer<typeof SinglePostOutputSchema>
@@ -41,6 +67,9 @@ export const ThreadOutputSchema = z.object({
   // added later, each with their own imageBrief semantics.
   imageBrief: z.string().nullable(),
   scriptBrief: z.string().max(SCRIPT_BRIEF_MAX_CHARS).nullish(),
+  // ADR 0026 §4.3 — declared per branch like imageBrief/scriptBrief (a zod
+  // discriminatedUnion has no shared-base merge). Describes the FIRST post's opening.
+  hookType: HookTypeSchema.nullish(),
 })
 
 export type ThreadOutput = z.infer<typeof ThreadOutputSchema>
@@ -71,6 +100,8 @@ export const CarouselOutputSchema = z.object({
   // Branch-level only (not per-slide) — a script recommendation describes
   // filming the carousel as a whole short-form video, not one per slide.
   scriptBrief: z.string().max(SCRIPT_BRIEF_MAX_CHARS).nullish(),
+  // ADR 0026 §4.3 — branch-level; describes the COVER slide's opening.
+  hookType: HookTypeSchema.nullish(),
 })
 
 export type CarouselOutput = z.infer<typeof CarouselOutputSchema>

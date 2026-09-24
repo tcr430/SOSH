@@ -1514,3 +1514,15 @@ no `signal 11`; **app-tests** [35437471297](https://github.com/tcr430/SOSH/actio
 [35437471258](https://github.com/tcr430/SOSH/actions/runs/35437471258) green; **Vercel** deployment succeeded. The
 §15.9/§15.11 tier statuses therefore hold at `ceb302fd` as well as at `15beb540`. The `db-tests` promotion tally is
 unchanged (no `master` push run).
+
+
+---
+
+## Correction note — §5.4's "outcome loop reads `source='distilled'` only" is superseded (2026-09-20, Session 33, J2.13)
+
+**Additive.** Source: ADR 0026 §9. ADR 0025 §5.4 said its outcome loop reads `source = 'distilled'` only. That
+sentence is **superseded**: the outcome loop reads `post_outcomes`, `post_dimensions` and `source = 'outcome'`
+rows, and **never reads or writes `source = 'import'` or `source = 'distilled'` rows.** Imported data reaches the
+loop in exactly one place, as a baseline seed: the X engagement baseline recorded in
+`social_backfill_runs.summary`, used only when its recorded basis is `rate` (`OUTCOME-SEED-BASIS-MATCH`, ADR 0026
+§6.3). Imported memory rows remain permanently distinguishable from outcome rows.
