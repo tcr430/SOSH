@@ -1564,9 +1564,12 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
     form is submitted, and lands on brief review. It has NOT been observed against a real model or in a browser. Creation now
     blocks on Stage A plus the slower of critique and planner, and spends LLM cost per new campaign, trials included.
     `S34-WIRE-PLANNER` is closed.
-  - **Found while wiring, predates this session, launch-blocking: no production path takes an approved brief to generated posts**
-    (`GeneratePostsButton` needs `draft`, `generatePostsForCampaign` needs `awaiting_brief`, `approveBriefAction` starts nothing).
-    Read from the code, not exercised in a browser. `S34-APPROVE-TO-GENERATE` in `docs/backlog.md` §1.
+  - **Approve -> generate is wired as of K2.13 (ADR 0027 §V.9), closing `S34-APPROVE-TO-GENERATE`.** A separate Generate control appears on
+    an approved brief (`generateStage`), `startGenerationAction` accepts `awaiting_brief` with an approved brief, and a draft campaign
+    whose brief failed at submit has a retry. The choice of a separate control over auto-start was deliberate: generation spends trial
+    post quota and runs long, so it stays an explicit customer action. **The full path has never been run in a browser or against a
+    real model** (`S34-E2E-UNVERIFIED`, launch sign-off): creation latency and per-campaign LLM cost at creation are the two things to
+    watch. Full app suite, CI's dummy env, at this tree: 336 files, 4837 tests passed. Still not pushed.
   - **Measured p95 latency against ADR 0027 §7.3's predicted 30 000 ms: NOT MEASURED.** No planner run has ever been
     observed, in tests or elsewhere, so there is no measurement. The 30 000 ms figure remains a prediction and is not
     reported as anything else here.

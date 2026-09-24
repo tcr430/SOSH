@@ -38,7 +38,6 @@ ADR 0028 — production OAuth apps not yet registered) is tracked in §16; the `
 lives in `current-phase.md`.
 
 ---
-| **S34-APPROVE-TO-GENERATE** | request path: `campaigns/[id]/generate-action.ts`, `brief/actions.ts`, `lib/campaigns/generate.ts` | **No production path takes an approved brief to generated posts.** `GeneratePostsButton` shows only for `draft` campaigns and `startGenerationAction` requires `draft`, but `generatePostsForCampaign` (`lib/campaigns/generate.ts:123`) requires `awaiting_brief`; `approveBriefAction` approves and starts nothing. True for customer-authored and for Studio/signal-originated campaigns. Read from the code, not exercised in a browser. Needs a decision on where generation starts after approval (an approve-then-generate step in `approveBriefAction`, or a Generate control on an approved brief). **Launch-blocking**: a customer cannot generate posts. | K2.12 |
 
 ## 2. Deferred with a named un-defer trigger
 
@@ -147,6 +146,7 @@ surface (T1-B); cross-type retrieval and any further memory writer (Session 34+)
 | **S34-SEMANTIC-REDUNDANCY** | Semantic cross-set redundancy (`checkSetRedundancy` is structural, not semantic). | Measured edit-distance or manual-review data showing semantic redundancy surviving both halves (ADR 0027 §5.8). |
 | **S34-UNIFY-VERIFY** | Unify the three verify-then-cite modules (`lib/studio/verify.ts`, `lib/signals/triage/verify.ts`, `lib/campaigns/verify-claims.ts`). No owner; `AGENCY-VERIFY-CROSS-REFERENCED` keeps the map so it is a refactor, not archaeology. | No trigger; a refactor when a fourth instantiation is proposed. |
 | **S34-RENAME-TRIAGE-CONSTS** | Rename `runToolLoop`'s `TRIAGE_*` constants now that it has a second consumer. Forbidden in Session 34 (ADR 0027 §3.1); its own tracked piece of work. | Any session that touches `lib/ai/tool-runner.ts` for a third consumer. |
+| **S34-E2E-UNVERIFIED** | The whole customer path (create campaign -> brief review with the plan panel -> approve -> generate -> posts) is unit-tested and has **never been run in a browser or against a real model**. Two specifics need a real run: form-submit latency (creation now blocks on Stage A plus the slower of critique and planner; ADR 0027 §7.3 predicts +16 s p50 and 30 000 ms p95, unmeasured), and per-campaign LLM cost at creation, which now falls on every new campaign including trials before any post exists. I did not verify that Stage A or the critique carry a per-business daily cap (only the planner does, `AI_PLANNER_DAILY_CAP_CENTS`). | **Before launch sign-off**, and the first time a real model key is available in a non-test environment. If latency or cost is unacceptable, prepare the brief in the background (`after()`) with a "preparing your brief" state on the campaign page. |
 
 **Found in passing, out of scope for Session 34** (ADR 0027 §12; both re-verified still true at K2.11):
 
@@ -194,6 +194,7 @@ Struck-through IDs resolve historical references. Full closure evidence for the 
 
 | ID | Description | Closed |
 |----|-------------|--------|
+| ~~S34-APPROVE-TO-GENERATE~~ | No production path took an approved brief to generated posts (`startGenerationAction` demanded `draft`, `generatePostsForCampaign` demanded `awaiting_brief`, `approveBriefAction` started nothing). Fixed with a separate Generate control on an approved brief plus a retry for a draft campaign whose brief failed; ADR 0027 §V.9 | K2.13 |
 | ~~A4~~ | `suppressed` missing from `EmailProviderErrorCode` union | 18B-5 (B18-001) |
 | ~~E5~~ | Email footer 13 px → 14 px (WCAG 1.4.4) | 18B-5 + 18B-5D (B18-002) |
 | ~~L-05~~ | Atomic `WHERE status=` guard in `transitionEmailOutboxRow` | 18B-2 (B18-003) |

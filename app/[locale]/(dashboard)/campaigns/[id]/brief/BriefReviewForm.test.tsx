@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client'
 import { act } from 'react'
 
 vi.mock('next-intl', () => ({
+  useLocale: () => 'en',
   useTranslations: () => (key: string, vars?: Record<string, string | number>) =>
     vars ? `${key}:${JSON.stringify(vars)}` : key,
 }))

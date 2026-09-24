@@ -311,6 +311,7 @@
       "score_label": "Puntuación: {score}/100",
       "pending": "El brief todavía se está preparando y evaluando — esto puede tardar hasta 20 segundos. Vuelve a comprobarlo pronto.",
       "already_approved": "Este brief ya ha sido aprobado.",
+      "continue_to_generate": "Continuar para generar publicaciones",
       "approve": "Aprobar",
       "reject": "Devolver",
       "edit": "Guardar cambios",
@@ -409,10 +410,28 @@
           "provider_error": "El proveedor de IA devolvió un error. Por favor, inténtalo de nuevo.",
           "invalid_response": "La IA devolvió una respuesta inesperada. Por favor, inténtalo de nuevo.",
           "timeout": "La generación expiró. Por favor, inténtalo de nuevo.",
-          "invalid_campaign_state": "Esta campaña no está lista para generar publicaciones. Verifica que tenga voz de marca y estado de borrador.",
+          "invalid_campaign_state": "Esta campaña no está lista para generar publicaciones. Verifica que tenga voz de marca y un brief aprobado.",
+          "brief_not_approved": "El brief de esta campaña aún no ha sido aprobado. Apruébalo antes de generar publicaciones.",
           "already_generated": "Ya se han generado publicaciones para esta campaña.",
           "generic": "Algo salió mal. Por favor, inténtalo de nuevo."
         }
+      },
+      "prepare_brief": {
+        "title": "Tu brief aún no está listo",
+        "body": "No pudimos preparar el brief de esta campaña. Inténtalo de nuevo para crearlo y revísalo antes de generar cualquier publicación.",
+        "cta": "Preparar brief",
+        "starting": "Preparando tu brief…",
+        "try_again": "Intentar de nuevo",
+        "error": {
+          "forbidden": "No tienes permiso para preparar briefs de este negocio.",
+          "failed": "No pudimos preparar el brief. Inténtalo de nuevo.",
+          "generic": "Algo salió mal. Inténtalo de nuevo."
+        }
+      },
+      "review_brief": {
+        "title": "Revisa primero el brief",
+        "body": "Las publicaciones se generan a partir de un brief aprobado. Revísalo y apruébalo para continuar.",
+        "cta": "Revisar brief"
       },
       "posts": {
         "published": "{published} de {total} publicaciones publicadas",

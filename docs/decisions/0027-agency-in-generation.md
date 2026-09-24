@@ -2019,4 +2019,39 @@ The founder's ruling at K2.7 ("don't wire yet") was reversed at K2.12 ("wire it"
   Studio/signal-originated one. Read from the code, not exercised in a browser. Filed as `S34-APPROVE-TO-GENERATE`, pre-launch.
   K2.12 makes it more visible, not less: a campaign whose pipeline succeeds is no longer `draft`, so the button no longer shows.
 
-_End of Builder verification (K2.11, with the K2.12 addendum). Sections 0-14 above were not modified._
+### V.9 Addendum (K2.13): approve -> generate is wired. V.8's last bullet is superseded, not edited.
+
+V.8 recorded that no production path took an approved brief to generated posts. **At K2.13 one does.** The decision left open
+at K2.12 (auto-start inside `approveBriefAction`, or a separate control) was made for the **separate Generate control**:
+generation spends trial post quota and runs for a long time, so it stays an explicit customer action with its existing checks
+in front of it, rather than a side effect of clicking Approve.
+
+- **`startGenerationAction`** accepts an `awaiting_brief` campaign whose brief is `approved` (the state `generatePostsForCampaign`
+  itself requires) and returns the new `brief_not_approved` otherwise. Every earlier guard is untouched: business ownership,
+  brand voice, trial quota, already-generated. The brief is read through the caller's authenticated client.
+- **The campaign page decides what to offer from persisted state,** `generateStage(campaignStatus, briefStatus)`
+  (`lib/campaigns/generate-stage.ts`): `draft` -> retry the brief; `awaiting_brief` with an unapproved brief -> a link to brief
+  review; `awaiting_brief` with an approved brief -> the Generate control; anything else -> the posts summary. A test asserts
+  the action proceeds for exactly the combinations `generateStage` calls `generate`, so the page and the action cannot drift.
+- **After approval** the brief page offers "Continue to generate posts", linking to the campaign page.
+- **A retry for the dead end K2.12 introduced.** If Stage A fails at submit the campaign stays `draft` with no brief.
+  `prepareBriefAction` + `PrepareBriefButton` re-run the same pipeline (so the planner runs) for an author on a draft campaign,
+  and refuse any other state, so a stale page cannot create a second brief.
+- **Strings** in en/pt/es, with a test that every key exists, is non-empty and is translated in all three, and that no locale
+  still says generation needs a `draft` campaign.
+- **Proof.** `generate-action.test.ts` (14), `generate-stage.test.ts` (10), `prepare-brief-action.test.ts` (10),
+  `campaign-brief-flow.test.ts` (5). **Reddened, each run and restored:** the action accepting `draft` again (2 fail); the action
+  ignoring brief approval (5 fail); the page offering Generate before approval (3 fail); a pt key removed (1 fails).
+  Full app suite, CI's dummy env: 336 files, 4837 tests passed.
+- **Two existing tests changed, assertions untouched:** `context-callers.context-equivalence.test.ts` (ADR 0024's proof for
+  caller 3, `startGenerationAction`) now seeds an `awaiting_brief` campaign and an approved brief, because the action requires
+  them; `BriefReviewForm.test.tsx`'s `next-intl` mock gained `useLocale`.
+- **STILL NOT VERIFIED, and worth seeing before launch.** Nothing here has run in a browser or against a real model. The path
+  create -> brief review (with the plan panel) -> approve -> generate has been read and unit-tested end to end, never exercised.
+  Creation now blocks on Stage A plus the slower of the critique and the planner; every new campaign spends LLM cost at
+  creation, before a single post is generated. The planner's daily cap (`AI_PLANNER_DAILY_CAP_CENTS`, 300) bounds only the
+  planner; I did not verify whether Stage A or the critique carry a per-business cap. If creation feels slow or costly on a real
+  run, the alternative considered at K2.12 was to return immediately and prepare the brief in the background with a "preparing
+  your brief" state.
+
+_End of Builder verification (K2.11, with the K2.12 and K2.13 addenda). Sections 0-14 above were not modified._

@@ -24,19 +24,24 @@ import {
   deleteCampaignAction,
 } from '@/app/[locale]/(dashboard)/campaigns/actions'
 import { GeneratePostsButton } from './GeneratePostsButton'
+import { PrepareBriefButton } from './PrepareBriefButton'
+import { generateStage } from '@/lib/campaigns/generate-stage'
 import { useCan } from '@/lib/members/useCan'
 import { CAPABILITIES } from '@/lib/members/capabilities'
-import type { CampaignRow } from '@/lib/db/types'
+import type { CampaignBriefRow, CampaignRow } from '@/lib/db/types'
 
 interface CampaignDetailActionsProps {
   campaign: CampaignRow
+  // The persisted brief status (null when there is no brief or the campaign is not awaiting one). generateStage decides
+  // what the customer is offered from this and campaign.status: see lib/campaigns/generate-stage.ts.
+  briefStatus: CampaignBriefRow['status'] | null
   locale: string
   pollMaxSeconds: number
   nextScheduledAt: string | null
   failedCount: number
 }
 
-export function CampaignDetailActions({ campaign, locale, pollMaxSeconds, nextScheduledAt, failedCount }: CampaignDetailActionsProps) {
+export function CampaignDetailActions({ campaign, briefStatus, locale, pollMaxSeconds, nextScheduledAt, failedCount }: CampaignDetailActionsProps) {
   const t = useTranslations('campaigns.detail')
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -87,12 +92,29 @@ export function CampaignDetailActions({ campaign, locale, pollMaxSeconds, nextSc
     })
   }
 
-  const isDraft = campaign.status === 'draft'
+  const stage = generateStage(campaign.status, briefStatus)
 
   return (
     <div className="space-y-4">
-      {/* Generate Posts section (draft) or Posts summary (active/paused/completed) */}
-      {isDraft && canAuthor ? (
+      {/* Prepare brief (draft, Stage A failed) / Review brief / Generate posts (approved brief) / Posts summary */}
+      {stage === 'prepare_brief' && canAuthor ? (
+        <section className="rounded-lg border border-border bg-card p-6">
+          <h2 className="text-base font-semibold mb-1.5">{t('prepare_brief.title')}</h2>
+          <p className="text-sm text-muted-foreground leading-relaxed mb-4">{t('prepare_brief.body')}</p>
+          <PrepareBriefButton campaignId={campaign.id} locale={locale} />
+        </section>
+      ) : stage === 'review_brief' ? (
+        <section className="rounded-lg border border-border bg-card p-6">
+          <h2 className="text-base font-semibold mb-1.5">{t('review_brief.title')}</h2>
+          <p className="text-sm text-muted-foreground leading-relaxed mb-4">{t('review_brief.body')}</p>
+          <Link
+            href={`/${locale}/campaigns/${campaign.id}/brief`}
+            className={cn(buttonVariants({ size: 'sm' }), 'w-fit')}
+          >
+            {t('review_brief.cta')}
+          </Link>
+        </section>
+      ) : stage === 'generate' && canAuthor ? (
         <section className="rounded-lg border border-border bg-card p-6">
           <h2 className="text-base font-semibold mb-1.5">{t('generate.title')}</h2>
           <p className="text-sm text-muted-foreground leading-relaxed mb-4">
