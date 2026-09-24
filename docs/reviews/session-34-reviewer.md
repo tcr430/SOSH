@@ -892,3 +892,69 @@ live local database. CI applies the file to an empty database in `db-tests`.
 - **What I did NOT touch:** no production change beyond NIT-2's brief check; no i18n key (the mismatch reuses the
   existing `not_found` error); `ApprovalsInbox.test.tsx`'s existing cases are unchanged (its `renderInbox` helper
   gained one OPTIONAL trailing parameter, so every existing call is untouched).
+
+### D7 — MAJOR-3
+
+- **Finding:** MAJOR-3.
+- **Decision (build-guide §4 decision table):** read-side invalidation; the named loser is per-writer clearing. A
+  claim check stores spans into `posts.content`, so it now carries a fingerprint of that exact text and every
+  reader treats an absent or mismatching fingerprint as "not checked". A content writer added tomorrow is covered
+  without anyone remembering to clear a key.
+- **Fix:**
+  - `lib/campaigns/claim-fingerprint.ts` (new) — the ONE hasher: `contentFingerprint(content)` is a SHA-256 hex of
+    EXACTLY the `posts.content` string, never content plus hashtags; `withContentFingerprint` stamps EVERY variant
+    (`checked`, `no_claims`, `no_corpus` — a stale "no claims" is as wrong as stale spans);
+    `claimCheckMatchesContent` is the one validity rule.
+  - `lib/db/types.ts` — `PersistedClaimCheck` gains an optional `contentFingerprint` on every variant (optional in
+    the type only because K2.9-era rows predate it).
+  - `lib/campaigns/generate.ts` — the single `toPersistedClaimCheck(...)` call site is wrapped in
+    `withContentFingerprint(..., renderedContent)`, i.e. the string inserted as `posts.content`.
+  - `lib/db/posts.ts` — `listClaimChecksByPostIds` now selects `content` and returns a check only when
+    `claimCheckMatchesContent` (`:327`); `setPostClaimResolution` reads `content` and refuses a stale or
+    fingerprint-less check as `not_checked` with nothing written (`:365`); the false comment ("… or regenerated) is
+    simply absent") is replaced with what is now true.
+  - `posts/actions.ts` `regeneratePostAction` builds `newMetadata` WITHOUT `claimCheck` (explicit omission, belt and
+    braces).
+- **Pre-launch note (stated as the work order asks):** there are no customer rows before launch. Any K2.9-era
+  check (written before this fix, therefore with no fingerprint) now reads "not checked", the existing state.
+  The regenerated post also reads "not checked" until a future step re-verifies it; it is never shown as "clean".
+- **Callers (SHARED-FUNCTION CALLERS, `git grep` at D7), each with its test:**
+
+  | Function | Production caller(s) | Test |
+  |---|---|---|
+  | `updatePostContent` | `campaigns/[id]/posts/actions.ts:206` (`updatePostContentAction`) and `calendar/actions.ts:262` (the calendar edit) — neither touches `ai_generation_metadata`, so the READ side is what protects both | live Postgres through the real function both call: `supabase/__tests__/claim-check-fingerprint.test.ts:62` (edited → no check), `:68` (hashtag-only → kept) |
+  | `updatePostContentAndMetadata` | `campaigns/[id]/posts/actions.ts:383` (`regeneratePostAction`) | `claim-check-fingerprint.test.ts:74` (regenerated, check dropped), `:84` (regenerated with the OLD check riding along → still no check); `posts/actions.test.ts:265` (the action's metadata carries no `claimCheck` and keeps every other key) |
+  | `listClaimChecksByPostIds` | `approvals/page.tsx:84` (one) | `lib/db/posts.claims-fingerprint.test.ts:31,37,42,47,58,64,78`; `claim-check-fingerprint.test.ts:57` |
+  | `setPostClaimResolution` | `approvals/claim-actions.ts:92` (one) | `posts.claims-fingerprint.test.ts:96,102,108,115`; live: `claim-check-fingerprint.test.ts:100,112,121` |
+  | `withContentFingerprint` | `lib/campaigns/generate.ts` (one) | `generate.test.ts:1302` (every generated post's verdict carries the fingerprint of EXACTLY its inserted content, and not of content + hashtags) |
+  | the rendering side | `ClaimFlags` / `MarkedPostText` / `hasOpenClaimFlags` via `ApprovalsInbox` `DraftRow` | a post absent from `claimChecksByPostId` — which is exactly what the reader now returns for a stale post — renders "not checked" and never highlights substrings: `ApprovalsInbox.test.tsx:867` block (D6), unchanged |
+
+- **The "one hasher" rule is executable:** `lib/campaigns/__tests__/claim-fingerprint.test.ts:76` (`contentFingerprint`
+  is DEFINED in exactly one module, floor of 300 files scanned), `:82` (the writer and the readers import the helper
+  and hash nothing locally), `:90` (the resolve action never hashes); `:48`/`:52` pin the validity rule, including a
+  known SHA-256 vector so the algorithm cannot drift.
+- **Existing tests updated for the new shape (fixtures only, every assertion kept):** `lib/db/posts.claims.test.ts`
+  (rows now carry `content` and a matching fingerprint, as real rows do) and two `generate.test.ts` expectations
+  (`no_corpus` / `no_claims` now include the fingerprint). `AGENCY-CLAIMS-FLAGGED-NEVER-EDITED` stays green and gains a
+  live assertion: `claim-check-fingerprint.test.ts:121` (resolving and reading leave `posts.content` byte-identical).
+- **Reddening** (each restored from a saved copy, byte-identical):
+  - (a) the READER ignores the fingerprint (`if (check) out[row.id] = check`) → `posts.claims-fingerprint.test.ts`
+    5 RED (edited, regenerated, K2.9-era, stale `no_claims`/`no_corpus`, per-post) and the live file 3 RED
+    (`× a post edited through updatePostContent …`, `× a regenerated post whose OLD check rode along …`,
+    `× a K2.9-era check …`);
+  - (b) the fingerprint computed over content plus a hashtag suffix (`renderedContent + '#hashtags'`) →
+    `generate.test.ts` `× D7: every generated post's verdict carries the fingerprint of EXACTLY its inserted content`
+    and the two updated `no_corpus`/`no_claims` expectations RED (3 failed | 61 passed) — the trap of risk class (c):
+    with that hash an UNEDITED post would never match its own text and every check would read "not checked";
+  - (c1) `regeneratePostAction` spreads `...existingMetadata` again → `× D7: the regenerated post's metadata does NOT
+    carry the old claimCheck forward …` RED (1 failed | 20 passed);
+  - (c2) the reader's check disabled while the old check rides along → the live regenerate test RED
+    (`× a regenerated post whose OLD check rode along …`, 3 failed | 6 passed).
+- **Verification:** `tsc` clean; lint 0 errors, **111 warnings (unchanged baseline** — a first pass added one unused
+  binding in `posts/actions.ts`, removed by building the metadata with `Object.fromEntries`); `test:app` 345 files
+  / 4947 tests, all green (the known `corpus-v2-schema` flake did not fire this run); `test:db` **97 files, 815
+  tests, all green**.
+- **Commit:** this commit (D7; SHA back-filled by D12's sweep).
+- **What I did NOT touch:** `posts.content` is never written by the system; no per-writer clearing was added to
+  either edit path (the calendar edit and `updatePostContentAction` are unchanged); `toPersistedClaimCheck` and its
+  one-call-site scan are unchanged.

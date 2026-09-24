@@ -24,6 +24,7 @@ import { incrementPostsGeneratedBy } from '@/lib/db/trial-state'
 import { schedulePosts } from '@/lib/campaigns/schedule'
 import { checkRoleCoverage, checkLinkPlacement, checkSetRedundancy } from '@/lib/campaigns/consistency'
 import { verifyClaims, toPersistedClaimCheck } from '@/lib/campaigns/verify-claims'
+import { withContentFingerprint } from '@/lib/campaigns/claim-fingerprint'
 import type { Platform, PostInsert, AiGenerationMetadata, CampaignPostRole } from '@/lib/db/types'
 import type { SinglePostOutput, ThreadOutput } from '@/lib/ai/prompts/formats/schemas'
 
@@ -615,8 +616,13 @@ export async function generatePostsForCampaign(
         ...(hasEvidenceCorpus === null
           ? {}
           : {
-              claimCheck: toPersistedClaimCheck(
-                verifyClaims({ claims: g.output.claims, content: renderedContent, bound: boundEvidence, hasEvidenceCorpus }),
+              // Session 34-D D7 (MAJOR-3): stamped with the fingerprint of EXACTLY `renderedContent` — the string
+              // inserted below as posts.content, the text the spans index into (never content + hashtags).
+              claimCheck: withContentFingerprint(
+                toPersistedClaimCheck(
+                  verifyClaims({ claims: g.output.claims, content: renderedContent, bound: boundEvidence, hasEvidenceCorpus }),
+                ),
+                renderedContent,
               ),
             }),
       }

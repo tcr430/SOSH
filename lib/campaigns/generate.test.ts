@@ -98,6 +98,7 @@ import type { CampaignRow, CampaignBriefRow, PostRow, BusinessRow } from '@/lib/
 import type { CustomerContext } from '@/lib/ai/context'
 import type { RubricOutput } from '@/lib/ai/prompts/rubric'
 import type { SinglePostOutput, ThreadOutput } from '@/lib/ai/prompts/formats/schemas'
+import { contentFingerprint } from '@/lib/campaigns/claim-fingerprint'
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -1277,7 +1278,7 @@ describe('generatePostsForCampaign — claim verification (ADR 0027 §4)', () =>
     vi.mocked(retrieveEvidenceMemory).mockResolvedValue([])
     withClaims([{ text: CLAIM }, { text: 'It is the fastest tool.' }])
     await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
-    for (const post of insertedPosts()) expect(checkOf(post)).toEqual({ status: 'no_corpus' })
+    for (const post of insertedPosts()) expect(checkOf(post)).toEqual({ status: 'no_corpus', contentFingerprint: contentFingerprint(post.content as string) })
   })
 
   it('evidence EXISTS but none was pinned: the claims really are uncited, so they ARE flagged (not no_corpus)', async () => {
@@ -1292,7 +1293,23 @@ describe('generatePostsForCampaign — claim verification (ADR 0027 §4)', () =>
     sent(['ev-1'])
     withClaims([])
     await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
-    for (const post of insertedPosts()) expect(checkOf(post)).toEqual({ status: 'no_claims' })
+    for (const post of insertedPosts()) expect(checkOf(post)).toEqual({ status: 'no_claims', contentFingerprint: contentFingerprint(post.content as string) })
+  })
+
+  // Session 34-D D7 (MAJOR-3): the verdict is valid only for the text its spans index into, so it is stamped with a
+  // fingerprint of EXACTLY the posts.content string inserted — never content plus hashtags (a hashtag edit must not
+  // invalidate a verdict whose spans are still right, and an UNEDITED post must always match itself).
+  it('D7: every generated post\'s verdict carries the fingerprint of EXACTLY its inserted content', async () => {
+    sent(['ev-1'])
+    withClaims([{ text: CLAIM, evidenceMemoryId: 'ev-1' }])
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+    const posts = insertedPosts()
+    expect(posts.length).toBeGreaterThan(0)
+    for (const post of posts) {
+      const check = checkOf(post) as { contentFingerprint?: string } | undefined
+      expect(check?.contentFingerprint).toBe(contentFingerprint(post.content as string))
+      expect(check?.contentFingerprint).not.toBe(contentFingerprint(`${post.content}${(post as { hashtags?: string[] }).hashtags?.join(' ') ?? '#'}`))
+    }
   })
 
   it('FLAGGED, NEVER EDITED, NEVER WITHHELD: content is unchanged and every post is inserted even when every claim is fabricated', async () => {

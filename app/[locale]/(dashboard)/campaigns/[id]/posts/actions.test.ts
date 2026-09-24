@@ -258,6 +258,33 @@ describe('regeneratePostAction', () => {
     expect(patch.metadata.rationale).toBe(MOCK_REGEN_OUTPUT.rationale)
   })
 
+  // Session 34-D D7 (MAJOR-3): the old claimCheck's spans index into the OLD text. regeneratePostAction builds its
+  // metadata from ...existingMetadata, so the check used to ride onto the regenerated text and highlight substrings
+  // the model never wrote. It is now dropped explicitly (the read side rejects it too — its fingerprint no longer
+  // matches — but this action must not carry it forward).
+  it('D7: the regenerated post\'s metadata does NOT carry the old claimCheck forward, and keeps every other key', async () => {
+    makeAuthClient()
+    vi.mocked(getPostById).mockResolvedValue({
+      ...MOCK_DRAFT_POST,
+      ai_generation_metadata: {
+        ...(MOCK_DRAFT_POST.ai_generation_metadata as object),
+        claimCheck: { status: 'checked', contentFingerprint: 'abc', claims: [{ outcome: 'unsupported', span: { start: 0, end: 4 } }] },
+      },
+    } as never)
+    vi.mocked(getCampaignById).mockResolvedValue(MOCK_CAMPAIGN)
+    vi.mocked(getPostSiblingTopics).mockResolvedValue([])
+    vi.mocked(buildCustomerContext).mockResolvedValue(MOCK_AI_CTX as never)
+    vi.mocked(runPrompt).mockResolvedValue(MOCK_REGEN_OUTPUT as never)
+    vi.mocked(updatePostContentAndMetadata).mockResolvedValue({ ...MOCK_DRAFT_POST, content: MOCK_REGEN_OUTPUT.content })
+
+    await regeneratePostAction(VALID_POST_ID, VALID_FEEDBACK)
+
+    const [, , patch] = vi.mocked(updatePostContentAndMetadata).mock.calls[0]
+    expect(patch.metadata).not.toHaveProperty('claimCheck')
+    expect(patch.metadata.regenerationCount).toBe(1)
+    expect(patch.metadata.promptId).toBe((MOCK_DRAFT_POST.ai_generation_metadata as { promptId: string }).promptId)
+  })
+
   it('ADR 0018 §2.6 — writes the next post_ai_originals revision alongside the content update, synthesized as a SinglePostOutput', async () => {
     makeAuthClient()
     vi.mocked(getPostById).mockResolvedValue(MOCK_DRAFT_POST)

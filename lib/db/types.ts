@@ -1031,10 +1031,16 @@ export type GenerationSessionUpdate = Partial<
 // (so every rendered byte comes from the draft, never from the model's claim string), and — for a `supported`
 // claim only — the evidence id taken from the set that was sent to the model. `supported` is the ADR table's
 // internal word for "the cited id was in the sent set"; user-facing copy says "cited" (provenance, not support).
+//
+// Session 34-D D7 (MAJOR-3): `contentFingerprint` is a SHA-256 hex of EXACTLY the posts.content string the spans
+// index into (lib/campaigns/claim-fingerprint.ts is the one hasher). Every reader treats a check whose fingerprint
+// is absent or does not match the current content as "not checked" — an edited or regenerated post never shows
+// another text's flags. Optional in the TYPE only because K2.9-era rows predate it; those read "not checked".
 export type PersistedClaimCheck =
-  | { status: 'no_claims' | 'no_corpus' }
+  | { status: 'no_claims' | 'no_corpus'; contentFingerprint?: string }
   | {
       status: 'checked'
+      contentFingerprint?: string
       claims: Array<{
         outcome: 'supported' | 'unsupported' | 'fabricated'
         span: { start: number; end: number } | null

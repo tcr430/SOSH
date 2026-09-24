@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { createSequentialMockClient, createMockClient } from './__test-utils__/mock-client'
 import { setPostClaimResolution, listClaimChecksByPostIds } from './posts'
 import type { ClaimResolution, PersistedClaimCheck } from './types'
+import { contentFingerprint } from '@/lib/campaigns/claim-fingerprint'
 
 // ADR 0027 §4.8 (Session 34 K2.10). What a HUMAN does about a flagged claim is recorded beside the claim in
 // posts.ai_generation_metadata.claimCheck — NEVER in posts.content (AGENCY-CLAIMS-FLAGGED-NEVER-EDITED).
@@ -11,7 +12,11 @@ import type { ClaimResolution, PersistedClaimCheck } from './types'
 // functions and callers are unchanged.
 
 const RESOLUTION: ClaimResolution = { kind: 'accepted', at: '2026-09-24T10:00:00Z', by: 'user-1' }
+// Session 34-D D7 (MAJOR-3): a check is valid only for the text it was computed on, so a valid fixture carries the
+// post's content AND the fingerprint of it.
+const CONTENT = 'Cut churn 42% fastest ever'
 const CHECK: PersistedClaimCheck = {
+  contentFingerprint: contentFingerprint(CONTENT),
   status: 'checked',
   claims: [
     { outcome: 'unsupported', span: { start: 0, end: 5 } },
@@ -19,7 +24,7 @@ const CHECK: PersistedClaimCheck = {
   ],
 }
 const readRow = (over: Record<string, unknown> = {}) => ({
-  data: { ai_generation_metadata: { promptId: 'p', rationale: 'r', claimCheck: CHECK }, updated_at: '2026-09-24T09:00:00Z', ...over },
+  data: { content: CONTENT, ai_generation_metadata: { promptId: 'p', rationale: 'r', claimCheck: CHECK }, updated_at: '2026-09-24T09:00:00Z', ...over },
   error: null,
 })
 // The shared mock builder exposes its chain methods as `unknown`.
@@ -111,16 +116,16 @@ describe('listClaimChecksByPostIds — one bounded read for a page of posts', ()
   it('returns ONLY posts that carry a verdict — a post with none is absent ("not checked"), never an empty/clean entry', async () => {
     const { client } = createMockClient(
       [
-        { id: 'a', ai_generation_metadata: { claimCheck: CHECK } },
-        { id: 'b', ai_generation_metadata: { promptId: 'p' } },
-        { id: 'c', ai_generation_metadata: null },
-        { id: 'd', ai_generation_metadata: { claimCheck: { status: 'no_corpus' } } },
+        { id: 'a', content: CONTENT, ai_generation_metadata: { claimCheck: CHECK } },
+        { id: 'b', content: CONTENT, ai_generation_metadata: { promptId: 'p' } },
+        { id: 'c', content: CONTENT, ai_generation_metadata: null },
+        { id: 'd', content: CONTENT, ai_generation_metadata: { claimCheck: { status: 'no_corpus', contentFingerprint: contentFingerprint(CONTENT) } } },
       ],
       null,
     )
     const out = await listClaimChecksByPostIds(client, ['a', 'b', 'c', 'd'])
     expect(Object.keys(out).sort()).toEqual(['a', 'd'])
-    expect(out.d).toEqual({ status: 'no_corpus' })
+    expect(out.d).toEqual({ status: 'no_corpus', contentFingerprint: contentFingerprint(CONTENT) })
   })
 
   it('throws on a DB error', async () => {
