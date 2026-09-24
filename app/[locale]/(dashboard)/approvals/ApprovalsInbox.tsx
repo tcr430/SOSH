@@ -22,10 +22,11 @@ import {
 } from '@/app/[locale]/(dashboard)/campaigns/[id]/posts/actions'
 import { AiOutputPreview } from './AiOutputPreview'
 import { ClaimFlags, MarkedPostText, hasOpenClaimFlags, type EvidenceOption } from './ClaimFlags'
+import { RedundancyFlag } from './RedundancyFlag'
 import { PostJudgmentBadge } from '@/components/posts/PostJudgmentBadge'
 import { isExcludedFromBulkApprove } from '@/lib/posts/judgment'
 import type { CalendarPostRow } from '@/lib/calendar/types'
-import type { CampaignRow, Platform, PostAiOriginalRow, PersistedClaimCheck } from '@/lib/db/types'
+import type { CampaignRow, Platform, PostAiOriginalRow, PersistedClaimCheck, PersistedRedundancy } from '@/lib/db/types'
 
 const PLATFORM_LABELS: Record<Platform, string> = {
   linkedin: 'LinkedIn',
@@ -53,6 +54,9 @@ interface ApprovalsInboxProps {
   // post_id, plus the EXISTING evidence a reviewer may link to a claim. Both optional/defaulted for the same reason
   // as originalsByPostId: a post absent from the map renders "not checked" — never "clean".
   claimChecksByPostId?: Record<string, PersistedClaimCheck>
+  // ADR 0027 §5.8(b) (D9) — each flagged post's redundancy flag, keyed by post_id; absent = nothing flagged (or the
+  // text changed since the flag was computed). Never blocks Approve.
+  redundancyByPostId?: Record<string, PersistedRedundancy>
   evidenceOptions?: EvidenceOption[]
 }
 
@@ -62,6 +66,7 @@ export function ApprovalsInbox({
   totalPendingCount,
   originalsByPostId = {},
   claimChecksByPostId = {},
+  redundancyByPostId = {},
   evidenceOptions = [],
 }: ApprovalsInboxProps) {
   const t = useTranslations('approvals')
@@ -329,6 +334,7 @@ export function ApprovalsInbox({
                   showReschedule={rescheduleFor === post.id}
                   original={originalsByPostId[post.id]}
                   claimCheck={claimChecksByPostId[post.id]}
+                  redundancy={redundancyByPostId[post.id]}
                   evidenceOptions={evidenceOptions}
                   onApprove={() => handleApprove(post.id)}
                   onApproveWithNewTime={newScheduledAt => handleApprove(post.id, newScheduledAt)}
@@ -352,6 +358,7 @@ function DraftRow({
   showReschedule,
   original,
   claimCheck,
+  redundancy,
   evidenceOptions,
   onApprove,
   onApproveWithNewTime,
@@ -365,6 +372,7 @@ function DraftRow({
   showReschedule: boolean
   original: PostAiOriginalRow | undefined
   claimCheck: PersistedClaimCheck | undefined
+  redundancy: PersistedRedundancy | undefined
   evidenceOptions: EvidenceOption[]
   onApprove: () => void
   onApproveWithNewTime: (newScheduledAt: string) => void
@@ -414,6 +422,10 @@ function DraftRow({
             evidenceOptions={evidenceOptions}
             editHref={`/${locale}/campaigns/${post.campaign_id}/posts`}
           />
+          {/* ADR 0027 §5.8(b) (D9): a post that repeats another post of the campaign is flagged here, beside the
+              claim flags. Informational only — it is not a control, Approve below stays enabled, nothing is hidden,
+              reordered or edited. */}
+          <RedundancyFlag redundancy={redundancy} />
         </div>
 
         {!isSkipOpen && !showReschedule && (

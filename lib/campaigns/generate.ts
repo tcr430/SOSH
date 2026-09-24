@@ -24,8 +24,8 @@ import { incrementPostsGeneratedBy } from '@/lib/db/trial-state'
 import { schedulePosts } from '@/lib/campaigns/schedule'
 import { checkRoleCoverage, checkLinkPlacement, checkSetRedundancy } from '@/lib/campaigns/consistency'
 import { verifyClaims, toPersistedClaimCheck } from '@/lib/campaigns/verify-claims'
-import { withContentFingerprint } from '@/lib/campaigns/claim-fingerprint'
-import type { Platform, PostInsert, AiGenerationMetadata, CampaignPostRole } from '@/lib/db/types'
+import { withContentFingerprint, contentFingerprint } from '@/lib/campaigns/claim-fingerprint'
+import type { Platform, PostInsert, AiGenerationMetadata, CampaignPostRole, PersistedRedundancy } from '@/lib/db/types'
 import type { SinglePostOutput, ThreadOutput } from '@/lib/ai/prompts/formats/schemas'
 
 export interface GenerateResult {
@@ -589,6 +589,24 @@ export async function generatePostsForCampaign(
       id: crypto.randomUUID(),
       renderedContent: joinContent(g.output),
     }))
+    // ADR 0027 §5.8(b) (Session 34-D D9, MAJOR-5) — the redundancy flags computed above are PERSISTED on each post of a
+    // flagged pair (ai_generation_metadata.redundancy, jsonb — no migration), naming the OTHER post's plan order and
+    // id and the overlap score, plus the fingerprint of THIS post's content (a flag on text since edited or
+    // regenerated is not shown, the same rule as a claim check). Written in the SAME insert as claimCheck, so the
+    // approvals gate can render "flagged at the approval gate" (§5.8(b)) instead of an operator log line alone.
+    // FLAGGED, NEVER BLOCKED, NEVER EDITED: nothing here touches content or drops a post.
+    const postIdByOrder = new Map(generatedWithIds.map(({ g, id }) => [g.order, id] as const))
+    const redundancyFor = (order: number, renderedContent: string): { redundancy?: PersistedRedundancy } => {
+      if (redundancy.ok) return {}
+      const overlaps = redundancy.flags
+        .filter((f) => f.orders.includes(order))
+        .flatMap((f) => {
+          const otherOrder = f.orders[0] === order ? f.orders[1] : f.orders[0]
+          const otherPostId = postIdByOrder.get(otherOrder)
+          return otherPostId === undefined ? [] : [{ order: otherOrder, postId: otherPostId, overlap: f.overlap }]
+        })
+      return overlaps.length === 0 ? {} : { redundancy: { contentFingerprint: contentFingerprint(renderedContent), overlaps } }
+    }
     const allInserts: PostInsert[] = generatedWithIds.map(({ g, id, renderedContent }) => {
       const metadata: AiGenerationMetadata = {
         promptId: g.output.format === 'thread' ? 'native-generation-thread' : 'native-generation-single',
@@ -625,6 +643,7 @@ export async function generatePostsForCampaign(
                 renderedContent,
               ),
             }),
+        ...redundancyFor(g.order, renderedContent),
       }
       return {
         id,

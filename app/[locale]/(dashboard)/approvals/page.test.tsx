@@ -15,6 +15,7 @@ vi.mock('@/lib/db/posts', () => ({
   listPendingDraftPosts: vi.fn().mockResolvedValue({ rows: [], total: 0 }),
   // ADR 0027 K2.10 — the claim-verification verdicts for the rendered page (empty = every post "not checked").
   listClaimChecksByPostIds: vi.fn().mockResolvedValue({}),
+  listRedundancyByPostIds: vi.fn().mockResolvedValue({}),
 }))
 vi.mock('@/lib/memory', () => ({ retrieveEvidenceMemory: vi.fn().mockResolvedValue([]) }))
 vi.mock('@/lib/db/post-ai-originals', () => ({
@@ -25,7 +26,7 @@ vi.mock('./ApprovalsInbox', () => ({ ApprovalsInbox: vi.fn(() => null) }))
 import * as serverModule from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
 import { getMemberForUser } from '@/lib/db/business-members'
-import { listPendingDraftPosts } from '@/lib/db/posts'
+import { listPendingDraftPosts, listRedundancyByPostIds } from '@/lib/db/posts'
 import { listLatestPostAiOriginalsByPostIds } from '@/lib/db/post-ai-originals'
 import { ApprovalsInbox } from './ApprovalsInbox'
 import ApprovalsPage from './page'
@@ -244,5 +245,36 @@ describe('ApprovalsPage — ROLE-APPROVALS-GATED (ADR 0014 §9.1)', () => {
     const outer = result as unknown as { props: { children: ReactElementLike[] } }
     const inboxElement = outer.props.children.find(child => child.type === ApprovalsInbox)
     expect(inboxElement?.props.originalsByPostId).toEqual({ 'post-1': originalRow })
+  })
+})
+
+// ADR 0027 §5.8(b) (Session 34-D D9, MAJOR-5) — the redundancy flags reach the approval gate. The page reads them for
+// EXACTLY the rendered posts (one bounded read by id, the same shape as the claim-check read) and hands them to the
+// inbox as a plain object. Without this, persisting the flag would change nothing a reviewer can see.
+describe('ApprovalsPage — redundancy flags reach the gate (ADR 0027 §5.8(b), MAJOR-5)', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('reads the redundancy flags for exactly the rendered post ids', async () => {
+    mockClient(OWNER_ID)
+    vi.mocked(getBusinessForUser).mockResolvedValue(BUSINESS as never)
+    vi.mocked(listPendingDraftPosts).mockResolvedValue({ rows: [{ id: 'post-1' }, { id: 'post-2' }] as never, total: 2 })
+
+    await ApprovalsPage({ params: Promise.resolve({ locale: 'en' }), searchParams: NO_SEARCH_PARAMS })
+
+    expect(listRedundancyByPostIds).toHaveBeenCalledWith(expect.anything(), ['post-1', 'post-2'])
+  })
+
+  it('threads redundancyByPostId (a plain object) to ApprovalsInbox', async () => {
+    mockClient(OWNER_ID)
+    vi.mocked(getBusinessForUser).mockResolvedValue(BUSINESS as never)
+    const flag = { contentFingerprint: 'f', overlaps: [{ order: 2, postId: 'post-2', overlap: 0.7 }] }
+    vi.mocked(listRedundancyByPostIds).mockResolvedValue({ 'post-1': flag })
+
+    const result = await ApprovalsPage({ params: Promise.resolve({ locale: 'en' }), searchParams: NO_SEARCH_PARAMS })
+
+    type ReactElementLike = { type: unknown; props: { redundancyByPostId?: Record<string, unknown> } }
+    const outer = result as unknown as { props: { children: ReactElementLike[] } }
+    const inboxElement = outer.props.children.find((child) => child.type === ApprovalsInbox)
+    expect(inboxElement?.props.redundancyByPostId).toEqual({ 'post-1': flag })
   })
 })

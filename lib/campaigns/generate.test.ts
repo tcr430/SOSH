@@ -1333,3 +1333,105 @@ describe('generatePostsForCampaign — claim verification (ADR 0027 §4)', () =>
     for (const post of posts) expect(checkOf(post)).toBeUndefined()
   })
 })
+
+// ── ADR 0027 §5.8(b) (Session 34-D D9, MAJOR-5) — MODE2-REDUNDANCY-UNDEFER half (b) is PERSISTED ─────────────────
+//
+// checkSetRedundancy ran and its only output was a console.log; nothing persisted it and nothing rendered it, so
+// "flagged at the approval gate" was an operator log line. The flags now ride in ai_generation_metadata.redundancy on
+// BOTH posts of a flagged pair (naming the OTHER post's plan order and id, and the overlap), with D7's fingerprint of
+// THIS post's content, written in the same insert as claimCheck. The approvals surface reads and renders it
+// (RedundancyFlag.test.tsx, ApprovalsInbox.test.tsx). FLAGGED, NEVER BLOCKED, NEVER EDITED.
+//
+// SHARED-FUNCTION CALLERS: generatePostsForCampaign has one production caller (generate-action.ts), unchanged.
+describe('generatePostsForCampaign — redundancy flags are persisted (ADR 0027 §5.8(b), MAJOR-5)', () => {
+  const SHARED_BODY = 'Customers keep telling us onboarding takes minutes instead of days and reporting is finally painless'
+  // Six bodies with no content word in common, so an unflagged set really is unflagged.
+  const DISTINCT_BODIES = [
+    'Alpha bravo charlie delta echoes foxtrot',
+    'Golf hotel india juliet kilo lima',
+    'Mike november oscar papa quebec romeo',
+    'Sierra tango uniform victor whiskey xray',
+    'Yankee zulu amber bronze copper dolphin',
+    'Emerald falcon granite harbor island jasper',
+  ]
+  // Orders 1 and 3 share the role customer_proof (the tuple half of the check); everything else is distinct.
+  const briefWithRepeatedRole: CampaignBriefRow = {
+    ...mockBrief,
+    content: {
+      ...mockBrief.content,
+      roleSequence: mockBrief.content.roleSequence.map((r) => (r.order === 3 ? { ...r, role: 'customer_proof' as const } : r)),
+    },
+  }
+  const outputs = (repeatPair: boolean) =>
+    vi.mocked(generateNativeContent).mockImplementation(async (_c, _x, input) => {
+      const idx = briefWithRepeatedRole.content.roleSequence.findIndex((r) => r.angle === input.angle)
+      return repeatPair && (idx === 1 || idx === 3)
+        ? ({ format: 'single', body: SHARED_BODY, imageBrief: null, scriptBrief: null } as SinglePostOutput)
+        : ({ format: 'single', body: DISTINCT_BODIES[idx], imageBrief: null, scriptBrief: null } as SinglePostOutput)
+    })
+  const insertedPosts = () => vi.mocked(createPosts).mock.calls[0][1]
+  type Meta = { redundancy?: { contentFingerprint: string; overlaps: Array<{ order: number; postId: string; overlap: number }> } }
+  const metaOf = (post: { ai_generation_metadata?: unknown }) => post.ai_generation_metadata as Meta
+
+  it('a flagged pair persists the redundancy key on BOTH posts, each naming the OTHER post (order and id) and the overlap', async () => {
+    vi.mocked(getBriefByCampaign).mockResolvedValue(briefWithRepeatedRole)
+    outputs(true)
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+
+    const posts = insertedPosts()
+    const byOrder = (order: number) => posts[order]
+    const first = byOrder(1)
+    const second = byOrder(3)
+    expect(metaOf(first).redundancy?.overlaps).toEqual([{ order: 3, postId: second.id, overlap: expect.any(Number) }])
+    expect(metaOf(second).redundancy?.overlaps).toEqual([{ order: 1, postId: first.id, overlap: expect.any(Number) }])
+    expect(metaOf(first).redundancy!.overlaps[0].overlap).toBeGreaterThanOrEqual(0.6)
+    // Each flag carries D7's fingerprint of THAT post's content, so an edit invalidates it.
+    expect(metaOf(first).redundancy!.contentFingerprint).toBe(contentFingerprint(first.content as string))
+    expect(metaOf(second).redundancy!.contentFingerprint).toBe(contentFingerprint(second.content as string))
+    logSpy.mockRestore()
+  })
+
+  it('the posts OUTSIDE the pair carry no redundancy key', async () => {
+    vi.mocked(getBriefByCampaign).mockResolvedValue(briefWithRepeatedRole)
+    outputs(true)
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+    const posts = insertedPosts()
+    for (const order of [0, 2, 4, 5]) expect(metaOf(posts[order])).not.toHaveProperty('redundancy')
+    logSpy.mockRestore()
+  })
+
+  it('an UNFLAGGED set persists NO redundancy key on any post', async () => {
+    vi.mocked(getBriefByCampaign).mockResolvedValue(briefWithRepeatedRole)
+    outputs(false)
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+    for (const post of insertedPosts()) expect(metaOf(post)).not.toHaveProperty('redundancy')
+  })
+
+  it('FLAGGED, NEVER BLOCKED, NEVER EDITED: every post is still inserted and the flagged pair\'s text is untouched', async () => {
+    vi.mocked(getBriefByCampaign).mockResolvedValue(briefWithRepeatedRole)
+    outputs(true)
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+
+    const posts = insertedPosts()
+    expect(posts).toHaveLength(briefWithRepeatedRole.content.roleSequence.length)
+    expect(posts[1].content).toContain(SHARED_BODY)
+    expect(posts[3].content).toContain(SHARED_BODY)
+    logSpy.mockRestore()
+  })
+
+  it('the operator console line is UNCHANGED (kept as the operator signal beside the persisted flag)', async () => {
+    vi.mocked(getBriefByCampaign).mockResolvedValue(briefWithRepeatedRole)
+    outputs(true)
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+    const lines = logSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('campaign.generate.redundancy_flagged'))
+    expect(lines).toHaveLength(1)
+    expect(JSON.parse(lines[0])).toMatchObject({ kind: 'campaign.generate.redundancy_flagged', level: 'warn', campaign_id: CAMPAIGN_ID })
+    logSpy.mockRestore()
+  })
+})

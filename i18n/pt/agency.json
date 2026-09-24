@@ -130,5 +130,10 @@
       "cite": "Citar evidência existente",
       "dismiss": "Ignorar o alerta"
     }
+  },
+  "redundancy": {
+    "heading": "Repetição nesta campanha",
+    "overlap": "Repete o post na posição {position} do plano desta campanha: {percent}% das palavras coincidem.",
+    "explainer": "É uma comparação estrutural de palavras, não um juízo de qualidade. Nada foi alterado e pode continuar a aprovar. Leia os dois posts e decida."
   }
 }

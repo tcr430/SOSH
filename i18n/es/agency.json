@@ -130,5 +130,10 @@
       "cite": "Citar evidencia existente",
       "dismiss": "Descartar el aviso"
     }
+  },
+  "redundancy": {
+    "heading": "Repetición en esta campaña",
+    "overlap": "Repite el post en la posición {position} del plan de esta campaña: el {percent}% de las palabras coincide.",
+    "explainer": "Es una comparación estructural de palabras, no un juicio de calidad. No se cambió nada y aún puedes aprobar. Lee ambos posts y decide."
   }
 }

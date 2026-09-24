@@ -27,5 +27,11 @@ export function withContentFingerprint(check: PersistedClaimCheck, content: stri
 // True only when the check carries a fingerprint AND it matches the text now in the post. A check with NO
 // fingerprint (K2.9-era, before this fix) is NOT valid: absence already means "not checked", never "clean".
 export function claimCheckMatchesContent(check: PersistedClaimCheck | undefined, content: string): check is PersistedClaimCheck {
-  return check !== undefined && typeof check.contentFingerprint === 'string' && check.contentFingerprint === contentFingerprint(content)
+  return check !== undefined && fingerprintMatchesContent(check.contentFingerprint, content)
+}
+
+// The rule itself, for anything else that is computed FROM a post's text and must not outlive it (Session 34-D D9:
+// the redundancy flag). Same one hasher, same "absent means not valid" reading.
+export function fingerprintMatchesContent(fingerprint: string | undefined, content: string): boolean {
+  return typeof fingerprint === 'string' && fingerprint === contentFingerprint(content)
 }

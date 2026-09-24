@@ -269,6 +269,7 @@ describe('regeneratePostAction', () => {
       ai_generation_metadata: {
         ...(MOCK_DRAFT_POST.ai_generation_metadata as object),
         claimCheck: { status: 'checked', contentFingerprint: 'abc', claims: [{ outcome: 'unsupported', span: { start: 0, end: 4 } }] },
+        redundancy: { contentFingerprint: 'abc', overlaps: [{ order: 3, postId: 'sibling', overlap: 0.8 }] },
       },
     } as never)
     vi.mocked(getCampaignById).mockResolvedValue(MOCK_CAMPAIGN)
@@ -281,6 +282,8 @@ describe('regeneratePostAction', () => {
 
     const [, , patch] = vi.mocked(updatePostContentAndMetadata).mock.calls[0]
     expect(patch.metadata).not.toHaveProperty('claimCheck')
+    // D9: the redundancy flag is computed FROM the old text too — it does not survive a regenerate either.
+    expect(patch.metadata).not.toHaveProperty('redundancy')
     expect(patch.metadata.regenerationCount).toBe(1)
     expect(patch.metadata.promptId).toBe((MOCK_DRAFT_POST.ai_generation_metadata as { promptId: string }).promptId)
   })

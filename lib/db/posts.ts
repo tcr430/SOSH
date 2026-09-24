@@ -1,7 +1,7 @@
 import { formatISO, subMinutes } from 'date-fns'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { PostRow, PostInsert, PostUpdate, PostStatus, Platform, AiGenerationMetadata, ClaimResolution, PersistedClaimCheck } from './types'
-import { claimCheckMatchesContent } from '@/lib/campaigns/claim-fingerprint'
+import type { PostRow, PostInsert, PostUpdate, PostStatus, Platform, AiGenerationMetadata, ClaimResolution, PersistedClaimCheck, PersistedRedundancy } from './types'
+import { claimCheckMatchesContent, fingerprintMatchesContent } from '@/lib/campaigns/claim-fingerprint'
 import type { CalendarPostRow, CalendarPostMetrics } from '@/lib/calendar/types'
 import { getErrorMessage } from './utils'
 import { toUtcIso } from '@/lib/utils'
@@ -325,6 +325,33 @@ export async function listClaimChecksByPostIds(
   for (const row of (data ?? []) as Array<{ id: string; content: string; ai_generation_metadata: Record<string, unknown> | null }>) {
     const check = row.ai_generation_metadata?.claimCheck as PersistedClaimCheck | undefined
     if (claimCheckMatchesContent(check, row.content)) out[row.id] = check
+  }
+  return out
+}
+
+// ADR 0027 §5.8(b) (Session 34-D D9, MAJOR-5) — the redundancy flags for a page of posts, for the approvals gate.
+// The same bounded, caller-client shape as listClaimChecksByPostIds (and NOT a widening of the shared
+// listPendingDraftPosts / CalendarPostRow): the `.limit` is the id list's own length, ordered by id, RLS via the
+// caller's client. A flag is returned ONLY if it was computed on the text the post holds NOW (its fingerprint
+// matches the current content) — an edited or regenerated post shows no flag, exactly like a claim check. A post
+// with no flag is simply absent: absence means "nothing flagged".
+export async function listRedundancyByPostIds(
+  client: SupabaseClient,
+  postIds: string[],
+): Promise<Record<string, PersistedRedundancy>> {
+  if (postIds.length === 0) return {}
+  const { data, error } = await client
+    .from('posts')
+    .select('id, content, ai_generation_metadata')
+    .in('id', postIds)
+    .is('deleted_at', null)
+    .order('id', { ascending: true })
+    .limit(postIds.length)
+  if (error) throw new Error(getErrorMessage(error))
+  const out: Record<string, PersistedRedundancy> = {}
+  for (const row of (data ?? []) as Array<{ id: string; content: string; ai_generation_metadata: Record<string, unknown> | null }>) {
+    const flag = row.ai_generation_metadata?.redundancy as PersistedRedundancy | undefined
+    if (flag && flag.overlaps?.length > 0 && fingerprintMatchesContent(flag.contentFingerprint, row.content)) out[row.id] = flag
   }
   return out
 }

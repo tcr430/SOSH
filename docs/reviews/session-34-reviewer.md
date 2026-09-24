@@ -1037,3 +1037,77 @@ The diff against D7's commit (`7c6761c2`) is EMPTY; both files are green (`lib/a
 346 files / 4959 tests, all green; `test:db` **98 files, 817 tests, all green** (includes the new join test).
 - **What I did NOT touch:** `lib/ai/tool-runner.test.ts` and `lib/signals/triage/orchestrator.test.ts` are
   byte-unchanged; no FK and no migration; the ADR text stays for D11.
+
+### D9 — MAJOR-5
+
+- **Finding:** MAJOR-5.
+- **Option taken:** (a) — deliver half (b) at the approval gate. Option (b) (amend ADR 0017 F.3 / ADR 0027 V.2 row 35
+  to record half (b) as open) would have re-deferred ruling A-3's substitution and needed a founder ruling; it was
+  not taken, and no design decision beyond copy arose (the render is one informational block beside `ClaimFlags`),
+  so the step did not stop.
+- **Fix:**
+  - **Persist** — `lib/campaigns/generate.ts`: each post of a flagged pair gets `ai_generation_metadata.redundancy`
+    (`{ contentFingerprint, overlaps: [{ order, postId, overlap }] }`, jsonb — no migration), naming the OTHER
+    post's plan order and id and the overlap score, plus D7's fingerprint of THIS post's content
+    (`contentFingerprint(renderedContent)`), written in the SAME insert that writes `claimCheck`. The console line
+    (`campaign.generate.redundancy_flagged`) is UNCHANGED, kept as the operator signal. `PersistedRedundancy` and
+    `AiGenerationMetadata.redundancy` are typed in `lib/db/types.ts`.
+  - **Read** — `listRedundancyByPostIds` (`lib/db/posts.ts`): the same bounded, caller-client, ordered-by-id shape as
+    `listClaimChecksByPostIds`, `.limit` = the id list's own length; it returns a flag ONLY if its fingerprint
+    matches the post's CURRENT content (`fingerprintMatchesContent`, the D7 rule, one hasher). The shared
+    `listPendingDraftPosts` / `CalendarPostRow` are NOT widened. `approvals/page.tsx` reads both verdicts in parallel
+    and threads `redundancyByPostId` to `ApprovalsInbox`.
+  - **Render** — new `approvals/RedundancyFlag.tsx`, beside `ClaimFlags` in its idiom (quiet text, hairline-free
+    inside the row's own card, no tick, no colour-only signal): "Repeats the post at position N of this campaign's
+    plan: P% of the wording overlaps." plus one explainer line — a structural word-overlap comparison, not a
+    judgment; nothing was changed; you can still approve. It is informational: no button, no link, no form
+    control, and no text from either post. **Approve is untouched and stays ENABLED**; the post is not hidden or
+    reordered; no auto-edit.
+  - **i18n** — `agency.redundancy.{heading,overlap,explainer}` added to en, pt and es TOGETHER.
+    `lib/i18n/agency-parity.test.ts` (the existing agency copy lint: identical keys and placeholders across the
+    three locales, and no `verif…`/`support…` stem in en, no `verific…`/`comprov…`/`suport…`/`valid…` in pt, no
+    `verific…`/`comprob…`/`respald…`/`soport…`/`valid…` in es, on EVERY leaf) ran over the new keys and is green.
+    Two words were chosen for that lint: the pt/es explainers say "comparação"/"comparación", never "verificação".
+  - **Regenerate** — `regeneratePostAction` also drops the `redundancy` key (it is computed from the old text, as the
+    claim check is); the read side rejects a stale flag regardless.
+  - **Not changed (as the work order says):** the `proofType: null` input to `checkSetRedundancy` — a disclosed K2.8
+    limitation, "not a separate finding"; **D11 restates it beside the closure.**
+- **Proof:**
+  - Tier-2 (generate) `lib/campaigns/generate.test.ts:1376` (a flagged pair persists the key on BOTH posts, each
+    naming the OTHER post's order and id, overlap ≥ 0.6, and D7's fingerprint of that post's content), `:1396` (posts
+    outside the pair carry none), `:1406` (an unflagged set persists none), `:1413` (FLAGGED, NEVER BLOCKED, NEVER
+    EDITED: every post still inserted, the pair's text untouched), `:1427` (the console line is unchanged).
+  - Tier-2 (reader) `lib/db/posts.redundancy.test.ts` — bounded/ordered/soft-delete shape; an unedited flagged post
+    returns its flag; a flagged post EDITED after generation returns none; a regenerated post returns none; a flag
+    with no fingerprint is not shown; empty/malformed/unflagged are absent; each post is judged on its own content.
+  - Tier-2 (approvals) `app/[locale]/(dashboard)/approvals/ApprovalsInbox.test.tsx:923` block — `:929` (a flagged post
+    renders the flag AND an ENABLED Approve), `:940` (clicking Approve on a flagged post still calls the approve
+    action), `:949` (an unflagged post — or one whose flag was dropped on edit — renders none), `:958` (per post; order and
+    text unchanged), `:971` (the text is rendered exactly as written). `RedundancyFlag.test.tsx:45–97` renders the
+    REAL en/pt/es strings (no missing-key marker, no forbidden vocabulary, pt/es actually translated, informational
+    only). `approvals/page.test.tsx:254` block — the page reads the flags for exactly the rendered ids and threads
+    them to the inbox.
+  - **Tier-1 (live Postgres)** `supabase/__tests__/redundancy-flag-fingerprint.test.ts` — a flagged pair shows
+    BOTH flags; editing one post through the real `updatePostContent` (the function both edit actions call) drops ITS
+    flag and the counterpart keeps its own; a hashtag-only edit keeps it; a regenerated post shows none; reading
+    never changes `posts.content`.
+- **Reddening** (each restored from a saved copy, byte-identical):
+  - (a) STOP PERSISTING — the `...redundancyFor(...)` spread removed (the cad8790f state: log only) →
+    `× a flagged pair persists the redundancy key on BOTH posts …` RED (1 failed | 68 passed). The work order's
+    "approvals render test RED" is only reachable through the page's read-and-thread chain, so (a2) is the matching
+    render-side mutation: the page stops threading `redundancyByPostId` → `× threads redundancyByPostId (a plain
+    object) to ApprovalsInbox` RED (1 failed | 17 passed);
+  - (b) DISABLE APPROVE WHEN FLAGGED (`disabled={isPending || redundancy !== undefined}`) → `× a flagged post renders
+    the flag AND an ENABLED Approve control (never blocked)`, `× clicking Approve on a flagged post still calls the
+    approve action`, `× the flag is per post …` RED (3 failed | 46 passed);
+  - (c) the reader ignores the fingerprint → `lib/db/posts.redundancy.test.ts` 4 RED (edited, regenerated, no
+    fingerprint, per-post) and the live file 2 RED (`× editing one post through updatePostContent …`,
+    `× a REGENERATED post …`).
+- **Verification:** `tsc` clean; lint 0 errors, 111 warnings (unchanged baseline); `test:app` 348 files / 4987
+  tests, all green; `test:db` **99 files, 822 tests, all green**. Existing fixtures updated only where the shape
+  demanded it: the approvals `page.test.tsx` mock of `@/lib/db/posts` gained `listRedundancyByPostIds`, and
+  `renderInbox` gained one optional trailing parameter (every existing call untouched).
+- **Commit:** this commit (D9; SHA back-filled by D12's sweep).
+- **What I did NOT touch:** Approve is never disabled; the `proofType: null` input is unchanged;
+  `listPendingDraftPosts` is not widened; `checkSetRedundancy` and its threshold are unchanged; ADR 0017 F.3 / ADR
+  0027 V.2 row 35 stay for D11 (which now records half (b) as delivered, with the `proofType` limitation restated).

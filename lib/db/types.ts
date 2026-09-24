@@ -1061,6 +1061,17 @@ export type ClaimResolution = {
   by: string
 }
 
+// ADR 0027 §5.8(b) (Session 34-D D9, MAJOR-5) — MODE2-REDUNDANCY-UNDEFER half (b): checkSetRedundancy's structural
+// word-overlap flag over the GENERATED set, persisted on EACH post of a flagged pair so the approvals gate can show
+// it. FLAGGED, NEVER BLOCKED, NEVER EDITED. Each entry names the OTHER post (its plan `order` and post id) and the
+// overlap score (0..1). `contentFingerprint` is D7's fingerprint of THIS post's content: a flag computed on text
+// that has since been edited or regenerated is not shown (the same rule as a claim check). Optional in the type
+// only because it is written for a flagged post alone.
+export type PersistedRedundancy = {
+  contentFingerprint?: string
+  overlaps: Array<{ order: number; postId: string; overlap: number }>
+}
+
 export interface AiGenerationMetadata {
   promptId: string
   promptVersion: number
@@ -1079,6 +1090,8 @@ export interface AiGenerationMetadata {
   // ADR 0027 §4 (K2.9). Absent on posts generated before it, on regenerations, and on any post whose
   // verification was not run — absence means "not checked", never "clean".
   claimCheck?: PersistedClaimCheck
+  // ADR 0027 §5.8(b) (D9): present only on a post that is one half of a flagged redundant pair.
+  redundancy?: PersistedRedundancy
 }
 
 // ---------------------------------------------------------------------------

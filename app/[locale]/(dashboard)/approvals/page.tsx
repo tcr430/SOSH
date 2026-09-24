@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
 import { getMemberForUser } from '@/lib/db/business-members'
 import { listCampaigns } from '@/lib/db/campaigns'
-import { listPendingDraftPosts, listClaimChecksByPostIds } from '@/lib/db/posts'
+import { listPendingDraftPosts, listClaimChecksByPostIds, listRedundancyByPostIds } from '@/lib/db/posts'
 import { retrieveEvidenceMemory } from '@/lib/memory'
 import { listLatestPostAiOriginalsByPostIds } from '@/lib/db/post-ai-originals'
 import { hasCapability, resolveMemberContext, CAPABILITIES } from '@/lib/members/capabilities'
@@ -81,7 +81,12 @@ export default async function ApprovalsPage({
   // with none is simply absent and renders "not checked", never "clean"), and — only when some post actually has an
   // open flag — the EXISTING evidence a reviewer may link to a claim (business-scoped, active, capped, through
   // lib/memory; it selects, never creates). A failed evidence read degrades to an empty picker, never a broken inbox.
-  const claimChecksByPostId = await listClaimChecksByPostIds(client, posts.map((p) => p.id))
+  // ADR 0027 §5.8(b) (Session 34-D D9, MAJOR-5) — the redundancy flags for the same page, read the same way (one
+  // bounded read by id through the caller's client; a flag on text since edited or regenerated is dropped).
+  const [claimChecksByPostId, redundancyByPostId] = await Promise.all([
+    listClaimChecksByPostIds(client, posts.map((p) => p.id)),
+    listRedundancyByPostIds(client, posts.map((p) => p.id)),
+  ])
   const anyOpenFlag = Object.values(claimChecksByPostId).some(
     (c) => c.status === 'checked' && c.claims.some((claim) => claim.outcome !== 'supported' && !claim.resolution),
   )
@@ -101,6 +106,7 @@ export default async function ApprovalsPage({
         totalPendingCount={totalPendingCount}
         originalsByPostId={originalsByPostId}
         claimChecksByPostId={claimChecksByPostId}
+        redundancyByPostId={redundancyByPostId}
         evidenceOptions={evidenceOptions}
       />
     </div>

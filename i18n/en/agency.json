@@ -130,5 +130,10 @@
       "cite": "Cite existing evidence",
       "dismiss": "Dismiss the flag"
     }
+  },
+  "redundancy": {
+    "heading": "Repetition in this campaign",
+    "overlap": "Repeats the post at position {position} of this campaign's plan: {percent}% of the wording overlaps.",
+    "explainer": "This is a structural word-overlap comparison, not a judgment of quality. Nothing was changed, and you can still approve. Read both posts and decide."
   }
 }
