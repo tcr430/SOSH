@@ -1039,8 +1039,21 @@ export type PersistedClaimCheck =
         outcome: 'supported' | 'unsupported' | 'fabricated'
         span: { start: number; end: number } | null
         evidenceMemoryId?: string
+        // ADR 0027 §4.8 (K2.10) — what a HUMAN did about this flag. Written only by the approvals surface's
+        // resolve action; the system never sets it and never edits the post text. `accepted` and `dismissed`
+        // are acknowledgements (the text is untouched); `cited` LINKS an existing evidence_memory row (it
+        // selects, it never creates — L-1). Editing the text is the existing post-edit path and records nothing here.
+        resolution?: ClaimResolution
       }>
     }
+
+export type ClaimResolution = {
+  kind: 'accepted' | 'dismissed' | 'cited'
+  // Present iff kind === 'cited'.
+  evidenceMemoryId?: string
+  at: string
+  by: string
+}
 
 export interface AiGenerationMetadata {
   promptId: string
@@ -1441,7 +1454,7 @@ export type CampaignBriefRow = {
   // ADR 0027 §3.3 (Session 34 K2.5) — whether/why the campaign planner ran. DEFAULT 'not_run' at
   // the DB layer, never 'ok' — see the migration comment for why that default matters.
   plan_analysis_status: 'not_run' | 'ok' | 'unavailable' | 'capped'
-  plan_analysis_reason: string | null
+  plan_analysis_reason: PlanAnalysisReason | null
 }
 
 export type CampaignBriefInsert = {
@@ -1458,7 +1471,7 @@ export type CampaignBriefInsert = {
   created_at?: string
   updated_at?: string
   plan_analysis_status?: 'not_run' | 'ok' | 'unavailable' | 'capped'
-  plan_analysis_reason?: string | null
+  plan_analysis_reason?: PlanAnalysisReason | null
 }
 
 // Tenancy-critical + lifecycle-managed fields excluded, mirroring

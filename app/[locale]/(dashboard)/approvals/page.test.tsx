@@ -13,7 +13,10 @@ vi.mock('@/lib/db/business-members', () => ({ getMemberForUser: vi.fn() }))
 vi.mock('@/lib/db/campaigns', () => ({ listCampaigns: vi.fn().mockResolvedValue([]) }))
 vi.mock('@/lib/db/posts', () => ({
   listPendingDraftPosts: vi.fn().mockResolvedValue({ rows: [], total: 0 }),
+  // ADR 0027 K2.10 — the claim-verification verdicts for the rendered page (empty = every post "not checked").
+  listClaimChecksByPostIds: vi.fn().mockResolvedValue({}),
 }))
+vi.mock('@/lib/memory', () => ({ retrieveEvidenceMemory: vi.fn().mockResolvedValue([]) }))
 vi.mock('@/lib/db/post-ai-originals', () => ({
   listLatestPostAiOriginalsByPostIds: vi.fn().mockResolvedValue(new Map()),
 }))

@@ -4,7 +4,8 @@ import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
 import { getMemberForUser } from '@/lib/db/business-members'
 import { listCampaigns } from '@/lib/db/campaigns'
-import { listPendingDraftPosts } from '@/lib/db/posts'
+import { listPendingDraftPosts, listClaimChecksByPostIds } from '@/lib/db/posts'
+import { retrieveEvidenceMemory } from '@/lib/memory'
 import { listLatestPostAiOriginalsByPostIds } from '@/lib/db/post-ai-originals'
 import { hasCapability, resolveMemberContext, CAPABILITIES } from '@/lib/members/capabilities'
 import type { Platform } from '@/lib/db/types'
@@ -12,6 +13,13 @@ import { ApprovalsInbox } from './ApprovalsInbox'
 
 const PLATFORMS: readonly Platform[] = ['linkedin', 'twitter', 'instagram', 'facebook', 'threads']
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// A short, plain-text label for an evidence row in the picker. Cut by code points so a surrogate pair is never split.
+const SNIPPET_MAX_CHARS = 120
+function toSnippet(content: string): string {
+  const chars = Array.from(content.replace(/\s+/g, ' ').trim())
+  return chars.length <= SNIPPET_MAX_CHARS ? chars.join('') : `${chars.slice(0, SNIPPET_MAX_CHARS).join('')}...`
+}
 
 function parsePlatform(value: string | undefined): Platform | undefined {
   return value && (PLATFORMS as readonly string[]).includes(value) ? (value as Platform) : undefined
@@ -69,6 +77,17 @@ export default async function ApprovalsPage({
   const originalsMap = await listLatestPostAiOriginalsByPostIds(client, posts.map(p => p.id))
   const originalsByPostId = Object.fromEntries(originalsMap)
 
+  // ADR 0027 §4/§8 (K2.10) — the claim-verification verdicts for THIS page of posts (one bounded read by id; a post
+  // with none is simply absent and renders "not checked", never "clean"), and — only when some post actually has an
+  // open flag — the EXISTING evidence a reviewer may link to a claim (business-scoped, active, capped, through
+  // lib/memory; it selects, never creates). A failed evidence read degrades to an empty picker, never a broken inbox.
+  const claimChecksByPostId = await listClaimChecksByPostIds(client, posts.map((p) => p.id))
+  const anyOpenFlag = Object.values(claimChecksByPostId).some(
+    (c) => c.status === 'checked' && c.claims.some((claim) => claim.outcome !== 'supported' && !claim.resolution),
+  )
+  const evidenceRows = anyOpenFlag ? await retrieveEvidenceMemory(client, business.id, {}).catch(() => []) : []
+  const evidenceOptions = evidenceRows.map((row) => ({ id: row.id, snippet: toSnippet(row.content) }))
+
   return (
     <div className="space-y-6">
       <div>
@@ -81,6 +100,8 @@ export default async function ApprovalsPage({
         campaigns={campaigns}
         totalPendingCount={totalPendingCount}
         originalsByPostId={originalsByPostId}
+        claimChecksByPostId={claimChecksByPostId}
+        evidenceOptions={evidenceOptions}
       />
     </div>
   )

@@ -74,3 +74,62 @@ export async function applyBriefProposalsRpc(args: {
   if (error) throw new Error(getErrorMessage(error))
   return data as ApplyBriefProposalsRpcResult
 }
+
+// ADR 0027 §8.2/§8.5 (Session 34 K2.10) — EVERY proposal state for one brief, so the review surface can render
+// pending / accepted / rejected / superseded (with its superseded_reason). BOUNDED: an explicit ORDER BY that is
+// ALL-ASC (target_order, created_at, id — mixing a DESC in would stop the ORDER BY matching the review index and
+// satisfy the house rule only nominally) and a default `limit` of 50. The caller's client, so RLS applies (the
+// table has a member-scoped SELECT policy and no authenticated write grant at all).
+export const PLAN_PROPOSALS_DEFAULT_LIMIT = 50
+
+export async function listPlanProposalsForBrief(
+  client: SupabaseClient,
+  briefId: string,
+  limit = PLAN_PROPOSALS_DEFAULT_LIMIT,
+): Promise<CampaignPlanProposalRow[]> {
+  const { data, error } = await client
+    .from('campaign_plan_proposals')
+    .select('*')
+    .eq('brief_id', briefId)
+    .order('target_order', { ascending: true })
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true })
+    .limit(limit)
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as CampaignPlanProposalRow[] | null) ?? []
+}
+
+// ADR 0027 §5.6 — accept/reject ONE proposal through the RPC (which verifies the author capability itself and does
+// the guarded `WHERE status = 'pending'` UPDATE). `null` is the RPC's already_decided signal — never an error.
+//
+// PostgREST serialises a NULL composite return as an OBJECT WITH EVERY FIELD NULL, not JSON null (the standing
+// quirk lib/db/campaign-retrospectives.ts#retrospectiveOrNull already works around): keyed on `id == null`.
+export async function decidePlanProposalRpc(args: {
+  businessId: string
+  proposalId: string
+  userId: string
+  status: 'accepted' | 'rejected'
+}): Promise<CampaignPlanProposalRow | null> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client.rpc('decide_plan_proposal', {
+    p_business_id: args.businessId,
+    p_proposal_id: args.proposalId,
+    p_user_id: args.userId,
+    p_status: args.status,
+  })
+  if (error) throw new Error(getErrorMessage(error))
+  const row = data as CampaignPlanProposalRow | null
+  return row === null || row.id == null ? null : row
+}
+
+// The proposal's CURRENT state, by id — what an `already_decided` outcome re-renders (the second actor sees THAT
+// proposal's real state, never a generic error). The caller's client, so RLS applies too.
+export async function getPlanProposalById(
+  client: SupabaseClient,
+  proposalId: string,
+): Promise<CampaignPlanProposalRow | null> {
+  const { data, error } = await client.from('campaign_plan_proposals').select('*').eq('id', proposalId).maybeSingle()
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as CampaignPlanProposalRow | null) ?? null
+}

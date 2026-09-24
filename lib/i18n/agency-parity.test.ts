@@ -15,8 +15,12 @@ function flatten(obj: unknown, prefix = ''): Record<string, string> {
   return Object.assign({}, ...Object.entries(obj).map(([k, v]) => flatten(v, prefix ? `${prefix}.${k}` : k)))
 }
 
+// The VARIABLE names an ICU string uses. A variable is `{name}` or `{name, plural, ...}`: an identifier followed by
+// `,` or `}`. A plural BRANCH body (`{The planner proposed # change}`) starts with prose, never `word,` / `word}`,
+// so it is not mistaken for a variable — but the branch KEYWORDS (`one {`, `other {`) are followed by a space and
+// a brace, so they are not either.
 function placeholders(text: string): string[] {
-  return [...new Set([...text.matchAll(/\{(\w+)(?:,\s*plural)?/g)].map((m) => m[1]))].sort()
+  return [...new Set([...text.matchAll(/\{(\w+)\s*[,}]/g)].map((m) => m[1]))].sort()
 }
 
 const E = flatten(en)
