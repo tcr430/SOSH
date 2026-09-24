@@ -524,3 +524,40 @@ option (b) were available and not taken (build-guide §4).
 - **Commit:** this commit (D1; SHA back-filled by D12's sweep).
 - **What I did NOT touch:** no production code, no migration; the existing `plan-proposals-*.test.ts` files are
   unchanged.
+
+### D2 — MINOR-1 and NIT-1
+
+**MINOR-1**
+- **Finding:** MINOR-1.
+- **Fix:** `supabase/__tests__/planner-tools-tenancy.test.ts` now runs every tool under BOTH clients — the
+  existing service-role arm (kept) and user U's signed-in client (U reaches A and B, so RLS alone cannot keep B
+  out of a tool bound to A) — and its header is corrected to what is true (the orchestrator threads the
+  request's authenticated client, `campaigns/new/actions.ts:154`); the "RLS arm" title for business C is
+  relabelled (RLS-closed for the member, filter-closed for service-role). A new Tier-2 recording-client test,
+  `lib/db/signals-campaign-tenancy.test.ts`, asserts `.eq('business_id', …)` on each of
+  `getSignalForCampaign`'s three hops by table name.
+- **Proof:** `supabase/__tests__/planner-tools-tenancy.test.ts:204` (`arms`) and `:209` (`for (const arm of arms)`;
+  the three tests at `:211`, `:238`, `:261` plus the zero-rows test each run once per arm — 8 tests);
+  `lib/db/signals-campaign-tenancy.test.ts:42` (per-hop, `it.each` over the three tables) and `:50` (exactly
+  the three hops).
+- **Reddening** (each restored from a saved copy; `git diff` on the mutated file confirmed empty afterwards):
+  - (a) delete the `.eq('business_id', businessId)` line of ONE hop in `lib/db/signals.ts`: hop 1 (`:123`) →
+    `× hop insight_cards …: insight_cards lacks .eq('business_id', 'biz-1')`; hop 2 (`:132`) →
+    `× hop signal_candidates …`; hop 3 (`:141`) → `× hop signals …`. Each: 1 failed | 3 passed, naming the hop.
+    (Before D2 the Reviewer showed hop 1 removed left 4/4 green.)
+  - (b) delete `lib/db/campaigns.ts:14` (`listCampaigns`' `.eq('business_id')`) → the Tier-1 file went
+    3 failed | 5 passed, including `… ZERO business-B rows [member's signed-in client]` — the signed-in arm
+    reddens, not only service-role.
+- **Commit:** this commit (D2; SHA back-filled by D12's sweep).
+- **What I did NOT touch:** the service-role arm is kept, not replaced; no tool's code changed.
+
+**NIT-1**
+- **Finding:** NIT-1.
+- **Fix:** `lib/campaigns/planner/__tests__/tools.test.ts` case (c) now smuggles an ARBITRARY key
+  (`injected: 1`) alongside `businessId` and additionally asserts `toBeInstanceOf(z.ZodError)`; the existing
+  `toHaveProperty('issues')` and `unrecognized_keys` assertions are kept (added, not weakened).
+- **Proof:** `lib/campaigns/planner/__tests__/tools.test.ts:101` (smuggle) and `:104` (`instanceof z.ZodError`).
+- **Reddening:** `z.strictObject(` → `z.object(` in `lib/campaigns/planner/tools.ts` → case (c) RED
+  (`expected AssertionError: list_evidence accepted a … to be an instance of ZodError`), 1 failed | 11 passed;
+  restored, `git diff` empty.
+- **Commit:** this commit (D2; SHA back-filled by D12's sweep).

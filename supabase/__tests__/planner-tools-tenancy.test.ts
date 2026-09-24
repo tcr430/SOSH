@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 // ADR 0027 §2.4 (K2.4) — AGENCY-TOOLS-TENANT-BOUND, Tier 1, live Postgres.
 //
@@ -15,18 +16,22 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 // ERRORING — pinning the silent-failure shape (a future .single()/throw regression must be caught here, not
 // discovered as a 500 in production).
 //
-// The planner's own `client` parameter is service-role in production (the orchestrator, K2.7, acquires it —
-// AGENCY-NO-SERVICE-ROLE-IN-TOOLS forbids the tools module itself from doing so). Service-role bypasses RLS
-// entirely, so under this client the EXPLICIT `.eq('business_id', businessId)` inside each backing function is
-// the SOLE tenancy boundary — there is no RLS fallback to rescue a missing filter. The multi-business-reachable
-// seed for U still matters: it proves the boundary is the explicit column filter and not an accident of no two
-// businesses in this seed ever sharing an owner.
+// EVERY assertion runs TWICE (Session 34-D D2, MINOR-1), once per client the planner can be handed:
+//  - SERVICE-ROLE: bypasses RLS entirely, so the explicit `.eq('business_id', businessId)` inside each backing
+//    function is the SOLE tenancy boundary (no RLS fallback rescues a missing filter).
+//  - U's SIGNED-IN client (the arm the orchestrator really uses: prepareBriefForCampaign is called with the
+//    REQUEST client, app/[locale]/(dashboard)/campaigns/new/actions.ts:154, and the orchestrator threads that
+//    authenticated client to the tools). U's RLS scope spans A AND B, so a tool bound to A that returned B's
+//    rows would NOT be stopped by RLS: the `.eq('business_id')` filter alone must keep B out. Business C is the
+//    only genuinely RLS-closed business for U.
+// AGENCY-NO-SERVICE-ROLE-IN-TOOLS still forbids the tools module itself from acquiring service-role.
 
 const NOW_ISO = new Date().toISOString()
 
 describe('buildPlannerTools tenancy (ADR 0027 §2.4, constraint 3, live Postgres)', () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let admin: any
+  let memberClient: SupabaseClient
   let userUId: string
   let ownerCId: string
   let businessAId: string
@@ -37,8 +42,10 @@ describe('buildPlannerTools tenancy (ADR 0027 §2.4, constraint 3, live Postgres
   let campaignCId: string
   let evidenceAId: string
 
-  async function createUser(label: string) {
-    const email = `planner-tools-${label}-${Date.now()}-${Math.random().toString(36).slice(2)}@integration.test`
+  const userUEmail = `planner-tools-user-u-${Date.now()}-${Math.random().toString(36).slice(2)}@integration.test`
+
+  async function createUser(label: string, email?: string) {
+    email ??= `planner-tools-${label}-${Date.now()}-${Math.random().toString(36).slice(2)}@integration.test`
     const { data, error } = await admin.auth.admin.createUser({ email, password: 'TestPass123!', email_confirm: true })
     if (error) throw error
     return data.user.id as string
@@ -151,7 +158,7 @@ describe('buildPlannerTools tenancy (ADR 0027 §2.4, constraint 3, live Postgres
     const { createServiceRoleClient } = await import('@/lib/supabase/service')
     admin = createServiceRoleClient()
 
-    userUId = await createUser('user-u')
+    userUId = await createUser('user-u', userUEmail)
     ownerCId = await createUser('owner-c')
 
     businessAId = await insertBusiness('Planner Tools Business A', userUId)
@@ -162,7 +169,7 @@ describe('buildPlannerTools tenancy (ADR 0027 §2.4, constraint 3, live Postgres
     const { error: memberErr } = await admin.from('business_members').insert({
       business_id: businessBId,
       user_id: userUId,
-      email: 'planner-tools-user-u@integration.test',
+      email: userUEmail,
       role: 'viewer',
       status: 'active',
       accepted_at: NOW_ISO,
@@ -177,6 +184,10 @@ describe('buildPlannerTools tenancy (ADR 0027 §2.4, constraint 3, live Postgres
     evidenceAId = seededA.evidenceId
     await seedBackingRows(businessBId, campaignBId, 'Business B')
     await seedBackingRows(businessCId, campaignCId, 'Business C')
+
+    memberClient = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL as string, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string)
+    const { error: signInErr } = await memberClient.auth.signInWithPassword({ email: userUEmail, password: 'TestPass123!' })
+    if (signInErr) throw signInErr
   })
 
   afterAll(async () => {
@@ -190,77 +201,86 @@ describe('buildPlannerTools tenancy (ADR 0027 §2.4, constraint 3, live Postgres
     }
   })
 
-  it('POSITIVE CONTROL: a tool bound to business A returns business A rows', async () => {
-    const { buildPlannerTools } = await import('@/lib/campaigns/planner/tools')
-    const tools = buildPlannerTools(admin, businessAId, campaignAId)
+  const arms = [
+    { label: 'service-role', client: () => admin },
+    { label: "member's signed-in client", client: () => memberClient },
+  ]
 
-    const evidence = (await tools.find((t) => t.name === 'list_evidence')!.execute({})) as unknown as {
-      ids: string[]
-      evidence: string
-    }
-    expect(evidence.ids).toContain(evidenceAId)
-    expect(evidence.evidence).toContain('Business A evidence')
+  for (const arm of arms) {
+    describe(`under the ${arm.label}`, () => {
+    it(`POSITIVE CONTROL: a tool bound to business A returns business A rows [${arm.label}]`, async () => {
+      const { buildPlannerTools } = await import('@/lib/campaigns/planner/tools')
+      const tools = buildPlannerTools(arm.client(), businessAId, campaignAId)
 
-    const audience = (await tools.find((t) => t.name === 'list_audience_notes')!.execute({})) as unknown as Array<{ statement: string }>
-    expect(audience.some((r) => r.statement.includes('Business A audience note'))).toBe(true)
+      const evidence = (await tools.find((t) => t.name === 'list_evidence')!.execute({})) as unknown as {
+        ids: string[]
+        evidence: string
+      }
+      expect(evidence.ids).toContain(evidenceAId)
+      expect(evidence.evidence).toContain('Business A evidence')
 
-    const brand = (await tools.find((t) => t.name === 'list_brand_claims')!.execute({})) as unknown as Array<{ statement: string }>
-    expect(brand.some((r) => r.statement.includes('Business A brand claim'))).toBe(true)
+      const audience = (await tools.find((t) => t.name === 'list_audience_notes')!.execute({})) as unknown as Array<{ statement: string }>
+      expect(audience.some((r) => r.statement.includes('Business A audience note'))).toBe(true)
 
-    const campaigns = (await tools.find((t) => t.name === 'list_recent_campaigns')!.execute({})) as unknown as Array<{ name: string }>
-    expect(campaigns.some((r) => r.name.includes('Business A campaign'))).toBe(true)
+      const brand = (await tools.find((t) => t.name === 'list_brand_claims')!.execute({})) as unknown as Array<{ statement: string }>
+      expect(brand.some((r) => r.statement.includes('Business A brand claim'))).toBe(true)
 
-    const signal = (await tools.find((t) => t.name === 'get_campaign_signal')!.execute({})) as unknown as { signal: string | null }
-    expect(signal.signal).toContain('Business A signal')
+      const campaigns = (await tools.find((t) => t.name === 'list_recent_campaigns')!.execute({})) as unknown as Array<{ name: string }>
+      expect(campaigns.some((r) => r.name.includes('Business A campaign'))).toBe(true)
 
-    const posts = (await tools.find((t) => t.name === 'list_recent_posts')!.execute({})) as unknown as string[]
-    expect(posts.some((p) => p.includes('Business A published post'))).toBe(true)
-  })
+      const signal = (await tools.find((t) => t.name === 'get_campaign_signal')!.execute({})) as unknown as { signal: string | null }
+      expect(signal.signal).toContain('Business A signal')
 
-  it('a tool bound to business A (owned by U, who ALSO reaches B) returns ZERO business-B rows', async () => {
-    const { buildPlannerTools } = await import('@/lib/campaigns/planner/tools')
-    const tools = buildPlannerTools(admin, businessAId, campaignAId)
+      const posts = (await tools.find((t) => t.name === 'list_recent_posts')!.execute({})) as unknown as string[]
+      expect(posts.some((p) => p.includes('Business A published post'))).toBe(true)
+    })
 
-    const evidence = (await tools.find((t) => t.name === 'list_evidence')!.execute({})) as unknown as { evidence: string }
-    expect(evidence.evidence).not.toContain('Business B evidence')
+    it(`a tool bound to business A (owned by U, who ALSO reaches B) returns ZERO business-B rows [${arm.label}]`, async () => {
+      const { buildPlannerTools } = await import('@/lib/campaigns/planner/tools')
+      const tools = buildPlannerTools(arm.client(), businessAId, campaignAId)
 
-    const audience = (await tools.find((t) => t.name === 'list_audience_notes')!.execute({})) as unknown as Array<{ statement: string }>
-    expect(audience.some((r) => r.statement.includes('Business B audience note'))).toBe(false)
+      const evidence = (await tools.find((t) => t.name === 'list_evidence')!.execute({})) as unknown as { evidence: string }
+      expect(evidence.evidence).not.toContain('Business B evidence')
 
-    const brand = (await tools.find((t) => t.name === 'list_brand_claims')!.execute({})) as unknown as Array<{ statement: string }>
-    expect(brand.some((r) => r.statement.includes('Business B brand claim'))).toBe(false)
+      const audience = (await tools.find((t) => t.name === 'list_audience_notes')!.execute({})) as unknown as Array<{ statement: string }>
+      expect(audience.some((r) => r.statement.includes('Business B audience note'))).toBe(false)
 
-    const campaigns = (await tools.find((t) => t.name === 'list_recent_campaigns')!.execute({})) as unknown as Array<{ name: string }>
-    expect(campaigns.some((r) => r.name.includes('Business B campaign'))).toBe(false)
+      const brand = (await tools.find((t) => t.name === 'list_brand_claims')!.execute({})) as unknown as Array<{ statement: string }>
+      expect(brand.some((r) => r.statement.includes('Business B brand claim'))).toBe(false)
 
-    const signal = (await tools.find((t) => t.name === 'get_campaign_signal')!.execute({})) as unknown as { signal: string | null }
-    expect(signal.signal ?? '').not.toContain('Business B signal')
+      const campaigns = (await tools.find((t) => t.name === 'list_recent_campaigns')!.execute({})) as unknown as Array<{ name: string }>
+      expect(campaigns.some((r) => r.name.includes('Business B campaign'))).toBe(false)
 
-    const posts = (await tools.find((t) => t.name === 'list_recent_posts')!.execute({})) as unknown as string[]
-    expect(posts.some((p) => p.includes('Business B published post'))).toBe(false)
-  })
+      const signal = (await tools.find((t) => t.name === 'get_campaign_signal')!.execute({})) as unknown as { signal: string | null }
+      expect(signal.signal ?? '').not.toContain('Business B signal')
 
-  it('a tool bound to business A returns ZERO business-C rows (the RLS arm — U has no relationship to C)', async () => {
-    const { buildPlannerTools } = await import('@/lib/campaigns/planner/tools')
-    const tools = buildPlannerTools(admin, businessAId, campaignAId)
+      const posts = (await tools.find((t) => t.name === 'list_recent_posts')!.execute({})) as unknown as string[]
+      expect(posts.some((p) => p.includes('Business B published post'))).toBe(false)
+    })
 
-    const evidence = (await tools.find((t) => t.name === 'list_evidence')!.execute({})) as unknown as { evidence: string }
-    expect(evidence.evidence).not.toContain('Business C evidence')
+    it(`a tool bound to business A returns ZERO business-C rows (U has no relationship to C: RLS-closed for the member, filter-closed for service-role) [${arm.label}]`, async () => {
+      const { buildPlannerTools } = await import('@/lib/campaigns/planner/tools')
+      const tools = buildPlannerTools(arm.client(), businessAId, campaignAId)
 
-    const campaigns = (await tools.find((t) => t.name === 'list_recent_campaigns')!.execute({})) as unknown as Array<{ name: string }>
-    expect(campaigns.some((r) => r.name.includes('Business C campaign'))).toBe(false)
+      const evidence = (await tools.find((t) => t.name === 'list_evidence')!.execute({})) as unknown as { evidence: string }
+      expect(evidence.evidence).not.toContain('Business C evidence')
 
-    const posts = (await tools.find((t) => t.name === 'list_recent_posts')!.execute({})) as unknown as string[]
-    expect(posts.some((p) => p.includes('Business C published post'))).toBe(false)
-  })
+      const campaigns = (await tools.find((t) => t.name === 'list_recent_campaigns')!.execute({})) as unknown as Array<{ name: string }>
+      expect(campaigns.some((r) => r.name.includes('Business C campaign'))).toBe(false)
 
-  it('get_campaign_signal bound to a business/campaign pair with no linked insight_card returns ZERO ROWS WITHOUT ERRORING — pins the silent-failure shape', async () => {
-    const { buildPlannerTools } = await import('@/lib/campaigns/planner/tools')
-    // Bound to businessCId + campaignAId deliberately: no insight_card links campaignAId to businessCId (C's
-    // own campaign is campaignCId), so the three-hop walk finds nothing at the FIRST hop. getSignalForCampaign
-    // must resolve to null there, not throw — the exact shape a future .single() regression (which throws
-    // PGRST116 on zero rows) would break, and exactly what .maybeSingle() at every hop exists to guarantee.
-    const tools = buildPlannerTools(admin, businessCId, campaignAId)
-    await expect(tools.find((t) => t.name === 'get_campaign_signal')!.execute({})).resolves.toEqual({ signal: null })
-  })
+      const posts = (await tools.find((t) => t.name === 'list_recent_posts')!.execute({})) as unknown as string[]
+      expect(posts.some((p) => p.includes('Business C published post'))).toBe(false)
+    })
+
+    it(`get_campaign_signal bound to a business/campaign pair with no linked insight_card returns ZERO ROWS WITHOUT ERRORING — pins the silent-failure shape [${arm.label}]`, async () => {
+      const { buildPlannerTools } = await import('@/lib/campaigns/planner/tools')
+      // Bound to businessCId + campaignAId deliberately: no insight_card links campaignAId to businessCId (C's
+      // own campaign is campaignCId), so the three-hop walk finds nothing at the FIRST hop. getSignalForCampaign
+      // must resolve to null there, not throw — the exact shape a future .single() regression (which throws
+      // PGRST116 on zero rows) would break, and exactly what .maybeSingle() at every hop exists to guarantee.
+      const tools = buildPlannerTools(arm.client(), businessCId, campaignAId)
+      await expect(tools.find((t) => t.name === 'get_campaign_signal')!.execute({})).resolves.toEqual({ signal: null })
+    })
+    })
+  }
 })

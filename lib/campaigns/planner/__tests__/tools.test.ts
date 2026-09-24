@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { z } from 'zod'
 import { createMockClient, createSequentialMockClient } from '@/lib/db/__test-utils__/mock-client'
 import { buildPlannerTools, queryContextInputSchema, emptyInputSchema } from '../tools'
 import { PLANNER_TOOL_NAMES } from '../constants'
@@ -95,9 +96,12 @@ describe('buildPlannerTools — AGENCY-TOOLS-TENANT-BOUND (ADR 0027 §2.4, const
     for (const name of PLANNER_TOOL_NAMES) {
       const tool = tools.find((t) => t.name === name)!
       try {
-        await tool.execute({ businessId: 'attacker-biz' })
+        // NIT-1 (Session 34-D D2): an ARBITRARY key as well as businessId — the strict schema must reject any
+        // unknown key, not just the one a tenancy attacker would think of.
+        await tool.execute({ businessId: 'attacker-biz', injected: 1 })
         expect.fail(`${name} accepted a smuggled key`)
       } catch (err) {
+        expect(err, name).toBeInstanceOf(z.ZodError)
         expect(err, name).toHaveProperty('issues')
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         expect((err as any).issues[0].code, name).toBe('unrecognized_keys')
