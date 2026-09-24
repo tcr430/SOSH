@@ -66,3 +66,71 @@ export function validateRoleSequence(value: unknown): { ok: true; roleSequence: 
   if (parsed.success) return { ok: true, roleSequence: parsed.data }
   return { ok: false, message: parsed.error.issues.map((i) => i.message).join('; ') }
 }
+
+// ─── ratified-proposal placement (Session 34-D D5, MAJOR-1 / MINOR-8; AGENCY-REORDER-RATIFIED-EXACT) ─────────
+//
+// The PURE REFERENCE for what apply_brief_proposals (supabase/migrations/20260924100000_...sql) writes. The RPC
+// and this function implement ONE rule, and a Tier-1 test (supabase/__tests__/plan-proposals-ratify.test.ts)
+// asserts they agree for every combination it sends. THE RULE, the sentence the human ratifies ("move the post
+// at targetOrder to proposedOrder"):
+//   proposedOrder is the entry's 0-based position in the RESULTING sequence — after every accepted drop is
+//   removed — and every entry that is not the target of an accepted reorder keeps its original relative order
+//   and fills the remaining positions, in order.
+// Composition: targetOrder always names an entry by its ORIGINAL `order`; drop removes; substitute changes only
+// the role; a reorder PINS its entry to its slot; the un-pinned survivors fill the open slots left to right.
+// A combination the sentence cannot satisfy is REFUSED, never reinterpreted (see PlacementRefusal). Pure and
+// independent of the order the proposals are listed in.
+export interface RatifiedProposal {
+  kind: 'drop' | 'substitute' | 'reorder' | 'request_evidence'
+  targetOrder: number
+  proposedRole?: string | null
+  proposedOrder?: number | null
+}
+
+export type PlacementRefusal =
+  | { outcome: 'empty_sequence' }
+  | { outcome: 'conflicting_reorders' | 'invalid_reorder_target'; targetOrder: number }
+
+export type PlacementResult = { ok: true; roleSequence: RoleSequence } | ({ ok: false } & PlacementRefusal)
+
+export function placeRatifiedProposals(entries: RoleSequence, proposals: readonly RatifiedProposal[]): PlacementResult {
+  const survivors = entries
+    .map((entry, pos) => ({ entry, pos }))
+    .filter(({ entry }) => !proposals.some((p) => p.kind === 'drop' && p.targetOrder === entry.order))
+    .map(({ entry, pos }) => {
+      const substitute = proposals.find((p) => p.kind === 'substitute' && p.targetOrder === entry.order)
+      const reorder = proposals.find((p) => p.kind === 'reorder' && p.targetOrder === entry.order)
+      return {
+        entry,
+        pos,
+        role: (substitute?.proposedRole ?? entry.role) as RoleSequence[number]['role'],
+        pin: reorder?.proposedOrder ?? null,
+      }
+    })
+
+  if (survivors.length === 0) return { ok: false, outcome: 'empty_sequence' }
+
+  const pinned = survivors.filter((s) => s.pin !== null)
+  for (const s of pinned) {
+    if (pinned.filter((o) => o.pin === s.pin).length > 1) {
+      return { ok: false, outcome: 'conflicting_reorders', targetOrder: s.entry.order }
+    }
+  }
+  for (const s of pinned) {
+    if ((s.pin as number) >= survivors.length) {
+      return { ok: false, outcome: 'invalid_reorder_target', targetOrder: s.entry.order }
+    }
+  }
+
+  const pinnedSlots = new Set(pinned.map((s) => s.pin as number))
+  const free = survivors.filter((s) => s.pin === null).sort((a, b) => a.entry.order - b.entry.order || a.pos - b.pos)
+  const result: RoleSequence = new Array(survivors.length)
+  for (const s of pinned) result[s.pin as number] = { order: s.pin as number, role: s.role, platform: s.entry.platform, angle: s.entry.angle }
+  let next = 0
+  for (const s of free) {
+    while (pinnedSlots.has(next)) next += 1
+    result[next] = { order: next, role: s.role, platform: s.entry.platform, angle: s.entry.angle }
+    next += 1
+  }
+  return { ok: true, roleSequence: result }
+}

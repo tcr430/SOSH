@@ -687,3 +687,134 @@ option (b) were available and not taken (build-guide §4).
 - **What I did NOT touch:** `approveBriefIfQualified`'s threshold gate is unchanged;
   `plan-proposals-freeze-supersede.test.ts` is unchanged. The ADR text that still names `approveBrief` /
   `reviseBrief` (`docs/decisions/0027-…`, §5.7 and the caller tables) is D11's, not this step's.
+
+### D5 — MAJOR-1, MINOR-2, MINOR-8 and MINOR-7's index half  ·  the only migration
+
+**One forward migration:** `supabase/migrations/20260924100000_apply_brief_proposals_exact_placement.sql`
+(`20260922110000` and `20260923100000` are untouched). `CREATE OR REPLACE apply_brief_proposals` with the SAME
+signature; its `REVOKE ALL … FROM PUBLIC`, `REVOKE EXECUTE … FROM anon, authenticated` and
+`GRANT EXECUTE … TO service_role` lines are restated verbatim. D1's grant test is green after it
+(`plan-proposals-rpc-grants.test.ts`, 5/5); `information_schema.routine_privileges` for the function reads
+`postgres:EXECUTE`, `service_role:EXECUTE` only.
+
+**The placement rule, in the migration header and matching the sentence the human ratifies** ("reorder: move
+the post at targetOrder to proposedOrder", `lib/ai/prompts/campaign-planner.ts`): *proposed_order is the entry's
+0-based position in the RESULTING sequence — after every accepted drop is removed — and every entry that is not
+the target of an accepted reorder keeps its original relative order and fills the remaining positions, in
+order.* Composition: `target_order` always names an entry by its ORIGINAL `order`; drop removes; substitute
+keeps the place and changes only the role; a reorder PINS its entry to its slot and the un-pinned survivors fill
+the open slots left to right (submission order is irrelevant). A combination the sentence cannot satisfy is
+REFUSED with a typed outcome: two reorders to one slot → `conflicting_reorders`; a slot past the result's end →
+`invalid_reorder_target`; nothing left → `empty_sequence`.
+
+**MAJOR-1**
+- **Finding:** MAJOR-1.
+- **Fix:** the ranking `ORDER BY sort_key, idx` is replaced by pin-and-fill in the migration's `placed` CTE. The
+  same rule is implemented as the pure reference `placeRatifiedProposals` (`lib/campaigns/role-sequence.ts:96`).
+  New constraint **`AGENCY-REORDER-RATIFIED-EXACT`** (Tier 1); D11 records it in ADR 0027 (46 → 47).
+- **Proof:** Tier-1 `supabase/__tests__/plan-proposals-ratify.test.ts` — cases ADDED, none changed (0 removed
+  lines): `:272` (the Reviewer's 3 → 0, verbatim: `r3,r0,r1,r2`), `:276` (0 → 3, verbatim: `r1,r2,r3,r0`), `:280`
+  (forward and backward interior moves), `:285` (reorder + drop), `:294` (reorder + substitute), `:303` (two
+  reorders to different slots), `:323` (two reorders to one slot refused), `:335` (slot past the result's end
+  refused). Each accepted case asserts the RPC's `roleSequence` EQUALS the TypeScript reference's output for the
+  same input; each refusal asserts the typed outcome, a named proposal, and ZERO rows changed. Tier-2
+  `lib/campaigns/role-sequence-placement.test.ts:25,48,79` pins the reference itself.
+- **Reddening (LOCAL DB):** loaded the previous migration's function body (`ORDER BY sort_key, idx`) into the
+  local database (`md5(pg_get_functiondef)` `902f8742…` → `f4a8bba0…`): 9 of the 17 ratify tests RED, including
+  `× the Reviewer's case 3 -> 0 (verbatim)` and `× … 0 -> 3 (verbatim)`; re-applied the migration's function
+  body → hash `902f8742…` again (byte-identical) and 17/17 green. (Before the migration was applied at all, the
+  same 9 were RED against the live old function — the TDD RED run.)
+- **Commit:** this commit (D5) for the migration and tests; a second SHA for the ADR record is D11's.
+
+**MINOR-2**
+- **Finding:** MINOR-2.
+- **Fix:** the RPC refuses a brief that is not `critiqued` with the typed outcome `not_critiqued`, and the final
+  brief UPDATE is also guarded `AND status = 'critiqued'`. **Guard order, argued:** frozen → concurrent_edit →
+  (stale/conflicting checks) → no_proposals_applied → `not_critiqued`. The first draft of the migration put
+  `not_critiqued` before `no_proposals_applied`; the EXISTING `plan-proposals-version-scope.test.ts` scenario
+  ("applying the stale sibling afterwards changes NOTHING", which is a `draft` brief with nothing pending) went
+  RED across all retries, because that scenario has always answered `no_proposals_applied`. That test was not
+  changed; the migration was — "nothing to apply" is the truer answer than "not critiqued" when no pending
+  proposal remains, and a draft brief WITH a pending proposal still reads `not_critiqued`.
+- **Proof:** `plan-proposals-ratify.test.ts:347` (a draft brief → `not_critiqued`, proposal still `pending`,
+  version and status unchanged); `plan-proposals-version-scope.test.ts` unchanged and green.
+- **Reddening:** the old function body (no critiqued guard) → `× a draft (non-critiqued) brief is refused
+  'not_critiqued'` RED (part of the 9 above); restored, hash identical.
+- **Commit:** this commit (D5); D11's ADR 0017 addendum is the second SHA.
+
+**MINOR-8**
+- **Finding:** MINOR-8.
+- **Fix:** a result with zero entries returns `empty_sequence` BEFORE any proposal is marked accepted, so the
+  brief is not left `draft` with an empty `roleSequence` and no row changes.
+- **Proof:** `plan-proposals-ratify.test.ts:359` (drop every entry → `empty_sequence`; proposals still pending;
+  version, status and roleSequence unchanged); `role-sequence-placement.test.ts` covers the reference.
+- **Reddening:** old body → RED (part of the 9); restored, hash identical.
+- **Commit:** this commit (D5).
+
+**MINOR-7 (index half only; the query changes at D10)**
+- **Fix:** non-partial index `campaign_plan_proposals_brief_version_idx ON campaign_plan_proposals (brief_id,
+  brief_version, target_order, created_at, id)`. The partial review index and the partial unique index are
+  unchanged. `pg_indexes` after the migration (local):
+
+  ```
+  campaign_plan_proposals_brief_id_idx      ... USING btree (brief_id)
+  campaign_plan_proposals_brief_version_idx ... USING btree (brief_id, brief_version, target_order, created_at, id)
+  campaign_plan_proposals_business_id_idx   ... USING btree (business_id)
+  campaign_plan_proposals_campaign_id_idx   ... USING btree (campaign_id)
+  campaign_plan_proposals_decided_by_idx    ... USING btree (decided_by) WHERE (decided_by IS NOT NULL)
+  campaign_plan_proposals_pending_slot_uq   ... UNIQUE ... (brief_id, brief_version, kind, target_order) WHERE (status = 'pending')
+  campaign_plan_proposals_pkey              ... UNIQUE ... (id)
+  campaign_plan_proposals_review_idx        ... USING btree (brief_id, brief_version, target_order, created_at, id) WHERE (status = 'pending')
+  ```
+
+- **Proof:** the query output above (an index has no behavioural assertion; D10's query is what uses it).
+- **Commit:** this commit (D5) for the index; D10 is the second SHA (the query).
+
+**Specialist — `ecc:database-reviewer`, invoked ONCE, after the plan and before the commit** (read-only, over the
+uncommitted migration). **No blocking finding.** It confirmed the placement CTE cannot silently drop or duplicate
+an entry when no refusal fires (pins are distinct and in range, so free count = open-slot count), that every
+refusal `RETURN` precedes the flip UPDATE, the tenant scoping and the restated grants, and that the new index is
+non-partial and matches the page's ASC ordering. Its findings and their disposition — **all closed in this step,
+none deferred:**
+- **MEDIUM — race with `decide_plan_proposal`** (it does not lock the brief, so a proposal rejected between the
+  placement computation and the flip would still shape the brief while `acceptedIds` omitted it). **Fixed:** the
+  would-be-accepted proposal rows are locked `FOR UPDATE ORDER BY id` before anything is computed from them.
+  **Proof:** new `supabase/__tests__/plan-proposals-apply-lock.test.ts:39` — a second connection rejects the
+  proposal inside an open transaction, the apply must BLOCK (it cannot settle while the reject is uncommitted),
+  and after the COMMIT it must answer `no_proposals_applied` and leave the brief untouched. **Reddening:** the
+  function loaded WITHOUT the lock block → `AssertionError: expected 'ok' to be 'no_proposals_applied'` (the
+  apply wrote the brief with a change the human had rejected — exactly the defect); restored, hash `4f7059cf…`
+  identical, green.
+- **LOW — latent partial commit** (a `RETURN concurrent_edit` after the flip would commit the flip without the
+  brief write if the row lock were ever loosened). **Fixed:** it is now `RAISE EXCEPTION … ERRCODE '40001'`, which
+  rolls the whole call back and keeps the "a refusal changes zero rows" contract. Unreachable while `FOR UPDATE`
+  on the brief holds, so it has no test of its own.
+- **LOW, inherited and unchanged — non-contiguous or duplicate stored `order` values** (matching is by the order
+  VALUE as before; a duplicate would make a reorder pin two rows and read as `conflicting_reorders`, still a
+  refusal, never silent corruption; a valid target absent from a non-contiguous array reads `stale_target_order`).
+  Not changed: the shared schema (`RoleSequenceSchema`, Amendment E) already forbids duplicate `order`, and the
+  apply re-derives `order` contiguously, so a stored sequence in this state predates that schema.
+- **NIT — the partial review index is now a subset of the new one.** Kept, as the work order requires
+  ("Keep the partial review index … exactly as they are").
+
+**Wiring the new typed outcomes (needed so the exhaustive `switch` still type-checks):**
+`ApplyBriefProposalsRpcResult` (`lib/db/campaign-plan-proposals.ts`) gains `not_critiqued`, `empty_sequence`,
+`conflicting_reorders`, `invalid_reorder_target`; `applyPlanProposalsAction` (`brief/plan-actions.ts`) maps
+`not_critiqued` → `invalid_brief_state`, `empty_sequence` → error `empty_sequence`, and the two reorder refusals →
+`conflict` with the proposal named; `i18n/{en,pt,es}/agency.json` gain `conflict.conflicting_reorders`,
+`conflict.invalid_reorder_target` and `error.empty_sequence` in all three locales (`lib/i18n/agency-parity.test.ts`
+green). The action's own tests are D6's (MAJOR-2).
+
+**Verification:** `tsc` clean; lint 0 errors (111 warnings, unchanged baseline; touched files clean); `test:app`
+4873/4874 (the one failure is the known `corpus-v2-schema` flake); `test:db` **96 files, 806 tests, all green**
+(includes every `plan-proposals-*.test.ts`, D4's tests, D1's grant test and the new lock test).
+`supabase db reset --local` was DENIED by the auto-mode classifier as irreversible local destruction, so the
+from-scratch proof used a safer equivalent: the ENTIRE migration file was executed inside a transaction that was
+rolled back (the new index dropped inside it first so its `CREATE INDEX` could run) — `CREATE FUNCTION`, three
+`REVOKE`/`GRANT`, `CREATE INDEX`, `ROLLBACK`, no error — and only the function body was then re-applied to the
+live local database. CI applies the file to an empty database in `db-tests`.
+
+- **Commit:** this commit (D5; SHA back-filled by D12's sweep).
+- **What I did NOT touch:** the two partial indexes, the write-once trigger and the other RPC bodies are
+  unchanged; no committed migration was edited; no existing test was changed (the `plan-proposals-ratify.test.ts`
+  addition removes 0 lines; `plan-proposals-version-scope.test.ts` is untouched).

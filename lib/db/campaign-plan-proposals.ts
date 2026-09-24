@@ -52,8 +52,13 @@ export async function listPendingPlanProposals(
 // said, and the one place that judges it is the campaigns-layer wrapper.
 export type ApplyBriefProposalsRpcResult =
   | { outcome: 'ok'; brief: CampaignBriefRow; acceptedIds: string[] }
-  | { outcome: 'not_found' | 'frozen' | 'concurrent_edit' | 'no_proposals_applied' }
-  | { outcome: 'stale_target_order' | 'conflicting_proposals'; proposalId: string }
+  // Session 34-D D5: 'not_critiqued' (MINOR-2) and 'empty_sequence' (MINOR-8) are typed refusals that change zero rows.
+  | { outcome: 'not_found' | 'frozen' | 'concurrent_edit' | 'no_proposals_applied' | 'not_critiqued' | 'empty_sequence' }
+  // 'conflicting_reorders' / 'invalid_reorder_target' (MAJOR-1): a reorder the ratified sentence cannot satisfy.
+  | {
+      outcome: 'stale_target_order' | 'conflicting_proposals' | 'conflicting_reorders' | 'invalid_reorder_target'
+      proposalId: string
+    }
 
 export async function applyBriefProposalsRpc(args: {
   businessId: string

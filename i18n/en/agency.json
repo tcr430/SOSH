@@ -68,7 +68,9 @@
     },
     "conflict": {
       "conflicting_proposals": "Two selected proposals change the same post in ways that cannot both apply. Choose one of them.",
-      "stale_target_order": "One selected proposal points at a position that no longer exists. Reload the page and choose again."
+      "stale_target_order": "One selected proposal points at a position that no longer exists. Reload the page and choose again.",
+      "conflicting_reorders": "Two selected proposals move different posts to the same position. Choose one of them.",
+      "invalid_reorder_target": "One selected proposal moves a post to a position that would not exist after the other changes. Adjust your selection and try again."
     },
     "error": {
       "invalid_input": "That request was not valid. Reload the page and try again.",
@@ -79,6 +81,7 @@
       "already_approved": "This brief was already approved, so it can no longer change.",
       "concurrent_edit": "Someone else changed this brief while you were reading. Reload and try again.",
       "nothing_applied": "None of the selected proposals could be applied. They may already be decided.",
+      "empty_sequence": "Applying these would remove every post from the plan, so nothing was changed. Keep at least one post.",
       "invalid_result": "The applied plan is not valid. Regenerate the brief.",
       "generic": "Something went wrong. Try again."
     },

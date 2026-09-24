@@ -132,6 +132,7 @@ export type ApplyPlanProposalsError =
   | 'already_approved'
   | 'concurrent_edit'
   | 'nothing_applied'
+  | 'empty_sequence'
   | 'invalid_result'
   | 'generic'
 
@@ -142,7 +143,13 @@ export type ApplyPlanProposalsState =
   | { status: 'applied'; appliedCount: number; recritiqued: boolean }
   // Two selected proposals cannot both apply (a drop and a substitute/reorder of the same post) or one names a
   // position that no longer exists: the human is told which, and re-selects.
-  | { status: 'conflict'; reason: 'conflicting_proposals' | 'stale_target_order'; proposalId: string }
+  // 'conflicting_reorders' / 'invalid_reorder_target' (Session 34-D D5): a reorder the ratified sentence cannot
+  // satisfy is refused with the offending proposal named — never silently reinterpreted.
+  | {
+      status: 'conflict'
+      reason: 'conflicting_proposals' | 'stale_target_order' | 'conflicting_reorders' | 'invalid_reorder_target'
+      proposalId: string
+    }
   | { status: 'error'; error: ApplyPlanProposalsError }
 
 export async function applyPlanProposalsAction(
@@ -193,8 +200,16 @@ export async function applyPlanProposalsAction(
         return { status: 'error', error: 'not_found' }
       case 'no_proposals_applied':
         return { status: 'error', error: 'nothing_applied' }
+      case 'not_critiqued':
+        // The RPC's own critiqued guard (MINOR-2) — the same state the pre-check above reports.
+        return { status: 'error', error: 'invalid_brief_state' }
+      case 'empty_sequence':
+        // Every entry would be dropped (MINOR-8): refused before any write, so the brief is untouched.
+        return { status: 'error', error: 'empty_sequence' }
       case 'stale_target_order':
       case 'conflicting_proposals':
+      case 'conflicting_reorders':
+      case 'invalid_reorder_target':
         return { status: 'conflict', reason: result.outcome, proposalId: result.proposalId }
       case 'invalid_result':
         return { status: 'error', error: 'invalid_result' }

@@ -68,7 +68,9 @@
     },
     "conflict": {
       "conflicting_proposals": "Dos propuestas seleccionadas cambian el mismo post de formas que no pueden aplicarse a la vez. Elige una.",
-      "stale_target_order": "Una propuesta seleccionada apunta a una posición que ya no existe. Recarga la página y elige de nuevo."
+      "stale_target_order": "Una propuesta seleccionada apunta a una posición que ya no existe. Recarga la página y elige de nuevo.",
+      "conflicting_reorders": "Dos propuestas seleccionadas mueven posts distintos a la misma posición. Elige una.",
+      "invalid_reorder_target": "Una propuesta seleccionada mueve un post a una posición que no existiría tras los demás cambios. Ajusta la selección e inténtalo de nuevo."
     },
     "error": {
       "invalid_input": "Esa solicitud no era correcta. Recarga la página e inténtalo de nuevo.",
@@ -79,6 +81,7 @@
       "already_approved": "Este brief ya se aprobó, así que ya no puede cambiar.",
       "concurrent_edit": "Otra persona cambió este brief mientras leías. Recarga e inténtalo de nuevo.",
       "nothing_applied": "No se pudo aplicar ninguna de las propuestas seleccionadas. Puede que ya estén decididas.",
+      "empty_sequence": "Aplicar estas propuestas eliminaría todos los posts del plan, así que no se cambió nada. Conserva al menos un post.",
       "invalid_result": "El plan aplicado no es correcto. Vuelve a generar el brief.",
       "generic": "Algo salió mal. Inténtalo de nuevo."
     },

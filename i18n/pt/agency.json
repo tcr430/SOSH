@@ -68,7 +68,9 @@
     },
     "conflict": {
       "conflicting_proposals": "Duas propostas selecionadas alteram o mesmo post de formas que não podem aplicar-se em conjunto. Escolha uma.",
-      "stale_target_order": "Uma proposta selecionada aponta para uma posição que já não existe. Recarregue a página e escolha de novo."
+      "stale_target_order": "Uma proposta selecionada aponta para uma posição que já não existe. Recarregue a página e escolha de novo.",
+      "conflicting_reorders": "Duas propostas selecionadas movem posts diferentes para a mesma posição. Escolha uma.",
+      "invalid_reorder_target": "Uma proposta selecionada move um post para uma posição que não existiria depois das outras alterações. Ajuste a seleção e tente de novo."
     },
     "error": {
       "invalid_input": "Este pedido não estava correto. Recarregue a página e tente de novo.",
@@ -79,6 +81,7 @@
       "already_approved": "Este briefing já foi aprovado, por isso já não pode mudar.",
       "concurrent_edit": "Outra pessoa alterou este briefing enquanto lia. Recarregue e tente de novo.",
       "nothing_applied": "Nenhuma das propostas selecionadas pôde ser aplicada. Podem já estar decididas.",
+      "empty_sequence": "Aplicar estas propostas removeria todos os posts do plano, por isso nada foi alterado. Mantenha pelo menos um post.",
       "invalid_result": "O plano aplicado não está correto. Volte a gerar o briefing.",
       "generic": "Algo correu mal. Tente de novo."
     },
