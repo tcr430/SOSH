@@ -22,7 +22,7 @@ import type { PersistedClaimCheck } from '@/lib/db/types'
 // ADR 0027 §4.6/§4.8/§8 (Session 34 K2.10). Tier 2, rendered against the REAL en/pt/es strings.
 //
 // SHARED-FUNCTION CALLERS: ClaimFlags / MarkedPostText / hasOpenClaimFlags have ONE caller, ApprovalsInbox.tsx's
-// DraftRow (its integration is tested in ApprovalsInbox.claims.test.tsx). resolveClaimAction has one caller, ClaimFlags
+// DraftRow (its integration is tested in ApprovalsInbox.test.tsx, describe "claim flags in DraftRow", line 867). resolveClaimAction has one caller, ClaimFlags
 // (claim-actions.test.ts).
 
 const POST_ID = '11111111-1111-4111-8111-111111111111'

@@ -90,6 +90,13 @@ export async function decidePlanProposalAction(
     const loaded = await loadForAuthor(parsed.data.campaignId)
     if (!loaded.ok) return { status: 'error', error: loaded.error }
 
+    // NIT-2 (Session 34-D D6): the RPC scopes by business_id only, so without this a member could decide a SIBLING
+    // campaign's proposal by submitting it beside their own campaignId. The proposal must belong to THIS campaign's
+    // brief — a bounded single-row read through the caller's client (RLS applies). A mismatch, or a proposal the
+    // caller cannot see, is a typed refusal and the RPC is never called.
+    const proposal = await getPlanProposalById(await createClient(), parsed.data.proposalId)
+    if (!proposal || proposal.brief_id !== loaded.brief.id) return { status: 'error', error: 'not_found' }
+
     const decided = await decidePlanProposalRpc({
       businessId: loaded.businessId,
       proposalId: parsed.data.proposalId,

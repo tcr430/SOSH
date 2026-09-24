@@ -42,7 +42,7 @@ vi.mock('@/app/[locale]/(dashboard)/campaigns/[id]/posts/actions', () => ({
 
 import { ApprovalsInbox } from './ApprovalsInbox'
 import type { CalendarPostRow } from '@/lib/calendar/types'
-import type { CampaignRow, PostAiOriginalRow } from '@/lib/db/types'
+import type { CampaignRow, PostAiOriginalRow, PersistedClaimCheck } from '@/lib/db/types'
 import en from '@/i18n/en/approvals.json'
 import pt from '@/i18n/pt/approvals.json'
 import es from '@/i18n/es/approvals.json'
@@ -92,12 +92,13 @@ function renderInbox(
   campaigns: CampaignRow[] = [CAMPAIGN],
   totalPendingCount: number = posts.length,
   originalsByPostId: Record<string, PostAiOriginalRow> = {},
+  claimChecksByPostId: Record<string, PersistedClaimCheck> = {},
 ) {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
   act(() => {
-    root.render(React.createElement(ApprovalsInbox, { posts, campaigns, totalPendingCount, originalsByPostId }))
+    root.render(React.createElement(ApprovalsInbox, { posts, campaigns, totalPendingCount, originalsByPostId, claimChecksByPostId }))
   })
   return {
     container,
@@ -855,5 +856,57 @@ describe('ApprovalsInbox — i18n key completeness (B5)', () => {
   it('no locale hardcodes English inside the overflow notice (pt/es must differ from en)', () => {
     expect(pt.overflow.notice).not.toBe(en.overflow.notice)
     expect(es.overflow.notice).not.toBe(en.overflow.notice)
+  })
+})
+
+// ── ADR 0027 §4.8 (K2.10) — claim flags inside DraftRow ─────────────────────────────────────────────────────
+// Session 34-D D6 (MAJOR-2): ClaimFlags.test.tsx cited a test file for this integration that never existed; it lives
+// HERE. ClaimFlags / MarkedPostText / hasOpenClaimFlags have ONE caller,
+// DraftRow. The claim surface itself is ClaimFlags.test.tsx; the action is claim-actions.test.ts.
+
+describe('ApprovalsInbox — claim flags in DraftRow (ADR 0027 §4.8)', () => {
+  const TEXT = 'We cut churn by 42% in Q3. The rest is plain.'
+  const S1 = 'We cut churn by 42% in Q3.'
+  const span = { start: TEXT.indexOf(S1), end: TEXT.indexOf(S1) + S1.length }
+  const POST = () => makePost({ id: 'ccccccc1-cccc-4ccc-8ccc-ccccccccccc1', content: TEXT })
+  const flagged = (resolution?: object): PersistedClaimCheck =>
+    ({ status: 'checked', claims: [{ outcome: 'unsupported', span, ...(resolution ? { resolution } : {}) }] }) as PersistedClaimCheck
+
+  it('a post with an OPEN flag renders its FULL text with the flagged sentence marked inline (not the two-line clamp)', () => {
+    const post = POST()
+    const { container, cleanup } = renderInbox([post], [CAMPAIGN], 1, {}, { [post.id]: flagged() })
+    const marks = container.querySelectorAll('mark')
+    expect(marks).toHaveLength(1)
+    expect(marks[0].textContent).toContain(S1)
+    expect(container.textContent).toContain('The rest is plain.')
+    expect(container.querySelector('p.line-clamp-2')).toBeNull()
+    cleanup()
+  })
+
+  it('a post with NO verdict reads "not checked" (never "clean") and keeps the unchanged two-line clamp', () => {
+    const post = POST()
+    const { container, cleanup } = renderInbox([post])
+    expect(container.textContent).toContain('not_checked')
+    expect(container.querySelector('mark')).toBeNull()
+    expect(container.querySelector('p.line-clamp-2')?.textContent).toBe(TEXT)
+    cleanup()
+  })
+
+  it('a flag the reviewer has RESOLVED no longer marks the text — the clamp returns and the text is never altered', () => {
+    const post = POST()
+    const resolved = flagged({ kind: 'accepted', at: '2026-09-24T10:00:00Z', by: 'user-1' })
+    const { container, cleanup } = renderInbox([post], [CAMPAIGN], 1, {}, { [post.id]: resolved })
+    expect(container.querySelector('mark')).toBeNull()
+    expect(container.querySelector('p.line-clamp-2')?.textContent).toBe(TEXT)
+    cleanup()
+  })
+
+  it("each post is shown ITS OWN verdict: only the flagged post is marked when two are pending", () => {
+    const a = makePost({ id: 'ccccccc1-cccc-4ccc-8ccc-ccccccccccc1', content: TEXT })
+    const b = makePost({ id: 'ccccccc2-cccc-4ccc-8ccc-ccccccccccc2', content: 'Another post entirely.' })
+    const { container, cleanup } = renderInbox([a, b], [CAMPAIGN], 2, {}, { [a.id]: flagged() })
+    expect(container.querySelectorAll('mark')).toHaveLength(1)
+    expect(container.textContent).toContain('Another post entirely.')
+    cleanup()
   })
 })

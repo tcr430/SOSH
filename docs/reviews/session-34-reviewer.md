@@ -818,3 +818,77 @@ live local database. CI applies the file to an empty database in `db-tests`.
 - **What I did NOT touch:** the two partial indexes, the write-once trigger and the other RPC bodies are
   unchanged; no committed migration was edited; no existing test was changed (the `plan-proposals-ratify.test.ts`
   addition removes 0 lines; `plan-proposals-version-scope.test.ts` is untouched).
+
+### D6 — MAJOR-2 and NIT-2
+
+**NIT-2**
+- **Finding:** NIT-2.
+- **Fix:** `decidePlanProposalAction` (`brief/plan-actions.ts:93`) now reads the proposal through the caller's client
+  (`getPlanProposalById`, a bounded single-row read; RLS applies) BEFORE the RPC and refuses `not_found` when the
+  row is absent or its `brief_id` is not the submitted campaign's brief. The RPC is never called on a mismatch.
+- **Proof:** `plan-actions.test.ts:99` (a proposal belonging to another campaign's brief → `not_found`, RPC never
+  called) and `:106` (a proposal the caller cannot see → `not_found`, RPC never called).
+- **Reddening:** the check line replaced by a comment → `× NIT-2: a proposal that belongs to ANOTHER campaign's
+  brief is refused …` and `× NIT-2: a proposal the caller cannot see …` RED (2 failed | 30 passed); restored from a
+  saved copy, byte-identical.
+- **Commit:** this commit (D6; SHA back-filled by D12's sweep).
+
+**MAJOR-2**
+- **Finding:** MAJOR-2.
+- **Fix:** two new test files exercise all four actions, and every phantom citation now resolves.
+- **Per-action table (action → test file:line):**
+
+  | Action | What is asserted | Test (file:line) |
+  |---|---|---|
+  | `decidePlanProposalAction` | Zod refusal (incl. `accepted` unrepresentable) | `app/[locale]/(dashboard)/campaigns/[id]/brief/plan-actions.test.ts:72` |
+  | | unauthenticated; capability refusal (viewer → `forbidden`); another business's campaign | `:80`, `:86`, `:93` |
+  | | NIT-2 mismatch and invisible proposal | `:99`, `:106` |
+  | | happy path: RPC called EXACTLY ONCE with (business, proposal, user, `rejected`) | `:112` |
+  | | the typed `already_decided` re-render (ADR §5.6): the second actor's `null` re-renders the proposal's real status and `superseded_reason` | `:123` |
+  | `applyPlanProposalsAction` | Zod refusal (no ids, 51 ids, non-uuid, version 0) | `plan-actions.test.ts:149` |
+  | | the critiqued pre-check (`draft`/`approved`/`generated` → `invalid_brief_state`, RPC not reached) | `:157` |
+  | | capability refusal; arguments passed to the RPC (loaded business/brief, version, user, only the selected ids) | `:166`, `:173` |
+  | | **on success `critiqueBrief` is called once, for this campaign, in the SAME request** ([cr-MINOR-2], §5.5) | `:187` |
+  | | a throwing re-critique still reports `applied` with `recritiqued: false` (the transient state) | `:198` |
+  | | D5's typed outcomes map to user-facing states: `frozen`, `concurrent_edit`, `not_found`, `no_proposals_applied`, `not_critiqued`, `empty_sequence` — none of them critiques | `:205` |
+  | | `stale_target_order`, `conflicting_proposals`, `conflicting_reorders`, `invalid_reorder_target` → `conflict` naming the proposal — none of them critiques | `:218` |
+  | | `invalid_result` is terminal and not re-critiqued; a thrown RPC error is `generic` | `:227`, `:233` |
+  | `recritiqueBriefAction` | Zod; its guard (only `draft`); capability refusal; calls `critiqueBrief` once for this campaign; a failing critique is `generic` | `:245`, `:250`, `:258`, `:266`, `:274` |
+  | `resolveClaimAction` | Zod (incl. `edited`, `cited` without id, an id on a non-cited resolution, `claimIndex` ≥ `CLAIMS_MAX`); unauthenticated; capability; another business's post | `app/[locale]/(dashboard)/approvals/claim-actions.test.ts:66`, `:79`, `:85`, `:92` |
+  | | **"cite SELECTS, never creates":** an id NOT in the business-scoped retrieval set → `unknown_evidence`, NOTHING written | `claim-actions.test.ts:102` |
+  | | the membership set is `retrieveEvidenceMemory(callerClient, business, {})`; an offered id records `{kind:'cited', evidenceMemoryId, at, by}` | `:108`, `:114` |
+  | | `accepted` and `dismissed` each record `{kind, at, by}` and do not consult evidence memory | `:129` |
+  | | `no_such_claim` → `invalid_input`; `conflict`/`not_checked`/`not_found` pass through; a throw → `generic` | `:138`, `:147` |
+  | | **never writes `posts.content`:** the module imports only `getPostById` + `setPostClaimResolution`, issues no PostgREST write, never names `content:`/`updatePostContent` (a source scan), and the mock exposes only those two functions | `:157`, `:162` |
+
+  The section-4.8 action "EDIT THE TEXT" is the existing post-edit path, a link and not an action in this module
+  (`claim-actions.ts` header); the four actions the review named are the four in the table.
+- **Citations corrected** (`git grep -n "claim-actions.test\|plan-actions.test\|ApprovalsInbox.claims.test"` after
+  the step — every hit now names a file that exists):
+  - `ApprovalsInbox.claims.test.tsx` (phantom, `ClaimFlags.test.tsx:25`) → the behaviour was covered NOWHERE, so
+    the test was written: `ApprovalsInbox.test.tsx` `describe('ApprovalsInbox — claim flags in DraftRow')` at
+    `:867` (an open flag renders the full text with the flagged sentence marked and no two-line clamp; no verdict
+    reads "not checked" and keeps the clamp; a resolved flag stops marking; each post is shown its own verdict);
+    the citation now reads `ApprovalsInbox.test.tsx, describe "claim flags in DraftRow", line 867`.
+  - `plan-actions.test.ts` (cited by `PlanReviewPanel.test.tsx:28` and `lib/db/campaign-plan-proposals.test.ts:26`)
+    and `claim-actions.test.ts` (cited by `ClaimFlags.test.tsx:26`, `ApprovalsInbox.test.tsx:23`,
+    `lib/db/posts.claims.test.ts:10`) — the citations were right and the files now exist (created in this step).
+- **Reddening** (each restored from a saved copy, byte-identical):
+  - (a1) the APPLY action's `critiqueBrief` call (`plan-actions.ts:195`) removed → `× ON SUCCESS the brief is
+    RE-CRITIQUED IN THE SAME REQUEST …` and `× if the same-request re-critique THROWS …` RED (2 failed | 30 passed);
+  - (a2) the RECRITIQUE action's call (`:255`) removed → `× a draft brief is re-critiqued …` and `× a failing
+    critique is a generic error …` RED (2 failed | 30 passed) — the two call sites the review named, each proved
+    independently (the line numbers moved from `:181`/`:233` because D5 added lines above them);
+  - (b) `resolveClaimAction`'s membership check skipped (`if (false && !offered.some(`) → `× an evidence id that is
+    NOT in the business-scoped retrieval set is refused unknown_evidence — and NOTHING is written` RED
+    (1 failed | 12 passed);
+  - (c) NIT-2's check removed → RED (see NIT-2);
+  - (d) `ApprovalsInbox.tsx`'s `hasOpenClaimFlags(claimCheck) ?` replaced by `false ?` → `× a post with an OPEN flag
+    renders its FULL text …` and `× each post is shown ITS OWN verdict …` RED (2 failed | 42 passed).
+- **Verification:** `tsc` clean (a first run caught an untyped array in my own test, fixed); lint 0 errors (111
+  warnings, unchanged baseline; touched files clean); `test:app` 4922/4923 (only the known `corpus-v2-schema`
+  flake). No `test:db` for this step (no SQL, no Tier-1 change).
+- **Commit:** this commit (D6; SHA back-filled by D12's sweep).
+- **What I did NOT touch:** no production change beyond NIT-2's brief check; no i18n key (the mismatch reuses the
+  existing `not_found` error); `ApprovalsInbox.test.tsx`'s existing cases are unchanged (its `renderInbox` helper
+  gained one OPTIONAL trailing parameter, so every existing call is untouched).
