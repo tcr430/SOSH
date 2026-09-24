@@ -203,21 +203,28 @@ describe('SIGNAL-NO-LLM-IN-STAGE-AB (L-1, ADR §11.3 scan #1)', () => {
   // this stronger, provenance-honest guard rather than wrapToolResultForPrompt. This scan only sees
   // lib/signals/** — the planner's own module lives outside that root and is asserted by name here so a
   // fourth, unsanctioned caller anywhere under lib/signals/** still fails.
-  it('wrapSignalForPrompt is referenced by exactly the sanctioned Stage C/D entry points, nowhere else under lib/signals/**', () => {
-    const files = SCAN_ROOTS.flatMap((root) => collectTsFiles(root))
-    expect(files.length).toBeGreaterThan(0)
+  //
+  // Session 34-D D3 (NIT-3) — WIDENED again, this time in ROOTS: the scan now walks app/**, lib/** and
+  // components/** (not only lib/signals/**), so a fourth caller ANYWHERE in production code fails it. The
+  // allowlist is the three production callers; the definition (lib/ai/wrap-evidence.ts) is excluded by name.
+  // No scripts/ caller exists (git grep at D3), and scripts/ is not a production root.
+  it('wrapSignalForPrompt is referenced by exactly the three sanctioned production callers, nowhere else under app/**, lib/** or components/**', () => {
+    const roots = ['app', 'lib', 'components'].map((r) => path.join(ROOT, r))
+    const files = roots.flatMap((root) => collectTsFiles(root))
+    expect(files.length).toBeGreaterThan(100)
 
     const referencing: string[] = []
     for (const file of files) {
+      const rel = path.relative(ROOT, file).replace(/\\/g, '/')
+      if (rel === 'lib/ai/wrap-evidence.ts') continue
       const source = stripLineComments(fs.readFileSync(file, 'utf8'))
-      if (/wrapSignalForPrompt/.test(source)) referencing.push(path.relative(ROOT, file).replace(/\\/g, '/'))
+      if (/wrapSignalForPrompt/.test(source)) referencing.push(rel)
     }
-    expect(referencing.sort()).toEqual(['lib/signals/triage/card.ts', 'lib/signals/triage/orchestrator.ts'])
-
-    const plannerToolsSource = stripLineComments(
-      fs.readFileSync(path.join(ROOT, 'lib', 'campaigns', 'planner', 'tools.ts'), 'utf8'),
-    )
-    expect(/wrapSignalForPrompt/.test(plannerToolsSource), 'lib/campaigns/planner/tools.ts must call wrapSignalForPrompt').toBe(true)
+    expect(referencing.sort()).toEqual([
+      'lib/campaigns/planner/tools.ts',
+      'lib/signals/triage/card.ts',
+      'lib/signals/triage/orchestrator.ts',
+    ])
   })
 
   // SIGNAL-NO-SIXTH-SANITIZER's full-standing form (the fifth assertion the

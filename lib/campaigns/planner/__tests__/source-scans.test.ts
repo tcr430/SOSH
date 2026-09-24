@@ -276,15 +276,66 @@ export function extractFunctionBody(source: string, functionName: string): strin
   return null
 }
 
-// The exact (file, function) pairs a planner tool imports and calls, per lib/campaigns/planner/tools.ts.
-const PLANNER_CALLED_DB_FUNCTIONS: ReadonlyArray<{ file: string; fn: string }> = [
-  { file: 'lib/db/memory-evidence.ts', fn: 'listEvidenceMemoryCandidates' },
-  { file: 'lib/db/memory-audience.ts', fn: 'listAudienceMemoryCandidates' },
-  { file: 'lib/db/memory-brand.ts', fn: 'listBrandMemoryCandidates' },
-  { file: 'lib/db/campaigns.ts', fn: 'listCampaigns' },
-  { file: 'lib/db/signals.ts', fn: 'getSignalForCampaign' },
-  { file: 'lib/db/posts.ts', fn: 'listRecentPublishedPostTexts' },
-]
+// Session 34-D D3 (MINOR-6): the (file, function) pairs a planner tool reaches are DERIVED from tools.ts' import
+// graph, never hand-listed — a hand list is covered only if someone remembers to extend it, and the old one
+// omitted getEvidenceMemoryByIds (reached through wrapEvidenceForPrompt in lib/ai/wrap-evidence.ts).
+//
+// The derivation, one hop at each boundary:
+//   1. tools.ts' own named VALUE imports (never `import type`, never an inline `type X`) from '@/lib/db/*';
+//   2. every lib/ai module tools.ts imports: THAT module's named value imports from '@/lib/db/*';
+//   3. every '@/lib/memory' / '@/lib/memory/*' name tools.ts imports, followed through lib/memory/index.ts'
+//      re-export to the module that defines it: THAT module's named value imports from '@/lib/db/*'.
+export function namedValueImports(source: string): Array<{ spec: string; names: string[] }> {
+  const out: Array<{ spec: string; names: string[] }> = []
+  const clean = stripComments(source)
+  const re = /\bimport\s+(?!type\b)\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(clean)) !== null) {
+    const names = m[1]
+      .split(',')
+      .map((part) => part.trim())
+      .filter((part) => part.length > 0 && !/^type\s/.test(part))
+      .map((part) => part.split(/\s+as\s+/)[0].trim())
+    out.push({ spec: m[2], names })
+  }
+  return out
+}
+
+function dbSpecToFile(spec: string): string | null {
+  return spec.startsWith('@/lib/db/') ? `lib/${spec.slice('@/lib/'.length)}.ts` : null
+}
+
+function readRepo(rel: string): string {
+  const full = path.join(ROOT, rel)
+  expect(fs.existsSync(full), `${rel} is missing — the derivation would pass vacuously`).toBe(true)
+  return fs.readFileSync(full, 'utf8')
+}
+
+function dbImportsOf(source: string, into: Map<string, { file: string; fn: string }>): void {
+  for (const { spec, names } of namedValueImports(source)) {
+    const file = dbSpecToFile(spec)
+    if (!file) continue
+    for (const fn of names) into.set(`${file}#${fn}`, { file, fn })
+  }
+}
+
+export function derivePlannerCalledDbFunctions(toolsSource: string): Array<{ file: string; fn: string }> {
+  const derived = new Map<string, { file: string; fn: string }>()
+  dbImportsOf(toolsSource, derived) // (1)
+  for (const { spec, names } of namedValueImports(toolsSource)) {
+    if (spec.startsWith('@/lib/ai/')) {
+      dbImportsOf(readRepo(`lib/${spec.slice('@/lib/'.length)}.ts`), derived) // (2)
+    } else if (spec === '@/lib/memory' || spec.startsWith('@/lib/memory/')) {
+      const index = stripComments(readRepo('lib/memory/index.ts'))
+      for (const name of names) {
+        const re = new RegExp(`export\\s*\\{[^}]*\\b(?:\\w+\\s+as\\s+)?${name}\\b[^}]*\\}\\s*from\\s*['"]\\./(\\w+)['"]`)
+        const target = re.exec(index)
+        if (target) dbImportsOf(readRepo(`lib/memory/${target[1]}.ts`), derived) // (3)
+      }
+    }
+  }
+  return [...derived.values()].sort((a, b) => `${a.file}#${a.fn}`.localeCompare(`${b.file}#${b.fn}`))
+}
 
 describe('AGENCY-NO-SERVICE-ROLE-IN-TOOLS — second half (ADR 0027 §2.6, constraint 4, closes here)', () => {
   it('extractFunctionBody isolates a named function from its service-role-using siblings (planted)', () => {
@@ -303,14 +354,52 @@ describe('AGENCY-NO-SERVICE-ROLE-IN-TOOLS — second half (ADR 0027 §2.6, const
     expect(extractFunctionBody('export async function a() { return 1 }', 'doesNotExist')).toBeNull()
   })
 
-  it('every lib/db function a planner tool calls has a body, and that body reaches no service-role client', () => {
+  it('namedValueImports keeps value imports and drops `import type` and inline `type X` specifiers (planted)', () => {
+    const source = `
+      import { a, type B, c as d } from '@/lib/db/x'
+      import type { E } from '@/lib/db/y'
+      import { f } from '@/lib/other'
+    `
+    expect(namedValueImports(source)).toEqual([
+      { spec: '@/lib/db/x', names: ['a', 'c'] },
+      { spec: '@/lib/other', names: ['f'] },
+    ])
+  })
+
+  it('every lib/db function a planner tool reaches — DERIVED from the import graph — has a body, and that body reaches no service-role client', () => {
+    const PLANNER_CALLED_DB_FUNCTIONS = derivePlannerCalledDbFunctions(readRepo('lib/campaigns/planner/tools.ts'))
+    expect(PLANNER_CALLED_DB_FUNCTIONS.length, 'the derivation found nothing — it would pass vacuously').toBeGreaterThan(0)
+    const derivedIds = PLANNER_CALLED_DB_FUNCTIONS.map((f) => `${f.file}#${f.fn}`)
+    // MINOR-6: reached through wrapEvidenceForPrompt (lib/ai/wrap-evidence.ts), absent from the old hand list;
+    // plus the six the hand list did name — the derivation must be a SUPERSET of what was hand-verified.
+    for (const expected of [
+      'lib/db/memory-evidence.ts#getEvidenceMemoryByIds',
+      'lib/db/memory-evidence.ts#listEvidenceMemoryCandidates',
+      'lib/db/memory-audience.ts#listAudienceMemoryCandidates',
+      'lib/db/memory-brand.ts#listBrandMemoryCandidates',
+      'lib/db/campaigns.ts#listCampaigns',
+      'lib/db/signals.ts#getSignalForCampaign',
+      'lib/db/posts.ts#listRecentPublishedPostTexts',
+    ]) {
+      expect(derivedIds, `the derived set lost ${expected}`).toContain(expected)
+    }
+
     const offenders: string[] = []
     for (const { file, fn } of PLANNER_CALLED_DB_FUNCTIONS) {
       const full = path.join(ROOT, file)
       expect(fs.existsSync(full), `${file} is missing — the scan would pass vacuously`).toBe(true)
       const source = fs.readFileSync(full, 'utf8')
       const body = extractFunctionBody(source, fn)
-      expect(body, `${file}#${fn} not found by name — the extractor or the PLANNER_CALLED_DB_FUNCTIONS list drifted`).not.toBeNull()
+      if (body === null) {
+        // Not a `function` declaration. The only thing allowed is a plain VALUE export (a constant such as
+        // MEMORY_CANDIDATE_LIMIT — it has no client to acquire); an arrow/function-expression const is a
+        // function this extractor cannot read, so it FAILS rather than being skipped.
+        const decl = new RegExp(`export\\s+const\\s+${fn}\\b([^\\n]*)`).exec(source)
+        expect(decl, `${file}#${fn} is neither a function declaration nor an exported const — the extractor or the derivation drifted`).not.toBeNull()
+        expect(/=>|\bfunction\b/.test((decl as RegExpExecArray)[1]), `${file}#${fn} is a function expression the body scan cannot read`).toBe(false)
+        expect(findServiceRoleReach(source.slice((decl as RegExpExecArray).index, (decl as RegExpExecArray).index + 400), file)).toEqual([])
+        continue
+      }
       const hits = findServiceRoleReach(body as string, file)
       if (hits.length > 0) offenders.push(`${file}#${fn}: ${hits.join('; ')}`)
     }

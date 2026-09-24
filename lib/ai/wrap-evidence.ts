@@ -324,11 +324,18 @@ export type RenderedToolResult = string & { readonly [renderedToolResultBrand]: 
 const toolResultIdBrand: unique symbol = Symbol('tool-result-id')
 export type ToolResultId = string & { readonly [toolResultIdBrand]: true }
 
-// The ONLY producer of a ToolResultId. It does NOT validate: row ids reach here from typed DB rows, and the
-// fixtures of the existing triage tool tests use non-UUID ids ('row-1'). UUID-shape is ENFORCED at the
-// dispatcher (assertGuardedToolResult), the one point no tool can skip — this function only makes an id
-// DISTINCT from arbitrary text at the type level.
+// The single UUID-shape pattern: the mint below AND the dispatcher's assertGuardedToolResult both use THIS
+// constant (Session 34-D D3, MINOR-5) — never a second regex.
+export const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// The ONLY producer of a ToolResultId. It VALIDATES (Session 34-D D3, MINOR-5): a non-UUID throws, so
+// `texts.map(toToolResultId)` over post text — a call tsc and the cast scan cannot see — fails at the mint,
+// in the tool's own test, rather than only at the dispatcher (assertGuardedToolResult stays as the second,
+// unskippable layer).
 export function toToolResultId(id: string): ToolResultId {
+  if (typeof id !== 'string' || !UUID_SHAPE.test(id)) {
+    throw new Error('toToolResultId: refused a value that is not UUID-shaped')
+  }
   return id as ToolResultId
 }
 
@@ -346,7 +353,6 @@ export type GuardedJson =
   | readonly GuardedJson[]
   | { readonly [key: string]: GuardedJson }
 
-const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const ENVELOPE_OPEN = '[DATA]\n'
 const ENVELOPE_CLOSE = '\n[/DATA]'
 const GUARDED_JSON_MAX_DEPTH = 16

@@ -6,7 +6,7 @@ const NOW_ISO = new Date().toISOString()
 
 function memoryRow(overrides: Record<string, unknown>) {
   return {
-    id: 'row-1',
+    id: '00000000-0000-4000-8000-000000000001', // UUID-shaped: toToolResultId validates (Session 34-D D3)
     business_id: 'biz-1',
     source: 'manual',
     confidence: 80,
@@ -97,7 +97,7 @@ describe('buildTriageTools (ADR 0021 §2.2/§2.3, Session 28 E5.5)', () => {
     const { client } = createMockClient(
       [
         {
-          id: 'camp-1',
+          id: '00000000-0000-4000-8000-000000000002',
           business_id: 'biz-1',
           name: injectedName,
           objective: 'Grow the business',
@@ -136,7 +136,7 @@ describe('buildTriageTools (ADR 0021 §2.2/§2.3, Session 28 E5.5)', () => {
     const { client } = createMockClient(
       [
         {
-          id: 'camp-1',
+          id: '00000000-0000-4000-8000-000000000002',
           business_id: 'biz-1',
           name: 'Q3 launch',
           objective: injectedObjective,

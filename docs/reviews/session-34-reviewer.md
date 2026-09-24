@@ -561,3 +561,62 @@ option (b) were available and not taken (build-guide §4).
   (`expected AssertionError: list_evidence accepted a … to be an instance of ZodError`), 1 failed | 11 passed;
   restored, `git diff` empty.
 - **Commit:** this commit (D2; SHA back-filled by D12's sweep).
+
+### D3 — MINOR-5, MINOR-6 and NIT-3
+
+**MINOR-5**
+- **Finding:** MINOR-5.
+- **Fix:** `lib/ai/wrap-evidence.ts` — `toToolResultId` now throws `toToolResultId: refused a value that is not
+  UUID-shaped` on anything failing the pattern, and `UUID_SHAPE` is exported once (moved above the mint) and
+  used by both the mint and the dispatcher's `assertGuardedToolResult` — no second regex.
+- **Callers (SHARED-FUNCTION CALLERS), each passing a typed DB row id:** `lib/campaigns/planner/tools.ts:73`
+  (`rawIds`), `:85`, `:96`, `:108` (row ids) and `lib/signals/triage/tools.ts:95`, `:110`, `:124`, `:136` —
+  exercised by `lib/campaigns/planner/__tests__/tools.test.ts` (deep-walk + injection) and
+  `lib/signals/triage/tools.test.ts` respectively; `lib/ai/tool-result-guard.test.ts` passes a real UUID.
+  Their fixtures used non-UUID ids (`'row-1'`, `'camp-1'`), which is exactly what the old comment recorded as
+  the reason the mint could not validate; the fixture ids were changed to UUID-shaped values
+  (`memoryRow` and `campaignRow` in both files, plus `lib/campaigns/planner/__tests__/tools.test.ts:116`'s
+  comment) — production ids are always real UUIDs, so no assertion was weakened. Stage C behaviour is
+  unchanged (`lib/ai/tool-runner.test.ts` and `lib/signals/triage/orchestrator.test.ts` not edited).
+- **Proof:** `lib/ai/to-tool-result-id.test.ts:17` (valid uuid round-trips), `:22` (throws on `'not-a-uuid'`,
+  `''`, `'row-1'`, post text, trailing space, an envelope-close smuggle), `:29` (the Reviewer's exact
+  `texts.map((text) => toToolResultId(text))` throws), `:34` (one constant shared with the dispatcher).
+- **Reddening:** re-planted the Reviewer's mutation — `lib/campaigns/planner/tools.ts:135`
+  `wrapToolResultForPrompt(text)` → `toToolResultId(text)` in `list_recent_posts`. **tsc accepted it (no
+  output)**; `lib/campaigns/planner/__tests__/tools.test.ts` went RED —
+  `× list_recent_posts: every string in the result is guarded … Error: toToolResultId: refused a value that is
+  not UUID-shaped` (1 failed | 11 passed). Restored from a saved copy; `git diff` on `tools.ts` empty.
+- **Commit:** this commit (D3; SHA back-filled by D12's sweep).
+
+**MINOR-6**
+- **Finding:** MINOR-6.
+- **Fix:** `lib/campaigns/planner/__tests__/source-scans.test.ts` — the hand list is deleted;
+  `derivePlannerCalledDbFunctions` (`:322`) derives the set from `tools.ts`' named value imports (one hop into
+  every `lib/ai` module it imports, and through `lib/memory/index.ts`' re-exports into the module that defines
+  each retrieval function), via the new `namedValueImports` (`:288`, drops `import type` and inline `type X`).
+  The service-role body scan runs over the derived set. A derived name that is not a `function` declaration
+  must be a plain exported constant (e.g. `MEMORY_CANDIDATE_LIMIT`) — an arrow/function-expression const FAILS
+  instead of being skipped.
+- **Proof:** `source-scans.test.ts:357` (`namedValueImports` planted), `:369` (derived set non-empty, contains
+  `getEvidenceMemoryByIds` and the six previously hand-listed functions, and no body reaches service-role).
+- **Reddening:** prepended `import { insertSignal } from '@/lib/db/signals'` (a function that lazily acquires
+  `createServiceRoleClient`) to `tools.ts` → `× every lib/db function a planner tool reaches — DERIVED from the
+  import graph … AssertionError: expected [ Array(1) ] to deeply equal []` (1 failed | 51 passed); the hand list
+  would have stayed green. Restored; `git diff` on `tools.ts` empty.
+- **Commit:** this commit (D3; SHA back-filled by D12's sweep).
+
+**NIT-3**
+- **Finding:** NIT-3.
+- **Fix:** `lib/signals/source-scans.test.ts` — the `wrapSignalForPrompt` allowlist scan now walks `app/**`,
+  `lib/**` and `components/**` (definition `lib/ai/wrap-evidence.ts` excluded by name) and asserts exactly
+  `lib/campaigns/planner/tools.ts`, `lib/signals/triage/card.ts`, `lib/signals/triage/orchestrator.ts`. No
+  `scripts/` caller exists (`git grep` at D3), and `scripts/` is not a production root.
+- **Proof:** `lib/signals/source-scans.test.ts:211`.
+- **Reddening:** created `app/scratch-d3.ts` importing and referencing `wrapSignalForPrompt` →
+  `× wrapSignalForPrompt is referenced by exactly the three sanctioned production callers … AssertionError:
+  expected [ 'app/scratch-d3.ts', …(3) ] to deeply equal [ …(3) ]` (1 failed | 15 passed). File deleted;
+  `git status` shows no scratch file.
+- **Commit:** this commit (D3; SHA back-filled by D12's sweep).
+- **What I did NOT touch:** no second UUID regex; no tool behaviour change beyond the mint's throw.
+  Note for the record: `lib/signals/triage/tools.test.ts` was edited for FIXTURE IDS ONLY (rule 9 names
+  `tool-runner.test.ts` and `triage/orchestrator.test.ts` as the byte-identical pair; neither was touched).
