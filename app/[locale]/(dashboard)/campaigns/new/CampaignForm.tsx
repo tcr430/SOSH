@@ -75,9 +75,10 @@ export function CampaignForm({ connectedAccounts, variations, locale }: Campaign
 
   useEffect(() => {
     if (state.success && state.campaignId) {
-      router.push(`/${locale}/campaigns/${state.campaignId}`)
+      // A prepared brief lands the customer on brief review (where the planner's proposals are); otherwise the campaign page.
+      router.push(`/${locale}/campaigns/${state.campaignId}${state.briefReady ? '/brief' : ''}`)
     }
-  }, [state.success, state.campaignId, router, locale])
+  }, [state.success, state.campaignId, state.briefReady, router, locale])
 
   function togglePlatform(platform: Platform) {
     setSelectedPlatforms((prev) =>

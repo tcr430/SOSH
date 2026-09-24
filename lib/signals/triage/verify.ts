@@ -1,3 +1,14 @@
+// CROSS-REFERENCE (ADR 0027 §4.5, founder ruling A-2, Session 34 K2.9) — this is ONE OF THREE independent
+// instantiations of the verify-then-cite shape. A future unification session should start from this map, not
+// rediscover it (each file carries the same note; lib/campaigns/verify-claims.test.ts asserts all three name the
+// other two by CURRENT path, so a rename fires a test):
+//   1. lib/studio/verify.ts           — Studio suggestions vs a CitableContext bound at send time;
+//                                       has a `rejected` arm above FABRICATION_REJECT_THRESHOLD.
+//   2. lib/signals/triage/verify.ts   — THIS FILE. Mode 3 Stage C card citations vs the set the triage tools
+//                                       returned this call.
+//   3. lib/campaigns/verify-claims.ts — Mode 2 draft claims vs the frozen brief's pinned evidence; NO rejected arm
+//                                       (L-4 forbids withholding), flags attach and everything renders.
+//
 // ADR 0021 §4.6 (Session 28 E5.7) — the render-time citation guard, a
 // Stage-C-local ANALOGUE of lib/studio/verify.ts's verify-then-cite
 // pattern, NOT an extension of it: `lib/studio/verify.ts`'s

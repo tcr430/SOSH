@@ -119,7 +119,7 @@ describe('buildTriageTools tenancy (ADR 0021 §2.3, live Postgres)', () => {
     const { buildTriageTools } = await import('@/lib/signals/triage/tools')
     const tools = buildTriageTools(admin, businessAId)
     const listEvidence = tools.find((t) => t.name === 'list_evidence')!
-    const result = (await listEvidence.execute({})) as { ids: string[]; evidence: string }
+    const result = (await listEvidence.execute({})) as unknown as { ids: string[]; evidence: string }
     expect(result.ids).toContain(evidenceAId)
     expect(result.ids).not.toContain(evidenceBId)
     expect(result.evidence).toContain('Business A evidence')
@@ -130,7 +130,7 @@ describe('buildTriageTools tenancy (ADR 0021 §2.3, live Postgres)', () => {
     const { buildTriageTools } = await import('@/lib/signals/triage/tools')
     const tools = buildTriageTools(admin, businessBId)
     const listEvidence = tools.find((t) => t.name === 'list_evidence')!
-    const result = (await listEvidence.execute({})) as { ids: string[]; evidence: string }
+    const result = (await listEvidence.execute({})) as unknown as { ids: string[]; evidence: string }
     expect(result.ids).toContain(evidenceBId)
     expect(result.ids).not.toContain(evidenceAId)
     expect(result.evidence).toContain('Business B evidence')
@@ -140,7 +140,7 @@ describe('buildTriageTools tenancy (ADR 0021 §2.3, live Postgres)', () => {
   it('SIGNAL3-TOOLS-TENANT-BOUND: list_audience_notes never leaks the other business', async () => {
     const { buildTriageTools } = await import('@/lib/signals/triage/tools')
     const toolsA = buildTriageTools(admin, businessAId)
-    const result = (await toolsA.find((t) => t.name === 'list_audience_notes')!.execute({})) as Array<{
+    const result = (await toolsA.find((t) => t.name === 'list_audience_notes')!.execute({})) as unknown as Array<{
       id: string
       statement: string
     }>
@@ -151,7 +151,7 @@ describe('buildTriageTools tenancy (ADR 0021 §2.3, live Postgres)', () => {
   it('SIGNAL3-TOOLS-TENANT-BOUND: list_brand_claims never leaks the other business', async () => {
     const { buildTriageTools } = await import('@/lib/signals/triage/tools')
     const toolsB = buildTriageTools(admin, businessBId)
-    const result = (await toolsB.find((t) => t.name === 'list_brand_claims')!.execute({})) as Array<{
+    const result = (await toolsB.find((t) => t.name === 'list_brand_claims')!.execute({})) as unknown as Array<{
       id: string
       statement: string
     }>
@@ -162,7 +162,7 @@ describe('buildTriageTools tenancy (ADR 0021 §2.3, live Postgres)', () => {
   it('SIGNAL3-TOOLS-TENANT-BOUND: list_recent_campaigns never leaks the other business', async () => {
     const { buildTriageTools } = await import('@/lib/signals/triage/tools')
     const toolsA = buildTriageTools(admin, businessAId)
-    const result = (await toolsA.find((t) => t.name === 'list_recent_campaigns')!.execute({})) as Array<{
+    const result = (await toolsA.find((t) => t.name === 'list_recent_campaigns')!.execute({})) as unknown as Array<{
       id: string
       name: string
     }>

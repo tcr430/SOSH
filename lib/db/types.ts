@@ -810,7 +810,7 @@ export type InsightCardUpdate = Partial<
 // ai_budget_daily with a MANDATORY purpose discriminator. `reserved_cents`
 // -> `reserved_units`: the unit is named BY purpose (cents for
 // 'triage_cents', posts for 'generation_posts', H2.9), not by the column.
-export type AiBudgetPurpose = 'triage_cents' | 'generation_posts' | 'backfill_cents'
+export type AiBudgetPurpose = 'triage_cents' | 'generation_posts' | 'backfill_cents' | 'planner_cents'
 
 export type AiBudgetDailyRow = {
   id: string
@@ -1026,6 +1026,35 @@ export type GenerationSessionUpdate = Partial<
 // AI generation metadata — stored in posts.ai_generation_metadata (JSONB)
 // ---------------------------------------------------------------------------
 
+// ADR 0027 §4.2/§4.8 (Session 34 K2.9) — the claim-verification verdict persisted on the post for the approval
+// gate to render. Plain JSON, nothing model-authored: an outcome per claim, a span into the post's OWN text
+// (so every rendered byte comes from the draft, never from the model's claim string), and — for a `supported`
+// claim only — the evidence id taken from the set that was sent to the model. `supported` is the ADR table's
+// internal word for "the cited id was in the sent set"; user-facing copy says "cited" (provenance, not support).
+export type PersistedClaimCheck =
+  | { status: 'no_claims' | 'no_corpus' }
+  | {
+      status: 'checked'
+      claims: Array<{
+        outcome: 'supported' | 'unsupported' | 'fabricated'
+        span: { start: number; end: number } | null
+        evidenceMemoryId?: string
+        // ADR 0027 §4.8 (K2.10) — what a HUMAN did about this flag. Written only by the approvals surface's
+        // resolve action; the system never sets it and never edits the post text. `accepted` and `dismissed`
+        // are acknowledgements (the text is untouched); `cited` LINKS an existing evidence_memory row (it
+        // selects, it never creates — L-1). Editing the text is the existing post-edit path and records nothing here.
+        resolution?: ClaimResolution
+      }>
+    }
+
+export type ClaimResolution = {
+  kind: 'accepted' | 'dismissed' | 'cited'
+  // Present iff kind === 'cited'.
+  evidenceMemoryId?: string
+  at: string
+  by: string
+}
+
 export interface AiGenerationMetadata {
   promptId: string
   promptVersion: number
@@ -1041,6 +1070,9 @@ export interface AiGenerationMetadata {
     regeneratedAt: string
   }>
   generatedAt: string
+  // ADR 0027 §4 (K2.9). Absent on posts generated before it, on regenerations, and on any post whose
+  // verification was not run — absence means "not checked", never "clean".
+  claimCheck?: PersistedClaimCheck
 }
 
 // ---------------------------------------------------------------------------
@@ -1419,6 +1451,10 @@ export type CampaignBriefRow = {
   deleted_at: string | null
   created_at: string
   updated_at: string
+  // ADR 0027 §3.3 (Session 34 K2.5) — whether/why the campaign planner ran. DEFAULT 'not_run' at
+  // the DB layer, never 'ok' — see the migration comment for why that default matters.
+  plan_analysis_status: 'not_run' | 'ok' | 'unavailable' | 'capped'
+  plan_analysis_reason: PlanAnalysisReason | null
 }
 
 export type CampaignBriefInsert = {
@@ -1434,6 +1470,8 @@ export type CampaignBriefInsert = {
   deleted_at?: string | null
   created_at?: string
   updated_at?: string
+  plan_analysis_status?: 'not_run' | 'ok' | 'unavailable' | 'capped'
+  plan_analysis_reason?: PlanAnalysisReason | null
 }
 
 // Tenancy-critical + lifecycle-managed fields excluded, mirroring
@@ -1443,6 +1481,72 @@ export type CampaignBriefInsert = {
 // atomic transition helpers, never a raw .update() call.
 export type CampaignBriefUpdate = Partial<
   Omit<CampaignBriefRow, 'id' | 'created_at' | 'business_id' | 'campaign_id' | 'deleted_at'>
+>
+
+// ADR 0027 §3.3 — the CLOSED set of values campaign_briefs.plan_analysis_reason may hold: the eleven runtime
+// loop-failure reasons plus three orchestrator-level ones. Owned here (not in lib/campaigns/planner) so the DB
+// helper that writes the column can type its parameter with it: the column is rendered to a human, so it must
+// never be able to carry model text. There is NO DB CHECK on the column yet (a forward migration is owed —
+// recorded in the K2.7 security review, F3); this type is the only enforcement until then. A Tier-2 test pins
+// this list to TOOL_LOOP_FAILURE_REASONS so a twelfth loop reason cannot be added without extending it.
+export const PLAN_ANALYSIS_REASONS = [
+  'quota_exceeded',
+  'rate_limited',
+  'wall_clock_exceeded',
+  'input_token_cap_exceeded',
+  'output_token_per_turn_exceeded',
+  'output_token_cap_exceeded',
+  'retry_budget_exhausted',
+  'max_turns_exceeded',
+  'response_truncated',
+  'invalid_response',
+  'provider_error',
+  'internal_error',
+  'no_brief',
+  'daily_cap',
+] as const
+export type PlanAnalysisReason = (typeof PLAN_ANALYSIS_REASONS)[number]
+
+// ADR 0027 §5.3 (Session 34 K2.5/K2.7) — one planner-proposed brief change. Rows are written ONLY by the
+// planner orchestrator (service-role INSERT) and decided ONLY through the K2.6 RPCs, so there is no
+// *Update type: nothing generic may mutate a proposal.
+export type PlanProposalKind = 'drop' | 'substitute' | 'reorder' | 'request_evidence'
+export type PlanProposalStatus = 'pending' | 'accepted' | 'rejected' | 'superseded'
+
+export type CampaignPlanProposalRow = {
+  id: string
+  business_id: string
+  brief_id: string
+  campaign_id: string
+  brief_version: number
+  kind: PlanProposalKind
+  target_order: number
+  proposed_role: CampaignPostRole | null
+  proposed_order: number | null
+  reason: string
+  status: PlanProposalStatus
+  superseded_reason: 'version_advanced' | 'brief_frozen' | null
+  planner_run_id: string
+  model: string
+  decided_by: string | null
+  decided_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type CampaignPlanProposalInsert = Pick<
+  CampaignPlanProposalRow,
+  | 'business_id'
+  | 'brief_id'
+  | 'campaign_id'
+  | 'brief_version'
+  | 'kind'
+  | 'target_order'
+  | 'proposed_role'
+  | 'proposed_order'
+  | 'reason'
+  | 'planner_run_id'
+  | 'model'
 >
 
 // ---------------------------------------------------------------------------

@@ -33,6 +33,8 @@ const mockBrief: CampaignBriefRow = {
   deleted_at: null,
   created_at: '2026-07-23T00:00:00Z',
   updated_at: '2026-07-23T00:00:00Z',
+  plan_analysis_status: 'not_run',
+  plan_analysis_reason: null,
 }
 
 const mockCampaign: CampaignRow = {

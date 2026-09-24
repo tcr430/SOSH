@@ -3,12 +3,16 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 vi.mock('./runner', () => ({
   runPrompt: vi.fn(),
 }))
+// ADR 0027 §4.2 (K2.9) — generate-native binds the evidence (text + sent-id set, ONE fetch) instead of only
+// rendering it. `bound(...)` builds the mock's return value.
 vi.mock('./wrap-evidence', () => ({
-  wrapEvidenceForPrompt: vi.fn().mockResolvedValue(''),
+  bindEvidenceForPrompt: vi.fn(),
 }))
 
 import { runPrompt } from './runner'
-import { wrapEvidenceForPrompt } from './wrap-evidence'
+import { bindEvidenceForPrompt } from './wrap-evidence'
+
+const bound = (rendered = '', ids: string[] = []) => ({ rendered, sentIds: new Set(ids) }) as never
 import { generateNativeContent, type GenerateNativeContentInput } from './generate-native'
 import { AiError } from './errors'
 import type { CustomerContext } from './context'
@@ -79,7 +83,7 @@ const client = {} as any
 
 beforeEach(() => {
   vi.mocked(runPrompt).mockReset()
-  vi.mocked(wrapEvidenceForPrompt).mockReset().mockResolvedValue('' as never)
+  vi.mocked(bindEvidenceForPrompt).mockReset().mockResolvedValue(bound())
 })
 
 describe('generateNativeContent — bounded re-prompt (MODE2-NATIVE-RETRY)', () => {
@@ -166,10 +170,24 @@ describe('generateNativeContent — bounded re-prompt (MODE2-NATIVE-RETRY)', () 
     expect(runPrompt).toHaveBeenCalledTimes(1)
   })
 
-  it('threads businessId through to wrapEvidenceForPrompt (MAJOR-1 correction, Session 24-D D1)', async () => {
+  it('threads businessId through to bindEvidenceForPrompt (MAJOR-1 correction, Session 24-D D1)', async () => {
     vi.mocked(runPrompt).mockResolvedValueOnce(validSingle)
     await generateNativeContent(client, makeCtx(), singleInput({ businessId: 'biz-42', pinnedEvidenceIds: ['ev-1'] }))
-    expect(wrapEvidenceForPrompt).toHaveBeenCalledWith(client, 'biz-42', ['ev-1'])
+    expect(bindEvidenceForPrompt).toHaveBeenCalledWith(client, 'biz-42', ['ev-1'])
+  })
+
+  it('renders the bound evidence into the prompt input, and uses a SUPPLIED binding WITHOUT fetching (ADR 0027 §4.2)', async () => {
+    vi.mocked(runPrompt).mockResolvedValue(validSingle)
+    // own binding: fetched, and its text reaches runPrompt
+    vi.mocked(bindEvidenceForPrompt).mockResolvedValueOnce(bound('Evidence id: ev-1\n[DATA]x[/DATA]', ['ev-1']))
+    await generateNativeContent(client, makeCtx(), singleInput({ pinnedEvidenceIds: ['ev-1'] }))
+    expect((vi.mocked(runPrompt).mock.calls[0][2] as { renderedEvidence: string }).renderedEvidence).toBe('Evidence id: ev-1\n[DATA]x[/DATA]')
+
+    // supplied binding: NO fetch, and ITS text is what is rendered — the caller's oracle and the prompt cannot drift
+    vi.mocked(bindEvidenceForPrompt).mockClear()
+    await generateNativeContent(client, makeCtx(), singleInput({ pinnedEvidenceIds: ['ev-1'], evidence: bound('SUPPLIED', ['ev-1']) }))
+    expect(bindEvidenceForPrompt).not.toHaveBeenCalled()
+    expect((vi.mocked(runPrompt).mock.calls[1][2] as { renderedEvidence: string }).renderedEvidence).toBe('SUPPLIED')
   })
 
   it('low content-volume twitter input selects single, not thread', async () => {

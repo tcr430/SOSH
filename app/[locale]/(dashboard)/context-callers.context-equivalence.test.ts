@@ -41,6 +41,7 @@ vi.mock('@/lib/db/campaigns', () => ({
   getCampaignById: vi.fn(),
   listCampaigns: vi.fn(),
 }))
+vi.mock('@/lib/db/campaign-briefs', () => ({ getBriefByCampaign: vi.fn() }))
 vi.mock('@/lib/db/posts', () => ({
   listPostsByCampaign: vi.fn(),
   listPostsByIds: vi.fn(),
@@ -78,6 +79,7 @@ import { refineFromPostsAction } from './settings/voice/refine-from-posts-action
 import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser, getBusinessById } from '@/lib/db/businesses'
 import { getCampaignById, listCampaigns } from '@/lib/db/campaigns'
+import { getBriefByCampaign } from '@/lib/db/campaign-briefs'
 import { listPostsByCampaign, listPostsByIds, listRecentPublishedPostTexts } from '@/lib/db/posts'
 import { createGenerationSession } from '@/lib/db/post-generation-sessions'
 import { getBrandVoice } from '@/lib/db/brand-voices'
@@ -117,7 +119,9 @@ const mockCampaign: CampaignRow = {
   id: CAMPAIGN_ID, business_id: BUSINESS_ID, name: 'RECENT-CAMPAIGN-MARKER',
   objective: 'Drive awareness', special_instructions: null,
   platforms: ['linkedin'], frequency: 'weekly', posts_per_week: 1,
-  start_date: '2026-06-01', end_date: null, status: 'draft',
+  // K2.12: startGenerationAction starts generation from an APPROVED brief on an 'awaiting_brief' campaign (it used to
+  // demand 'draft'). The assertions in this file are about context assembly and are unchanged.
+  start_date: '2026-06-01', end_date: null, status: 'awaiting_brief',
   total_posts_planned: 3, total_posts_published: 0, voice_variation_id: null,
   origin: 'objective_generated',
   deleted_at: null,
@@ -161,6 +165,7 @@ beforeEach(() => {
   vi.mocked(getBusinessForUser).mockResolvedValue(mockBusiness)
   vi.mocked(getBusinessById).mockResolvedValue(mockBusiness)
   vi.mocked(getCampaignById).mockResolvedValue(mockCampaign)
+  vi.mocked(getBriefByCampaign).mockResolvedValue({ status: 'approved' } as never)
   vi.mocked(listCampaigns).mockResolvedValue([mockCampaign])
   vi.mocked(listPostsByCampaign).mockResolvedValue([])
   vi.mocked(getBrandVoice).mockResolvedValue(mockBrandVoice)

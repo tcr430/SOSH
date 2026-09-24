@@ -1089,8 +1089,17 @@ GRANT EXECUTE ON FUNCTION public.purge_business(uuid) TO service_role;
 | post_dimensions | yes (business_id + post_id + ai_original_id) | CASCADE | yes | none — cascade = erasure (generation-time tags of the customer's posts; no content; ADR 0026 §4.2) |
 | post_outcomes | yes (business_id + post_id) | CASCADE | yes | none — cascade = erasure (per-post engagement measurements and baselines; no content; ADR 0026 §6.1) |
 | campaign_retrospectives | yes (business_id + campaign_id) | CASCADE | yes | none — cascade = erasure (holds the customer's hypothesis text and an optional member note; ADR 0026 §8.3) |
+| campaign_plan_proposals | yes (business_id + brief_id + campaign_id) | CASCADE (all three) | yes | none — cascade = erasure (holds the planner's proposed reason text and role/order changes, no third-party content; decided_by is SET NULL, not CASCADE, so deleting the deciding auth user leaves the decision row intact per ADR 0027 §9.3; ADR 0027 §9.1) |
 
 Only `business_deletion_requests` (NO ACTION) would have blocked the root delete; D2.1 resolves it. Every other business-scoped table either cascades or is deliberately retained.
+
+**Session 34 K2.5 note (2026-09-22):** the `campaign_plan_proposals` row above (ADR 0027, the campaign
+planner's proposed brief changes) added in the same PR as its migration
+(`20260922100000_campaign_plan_proposals.sql`), per this file's own mandatory rule and CLAUDE.md's
+erasure-cascade rule. `campaign_briefs` gained two columns (`plan_analysis_status`,
+`plan_analysis_reason`) in the same migration — no new §D2.5 row is required for that table, the same
+"new column on an already-cascaded table" precedent as the Session 30.5 N2.4 and Session 31-D notes above;
+the existing `campaign_briefs` row already covers it by `business_id` CASCADE.
 
 **Session 30-G1b.1 note (2026-08-27):** the `watched_feeds` row above — ADR 0023's market-responsive
 signal source (Mode 3's second source) — added in the same PR as its migration

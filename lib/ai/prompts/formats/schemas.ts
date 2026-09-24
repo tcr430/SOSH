@@ -36,12 +36,31 @@ export const HOOK_TYPES = ['question', 'statistic', 'contrarian', 'story', 'anno
 export const HookTypeSchema = z.enum(HOOK_TYPES)
 export type HookType = z.infer<typeof HookTypeSchema>
 
+// ADR 0027 §4.1 (Session 34 K2.9) — CLAIM EXTRACTION is part of the structured output this call already returns:
+// a checkable assertion in the draft, with the pinned-evidence id the model says supports it. A separate
+// extraction pass is the named loser (it doubles calls per post, and an extractor reading a draft is a second
+// model judgment with no oracle).
+//
+// `claims` is OPTIONAL and declared PER BRANCH (like hookType/imageBrief): z.object STRIPS unknown keys, so a
+// field missing from a branch is silently discarded, not rejected. `evidenceMemoryId` is the model's CLAIM
+// about provenance — unverified until lib/campaigns/verify-claims.ts intersects it with the set actually sent.
+// AI_ORIGINAL_SCHEMA_VERSION is NOT bumped (the ADR 0026 §4.3 precedent for optional hookType).
+export const CLAIM_TEXT_MAX_CHARS = 1000
+export const CLAIMS_MAX = 20
+export const ClaimSchema = z.object({
+  text: z.string().min(1).max(CLAIM_TEXT_MAX_CHARS),
+  evidenceMemoryId: z.string().min(1).nullish(),
+})
+export type Claim = z.infer<typeof ClaimSchema>
+export const ClaimsSchema = z.array(ClaimSchema).max(CLAIMS_MAX).nullish()
+
 export const SinglePostOutputSchema = z.object({
   format: z.literal('single'),
   body: z.string().min(1),
   imageBrief: z.string().nullable(),
   scriptBrief: z.string().max(SCRIPT_BRIEF_MAX_CHARS).nullish(),
   hookType: HookTypeSchema.nullish(),
+  claims: ClaimsSchema,
 })
 
 export type SinglePostOutput = z.infer<typeof SinglePostOutputSchema>
@@ -70,6 +89,7 @@ export const ThreadOutputSchema = z.object({
   // ADR 0026 §4.3 — declared per branch like imageBrief/scriptBrief (a zod
   // discriminatedUnion has no shared-base merge). Describes the FIRST post's opening.
   hookType: HookTypeSchema.nullish(),
+  claims: ClaimsSchema,
 })
 
 export type ThreadOutput = z.infer<typeof ThreadOutputSchema>
@@ -102,6 +122,7 @@ export const CarouselOutputSchema = z.object({
   scriptBrief: z.string().max(SCRIPT_BRIEF_MAX_CHARS).nullish(),
   // ADR 0026 §4.3 — branch-level; describes the COVER slide's opening.
   hookType: HookTypeSchema.nullish(),
+  claims: ClaimsSchema,
 })
 
 export type CarouselOutput = z.infer<typeof CarouselOutputSchema>

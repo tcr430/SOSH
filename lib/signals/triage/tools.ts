@@ -3,7 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { TriageTool } from '@/lib/ai/tool-runner'
 import { retrieveEvidenceMemory, retrieveAudienceMemory, retrieveBrandMemory, type MemoryQueryContext } from '@/lib/memory'
 import { listCampaigns } from '@/lib/db/campaigns'
-import { wrapEvidenceForPrompt, wrapToolResultForPrompt } from '@/lib/ai/wrap-evidence'
+import { wrapEvidenceForPrompt, wrapToolResultForPrompt, toToolResultId } from '@/lib/ai/wrap-evidence'
 import type { CardCitableContext } from './verify'
 
 // ADR 0021 §2.2/§2.3 (Session 28 E5.5) — the closed four-tool inventory for
@@ -16,8 +16,13 @@ import type { CardCitableContext } from './verify'
 // / retrieveAudienceMemory / retrieveBrandMemory read through the
 // lib/memory barrel, MEM-NO-DIRECT-TABLE-ACCESS; listCampaigns reads through
 // lib/db directly, matching the ADR's own §2.2 citation). No tool calls
-// .insert/.update/.upsert/.delete/.rpc — proven by the source scan in
-// tools.test.ts, not by this comment alone.
+// .insert/.update/.upsert/.delete/.rpc — proven by the source scan at
+// lib/signals/triage/source-scans.test.ts:35-48, not by this comment alone.
+//
+// CROSS-REFERENCE (ADR 0027 §2.3, K2.4): lib/campaigns/planner/tools.ts re-implements this module's first
+// four tools (list_evidence, list_brand_claims, list_audience_notes, list_recent_campaigns), rather than
+// importing them — lib/campaigns importing lib/signals/triage is a module-boundary violation. This is a
+// documented duplication, not an oversight; the twin comment lives in that module.
 //
 // retrievePerformancePatterns is deliberately EXCLUDED — not an oversight.
 // Its derived_from_metrics fallback arm (lib/memory/performance.ts:73-96)
@@ -85,8 +90,9 @@ export function buildTriageTools(client: SupabaseClient, businessId: string, cit
       // model can cite a SPECIFIC id (citableEvidenceIds) even though the
       // rendered text is one joined, guarded block rather than a per-row
       // list.
-      const ids = rows.map((row) => row.id)
-      const evidence = await wrapEvidenceForPrompt(client, businessId, ids)
+      const rawIds = rows.map((row) => row.id)
+      const evidence = await wrapEvidenceForPrompt(client, businessId, rawIds)
+      const ids = rawIds.map(toToolResultId)
       if (citable) {
         for (const row of rows) citable.evidence.set(row.id, { id: row.id, snippet: wrapToolResultForPrompt(row.content) })
       }
@@ -101,7 +107,7 @@ export function buildTriageTools(client: SupabaseClient, businessId: string, cit
     execute: async (input) => {
       const queryContext = parseQueryContext(input)
       const rows = await retrieveAudienceMemory(client, businessId, queryContext)
-      return rows.map((row) => ({ id: row.id, statement: wrapToolResultForPrompt(row.statement) }))
+      return rows.map((row) => ({ id: toToolResultId(row.id), statement: wrapToolResultForPrompt(row.statement) }))
     },
   }
 
@@ -115,7 +121,7 @@ export function buildTriageTools(client: SupabaseClient, businessId: string, cit
       if (citable) {
         for (const row of rows) citable.brandClaims.set(row.id, { id: row.id, statement: wrapToolResultForPrompt(row.statement) })
       }
-      return rows.map((row) => ({ id: row.id, statement: wrapToolResultForPrompt(row.statement) }))
+      return rows.map((row) => ({ id: toToolResultId(row.id), statement: wrapToolResultForPrompt(row.statement) }))
     },
   }
 
@@ -127,7 +133,7 @@ export function buildTriageTools(client: SupabaseClient, businessId: string, cit
       emptyInputSchema.parse(input)
       const rows = await listCampaigns(client, businessId, RECENT_CAMPAIGNS_LIMIT)
       return rows.map((row) => ({
-        id: row.id,
+        id: toToolResultId(row.id),
         name: wrapToolResultForPrompt(row.name),
         objective: wrapToolResultForPrompt(row.objective),
         specialInstructions: row.special_instructions ? wrapToolResultForPrompt(row.special_instructions) : null,

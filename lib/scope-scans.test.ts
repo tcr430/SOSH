@@ -232,7 +232,10 @@ describe('QUAL-PARSER-RETAINED (ADR 0024 §6.5, H2.13)', () => {
     expect(runnerSource).toContain('safeParseOrAiError(prompt.outputSchema, rawText)')
 
     const toolRunnerSource = fs.readFileSync(path.join(ROOT, 'lib', 'ai', 'tool-runner.ts'), 'utf8')
-    expect(toolRunnerSource).toContain('safeParseOrAiError(TriageDecisionSchema, rawText)')
+    // Session 34 K2.2 (ADR 0027 §3.1): the decision schema became a PARAMETER of runToolLoop (defaulting to
+    // TriageDecisionSchema), so the still-exercised call now names the parameter. The assertion's purpose —
+    // that the text-path parser is still what tool-runner.ts parses a decision with — is unchanged.
+    expect(toolRunnerSource).toContain('safeParseOrAiError(outputSchema, rawText)')
   })
 })
 

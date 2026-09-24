@@ -5,6 +5,7 @@ import { after } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
 import { getCampaignById } from '@/lib/db/campaigns'
+import { getBriefByCampaign } from '@/lib/db/campaign-briefs'
 import { listPostsByCampaign } from '@/lib/db/posts'
 import { buildCustomerContext } from '@/lib/ai/context'
 import { createGenerationSession, getGenerationSession } from '@/lib/db/post-generation-sessions'
@@ -37,8 +38,16 @@ export async function startGenerationAction(
     if (!campaign || campaign.business_id !== ctx.business.id) {
       return { error: 'invalid_campaign_state' }
     }
-    if (campaign.status !== 'draft' || campaign.total_posts_planned <= 0) {
+    // ADR 0017 §11 / K2.12 — generation starts from an APPROVED brief on an 'awaiting_brief' campaign, which is the
+    // state generatePostsForCampaign itself requires. (This used to demand 'draft', a state generation then rejected,
+    // so no production path could take an approved brief to posts.) The brief check is the authenticated client's own
+    // read: RLS scopes it to the caller's business.
+    if (campaign.status !== 'awaiting_brief' || campaign.total_posts_planned <= 0) {
       return { error: 'invalid_campaign_state' }
+    }
+    const brief = await getBriefByCampaign(ctx.client, campaignId)
+    if (!brief || brief.status !== 'approved') {
+      return { error: 'brief_not_approved' }
     }
 
     const customerCtx = await buildCustomerContext(ctx.business.id)

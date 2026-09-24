@@ -95,6 +95,10 @@ export const serverSchema = z.object({
   // 5 x 22c worst case = 110c, so the full TRIAGE_SHORTLIST_PER_TICK shortlist
   // fits with headroom and the cap binds only on pathology (§3.1).
   TRIAGE_DAILY_CAP_CENTS: z.coerce.number().int().positive().default(125),
+  // ADR 0027 §7.4 (Session 34 K2.6) — the campaign planner's daily cost ceiling, the fourth
+  // ai_budget_daily purpose (planner_cents). Worst case at the bounds is ~24c per run (§7.1); 300c
+  // absorbs roughly a dozen runs a day before capping.
+  AI_PLANNER_DAILY_CAP_CENTS: z.coerce.number().int().positive().default(300),
   // ADR 0024 §7.4/§7.5a (Session 31, H2.9) — founder ruling A-1's Pro daily
   // post-count ceiling. A POST cap, not a cents cap — a 15-post/day limit
   // IS a ≈150¢/day spend ceiling at ≈10¢/post recorded (§2.1), so §7.4's
@@ -336,6 +340,7 @@ function parseServerEnv() {
     LEARNING_SUMMARY_MAX_INPUT_TOKENS: process.env.LEARNING_SUMMARY_MAX_INPUT_TOKENS,
     LEARNING_SUMMARY_MAX_MONTHLY_CALLS_PER_BUSINESS: process.env.LEARNING_SUMMARY_MAX_MONTHLY_CALLS_PER_BUSINESS,
     TRIAGE_DAILY_CAP_CENTS: process.env.TRIAGE_DAILY_CAP_CENTS,
+    AI_PLANNER_DAILY_CAP_CENTS: process.env.AI_PLANNER_DAILY_CAP_CENTS,
     AI_PRO_DAILY_POST_CAP: process.env.AI_PRO_DAILY_POST_CAP,
     RSS_FEED_FETCH_TIMEOUT_MS: process.env.RSS_FEED_FETCH_TIMEOUT_MS,
     RSS_FEED_POLL_TICK_BUDGET_MS: process.env.RSS_FEED_POLL_TICK_BUDGET_MS,
@@ -544,6 +549,9 @@ export const config = {
     },
     get TRIAGE_DAILY_CAP_CENTS() {
       return serverOnly("TRIAGE_DAILY_CAP_CENTS", () => server().TRIAGE_DAILY_CAP_CENTS);
+    },
+    get AI_PLANNER_DAILY_CAP_CENTS() {
+      return serverOnly("AI_PLANNER_DAILY_CAP_CENTS", () => server().AI_PLANNER_DAILY_CAP_CENTS);
     },
     get AI_PRO_DAILY_POST_CAP() {
       return serverOnly("AI_PRO_DAILY_POST_CAP", () => server().AI_PRO_DAILY_POST_CAP);

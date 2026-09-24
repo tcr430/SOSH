@@ -15,7 +15,13 @@ vi.mock('next-intl', () => ({
 
 vi.mock('next/navigation', () => ({
   useParams: () => ({ locale: 'en' }),
+  // ADR 0027 K2.10 — ClaimFlags (rendered in every DraftRow) refreshes the route after a resolved claim.
+  useRouter: () => ({ refresh: vi.fn() }),
 }))
+
+// ClaimFlags imports its Server Action; stubbed so this file stays about the inbox. The claim surface has its own
+// test (ClaimFlags.test.tsx) and the action has its own (claim-actions.test.ts).
+vi.mock('./claim-actions', () => ({ resolveClaimAction: vi.fn() }))
 
 vi.mock('next/link', () => ({
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) =>

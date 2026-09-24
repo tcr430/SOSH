@@ -98,8 +98,11 @@ export const FROZEN_TABLE: Record<string, FrozenRow> = {
   // ADR 0026 §4.3 (Session 33, J2.4) — the three native-generation rows move 2 -> 3:
   // the system-prompt text now asks for hookType. Nothing else about them changed
   // (same model, same temperature, no thinking, no tool output).
+  // ADR 0027 §4.1 (Session 34 K2.9) — the three rows move 3 -> 4 again: the system-prompt text now asks for
+  // `claims` (checkable assertions + the pinned-evidence id said to support each). Same model, temperature, no
+  // thinking, no tool output; AI_ORIGINAL_SCHEMA_VERSION is NOT bumped (optional field, ADR 0026 §4.3 precedent).
   'native-generation-single': {
-    version: 3,
+    version: 4,
     modelKey: 'SONNET_4_6',
     temperature: 1.0,
     thinking: undefined,
@@ -107,7 +110,7 @@ export const FROZEN_TABLE: Record<string, FrozenRow> = {
     useToolOutput: undefined,
   },
   'native-generation-thread': {
-    version: 3,
+    version: 4,
     modelKey: 'SONNET_4_6',
     temperature: 1.0,
     thinking: undefined,
@@ -115,7 +118,7 @@ export const FROZEN_TABLE: Record<string, FrozenRow> = {
     useToolOutput: undefined,
   },
   'native-generation-carousel': {
-    version: 3,
+    version: 4,
     modelKey: 'SONNET_4_6',
     temperature: 1.0,
     thinking: undefined,

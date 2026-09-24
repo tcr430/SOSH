@@ -1424,3 +1424,32 @@ Reviewer named.
 
 **Constraint closed:** `OUTCOME-HOOKTYPE-ADDITIVE` (ADR 0026 §13 #8) — `lib/ai/prompts/formats/hooktype.test.ts`, and
 `lib/campaigns/generate.test.ts` (`hookType` rides in the snapshot payload and never in the post content).
+
+
+## 18. Note — `ai_budget_daily` gains a fourth purpose, `'planner_cents'`; and a first-call-of-day cap bug is closed (Session 34, K2.6/K2.11; ADR 0027 §7.4)
+
+**Additive to §7.5b, plus one behavioural fix that touches every purpose.** Authority: founder ruling A-6 (ADR 0027).
+
+> **A correction to the record.** The K2.6 commit (`26e732fc`) says in its subject "(+ ADR 0024 Section 7.5b fourth
+> purpose)". **No ADR was changed in that commit** (its file list has no `docs/decisions/` path), and this file had no
+> mention of `planner_cents` until now. The amendment the subject claims is written here, at K2.11, and that is the
+> first commit that contains it.
+
+- **The fourth value.** `ai_budget_daily.purpose`'s named CHECK `ai_budget_daily_purpose_check` is widened, by a
+  forward migration (`20260922110000_campaign_plan_proposal_rpcs.sql`), to
+  `('triage_cents', 'generation_posts', 'backfill_cents', 'planner_cents')`. §7.5b's table listed two purposes; the
+  third, `backfill_cents`, was added by Session 32's migration `20260913130000`. The unit for `planner_cents` is cents;
+  the reservation is 24 ¢ per planner run, reconciled to actual cost on every outcome including failure. It has its own
+  module (`lib/db/planner-budget.ts`) and its own cap (`AI_PLANNER_DAILY_CAP_CENTS`). **No second budget table**
+  (`QUAL-NO-SECOND-BUDGET-TABLE`, ADR 0027 `AGENCY-NO-SECOND-BUDGET-TABLE`).
+- **Isolation.** A `planner_cents` reservation at its cap does not deny a `generation_posts` reservation on the same
+  day (`AGENCY-BUDGET-PURPOSE-ISOLATED`, `supabase/__tests__/ai-budget-purpose.test.ts`).
+- **The bug, and why it is in an amendment to §7.5b.** `reserve_ai_budget` (`20260909110000_ai_budget_daily_rename.sql`)
+  enforced the cap only in the `ON CONFLICT ... DO UPDATE ... WHERE` branch. A plain INSERT with no existing row for
+  that `(business, purpose, day)` never evaluated that clause, so **a business's first reservation of the day, for any
+  of the four purposes, could exceed its cap**: `p_units = 500` against `p_cap = 300` succeeded and wrote
+  `reserved_units = 500` (reproduced live at K2.6). The fix (same migration as above) makes the INSERT source a guarded
+  `SELECT ... WHERE p_units <= p_cap`, so an over-cap first call yields zero rows, which is the "refused, not an error,
+  never retried" contract every caller already handles. The `DO UPDATE` branch and its guard are unchanged.
+  `AGENCY-COST-CEILING-EXTENDED` covers the first-call-of-day case in `ai-budget-purpose.test.ts`. §7.5b's statement
+  that the cap check is atomic was true of the update path only; it is now true of both.

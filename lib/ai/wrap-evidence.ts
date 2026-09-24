@@ -169,14 +169,57 @@ function guard(rawContent: string): string {
 // caller below), so a foreign-tenant id renders nothing even if one were ever
 // pinned. Defense in depth: citation-by-id AND business_id scoping, not one
 // or the other.
+// What wrapEvidenceForPrompt renders for zero ids — exported so a test double for a tool that returns
+// `{ ids, evidence }` can say "no evidence" without minting its own brand by cast (K2.3).
+export const EMPTY_RENDERED_EVIDENCE = '' as RenderedEvidence
+
 export async function wrapEvidenceForPrompt(
   client: SupabaseClient,
   businessId: string,
   evidenceIds: string[],
 ): Promise<RenderedEvidence> {
-  if (evidenceIds.length === 0) return '' as RenderedEvidence
+  if (evidenceIds.length === 0) return EMPTY_RENDERED_EVIDENCE
   const rows = await getEvidenceMemoryByIds(client, businessId, evidenceIds)
   return rows.map((row) => guard(row.content)).join('\n\n') as RenderedEvidence
+}
+
+// ─── The bound evidence set (ADR 0027 §4.2/§4.5, Session 34 K2.9) ───────────
+//
+// ONE fetch produces BOTH the text the model is shown AND the set of ids it was shown — the CitableContext of
+// lib/studio/verify.ts:77-84, "bound at send time". Claim verification (lib/campaigns/verify-claims.ts)
+// intersects a cited id with THIS set and never re-reads the database: a fresh read is a different transaction
+// and could legitimise a row promoted AFTER the prompt was sent (a citation the model provably could not have
+// seen), or race a demotion. Deriving the render and the oracle from the same rows makes that drift
+// unrepresentable rather than merely tested.
+//
+// Every id in `sentIds` came out of getEvidenceMemoryByIds, so it is business-scoped, status='active' and
+// not soft-deleted — a cross-tenant id can never be a member.
+//
+// Non-exported `unique symbol` brand with a REAL runtime initializer (the Session 31 BLOCKER-1 lesson: an
+// ambient `declare const` throws at runtime), so an object literal cannot be passed off as a bound set. The
+// brand kills structural forgery, not a bare cast — the same honest limit as the tool-result brands above.
+const boundEvidenceBrand: unique symbol = Symbol('wrap-evidence-bound-evidence')
+
+export type BoundEvidence = {
+  // What goes into the prompt: `Evidence id: <uuid>` then the guarded [DATA] block, per row, so the model has a
+  // real id to cite. The id is a database uuid, never model or third-party text.
+  readonly rendered: RenderedEvidence
+  readonly sentIds: ReadonlySet<string>
+  readonly [boundEvidenceBrand]: true
+}
+
+export async function bindEvidenceForPrompt(
+  client: SupabaseClient,
+  businessId: string,
+  evidenceIds: string[],
+): Promise<BoundEvidence> {
+  const rows = evidenceIds.length === 0 ? [] : await getEvidenceMemoryByIds(client, businessId, evidenceIds)
+  const rendered = rows.map((row) => `Evidence id: ${row.id}\n${guard(row.content)}`).join('\n\n') as RenderedEvidence
+  return Object.freeze({
+    rendered,
+    sentIds: new Set(rows.map((row) => row.id)),
+    [boundEvidenceBrand]: true as const,
+  })
 }
 
 // ─── Signal text (ADR 0020 §7.3/§7.4) ───────────────────────────────────────
@@ -237,18 +280,134 @@ function truncateToolResultField(text: string): string {
 //
 // security-reviewer (E5.4+E5.5+E5.7 pass, HIGH-2): the property this
 // function exists to guarantee is "every string field a tool's execute()
-// returns has already passed through a guard before it leaves the tool" —
-// a fixture-based test (tools.test.ts), not a JSON.stringify grep (the
-// dispatcher in lib/ai/tool-runner.ts unconditionally JSON.stringifies
-// whatever a tool returns, by design — that call site cannot itself
-// distinguish guarded from raw content).
-export function wrapToolResultForPrompt(rawText: string): string {
+// returns has already passed through a guard before it leaves the tool".
+//
+// Session 34 K2.3 (ADR 0027 §6.2/§6.3, [sec-MINOR-9]) — CORRECTION of the
+// comment that stood here, which claimed the dispatcher's JSON.stringify
+// "cannot itself distinguish guarded from raw content". That is FALSE: the
+// [DATA] envelope IS a distinguishing marker, emitted on every guarded path
+// (guard(), this function, wrapSignalForPrompt). The dispatcher therefore
+// ENFORCES the property at runtime — assertGuardedToolResult below runs
+// before that single JSON.stringify — and the return type is now the
+// RenderedToolResult brand, so a raw string cannot be placed where a
+// tool-result string is required. Tool-boundary semantics (which field is
+// content, which is an id) stay with the tool; enforcement lives at the one
+// point every tool's output passes through.
+export function wrapToolResultForPrompt(rawText: string): RenderedToolResult {
   const neutralized = neutralizeWithSentinels(rawText)
   const capped = truncateToolResultField(neutralized)
   // Re-run the [/DATA]-closer pass once more post-truncation — same
   // defense-in-depth as guard() and wrapSignalForPrompt() above.
   const reguarded = capped.replace(/\[\/DATA\]/gi, '[/data-blocked]')
-  return `[DATA]\n${reguarded}\n[/DATA]`
+  return `[DATA]\n${reguarded}\n[/DATA]` as RenderedToolResult
+}
+
+// ─── The tool-result guarantee (ADR 0027 §6.2) ──────────────────────────────
+//
+// Two more non-exported `unique symbol` brands, minted with REAL runtime
+// initializers (never an ambient `declare const` — that throws at runtime, the
+// Session 31 BLOCKER-1 lesson). Same pattern as renderedSignalTextBrand above.
+//
+// HONEST LIMITS, stated where the brand is minted (ADR 0027 §6.2 — do not
+// restate this more strongly):
+//   1. A branded string is still a `string`: it drops into any template-literal
+//      hole with no error.
+//   2. A bare `as RenderedToolResult` (or `as ToolResultId`, `as GuardedJson`)
+//      cast is compile-legal.
+// The brand kills STRUCTURAL FORGERY; it does not kill a cast. The cast is
+// closed by the executable scan in lib/campaigns/planner/__tests__/
+// source-scans.test.ts (AGENCY-TOOL-RESULT-BRANDED) — without that scan the
+// brand is decoration.
+const renderedToolResultBrand: unique symbol = Symbol('tool-result-rendered')
+export type RenderedToolResult = string & { readonly [renderedToolResultBrand]: true }
+
+const toolResultIdBrand: unique symbol = Symbol('tool-result-id')
+export type ToolResultId = string & { readonly [toolResultIdBrand]: true }
+
+// The ONLY producer of a ToolResultId. It does NOT validate: row ids reach here from typed DB rows, and the
+// fixtures of the existing triage tool tests use non-UUID ids ('row-1'). UUID-shape is ENFORCED at the
+// dispatcher (assertGuardedToolResult), the one point no tool can skip — this function only makes an id
+// DISTINCT from arbitrary text at the type level.
+export function toToolResultId(id: string): ToolResultId {
+  return id as ToolResultId
+}
+
+// What a tool's execute() may return: JSON whose ONLY string members are a guarded render (a tool-result
+// field, an evidence block or signal text — every one of them [DATA]-enveloped) or an id. Adding a raw
+// `html_url: string` to a tool result no longer type-checks.
+export type GuardedJson =
+  | null
+  | boolean
+  | number
+  | RenderedToolResult
+  | RenderedEvidence
+  | RenderedSignalText
+  | ToolResultId
+  | readonly GuardedJson[]
+  | { readonly [key: string]: GuardedJson }
+
+const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const ENVELOPE_OPEN = '[DATA]\n'
+const ENVELOPE_CLOSE = '\n[/DATA]'
+const GUARDED_JSON_MAX_DEPTH = 16
+
+// A rendered string is one or more [DATA] blocks joined by a blank line (wrapEvidenceForPrompt joins rows that
+// way). Every guard replaces an inner [/DATA] with [/data-blocked], so the FIRST closer in a block is its real
+// end — anything after it must be the end of the string or the opening of the next block. The empty string
+// (wrapEvidenceForPrompt with no ids) carries nothing.
+function isGuardedEnvelope(text: string): boolean {
+  if (text === '') return true
+  let rest = text
+  for (;;) {
+    if (!rest.startsWith(ENVELOPE_OPEN)) return false
+    const close = rest.indexOf(ENVELOPE_CLOSE, ENVELOPE_OPEN.length - 1)
+    if (close === -1) return false
+    rest = rest.slice(close + ENVELOPE_CLOSE.length)
+    if (rest === '') return true
+    if (!rest.startsWith('\n\n')) return false
+    rest = rest.slice(2)
+  }
+}
+
+// ADR 0027 §6.3 — enforcement at the DISPATCHER (lib/ai/tool-runner.ts), over its single JSON.stringify output:
+// every string a tool returned is either UUID-shaped or [DATA]-enveloped. The tool boundary is the wrong place
+// for enforcement because a new tool can forget to visit it; it cannot forget the dispatcher. The thrown message
+// names the PATH of the offending value and never its content, so a violation cannot itself leak text.
+//
+// HONEST LIMIT (typescript-reviewer, K2.3 finding 2 — do not restate this more strongly): this proves a string
+// has the SHAPE of a guard's output, NOT that a guard produced it. Text hand-wrapped as `[DATA]\n…\n[/DATA]` (or
+// carrying its own closer followed by a fresh opener) is accepted. Provenance rests on the brands and the cast
+// scan, not on this function. It is defence in depth against the accidental raw field — the case it was built for.
+//
+// Object KEYS are constrained too (finding 1): a key built from data is text the model reads, so it must look like
+// an identifier.
+const OBJECT_KEY_SHAPE = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/
+
+export function assertGuardedToolResult(value: unknown, path = '$', depth = 0): void {
+  if (depth > GUARDED_JSON_MAX_DEPTH) throw new Error(`tool result too deep at ${path}`)
+  if (value === null || typeof value === 'boolean') return
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) throw new Error(`non-finite number in tool result at ${path}`)
+    return
+  }
+  if (typeof value === 'string') {
+    if (UUID_SHAPE.test(value) || isGuardedEnvelope(value)) return
+    throw new Error(`unguarded string in tool result at ${path}`)
+  }
+  if (Array.isArray(value)) {
+    value.forEach((item, i) => assertGuardedToolResult(item, `${path}[${i}]`, depth + 1))
+    return
+  }
+  if (typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype) {
+    for (const [key, item] of Object.entries(value)) {
+      // The message names the path so far and the key's LENGTH, never the key itself: a raw-text key must not
+      // be echoed by its own rejection.
+      if (!OBJECT_KEY_SHAPE.test(key)) throw new Error(`non-identifier object key (${key.length} chars) in tool result at ${path}`)
+      assertGuardedToolResult(item, `${path}.${key}`, depth + 1)
+    }
+    return
+  }
+  throw new Error(`non-JSON value (${typeof value}) in tool result at ${path}`)
 }
 
 // ADR 0020 §7.4 — the ONE chokepoint for signal text, alongside

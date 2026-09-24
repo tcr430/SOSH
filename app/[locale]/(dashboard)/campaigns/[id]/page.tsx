@@ -7,6 +7,7 @@ import { buttonVariants } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
 import { getCampaignById } from '@/lib/db/campaigns'
+import { getBriefByCampaign } from '@/lib/db/campaign-briefs'
 import { listPostsByCampaign } from '@/lib/db/posts'
 import { PLATFORM_CONFIGS } from '@/lib/social'
 import { config } from '@/lib/config'
@@ -45,6 +46,12 @@ export default async function CampaignDetailPage({ params }: Props) {
 
   const campaign = await getCampaignById(client, id).catch(() => null)
   if (!campaign) redirect(`/${locale}/campaigns`)
+
+  // K2.12 — the persisted brief status decides what the customer is offered next (generateStage), never a derived prop.
+  // Read through the caller's own client: RLS scopes it to their business. Only awaiting_brief campaigns need it.
+  const briefStatus = campaign.status === 'awaiting_brief'
+    ? ((await getBriefByCampaign(client, id).catch(() => null))?.status ?? null)
+    : null
 
   const allPosts = campaign.status !== 'draft'
     ? await listPostsByCampaign(client, id, 200)
@@ -160,6 +167,7 @@ export default async function CampaignDetailPage({ params }: Props) {
       {/* Interactive: generate posts + danger zone */}
       <CampaignDetailActions
         campaign={campaign}
+        briefStatus={briefStatus}
         locale={locale}
         pollMaxSeconds={config.server.POST_GENERATION_POLL_MAX_SECONDS}
         nextScheduledAt={nextScheduledAt}
