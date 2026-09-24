@@ -484,3 +484,43 @@ MINORs may be closed in the same correction pass or deferred with a `docs/backlo
 
 _End of reviewer findings. A correction pass appends below this line, per REVIEWER-REPORT APPEND-ONLY; nothing above it
 is edited._
+
+---
+
+## CORRECTION PASS (Session 34-D)
+
+**Author:** Session 34-D correction pass · **Date:** 2026-09-24 · **Range fixed:** `cad8790f..<D12-sha>`
+**Reviewed head:** `cad8790f` — the head the Reviewer read; only this pass's §4 and the report itself landed
+after it, at D0 (`da1f1aa5`).
+**Founder adjudications consumed:** one — no finding is deferred (founder, 2026-09-24), overriding the
+Reviewer's §7 permission to defer MINORs. A-1…A-9 stand; MAJOR-5 option (b), MAJOR-4 option (b) and MAJOR-2
+option (b) were available and not taken (build-guide §4).
+**Everything above this line is the Reviewer's. Everything below it is this pass's.**
+
+### D1 — MAJOR-6
+
+- **Finding:** MAJOR-6.
+- **Fix:** new Tier-1 file `supabase/__tests__/plan-proposals-rpc-grants.test.ts` derives every
+  `CREATE OR REPLACE FUNCTION public.<name>(` from `20260922110000_campaign_plan_proposal_rpcs.sql` and
+  `20260923100000_plan_proposal_version_scope_and_reason_check.sql` (6 functions), then asserts per function
+  that anon, authenticated and PUBLIC hold no EXECUTE (ACL read from `pg_proc.proacl`, defaulting through
+  `acldefault` when NULL, plus `has_function_privilege`) and that `service_role` does, and that an
+  authenticated member's `rpc()` — passing the owner's id as `p_user_id` and the real `p_business_id` — and an
+  anon `rpc()` are both refused with `42501` (a body-level refusal would mean the caller got in).
+- **Proof:** `supabase/__tests__/plan-proposals-rpc-grants.test.ts:80` (derived set non-empty, contains the six
+  required names), `:90` (ACL arm), `:132` (authenticated `rpc()` arm), `:141` (anon `rpc()` arm). The
+  authenticated-client construction is the `plan-proposals-rls.test.ts` one (`createClient` +
+  `signInWithPassword` on the `createWorld` user); no second helper was written.
+- **Reddening** (LOCAL stack only, `127.0.0.1:54321/54322`; both arms went red each time, `REVOKE` restored, re-run green):
+  1. `GRANT EXECUTE ON FUNCTION public.decide_plan_proposal(uuid, uuid, uuid, text) TO authenticated;` →
+     `2 failed | 3 passed`: `decide_plan_proposal grantees: expected [ 'postgres', 'service_role', …(1) ] to not include 'authenticated'`
+     and `decide_plan_proposal was callable by an authenticated member: expected null not to be null`.
+     `REVOKE EXECUTE … FROM authenticated;` → `5 passed`.
+  2. `GRANT EXECUTE ON FUNCTION public.apply_brief_proposals(uuid, uuid, int, uuid, uuid[]) TO authenticated;` →
+     `2 failed | 3 passed`: `apply_brief_proposals grantees: … to not include 'authenticated'` and
+     `apply_brief_proposals was callable by an authenticated member`. `REVOKE` → `5 passed`.
+  The mutation was a live-DB `GRANT`, not a file edit, so the working tree was never dirtied; the local
+  database is back at the migrations' state.
+- **Commit:** this commit (D1; SHA back-filled by D12's sweep).
+- **What I did NOT touch:** no production code, no migration; the existing `plan-proposals-*.test.ts` files are
+  unchanged.
