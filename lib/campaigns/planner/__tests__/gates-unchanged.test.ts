@@ -40,8 +40,8 @@ import { planBrief } from '@/lib/campaigns/plan-brief'
 // REDDENING MUTATION (transcript in the K2.11 commit body): make setBriefPlanAnalysis (the planner path's ONLY
 // write to campaign_briefs) also write `status: 'approved'` -> every case in the first describe fails.
 //
-// SHARED-FUNCTION CALLERS (ADR 0015): planBrief has NO production caller today (K2.7 shipped it deliberately
-// unwired; see docs/current-phase.md), so its callers are this file and lib/campaigns/plan-brief.test.ts only.
+// SHARED-FUNCTION CALLERS (ADR 0015): planBrief's one production caller is lib/campaigns/prepare-brief.ts (wired at K2.12; it
+// was unwired when this test was written, K2.11), so its callers are that module, this file and plan-brief.test.ts.
 // createBrief's one production caller is lib/campaigns/brief.ts (assembleBrief), exercised here on the write it makes.
 
 const BUSINESS_ID = '11111111-1111-4111-8111-111111111111'

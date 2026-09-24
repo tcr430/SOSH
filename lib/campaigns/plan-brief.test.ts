@@ -14,10 +14,10 @@ import { planBrief } from './plan-brief'
 // "proposed nothing" are recorded distinctly; these tests assert against what is WRITTEN to the brief (the
 // setBriefPlanAnalysis arguments — the persisted column), not against anything a component would receive.
 //
-// SHARED-FUNCTION CALLERS: planBrief has NO production caller today. K2.7 shipped it unwired by user ruling (the ADR's
-// "brief surface" that was to call assembleBrief does not exist; only the two worker callers do, and ruling A-8 excludes
-// them), so its only callers are this file and lib/campaigns/planner/__tests__/gates-unchanged.test.ts. A comment here
-// previously named the campaign-creation action as the caller; it does not call planBrief (corrected at K2.11).
+// SHARED-FUNCTION CALLERS: planBrief has ONE production caller, lib/campaigns/prepare-brief.ts (K2.12), which createCampaignAction
+// reaches on the request path; its wiring is tested in prepare-brief.test.ts and campaigns/new/actions.test.ts. K2.7 shipped it
+// unwired and K2.12 wired it (ADR 0027 §V.8). A comment here once named the campaign-creation action as the direct caller; it
+// calls prepareBriefForCampaign, not planBrief.
 
 const client = {} as SupabaseClient
 const CAMPAIGN_ID = '22222222-2222-4222-8222-222222222222'

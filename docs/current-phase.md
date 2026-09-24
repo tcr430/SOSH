@@ -1559,11 +1559,14 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
     orchestrator; a deterministic set-redundancy check; and the two surfaces (plan review on the brief page, claim flags at
     the approval gate), in en/pt/es. **46 `AGENCY-*` constraints**, mapped to their proving file and CI job in ADR 0027
     §V.2. `AGENCY-GATES-UNCHANGED` closes in three parts (ADR 0027 §V.4), deliberately not as a manifest scan.
-  - **What is NOT true, stated first because it matters most: the campaign planner cannot run on any path in the product.**
-    K2.7 shipped `planBrief()` unwired, by user ruling, because ADR 0027 §2.7's premise (a request-path "brief surface"
-    calling `assembleBrief`) is false at HEAD: `assembleBrief` has two production callers, both worker-side, and ruling A-8
-    gives those no planner. So every brief renders the `not_run` state today. Claim verification and the set-redundancy
-    check DO run, inside `generate.ts`. Wiring the planner is filed as `S34-WIRE-PLANNER` in `docs/backlog.md`.
+  - **The campaign planner is WIRED as of K2.12 (`createCampaignAction` -> `prepareBriefForCampaign`, ADR 0027 §V.8), after the K2.11 close-out
+    found it was not.** A customer-authored campaign now gets a brief, its critique and its planner run (concurrently) when the
+    form is submitted, and lands on brief review. It has NOT been observed against a real model or in a browser. Creation now
+    blocks on Stage A plus the slower of critique and planner, and spends LLM cost per new campaign, trials included.
+    `S34-WIRE-PLANNER` is closed.
+  - **Found while wiring, predates this session, launch-blocking: no production path takes an approved brief to generated posts**
+    (`GeneratePostsButton` needs `draft`, `generatePostsForCampaign` needs `awaiting_brief`, `approveBriefAction` starts nothing).
+    Read from the code, not exercised in a browser. `S34-APPROVE-TO-GENERATE` in `docs/backlog.md` §1.
   - **Measured p95 latency against ADR 0027 §7.3's predicted 30 000 ms: NOT MEASURED.** No planner run has ever been
     observed, in tests or elsewhere, so there is no measurement. The 30 000 ms figure remains a prediction and is not
     reported as anything else here.

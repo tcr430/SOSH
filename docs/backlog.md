@@ -38,6 +38,7 @@ ADR 0028 — production OAuth apps not yet registered) is tracked in §16; the `
 lives in `current-phase.md`.
 
 ---
+| **S34-APPROVE-TO-GENERATE** | request path: `campaigns/[id]/generate-action.ts`, `brief/actions.ts`, `lib/campaigns/generate.ts` | **No production path takes an approved brief to generated posts.** `GeneratePostsButton` shows only for `draft` campaigns and `startGenerationAction` requires `draft`, but `generatePostsForCampaign` (`lib/campaigns/generate.ts:123`) requires `awaiting_brief`; `approveBriefAction` approves and starts nothing. True for customer-authored and for Studio/signal-originated campaigns. Read from the code, not exercised in a browser. Needs a decision on where generation starts after approval (an approve-then-generate step in `approveBriefAction`, or a Generate control on an approved brief). **Launch-blocking**: a customer cannot generate posts. | K2.12 |
 
 ## 2. Deferred with a named un-defer trigger
 
@@ -134,7 +135,7 @@ surface (T1-B); cross-type retrieval and any further memory writer (Session 34+)
 
 | ID | Item | Un-defer trigger |
 |----|------|------------------|
-| **S34-WIRE-PLANNER** | Wire `planBrief()` (`lib/campaigns/plan-brief.ts`) onto a request path. It ships tested and scan-guarded but has **no production caller**: ADR 0027 §2.7 assumed a request-path "brief surface" calling `assembleBrief`; only the two worker-side callers exist, and ruling A-8 excludes them. Until wired, every brief renders `not_run` and no p95 can be measured. | **A request-path producer of briefs exists** (a user-initiated brief for a campaign the customer authored), or a founder ruling revises A-8 for a worker path (which reopens ADR 0021 §2.3's service-role reasoning). |
+| **S34-WIRE-PLANNER** | **CLOSED at K2.12** (ADR 0027 §V.8). `prepareBriefForCampaign` runs `assembleBrief`, then the critique and the planner concurrently, from `createCampaignAction`; the form redirects to brief review. Not yet observed against a real model, so the p95 is still unmeasured. | (closed) |
 | **S34-POSTS-TRIGGER-AUTHOR-WRITES** | `enforce_post_transition_capability` (`20260702120300`) gates only the grant of approval. A holder of `author` can raw-write `draft -> scheduled` and `draft -> published` on their own row through RLS (probed live at K2.11). Not a publication bypass (the worker consumes only rows `claim_posts_for_publishing` returned from `approved`), but a post can read `published` that never published. | **Before launch sign-off**, or the first migration touching that trigger, whichever comes first. Fix shape: deny any human `draft -> scheduled|published`, keeping the service-role exemption. |
 | **S34-MEMORY-CARDS-AND-AGENTS** | Memory-driven opportunity cards and background proposal agents (brainstorm T2.5, §13). They belong in the EXISTING opportunity feed; a second inbox is how this class of feature dies. | Founder ruling **R2**. |
 | **S34-CROSS-TYPE-RETRIEVAL** | Cross-type retrieval and additional memory writers. | Track L, memory as a platform substrate. |

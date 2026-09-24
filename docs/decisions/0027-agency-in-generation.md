@@ -1985,4 +1985,38 @@ Amendment B(b) forbids. **This is not an omission.** No Tier-E row exists for Se
    already had five at BASE, so this follows its existing pattern; noted against CLAUDE.md's "one canonical line"
    carve-out.
 
-_End of Builder verification (K2.11). Sections 0-14 above were not modified._
+### V.8 Addendum (K2.12): the planner is now wired. V.7 item 6 is superseded, not edited.
+
+V.7 item 6 above stays as the record of what was true at K2.11. **At K2.12 the campaign planner runs on a production path.**
+The founder's ruling at K2.7 ("don't wire yet") was reversed at K2.12 ("wire it"), and the wiring point was chosen with them:
+**inside `createCampaignAction`, then redirect to the brief page.**
+
+- **What shipped.** `lib/campaigns/prepare-brief.ts`, `prepareBriefForCampaign(client, campaignId)`: `assembleBrief`, then
+  `critiqueBrief` and `planBrief` CONCURRENTLY (ruling A-4). `createCampaignAction` calls it after the campaign exists and the
+  trial counter has moved, on the caller's AUTHENTICATED client, and returns `briefReady`; `CampaignForm` sends the customer to
+  `/campaigns/<id>/brief` when it is true and to the campaign page otherwise. It never throws.
+- **§2.7's premise, corrected.** §2.7 says `assembleBrief` has three production callers, the first a "brief surface". It has
+  three now, and the first is this request-path one; before K2.12 it had two, both worker-side. The worker callers are unchanged
+  and still get no planner (`AGENCY-PLANNER-REQUEST-PATH-ONLY`, scanned).
+- **Proof.** `lib/campaigns/prepare-brief.test.ts` (10 tests, including a Tier-3 scan that exactly one production module imports
+  `plan-brief`, that it is `prepare-brief.ts`, and that it acquires no service-role client) and the wiring cases in
+  `app/[locale]/(dashboard)/campaigns/new/actions.test.ts` (28 tests). **Reddened, each run and restored:** the planner call
+  dropped (5 fail); the action no longer calling the pipeline (3 fail); the planner run after the critique instead of
+  concurrently (1 fails: the concurrency test); the planner started before Stage A (4 fail); a second production importer of
+  `plan-brief` planted in `lib/signals/seed.ts` (the new scan fails).
+- **Failure behaviour, each to a state the surface already renders.** Stage A fails: no brief, the campaign stays `draft`,
+  `briefReady: false`, the customer lands on the campaign page as before. The critique fails: the brief exists as `draft`, the
+  planner still ran, and the review surface shows its "re-check in flight" state with a retry (`recritiqueBriefAction`). The
+  planner is fail-soft and persisted (`unavailable`).
+- **NOT verified.** No live run: no real model call, no browser, no measured p95. The 30 000 ms figure is still a prediction.
+  Creation now blocks on Stage A plus the slower of the critique and the planner, and spends LLM cost at creation time
+  (planner reservation 24 c, exempt from the trial post quota) for every new campaign, including trials. Both are consequences
+  of the chosen wiring point and should be seen on a real run before launch.
+- **A second break found while wiring, which predates this session and is NOT fixed here.** The only production starter of
+  generation is `GeneratePostsButton`, shown only for `draft` campaigns, and `startGenerationAction` refuses anything but
+  `draft`; but `generatePostsForCampaign` refuses anything but `awaiting_brief`. `approveBriefAction` approves the brief and
+  starts nothing. So **no production path takes an approved brief to generated posts**, for a customer-authored campaign or a
+  Studio/signal-originated one. Read from the code, not exercised in a browser. Filed as `S34-APPROVE-TO-GENERATE`, pre-launch.
+  K2.12 makes it more visible, not less: a campaign whose pipeline succeeds is no longer `draft`, so the button no longer shows.
+
+_End of Builder verification (K2.11, with the K2.12 addendum). Sections 0-14 above were not modified._
