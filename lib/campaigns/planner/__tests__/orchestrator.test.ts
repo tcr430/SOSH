@@ -353,3 +353,36 @@ describe('persistence: one run id, every kind, proposes only (constraints 25 and
     expect(outcome).toEqual({ status: 'ok', reason: null, proposalCount: 1, droppedCount: 1 })
   })
 })
+
+// Session 34-D D8 (MAJOR-4): planner_run_id is "the ai_usage row the spend belongs to" (ADR 0027 §5.3, [db-MAJOR-B]).
+// The orchestrator mints the id BEFORE the loop, hands it to runToolLoop as the id of the loop's ONE ai_usage row,
+// and persists the SAME value on every proposal it writes. The live join is proved in
+// supabase/__tests__/plan-proposals-run-id-join.test.ts; the loop's insert-under-that-id in
+// lib/ai/tool-runner-run-id.test.ts; here, the two ends are asserted to be one value.
+describe('MAJOR-4 — the run id handed to the loop IS the planner_run_id persisted on every proposal', () => {
+  it('runToolLoop receives usageId, and every persisted proposal row carries EXACTLY that value', async () => {
+    vi.mocked(runToolLoop).mockResolvedValue(
+      decisionResult([
+        { kind: 'drop', targetOrder: 1, reason: 'No customer evidence exists.' },
+        { kind: 'drop', targetOrder: 2, reason: 'Nothing supports the follow-up.' },
+      ]) as never,
+    )
+
+    await runPlannerForCampaign(client, CAMPAIGN_ID)
+
+    const { usageId } = loopInput()
+    expect(usageId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
+    const rows = vi.mocked(insertPlanProposals).mock.calls[0][0] as Array<{ planner_run_id: string }>
+    expect(rows).toHaveLength(2)
+    for (const row of rows) expect(row.planner_run_id).toBe(usageId)
+  })
+
+  it('a NEW id is minted for each run — never a constant, never reused across runs', async () => {
+    vi.mocked(runToolLoop).mockResolvedValue(decisionResult([{ kind: 'drop', targetOrder: 1, reason: 'r' }]) as never)
+    await runPlannerForCampaign(client, CAMPAIGN_ID)
+    await runPlannerForCampaign(client, CAMPAIGN_ID)
+    const ids = vi.mocked(runToolLoop).mock.calls.map((c) => c[0].usageId)
+    expect(ids).toHaveLength(2)
+    expect(ids[0]).not.toBe(ids[1])
+  })
+})

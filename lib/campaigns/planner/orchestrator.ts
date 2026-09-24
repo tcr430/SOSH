@@ -104,7 +104,13 @@ export async function runPlannerForCampaign(client: SupabaseClient, campaignId: 
     const context = await buildCustomerContext(campaign.business_id, campaign.voice_variation_id)
     const tools = buildPlannerTools(client, campaign.business_id, campaignId)
 
+    // Session 34-D D8 (MAJOR-4): the run id is minted BEFORE the loop and handed to it as the id of the loop's ONE
+    // ai_usage row, then persisted below as planner_run_id — the SAME value. planner_run_id is therefore "the
+    // ai_usage row the spend belongs to" (ADR 0027 §5.3, [db-MAJOR-B]): campaign_plan_proposals joins to its spend
+    // by value. No FK (the decision table names it the loser); a failed usage write is captured with this id.
+    const plannerRunId = crypto.randomUUID()
     const result = await runToolLoop({
+      usageId: plannerRunId,
       context,
       systemPrompt: buildPlannerSystemPrompt(context),
       userMessage: buildPlannerUserMessage({
@@ -158,7 +164,7 @@ export async function runPlannerForCampaign(client: SupabaseClient, campaignId: 
       campaignId,
       briefVersion: brief.version,
       model: MODELS[PLANNER_MODEL_KEY].id,
-      plannerRunId: crypto.randomUUID(),
+      plannerRunId,
       roleSequence: brief.content.roleSequence,
     })
     return { status: 'ok', reason: null, proposalCount: inserted.length, droppedCount: dropped }

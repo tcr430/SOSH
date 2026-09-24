@@ -958,3 +958,82 @@ live local database. CI applies the file to an empty database in `db-tests`.
 - **What I did NOT touch:** `posts.content` is never written by the system; no per-writer clearing was added to
   either edit path (the calendar edit and `updatePostContentAction` are unchanged); `toPersistedClaimCheck` and its
   one-call-site scan are unchanged.
+
+### D8 — MAJOR-4 and NIT-4
+
+**`runToolLoop` caller table (SHARED-FUNCTION CALLERS, `git grep` at D8 — the same two callers for both rows below):**
+
+| Caller | Passes | Test that exercises it |
+|---|---|---|
+| Stage C triage — `lib/signals/triage/orchestrator.ts:128` | **no `usageId`** (its insert payload has no `id` key) | `lib/signals/triage/orchestrator.test.ts` and `lib/ai/tool-runner.test.ts` — **byte-unchanged**, both green; and the "absent" cases of the new `lib/ai/tool-runner-run-id.test.ts:75,107` |
+| The campaign planner — `lib/campaigns/planner/orchestrator.ts:113` | `usageId: plannerRunId` (minted at `:111`, before the loop) | `lib/campaigns/planner/__tests__/orchestrator.test.ts:363` (the id handed to the loop EQUALS the id persisted on every proposal), `:380` (a new id per run); the "present" cases of `tool-runner-run-id.test.ts:68,85,92` |
+
+**STAGE C UNCHANGED (rule 9), pasted:**
+
+```
+$ git diff 7c6761c2 -- lib/ai/tool-runner.test.ts lib/signals/triage/orchestrator.test.ts | wc -c
+0
+$ git status --short lib/ai/tool-runner.test.ts lib/signals/triage/orchestrator.test.ts | wc -c
+0
+```
+
+The diff against D7's commit (`7c6761c2`) is EMPTY; both files are green (`lib/ai/tool-runner.test.ts`,
+`lib/signals/triage/orchestrator.test.ts` and `lib/ai/tool-runner-generic.test.ts` all pass).
+
+**MAJOR-4**
+- **Finding:** MAJOR-4.
+- **Fix:** `RunToolLoopInput` (`lib/ai/tool-runner.ts`) gains an OPTIONAL `usageId`. In the finally block the
+  `recordAiUsage` payload spreads `{ id: usageId }` ONLY when it is present — absent, the object has no `id` key and
+  is what it always was (triage passes nothing). `runPlannerForCampaign` (`planner/orchestrator.ts:111`) mints
+  `plannerRunId` BEFORE the loop, passes it as `usageId`, and persists the SAME value as `planner_run_id`
+  (`:167`). No FK and no migration (the §4 decision table names the FK as the loser); the join is by value. If the
+  `ai_usage` write fails the id is dangling, so — only when an id was supplied — the failure is captured with
+  Sentry, tags `{ business_id, run_id, phase: 'planner-usage-record' }`, message fixed (never the DB's). Triage's
+  path keeps its `console.error` only. The migration comment at `20260922100000_…sql:72-73` is now TRUE and is not
+  edited.
+- **Proof:**
+  - Tier-2 (new file, NOT `tool-runner.test.ts`) `lib/ai/tool-runner-run-id.test.ts:68` (with `usageId`,
+    `recordAiUsage` receives `{ id: usageId, … }`, one record), `:75` (without it: NO `id` key and the exact key
+    set of the current shape), `:85` (the id is used on a failed loop too), `:92` (a failing write with an id is
+    captured with the run id and phase, the DB's message not leaked), `:107` (a failing write WITHOUT an id is not
+    captured — triage's path is exactly what it was).
+  - Tier-2 ADDED cases in `planner/__tests__/orchestrator.test.ts:363` (the `usageId` handed to `runToolLoop`
+    equals `planner_run_id` on every row passed to `insertPlanProposals`) and `:380` (a fresh id per run).
+  - **Tier-1 (live Postgres)** `supabase/__tests__/plan-proposals-run-id-join.test.ts:69` — a real
+    `ai_usage` row under a known id (via the real `recordAiUsage`) plus proposals persisted through the real
+    `persistPlannerProposals` with that id: `campaign_plan_proposals JOIN ai_usage ON planner_run_id = ai_usage.id`
+    returns EVERY proposal, each with its `cost_cents` and `prompt_id`; `:90` is the negative — a proposal whose run
+    id was minted and never given to the loop (the old `crypto.randomUUID()` shape) does NOT join.
+- **Reddening** (each restored from a saved copy, byte-identical):
+  - (a) `plannerRunId` back to a fresh `crypto.randomUUID()` at persist time →
+    `× runToolLoop receives usageId, and every persisted proposal row carries EXACTLY that value` RED
+    (1 failed | 38 passed);
+  - (c) the loop no longer spreads the id into `recordAiUsage` → `× WITH usageId: recordAiUsage receives …` and
+    `× the id is used on a FAILED loop too …` RED (2 failed | 8 passed). (The Tier-1 join calls `recordAiUsage`
+    directly, so the loop's half of the chain is pinned by this Tier-2 file and the writer/join half by the live one.)
+- **Disclosure:** the K2.7 body's "one planner_run_id per run" did not disclose that the id was unlinked; that is
+  corrected here in code rather than by amending the ADR (the option the review offered second).
+- **Commit:** this commit (D8; SHA back-filled by D12's sweep).
+
+**NIT-4**
+- **Finding:** NIT-4.
+- **Fix:** `ToolResultEnvelopeViolation` (exported, `lib/ai/tool-runner.ts`) is thrown when the dispatcher's
+  `assertGuardedToolResult` rejects a tool result, and the generic catch captures it with Sentry, tags
+  `{ prompt_id, phase: 'tool-result-envelope' }`. The model-facing result is STILL the constant
+  `TOOL_EXECUTION_ERROR_MESSAGE` with `is_error`, and the call is counted exactly as before (`toolCallsUsed += 1`), so
+  fail-closed behaviour is unchanged. No new console line (the existing one stays). The captured message is the
+  assertion's own JSON path, never tool output.
+- **Proof:** `lib/ai/tool-runner-run-id.test.ts:123` (captured under its own name with the prompt id and phase;
+  the offending text is not in the capture), `:140` (the model still receives only `Tool execution failed.`,
+  flagged `is_error`, and the leaked text appears nowhere in the messages), `:154` (counted exactly as before: after
+  `TRIAGE_MAX_TOOL_CALLS` violations the tools are withheld, and the capture fires once per violation), `:167` (an
+  ORDINARY tool error is NOT captured as an envelope violation — the same fail-closed path, unnamed), `:180` (a
+  guarded result is not a violation).
+- **Reddening:** the capture in the envelope branch replaced by `void toolErr` → `× is captured under its own name …`
+  and `× the call is COUNTED exactly as before …` RED (2 failed | 8 passed); restored, byte-identical.
+- **Commit:** this commit (D8; SHA back-filled by D12's sweep).
+
+**Verification:** `tsc` clean; lint 0 errors, 111 warnings (unchanged baseline; touched files clean); `test:app`
+346 files / 4959 tests, all green; `test:db` **98 files, 817 tests, all green** (includes the new join test).
+- **What I did NOT touch:** `lib/ai/tool-runner.test.ts` and `lib/signals/triage/orchestrator.test.ts` are
+  byte-unchanged; no FK and no migration; the ADR text stays for D11.

@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
+import * as Sentry from '@sentry/nextjs'
 import { z } from 'zod'
 import { MODELS, calculateCostCents, type ModelKey } from './models'
 import { safeParseOrAiError } from './parsers'
@@ -214,6 +215,23 @@ export interface RunToolLoopInput<S extends DecisionSchema = typeof TriageDecisi
   // post per plan (AGENCY-PLANNER-TRIAL-EXEMPT). Default true = triage's existing behaviour.
   enforceTrialQuota?: boolean
   outputSchema?: S
+  // Session 34-D D8 (MAJOR-4). OPTIONAL: when present (a uuid), the loop's ONE ai_usage row is inserted under THIS
+  // id, so a caller that minted it before the loop can persist the same value elsewhere (the planner's
+  // planner_run_id) and join back to the spend. When absent the insert is byte-for-byte what it always was — Stage C
+  // triage passes nothing. No FK: the join is by value (ADR 0027 §4 decision table names the FK as the loser).
+  usageId?: string
+}
+
+// Session 34-D D8 (NIT-4). A tool result that fails the dispatcher's envelope assertion (a string that is neither
+// UUID-shaped nor [DATA]-enveloped) is a SECURITY-relevant event, not an ordinary tool error: it means a tool
+// tried to hand the model unguarded text. It still fails closed exactly as before (the model receives only
+// TOOL_EXECUTION_ERROR_MESSAGE and the call is counted); this class only makes it NAMEABLE so it can be captured
+// as such. The message is the assertion's own (a JSON path, never content).
+export class ToolResultEnvelopeViolation extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'ToolResultEnvelopeViolation'
+  }
 }
 
 function isRetryableStatus(status: number | undefined): boolean {
@@ -511,7 +529,13 @@ export async function runToolLoop<S extends DecisionSchema = typeof TriageDecisi
           // JSON.stringify output removes that whole class — what was asserted IS what is sent. A result
           // that does not serialise (undefined, a cycle, a bigint) throws here and fails closed.
           const serialised = JSON.stringify(toolResult)
-          assertGuardedToolResult(JSON.parse(serialised))
+          try {
+            assertGuardedToolResult(JSON.parse(serialised))
+          } catch (envelopeErr: unknown) {
+            // NIT-4 (D8): named, so the catch below can tell it from an ordinary tool error. Still throws into
+            // that catch — the fail-closed path (model sees the constant message, the call is counted) is unchanged.
+            throw new ToolResultEnvelopeViolation(envelopeErr instanceof Error ? envelopeErr.message : 'envelope violation')
+          }
           toolCallsUsed += 1
           messages.push({
             role: 'user',
@@ -523,6 +547,12 @@ export async function runToolLoop<S extends DecisionSchema = typeof TriageDecisi
           // sees a generic, constant message — never message text a tool
           // implementation happened to throw.
           console.error('tool-runner: tool execution failed', tool.name, toolErr)
+          // NIT-4 (D8): an envelope violation is an operator signal, captured under its own name. No new console
+          // line (the one above already covers it). Tags: the consumer's prompt id and the phase — ids and a closed
+          // label only; the error message is the assertion's JSON path, never tool output.
+          if (toolErr instanceof ToolResultEnvelopeViolation) {
+            Sentry.captureException(toolErr, { tags: { prompt_id: promptId, phase: 'tool-result-envelope' } })
+          }
           toolCallsUsed += 1
           messages.push({
             role: 'user',
@@ -570,6 +600,8 @@ export async function runToolLoop<S extends DecisionSchema = typeof TriageDecisi
     costCents = calculateCostCents(modelKey, cumulativeInputTokens, cumulativeOutputTokens, 0)
     try {
       await recordAiUsage({
+        // D8 (MAJOR-4): only when the caller minted one — absent, this object has NO `id` key (triage's shape).
+        ...(input.usageId !== undefined ? { id: input.usageId } : {}),
         business_id: context.business.id,
         prompt_id: promptId,
         prompt_version: promptVersion,
@@ -583,6 +615,14 @@ export async function runToolLoop<S extends DecisionSchema = typeof TriageDecisi
       })
     } catch (usageErr: unknown) {
       console.error('tool-runner: failed to record ai_usage', usageErr)
+      // D8 (MAJOR-4): if the caller minted the row's id, a failed write leaves that id DANGLING (the planner has
+      // already committed to it as planner_run_id). Make it visible — tagged with the id and phase, and only when
+      // an id was supplied, so Stage C triage's path is exactly what it was. A fixed message: never the DB's.
+      if (input.usageId !== undefined) {
+        Sentry.captureException(new Error('planner ai_usage record failed; the run id has no usage row'), {
+          tags: { business_id: context.business.id, run_id: input.usageId, phase: 'planner-usage-record' },
+        })
+      }
     }
   }
 
