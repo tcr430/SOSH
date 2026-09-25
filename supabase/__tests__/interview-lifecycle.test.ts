@@ -140,11 +140,16 @@ describe('founder-interview lifecycle RPCs (ADR 0029 §5, §7.2, §9.2)', () => 
     admin = createServiceRoleClient()
   })
 
+  // This file creates ~200 users (five per world), so a sequential cleanup outran vitest's 10 s default hook timeout on a
+  // slow run (Session 35 M2.5: every test passed, then afterAll timed out and failed the suite). Businesses first (one
+  // statement each, cascading everything), then users in concurrent batches, under an explicit generous timeout.
   afterAll(async () => {
     for (const id of businessIds) await pg.query('DELETE FROM public.businesses WHERE id = $1', [id])
-    for (const id of userIds) await admin.auth.admin.deleteUser(id)
+    for (let i = 0; i < userIds.length; i += 20) {
+      await Promise.all(userIds.slice(i, i + 20).map((id) => admin.auth.admin.deleteUser(id)))
+    }
     await pg.end()
-  })
+  }, 180_000)
 
   // ─── INTERVIEW-ANSWER-AUTHORISED (12), Tier-1 half ──────────────────────────
 

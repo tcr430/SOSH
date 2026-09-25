@@ -624,6 +624,13 @@ export function findEvidenceWritePath(source: string): string[] {
 
 export const EVIDENCE_WRITER_FILES: readonly string[] = ['lib/db/memory-evidence.ts', 'lib/memory/import.ts']
 
+// The SQL functions allowed to INSERT INTO evidence_memory. ADR 0027 §4.8 fixed this set at exactly
+// import_evidence_memory. ADR 0029 §2.3 (Session 35 M2.5) DELIBERATELY adds ONE writer, write_interview_candidates: the
+// founder interview's service-role RPC, which writes CANDIDATE rows only, with public_use_permission fixed false in SQL. It is
+// named here rather than the check being loosened, so any OTHER function that inserts evidence still fails this scan. This
+// amends ADR 0027's constraint by reference (recorded in ADR 0029 §13 / the M2.11 documents).
+export const EVIDENCE_INSERT_FUNCTIONS: readonly string[] = ['import_evidence_memory', 'write_interview_candidates']
+
 export function evidenceInsertFunctions(sql: string): string[] {
   const clean = stripSqlComments(sql)
   const names: string[] = []
@@ -666,6 +673,10 @@ describe('AGENCY-NO-EVIDENCE-WRITE-SURFACE (ADR 0027 §4.8, constraint 24)', () 
       CREATE FUNCTION public.rogue_writer() RETURNS void AS $$ BEGIN
       INSERT INTO evidence_memory (a) VALUES (2); END; $$;`
     expect(evidenceInsertFunctions(sql)).toEqual(['import_evidence_memory', 'rogue_writer'])
+    // the allow-list names exactly the two sanctioned writers: the rogue one is still an offender, the interview writer is not
+    expect(evidenceInsertFunctions(sql).filter((n) => !EVIDENCE_INSERT_FUNCTIONS.includes(n))).toEqual(['rogue_writer'])
+    const interviewSql = 'CREATE FUNCTION public.write_interview_candidates(a int) RETURNS void AS $$ BEGIN INSERT INTO public.evidence_memory (a) VALUES (1); END; $$;'
+    expect(evidenceInsertFunctions(interviewSql).filter((n) => !EVIDENCE_INSERT_FUNCTIONS.includes(n))).toEqual([])
     expect(evidenceInsertFunctions('INSERT INTO public.evidence_memory (a) VALUES (1);')).toEqual(['<outside any function>'])
     expect(evidenceInsertFunctions('-- INSERT INTO public.evidence_memory (a) VALUES (1);\nSELECT 1;')).toEqual([])
   })
@@ -688,12 +699,14 @@ describe('AGENCY-NO-EVIDENCE-WRITE-SURFACE (ADR 0027 §4.8, constraint 24)', () 
     expect([...writers].sort()).toEqual([...EVIDENCE_WRITER_FILES].sort())
   })
 
-  it('every INSERT INTO evidence_memory in a migration sits inside import_evidence_memory', () => {
+  it('every INSERT INTO evidence_memory in a migration sits inside import_evidence_memory or (ADR 0029 §2.3) write_interview_candidates', () => {
     const migrations = collect(path.join(ROOT, 'supabase', 'migrations'), isSql)
     expect(migrations.length, 'scanned suspiciously few migrations').toBeGreaterThan(50)
     const names = migrations.flatMap((f) => evidenceInsertFunctions(fs.readFileSync(f, 'utf8')))
     expect(names.length, 'no evidence_memory INSERT was found — the detector would pass vacuously').toBeGreaterThanOrEqual(4)
-    expect(names.filter((n) => n !== 'import_evidence_memory')).toEqual([])
+    expect(names.filter((n) => !EVIDENCE_INSERT_FUNCTIONS.includes(n))).toEqual([])
+    // the interview writer is really there, so the allow-list is not vacuous
+    expect(names).toContain('write_interview_candidates')
   })
 
   it('no planner, campaign or approvals surface carries a create-shaped evidence affordance', () => {

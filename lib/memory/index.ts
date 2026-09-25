@@ -5,12 +5,17 @@
 // Production consumers today: lib/ai/context.ts, which imports
 // retrievePerformancePatterns (B3) and retrieveVoice (Session 23-D · D2).
 //
-// retrieveBrandMemory / retrieveEvidenceMemory / retrieveAudienceMemory have
-// NO production consumer yet, by design: ADR 0016 §10 names ADR 0017 (Mode 2)
-// as their consumer, and Track A's stated purpose is to ship the read side
-// ahead of it. They are built and Tier-2 tested, not dead code awaiting
-// deletion — but they are unwired, and that is a deliberate, recorded state
-// rather than an oversight.
+// retrieveBrandMemory / retrieveEvidenceMemory / retrieveAudienceMemory ARE
+// consumed in production (ADR 0029 §1.5 corrected the earlier "no production
+// consumer yet" note, which had gone stale): lib/campaigns/brief.ts reads all
+// three when it assembles a brief, and retrieveEvidenceMemory is also read by
+// app/[locale]/(dashboard)/approvals/{page.tsx,claim-actions.ts} and
+// studio/actions.ts. Their reads return ACTIVE rows only, which is why
+// ratification (ADR 0029 §8.5) is what makes a founder's answer reach a prompt.
+//
+// recordInterviewCandidates (ADR 0029 §2.3) is the one WRITE exported here: the
+// governed entry point that turns grounded interview answers into CANDIDATE
+// records. It activates nothing.
 
 export { retrieveRelevant as retrieveBrandMemory } from './brand'
 export { retrieveRelevant as retrieveEvidenceMemory } from './evidence'
@@ -23,6 +28,7 @@ export {
 } from './performance'
 export { retrieveOutcomePatterns, retrieveHypothesisResults, type OutcomeObservation } from './outcomes'
 export { retrieveVoice, type CoreVoiceRules } from './voice'
+export { recordInterviewCandidates, type RecordInterviewCandidatesInput } from './interview'
 
 export type { MemoryQueryContext } from './scoring'
 export { BRAND_CAP, EVIDENCE_CAP, AUDIENCE_CAP, PERFORMANCE_CAP, MEMORY_SCORE_WEIGHTS } from './constants'

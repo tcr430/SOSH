@@ -126,11 +126,15 @@ describe('founder-interview schema (ADR 0029 §2, §5.2, §9.1)', () => {
   })
 
   afterAll(async () => {
-    // Root delete: rounds, answers and interview memory rows cascade in ONE statement.
+    // Root delete: rounds, answers and interview memory rows cascade in ONE statement. Users go in concurrent batches under an
+    // explicit timeout: ~60 sequential deletes can outrun vitest's 10 s default hook timeout on a slow run (see
+    // interview-lifecycle.test.ts, where exactly that happened).
     for (const id of businessIds) await pg.query('DELETE FROM public.businesses WHERE id = $1', [id])
-    for (const id of userIds) await admin.auth.admin.deleteUser(id)
+    for (let i = 0; i < userIds.length; i += 20) {
+      await Promise.all(userIds.slice(i, i + 20).map((id) => admin.auth.admin.deleteUser(id)))
+    }
     await pg.end()
-  })
+  }, 180_000)
 
   // ─── INTERVIEW-PROVENANCE-DISTINCT (1) ──────────────────────────────────────
 
