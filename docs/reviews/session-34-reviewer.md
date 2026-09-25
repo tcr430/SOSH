@@ -1111,3 +1111,62 @@ The diff against D7's commit (`7c6761c2`) is EMPTY; both files are green (`lib/a
 - **What I did NOT touch:** Approve is never disabled; the `proofType: null` input is unchanged;
   `listPendingDraftPosts` is not widened; `checkSetRedundancy` and its threshold are unchanged; ADR 0017 F.3 / ADR
   0027 V.2 row 35 stay for D11 (which now records half (b) as delivered, with the `proofType` limitation restated).
+
+### D10 — MINOR-3 and MINOR-7
+
+- **Findings:** MINOR-3 (`planBrief` swallows a failed or no-op status write) and MINOR-7 (the page's proposal query
+  matches no index, and the constraint's test targets a function with no production caller).
+- **Fix — MINOR-3:**
+  - `lib/campaigns/plan-brief.ts`: `planBrief` now tells three outcomes of the record apart. WRITTEN captures
+    nothing. FAILED (the write threw) is captured with phase `plan-analysis-record-failed`. NO-OP (the write returned
+    `null`, so the `not_run` guard excluded the row) is captured under a separate phase, `plan-analysis-record-noop`,
+    and carries `existing_status`, the status already on the brief. That status comes from a best-effort
+    `getBriefByCampaign` read. If the read fails it degrades to `unknown` and never throws. Nothing is thrown on any
+    path, so fail-soft stands.
+  - `PlanReviewPanel.tsx`: status `not_run` **with proposal rows present** no longer renders "No plan analysis was
+    run". It renders a distinct line, `state.not_recorded` ("The planner proposed N change(s) to this plan, but its
+    outcome was not recorded."), above the proposals. Added to en, pt and es together.
+- **Fix — MINOR-7:**
+  - `lib/db/campaign-plan-proposals.ts`: `listPlanProposalsForBrief` is replaced by `listCurrentVersionPlanProposals(
+    client, briefId, briefVersion, limit = 50)`. It filters `brief_id` and `brief_version`, applies **no** status
+    filter (§8.2 renders decided and `brief_frozen` states), and orders all-ASC by `target_order, created_at, id`.
+    That predicate and order are what D5's non-partial `campaign_plan_proposals_brief_version_idx` serves.
+  - `brief/page.tsx` calls it with `brief.version`.
+  - `listPendingPlanProposals` had no production caller (`git grep` found only its own test cases), so it and those
+    cases were **deleted**. A source-scan test asserts neither old name reappears in the module.
+  - `AGENCY-PROPOSAL-BOUNDED-QUERY`'s test now targets the function production calls.
+- **Proof:**
+  - Tier-2 `lib/campaigns/plan-brief.test.ts`: the failed record is captured with phase
+    `plan-analysis-record-failed` and does not throw. The no-op record is captured with phase
+    `plan-analysis-record-noop` and `existing_status`, and does not throw. A no-op whose follow-up read also fails
+    reports `existing_status: 'unknown'` and does not throw. A written record captures nothing.
+  - Tier-2 `PlanReviewPanel.test.tsx`: `not_run` with rows renders the proposals and the `not_recorded` line, never
+    "No plan analysis was run", in all three locales with no missing-key marker. The existing "Already decided" case
+    still proves a `brief_frozen` proposal renders "The brief was approved, so this can no longer be applied."
+  - Tier-2 `brief/page.test.tsx`: the page reads the caller's client, the brief id and `brief.version`. A version-2
+    brief reads version 2, never version 1.
+  - Tier-2 `lib/db/campaign-plan-proposals.test.ts`: the query filters `brief_id` and `brief_version`, applies no
+    status filter, and takes the version as a required argument, never a constant.
+  - **Tier-1 (live Postgres)** `supabase/__tests__/plan-proposals-current-version-read.test.ts`, 4 tests:
+    - a brief at version 2 with two version-1 rows (one still PENDING) and three version-2 rows (pending, rejected,
+      `brief_frozen`) returns only the version-2 rows, in every status, ordered `target_order, created_at, id`;
+    - a version with no proposals reads as empty;
+    - an explicit limit caps the read;
+    - EXPLAIN (with `enable_seqscan = off`, because the table is tiny and the question is which index the planner
+      would choose): `Limit -> Index Scan using campaign_plan_proposals_brief_version_idx`, Index Cond
+      `(brief_id = …) AND (brief_version = 2)`, cost 0.14..8.16, **no Sort node**.
+- **Reddening** (each restored from a saved copy; `git diff --stat` unchanged after restore):
+  - (a) REMOVE THE NULL CHECK (`if (recorded === null)` made unreachable) → `× a NO-OP record … is captured with phase
+    plan-analysis-record-noop …` and `× a no-op whose follow-up status read ALSO fails …` RED (2 failed | 9 passed);
+  - (b) DROP THE `brief_version` FILTER → `× filters brief_id AND brief_version, and applies NO status filter …` and
+    `× the version argument is required and is what is filtered on …` RED (2 failed | 13 passed).
+  - The old-version Tier-1 case fails under (b) by construction (the version-1 PENDING row would be returned). I did
+    **not** re-run the live file under the mutation, because Docker was not running at the time of this pass.
+- **Verification:** `tsc` clean; eslint 0 errors on the changed files; `test:app` (with the CI env block) **348 files /
+  4994 tests, all green**. The Tier-1 file above passed against local Docker Postgres during the D10 work, before the
+  session was interrupted, and is unchanged since. **The full `test:db` was NOT re-run in this pass** (Docker Desktop
+  was not running), so D10 has no fresh full-suite figure. D9's 822/99 is the last full-suite result.
+- **Commit:** this commit (D10; SHA back-filled by D12's sweep). MINOR-7 cites D5 (`59f0015c`) for the index and this
+  commit for the query.
+- **What I did NOT touch:** the `not_run` DEFAULT and the request-path guard in `setBriefPlanAnalysis`;
+  `supabase/.temp/cli-latest` (CLI churn, left out of the commit); D11's documentation amendments.

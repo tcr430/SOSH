@@ -5,6 +5,7 @@
     "assessment_note": "Uma leitura da IA sobre este plano. É uma opinião, não um facto confirmado.",
     "state": {
       "not_run": "Não foi feita análise do plano nesta campanha.",
+      "not_recorded": "{count, plural, one {O planeador propôs # alteração a este plano, mas o resultado não ficou registado.} other {O planeador propôs # alterações a este plano, mas o resultado não ficou registado.}}",
       "proposed": "{count, plural, one {O planeador propôs # alteração a este plano.} other {O planeador propôs # alterações a este plano.}}",
       "proposed_nothing": "O planeador reviu o plano e não propôs alterações.",
       "unavailable": "Análise do plano indisponível: {reason}.",

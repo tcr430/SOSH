@@ -109,7 +109,10 @@ export function PlanReviewPanel({
   let stateLine: string
   switch (planStatus) {
     case 'not_run':
-      stateLine = t('state.not_run')
+      // Session 34-D D10 (MINOR-3): 'not_run' means "the request-path planner never recorded an outcome". If
+      // proposal rows EXIST the planner plainly DID run — its bookkeeping write failed or was a no-op — so the panel
+      // must never say "no plan analysis was run" above a list of its proposals. A distinct, honest state.
+      stateLine = proposals.length > 0 ? t('state.not_recorded', { count: proposals.length }) : t('state.not_run')
       break
     case 'capped':
       stateLine = t('state.capped')

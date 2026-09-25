@@ -1,7 +1,7 @@
 import * as Sentry from '@sentry/nextjs'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { runPlannerForCampaign, type PlanAnalysisOutcome } from '@/lib/campaigns/planner/orchestrator'
-import { setBriefPlanAnalysis } from '@/lib/db/campaign-briefs'
+import { setBriefPlanAnalysis, getBriefByCampaign } from '@/lib/db/campaign-briefs'
 
 // ADR 0027 §3.3/§2.7 (Session 34 K2.7) — the REQUEST-PATH entry point for the campaign planner: runs it and
 // PERSISTS its outcome on the brief. This lives outside lib/campaigns/planner/** on purpose: the planner
@@ -18,12 +18,30 @@ import { setBriefPlanAnalysis } from '@/lib/db/campaign-briefs'
 // column at its 'not_run' DEFAULT.
 export async function planBrief(client: SupabaseClient, campaignId: string): Promise<PlanAnalysisOutcome> {
   const outcome = await runPlannerForCampaign(client, campaignId)
+  // Session 34-D D10 (MINOR-3): THREE outcomes of the record, each distinguishable in the alert stream.
+  //   WRITTEN  — the row was updated (non-null).
+  //   FAILED   — the write threw: proposals (if any) exist but the brief still reads 'not_run'.
+  //   NO-OP    — the write returned null: the atomic guard (`plan_analysis_status = 'not_run'`) excluded the row, so
+  //              it was ALREADY recorded (a duplicate or racing recorder) or the brief is gone. Nothing was written
+  //              — and before this fix nothing even noticed.
+  // The panel no longer trusts the status alone (it renders proposals whenever rows exist), but an operator must
+  // still be able to see that the bookkeeping did not land. Never thrown: fail-soft extends to the bookkeeping.
   try {
-    await setBriefPlanAnalysis(client, campaignId, { status: outcome.status, reason: outcome.reason })
+    const recorded = await setBriefPlanAnalysis(client, campaignId, { status: outcome.status, reason: outcome.reason })
+    if (recorded === null) {
+      // Include the status that was already there. Best-effort: a failed read must not turn a no-op alert into a throw.
+      let existingStatus = 'unknown'
+      try {
+        existingStatus = (await getBriefByCampaign(client, campaignId))?.plan_analysis_status ?? 'no_brief'
+      } catch {
+        // keep 'unknown'
+      }
+      Sentry.captureException(new Error('plan-analysis record was a no-op: the not_run guard excluded the brief row'), {
+        tags: { campaign_id: campaignId, phase: 'plan-analysis-record-noop', existing_status: existingStatus },
+      })
+    }
   } catch (err) {
-    // Recording failed: proposals (if any) exist but the brief still reads 'not_run'. Logged, never thrown —
-    // fail-soft extends to the bookkeeping.
-    Sentry.captureException(err, { tags: { campaign_id: campaignId, phase: 'plan-analysis-record' } })
+    Sentry.captureException(err, { tags: { campaign_id: campaignId, phase: 'plan-analysis-record-failed' } })
   }
   return outcome
 }

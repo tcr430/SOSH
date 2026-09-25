@@ -19,29 +19,6 @@ export async function insertPlanProposals(rows: CampaignPlanProposalInsert[]): P
   return (data as CampaignPlanProposalRow[] | null) ?? []
 }
 
-// Read side for the brief-review surface (K2.10) and the tests: the caller's client, so RLS applies.
-// Explicit ORDER BY matches campaign_plan_proposals_review_idx (brief_id, brief_version, target_order,
-// created_at, id); `limit` is required by the list-query convention.
-export async function listPendingPlanProposals(
-  client: SupabaseClient,
-  briefId: string,
-  briefVersion: number,
-  limit = 50,
-): Promise<CampaignPlanProposalRow[]> {
-  const { data, error } = await client
-    .from('campaign_plan_proposals')
-    .select('*')
-    .eq('brief_id', briefId)
-    .eq('brief_version', briefVersion)
-    .eq('status', 'pending')
-    .order('target_order', { ascending: true })
-    .order('created_at', { ascending: true })
-    .order('id', { ascending: true })
-    .limit(limit)
-  if (error) throw new Error(getErrorMessage(error))
-  return (data as CampaignPlanProposalRow[] | null) ?? []
-}
-
 // ADR 0027 §5.5 (Session 34 K2.8) — the typed wrapper over apply_brief_proposals. SERVICE-ROLE by construction
 // (the RPC is granted to service_role only and verifies `p_user_id` itself — auth.uid() does not exist inside
 // it), so this takes no client and acquires its own via the lazy import. The typed outcomes are the RPC's, one
@@ -80,22 +57,33 @@ export async function applyBriefProposalsRpc(args: {
   return data as ApplyBriefProposalsRpcResult
 }
 
-// ADR 0027 §8.2/§8.5 (Session 34 K2.10) — EVERY proposal state for one brief, so the review surface can render
-// pending / accepted / rejected / superseded (with its superseded_reason). BOUNDED: an explicit ORDER BY that is
-// ALL-ASC (target_order, created_at, id — mixing a DESC in would stop the ORDER BY matching the review index and
-// satisfy the house rule only nominally) and a default `limit` of 50. The caller's client, so RLS applies (the
+// ADR 0027 §8.2/§8.5 (Session 34 K2.10; Session 34-D D10, MINOR-7) — every proposal STATUS of the brief's CURRENT
+// VERSION, so the review surface can render pending / accepted / rejected / superseded (with its superseded_reason,
+// e.g. 'brief_frozen' once the brief is approved). It is the read the brief page actually calls.
+//
+// CURRENT VERSION ONLY. The former read spanned every version by brief_id alone, so a proposal written against an
+// earlier version — superseded or not — reached the screen (BLOCKER-1's stale rows were selectable for exactly that
+// reason). A proposal is only ever applicable against the version it was written for (apply_brief_proposals is
+// version-scoped), so an old-version row has no business on the page.
+//
+// BOUNDED: an explicit ORDER BY that is ALL-ASC (target_order, created_at, id — mixing a DESC in would stop the
+// ORDER BY matching the index and satisfy the house rule only nominally) and a default `limit` of 50. The predicate
+// (brief_id, brief_version) plus that ORDER BY is exactly campaign_plan_proposals_brief_version_idx (D5's migration,
+// non-partial, because this read is not restricted to status = 'pending'). The caller's client, so RLS applies (the
 // table has a member-scoped SELECT policy and no authenticated write grant at all).
 export const PLAN_PROPOSALS_DEFAULT_LIMIT = 50
 
-export async function listPlanProposalsForBrief(
+export async function listCurrentVersionPlanProposals(
   client: SupabaseClient,
   briefId: string,
+  briefVersion: number,
   limit = PLAN_PROPOSALS_DEFAULT_LIMIT,
 ): Promise<CampaignPlanProposalRow[]> {
   const { data, error } = await client
     .from('campaign_plan_proposals')
     .select('*')
     .eq('brief_id', briefId)
+    .eq('brief_version', briefVersion)
     .order('target_order', { ascending: true })
     .order('created_at', { ascending: true })
     .order('id', { ascending: true })

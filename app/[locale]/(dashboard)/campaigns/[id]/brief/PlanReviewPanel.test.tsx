@@ -112,6 +112,21 @@ describe('§8.2 — the FIVE planner states are five distinct sentences, driven 
     expect(lines[4]).toMatch(/daily limit/)
   })
 
+  it("D10 (MINOR-3): status not_run WITH proposal rows renders the proposals and a distinct 'not recorded' line, never 'No plan analysis was run'", async () => {
+    for (const locale of LOCALES) {
+      const c = await render(baseProps({ planStatus: 'not_run', proposals: [proposal(), proposal({ targetOrder: 2 })] }), locale)
+      const line = stateLine(c)!
+      expect(line, locale).not.toContain('⟦missing')
+      if (locale === 'en') {
+        expect(line).toMatch(/proposed 2 changes/)
+        expect(line).toMatch(/not recorded/)
+        expect(line).not.toMatch(/No plan analysis was run/)
+      }
+      expect(c.querySelectorAll('li').length, locale).toBeGreaterThan(0)
+      await unmount()
+    }
+  })
+
   it("'unavailable' and 'proposed nothing' both have ZERO proposal rows yet read differently (the whole point of §3.3)", async () => {
     const nothing = await render(baseProps({ planStatus: 'ok', proposals: [] }))
     const nothingText = stateLine(nothing)

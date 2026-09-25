@@ -15,7 +15,7 @@ vi.mock('@/lib/db/campaign-briefs', () => ({ getBriefByCampaign: vi.fn() }))
 vi.mock('./BriefReviewForm', () => ({ BriefReviewForm: vi.fn(() => null) }))
 // ADR 0027 K2.10 — the page now reads the caller's member row and the brief's proposals, and renders the panel.
 vi.mock('@/lib/db/business-members', () => ({ getMemberForUser: vi.fn().mockResolvedValue(null) }))
-vi.mock('@/lib/db/campaign-plan-proposals', () => ({ listPlanProposalsForBrief: vi.fn().mockResolvedValue([]) }))
+vi.mock('@/lib/db/campaign-plan-proposals', () => ({ listCurrentVersionPlanProposals: vi.fn().mockResolvedValue([]) }))
 vi.mock('./PlanReviewPanel', () => ({ PlanReviewPanel: vi.fn(() => null) }))
 
 import { createClient } from '@/lib/supabase/server'
@@ -25,7 +25,7 @@ import { getBriefByCampaign } from '@/lib/db/campaign-briefs'
 import { BriefReviewForm } from './BriefReviewForm'
 import { PlanReviewPanel } from './PlanReviewPanel'
 import { getMemberForUser } from '@/lib/db/business-members'
-import { listPlanProposalsForBrief } from '@/lib/db/campaign-plan-proposals'
+import { listCurrentVersionPlanProposals } from '@/lib/db/campaign-plan-proposals'
 import CampaignBriefPage from './page'
 import type { CampaignRow, CampaignBriefRow, BusinessRow } from '@/lib/db/types'
 
@@ -150,15 +150,17 @@ describe('CampaignBriefPage — planner panel (ADR 0027 K2.10)', () => {
     vi.mocked(getBriefByCampaign).mockResolvedValue(brief)
     await CampaignBriefPage({ params: Promise.resolve({ locale: 'en', id: 'camp-1' }) })
     const callerClient = await vi.mocked(createClient).mock.results[0].value
-    expect(listPlanProposalsForBrief).toHaveBeenCalledTimes(1)
-    expect(vi.mocked(listPlanProposalsForBrief).mock.calls[0][0]).toBe(callerClient)
-    expect(vi.mocked(listPlanProposalsForBrief).mock.calls[0][1]).toBe('brief-9')
+    expect(listCurrentVersionPlanProposals).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(listCurrentVersionPlanProposals).mock.calls[0][0]).toBe(callerClient)
+    expect(vi.mocked(listCurrentVersionPlanProposals).mock.calls[0][1]).toBe('brief-9')
+    // Session 34-D D10 (MINOR-7): the read is scoped to the brief's CURRENT VERSION (makeBrief defaults to version 1).
+    expect(vi.mocked(listCurrentVersionPlanProposals).mock.calls[0][2]).toBe(brief.version)
   })
 
   it('maps proposal rows to the serialisable view (snake_case -> camelCase), including the superseded reason', async () => {
     mockAuthedClient()
     vi.mocked(getBriefByCampaign).mockResolvedValue(makeBrief())
-    vi.mocked(listPlanProposalsForBrief).mockResolvedValue([
+    vi.mocked(listCurrentVersionPlanProposals).mockResolvedValue([
       {
         id: 'p-1', kind: 'substitute', target_order: 0, proposed_role: 'objection_response', proposed_order: null,
         reason: 'No customer evidence exists.', status: 'superseded', superseded_reason: 'brief_frozen', brief_version: 1,
@@ -171,6 +173,13 @@ describe('CampaignBriefPage — planner panel (ADR 0027 K2.10)', () => {
         reason: 'No customer evidence exists.', status: 'superseded', supersededReason: 'brief_frozen', briefVersion: 1,
       },
     ])
+  })
+
+  it('D10: reads the proposals of the brief CURRENT version - a ratified round (version 2) reads version 2, never version 1', async () => {
+    mockAuthedClient()
+    vi.mocked(getBriefByCampaign).mockResolvedValue(makeBrief({ id: 'brief-1', version: 2 }))
+    await CampaignBriefPage({ params: Promise.resolve({ locale: 'en', id: 'camp-1' }) })
+    expect(vi.mocked(listCurrentVersionPlanProposals).mock.calls[0][2]).toBe(2)
   })
 
   it('keys the panel on brief id AND version, so a ratified round (which advances the version) clears the selection', async () => {

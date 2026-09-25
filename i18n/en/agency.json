@@ -5,6 +5,7 @@
     "assessment_note": "An AI reading of this plan. It is an opinion, not a checked fact.",
     "state": {
       "not_run": "No plan analysis was run for this campaign.",
+      "not_recorded": "{count, plural, one {The planner proposed # change to this plan, but its outcome was not recorded.} other {The planner proposed # changes to this plan, but its outcome was not recorded.}}",
       "proposed": "{count, plural, one {The planner proposed # change to this plan.} other {The planner proposed # changes to this plan.}}",
       "proposed_nothing": "The planner reviewed the plan and proposed no changes.",
       "unavailable": "Plan analysis unavailable: {reason}.",
