@@ -387,6 +387,18 @@ describe('founder-interview schema (ADR 0029 §2, §5.2, §9.1)', () => {
       expect((await pgError(newAnswer(businessId, roundId, 6, { slot_category: 'other' }))).code).toBe(CHECK_VIOLATION)
     })
 
+    it('a slot category must belong to its slot type (db-review NIT-8)', async () => {
+      const { businessId } = await newBusiness()
+      const roundId = await newRound(businessId)
+      expect((await pgError(newAnswer(businessId, roundId, 1, { slot_type: 'brand', slot_category: 'problem' }))).code).toBe(CHECK_VIOLATION)
+      expect((await pgError(newAnswer(businessId, roundId, 2, { slot_type: 'audience', slot_category: 'quote' }))).code).toBe(CHECK_VIOLATION)
+      expect((await pgError(newAnswer(businessId, roundId, 3, { slot_type: 'evidence', slot_category: 'positioning' }))).code).toBe(CHECK_VIOLATION)
+      const ok: [string, string][] = [['brand', 'pricing'], ['audience', 'trigger'], ['evidence', 'usage_data']]
+      for (const [i, [t, c]] of ok.entries()) {
+        await expect(newAnswer(businessId, roundId, i + 4, { slot_type: t, slot_category: c })).resolves.toBeTruthy()
+      }
+    })
+
     it('businesses gained interview_snoozed_until, nullable', async () => {
       const { businessId } = await newBusiness()
       const { rows } = await pg.query<{ interview_snoozed_until: string | null }>('SELECT interview_snoozed_until FROM public.businesses WHERE id = $1', [businessId])

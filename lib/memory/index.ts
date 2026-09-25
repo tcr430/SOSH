@@ -13,9 +13,10 @@
 // studio/actions.ts. Their reads return ACTIVE rows only, which is why
 // ratification (ADR 0029 §8.5) is what makes a founder's answer reach a prompt.
 //
-// recordInterviewCandidates (ADR 0029 §2.3) is the one WRITE exported here: the
-// governed entry point that turns grounded interview answers into CANDIDATE
-// records. It activates nothing.
+// recordInterviewCandidates and ratifyInterviewCandidates (ADR 0029 §2.3, §8.5) are the two WRITES
+// exported here: the governed entry points that turn grounded interview answers into CANDIDATE
+// records, and that let an approver activate or reject them, one decision per candidate.
+// recordInterviewCandidates activates nothing; ratifyInterviewCandidates has no accept-all.
 
 export { retrieveRelevant as retrieveBrandMemory } from './brand'
 export { retrieveRelevant as retrieveEvidenceMemory } from './evidence'
@@ -28,7 +29,12 @@ export {
 } from './performance'
 export { retrieveOutcomePatterns, retrieveHypothesisResults, type OutcomeObservation } from './outcomes'
 export { retrieveVoice, type CoreVoiceRules } from './voice'
-export { recordInterviewCandidates, type RecordInterviewCandidatesInput } from './interview'
+export {
+  recordInterviewCandidates,
+  ratifyInterviewCandidates,
+  type RecordInterviewCandidatesInput,
+  type RatifyInterviewCandidatesInput,
+} from './interview'
 
 export type { MemoryQueryContext } from './scoring'
 export { BRAND_CAP, EVIDENCE_CAP, AUDIENCE_CAP, PERFORMANCE_CAP, MEMORY_SCORE_WEIGHTS } from './constants'

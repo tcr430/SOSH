@@ -16,6 +16,7 @@ import {
   skipInterviewRound,
   snoozeInterview,
   submitInterviewRound,
+  sweepInterviewData,
 } from './founder-interview-rounds'
 import { INTERVIEW_ROUNDS_LIMIT } from '@/lib/interview/constants'
 
@@ -135,12 +136,12 @@ describe('founder-interview-rounds RPC wrappers — service-role by lazy import,
   })
 
   it('reconcileInterviewSpend forwards the error code on failure and NULL on success', async () => {
-    const spy = serviceRpc({ data: { outcome: 'reconciled', status: 'extraction_failed', spendCents: 7 }, error: null })
-    await reconcileInterviewSpend({ roundId: ROUND, actualCents: 7, outcome: 'failed', errorCode: 'model_error' })
-    await reconcileInterviewSpend({ roundId: ROUND, actualCents: 4, outcome: 'succeeded' })
+    const spy = serviceRpc({ data: { outcome: 'reconciled', status: 'extraction_failed', spendCents: 7, clamped: false }, error: null })
+    await reconcileInterviewSpend({ roundId: ROUND, attempt: 2, actualCents: 7, outcome: 'failed', errorCode: 'model_error' })
+    await reconcileInterviewSpend({ roundId: ROUND, attempt: 1, actualCents: 4, outcome: 'succeeded' })
     expect(spy.mock.calls.map((c) => c[1])).toEqual([
-      { p_round_id: ROUND, p_actual_cents: 7, p_outcome: 'failed', p_error_code: 'model_error' },
-      { p_round_id: ROUND, p_actual_cents: 4, p_outcome: 'succeeded', p_error_code: null },
+      { p_round_id: ROUND, p_actual_cents: 7, p_outcome: 'failed', p_error_code: 'model_error', p_attempt: 2 },
+      { p_round_id: ROUND, p_actual_cents: 4, p_outcome: 'succeeded', p_error_code: null, p_attempt: 1 },
     ])
   })
 
@@ -164,6 +165,20 @@ describe('founder-interview-rounds RPC wrappers — service-role by lazy import,
     serviceRpc({ data: { outcome: 'ok' }, error: null })
     await snoozeInterview({ userId: USER, businessId: BIZ })
     expect(createServiceRoleClient).toHaveBeenCalledTimes(1)
+  })
+
+  // ADR 0029 §5.4 (M2.6) — the retention sweep wrapper. Its sole future caller is the cron route (M2.9).
+  it('sweepInterviewData calls sweep_interview_data with NO arguments (no user id, no business id) and returns the six counters', async () => {
+    const counters = { failedStuck: 1, expired: 2, candidatesRetired: 3, answersRedacted: 4, spansRedacted: 5, candidatesDeleted: 6 }
+    const spy = serviceRpc({ data: counters, error: null })
+    expect(await sweepInterviewData()).toEqual(counters)
+    expect(spy).toHaveBeenCalledWith('sweep_interview_data', {})
+    expect(sweepInterviewData.length).toBe(0)
+  })
+
+  it('a sweep failure throws a FounderInterviewRpcError (the cron route must not swallow it)', async () => {
+    serviceRpc({ data: null, error: { code: '57014', message: 'canceling statement due to statement timeout' } })
+    await expect(sweepInterviewData()).rejects.toBeInstanceOf(FounderInterviewRpcError)
   })
 
   it('no wrapper takes a `client` parameter, and the file has no STATIC import of the service-role client', () => {

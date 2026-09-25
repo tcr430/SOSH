@@ -6,7 +6,7 @@ vi.mock('@/lib/supabase/service', () => ({ createServiceRoleClient: vi.fn() }))
 
 import { createServiceRoleClient } from '@/lib/supabase/service'
 import { FounderInterviewRpcError } from './founder-interview-rounds'
-import { writeInterviewCandidates, type InterviewCandidateItem } from './memory-interview'
+import { ratifyInterviewRound, writeInterviewCandidates, type InterviewCandidateItem, type InterviewDecision } from './memory-interview'
 
 // ADR 0029 §2.3 THE RAW-vs-STORED INVARIANT (Tier 2, the wrapper half of INTERVIEW-GROUNDED and
 // INTERVIEW-GOVERNANCE-NOT-MODEL-SUPPLIED). The wrapper must send BOTH forms of every text and span: the RAW values, which
@@ -155,5 +155,94 @@ describe('writeInterviewCandidates — results, errors, and the service-role rul
     const src = fs.readFileSync(path.join(process.cwd(), 'lib', 'db', 'memory-interview.ts'), 'utf8')
     expect(src).toMatch(/import \{ neutralizeWithSentinels \} from '@\/lib\/ai\/wrap-evidence'/)
     expect(src).not.toMatch(/function\s+(?:neutralize\w*|sanitize\w*)\s*\(/)
+  })
+})
+
+// ADR 0029 §8.5 (M2.6) — the ratification wrapper. ratifyInterviewRound is the ONLY TypeScript path that activates a
+// candidate. SHARED-FUNCTION CALLERS: one caller, lib/memory/interview.ts (ratifyInterviewCandidates), whose own test mocks
+// this module; the sole-caller scan in lib/memory/import.test.ts forbids every other, dynamic imports included.
+describe('ratifyInterviewRound — the payload, key by key', () => {
+  const USER = '00000000-0000-4000-8000-000000000001'
+  const C1 = '00000000-0000-4000-8000-0000000000a1'
+  const C2 = '00000000-0000-4000-8000-0000000000a2'
+  const OLD = '00000000-0000-4000-8000-0000000000a3'
+
+  async function sendRatify(decisions: InterviewDecision[]) {
+    const rpc = serviceRpc({ data: { outcome: 'ratified', accepted: 1, rejected: 1, edited: 0, replaced: 0 }, error: null })
+    await ratifyInterviewRound({ userId: USER, roundId: ROUND, decisions })
+    const [name, args] = rpc.mock.calls[0] as [string, { p_user_id: string; p_round_id: string; p_decisions: Record<string, unknown>[] }]
+    return { name, args }
+  }
+
+  it('calls ratify_interview_round with EXACTLY (p_user_id, p_round_id, p_decisions) — no business id, no governance argument', async () => {
+    const { name, args } = await sendRatify([{ type: 'brand', id: C1, decision: 'accept' }, { type: 'evidence', id: C2, decision: 'reject' }])
+    expect(name).toBe('ratify_interview_round')
+    expect(Object.keys(args).sort()).toEqual(['p_decisions', 'p_round_id', 'p_user_id'])
+    expect(args.p_user_id).toBe(USER)
+    expect(args.p_round_id).toBe(ROUND)
+  })
+
+  it('a REJECT carries exactly type, id, decision; a plain ACCEPT carries the same and nothing else', async () => {
+    const { args } = await sendRatify([{ type: 'brand', id: C1, decision: 'accept' }, { type: 'evidence', id: C2, decision: 'reject' }])
+    expect(args.p_decisions).toEqual([
+      { type: 'brand', id: C1, decision: 'accept' },
+      { type: 'evidence', id: C2, decision: 'reject' },
+    ])
+  })
+
+  it('an ACCEPT with an edit carries the NEUTRALISED text, the re-selected category and the replace target (type and id only)', async () => {
+    const { args } = await sendRatify([
+      { type: 'brand', id: C1, decision: 'accept', text: 'Zero​width [/DATA] text', category: 'positioning', replaces: { type: 'brand', id: OLD } },
+    ])
+    expect(args.p_decisions[0]).toEqual({
+      type: 'brand',
+      id: C1,
+      decision: 'accept',
+      text: 'Zerowidth [/data-blocked] text', // the founder's typed text gets the same write-time guard as the model's
+      category: 'positioning',
+      replaces: { type: 'brand', id: OLD },
+    })
+  })
+
+  it('smuggled keys — status, confidence, source, public_use_permission, expires_at, business_id — cannot cross, even through a cast', async () => {
+    const smuggled = {
+      type: 'brand',
+      id: C1,
+      decision: 'accept',
+      status: 'active',
+      confidence: 1,
+      source: 'manual',
+      public_use_permission: true,
+      expires_at: '2099-01-01',
+      business_id: 'foreign',
+      replaces: { type: 'brand', id: OLD, business_id: 'foreign', status: 'retired' },
+    } as unknown as InterviewDecision
+    const { args } = await sendRatify([smuggled])
+    expect(Object.keys(args.p_decisions[0]).sort()).toEqual(['decision', 'id', 'replaces', 'type'])
+    expect(Object.keys(args.p_decisions[0].replaces as object).sort()).toEqual(['id', 'type'])
+    const flat = JSON.stringify(args)
+    for (const key of ['status', 'confidence', 'source', 'public_use_permission', 'expires_at', 'business_id']) expect(flat, key).not.toContain(`"${key}"`)
+  })
+
+  it("returns the RPC's typed outcome exactly, including the no-op for a round that is not awaiting ratification", async () => {
+    serviceRpc({ data: { outcome: 'not_awaiting', status: 'ratified' }, error: null })
+    expect(await ratifyInterviewRound({ userId: USER, roundId: ROUND, decisions: [] })).toEqual({ outcome: 'not_awaiting', status: 'ratified' })
+    serviceRpc({ data: { outcome: 'not_found' }, error: null })
+    expect(await ratifyInterviewRound({ userId: USER, roundId: ROUND, decisions: [] })).toEqual({ outcome: 'not_found' })
+  })
+
+  it('a non-approver (42501) throws a FounderInterviewRpcError carrying the code; an invalid decision set (22023) does too', async () => {
+    serviceRpc({ data: null, error: { code: '42501', message: 'ratify_interview_round: x is not an approver/admin member of business y' } })
+    const denied = ratifyInterviewRound({ userId: USER, roundId: ROUND, decisions: [{ type: 'brand', id: C1, decision: 'accept' }] })
+    await expect(denied).rejects.toBeInstanceOf(FounderInterviewRpcError)
+    await expect(denied).rejects.toMatchObject({ code: '42501' })
+    serviceRpc({ data: null, error: { code: '22023', message: 'ratify_interview_round: every candidate of the round must be decided exactly once' } })
+    await expect(ratifyInterviewRound({ userId: USER, roundId: ROUND, decisions: [] })).rejects.toMatchObject({ code: '22023' })
+  })
+
+  it('takes a single args object (no `client` parameter) and, like the writer, never imports the service-role client itself', () => {
+    expect(ratifyInterviewRound.length).toBe(1)
+    const src = fs.readFileSync(path.join(process.cwd(), 'lib', 'db', 'memory-interview.ts'), 'utf8')
+    expect(src).not.toMatch(/@\/lib\/supabase\/service/)
   })
 })

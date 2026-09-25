@@ -8,6 +8,7 @@ import type {
   SkipInterviewRoundResult,
   SnoozeInterviewResult,
   SubmitInterviewRoundResult,
+  SweepInterviewDataResult,
 } from './types'
 import { INTERVIEW_ROUNDS_LIMIT } from '@/lib/interview/constants'
 import { getErrorMessage } from './utils'
@@ -103,18 +104,29 @@ export async function claimInterviewExtraction(args: { roundId: string }): Promi
 
 // §7.2 — replace the reserved 10 cents with the ACTUAL ai_usage cost on EVERY outcome, failure included. A failure
 // MUST carry an error code and a success MUST NOT (the RPC raises 22023 otherwise — the type below makes the wrong
-// combination unrepresentable here first).
+// combination unrepresentable here first). `attempt` is the number the claim returned: a late reconcile from a superseded
+// attempt matches nothing (not_extracting). ORDER CONTRACT: reconcile a success BEFORE write_interview_candidates — the writer
+// moves the round out of 'extracting', after which reconcile is not_extracting.
 export async function reconcileInterviewSpend(
   args:
-    | { roundId: string; actualCents: number; outcome: 'succeeded' }
-    | { roundId: string; actualCents: number; outcome: 'failed'; errorCode: string },
+    | { roundId: string; attempt: number; actualCents: number; outcome: 'succeeded' }
+    | { roundId: string; attempt: number; actualCents: number; outcome: 'failed'; errorCode: string },
 ): Promise<ReconcileInterviewSpendResult> {
   return callInterviewRpc<ReconcileInterviewSpendResult>('reconcile_interview_spend', {
     p_round_id: args.roundId,
     p_actual_cents: args.actualCents,
     p_outcome: args.outcome,
     p_error_code: args.outcome === 'failed' ? args.errorCode : null,
+    p_attempt: args.attempt,
   })
+}
+
+// §5.4 / §6.3 — ONE run of the daily retention sweep: stuck rounds -> failed, expiry, redaction of answer text and grounding
+// spans 30 days after a round closes, deletion of a retired candidate 30 days after retirement. Service-role, no arguments,
+// no user id and no business id: it is not tied to any member. Bounded per run inside the RPC (500 rows a step), so it is
+// safe to call on every cron tick. The cron route (M2.9) is its sole caller.
+export async function sweepInterviewData(): Promise<SweepInterviewDataResult> {
+  return callInterviewRpc<SweepInterviewDataResult>('sweep_interview_data', {})
 }
 
 // §9.5 — a business's rounds, NEWEST FIRST, for the round list and the due computation (§5.1). BOUNDED (limit 12) and

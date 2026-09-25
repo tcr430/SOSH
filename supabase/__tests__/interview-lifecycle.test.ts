@@ -554,7 +554,7 @@ describe('founder-interview lifecycle RPCs (ADR 0029 §5, §7.2, §9.2)', () => 
       const roundId = await submittedRound(w)
       await rpc('claim_interview_extraction', { p_round_id: roundId })
       const r = await rpc('reconcile_interview_spend', { p_round_id: roundId, p_actual_cents: 4, p_outcome: 'succeeded' })
-      expect(r.data).toEqual({ outcome: 'reconciled', status: 'extracting', spendCents: 4 })
+      expect(r.data).toEqual({ outcome: 'reconciled', status: 'extracting', spendCents: 4, clamped: false })
       expect(await roundRow(roundId)).toMatchObject({ status: 'extracting', spend_cents: 4, error_code: null })
     })
 
@@ -563,7 +563,7 @@ describe('founder-interview lifecycle RPCs (ADR 0029 §5, §7.2, §9.2)', () => 
       const roundId = await submittedRound(w)
       await rpc('claim_interview_extraction', { p_round_id: roundId })
       const r = await rpc('reconcile_interview_spend', { p_round_id: roundId, p_actual_cents: 7, p_outcome: 'failed', p_error_code: 'invalid_response' })
-      expect(r.data).toEqual({ outcome: 'reconciled', status: 'extraction_failed', spendCents: 7 })
+      expect(r.data).toEqual({ outcome: 'reconciled', status: 'extraction_failed', spendCents: 7, clamped: false })
       expect(await roundRow(roundId)).toMatchObject({ status: 'extraction_failed', spend_cents: 7, error_code: 'invalid_response', extraction_attempts: 1 })
       const again = await rpc('claim_interview_extraction', { p_round_id: roundId })
       expect(again.data).toEqual({ outcome: 'claimed', businessId: w.businessId, attempt: 2, spendCents: 17 })
@@ -618,6 +618,106 @@ describe('founder-interview lifecycle RPCs (ADR 0029 §5, §7.2, §9.2)', () => 
         expect(r.error?.code, JSON.stringify(args)).toBe('22023')
       }
       expect((await roundRow(roundId)).spend_cents).toBe(10)
+    })
+  })
+
+  // ─── database-reviewer findings (Session 35 M2.6) ───────────────────────────
+
+  describe('db-review MINOR-3 / MINOR-4 — reconcile is bound to an attempt, reports a clamp, and has an order contract', () => {
+    it('a late reconcile from a SUPERSEDED attempt matches nothing and changes nothing; the live attempt still reconciles', async () => {
+      const w = await newWorld()
+      const roundId = await submittedRound(w)
+      expect((await rpc('claim_interview_extraction', { p_round_id: roundId })).data.attempt).toBe(1)
+      await pg.query("UPDATE public.founder_interview_rounds SET claimed_at = now() - interval '11 minutes' WHERE id = $1", [roundId])
+      expect((await rpc('claim_interview_extraction', { p_round_id: roundId })).data.attempt).toBe(2)
+      const before = await roundRow(roundId)
+      const stale = await rpc('reconcile_interview_spend', { p_round_id: roundId, p_actual_cents: 3, p_outcome: 'failed', p_error_code: 'model_error', p_attempt: 1 })
+      expect(stale.data).toEqual({ outcome: 'not_extracting' })
+      expect(await roundRow(roundId)).toEqual(before)
+      const live = await rpc('reconcile_interview_spend', { p_round_id: roundId, p_actual_cents: 4, p_outcome: 'succeeded', p_attempt: 2 })
+      expect(live.data).toMatchObject({ outcome: 'reconciled', status: 'extracting', spendCents: 14 })
+    })
+
+    it('a clamped spend is REPORTED: clamped is true only when the actual cost pushed the round past its ceiling', async () => {
+      const w = await newWorld()
+      const roundId = await submittedRound(w)
+      await rpc('claim_interview_extraction', { p_round_id: roundId })
+      const ok = await rpc('reconcile_interview_spend', { p_round_id: roundId, p_actual_cents: 4, p_outcome: 'succeeded', p_attempt: 1 })
+      expect(ok.data.clamped).toBe(false)
+      const w2 = await newWorld()
+      const r2 = await submittedRound(w2)
+      await pg.query('UPDATE public.founder_interview_rounds SET spend_cents = 20, extraction_attempts = 1 WHERE id = $1', [r2])
+      await rpc('claim_interview_extraction', { p_round_id: r2 })
+      const over = await rpc('reconcile_interview_spend', { p_round_id: r2, p_actual_cents: 90, p_outcome: 'failed', p_error_code: 'model_error', p_attempt: 2 })
+      expect(over.data).toMatchObject({ spendCents: 30, clamped: true })
+    })
+
+    it('ORDER CONTRACT: once the writer has moved the round out of extracting, a late reconcile is not_extracting and the reservation stays un-trued', async () => {
+      const w = await newWorld()
+      const roundId = await submittedRound(w)
+      const claim = await rpc('claim_interview_extraction', { p_round_id: roundId })
+      const counters = { proposed: 0, droppedUngrounded: 0, droppedPerformanceClaim: 0 }
+      await rpc('write_interview_candidates', { p_round_id: roundId, p_items: { items: [], counters } })
+      expect((await roundRow(roundId)).status).not.toBe('extracting')
+      const late = await rpc('reconcile_interview_spend', { p_round_id: roundId, p_actual_cents: 4, p_outcome: 'succeeded', p_attempt: claim.data.attempt })
+      expect(late.data).toEqual({ outcome: 'not_extracting' })
+      expect((await roundRow(roundId)).spend_cents).toBe(10)
+    })
+  })
+
+  describe('db-review MINOR-5 — save and submit serialise on the round', () => {
+    const pause = (ms: number) => new Promise((r) => setTimeout(r, ms))
+    async function twoClients(): Promise<[Client, Client]> {
+      const a = new Client({ connectionString: process.env.DATABASE_URL })
+      const b = new Client({ connectionString: process.env.DATABASE_URL })
+      await Promise.all([a.connect(), b.connect()])
+      return [a, b]
+    }
+
+    it('a SUBMIT waits for an in-flight save and then sees its answer', async () => {
+      const w = await newWorld()
+      const roundId = await createRound(w)
+      const [first] = await answersOf(roundId)
+      const [a, b] = await twoClients()
+      try {
+        await a.query('BEGIN')
+        await a.query('SELECT public.save_interview_answer(p_user_id => $1, p_answer_id => $2, p_text => $3)', [w.owner, first.id, 'an answer still in flight'])
+        const pending = b.query('SELECT public.submit_interview_round(p_user_id => $1, p_round_id => $2) AS r', [w.owner, roundId])
+        await pause(500)
+        await a.query('COMMIT')
+        expect((await pending).rows[0].r.outcome).toBe('ok')
+      } finally {
+        await Promise.all([a.end(), b.end()])
+      }
+    })
+
+    it('a SAVE waits for an in-flight submit and is then refused (not_open)', async () => {
+      const w = await newWorld()
+      const roundId = await createRound(w)
+      const [first, second] = await answersOf(roundId)
+      await rpc('save_interview_answer', { p_user_id: w.owner, p_answer_id: first.id, p_text: 'the answer that lets it submit' })
+      const [a, b] = await twoClients()
+      try {
+        await a.query('BEGIN')
+        await a.query('SELECT public.submit_interview_round(p_user_id => $1, p_round_id => $2)', [w.owner, roundId])
+        const pending = b.query('SELECT public.save_interview_answer(p_user_id => $1, p_answer_id => $2, p_text => $3) AS r', [w.owner, second.id, 'a late answer'])
+        await pause(500)
+        await a.query('COMMIT')
+        expect((await pending).rows[0].r.outcome).toBe('not_open')
+        expect((await answersOf(roundId))[1].answer_text).toBeNull()
+      } finally {
+        await Promise.all([a.end(), b.end()])
+      }
+    })
+  })
+
+  describe('db-review NIT-8 — a soft-deleted business cannot start a round', () => {
+    it('create_interview_round raises 42501 for a business whose deleted_at is set', async () => {
+      const w = await newWorld()
+      await pg.query('UPDATE public.businesses SET deleted_at = now() WHERE id = $1', [w.businessId])
+      const r = await rpc('create_interview_round', { p_user_id: w.owner, p_business_id: w.businessId, p_questions: GOOD_QUESTIONS(5) })
+      expect(r.error?.code).toBe('42501')
+      expect(await countRounds(w.businessId)).toBe(0)
     })
   })
 

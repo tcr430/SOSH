@@ -467,6 +467,8 @@ describe('write_interview_candidates (ADR 0029 §2.3, §2.6)', () => {
         { items: [good], counters: { proposed: -1, droppedUngrounded: 0, droppedPerformanceClaim: 0 } },
         { items: [good, { ...good, text: 'second' }], counters: counters(1) },
         { items: [{ ...good, answerId: 'not-a-uuid' }], counters: counters(1) },
+        // db-review MINOR-6: 36 characters that are not a uuid must raise 22023, never 22P02 on the cast
+        { items: [{ ...good, answerId: '-'.repeat(36) }], counters: counters(1) },
         { items: [{ answerId: good.answerId, type: 'brand' }], counters: counters(1) },
         { items: 'nope', counters: counters(0) },
         null,

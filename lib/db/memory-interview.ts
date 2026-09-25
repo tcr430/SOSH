@@ -50,6 +50,53 @@ export type WriteInterviewCandidatesResult =
   | { outcome: 'not_found' }
   | { outcome: 'not_extracting'; status: FounderInterviewRoundStatus }
 
+// One decision per candidate (ADR 0029 §8.5). A REJECT carries nothing else; an ACCEPT may carry an edit of a brand/audience
+// text, a re-selected category/kind, and a replace target. There is NO field for status, confidence, source, sensitivity,
+// public_use_permission, scope or expiry: the RPC fixes or recomputes every one of them, and the type cannot carry them.
+export type InterviewDecision =
+  | { type: InterviewMemoryType; id: string; decision: 'reject' }
+  | {
+      type: InterviewMemoryType
+      id: string
+      decision: 'accept'
+      text?: string
+      category?: string
+      replaces?: { type: InterviewMemoryType; id: string }
+    }
+
+export type RatifyInterviewRoundResult =
+  | { outcome: 'ratified'; accepted: number; rejected: number; edited: number; replaced: number }
+  | { outcome: 'not_found' }
+  | { outcome: 'not_awaiting'; status: FounderInterviewRoundStatus }
+
+// The ONLY path that activates an interview candidate — per item, by an approver or admin (ADR 0029 §8.5). Same rules as the
+// writer above: service-role through callInterviewRpc, no `client`, and every payload built by picking named keys.
+//
+// `userId` MUST come from supabase.auth.getUser() on the anon server client — NEVER a form field; ratify_interview_round
+// trusts it only because EXECUTE is granted to service_role alone and re-checks approver-or-admin membership itself
+// (a non-member raises 42501, surfaced here as a FounderInterviewRpcError carrying that code).
+//
+// An EDITED text is neutralised HERE (neutralizeWithSentinels, the same single choke point the writer uses) before it is
+// stored as the record's statement: the founder's typed text reaches every future prompt, so it gets the same write-time guard
+// as the model's. The model's ORIGINAL survives untouched in interview_extracted_text.
+export async function ratifyInterviewRound(args: { userId: string; roundId: string; decisions: InterviewDecision[] }): Promise<RatifyInterviewRoundResult> {
+  return callInterviewRpc<RatifyInterviewRoundResult>('ratify_interview_round', {
+    p_user_id: args.userId,
+    p_round_id: args.roundId,
+    p_decisions: args.decisions.map((d) => {
+      if (d.decision === 'reject') return { type: d.type, id: d.id, decision: 'reject' }
+      return {
+        type: d.type,
+        id: d.id,
+        decision: 'accept',
+        ...(d.text !== undefined ? { text: neutralizeWithSentinels(d.text) } : {}),
+        ...(d.category !== undefined ? { category: d.category } : {}),
+        ...(d.replaces !== undefined ? { replaces: { type: d.replaces.type, id: d.replaces.id } } : {}),
+      }
+    }),
+  })
+}
+
 // Writes the round's grounded candidates in ONE transaction and flips the round: `awaiting_ratification`, or
 // `no_records` when it holds no candidate at all. A round that is not `extracting` writes NOTHING (`not_extracting`).
 // A validation failure inside the RPC (22023) surfaces as a thrown FounderInterviewRpcError — the TypeScript layer

@@ -1,5 +1,10 @@
 import { z } from 'zod'
-import { writeInterviewCandidates, type WriteInterviewCandidatesResult } from '@/lib/db/memory-interview'
+import {
+  ratifyInterviewRound,
+  writeInterviewCandidates,
+  type RatifyInterviewRoundResult,
+  type WriteInterviewCandidatesResult,
+} from '@/lib/db/memory-interview'
 import {
   INTERVIEW_EVIDENCE_TEXT_MAX_CHARS,
   INTERVIEW_MAX_ITEMS_PER_ANSWER,
@@ -88,5 +93,87 @@ export async function recordInterviewCandidates(input: RecordInterviewCandidates
     roundId: parsed.roundId,
     items: parsed.items.map((item) => ({ answerId: item.answerId, type: item.type, category: item.category, text: item.text, span: item.span })),
     counters: parsed.counters,
+  })
+}
+
+// ─── Ratification (ADR 0029 §8.5) ─────────────────────────────────────────────────────────────────────────────────────────
+// The governed entry point for ACTIVATING interview candidates, one human decision per candidate. There is NO accept-all here
+// or anywhere: the schema demands a decision object for every candidate and ratify_interview_round raises unless every
+// candidate of the round is decided exactly once. A REJECT is a strict object with no room for an edit or a replace target; an
+// ACCEPT may carry a brand/audience text edit (≤ 280), a re-selected category/kind within its type's enum, and a replace
+// target. No governance value has a field, and z.strictObject rejects a smuggled one.
+//
+// OWED BY THE CALLER (M2.9), not done here: the edited text must be re-run through the §4.7 performance-claim filter — the
+// per-locale lexicon lives with the extraction (M2.8) — and `userId` must come from supabase.auth.getUser(), never a form.
+
+const refSchema = z.strictObject({ type: z.enum(['brand', 'audience', 'evidence']), id: z.string().uuid() })
+
+const decisionSchema = z
+  .discriminatedUnion('decision', [
+    z.strictObject({ type: z.enum(['brand', 'audience', 'evidence']), id: z.string().uuid(), decision: z.literal('reject') }),
+    z.strictObject({
+      type: z.enum(['brand', 'audience', 'evidence']),
+      id: z.string().uuid(),
+      decision: z.literal('accept'),
+      text: z.string().trim().min(1).max(INTERVIEW_RECORD_TEXT_MAX_CHARS).optional(),
+      category: z.string().min(1).optional(),
+      replaces: refSchema.optional(),
+    }),
+  ])
+  .superRefine((d, ctx) => {
+    if (d.decision !== 'accept') return
+    if (d.category !== undefined && !(CATEGORY_BY_TYPE[d.type] as readonly string[]).includes(d.category)) {
+      ctx.addIssue({ code: 'custom', path: ['category'], message: `category "${d.category}" is not in the ${d.type} enum` })
+    }
+    // Evidence stays VERBATIM (ADR 0029 §4.3, §8.4): accept or reject, never an edit of its text.
+    if (d.type === 'evidence' && d.text !== undefined) {
+      ctx.addIssue({ code: 'custom', path: ['text'], message: 'evidence records cannot be edited' })
+    }
+  })
+
+const ratifyInputSchema = z
+  .strictObject({
+    userId: z.string().uuid(),
+    roundId: z.string().uuid(),
+    decisions: z.array(decisionSchema).min(1).max(INTERVIEW_MAX_ITEMS_PER_ROUND),
+  })
+  .superRefine((input, ctx) => {
+    const seen = new Set<string>()
+    const replaced = new Set<string>()
+    for (const d of input.decisions) {
+      const key = `${d.type}:${d.id}`
+      if (seen.has(key)) ctx.addIssue({ code: 'custom', path: ['decisions'], message: `candidate ${d.id} is decided more than once` })
+      seen.add(key)
+      if (d.decision === 'accept' && d.replaces) {
+        const target = `${d.replaces.type}:${d.replaces.id}`
+        if (replaced.has(target)) ctx.addIssue({ code: 'custom', path: ['decisions'], message: `replace target ${d.replaces.id} is used more than once` })
+        replaced.add(target)
+      }
+    }
+  })
+
+export type RatifyInterviewCandidatesInput = z.input<typeof ratifyInputSchema>
+
+// Ratifies a round: every candidate accepted or rejected, per item. Returns the RPC's typed result (`ratified` with its
+// counters, `not_awaiting` for a round that is not awaiting ratification — a no-op that wrote nothing — or `not_found`); a
+// ZodError for input that fails the strict schema (nothing is sent); a FounderInterviewRpcError (42501) for a caller who is
+// not an approver or admin of the round's business, or (22023) for a decision set the database rejects.
+export async function ratifyInterviewCandidates(input: RatifyInterviewCandidatesInput): Promise<RatifyInterviewRoundResult> {
+  const parsed = ratifyInputSchema.parse(input)
+  return ratifyInterviewRound({
+    userId: parsed.userId,
+    roundId: parsed.roundId,
+    decisions: parsed.decisions.map((d) =>
+      d.decision === 'reject'
+        ? { type: d.type, id: d.id, decision: 'reject' as const }
+        : {
+            type: d.type,
+            id: d.id,
+            decision: 'accept' as const,
+            ...(d.text !== undefined ? { text: d.text } : {}),
+            ...(d.category !== undefined ? { category: d.category } : {}),
+            ...(d.replaces !== undefined ? { replaces: { type: d.replaces.type, id: d.replaces.id } } : {}),
+          },
+    ),
   })
 }

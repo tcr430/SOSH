@@ -1864,5 +1864,15 @@ export type ClaimInterviewExtractionResult =
   | { outcome: 'attempts'; attempts: number }
   | { outcome: 'ceiling'; spendCents: number; ceilingCents: number }
 export type ReconcileInterviewSpendResult =
-  | { outcome: 'reconciled'; status: FounderInterviewRoundStatus; spendCents: number }
+  | { outcome: 'reconciled'; status: FounderInterviewRoundStatus; spendCents: number; clamped: boolean }
   | { outcome: 'not_extracting' }
+
+// ADR 0029 §5.4 / §6.3 (M2.6) — what one run of the daily retention sweep did, for the route's one canonical log line.
+export type SweepInterviewDataResult = {
+  failedStuck: number
+  expired: number
+  candidatesRetired: number
+  answersRedacted: number
+  spansRedacted: number
+  candidatesDeleted: number
+}

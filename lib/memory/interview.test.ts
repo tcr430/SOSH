@@ -3,10 +3,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { ZodError } from 'zod'
 
-vi.mock('@/lib/db/memory-interview', () => ({ writeInterviewCandidates: vi.fn() }))
+vi.mock('@/lib/db/memory-interview', () => ({ writeInterviewCandidates: vi.fn(), ratifyInterviewRound: vi.fn() }))
 
-import { writeInterviewCandidates } from '@/lib/db/memory-interview'
-import { recordInterviewCandidates, type RecordInterviewCandidatesInput } from './interview'
+import { ratifyInterviewRound, writeInterviewCandidates } from '@/lib/db/memory-interview'
+import { ratifyInterviewCandidates, recordInterviewCandidates, type RatifyInterviewCandidatesInput, type RecordInterviewCandidatesInput } from './interview'
 
 // ADR 0029 §2.3 / §6.1 (Tier 2): lib/memory/interview.ts is the strict gate in front of the writer. A field the schema does
 // not name is REJECTED — confidence, status, source, public_use_permission, sensitivity, scope, scope_ref, expires_at,
@@ -155,6 +155,120 @@ describe('the writer call', () => {
     expect(await recordInterviewCandidates(input())).toEqual({ outcome: 'not_extracting', status: 'ratified' })
     vi.mocked(writeInterviewCandidates).mockRejectedValue(new Error('rpc failed'))
     await expect(recordInterviewCandidates(input())).rejects.toThrow('rpc failed')
+  })
+})
+
+// ─── ratifyInterviewCandidates (ADR 0029 §8.5, M2.6) ─────────────────────────────────────────────────────────────────────────
+// SHARED-FUNCTION CALLERS: NO production caller yet — the ratify Server Action (M2.9) is the sole future one — so that caller is
+// AUTHORED-NOT-EXECUTED and this is the only executed proof. There is NO accept-all: the schema requires a decision object per
+// candidate, an empty set is rejected, and a reject cannot carry an edit.
+
+const USER = '00000000-0000-4000-8000-000000000001'
+const C1 = '00000000-0000-4000-8000-0000000000a1'
+const C2 = '00000000-0000-4000-8000-0000000000a2'
+const C3 = '00000000-0000-4000-8000-0000000000a3'
+const OLD = '00000000-0000-4000-8000-0000000000b1'
+const RATIFIED = { outcome: 'ratified', accepted: 2, rejected: 1, edited: 0, replaced: 0 } as const
+
+const accept = (over: Record<string, unknown> = {}) => ({ type: 'brand', id: C1, decision: 'accept', ...over })
+const reject = (over: Record<string, unknown> = {}) => ({ type: 'audience', id: C2, decision: 'reject', ...over })
+const ratifyInput = (over: Record<string, unknown> = {}): RatifyInterviewCandidatesInput =>
+  ({ userId: USER, roundId: ROUND, decisions: [accept(), reject()], ...over }) as RatifyInterviewCandidatesInput
+
+function ratifierReturns(value: unknown = RATIFIED) {
+  vi.mocked(ratifyInterviewRound).mockResolvedValue(value as never)
+}
+async function ratifyRejects(bad: RatifyInterviewCandidatesInput, fragment?: RegExp) {
+  ratifierReturns()
+  const attempt = ratifyInterviewCandidates(bad)
+  await expect(attempt).rejects.toBeInstanceOf(ZodError)
+  if (fragment) await expect(attempt).rejects.toThrow(fragment)
+  expect(ratifyInterviewRound).not.toHaveBeenCalled()
+}
+
+describe('ratifyInterviewCandidates — NO accept-all, no governance field at ANY level', () => {
+  it('forwards the user, the round and each decision, and returns the RPC result unchanged', async () => {
+    ratifierReturns()
+    const res = await ratifyInterviewCandidates(ratifyInput({ decisions: [accept({ text: 'An edited claim', category: 'pricing', replaces: { type: 'brand', id: OLD } }), reject(), accept({ id: C3, type: 'evidence', category: 'quote' })] }))
+    expect(res).toEqual(RATIFIED)
+    expect(vi.mocked(ratifyInterviewRound).mock.calls[0][0]).toEqual({
+      userId: USER,
+      roundId: ROUND,
+      decisions: [
+        { type: 'brand', id: C1, decision: 'accept', text: 'An edited claim', category: 'pricing', replaces: { type: 'brand', id: OLD } },
+        { type: 'audience', id: C2, decision: 'reject' },
+        { type: 'evidence', id: C3, decision: 'accept', category: 'quote' },
+      ],
+    })
+  })
+
+  it('an EMPTY decision set is rejected — there is no implicit accept-all', async () => {
+    await ratifyRejects(ratifyInput({ decisions: [] }))
+  })
+
+  it('more than 24 decisions are rejected', async () => {
+    const many = Array.from({ length: 25 }, (_, i) => accept({ id: `00000000-0000-4000-8000-0000000002${String(i).padStart(2, '0')}` }))
+    await ratifyRejects(ratifyInput({ decisions: many }))
+  })
+
+  it.each(['status', 'confidence', 'source', 'sensitivity', 'public_use_permission', 'scope', 'scope_ref', 'expires_at', 'observation_count', 'last_confirmed_at', 'business_id'])(
+    'a smuggled `%s` is REJECTED on the envelope, on an accept, on a reject and on a replace target — and nothing is sent',
+    async (key) => {
+      for (const bad of [
+        ratifyInput({ [key]: 'x' }),
+        ratifyInput({ decisions: [accept({ [key]: 'x' }), reject()] }),
+        ratifyInput({ decisions: [accept(), reject({ [key]: 'x' })] }),
+        ratifyInput({ decisions: [accept({ replaces: { type: 'brand', id: OLD, [key]: 'x' } }), reject()] }),
+      ]) {
+        await ratifyRejects(bad)
+        vi.clearAllMocks()
+      }
+    },
+  )
+
+  it('a REJECT cannot carry an edit, a category or a replace target', async () => {
+    await ratifyRejects(ratifyInput({ decisions: [accept(), reject({ text: 'edited' })] }))
+    await ratifyRejects(ratifyInput({ decisions: [accept(), reject({ category: 'problem' })] }))
+    await ratifyRejects(ratifyInput({ decisions: [accept(), reject({ replaces: { type: 'audience', id: OLD } })] }))
+  })
+
+  it('an EVIDENCE text edit is rejected (verbatim); a brand text edit over 280 or blank is rejected; 280 is accepted', async () => {
+    await ratifyRejects(ratifyInput({ decisions: [accept({ type: 'evidence', category: 'quote', text: 'a paraphrase' }), reject()] }), /evidence records cannot be edited/)
+    await ratifyRejects(ratifyInput({ decisions: [accept({ text: 'x'.repeat(281) }), reject()] }))
+    await ratifyRejects(ratifyInput({ decisions: [accept({ text: '   ' }), reject()] }))
+    vi.clearAllMocks()
+    ratifierReturns()
+    await expect(ratifyInterviewCandidates(ratifyInput({ decisions: [accept({ text: 'y'.repeat(280) }), reject()] }))).resolves.toEqual(RATIFIED)
+  })
+
+  it("a category outside THAT type's enum, an unknown type or decision, and a malformed id are rejected", async () => {
+    await ratifyRejects(ratifyInput({ decisions: [accept({ category: 'problem' }), reject()] }), /not in the brand enum/)
+    await ratifyRejects(ratifyInput({ decisions: [accept({ type: 'audience', id: C3, category: 'quote' }), reject()] }), /not in the audience enum/)
+    await ratifyRejects(ratifyInput({ decisions: [accept({ type: 'performance' }), reject()] }))
+    await ratifyRejects(ratifyInput({ decisions: [accept({ decision: 'maybe' }), reject()] }))
+    await ratifyRejects(ratifyInput({ decisions: [accept({ id: 'not-a-uuid' }), reject()] }))
+    await ratifyRejects(ratifyInput({ userId: 'not-a-uuid' }))
+    await ratifyRejects(ratifyInput({ roundId: 'not-a-uuid' }))
+  })
+
+  it('a duplicate decision and a replace target used twice are rejected before anything is sent', async () => {
+    await ratifyRejects(ratifyInput({ decisions: [accept(), accept()] }), /decided more than once/)
+    await ratifyRejects(
+      ratifyInput({ decisions: [accept({ replaces: { type: 'brand', id: OLD } }), accept({ id: C3, replaces: { type: 'brand', id: OLD } })] }),
+      /used more than once/,
+    )
+  })
+
+  it('a database refusal propagates (a non-approver, or a decision set the RPC rejects) and a no-op is returned as a value', async () => {
+    vi.mocked(ratifyInterviewRound).mockRejectedValue(new Error('not an approver/admin member'))
+    await expect(ratifyInterviewCandidates(ratifyInput())).rejects.toThrow('not an approver/admin member')
+    ratifierReturns({ outcome: 'not_awaiting', status: 'ratified' })
+    expect(await ratifyInterviewCandidates(ratifyInput())).toEqual({ outcome: 'not_awaiting', status: 'ratified' })
+  })
+
+  it('is exported through the barrel', async () => {
+    const barrel = await import('./index')
+    expect(barrel.ratifyInterviewCandidates).toBe(ratifyInterviewCandidates)
   })
 })
 
