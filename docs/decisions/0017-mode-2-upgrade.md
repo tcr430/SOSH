@@ -911,3 +911,78 @@ content cannot change.
 
 **Tiers.** `OUTCOME-HYPOTHESIS-IN-BRIEF` (ADR 0026 constraint 24): Tier 2 (schema boundaries, the prompt, the
 action) plus the existing Tier-1 freeze-guard test, run unmodified.
+
+
+---
+
+## Amendment F — `roleSequence` is editable before freeze; §5.2 `[type-6]` wording corrected; `MODE2-REDUNDANCY-UNDEFER` discharged elsewhere (2026-09-24, Session 34, K2.11)
+
+**Source:** ADR 0027 §5.4, §5.8, §5.9 and founder ruling A-3. **Additive.** Everything above this line is
+unchanged, including Amendments A–E. **The frozen-brief contract itself (§2.3, §2.4, §5.2's two layers) is
+unchanged**, and the test that proves it is `MODE2-BRIEF-FROZEN-GUARD` (`supabase/__tests__/mode2-brief-rls.test.ts`),
+which is **unmodified** across Session 34 (`git diff --stat dab25f86..HEAD -- supabase/__tests__/mode2-brief-rls.test.ts`
+is empty) and was re-run green at K2.8 as `AGENCY-FROZEN-BRIEF-CONTRACT-INTACT`'s Tier-1 half.
+
+### F.1 — §2.2 / §10: `roleSequence` becomes editable before freeze
+
+Until now the brief's `roleSequence` changed only by regenerating the brief. It is now also editable **before
+freeze, by a human, one round at a time**, through the `apply_brief_proposals` RPC
+(`20260922110000_campaign_plan_proposal_rpcs.sql`) that applies the campaign planner's *ratified* proposals
+(ADR 0027 §5.5). The RPC's guards are the existing ones plus a version check: the brief must be `critiqued`, must have
+`frozen_at IS NULL`, and `expected_version` must match; it then bumps `version` and leaves the brief `draft`, so the
+caller re-critiques before approval can happen again (`plan-actions.ts`). It takes no `status` argument, so applying a
+proposal cannot approve a brief. Approval is still the freeze, still human, still gated on the critique score.
+
+The array is validated by one shared schema, `lib/campaigns/role-sequence.ts` (`RoleSequenceSchema` with a
+unique-`order` refine), imported by both the Stage A prompt (`lib/ai/prompts/brief.ts`) and the apply path
+(`lib/campaigns/apply-proposals.ts`). Proven by `AGENCY-ROLE-SEQUENCE-ORDER-UNIQUE`
+(`lib/campaigns/role-sequence.test.ts`).
+
+### F.2 — §5.2 `[type-6]` wording corrected
+
+§5.2 says the role-coverage validator checks *"each generated post's `role[i] === frozenBrief.roleSequence[i]`"*.
+**The shipped `checkRoleCoverage` (`lib/campaigns/consistency.ts:32`) checks neither.** It is set-based and keyed on
+`order` alone: it builds a `Set` of generated `order` values and reports which expected `order` values are absent. It
+does not compare `role`, and it does not compare positions. The drift has been inert because `generate.ts` sources a
+post's `order` and `role` from the same `roleSequence` entry, which makes the check tautological for any entry that
+generated. **ADR 0027 therefore does not treat `checkRoleCoverage` as a safety net**; the unique-`order` refine in F.1
+is. The check is left as it is; only this description is corrected.
+
+### F.3 — `MODE2-REDUNDANCY-UNDEFER`: un-deferred and discharged elsewhere
+
+§8's deferral of the cross-set redundancy call (and its trigger, quoted at §8) is **recorded as un-deferred and
+discharged** by ADR 0027 §5.8 (ruling A-3, `pre-launch-scope.md` §12.4), in two halves, **neither of which is the
+whole-set LLM call §8 described**: (a) planner-side, at design time (the planner may propose `drop` / `substitute`
+over a set it judges redundant); (b) `checkSetRedundancy` (`lib/campaigns/consistency.ts`, overlap threshold
+`REDUNDANCY_OVERLAP_THRESHOLD = 0.6`), deterministic, zero LLM calls, run over the generated set in `generate.ts`,
+**flagging and never blocking or editing**. Proven by `AGENCY-SET-REDUNDANCY-CHECKED`
+(`lib/campaigns/consistency.redundancy.test.ts`). The §8 whole-set LLM call is not built and is retired, not merely
+postponed. Residual, stated: (b) is structural, not semantic; two posts arguing the same thing in different words from
+different evidence pass both halves (ADR 0027 §5.8).
+
+**Amendment D's table row for `MODE2-REDUNDANCY-UNDEFER`** cited `generate.ts:308` as untouched. `generate.ts` was
+modified in Session 34 (K2.8 added the `checkSetRedundancy` call; K2.9 added claim verification), so that citation is
+superseded by this amendment. Neither change alters what the frozen brief is or when it freezes.
+
+### F.4 — Addendum (Session 34-D, 2026-09-25): F.1 and F.3 dated to the commits that made them true
+
+**Additive.** F.1, F.2 and F.3 above are not edited. Two of their statements were **not true when written** and are
+dated here:
+
+- **F.1's "the brief must be `critiqued`" is true of the `apply_brief_proposals` RPC from `59f0015c` (D5), and was not
+  before.** At K2.11 the function's guards checked `frozen_at IS NULL` and `expected_version` but not `status`, so a
+  `draft` brief with a pending proposal could be applied. From `59f0015c` a non-critiqued brief is refused with the typed
+  outcome `not_critiqued`, and the final `UPDATE` is guarded `AND status = 'critiqued'`. Proven by
+  `supabase/__tests__/plan-proposals-ratify.test.ts:347` at that SHA. The same commit makes the RPC apply a ratified
+  reorder exactly where the ratified sentence says (ADR 0027 §VI.2, `AGENCY-REORDER-RATIFIED-EXACT`); F.1's
+  "the caller re-critiques before approval can happen again" is unchanged.
+- **F.3's discharge of `MODE2-REDUNDANCY-UNDEFER` is delivered at the approval gate from `eae53738` (D9), and was a log
+  line before.** F.3 says half (b), `checkSetRedundancy`, "flag[s] and never block[s] or edit[s]". Until `eae53738` the
+  flag was a `console.log` line and no reviewer saw it. From that commit each post of a flagged pair carries the flag in
+  `ai_generation_metadata.redundancy` and the approvals surface renders it, informationally, with Approve enabled and the
+  text untouched. Proven by `lib/campaigns/generate.test.ts:1376,1413` and
+  `app/[locale]/(dashboard)/approvals/ApprovalsInbox.test.tsx:923` block at that SHA. The residual F.3 states (a
+  structural check, not a semantic one) stands, and so does the disclosed `proofType: null` input to
+  `checkSetRedundancy`.
+
+The frozen-brief contract (§2.3, §2.4) is still unchanged by this addendum.

@@ -1,0 +1,140 @@
+{
+  "planner": {
+    "heading": "Plan review",
+    "assessment_label": "The planner's assessment",
+    "assessment_note": "An AI reading of this plan. It is an opinion, not a checked fact.",
+    "state": {
+      "not_run": "No plan analysis was run for this campaign.",
+      "not_recorded": "{count, plural, one {The planner proposed # change to this plan, but its outcome was not recorded.} other {The planner proposed # changes to this plan, but its outcome was not recorded.}}",
+      "proposed": "{count, plural, one {The planner proposed # change to this plan.} other {The planner proposed # changes to this plan.}}",
+      "proposed_nothing": "The planner reviewed the plan and proposed no changes.",
+      "unavailable": "Plan analysis unavailable: {reason}.",
+      "capped": "Plan analysis is paused: the daily limit was reached."
+    },
+    "reason": {
+      "quota_exceeded": "the trial allowance is used up",
+      "rate_limited": "too many AI requests in the last minute",
+      "wall_clock_exceeded": "it took too long",
+      "input_token_cap_exceeded": "the plan needed more context than allowed",
+      "output_token_per_turn_exceeded": "the answer was longer than allowed",
+      "output_token_cap_exceeded": "the reasoning ran longer than allowed",
+      "retry_budget_exhausted": "the AI service kept failing",
+      "max_turns_exceeded": "it did not reach an answer in time",
+      "response_truncated": "the answer was cut off",
+      "invalid_response": "the answer could not be read",
+      "provider_error": "the AI service returned an error",
+      "internal_error": "something went wrong on our side",
+      "no_brief": "there is no brief to analyse",
+      "daily_cap": "the daily limit was reached"
+    },
+    "proposal": {
+      "position": "Position {n}",
+      "kind": {
+        "drop": "Drop this post",
+        "substitute": "Change its role to {role}",
+        "reorder": "Move it to position {position}",
+        "request_evidence": "Keep it only if you can add evidence for it"
+      },
+      "status": {
+        "pending": "Waiting for your decision",
+        "accepted": "Accepted",
+        "rejected": "Rejected",
+        "superseded": "Superseded"
+      },
+      "superseded_reason": {
+        "version_advanced": "The brief moved on after this was proposed.",
+        "brief_frozen": "The brief was approved, so this can no longer be applied."
+      }
+    },
+    "round": {
+      "legend": "Proposed changes",
+      "note": "Nothing is applied until you press Apply. Selected proposals are applied together.",
+      "select": "Select for this round",
+      "apply": "Apply selected ({count})",
+      "apply_hint": "Select at least one proposal to apply.",
+      "reject": "Reject",
+      "history_heading": "Already decided"
+    },
+    "result": {
+      "applied": "{count, plural, one {Applied # change. The brief has been re-checked.} other {Applied # changes. The brief has been re-checked.}}",
+      "applied_recheck_pending": "{count, plural, one {Applied # change.} other {Applied # changes.}} The re-check did not finish, so Approve stays hidden until it does.",
+      "rejected": "Proposal rejected.",
+      "already": {
+        "accepted": "Someone else already accepted this proposal.",
+        "rejected": "Someone else already rejected this proposal.",
+        "superseded_version_advanced": "This proposal is out of date: the brief moved on.",
+        "superseded_brief_frozen": "This proposal is out of date: the brief was approved.",
+        "unknown": "This proposal is no longer waiting for a decision."
+      }
+    },
+    "conflict": {
+      "conflicting_proposals": "Two selected proposals change the same post in ways that cannot both apply. Choose one of them.",
+      "stale_target_order": "One selected proposal points at a position that no longer exists. Reload the page and choose again.",
+      "conflicting_reorders": "Two selected proposals move different posts to the same position. Choose one of them.",
+      "invalid_reorder_target": "One selected proposal moves a post to a position that would not exist after the other changes. Adjust your selection and try again."
+    },
+    "error": {
+      "invalid_input": "That request was not valid. Reload the page and try again.",
+      "unauthorized": "You need to sign in again.",
+      "forbidden": "You do not have permission to change this brief.",
+      "not_found": "This brief could not be found.",
+      "invalid_brief_state": "This brief is not waiting for review right now.",
+      "already_approved": "This brief was already approved, so it can no longer change.",
+      "concurrent_edit": "Someone else changed this brief while you were reading. Reload and try again.",
+      "nothing_applied": "None of the selected proposals could be applied. They may already be decided.",
+      "empty_sequence": "Applying these would remove every post from the plan, so nothing was changed. Keep at least one post.",
+      "invalid_result": "The applied plan is not valid. Regenerate the brief.",
+      "generic": "Something went wrong. Try again."
+    },
+    "transient": {
+      "heading": "Approve is hidden while the brief is re-checked",
+      "body": "The plan changed, so its earlier review no longer applies. Approve returns as soon as the new check is done.",
+      "retry": "Run the check again"
+    }
+  },
+  "claims": {
+    "heading": "Claims in this post",
+    "cited": "Cited",
+    "uncited": "No citation",
+    "cited_unknown": "Cites evidence that wasn't provided",
+    "no_corpus": "No evidence corpus: claims not checked",
+    "not_checked": "Claims in this post were not checked",
+    "no_claims": "No checkable claims in this post",
+    "all_cited": "{count, plural, one {The claim in this post is cited.} other {All # claims in this post are cited.}}",
+    "cited_explainer": "“Cited” means the claim points to evidence that was given to the AI. It does not guarantee the sentence matches that evidence. Read it and decide.",
+    "summary": "{cited} cited, {uncited} without a citation, {unknown} citing unknown evidence",
+    "flagged_mark": "Flagged claim",
+    "unlocated": "This claim could not be located in the text.",
+    "resolved": {
+      "accepted": "Accepted as written",
+      "dismissed": "Dismissed",
+      "cited": "Linked to existing evidence"
+    },
+    "cite": {
+      "label": "Choose existing evidence",
+      "submit": "Link this evidence",
+      "empty": "There is no stored evidence to choose from."
+    },
+    "error": {
+      "invalid_input": "That request was not valid. Reload the page and try again.",
+      "unauthorized": "You need to sign in again.",
+      "forbidden": "You do not have permission to review this post.",
+      "not_found": "This post could not be found.",
+      "conflict": "This post changed while you were reading. Reload and try again.",
+      "not_checked": "This post has no claim check to update.",
+      "unknown_evidence": "That evidence is not available to link.",
+      "generic": "Something went wrong. Try again."
+    },
+    "actions": {
+      "accept": "Accept as written",
+      "edit": "Edit the text",
+      "cite": "Cite existing evidence",
+      "dismiss": "Dismiss the flag"
+    }
+  },
+  "redundancy": {
+    "heading": "Repetition in this campaign",
+    "overlap": "Repeats the post at position {position} of this campaign's plan: {percent}% of the wording overlaps.",
+    "explainer": "This is a structural word-overlap comparison, not a judgment of quality. Nothing was changed, and you can still approve. Read both posts and decide."
+  }
+}

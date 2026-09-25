@@ -15,7 +15,13 @@ vi.mock('next-intl', () => ({
 
 vi.mock('next/navigation', () => ({
   useParams: () => ({ locale: 'en' }),
+  // ADR 0027 K2.10 — ClaimFlags (rendered in every DraftRow) refreshes the route after a resolved claim.
+  useRouter: () => ({ refresh: vi.fn() }),
 }))
+
+// ClaimFlags imports its Server Action; stubbed so this file stays about the inbox. The claim surface has its own
+// test (ClaimFlags.test.tsx) and the action has its own (claim-actions.test.ts).
+vi.mock('./claim-actions', () => ({ resolveClaimAction: vi.fn() }))
 
 vi.mock('next/link', () => ({
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) =>
@@ -36,7 +42,7 @@ vi.mock('@/app/[locale]/(dashboard)/campaigns/[id]/posts/actions', () => ({
 
 import { ApprovalsInbox } from './ApprovalsInbox'
 import type { CalendarPostRow } from '@/lib/calendar/types'
-import type { CampaignRow, PostAiOriginalRow } from '@/lib/db/types'
+import type { CampaignRow, PostAiOriginalRow, PersistedClaimCheck, PersistedRedundancy } from '@/lib/db/types'
 import en from '@/i18n/en/approvals.json'
 import pt from '@/i18n/pt/approvals.json'
 import es from '@/i18n/es/approvals.json'
@@ -86,12 +92,16 @@ function renderInbox(
   campaigns: CampaignRow[] = [CAMPAIGN],
   totalPendingCount: number = posts.length,
   originalsByPostId: Record<string, PostAiOriginalRow> = {},
+  claimChecksByPostId: Record<string, PersistedClaimCheck> = {},
+  redundancyByPostId: Record<string, PersistedRedundancy> = {},
 ) {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
   act(() => {
-    root.render(React.createElement(ApprovalsInbox, { posts, campaigns, totalPendingCount, originalsByPostId }))
+    root.render(
+      React.createElement(ApprovalsInbox, { posts, campaigns, totalPendingCount, originalsByPostId, claimChecksByPostId, redundancyByPostId }),
+    )
   })
   return {
     container,
@@ -849,5 +859,119 @@ describe('ApprovalsInbox — i18n key completeness (B5)', () => {
   it('no locale hardcodes English inside the overflow notice (pt/es must differ from en)', () => {
     expect(pt.overflow.notice).not.toBe(en.overflow.notice)
     expect(es.overflow.notice).not.toBe(en.overflow.notice)
+  })
+})
+
+// ── ADR 0027 §4.8 (K2.10) — claim flags inside DraftRow ─────────────────────────────────────────────────────
+// Session 34-D D6 (MAJOR-2): ClaimFlags.test.tsx cited a test file for this integration that never existed; it lives
+// HERE. ClaimFlags / MarkedPostText / hasOpenClaimFlags have ONE caller,
+// DraftRow. The claim surface itself is ClaimFlags.test.tsx; the action is claim-actions.test.ts.
+
+describe('ApprovalsInbox — claim flags in DraftRow (ADR 0027 §4.8)', () => {
+  const TEXT = 'We cut churn by 42% in Q3. The rest is plain.'
+  const S1 = 'We cut churn by 42% in Q3.'
+  const span = { start: TEXT.indexOf(S1), end: TEXT.indexOf(S1) + S1.length }
+  const POST = () => makePost({ id: 'ccccccc1-cccc-4ccc-8ccc-ccccccccccc1', content: TEXT })
+  const flagged = (resolution?: object): PersistedClaimCheck =>
+    ({ status: 'checked', claims: [{ outcome: 'unsupported', span, ...(resolution ? { resolution } : {}) }] }) as PersistedClaimCheck
+
+  it('a post with an OPEN flag renders its FULL text with the flagged sentence marked inline (not the two-line clamp)', () => {
+    const post = POST()
+    const { container, cleanup } = renderInbox([post], [CAMPAIGN], 1, {}, { [post.id]: flagged() })
+    const marks = container.querySelectorAll('mark')
+    expect(marks).toHaveLength(1)
+    expect(marks[0].textContent).toContain(S1)
+    expect(container.textContent).toContain('The rest is plain.')
+    expect(container.querySelector('p.line-clamp-2')).toBeNull()
+    cleanup()
+  })
+
+  it('a post with NO verdict reads "not checked" (never "clean") and keeps the unchanged two-line clamp', () => {
+    const post = POST()
+    const { container, cleanup } = renderInbox([post])
+    expect(container.textContent).toContain('not_checked')
+    expect(container.querySelector('mark')).toBeNull()
+    expect(container.querySelector('p.line-clamp-2')?.textContent).toBe(TEXT)
+    cleanup()
+  })
+
+  it('a flag the reviewer has RESOLVED no longer marks the text — the clamp returns and the text is never altered', () => {
+    const post = POST()
+    const resolved = flagged({ kind: 'accepted', at: '2026-09-24T10:00:00Z', by: 'user-1' })
+    const { container, cleanup } = renderInbox([post], [CAMPAIGN], 1, {}, { [post.id]: resolved })
+    expect(container.querySelector('mark')).toBeNull()
+    expect(container.querySelector('p.line-clamp-2')?.textContent).toBe(TEXT)
+    cleanup()
+  })
+
+  it("each post is shown ITS OWN verdict: only the flagged post is marked when two are pending", () => {
+    const a = makePost({ id: 'ccccccc1-cccc-4ccc-8ccc-ccccccccccc1', content: TEXT })
+    const b = makePost({ id: 'ccccccc2-cccc-4ccc-8ccc-ccccccccccc2', content: 'Another post entirely.' })
+    const { container, cleanup } = renderInbox([a, b], [CAMPAIGN], 2, {}, { [a.id]: flagged() })
+    expect(container.querySelectorAll('mark')).toHaveLength(1)
+    expect(container.textContent).toContain('Another post entirely.')
+    cleanup()
+  })
+})
+
+// ── ADR 0027 §5.8(b) (Session 34-D D9, MAJOR-5) — redundancy flags inside DraftRow ────────────────────────────
+// MODE2-REDUNDANCY-UNDEFER half (b) is "flagged at the approval gate. Never blocked, never edited." RedundancyFlag
+// has ONE caller, DraftRow. The component itself is RedundancyFlag.test.tsx; the read (and its fingerprint rule that
+// drops a flag on edited text) is lib/db/posts.redundancy.test.ts. THE LOAD-BEARING ASSERTIONS HERE: the flag is
+// shown, and Approve stays ENABLED; nothing is hidden, reordered or edited.
+
+describe('ApprovalsInbox — redundancy flags in DraftRow (ADR 0027 §5.8(b))', () => {
+  const FLAGGED_ID = 'ddddddd1-dddd-4ddd-8ddd-ddddddddddd1'
+  const OTHER_ID = 'ddddddd2-dddd-4ddd-8ddd-ddddddddddd2'
+  const flag: PersistedRedundancy = { contentFingerprint: 'f', overlaps: [{ order: 2, postId: OTHER_ID, overlap: 0.72 }] }
+  const approveButtons = (c: HTMLElement) => [...c.querySelectorAll('button')].filter((b) => b.textContent?.includes('row.approve'))
+
+  it('a flagged post renders the flag AND an ENABLED Approve control (never blocked)', () => {
+    const post = makePost({ id: FLAGGED_ID, content: 'Repeated wording about onboarding speed.' })
+    const { container, cleanup } = renderInbox([post], [CAMPAIGN], 1, {}, {}, { [FLAGGED_ID]: flag })
+    expect(container.querySelector('section[aria-label="heading"]')).not.toBeNull()
+    expect(container.textContent).toContain('overlap')
+    const buttons = approveButtons(container)
+    expect(buttons).toHaveLength(1)
+    expect(buttons[0].disabled).toBe(false)
+    cleanup()
+  })
+
+  it('clicking Approve on a flagged post still calls the approve action (the gate is a human decision, not a block)', () => {
+    approvePostAction.mockClear()
+    const post = makePost({ id: FLAGGED_ID, content: 'Repeated wording about onboarding speed.' })
+    const { container, cleanup } = renderInbox([post], [CAMPAIGN], 1, {}, {}, { [FLAGGED_ID]: flag })
+    act(() => approveButtons(container)[0].click())
+    expect(approvePostAction).toHaveBeenCalledTimes(1)
+    cleanup()
+  })
+
+  it('an UNFLAGGED post renders no redundancy section — and a post whose flag was dropped (edited text) renders none either', () => {
+    const post = makePost({ id: FLAGGED_ID })
+    // The reader (listRedundancyByPostIds) omits a flag whose fingerprint no longer matches; the inbox is then given
+    // no entry for the post, which is exactly the unflagged case.
+    const { container, cleanup } = renderInbox([post], [CAMPAIGN], 1, {}, {}, {})
+    expect(container.querySelector('section[aria-label="heading"]')).toBeNull()
+    cleanup()
+  })
+
+  it('the flag is per post: only the flagged post shows it, the other renders none, and the order and text are unchanged', () => {
+    const flagged = makePost({ id: FLAGGED_ID, content: 'First post text.' })
+    const other = makePost({ id: OTHER_ID, content: 'Second post text.' })
+    const { container, cleanup } = renderInbox([flagged, other], [CAMPAIGN], 2, {}, {}, { [FLAGGED_ID]: flag })
+    expect(container.querySelectorAll('section[aria-label="heading"]')).toHaveLength(1)
+    const text = container.textContent ?? ''
+    expect(text.indexOf('First post text.')).toBeGreaterThanOrEqual(0)
+    expect(text.indexOf('First post text.')).toBeLessThan(text.indexOf('Second post text.'))
+    expect(approveButtons(container)).toHaveLength(2)
+    for (const b of approveButtons(container)) expect(b.disabled).toBe(false)
+    cleanup()
+  })
+
+  it('the flagged post text is rendered exactly as written — never edited, never clamped away', () => {
+    const post = makePost({ id: FLAGGED_ID, content: 'Exactly this text, unchanged.' })
+    const { container, cleanup } = renderInbox([post], [CAMPAIGN], 1, {}, {}, { [FLAGGED_ID]: flag })
+    expect(container.textContent).toContain('Exactly this text, unchanged.')
+    cleanup()
   })
 })

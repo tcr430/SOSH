@@ -311,6 +311,7 @@
       "score_label": "Score: {score}/100",
       "pending": "The brief is still being assembled and critiqued — this can take up to 20 seconds. Check back shortly.",
       "already_approved": "This brief has already been approved.",
+      "continue_to_generate": "Continue to generate posts",
       "approve": "Approve",
       "reject": "Send back",
       "edit": "Save changes",
@@ -409,10 +410,28 @@
           "provider_error": "The AI provider returned an error. Please try again.",
           "invalid_response": "The AI returned an unexpected response. Please try again.",
           "timeout": "Generation timed out. Please try again.",
-          "invalid_campaign_state": "This campaign isn't ready to generate posts. Check that it has a brand voice and draft status.",
+          "invalid_campaign_state": "This campaign isn't ready to generate posts. Check that it has a brand voice and an approved brief.",
+          "brief_not_approved": "This campaign's brief hasn't been approved yet. Approve it before generating posts.",
           "already_generated": "Posts have already been generated for this campaign.",
           "generic": "Something went wrong. Please try again."
         }
+      },
+      "prepare_brief": {
+        "title": "Your brief isn't ready yet",
+        "body": "We couldn't prepare the brief for this campaign. Try again to build it, then review it before any posts are generated.",
+        "cta": "Prepare brief",
+        "starting": "Preparing your brief…",
+        "try_again": "Try again",
+        "error": {
+          "forbidden": "You don't have permission to prepare briefs for this business.",
+          "failed": "We couldn't prepare the brief. Please try again.",
+          "generic": "Something went wrong. Please try again."
+        }
+      },
+      "review_brief": {
+        "title": "Review your brief first",
+        "body": "Posts are generated from an approved brief. Review and approve it to continue.",
+        "cta": "Review brief"
       },
       "posts": {
         "published": "{published} of {total} posts published",

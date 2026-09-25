@@ -42,7 +42,7 @@ describe('ai_budget_daily.purpose CHECK (ADR 0025 §6.3)', () => {
     if (ownerId) await admin.auth.admin.deleteUser(ownerId)
   })
 
-  it.each(['triage_cents', 'generation_posts', 'backfill_cents'])('purpose=%s is accepted', async (purpose) => {
+  it.each(['triage_cents', 'generation_posts', 'backfill_cents', 'planner_cents'])('purpose=%s is accepted', async (purpose) => {
     const { error } = await admin.rpc('reserve_ai_budget', {
       p_business_id: businessId,
       p_purpose: purpose,
@@ -61,5 +61,84 @@ describe('ai_budget_daily.purpose CHECK (ADR 0025 §6.3)', () => {
     })
     expect(error).not.toBeNull()
     expect(error!.message).toContain('ai_budget_daily_purpose_check')
+  })
+
+  // ADR 0027 §7.4 (K2.6) — 41 AGENCY-COST-CEILING-EXTENDED, 42 AGENCY-BUDGET-PURPOSE-ISOLATED.
+  // Each of these three tests uses its OWN fresh business — the it.each block above already
+  // reserves 1 planner_cents unit against the shared businessId, so reusing it here would make the
+  // cap arithmetic below silently wrong depending on suite run order.
+
+  async function freshBusiness(label: string): Promise<string> {
+    const { data, error } = await admin
+      .from('businesses')
+      .insert({ name: `AI Budget ${label} Business`, owner_id: ownerId, plan: 'plus' })
+      .select('id')
+      .single()
+    if (error) throw error
+    return data.id as string
+  }
+
+  it('TWO CONCURRENT RESERVATIONS against one cap — exactly one wins once the cap is exhausted', async () => {
+    const biz = await freshBusiness('Concurrent')
+
+    const first = await admin.rpc('reserve_ai_budget', { p_business_id: biz, p_purpose: 'planner_cents', p_units: 24, p_cap: 30 })
+    expect(first.error).toBeNull()
+    expect(first.data ?? []).toHaveLength(1)
+
+    const [a, b] = await Promise.all([
+      admin.rpc('reserve_ai_budget', { p_business_id: biz, p_purpose: 'planner_cents', p_units: 6, p_cap: 30 }),
+      admin.rpc('reserve_ai_budget', { p_business_id: biz, p_purpose: 'planner_cents', p_units: 6, p_cap: 30 }),
+    ])
+    expect(a.error).toBeNull()
+    expect(b.error).toBeNull()
+    const won = [a, b].filter((r) => (r.data ?? []).length === 1).length
+    const denied = [a, b].filter((r) => (r.data ?? []).length === 0).length
+    expect(won).toBe(1)
+    expect(denied).toBe(1)
+
+    const { data: row } = await admin.from('ai_budget_daily').select('reserved_units').eq('business_id', biz).eq('purpose', 'planner_cents').single()
+    expect(Number(row.reserved_units)).toBe(30)
+
+    await admin.from('businesses').delete().eq('id', biz)
+  })
+
+  // THE FIRST-CALL-OF-DAY CASE that caught ADR 0021's [db-BLOCKER-1] — discovered regressed while
+  // writing this test: reserve_ai_budget's cap guard previously applied ONLY to the
+  // ON CONFLICT DO UPDATE branch, never to the initial INSERT (no existing row to conflict
+  // against), so a business's very FIRST reservation of the day, of ANY purpose, could blow
+  // straight through the cap. Fixed in this same migration (K2.6) via a guarded-SELECT INSERT
+  // source, verified live before the migration was written (see the K2.6 commit body).
+  it('THE FIRST-CALL-OF-DAY CASE: a single reservation that alone exceeds the cap is refused, not silently accepted', async () => {
+    const biz = await freshBusiness('FirstCall')
+
+    const overCap = await admin.rpc('reserve_ai_budget', { p_business_id: biz, p_purpose: 'planner_cents', p_units: 500, p_cap: 300 })
+    expect(overCap.error).toBeNull()
+    expect(overCap.data ?? []).toHaveLength(0)
+
+    const { data: rows } = await admin.from('ai_budget_daily').select('id').eq('business_id', biz).eq('purpose', 'planner_cents')
+    expect(rows ?? []).toHaveLength(0)
+
+    const underCap = await admin.rpc('reserve_ai_budget', { p_business_id: biz, p_purpose: 'planner_cents', p_units: 200, p_cap: 300 })
+    expect(underCap.error).toBeNull()
+    expect(underCap.data ?? []).toHaveLength(1)
+
+    await admin.from('businesses').delete().eq('id', biz)
+  })
+
+  it('cross-purpose isolation: a planner_cents reservation AT CAP does not deny a generation_posts reservation the same day', async () => {
+    const biz = await freshBusiness('CrossPurpose')
+
+    const capped = await admin.rpc('reserve_ai_budget', { p_business_id: biz, p_purpose: 'planner_cents', p_units: 300, p_cap: 300 })
+    expect(capped.error).toBeNull()
+    expect(capped.data ?? []).toHaveLength(1)
+
+    const stillCapped = await admin.rpc('reserve_ai_budget', { p_business_id: biz, p_purpose: 'planner_cents', p_units: 1, p_cap: 300 })
+    expect(stillCapped.data ?? []).toHaveLength(0)
+
+    const otherPurpose = await admin.rpc('reserve_ai_budget', { p_business_id: biz, p_purpose: 'generation_posts', p_units: 1, p_cap: 15 })
+    expect(otherPurpose.error).toBeNull()
+    expect(otherPurpose.data ?? []).toHaveLength(1)
+
+    await admin.from('businesses').delete().eq('id', biz)
   })
 })

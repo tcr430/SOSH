@@ -1777,3 +1777,45 @@ exists so the run-history clause can eventually be *met* rather than re-waived a
 ---
 
 _End Amendment B. Nothing above §17 was modified._
+
+
+---
+
+## §18 — Amendment C (Session 34 / ADR 0027, 2026-09-24, K2.11) — APPENDED, NOT REWRITTEN
+
+**Source:** ADR 0027 §3.1 and §6.3. **Additive; Stage C's behaviour is unchanged.** Nothing above §18 was modified.
+
+### C-1 — `runToolLoop` now has a second consumer
+
+`lib/ai/tool-runner.ts`'s `runToolLoop` was written for Stage C triage and hard-coded six triage-specific values,
+one of them a security control. ADR 0027 §3.1 parameterised them (bounds, prompt id, prompt version, model, the
+trial-quota flag and the decision schema become inputs) so that the campaign planner
+(`lib/campaigns/planner/orchestrator.ts`) can consume the same loop. **Stage C passes none of the new inputs and
+gets the old values by default.**
+
+**Which tests prove Stage C is unchanged.** `lib/ai/tool-runner.test.ts` and
+`lib/signals/triage/orchestrator.test.ts` are **unmodified** across Session 34
+(`git diff --stat dab25f86..HEAD -- lib/ai/tool-runner.test.ts lib/signals/triage/orchestrator.test.ts` is empty)
+and pass; `lib/ai/tool-runner-generic.test.ts` (`AGENCY-LOOP-BOUNDS-PARAMETERISED`, "the DEFAULT call (Stage C passes
+nothing) uses triage bounds, prompt id, version and model") asserts the defaults directly. The `TRIAGE_*` constant
+names were deliberately **not** renamed (ADR 0027 §3.1). The new schema input is typed to accept only a `z.strictObject`, so any
+schema passed in inherits §7.4's control (the absence of a `status`/`applied`/`approved`/`verified` field);
+`AGENCY-LOOP-SCHEMA-STRICT` scans for it.
+
+### C-2 — one behavioural addition Stage C now inherits: the dispatcher's envelope assertion
+
+The dispatcher now runs `assertGuardedToolResult` (`lib/ai/wrap-evidence.ts`) on every tool result **for both
+consumers**, before the result reaches the model: any raw string that is not a `[DATA]`-enveloped render or a UUID
+is replaced by a constant refusal string and still consumes a tool call (`lib/ai/tool-result-guard.test.ts`). For
+Stage C this is a tightening, not a change to a correct path: the real triage tools return only UUIDs and
+`wrapToolResultForPrompt` renders. Their return values were retyped with `toToolResultId` (a type-level brand, a
+runtime identity) and `lib/signals/triage/tools.test.ts` gained `as unknown as` casts (5 lines) to accommodate the
+brand; **no assertion in that file was changed.**
+
+### C-3 — the `tools.ts:19-20` citation
+
+`lib/signals/triage/tools.ts:19-20` cited `tools.test.ts` as the source scan for `SIGNAL3-TOOLS-READ-ONLY`. The scan
+is `lib/signals/triage/source-scans.test.ts:35-48`. **Corrected in K2.4** (`b741c078`); confirmed at K2.11 by
+reading the file (the comment now names `source-scans.test.ts:35-48`). The same commit added a cross-reference comment
+recording that `lib/campaigns/planner/tools.ts` re-implements this module's first four tools rather than importing
+them, to keep `lib/campaigns` from importing `lib/signals/triage`.

@@ -25,6 +25,7 @@ const ERROR_CODES = new Set([
   'invalid_response',
   'timeout',
   'invalid_campaign_state',
+  'brief_not_approved',
   'already_generated',
 ])
 

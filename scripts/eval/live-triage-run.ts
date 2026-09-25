@@ -33,6 +33,7 @@ import { resolve } from 'node:path'
 import { MODELS, calculateCostCents } from '../../lib/ai/models'
 import { safeParseOrAiError } from '../../lib/ai/parsers'
 import { getAnthropicClient, type AiClientLike } from '../../lib/ai/client'
+import { EMPTY_RENDERED_EVIDENCE } from '../../lib/ai/wrap-evidence'
 import { TriageDecisionSchema, TRIAGE_MAX_TOOL_CALLS, TRIAGE_MAX_TURNS, TRIAGE_MAX_OUTPUT_TOKENS_PER_TURN, type TriageTool, type TriageDecision } from '../../lib/ai/tool-runner'
 import { buildTriageSystemPrompt, buildTriageUserMessage } from '../../lib/signals/triage/orchestrator'
 import type { SignalCandidateWithSourceAndFeed } from '../../lib/db/signal-candidates'
@@ -128,7 +129,7 @@ export function buildStubTriageTools(): TriageTool[] {
       description:
         'List evidence memory (customer quotes, case studies, usage data) relevant to judging whether this release is worth surfacing.',
       inputSchema: QUERY_CONTEXT_JSON_SCHEMA,
-      execute: async () => ({ ids: [], evidence: '' }),
+      execute: async () => ({ ids: [], evidence: EMPTY_RENDERED_EVIDENCE }),
     },
     {
       name: 'list_audience_notes',

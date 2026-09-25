@@ -8,6 +8,7 @@ import { getTrialStateMaybe, incrementCampaignsCreated } from '@/lib/db/trial-st
 import { checkCampaignCreationAllowed } from '@/lib/campaigns/enforcement'
 import { createCampaign } from '@/lib/db/campaigns'
 import { listActiveSocialAccounts } from '@/lib/db/social-accounts'
+import { prepareBriefForCampaign } from '@/lib/campaigns/prepare-brief'
 import type { Platform } from '@/lib/db/types'
 
 export type CreateCampaignState = {
@@ -22,6 +23,9 @@ export type CreateCampaignState = {
   }
   success?: boolean
   campaignId?: string
+  // ADR 0017 §11 / ADR 0027 §2.7 (K2.12): true when the brief pipeline produced a brief, so the form lands the customer
+  // on the brief-review page; false leaves them on the campaign page exactly as before (the campaign stays 'draft').
+  briefReady?: boolean
 }
 
 function computeTotalPostsPlanned(
@@ -144,8 +148,13 @@ export async function createCampaignAction(
       }
     }
 
-    // Step 9: Return success with campaignId for client-side redirect
-    return { success: true, campaignId: campaign.id }
+    // Step 9: ADR 0017 §11 Stage A -> B, and ADR 0027's campaign planner (ruling A-8: the REQUEST PATH is the one place
+    // the planner runs). Assembles the brief, then critiques it and plans it concurrently. Never throws: a failure
+    // leaves the campaign as it was and is reported through `briefReady`, so it can never fail a campaign that exists.
+    const prepared = await prepareBriefForCampaign(client, campaign.id)
+
+    // Step 10: Return success with campaignId for client-side redirect
+    return { success: true, campaignId: campaign.id, briefReady: prepared.briefReady }
   } catch {
     return { errors: { _form: 'errors.campaign.generic' } }
   }

@@ -21,10 +21,12 @@ import {
   skipPostAction,
 } from '@/app/[locale]/(dashboard)/campaigns/[id]/posts/actions'
 import { AiOutputPreview } from './AiOutputPreview'
+import { ClaimFlags, MarkedPostText, hasOpenClaimFlags, type EvidenceOption } from './ClaimFlags'
+import { RedundancyFlag } from './RedundancyFlag'
 import { PostJudgmentBadge } from '@/components/posts/PostJudgmentBadge'
 import { isExcludedFromBulkApprove } from '@/lib/posts/judgment'
 import type { CalendarPostRow } from '@/lib/calendar/types'
-import type { CampaignRow, Platform, PostAiOriginalRow } from '@/lib/db/types'
+import type { CampaignRow, Platform, PostAiOriginalRow, PersistedClaimCheck, PersistedRedundancy } from '@/lib/db/types'
 
 const PLATFORM_LABELS: Record<Platform, string> = {
   linkedin: 'LinkedIn',
@@ -48,6 +50,14 @@ interface ApprovalsInboxProps {
   // as before — a snapshot-less post (manual origin, or none fetched) simply
   // renders no preview.
   originalsByPostId?: Record<string, PostAiOriginalRow>
+  // ADR 0027 §4/§8 (K2.10) — each post's claim-verification verdict (ai_generation_metadata.claimCheck), keyed by
+  // post_id, plus the EXISTING evidence a reviewer may link to a claim. Both optional/defaulted for the same reason
+  // as originalsByPostId: a post absent from the map renders "not checked" — never "clean".
+  claimChecksByPostId?: Record<string, PersistedClaimCheck>
+  // ADR 0027 §5.8(b) (D9) — each flagged post's redundancy flag, keyed by post_id; absent = nothing flagged (or the
+  // text changed since the flag was computed). Never blocks Approve.
+  redundancyByPostId?: Record<string, PersistedRedundancy>
+  evidenceOptions?: EvidenceOption[]
 }
 
 export function ApprovalsInbox({
@@ -55,6 +65,9 @@ export function ApprovalsInbox({
   campaigns,
   totalPendingCount,
   originalsByPostId = {},
+  claimChecksByPostId = {},
+  redundancyByPostId = {},
+  evidenceOptions = [],
 }: ApprovalsInboxProps) {
   const t = useTranslations('approvals')
   const params = useParams<{ locale: string }>()
@@ -320,6 +333,9 @@ export function ApprovalsInbox({
                   hasError={errorKey === post.id}
                   showReschedule={rescheduleFor === post.id}
                   original={originalsByPostId[post.id]}
+                  claimCheck={claimChecksByPostId[post.id]}
+                  redundancy={redundancyByPostId[post.id]}
+                  evidenceOptions={evidenceOptions}
                   onApprove={() => handleApprove(post.id)}
                   onApproveWithNewTime={newScheduledAt => handleApprove(post.id, newScheduledAt)}
                   onCancelReschedule={() => setRescheduleFor(null)}
@@ -341,6 +357,9 @@ function DraftRow({
   hasError,
   showReschedule,
   original,
+  claimCheck,
+  redundancy,
+  evidenceOptions,
   onApprove,
   onApproveWithNewTime,
   onCancelReschedule,
@@ -352,6 +371,9 @@ function DraftRow({
   hasError: boolean
   showReschedule: boolean
   original: PostAiOriginalRow | undefined
+  claimCheck: PersistedClaimCheck | undefined
+  redundancy: PersistedRedundancy | undefined
+  evidenceOptions: EvidenceOption[]
   onApprove: () => void
   onApproveWithNewTime: (newScheduledAt: string) => void
   onCancelReschedule: () => void
@@ -383,9 +405,27 @@ function DraftRow({
               {format(new Date(post.scheduled_at), 'EEE d MMM · HH:mm')}
             </span>
           </div>
-          <p className="line-clamp-2 text-sm leading-relaxed">{post.content}</p>
+          {/* ADR 0027 §4.8 (K2.10): a post with OPEN claim flags renders its FULL text with each flagged sentence
+              marked inline (the reviewer must be able to read the sentence in context); otherwise the unchanged
+              two-line clamp. The text itself is never altered either way. */}
+          {hasOpenClaimFlags(claimCheck) ? (
+            <MarkedPostText content={post.content} check={claimCheck} />
+          ) : (
+            <p className="line-clamp-2 text-sm leading-relaxed">{post.content}</p>
+          )}
           <PostJudgmentBadge original={original} t={tJudgment} />
           <AiOutputPreview original={original} />
+          <ClaimFlags
+            postId={post.id}
+            content={post.content}
+            check={claimCheck}
+            evidenceOptions={evidenceOptions}
+            editHref={`/${locale}/campaigns/${post.campaign_id}/posts`}
+          />
+          {/* ADR 0027 §5.8(b) (D9): a post that repeats another post of the campaign is flagged here, beside the
+              claim flags. Informational only — it is not a control, Approve below stays enabled, nothing is hidden,
+              reordered or edited. */}
+          <RedundancyFlag redundancy={redundancy} />
         </div>
 
         {!isSkipOpen && !showReschedule && (

@@ -1550,6 +1550,74 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
     Track J is proved by tests and is inert in production until that changes. X's live response shape (including a deleted
     post) and LinkedIn readability are **still unverified** — owed to the first live smoke (ADR 0028 Amendment A A.5).
 
+- **Session 34 — Track K Builder close-out (ADR 0027, agency in generation), K2.1–K2.11 (`8c21b052`…the K2.11 commit), branch
+  `session-34-adr-0027`. PUSHED as PR #13 (base `session-33-adr-0026`), CI green at `998030e8`, no Reviewer yet.** The Reviewer (K3, with `security-reviewer` as a mandatory
+  second pass) has not run; nothing below has been read by anyone but the Builder.
+  - **What shipped:** a closed inventory of six read-only, tenant-bound generation tools on a parameterised `runToolLoop`
+    (Stage C triage is byte-identical: its tests are unmodified); claim verification that says "cited", never "verified";
+    `campaign_plan_proposals` with RLS, write-once and transition triggers and decide/apply/freeze RPCs; the planner
+    orchestrator; a deterministic set-redundancy check; and the two surfaces (plan review on the brief page, claim flags at
+    the approval gate), in en/pt/es. **46 `AGENCY-*` constraints**, mapped to their proving file and CI job in ADR 0027
+    §V.2. `AGENCY-GATES-UNCHANGED` closes in three parts (ADR 0027 §V.4), deliberately not as a manifest scan.
+  - **The campaign planner is WIRED as of K2.12 (`createCampaignAction` -> `prepareBriefForCampaign`, ADR 0027 §V.8), after the K2.11 close-out
+    found it was not.** A customer-authored campaign now gets a brief, its critique and its planner run (concurrently) when the
+    form is submitted, and lands on brief review. It has NOT been observed against a real model or in a browser. Creation now
+    blocks on Stage A plus the slower of critique and planner, and spends LLM cost per new campaign, trials included.
+    `S34-WIRE-PLANNER` is closed.
+  - **Approve -> generate is wired as of K2.13 (ADR 0027 §V.9), closing `S34-APPROVE-TO-GENERATE`.** A separate Generate control appears on
+    an approved brief (`generateStage`), `startGenerationAction` accepts `awaiting_brief` with an approved brief, and a draft campaign
+    whose brief failed at submit has a retry. The choice of a separate control over auto-start was deliberate: generation spends trial
+    post quota and runs long, so it stays an explicit customer action. **The full path has never been run in a browser or against a
+    real model** (`S34-E2E-UNVERIFIED`, launch sign-off): creation latency and per-campaign LLM cost at creation are the two things to
+    watch. Full app suite, CI's dummy env, at this tree: 336 files, 4837 tests passed locally; CI at `998030e8` below.
+  - **Measured p95 latency against ADR 0027 §7.3's predicted 30 000 ms: NOT MEASURED.** No planner run has ever been
+    observed, in tests or elsewhere, so there is no measurement. The 30 000 ms figure remains a prediction and is not
+    reported as anything else here.
+  - **CI at `998030e8` (PR #13, `pull_request` events), read from the logs:** `app-tests`
+    [35985368438](https://github.com/tcr430/SOSH/actions/runs/35985368438) green, `skip-guard: 333 file(s) ... zero failures — green. (4837/4837 tests passed)`;
+    `db-tests` [35985368440](https://github.com/tcr430/SOSH/actions/runs/35985368440) green, `skip-guard: 93 file(s) ... zero failures — green. (782/782 tests passed)`,
+    no `signal 11`/`SIGSEGV`/`OOMKilled` line in the log; `eval-reported`/`eval-threshold` green; Vercel preview deployed. The ADR 0027 constraint
+    map's "executed green in CI at" column is filled from these two runs (ADR 0027 §V.10), as a per-file fact. **No total is claimed.**
+  - **`db-tests` promotion tally: unchanged.** Both runs are `pull_request` events; only consecutive green `master` push runs move it
+    (the last on record is the one cited in the Session 33 entry above). This pass neither advances nor resets it.
+  - **What the Builder found and fixed while closing** (ADR 0027 §V.7): ADR 0024's fourth-purpose amendment, claimed in
+    K2.6's commit subject, had never been written (now ADR 0024 §18); constraint 29 had no source-side half (a real-tree
+    scan added); a stale caller claim in `plan-brief.test.ts` corrected. **Found and not fixed:** the posts trigger gates
+    only the grant of approval, so an `author` can raw-write `draft -> scheduled|published` on their own row (not a
+    publication bypass: the worker consumes only rows `claim_posts_for_publishing` returned from `approved`).
+    `S34-POSTS-TRIGGER-AUTHOR-WRITES` in `docs/backlog.md`.
+  - **Amendments (each additive):** ADR 0017 Amendment F, ADR 0021 §18 (Amendment C), ADR 0024 §18, ADR 0027 "Builder
+    verification (K2.11)". ADR 0010 §D2.5's `campaign_plan_proposals` row landed in the same commit as its migration
+    (`09dbd445`), confirmed.
+  - **Next:** the Reviewer (K3, `security-reviewer` mandatory), reading at the commit range `origin/session-33-adr-0026..998030e8`, never HEAD.
+
+- **Session 34-D — Track K correction pass, D0-D12, CLOSED (2026-09-25), branch `session-34-adr-0027`, range `cad8790f..<D12 commit>`.**
+  The Reviewer's report (`docs/reviews/session-34-reviewer.md`, head `cad8790f`) found 20 findings (1 BLOCKER, 6 MAJOR,
+  8 MINOR, 5 NIT); the founder ruled none is deferred. **All 20 are dispositioned in the report's appendix; NIT-5 is the one
+  recorded closure** (a pushed commit body cannot be rewritten). One migration
+  (`20260924100000_apply_brief_proposals_exact_placement.sql`, forward, D5); one new constraint,
+  `AGENCY-REORDER-RATIFIED-EXACT` (47 `AGENCY-*` constraints now). The two claims that were not true at `cad8790f`
+  (ADR 0027 V.2 rows 34 and 35) are superseded by ADR 0027 §VI, not edited.
+  - **PR #14** (base `master`, head `session-34-adr-0027`) was opened to run CI: PR #13 had already merged into
+    `session-33-adr-0026`, and the required workflows run only on pull requests and `master` pushes. **Not merged.**
+  - **CI at `ac595776` (D11), `pull_request` events, read from the logs:** `app-tests`
+    [36110499833](https://github.com/tcr430/SOSH/actions/runs/36110499833) green, `skip-guard: 345 file(s) under [app, lib, components] all visible, zero failures — green. (4994/4994 tests passed)`;
+    `db-tests` [36110499747](https://github.com/tcr430/SOSH/actions/runs/36110499747) green, `skip-guard: 100 file(s) under [supabase/__tests__] all visible, zero failures — green. (826/826 tests passed)`,
+    zero `SIGSEGV`/`signal 11`/`OOMKilled`/`out of memory` lines; `eval-reported`/`eval-threshold`
+    [36110499930](https://github.com/tcr430/SOSH/actions/runs/36110499930) green. Counts are higher than at `998030e8`
+    (333 / 4837 and 93 / 782). All 47 constraints are re-dated to `ac595776` in ADR 0027 §VI.9.
+  - **`db-tests` promotion tally: unchanged.** Every run above is a `pull_request` event (PR #14); only consecutive
+    green `master` **push** runs move it. This pass neither advances nor resets it.
+  - **Measured p95 latency against ADR 0027 §7.3's predicted 30 000 ms: still NOT MEASURED.** No planner run has been
+    observed against a real model, in tests or elsewhere; the figure is a prediction and is not estimated here.
+  - **Delivered that was previously only claimed:** approve/revise now supersede proposals on the production path
+    (BLOCKER-1); a ratified reorder lands where its sentence says (MAJOR-1); edited or regenerated posts no longer show
+    stale claim flags (MAJOR-3); `planner_run_id` joins to its `ai_usage` row (MAJOR-4); set-redundancy flags reach the
+    approval gate, never blocking Approve (MAJOR-5, ADR 0017 F.4). **Disclosed, not closed:** `checkSetRedundancy` still
+    takes `proofType: null`, and it is structural word-overlap, not semantic.
+  - **Still unverified:** the whole agency path has never run in a browser or against a real model
+    (`S34-E2E-UNVERIFIED`); no finding row was added to `docs/backlog.md` (founder instruction).
+
 ## What's next
 
 Session 19D correction pass is applied. Voice model core is merge-ready. One open decision required before closing Session 19:

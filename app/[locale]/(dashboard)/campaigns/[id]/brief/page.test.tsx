@@ -13,12 +13,19 @@ vi.mock('@/lib/db/businesses', () => ({ getBusinessForUser: vi.fn() }))
 vi.mock('@/lib/db/campaigns', () => ({ getCampaignById: vi.fn() }))
 vi.mock('@/lib/db/campaign-briefs', () => ({ getBriefByCampaign: vi.fn() }))
 vi.mock('./BriefReviewForm', () => ({ BriefReviewForm: vi.fn(() => null) }))
+// ADR 0027 K2.10 — the page now reads the caller's member row and the brief's proposals, and renders the panel.
+vi.mock('@/lib/db/business-members', () => ({ getMemberForUser: vi.fn().mockResolvedValue(null) }))
+vi.mock('@/lib/db/campaign-plan-proposals', () => ({ listCurrentVersionPlanProposals: vi.fn().mockResolvedValue([]) }))
+vi.mock('./PlanReviewPanel', () => ({ PlanReviewPanel: vi.fn(() => null) }))
 
 import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
 import { getCampaignById } from '@/lib/db/campaigns'
 import { getBriefByCampaign } from '@/lib/db/campaign-briefs'
 import { BriefReviewForm } from './BriefReviewForm'
+import { PlanReviewPanel } from './PlanReviewPanel'
+import { getMemberForUser } from '@/lib/db/business-members'
+import { listCurrentVersionPlanProposals } from '@/lib/db/campaign-plan-proposals'
 import CampaignBriefPage from './page'
 import type { CampaignRow, CampaignBriefRow, BusinessRow } from '@/lib/db/types'
 
@@ -46,6 +53,7 @@ function makeBrief(overrides: Partial<CampaignBriefRow> = {}): CampaignBriefRow 
     status: 'critiqued', version: 1, overall_score: 85, critique: { critique: ['note'] },
     frozen_at: null, deleted_at: null,
     created_at: '2026-07-01T00:00:00Z', updated_at: '2026-07-01T00:00:00Z',
+    plan_analysis_status: 'not_run', plan_analysis_reason: null,
     ...overrides,
   }
 }
@@ -96,5 +104,113 @@ describe('CampaignBriefPage — MAJOR-2 (Session 24-D D0): remount key on BriefR
     expect(keyOf(first)).toBe('brief-1')
     expect(keyOf(second)).toBe('brief-2')
     expect(keyOf(first)).not.toBe(keyOf(second))
+  })
+})
+
+// ── ADR 0027 §8 (Session 34 K2.10) — the planner panel on the EXISTING brief-review page ──────────────────────────
+//
+// SHARED-FUNCTION CALLERS: CampaignBriefPage is a route module (one caller: Next). BriefReviewForm's props and key
+// are UNCHANGED (asserted by the two tests above, which still pass). The panel is a new sibling, not a new route.
+describe('CampaignBriefPage — planner panel (ADR 0027 K2.10)', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  type PanelProps = {
+    campaignId: string
+    briefVersion: number
+    briefStatus: string
+    planStatus: string
+    planReason: string | null
+    proposals: Array<Record<string, unknown>>
+    roleSequence: unknown[]
+    canAuthor: boolean
+  }
+  type El = { type: unknown; key: string | null; props: PanelProps }
+  const childrenOf = (r: unknown) => (r as { props: { children: El[] } }).props.children
+  const panelOf = (r: unknown) => childrenOf(r).find((c) => c.type === PlanReviewPanel)
+
+  it('hands the panel the PERSISTED plan_analysis_status and _reason, never a derived value', async () => {
+    mockAuthedClient()
+    vi.mocked(getBriefByCampaign).mockResolvedValue(makeBrief({ plan_analysis_status: 'unavailable', plan_analysis_reason: 'wall_clock_exceeded' }))
+    const result = await CampaignBriefPage({ params: Promise.resolve({ locale: 'en', id: 'camp-1' }) })
+    const panel = panelOf(result)
+    expect(panel?.props.planStatus).toBe('unavailable')
+    expect(panel?.props.planReason).toBe('wall_clock_exceeded')
+  })
+
+  it.each(['not_run', 'ok', 'unavailable', 'capped'] as const)('passes plan_analysis_status=%s through untouched', async (status) => {
+    mockAuthedClient()
+    vi.mocked(getBriefByCampaign).mockResolvedValue(makeBrief({ plan_analysis_status: status }))
+    const result = await CampaignBriefPage({ params: Promise.resolve({ locale: 'en', id: 'camp-1' }) })
+    expect(panelOf(result)?.props.planStatus).toBe(status)
+  })
+
+  it('reads proposals through the BOUNDED list function with the CALLER client (RLS applies), not the service client', async () => {
+    mockAuthedClient()
+    const brief = makeBrief({ id: 'brief-9' })
+    vi.mocked(getBriefByCampaign).mockResolvedValue(brief)
+    await CampaignBriefPage({ params: Promise.resolve({ locale: 'en', id: 'camp-1' }) })
+    const callerClient = await vi.mocked(createClient).mock.results[0].value
+    expect(listCurrentVersionPlanProposals).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(listCurrentVersionPlanProposals).mock.calls[0][0]).toBe(callerClient)
+    expect(vi.mocked(listCurrentVersionPlanProposals).mock.calls[0][1]).toBe('brief-9')
+    // Session 34-D D10 (MINOR-7): the read is scoped to the brief's CURRENT VERSION (makeBrief defaults to version 1).
+    expect(vi.mocked(listCurrentVersionPlanProposals).mock.calls[0][2]).toBe(brief.version)
+  })
+
+  it('maps proposal rows to the serialisable view (snake_case -> camelCase), including the superseded reason', async () => {
+    mockAuthedClient()
+    vi.mocked(getBriefByCampaign).mockResolvedValue(makeBrief())
+    vi.mocked(listCurrentVersionPlanProposals).mockResolvedValue([
+      {
+        id: 'p-1', kind: 'substitute', target_order: 0, proposed_role: 'objection_response', proposed_order: null,
+        reason: 'No customer evidence exists.', status: 'superseded', superseded_reason: 'brief_frozen', brief_version: 1,
+      },
+    ] as never)
+    const result = await CampaignBriefPage({ params: Promise.resolve({ locale: 'en', id: 'camp-1' }) })
+    expect(panelOf(result)?.props.proposals).toEqual([
+      {
+        id: 'p-1', kind: 'substitute', targetOrder: 0, proposedRole: 'objection_response', proposedOrder: null,
+        reason: 'No customer evidence exists.', status: 'superseded', supersededReason: 'brief_frozen', briefVersion: 1,
+      },
+    ])
+  })
+
+  it('D10: reads the proposals of the brief CURRENT version - a ratified round (version 2) reads version 2, never version 1', async () => {
+    mockAuthedClient()
+    vi.mocked(getBriefByCampaign).mockResolvedValue(makeBrief({ id: 'brief-1', version: 2 }))
+    await CampaignBriefPage({ params: Promise.resolve({ locale: 'en', id: 'camp-1' }) })
+    expect(vi.mocked(listCurrentVersionPlanProposals).mock.calls[0][2]).toBe(2)
+  })
+
+  it('keys the panel on brief id AND version, so a ratified round (which advances the version) clears the selection', async () => {
+    mockAuthedClient()
+    vi.mocked(getBriefByCampaign).mockResolvedValue(makeBrief({ id: 'brief-1', version: 1 }))
+    const v1 = await CampaignBriefPage({ params: Promise.resolve({ locale: 'en', id: 'camp-1' }) })
+    vi.mocked(getBriefByCampaign).mockResolvedValue(makeBrief({ id: 'brief-1', version: 2 }))
+    const v2 = await CampaignBriefPage({ params: Promise.resolve({ locale: 'en', id: 'camp-1' }) })
+    expect(panelOf(v1)?.key).toBe('brief-1-1')
+    expect(panelOf(v2)?.key).toBe('brief-1-2')
+  })
+
+  it('renders the panel BEFORE the review form, so the proposals are read before the human can approve', async () => {
+    mockAuthedClient()
+    vi.mocked(getBriefByCampaign).mockResolvedValue(makeBrief())
+    const result = await CampaignBriefPage({ params: Promise.resolve({ locale: 'en', id: 'camp-1' }) })
+    const types = childrenOf(result).map((c) => c.type)
+    expect(types.indexOf(PlanReviewPanel)).toBeGreaterThan(-1)
+    expect(types.indexOf(PlanReviewPanel)).toBeLessThan(types.indexOf(BriefReviewForm))
+  })
+
+  it("canAuthor is true for the business owner and false for a viewer member (UX echo of user_can 'author')", async () => {
+    mockAuthedClient()
+    vi.mocked(getBriefByCampaign).mockResolvedValue(makeBrief())
+    expect(panelOf(await CampaignBriefPage({ params: Promise.resolve({ locale: 'en', id: 'camp-1' }) }))?.props.canAuthor).toBe(true)
+
+    vi.mocked(getBusinessForUser).mockResolvedValue({ ...MOCK_BUSINESS, owner_id: 'someone-else' })
+    vi.mocked(getMemberForUser).mockResolvedValue({ role: 'viewer', status: 'active', user_id: 'user-1' } as never)
+    expect(panelOf(await CampaignBriefPage({ params: Promise.resolve({ locale: 'en', id: 'camp-1' }) }))?.props.canAuthor).toBe(false)
+
+    vi.mocked(getMemberForUser).mockResolvedValue({ role: 'editor', status: 'active', user_id: 'user-1' } as never)
+    expect(panelOf(await CampaignBriefPage({ params: Promise.resolve({ locale: 'en', id: 'camp-1' }) }))?.props.canAuthor).toBe(true)
   })
 })

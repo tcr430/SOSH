@@ -1,6 +1,7 @@
 import { formatISO, subMinutes } from 'date-fns'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { PostRow, PostInsert, PostUpdate, PostStatus, Platform, AiGenerationMetadata } from './types'
+import type { PostRow, PostInsert, PostUpdate, PostStatus, Platform, AiGenerationMetadata, ClaimResolution, PersistedClaimCheck, PersistedRedundancy } from './types'
+import { claimCheckMatchesContent, fingerprintMatchesContent } from '@/lib/campaigns/claim-fingerprint'
 import type { CalendarPostRow, CalendarPostMetrics } from '@/lib/calendar/types'
 import { getErrorMessage } from './utils'
 import { toUtcIso } from '@/lib/utils'
@@ -295,6 +296,112 @@ export async function createPosts(
     .select()
   if (error) throw new Error(getErrorMessage(error))
   return (data as PostRow[]) ?? []
+}
+
+// ADR 0027 §4.8 (Session 34 K2.10) — the claim-verification verdicts for a page of posts, for the approvals gate.
+// A SEPARATE bounded read rather than widening listPendingDraftPosts / CalendarPostRow (shared by the calendar and
+// the approvals inbox): only the approvals surface needs the verdict. Bounded by the caller's id list — the
+// `.limit` is that list's own length, never a fixed cap that could silently truncate a page. The caller's client,
+// so RLS scopes it. Session 34-D D7 (MAJOR-3): a check is returned ONLY if it is valid for the text the post holds
+// NOW — it carries a fingerprint and the fingerprint matches the current `content`. A post with no claimCheck, with a
+// K2.9-era check that predates the fingerprint, whose text was EDITED after generation (either edit path), or that
+// was REGENERATED, is simply absent from the result: absence means "not checked", never "clean". This is
+// read-side invalidation on purpose — every content writer (present and future) is covered without anyone
+// remembering to clear a key.
+export async function listClaimChecksByPostIds(
+  client: SupabaseClient,
+  postIds: string[],
+): Promise<Record<string, PersistedClaimCheck>> {
+  if (postIds.length === 0) return {}
+  const { data, error } = await client
+    .from('posts')
+    .select('id, content, ai_generation_metadata')
+    .in('id', postIds)
+    .is('deleted_at', null)
+    .order('id', { ascending: true })
+    .limit(postIds.length)
+  if (error) throw new Error(getErrorMessage(error))
+  const out: Record<string, PersistedClaimCheck> = {}
+  for (const row of (data ?? []) as Array<{ id: string; content: string; ai_generation_metadata: Record<string, unknown> | null }>) {
+    const check = row.ai_generation_metadata?.claimCheck as PersistedClaimCheck | undefined
+    if (claimCheckMatchesContent(check, row.content)) out[row.id] = check
+  }
+  return out
+}
+
+// ADR 0027 §5.8(b) (Session 34-D D9, MAJOR-5) — the redundancy flags for a page of posts, for the approvals gate.
+// The same bounded, caller-client shape as listClaimChecksByPostIds (and NOT a widening of the shared
+// listPendingDraftPosts / CalendarPostRow): the `.limit` is the id list's own length, ordered by id, RLS via the
+// caller's client. A flag is returned ONLY if it was computed on the text the post holds NOW (its fingerprint
+// matches the current content) — an edited or regenerated post shows no flag, exactly like a claim check. A post
+// with no flag is simply absent: absence means "nothing flagged".
+export async function listRedundancyByPostIds(
+  client: SupabaseClient,
+  postIds: string[],
+): Promise<Record<string, PersistedRedundancy>> {
+  if (postIds.length === 0) return {}
+  const { data, error } = await client
+    .from('posts')
+    .select('id, content, ai_generation_metadata')
+    .in('id', postIds)
+    .is('deleted_at', null)
+    .order('id', { ascending: true })
+    .limit(postIds.length)
+  if (error) throw new Error(getErrorMessage(error))
+  const out: Record<string, PersistedRedundancy> = {}
+  for (const row of (data ?? []) as Array<{ id: string; content: string; ai_generation_metadata: Record<string, unknown> | null }>) {
+    const flag = row.ai_generation_metadata?.redundancy as PersistedRedundancy | undefined
+    if (flag && flag.overlaps?.length > 0 && fingerprintMatchesContent(flag.contentFingerprint, row.content)) out[row.id] = flag
+  }
+  return out
+}
+
+// ADR 0027 §4.8 (Session 34 K2.10) — records what a HUMAN did about ONE flagged claim
+// (ai_generation_metadata.claimCheck.claims[i].resolution). NEVER writes posts.content: the system does not touch
+// the text (AGENCY-CLAIMS-FLAGGED-NEVER-EDITED); editing the text is the existing post-edit path.
+//
+// Read-modify-write of a jsonb column, so it is GUARDED on updated_at: two reviewers resolving different claims of
+// the same post at once would otherwise let the second write silently discard the first. A lost race returns
+// 'conflict' and the caller re-reads. Returns 'not_checked' when the post carries no `checked` verdict (nothing to
+// resolve) and 'no_such_claim' for an out-of-range index — typed outcomes, never exceptions.
+//
+// Session 34-D D7 (MAJOR-3): a resolution is NEVER written onto stale spans. If the check's fingerprint is absent or
+// does not match the post's current `content` (the text was edited or regenerated since the check), the check does
+// not describe this text any more, so there is "no claim check to update": 'not_checked' — the same outcome, and the
+// same user-facing sentence, as a post that was never checked.
+export type SetClaimResolutionResult = 'ok' | 'conflict' | 'not_found' | 'not_checked' | 'no_such_claim'
+
+export async function setPostClaimResolution(
+  client: SupabaseClient,
+  postId: string,
+  claimIndex: number,
+  resolution: ClaimResolution,
+): Promise<SetClaimResolutionResult> {
+  const { data: current, error: readError } = await client
+    .from('posts')
+    .select('content, ai_generation_metadata, updated_at')
+    .eq('id', postId)
+    .is('deleted_at', null)
+    .maybeSingle()
+  if (readError) throw new Error(getErrorMessage(readError))
+  if (!current) return 'not_found'
+
+  const row = current as { content: string; ai_generation_metadata: Record<string, unknown> | null; updated_at: string }
+  const metadata = row.ai_generation_metadata ?? {}
+  const check = metadata.claimCheck as PersistedClaimCheck | undefined
+  if (!claimCheckMatchesContent(check, row.content) || check.status !== 'checked') return 'not_checked'
+  if (!Number.isInteger(claimIndex) || claimIndex < 0 || claimIndex >= check.claims.length) return 'no_such_claim'
+
+  const claims = check.claims.map((c, i) => (i === claimIndex ? { ...c, resolution } : c))
+  const { data: updated, error: writeError } = await client
+    .from('posts')
+    .update({ ai_generation_metadata: { ...metadata, claimCheck: { ...check, claims } } })
+    .eq('id', postId)
+    .eq('updated_at', row.updated_at)
+    .select('id')
+    .maybeSingle()
+  if (writeError) throw new Error(getErrorMessage(writeError))
+  return updated ? 'ok' : 'conflict'
 }
 
 export async function updatePost(

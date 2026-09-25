@@ -15,7 +15,7 @@ vi.mock('@/lib/db/campaign-briefs', () => ({
   getBriefByCampaign: vi.fn(),
   createBrief: vi.fn(),
   submitBriefForCritique: vi.fn(),
-  approveBrief: vi.fn(),
+  approveBriefAndSupersedeProposals: vi.fn(),
 }))
 
 vi.mock('@/lib/ai/context', () => ({
@@ -47,7 +47,7 @@ vi.mock('@/lib/db/posts', () => ({
 
 import { assembleBrief, critiqueBrief, approveBriefIfQualified, freezeBrief } from './brief'
 import { getCampaignById, moveCampaignToAwaitingBrief } from '@/lib/db/campaigns'
-import { getBriefByCampaign, createBrief, submitBriefForCritique, approveBrief } from '@/lib/db/campaign-briefs'
+import { getBriefByCampaign, createBrief, submitBriefForCritique, approveBriefAndSupersedeProposals } from '@/lib/db/campaign-briefs'
 import { buildCustomerContext } from '@/lib/ai/context'
 import { runPrompt } from '@/lib/ai/runner'
 import { wrapEvidenceForPrompt, neutralize } from '@/lib/ai/wrap-evidence'
@@ -102,6 +102,8 @@ function makeBrief(overrides: Partial<CampaignBriefRow> = {}): CampaignBriefRow 
     deleted_at: null,
     created_at: '2026-08-01T00:00:00Z',
     updated_at: '2026-08-01T00:00:00Z',
+    plan_analysis_status: 'not_run',
+    plan_analysis_reason: null,
     ...overrides,
   }
 }
@@ -136,7 +138,7 @@ beforeEach(() => {
   vi.mocked(getBriefByCampaign).mockReset()
   vi.mocked(createBrief).mockReset()
   vi.mocked(submitBriefForCritique).mockReset()
-  vi.mocked(approveBrief).mockReset()
+  vi.mocked(approveBriefAndSupersedeProposals).mockReset()
   vi.mocked(buildCustomerContext).mockReset().mockResolvedValue(makeCtx())
   vi.mocked(runPrompt).mockReset()
   vi.mocked(wrapEvidenceForPrompt).mockReset().mockResolvedValue('' as never)
@@ -278,7 +280,7 @@ describe('critiqueBrief — Stage B', () => {
 })
 
 describe('approveBriefIfQualified — Stage C, the HARD gate (MODE2-CRITIQUE-GATE)', () => {
-  it('BELOW threshold: refuses approval, returns the critique, NEVER calls approveBrief', async () => {
+  it('BELOW threshold: refuses approval, returns the critique, NEVER calls approveBriefAndSupersedeProposals', async () => {
     vi.mocked(getBriefByCampaign).mockResolvedValue(
       makeBrief({ status: 'critiqued', overall_score: 69, critique: { note: 'weak' } }),
     )
@@ -290,24 +292,24 @@ describe('approveBriefIfQualified — Stage C, the HARD gate (MODE2-CRITIQUE-GAT
       expect(result.overallScore).toBe(69)
       expect(result.critique).toEqual({ note: 'weak' })
     }
-    expect(approveBrief).not.toHaveBeenCalled()
+    expect(approveBriefAndSupersedeProposals).not.toHaveBeenCalled()
   })
 
   it('AT threshold (exactly 70): allowed — this test reddens if the comparison flips from >= to >', async () => {
     vi.mocked(getBriefByCampaign).mockResolvedValue(makeBrief({ status: 'critiqued', overall_score: 70 }))
-    vi.mocked(approveBrief).mockResolvedValue(
+    vi.mocked(approveBriefAndSupersedeProposals).mockResolvedValue(
       makeBrief({ status: 'approved', overall_score: 70, frozen_at: '2026-08-01T01:00:00Z' }),
     )
 
     const result = await approveBriefIfQualified('camp-1')
 
     expect(result.approved).toBe(true)
-    expect(approveBrief).toHaveBeenCalledWith(expect.anything(), 'brief-1')
+    expect(approveBriefAndSupersedeProposals).toHaveBeenCalledWith('biz-1', 'brief-1')
   })
 
   it('ABOVE threshold: allowed, returns a FrozenBrief', async () => {
     vi.mocked(getBriefByCampaign).mockResolvedValue(makeBrief({ status: 'critiqued', overall_score: 90 }))
-    vi.mocked(approveBrief).mockResolvedValue(
+    vi.mocked(approveBriefAndSupersedeProposals).mockResolvedValue(
       makeBrief({ status: 'approved', overall_score: 90, frozen_at: '2026-08-01T01:00:00Z' }),
     )
 
@@ -325,7 +327,7 @@ describe('approveBriefIfQualified — Stage C, the HARD gate (MODE2-CRITIQUE-GAT
     expect(below.approved).toBe(false)
 
     vi.mocked(getBriefByCampaign).mockResolvedValueOnce(makeBrief({ status: 'critiqued', overall_score: 70 }))
-    vi.mocked(approveBrief).mockResolvedValue(makeBrief({ status: 'approved', overall_score: 70, frozen_at: 'x' }))
+    vi.mocked(approveBriefAndSupersedeProposals).mockResolvedValue(makeBrief({ status: 'approved', overall_score: 70, frozen_at: 'x' }))
     const at = await approveBriefIfQualified('camp-1')
     expect(at.approved).toBe(true)
   })

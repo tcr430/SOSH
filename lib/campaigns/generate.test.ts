@@ -64,6 +64,18 @@ vi.mock('@/lib/db/generation-budget', () => ({
   releaseGenerationPost: vi.fn(),
 }))
 
+// ADR 0027 §4.2 (K2.9) — generate.ts now binds the campaign's pinned evidence ONCE (bindEvidenceForPrompt: one
+// fetch -> the prompt text AND the set of ids sent) and verifies claims against that set. Both are mocked here
+// so the existing tests stay about what they were about; the claim behaviour has its own tests below.
+vi.mock('@/lib/ai/wrap-evidence', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/ai/wrap-evidence')>()
+  return { ...actual, bindEvidenceForPrompt: vi.fn() }
+})
+vi.mock('@/lib/memory', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/memory')>()
+  return { ...actual, retrieveEvidenceMemory: vi.fn() }
+})
+
 // ── Imports after mocks ─────────────────────────────────────────────────────
 
 import { generatePostsForCampaign } from './generate'
@@ -80,10 +92,13 @@ import { incrementPostsGeneratedBy } from '@/lib/db/trial-state'
 import { schedulePosts } from '@/lib/campaigns/schedule'
 import { getBusinessById } from '@/lib/db/businesses'
 import { reserveGenerationPost, releaseGenerationPost } from '@/lib/db/generation-budget'
+import { bindEvidenceForPrompt } from '@/lib/ai/wrap-evidence'
+import { retrieveEvidenceMemory } from '@/lib/memory'
 import type { CampaignRow, CampaignBriefRow, PostRow, BusinessRow } from '@/lib/db/types'
 import type { CustomerContext } from '@/lib/ai/context'
 import type { RubricOutput } from '@/lib/ai/prompts/rubric'
 import type { SinglePostOutput, ThreadOutput } from '@/lib/ai/prompts/formats/schemas'
+import { contentFingerprint } from '@/lib/campaigns/claim-fingerprint'
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -140,6 +155,8 @@ const mockBrief: CampaignBriefRow = {
   deleted_at: null,
   created_at: '2026-05-15T00:00:00.000Z',
   updated_at: '2026-06-01T00:00:00.000Z',
+  plan_analysis_status: 'not_run',
+  plan_analysis_reason: null,
 }
 
 const mockCtx: CustomerContext = {
@@ -289,6 +306,9 @@ function makeInsertedRows(count: number): PostRow[] {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // An EMPTY bound set by default: nothing pinned/sent. (A test that cares overrides it.)
+  vi.mocked(bindEvidenceForPrompt).mockResolvedValue({ rendered: '', sentIds: new Set<string>() } as never)
+  vi.mocked(retrieveEvidenceMemory).mockResolvedValue([])
   vi.mocked(getCampaignById).mockResolvedValue(mockCampaign)
   vi.mocked(getBriefByCampaign).mockResolvedValue(mockBrief)
   vi.mocked(markBriefGenerated).mockResolvedValue({ ...mockBrief, status: 'generated' })
@@ -1160,5 +1180,258 @@ describe('generatePostsForCampaign — consistency pass wiring (ADR §8)', () =>
       expect.anything(), SESSION_ID,
       expect.objectContaining({ status: 'failed', error_code: 'consistency_check_failed' }),
     )
+  })
+})
+
+// ── ADR 0027 §4 (Session 34 K2.9) — claim verification wiring ───────────────────────────────────────────────
+//
+// AGENCY-CLAIM-EVIDENCE-TRACEABLE (19), AGENCY-CLAIM-NO-CORPUS-DISTINCT (20), AGENCY-CLAIMS-FLAGGED-NEVER-EDITED
+// (18, Tier-2 half). The verdict rides in ai_generation_metadata.claimCheck; posts.content is never touched and no
+// post is ever dropped. The pure verifier is exercised in verify-claims.test.ts; THIS block proves the wiring:
+// the set the verifier uses is the set that was SENT (bound once), never a second read.
+//
+// SHARED-FUNCTION CALLERS: generatePostsForCampaign has one production caller (generate-action.ts); its callers'
+// tests are unchanged by this block. generateNativeContent's callers: generate.ts (passes `evidence`) and the
+// regeneration path (does not) — generate-native.test.ts covers both shapes.
+describe('generatePostsForCampaign — claim verification (ADR 0027 §4)', () => {
+  const CLAIM = 'We cut churn by 42% in Q3.'
+  type TestClaim = { text: string; evidenceMemoryId?: string | null }
+  const claimingOutput = (idx: number, claims: TestClaim[]): SinglePostOutput => ({
+    format: 'single',
+    body: `Update ${idx}: ${CLAIM}\nRest of the post ${idx}`,
+    imageBrief: null,
+    scriptBrief: null,
+    claims,
+  })
+  const withClaims = (claims: TestClaim[]) => {
+    vi.mocked(generateNativeContent).mockReset()
+    vi.mocked(generateNativeContent).mockImplementation(async (_c, _x, input) => {
+      const idx = mockBrief.content.roleSequence.findIndex((r) => r.angle === input.angle)
+      return claimingOutput(idx, claims)
+    })
+  }
+  const sent = (ids: string[]) =>
+    vi.mocked(bindEvidenceForPrompt).mockResolvedValue({ rendered: ids.map((i) => `Evidence id: ${i}`).join('\n'), sentIds: new Set(ids) } as never)
+  const insertedPosts = () => vi.mocked(createPosts).mock.calls[0][1]
+  type CheckedClaim = { outcome: string; span: { start: number; end: number } | null; evidenceMemoryId?: string }
+  const checkOf = (post: { ai_generation_metadata?: unknown }) =>
+    (post.ai_generation_metadata as { claimCheck?: { status: string; claims?: CheckedClaim[] } }).claimCheck
+
+  it('a claim citing an id that WAS in the sent set is recorded as supported, with the id and a span into the post text', async () => {
+    sent(['ev-1'])
+    withClaims([{ text: CLAIM, evidenceMemoryId: 'ev-1' }])
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+    for (const post of insertedPosts()) {
+      const check = checkOf(post)
+      expect(check?.status).toBe('checked')
+      const claim = check!.claims![0]
+      expect(claim.outcome).toBe('supported')
+      expect(claim.evidenceMemoryId).toBe('ev-1')
+      const start = post.content.indexOf(CLAIM)
+      expect(claim.span).toEqual({ start, end: start + CLAIM.length })
+      // every rendered byte comes from the post itself
+      expect(post.content.slice(claim.span!.start, claim.span!.end)).toBe(CLAIM)
+    }
+  })
+
+  it('a CROSS-TENANT id (not in the sent set) is FABRICATED — and the foreign id is never persisted', async () => {
+    sent(['ev-1'])
+    withClaims([{ text: CLAIM, evidenceMemoryId: 'ev-OTHER-TENANT' }])
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+    for (const post of insertedPosts()) {
+      const claim = checkOf(post)!.claims![0]
+      expect(claim.outcome).toBe('fabricated')
+      expect(claim).not.toHaveProperty('evidenceMemoryId')
+      expect(JSON.stringify(post.ai_generation_metadata)).not.toContain('ev-OTHER-TENANT')
+    }
+  })
+
+  it('a claim with no evidenceMemoryId is unsupported', async () => {
+    sent(['ev-1'])
+    withClaims([{ text: CLAIM }])
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+    for (const post of insertedPosts()) expect(checkOf(post)!.claims![0].outcome).toBe('unsupported')
+  })
+
+  it('REDDEN: a row PROMOTED AFTER the prompt was sent cannot legitimise a citation — the evidence is bound ONCE, never re-fetched', async () => {
+    // First (and only legitimate) bind: {ev-1}. Any SECOND bind would see the promotion and return {ev-1, ev-promoted}.
+    vi.mocked(bindEvidenceForPrompt)
+      .mockResolvedValueOnce({ rendered: 'Evidence id: ev-1', sentIds: new Set(['ev-1']) } as never)
+      .mockResolvedValue({ rendered: 'Evidence id: ev-1\nEvidence id: ev-promoted', sentIds: new Set(['ev-1', 'ev-promoted']) } as never)
+    withClaims([{ text: CLAIM, evidenceMemoryId: 'ev-promoted' }])
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+    expect(bindEvidenceForPrompt).toHaveBeenCalledTimes(1)
+    for (const post of insertedPosts()) expect(checkOf(post)!.claims![0].outcome).toBe('fabricated')
+  })
+
+  it('every candidate call is handed the SAME bound evidence object (prompt and oracle cannot drift)', async () => {
+    sent(['ev-1'])
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+    const bound = await vi.mocked(bindEvidenceForPrompt).mock.results[0].value
+    const calls = vi.mocked(generateNativeContent).mock.calls
+    expect(calls.length).toBeGreaterThan(0)
+    for (const call of calls) expect(call[2].evidence).toBe(bound)
+  })
+
+  it('NO CORPUS: nothing sent AND no active evidence -> "no_corpus", never "N unsupported claims"', async () => {
+    sent([])
+    vi.mocked(retrieveEvidenceMemory).mockResolvedValue([])
+    withClaims([{ text: CLAIM }, { text: 'It is the fastest tool.' }])
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+    for (const post of insertedPosts()) expect(checkOf(post)).toEqual({ status: 'no_corpus', contentFingerprint: contentFingerprint(post.content as string) })
+  })
+
+  it('evidence EXISTS but none was pinned: the claims really are uncited, so they ARE flagged (not no_corpus)', async () => {
+    sent([])
+    vi.mocked(retrieveEvidenceMemory).mockResolvedValue([{ id: 'ev-9' }] as never)
+    withClaims([{ text: CLAIM }])
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+    for (const post of insertedPosts()) expect(checkOf(post)?.status).toBe('checked')
+  })
+
+  it('a post with no claims is recorded as no_claims (checked, and clean of assertions)', async () => {
+    sent(['ev-1'])
+    withClaims([])
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+    for (const post of insertedPosts()) expect(checkOf(post)).toEqual({ status: 'no_claims', contentFingerprint: contentFingerprint(post.content as string) })
+  })
+
+  // Session 34-D D7 (MAJOR-3): the verdict is valid only for the text its spans index into, so it is stamped with a
+  // fingerprint of EXACTLY the posts.content string inserted — never content plus hashtags (a hashtag edit must not
+  // invalidate a verdict whose spans are still right, and an UNEDITED post must always match itself).
+  it('D7: every generated post\'s verdict carries the fingerprint of EXACTLY its inserted content', async () => {
+    sent(['ev-1'])
+    withClaims([{ text: CLAIM, evidenceMemoryId: 'ev-1' }])
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+    const posts = insertedPosts()
+    expect(posts.length).toBeGreaterThan(0)
+    for (const post of posts) {
+      const check = checkOf(post) as { contentFingerprint?: string } | undefined
+      expect(check?.contentFingerprint).toBe(contentFingerprint(post.content as string))
+      expect(check?.contentFingerprint).not.toBe(contentFingerprint(`${post.content}${(post as { hashtags?: string[] }).hashtags?.join(' ') ?? '#'}`))
+    }
+  })
+
+  it('FLAGGED, NEVER EDITED, NEVER WITHHELD: content is unchanged and every post is inserted even when every claim is fabricated', async () => {
+    sent(['ev-1'])
+    withClaims([{ text: CLAIM, evidenceMemoryId: 'ev-x' }])
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+    const posts = insertedPosts()
+    expect(posts.length).toBe(mockBrief.content.roleSequence.length)
+    for (const post of posts) expect(post.content).toContain(CLAIM)
+    // the session did not fail, and nothing was rejected
+    expect(updateGenerationSessionStatus).not.toHaveBeenCalledWith(expect.anything(), SESSION_ID, expect.objectContaining({ status: 'failed' }))
+  })
+
+  it('the corpus lookup FAILING leaves claimCheck absent ("not checked") — it never fails generation and never reads as clean', async () => {
+    sent([])
+    vi.mocked(retrieveEvidenceMemory).mockRejectedValue(new Error('memory down'))
+    withClaims([{ text: CLAIM }])
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+    const posts = insertedPosts()
+    expect(posts.length).toBe(mockBrief.content.roleSequence.length)
+    for (const post of posts) expect(checkOf(post)).toBeUndefined()
+  })
+})
+
+// ── ADR 0027 §5.8(b) (Session 34-D D9, MAJOR-5) — MODE2-REDUNDANCY-UNDEFER half (b) is PERSISTED ─────────────────
+//
+// checkSetRedundancy ran and its only output was a console.log; nothing persisted it and nothing rendered it, so
+// "flagged at the approval gate" was an operator log line. The flags now ride in ai_generation_metadata.redundancy on
+// BOTH posts of a flagged pair (naming the OTHER post's plan order and id, and the overlap), with D7's fingerprint of
+// THIS post's content, written in the same insert as claimCheck. The approvals surface reads and renders it
+// (RedundancyFlag.test.tsx, ApprovalsInbox.test.tsx). FLAGGED, NEVER BLOCKED, NEVER EDITED.
+//
+// SHARED-FUNCTION CALLERS: generatePostsForCampaign has one production caller (generate-action.ts), unchanged.
+describe('generatePostsForCampaign — redundancy flags are persisted (ADR 0027 §5.8(b), MAJOR-5)', () => {
+  const SHARED_BODY = 'Customers keep telling us onboarding takes minutes instead of days and reporting is finally painless'
+  // Six bodies with no content word in common, so an unflagged set really is unflagged.
+  const DISTINCT_BODIES = [
+    'Alpha bravo charlie delta echoes foxtrot',
+    'Golf hotel india juliet kilo lima',
+    'Mike november oscar papa quebec romeo',
+    'Sierra tango uniform victor whiskey xray',
+    'Yankee zulu amber bronze copper dolphin',
+    'Emerald falcon granite harbor island jasper',
+  ]
+  // Orders 1 and 3 share the role customer_proof (the tuple half of the check); everything else is distinct.
+  const briefWithRepeatedRole: CampaignBriefRow = {
+    ...mockBrief,
+    content: {
+      ...mockBrief.content,
+      roleSequence: mockBrief.content.roleSequence.map((r) => (r.order === 3 ? { ...r, role: 'customer_proof' as const } : r)),
+    },
+  }
+  const outputs = (repeatPair: boolean) =>
+    vi.mocked(generateNativeContent).mockImplementation(async (_c, _x, input) => {
+      const idx = briefWithRepeatedRole.content.roleSequence.findIndex((r) => r.angle === input.angle)
+      return repeatPair && (idx === 1 || idx === 3)
+        ? ({ format: 'single', body: SHARED_BODY, imageBrief: null, scriptBrief: null } as SinglePostOutput)
+        : ({ format: 'single', body: DISTINCT_BODIES[idx], imageBrief: null, scriptBrief: null } as SinglePostOutput)
+    })
+  const insertedPosts = () => vi.mocked(createPosts).mock.calls[0][1]
+  type Meta = { redundancy?: { contentFingerprint: string; overlaps: Array<{ order: number; postId: string; overlap: number }> } }
+  const metaOf = (post: { ai_generation_metadata?: unknown }) => post.ai_generation_metadata as Meta
+
+  it('a flagged pair persists the redundancy key on BOTH posts, each naming the OTHER post (order and id) and the overlap', async () => {
+    vi.mocked(getBriefByCampaign).mockResolvedValue(briefWithRepeatedRole)
+    outputs(true)
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+
+    const posts = insertedPosts()
+    const byOrder = (order: number) => posts[order]
+    const first = byOrder(1)
+    const second = byOrder(3)
+    expect(metaOf(first).redundancy?.overlaps).toEqual([{ order: 3, postId: second.id, overlap: expect.any(Number) }])
+    expect(metaOf(second).redundancy?.overlaps).toEqual([{ order: 1, postId: first.id, overlap: expect.any(Number) }])
+    expect(metaOf(first).redundancy!.overlaps[0].overlap).toBeGreaterThanOrEqual(0.6)
+    // Each flag carries D7's fingerprint of THAT post's content, so an edit invalidates it.
+    expect(metaOf(first).redundancy!.contentFingerprint).toBe(contentFingerprint(first.content as string))
+    expect(metaOf(second).redundancy!.contentFingerprint).toBe(contentFingerprint(second.content as string))
+    logSpy.mockRestore()
+  })
+
+  it('the posts OUTSIDE the pair carry no redundancy key', async () => {
+    vi.mocked(getBriefByCampaign).mockResolvedValue(briefWithRepeatedRole)
+    outputs(true)
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+    const posts = insertedPosts()
+    for (const order of [0, 2, 4, 5]) expect(metaOf(posts[order])).not.toHaveProperty('redundancy')
+    logSpy.mockRestore()
+  })
+
+  it('an UNFLAGGED set persists NO redundancy key on any post', async () => {
+    vi.mocked(getBriefByCampaign).mockResolvedValue(briefWithRepeatedRole)
+    outputs(false)
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+    for (const post of insertedPosts()) expect(metaOf(post)).not.toHaveProperty('redundancy')
+  })
+
+  it('FLAGGED, NEVER BLOCKED, NEVER EDITED: every post is still inserted and the flagged pair\'s text is untouched', async () => {
+    vi.mocked(getBriefByCampaign).mockResolvedValue(briefWithRepeatedRole)
+    outputs(true)
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+
+    const posts = insertedPosts()
+    expect(posts).toHaveLength(briefWithRepeatedRole.content.roleSequence.length)
+    expect(posts[1].content).toContain(SHARED_BODY)
+    expect(posts[3].content).toContain(SHARED_BODY)
+    logSpy.mockRestore()
+  })
+
+  it('the operator console line is UNCHANGED (kept as the operator signal beside the persisted flag)', async () => {
+    vi.mocked(getBriefByCampaign).mockResolvedValue(briefWithRepeatedRole)
+    outputs(true)
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+    const lines = logSpy.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('campaign.generate.redundancy_flagged'))
+    expect(lines).toHaveLength(1)
+    expect(JSON.parse(lines[0])).toMatchObject({ kind: 'campaign.generate.redundancy_flagged', level: 'warn', campaign_id: CAMPAIGN_ID })
+    logSpy.mockRestore()
   })
 })

@@ -2,7 +2,8 @@
 
 import { useActionState, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useTranslations } from 'next-intl'
+import { useLocale, useTranslations } from 'next-intl'
+import Link from 'next/link'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { approveBriefAction, rejectBriefAction, editBriefAction } from './actions'
@@ -28,6 +29,7 @@ function getCritiqueLines(critique: Record<string, unknown> | null): string[] {
 // gate. The high-touch brief-edit/Studio-diff surface is Session 24-UI.
 export function BriefReviewForm({ campaignId, brief }: BriefReviewFormProps) {
   const t = useTranslations('campaigns.brief')
+  const locale = useLocale()
   const router = useRouter()
 
   const [approveState, approveFormAction, approvePending] = useActionState(approveBriefAction, { status: 'idle' as const })
@@ -83,6 +85,12 @@ export function BriefReviewForm({ campaignId, brief }: BriefReviewFormProps) {
         <>
           {successMessage && <p role="status" className="text-sm text-emerald-600">{successMessage}</p>}
           <p className="text-sm text-muted-foreground">{t('already_approved')}</p>
+          {/* K2.12: an approved brief is the state generation starts from; the Generate control lives on the campaign page. */}
+          {brief.status === 'approved' && (
+            <Link href={`/${locale}/campaigns/${campaignId}`} className={cn(buttonVariants({ size: 'sm' }), 'w-fit')}>
+              {t('continue_to_generate')}
+            </Link>
+          )}
         </>
       )
     case 'critiqued':

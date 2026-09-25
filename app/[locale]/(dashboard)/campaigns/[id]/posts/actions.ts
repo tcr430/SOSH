@@ -324,8 +324,15 @@ export async function regeneratePostAction(
       ...(existingMetadata.previousVersions ?? []),
     ].slice(0, 5)
 
+    // Session 34-D D7 (MAJOR-3): the old claimCheck's spans index into the OLD text, so it must not ride onto the
+    // regenerated one — dropped here explicitly (belt and braces; the read side also rejects it because its
+    // fingerprint no longer matches). The regenerated post has no verdict: it reads "not checked", never "clean".
+    const retainedMetadata = Object.fromEntries(
+      // Both are computed FROM the old text (spans; a word-overlap flag against a sibling): neither survives a regenerate.
+      Object.entries(existingMetadata).filter(([key]) => key !== 'claimCheck' && key !== 'redundancy'),
+    ) as unknown as AiGenerationMetadata
     const newMetadata: AiGenerationMetadata = {
-      ...(existingMetadata as AiGenerationMetadata),
+      ...retainedMetadata,
       regenerationCount: (existingMetadata.regenerationCount ?? 0) + 1,
       previousVersions,
       rationale: output.rationale,

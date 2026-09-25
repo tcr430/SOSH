@@ -311,6 +311,7 @@
       "score_label": "Pontuação: {score}/100",
       "pending": "O brief ainda está a ser preparado e avaliado — isto pode demorar até 20 segundos. Volte a verificar em breve.",
       "already_approved": "Este brief já foi aprovado.",
+      "continue_to_generate": "Continuar para gerar publicações",
       "approve": "Aprovar",
       "reject": "Devolver",
       "edit": "Guardar alterações",
@@ -409,10 +410,28 @@
           "provider_error": "O fornecedor de IA devolveu um erro. Por favor, tente novamente.",
           "invalid_response": "A IA devolveu uma resposta inesperada. Por favor, tente novamente.",
           "timeout": "A geração expirou. Por favor, tente novamente.",
-          "invalid_campaign_state": "Esta campanha não está pronta para gerar publicações. Verifique se tem voz de marca e estado de rascunho.",
+          "invalid_campaign_state": "Esta campanha não está pronta para gerar publicações. Verifique se tem voz de marca e um brief aprovado.",
+          "brief_not_approved": "O brief desta campanha ainda não foi aprovado. Aprove-o antes de gerar publicações.",
           "already_generated": "As publicações já foram geradas para esta campanha.",
           "generic": "Ocorreu um erro. Por favor, tente novamente."
         }
+      },
+      "prepare_brief": {
+        "title": "O seu brief ainda não está pronto",
+        "body": "Não conseguimos preparar o brief desta campanha. Tente novamente para o criar e reveja-o antes de gerar qualquer publicação.",
+        "cta": "Preparar brief",
+        "starting": "A preparar o seu brief…",
+        "try_again": "Tentar novamente",
+        "error": {
+          "forbidden": "Não tem permissão para preparar briefs deste negócio.",
+          "failed": "Não conseguimos preparar o brief. Tente novamente.",
+          "generic": "Algo correu mal. Tente novamente."
+        }
+      },
+      "review_brief": {
+        "title": "Reveja primeiro o brief",
+        "body": "As publicações são geradas a partir de um brief aprovado. Reveja-o e aprove-o para continuar.",
+        "cta": "Rever brief"
       },
       "posts": {
         "published": "{published} de {total} publicações publicadas",

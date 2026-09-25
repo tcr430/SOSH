@@ -9,7 +9,7 @@ vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }))
 vi.mock('@/lib/supabase/service', () => ({ createServiceRoleClient: vi.fn(() => ({})) }))
 vi.mock('@/lib/db/businesses', () => ({ getBusinessForUser: vi.fn() }))
 vi.mock('@/lib/db/campaigns', () => ({ getCampaignById: vi.fn() }))
-vi.mock('@/lib/db/campaign-briefs', () => ({ getBriefByCampaign: vi.fn(), reviseBrief: vi.fn() }))
+vi.mock('@/lib/db/campaign-briefs', () => ({ getBriefByCampaign: vi.fn(), reviseBriefAndSupersedeProposals: vi.fn() }))
 vi.mock('@/lib/campaigns/brief', () => ({ approveBriefIfQualified: vi.fn() }))
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 
@@ -17,7 +17,7 @@ import { editBriefAction } from './actions'
 import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
 import { getCampaignById } from '@/lib/db/campaigns'
-import { getBriefByCampaign, reviseBrief } from '@/lib/db/campaign-briefs'
+import { getBriefByCampaign, reviseBriefAndSupersedeProposals } from '@/lib/db/campaign-briefs'
 import type { CampaignRow, CampaignBriefRow, BusinessRow } from '@/lib/db/types'
 
 const CAMPAIGN_ID = '11111111-1111-4111-8111-111111111111'
@@ -29,7 +29,8 @@ const CONTENT = {
 }
 const brief = (over: Partial<CampaignBriefRow> = {}): CampaignBriefRow => ({
   id: 'brief-1', business_id: 'biz-1', campaign_id: 'camp-1', content: CONTENT, status: 'critiqued', version: 1,
-  overall_score: 85, critique: null, frozen_at: null, deleted_at: null, created_at: '2026-07-01T00:00:00Z', updated_at: '2026-07-01T00:00:00Z', ...over,
+  overall_score: 85, critique: null, frozen_at: null, deleted_at: null, created_at: '2026-07-01T00:00:00Z', updated_at: '2026-07-01T00:00:00Z',
+  plan_analysis_status: 'not_run', plan_analysis_reason: null, ...over,
 })
 
 const fd = (fields: Record<string, string>) => {
@@ -47,13 +48,13 @@ beforeEach(() => {
   vi.mocked(getBusinessForUser).mockResolvedValue(BUSINESS)
   vi.mocked(getCampaignById).mockResolvedValue(CAMPAIGN)
   vi.mocked(getBriefByCampaign).mockResolvedValue(brief())
-  vi.mocked(reviseBrief).mockResolvedValue(brief({ status: 'draft', version: 2 }))
+  vi.mocked(reviseBriefAndSupersedeProposals).mockResolvedValue(brief({ status: 'draft', version: 2 }))
 })
 
 describe('editBriefAction — hypothesis and success criteria', () => {
   it('BEFORE freeze: an edit with a valid hypothesis and criteria is accepted and written into the content', async () => {
     expect(await edit(good)).toEqual({ status: 'saved' })
-    expect(reviseBrief).toHaveBeenCalledWith(expect.anything(), 'brief-1', 1, {
+    expect(reviseBriefAndSupersedeProposals).toHaveBeenCalledWith('biz-1', 'brief-1', 1, {
       ...CONTENT, narrative: 'N', proofPlan: 'P',
       hypothesis: 'Threads beat singles for this brand',
       successCriteria: { metric: 'win_rate', target: 0.6, evaluationWindowDays: 14 },
@@ -63,7 +64,7 @@ describe('editBriefAction — hypothesis and success criteria', () => {
   it('AFTER freeze: refused — an approved (frozen) brief is never revised, hypothesis or not', async () => {
     vi.mocked(getBriefByCampaign).mockResolvedValue(brief({ status: 'approved', frozen_at: '2026-07-02T00:00:00Z' }))
     expect(await edit(good)).toEqual({ status: 'error', error: 'invalid_brief_state' })
-    expect(reviseBrief).not.toHaveBeenCalled()
+    expect(reviseBriefAndSupersedeProposals).not.toHaveBeenCalled()
   })
 
   it.each([
@@ -80,19 +81,19 @@ describe('editBriefAction — hypothesis and success criteria', () => {
     ['criteria with no hypothesis', { hypothesis: '' }],
   ])('REFUSED, never clamped: %s', async (_name, override) => {
     expect(await edit({ ...good, ...override })).toEqual({ status: 'error', error: 'invalid_input' })
-    expect(reviseBrief).not.toHaveBeenCalled()
+    expect(reviseBriefAndSupersedeProposals).not.toHaveBeenCalled()
   })
 
   it('all fields blank CLEARS the hypothesis and criteria', async () => {
     vi.mocked(getBriefByCampaign).mockResolvedValue(brief({ content: { ...CONTENT, hypothesis: 'Old', successCriteria: { metric: 'win_rate', target: 0.6, evaluationWindowDays: 14 } } }))
     expect(await edit({ hypothesis: '', criteriaMetric: 'win_rate', criteriaTarget: '', criteriaWindow: '' })).toEqual({ status: 'saved' })
-    expect(reviseBrief).toHaveBeenCalledWith(expect.anything(), 'brief-1', 1, { ...CONTENT, narrative: 'N', proofPlan: 'P' })
+    expect(reviseBriefAndSupersedeProposals).toHaveBeenCalledWith('biz-1', 'brief-1', 1, { ...CONTENT, narrative: 'N', proofPlan: 'P' })
   })
 
   it('a form that does not carry the fields at all leaves an existing hypothesis unchanged', async () => {
     const withHypothesis = { ...CONTENT, hypothesis: 'Keep me', successCriteria: { metric: 'median_lift' as const, target: 1.5, evaluationWindowDays: 30 } }
     vi.mocked(getBriefByCampaign).mockResolvedValue(brief({ content: withHypothesis }))
     await edit()
-    expect(reviseBrief).toHaveBeenCalledWith(expect.anything(), 'brief-1', 1, { ...withHypothesis, narrative: 'N', proofPlan: 'P' })
+    expect(reviseBriefAndSupersedeProposals).toHaveBeenCalledWith('biz-1', 'brief-1', 1, { ...withHypothesis, narrative: 'N', proofPlan: 'P' })
   })
 })

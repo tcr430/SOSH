@@ -1,0 +1,140 @@
+{
+  "planner": {
+    "heading": "Revisión del plan",
+    "assessment_label": "La valoración del planificador",
+    "assessment_note": "Una lectura de la IA sobre este plan. Es una opinión, no un dato confirmado.",
+    "state": {
+      "not_run": "No se analizó el plan de esta campaña.",
+      "not_recorded": "{count, plural, one {El planificador propuso # cambio en este plan, pero no se registró su resultado.} other {El planificador propuso # cambios en este plan, pero no se registró su resultado.}}",
+      "proposed": "{count, plural, one {El planificador propuso # cambio en este plan.} other {El planificador propuso # cambios en este plan.}}",
+      "proposed_nothing": "El planificador revisó el plan y no propuso cambios.",
+      "unavailable": "Análisis del plan no disponible: {reason}.",
+      "capped": "El análisis del plan está en pausa: se alcanzó el límite diario."
+    },
+    "reason": {
+      "quota_exceeded": "se agotó el cupo de la prueba",
+      "rate_limited": "demasiadas solicitudes a la IA en el último minuto",
+      "wall_clock_exceeded": "tardó demasiado",
+      "input_token_cap_exceeded": "el plan necesitaba más contexto del permitido",
+      "output_token_per_turn_exceeded": "la respuesta fue más larga de lo permitido",
+      "output_token_cap_exceeded": "el razonamiento fue más largo de lo permitido",
+      "retry_budget_exhausted": "el servicio de IA siguió fallando",
+      "max_turns_exceeded": "no llegó a una respuesta a tiempo",
+      "response_truncated": "la respuesta se cortó",
+      "invalid_response": "no se pudo leer la respuesta",
+      "provider_error": "el servicio de IA devolvió un error",
+      "internal_error": "algo salió mal por nuestra parte",
+      "no_brief": "no hay brief que analizar",
+      "daily_cap": "se alcanzó el límite diario"
+    },
+    "proposal": {
+      "position": "Posición {n}",
+      "kind": {
+        "drop": "Quitar este post",
+        "substitute": "Cambiar su rol a {role}",
+        "reorder": "Moverlo a la posición {position}",
+        "request_evidence": "Mantenerlo solo si puedes añadir evidencia"
+      },
+      "status": {
+        "pending": "Esperando tu decisión",
+        "accepted": "Aceptada",
+        "rejected": "Rechazada",
+        "superseded": "Reemplazada"
+      },
+      "superseded_reason": {
+        "version_advanced": "El brief avanzó después de esta propuesta.",
+        "brief_frozen": "El brief se aprobó, así que ya no se puede aplicar."
+      }
+    },
+    "round": {
+      "legend": "Cambios propuestos",
+      "note": "No se aplica nada hasta que pulses Aplicar. Las propuestas seleccionadas se aplican juntas.",
+      "select": "Seleccionar para esta ronda",
+      "apply": "Aplicar seleccionadas ({count})",
+      "apply_hint": "Selecciona al menos una propuesta para aplicar.",
+      "reject": "Rechazar",
+      "history_heading": "Ya decididas"
+    },
+    "result": {
+      "applied": "{count, plural, one {Se aplicó # cambio. El brief se ha vuelto a revisar.} other {Se aplicaron # cambios. El brief se ha vuelto a revisar.}}",
+      "applied_recheck_pending": "{count, plural, one {Se aplicó # cambio.} other {Se aplicaron # cambios.}} La nueva revisión no terminó, así que Aprobar sigue oculto hasta que termine.",
+      "rejected": "Propuesta rechazada.",
+      "already": {
+        "accepted": "Otra persona ya aceptó esta propuesta.",
+        "rejected": "Otra persona ya rechazó esta propuesta.",
+        "superseded_version_advanced": "Esta propuesta está desactualizada: el brief avanzó.",
+        "superseded_brief_frozen": "Esta propuesta está desactualizada: el brief se aprobó.",
+        "unknown": "Esta propuesta ya no espera una decisión."
+      }
+    },
+    "conflict": {
+      "conflicting_proposals": "Dos propuestas seleccionadas cambian el mismo post de formas que no pueden aplicarse a la vez. Elige una.",
+      "stale_target_order": "Una propuesta seleccionada apunta a una posición que ya no existe. Recarga la página y elige de nuevo.",
+      "conflicting_reorders": "Dos propuestas seleccionadas mueven posts distintos a la misma posición. Elige una.",
+      "invalid_reorder_target": "Una propuesta seleccionada mueve un post a una posición que no existiría tras los demás cambios. Ajusta la selección e inténtalo de nuevo."
+    },
+    "error": {
+      "invalid_input": "Esa solicitud no era correcta. Recarga la página e inténtalo de nuevo.",
+      "unauthorized": "Tienes que iniciar sesión de nuevo.",
+      "forbidden": "No tienes permiso para cambiar este brief.",
+      "not_found": "No se encontró este brief.",
+      "invalid_brief_state": "Este brief no está esperando revisión ahora.",
+      "already_approved": "Este brief ya se aprobó, así que ya no puede cambiar.",
+      "concurrent_edit": "Otra persona cambió este brief mientras leías. Recarga e inténtalo de nuevo.",
+      "nothing_applied": "No se pudo aplicar ninguna de las propuestas seleccionadas. Puede que ya estén decididas.",
+      "empty_sequence": "Aplicar estas propuestas eliminaría todos los posts del plan, así que no se cambió nada. Conserva al menos un post.",
+      "invalid_result": "El plan aplicado no es correcto. Vuelve a generar el brief.",
+      "generic": "Algo salió mal. Inténtalo de nuevo."
+    },
+    "transient": {
+      "heading": "Aprobar queda oculto mientras se vuelve a revisar el brief",
+      "body": "El plan cambió, así que la revisión anterior ya no cuenta. Aprobar vuelve en cuanto termine la nueva revisión.",
+      "retry": "Ejecutar la revisión otra vez"
+    }
+  },
+  "claims": {
+    "heading": "Afirmaciones de este post",
+    "cited": "Citada",
+    "uncited": "Sin cita",
+    "cited_unknown": "Cita evidencia que no se proporcionó",
+    "no_corpus": "Sin evidencia guardada: afirmaciones no analizadas",
+    "not_checked": "Las afirmaciones de este post no se analizaron",
+    "no_claims": "Este post no contiene afirmaciones con datos concretos",
+    "all_cited": "{count, plural, one {La afirmación de este post está citada.} other {Las # afirmaciones de este post están citadas.}}",
+    "cited_explainer": "“Citada” significa que la afirmación apunta a evidencia que se dio a la IA. No garantiza que la frase coincida con esa evidencia. Léela y decide.",
+    "summary": "{cited} citadas, {uncited} sin cita, {unknown} con evidencia desconocida",
+    "flagged_mark": "Afirmación marcada",
+    "unlocated": "No se pudo localizar esta afirmación en el texto.",
+    "resolved": {
+      "accepted": "Aceptada tal cual",
+      "dismissed": "Descartada",
+      "cited": "Vinculada a evidencia existente"
+    },
+    "cite": {
+      "label": "Elegir evidencia existente",
+      "submit": "Vincular esta evidencia",
+      "empty": "No hay evidencia guardada para elegir."
+    },
+    "error": {
+      "invalid_input": "Esa solicitud no era correcta. Recarga la página e inténtalo de nuevo.",
+      "unauthorized": "Tienes que iniciar sesión de nuevo.",
+      "forbidden": "No tienes permiso para revisar este post.",
+      "not_found": "No se encontró este post.",
+      "conflict": "Este post cambió mientras leías. Recarga e inténtalo de nuevo.",
+      "not_checked": "Este post no tiene una revisión de afirmaciones que actualizar.",
+      "unknown_evidence": "Esa evidencia no está disponible para vincular.",
+      "generic": "Algo salió mal. Inténtalo de nuevo."
+    },
+    "actions": {
+      "accept": "Aceptar tal cual",
+      "edit": "Editar el texto",
+      "cite": "Citar evidencia existente",
+      "dismiss": "Descartar el aviso"
+    }
+  },
+  "redundancy": {
+    "heading": "Repetición en esta campaña",
+    "overlap": "Repite el post en la posición {position} del plan de esta campaña: el {percent}% de las palabras coincide.",
+    "explainer": "Es una comparación estructural de palabras, no un juicio de calidad. No se cambió nada y aún puedes aprobar. Lee ambos posts y decide."
+  }
+}

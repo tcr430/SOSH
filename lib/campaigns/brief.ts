@@ -9,7 +9,7 @@ import {
   getBriefByCampaign,
   createBrief,
   submitBriefForCritique,
-  approveBrief,
+  approveBriefAndSupersedeProposals,
 } from '@/lib/db/campaign-briefs'
 import type { CampaignBriefContent, CampaignBriefRow } from '@/lib/db/types'
 
@@ -195,9 +195,13 @@ export type ApproveBriefResult =
 
 // Stage C: the HARD gate (ADR §6.3, MODE2-CRITIQUE-GATE). The gate is
 // enforced IN CODE, before any DB write is attempted — a below-threshold
-// brief never even calls approveBrief, rather than relying on a DB guard to
-// silently no-op (that would make "refused" and "some other status
-// mismatch" indistinguishable to the caller).
+// brief never even calls approveBriefAndSupersedeProposals, rather than
+// relying on a DB guard to silently no-op (that would make "refused" and
+// "some other status mismatch" indistinguishable to the caller).
+//
+// Session 34-D D4 (BLOCKER-1): the write is the approve_brief_and_supersede_proposals RPC, so the freeze and the
+// supersede of every pending plan proposal ('brief_frozen') are ONE transaction. The business_id is the LOADED
+// brief row's, never the caller's input.
 export async function approveBriefIfQualified(campaignId: string): Promise<ApproveBriefResult> {
   const client = await serviceClient()
 
@@ -212,9 +216,9 @@ export async function approveBriefIfQualified(campaignId: string): Promise<Appro
     return { approved: false, overallScore, critique: brief.critique }
   }
 
-  const updated = await approveBrief(client, brief.id)
+  const updated = await approveBriefAndSupersedeProposals(brief.business_id, brief.id)
   if (!updated) {
-    throw new Error(`approveBrief guard rejected brief ${brief.id} (status changed concurrently)`)
+    throw new Error(`approveBriefAndSupersedeProposals guard rejected brief ${brief.id} (status changed concurrently)`)
   }
   return { approved: true, brief: freezeBrief(updated) }
 }

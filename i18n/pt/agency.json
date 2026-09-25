@@ -1,0 +1,140 @@
+{
+  "planner": {
+    "heading": "Revisão do plano",
+    "assessment_label": "A avaliação do planeador",
+    "assessment_note": "Uma leitura da IA sobre este plano. É uma opinião, não um facto confirmado.",
+    "state": {
+      "not_run": "Não foi feita análise do plano nesta campanha.",
+      "not_recorded": "{count, plural, one {O planeador propôs # alteração a este plano, mas o resultado não ficou registado.} other {O planeador propôs # alterações a este plano, mas o resultado não ficou registado.}}",
+      "proposed": "{count, plural, one {O planeador propôs # alteração a este plano.} other {O planeador propôs # alterações a este plano.}}",
+      "proposed_nothing": "O planeador reviu o plano e não propôs alterações.",
+      "unavailable": "Análise do plano indisponível: {reason}.",
+      "capped": "A análise do plano está em pausa: o limite diário foi atingido."
+    },
+    "reason": {
+      "quota_exceeded": "o limite do período de teste foi usado",
+      "rate_limited": "demasiados pedidos à IA no último minuto",
+      "wall_clock_exceeded": "demorou demasiado",
+      "input_token_cap_exceeded": "o plano precisava de mais contexto do que o permitido",
+      "output_token_per_turn_exceeded": "a resposta foi mais longa do que o permitido",
+      "output_token_cap_exceeded": "o raciocínio foi mais longo do que o permitido",
+      "retry_budget_exhausted": "o serviço de IA continuou a falhar",
+      "max_turns_exceeded": "não chegou a uma resposta a tempo",
+      "response_truncated": "a resposta foi cortada",
+      "invalid_response": "não foi possível ler a resposta",
+      "provider_error": "o serviço de IA devolveu um erro",
+      "internal_error": "algo correu mal do nosso lado",
+      "no_brief": "não existe briefing para analisar",
+      "daily_cap": "o limite diário foi atingido"
+    },
+    "proposal": {
+      "position": "Posição {n}",
+      "kind": {
+        "drop": "Retirar este post",
+        "substitute": "Mudar a função para {role}",
+        "reorder": "Mover para a posição {position}",
+        "request_evidence": "Manter apenas se puder juntar evidência"
+      },
+      "status": {
+        "pending": "À espera da sua decisão",
+        "accepted": "Aceite",
+        "rejected": "Rejeitada",
+        "superseded": "Substituída"
+      },
+      "superseded_reason": {
+        "version_advanced": "O briefing avançou depois desta proposta.",
+        "brief_frozen": "O briefing foi aprovado, por isso já não pode ser aplicada."
+      }
+    },
+    "round": {
+      "legend": "Alterações propostas",
+      "note": "Nada é aplicado até carregar em Aplicar. As propostas selecionadas são aplicadas em conjunto.",
+      "select": "Selecionar para esta ronda",
+      "apply": "Aplicar selecionadas ({count})",
+      "apply_hint": "Selecione pelo menos uma proposta para aplicar.",
+      "reject": "Rejeitar",
+      "history_heading": "Já decididas"
+    },
+    "result": {
+      "applied": "{count, plural, one {Aplicada # alteração. O briefing foi reanalisado.} other {Aplicadas # alterações. O briefing foi reanalisado.}}",
+      "applied_recheck_pending": "{count, plural, one {Aplicada # alteração.} other {Aplicadas # alterações.}} A reanálise não terminou, por isso Aprovar continua oculto até terminar.",
+      "rejected": "Proposta rejeitada.",
+      "already": {
+        "accepted": "Outra pessoa já aceitou esta proposta.",
+        "rejected": "Outra pessoa já rejeitou esta proposta.",
+        "superseded_version_advanced": "Esta proposta está desatualizada: o briefing avançou.",
+        "superseded_brief_frozen": "Esta proposta está desatualizada: o briefing foi aprovado.",
+        "unknown": "Esta proposta já não aguarda decisão."
+      }
+    },
+    "conflict": {
+      "conflicting_proposals": "Duas propostas selecionadas alteram o mesmo post de formas que não podem aplicar-se em conjunto. Escolha uma.",
+      "stale_target_order": "Uma proposta selecionada aponta para uma posição que já não existe. Recarregue a página e escolha de novo.",
+      "conflicting_reorders": "Duas propostas selecionadas movem posts diferentes para a mesma posição. Escolha uma.",
+      "invalid_reorder_target": "Uma proposta selecionada move um post para uma posição que não existiria depois das outras alterações. Ajuste a seleção e tente de novo."
+    },
+    "error": {
+      "invalid_input": "Este pedido não estava correto. Recarregue a página e tente de novo.",
+      "unauthorized": "Precisa de iniciar sessão outra vez.",
+      "forbidden": "Não tem permissão para alterar este briefing.",
+      "not_found": "Não foi possível encontrar este briefing.",
+      "invalid_brief_state": "Este briefing não está à espera de revisão neste momento.",
+      "already_approved": "Este briefing já foi aprovado, por isso já não pode mudar.",
+      "concurrent_edit": "Outra pessoa alterou este briefing enquanto lia. Recarregue e tente de novo.",
+      "nothing_applied": "Nenhuma das propostas selecionadas pôde ser aplicada. Podem já estar decididas.",
+      "empty_sequence": "Aplicar estas propostas removeria todos os posts do plano, por isso nada foi alterado. Mantenha pelo menos um post.",
+      "invalid_result": "O plano aplicado não está correto. Volte a gerar o briefing.",
+      "generic": "Algo correu mal. Tente de novo."
+    },
+    "transient": {
+      "heading": "Aprovar fica oculto enquanto o briefing é reanalisado",
+      "body": "O plano mudou, por isso a revisão anterior já não se aplica. Aprovar volta assim que a nova análise terminar.",
+      "retry": "Executar a análise outra vez"
+    }
+  },
+  "claims": {
+    "heading": "Afirmações neste post",
+    "cited": "Citada",
+    "uncited": "Sem citação",
+    "cited_unknown": "Cita evidência que não foi fornecida",
+    "no_corpus": "Sem evidência guardada: afirmações não analisadas",
+    "not_checked": "As afirmações deste post não foram analisadas",
+    "no_claims": "Este post não contém afirmações com dados concretos",
+    "all_cited": "{count, plural, one {A afirmação deste post está citada.} other {Todas as # afirmações deste post estão citadas.}}",
+    "cited_explainer": "“Citada” significa que a afirmação aponta para evidência que foi dada à IA. Não garante que a frase corresponda a essa evidência. Leia-a e decida.",
+    "summary": "{cited} citadas, {uncited} sem citação, {unknown} com evidência desconhecida",
+    "flagged_mark": "Afirmação assinalada",
+    "unlocated": "Não foi possível localizar esta afirmação no texto.",
+    "resolved": {
+      "accepted": "Aceite como está",
+      "dismissed": "Ignorada",
+      "cited": "Ligada a evidência existente"
+    },
+    "cite": {
+      "label": "Escolher evidência existente",
+      "submit": "Ligar esta evidência",
+      "empty": "Não há evidência guardada para escolher."
+    },
+    "error": {
+      "invalid_input": "Este pedido não estava correto. Recarregue a página e tente de novo.",
+      "unauthorized": "Precisa de iniciar sessão outra vez.",
+      "forbidden": "Não tem permissão para rever este post.",
+      "not_found": "Não foi possível encontrar este post.",
+      "conflict": "Este post mudou enquanto lia. Recarregue e tente de novo.",
+      "not_checked": "Este post não tem análise de afirmações para atualizar.",
+      "unknown_evidence": "Essa evidência não está disponível para ligar.",
+      "generic": "Algo correu mal. Tente de novo."
+    },
+    "actions": {
+      "accept": "Aceitar como está",
+      "edit": "Editar o texto",
+      "cite": "Citar evidência existente",
+      "dismiss": "Ignorar o alerta"
+    }
+  },
+  "redundancy": {
+    "heading": "Repetição nesta campanha",
+    "overlap": "Repete o post na posição {position} do plano desta campanha: {percent}% das palavras coincidem.",
+    "explainer": "É uma comparação estrutural de palavras, não um juízo de qualidade. Nada foi alterado e pode continuar a aprovar. Leia os dois posts e decida."
+  }
+}

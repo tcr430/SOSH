@@ -191,6 +191,7 @@ const mockBrief: CampaignBriefRow = {
   status: 'approved', version: 1, overall_score: 85, critique: null,
   frozen_at: '2026-07-23T00:00:00Z', deleted_at: null,
   created_at: '2026-07-01T00:00:00Z', updated_at: '2026-07-23T00:00:00Z',
+  plan_analysis_status: 'not_run', plan_analysis_reason: null,
 }
 
 const metric = (i: number): PostMetricsRow => ({

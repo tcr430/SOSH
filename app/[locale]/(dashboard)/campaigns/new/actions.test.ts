@@ -25,6 +25,10 @@ vi.mock('@/lib/db/social-accounts', () => ({
   listActiveSocialAccounts: vi.fn(),
 }))
 
+vi.mock('@/lib/campaigns/prepare-brief', () => ({
+  prepareBriefForCampaign: vi.fn(),
+}))
+
 vi.mock('@/lib/db/voice', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/db/voice')>()
   return {
@@ -49,6 +53,7 @@ import { checkCampaignCreationAllowed } from '@/lib/campaigns/enforcement'
 import { listActiveSocialAccounts } from '@/lib/db/social-accounts'
 import { createCampaign } from '@/lib/db/campaigns'
 import { getVariationById } from '@/lib/db/voice'
+import { prepareBriefForCampaign } from '@/lib/campaigns/prepare-brief'
 import type { BusinessRow, BrandVoiceVariationRow } from '@/lib/db/types'
 
 const mockGetVariationById = vi.mocked(getVariationById)
@@ -142,6 +147,7 @@ beforeEach(() => {
   mockCreateCampaign.mockResolvedValue(MOCK_CAMPAIGN as never)
   mockIncrementCampaignsCreated.mockResolvedValue(undefined)
   mockGetVariationById.mockResolvedValue(null)
+  vi.mocked(prepareBriefForCampaign).mockResolvedValue({ briefReady: true, critiqued: true })
 })
 
 describe('createCampaignAction', () => {
@@ -292,6 +298,53 @@ describe('createCampaignAction', () => {
       const result = await createCampaignAction(prevState, makeFormData())
       expect(result.success).toBe(true)
       expect(result.campaignId).toBe('camp-789')
+    })
+  })
+
+  // ADR 0017 §11 + ADR 0027 §2.7 (K2.12) — the brief pipeline is on the request path, and this is where the campaign
+  // planner is reached. SHARED-FUNCTION CALLERS: createCampaignAction is the one production caller of
+  // prepareBriefForCampaign (asserted below); the pipeline itself is tested in lib/campaigns/prepare-brief.test.ts.
+  describe('brief pipeline wiring (K2.12)', () => {
+    it("runs the pipeline for the campaign it just created, on the caller's AUTHENTICATED client", async () => {
+      const authClient = makeAuthClient()
+      mockCreateClient.mockResolvedValue(authClient as never)
+      await createCampaignAction(prevState, makeFormData())
+      expect(prepareBriefForCampaign).toHaveBeenCalledTimes(1)
+      expect(prepareBriefForCampaign).toHaveBeenCalledWith(authClient, 'camp-789')
+    })
+
+    it('runs the pipeline AFTER the campaign exists and after the trial counter, never before', async () => {
+      await createCampaignAction(prevState, makeFormData())
+      const pipeline = vi.mocked(prepareBriefForCampaign).mock.invocationCallOrder[0]
+      expect(pipeline).toBeGreaterThan(mockCreateCampaign.mock.invocationCallOrder[0])
+      expect(pipeline).toBeGreaterThan(mockIncrementCampaignsCreated.mock.invocationCallOrder[0])
+    })
+
+    it('reports briefReady so the form lands on brief review', async () => {
+      const result = await createCampaignAction(prevState, makeFormData())
+      expect(result).toMatchObject({ success: true, campaignId: 'camp-789', briefReady: true })
+    })
+
+    it('a failed pipeline still succeeds with briefReady false: the campaign exists and must not be reported as failed', async () => {
+      vi.mocked(prepareBriefForCampaign).mockResolvedValue({ briefReady: false })
+      const result = await createCampaignAction(prevState, makeFormData())
+      expect(result).toMatchObject({ success: true, campaignId: 'camp-789', briefReady: false })
+      expect(result.errors).toBeUndefined()
+    })
+
+    it.each([
+      ['validation fails', { name: '' }],
+      ['a platform is not connected', { platforms: ['twitter'] }],
+    ])('does not run the pipeline when %s', async (_label, overrides) => {
+      await createCampaignAction(prevState, makeFormData(overrides))
+      expect(prepareBriefForCampaign).not.toHaveBeenCalled()
+    })
+
+    it('does not run the pipeline when plan enforcement refuses the campaign', async () => {
+      mockCheckCampaignCreationAllowed.mockResolvedValue({ allowed: false, reason: 'trial_campaign_limit' } as never)
+      await createCampaignAction(prevState, makeFormData())
+      expect(mockCreateCampaign).not.toHaveBeenCalled()
+      expect(prepareBriefForCampaign).not.toHaveBeenCalled()
     })
   })
 

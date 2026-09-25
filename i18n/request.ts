@@ -10,7 +10,7 @@ export default getRequestConfig(async ({ requestLocale }) => {
     locale = routing.defaultLocale;
   }
 
-  const [common, auth, posts, billing, errors, marketing, calendar, team, approvals, studio, signals, opportunities, outcome] = await Promise.all([
+  const [common, auth, posts, billing, errors, marketing, calendar, team, approvals, studio, signals, opportunities, outcome, agency] = await Promise.all([
     import(`./${locale}/common.json`),
     import(`./${locale}/auth.json`),
     import(`./${locale}/posts.json`),
@@ -24,6 +24,7 @@ export default getRequestConfig(async ({ requestLocale }) => {
     import(`./${locale}/signals.json`),
     import(`./${locale}/opportunities.json`),
     import(`./${locale}/outcome.json`),
+    import(`./${locale}/agency.json`),
   ])
 
   return {
@@ -41,6 +42,7 @@ export default getRequestConfig(async ({ requestLocale }) => {
       signals: signals.default,
       opportunities: opportunities.default,
       outcome: outcome.default,
+      agency: agency.default,
       errors: {
         ...(common.default.errors ?? {}),
         ...errors.default,
