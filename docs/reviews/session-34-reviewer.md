@@ -1244,3 +1244,65 @@ the constraint count (46 to 47) and the tier tallies (16/25/22 to 20/26/23, deri
 
 - **What I did NOT touch:** §§0-14 and V.1-V.10 of ADR 0027 (D12 back-fills SHAs and CI cells); ADR 0017 F.1-F.3; any
   legal MDX; any code.
+
+### D12 — closing block: pass closed
+
+**Range fixed:** `cad8790f..<the D12 commit>` (D0 `da1f1aa5`, D1 `d5271652`, D2 `c4acce20`, D3 `b6e76bb6`, D4 `7113ba00`, D5 `59f0015c`,
+D6 `c6bcadd0`, D7 `7c6761c2`, D8 `f0b0d53a`, D9 `eae53738`, D10 `fe23ebe0`, D11 `ac595776`). The SHAs that every earlier row
+above says "back-filled by D12's sweep" are the ones in the table below; the earlier rows are **not** edited (append-only).
+
+**Push and CI.** D0 to D11 were pushed to `origin/session-34-adr-0027`. PR #13 had already merged into `session-33-adr-0026`,
+and the required workflows run only on pull requests or `master` pushes, so **PR #14** (base `master`) was opened to run
+them; it is **not merged**. All read from the run logs, event `pull_request`, head `ac595776`:
+
+- `app-tests` [36110499833](https://github.com/tcr430/SOSH/actions/runs/36110499833): `skip-guard: 345 file(s) under [app, lib, components] all visible, zero failures — green. (4994/4994 tests passed)`; lint green.
+- `db-tests` [36110499747](https://github.com/tcr430/SOSH/actions/runs/36110499747): `skip-guard: 100 file(s) under [supabase/__tests__] all visible, zero failures — green. (826/826 tests passed)`; no line matching `SIGSEGV`, `signal 11`, `OOMKilled=true` or `out of memory`.
+- `eval-reported` and `eval-threshold` [36110499930](https://github.com/tcr430/SOSH/actions/runs/36110499930): pass.
+
+Both counts are higher than the Reviewer's at `cad8790f` (333 / 4837 and 93 / 782), as they must be. **`db-tests` promotion tally:
+unchanged**, since every run is a `pull_request` event. ADR 0027 section VI.9 re-dates all 47 constraints to `ac595776`.
+
+**All 20 findings: disposition, proving test, SHA(s). Nothing was deferred.**
+
+| ID | Disposition | Proving test (file:line, at the step's SHA) | SHA(s) |
+|---|---|---|---|
+| BLOCKER-1 | fixed | plan-proposals-approve-revise-path.test.ts:51,71,84,102; brief-write-paths.test.ts:74,88; actions.supersede-callers.test.ts:85-132 | D4 `7113ba00` |
+| MAJOR-1 | fixed (new constraint AGENCY-REORDER-RATIFIED-EXACT) | plan-proposals-ratify.test.ts:272,276,280,285,294,303,323,335; role-sequence-placement.test.ts | D5 `59f0015c`; ADR record D11 `ac595776` |
+| MAJOR-2 | fixed (option a) | plan-actions.test.ts:72-274; claim-actions.test.ts:66-162; ApprovalsInbox.test.tsx:867 block | D6 `c6bcadd0` |
+| MAJOR-3 | fixed (read-side fingerprint) | claim-check-fingerprint.test.ts:62,68,74,84,121; posts.claims-fingerprint.test.ts; claim-fingerprint.test.ts:76,82,90 | D7 `7c6761c2` |
+| MAJOR-4 | fixed (no FK; loser named) | tool-runner-run-id.test.ts:68,75,85,92,107; planner orchestrator.test.ts:363,380; plan-proposals-run-id-join.test.ts:69,90 | D8 `f0b0d53a` |
+| MAJOR-5 | fixed (option a, delivered at the gate) | generate.test.ts:1376-1427; posts.redundancy.test.ts; ApprovalsInbox.test.tsx:923 block; redundancy-flag-fingerprint.test.ts | D9 `eae53738` |
+| MAJOR-6 | fixed | plan-proposals-rpc-grants.test.ts:80,90,132,141 | D1 `d5271652` |
+| MINOR-1 | fixed | planner-tools-tenancy.test.ts:204,209; signals-campaign-tenancy.test.ts:42,50 | D2 `c4acce20` |
+| MINOR-2 | fixed (code and ADR halves) | plan-proposals-ratify.test.ts:347 | D5 `59f0015c`; ADR 0017 F.4 D11 `ac595776` |
+| MINOR-3 | fixed | plan-brief.test.ts (failed, no-op, unknown, written); PlanReviewPanel.test.tsx (not_run with rows) | D10 `fe23ebe0` |
+| MINOR-4 | fixed (the only in-place edit) | diff-verified: ADR 0010 row equals ADR 0027 section 9.3 verbatim, 1 insertion / 1 deletion | D11 `ac595776` |
+| MINOR-5 | fixed | to-tool-result-id.test.ts:17,22,29,34 | D3 `b6e76bb6` |
+| MINOR-6 | fixed | planner source-scans.test.ts:322,357,369 | D3 `b6e76bb6` |
+| MINOR-7 | fixed (index and query) | campaign-plan-proposals.test.ts (BOUNDED-QUERY describe); plan-proposals-current-version-read.test.ts (EXPLAIN); page.test.tsx | index D5 `59f0015c`; query D10 `fe23ebe0` |
+| MINOR-8 | fixed | plan-proposals-ratify.test.ts:359 | D5 `59f0015c` |
+| NIT-1 | fixed | planner tools.test.ts:101,104 | D2 `c4acce20` |
+| NIT-2 | fixed | plan-actions.test.ts:99,106 | D6 `c6bcadd0` |
+| NIT-3 | fixed | signals source-scans.test.ts:211 | D3 `b6e76bb6` |
+| NIT-4 | fixed | tool-runner-run-id.test.ts:123,140,154,167,180 | D8 `f0b0d53a` |
+| NIT-5 | **recorded closure** (a pushed commit body cannot be rewritten) | the four invocations and SHAs are in the D11 row | D11 `ac595776` |
+
+**Count check (re-run, not assumed):** 20 rows, 20 distinct IDs; BLOCKER-1, MAJOR-1..6, MINOR-1..8 and NIT-1..5 all present. It
+passed by script, so the pass is closed. The one recorded closure is NIT-5; **no finding was deferred**, overriding the Reviewer's section 7
+permission (founder, 2026-09-24).
+
+**Reviewer statements that have since changed, listed and NOT edited above:**
+- Section 1's grant row ("Correct live, but pinned by no test") is no longer true: `plan-proposals-rpc-grants.test.ts` pins it (D1).
+- Section 3's SHARED-FUNCTION CALLERS table: `reviseBrief` (and `approveBrief`) are gone, replaced by the two wrappers (D4);
+  `critiqueBrief`'s two `plan-actions.ts` callers are now tested (D6); `runToolLoop`'s usage write now takes an optional id (D8).
+- Section 5's rows 3, 4, 18, 29, 32, 33, 34 and 35 no longer describe the head: 3 (D2), 4 (D3), 18 (D7), 29 (D1, D6), 32 (D8),
+  33 (D10), 34 (D4) and 35 (D9); the note on rows 26/27 (reorder placement) is closed by D5. ADR 0027 section VI records each.
+- The silent-failure-hunter's `reservationHeld` slip stays corrected **only by reference to the Reviewer's own section 6**, which already
+  corrected it; nothing is added here.
+
+**Diff proof.** `git diff da1f1aa5 -- docs/reviews/session-34-reviewer.md` shows additions only, all below the Reviewer's
+closing line and the `## CORRECTION PASS` heading; zero removed lines (checked before this commit).
+
+**Still open, and not this pass's to close:** planner p95 latency is **NOT MEASURED** against ADR 0027 section 7.3's predicted 30 000 ms (no
+planner run has been observed); the agency path has never run in a browser or against a real model (`S34-E2E-UNVERIFIED`);
+`checkSetRedundancy`'s `proofType: null` input and its structural-not-semantic limit are disclosed, not closed. **Track K closed.**

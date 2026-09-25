@@ -160,7 +160,7 @@ codebase and it is currently used for one of the three things it could do. It sh
 This is what turns "we store your edits" into "the system measurably converges on you," which is the
 claim the whole product rests on.
 
-### T2.4 — Let the model plan the campaign, not just fill it — **BUILT, NOT YET REACHABLE (Session 34, ADR 0027)**
+### T2.4 — Let the model plan the campaign, not just fill it — **SHIPPED AND WIRED (Session 34, ADR 0027 §V.8 / §V.9; corrected in Session 34-D); never run against a real model**
 
 **The one failure mode the rubric structurally cannot catch: a well-written post that should not exist.**
 
@@ -912,7 +912,7 @@ not incidental.
 | T1.4 / §10.2 query conditioning | reversible + verifiable | retrieval only |
 | T2.1 generator tools **(shipped, ADR 0027 §10.5)** | reversible + verifiable | read-only, closed inventory of six, authenticated client, caller-bound tenancy, bounded loop, no egress, no provider. A bad lookup produces a worse proposal, nothing more |
 | T2.2 claim verification **(shipped, ADR 0027 §10.5)** | reversible + verifiable | its only action is to render a flag; the oracle is an id-set intersection (automatic, no human needed to know it was wrong). Full autonomy is correct because it cannot act, and the copy says "cited", not "verified", so the limit of the oracle is disclosed too |
-| T2.4 campaign planner **(built, not yet reachable: ADR 0027 §V.7 item 6)** | reversible + **not** verifiable | autonomy -> human gate. Proposals are inert rows; a human ratifies at a checkpoint that already existed (brief review, before freeze); the accept rate is the graduation signal, derivable from `campaign_plan_proposals.status`. Nothing in Session 34 moves to the irreversible row |
+| T2.4 campaign planner **(shipped and wired at K2.12 / K2.13, ADR 0027 §V.8-V.9; never run against a real model or in a browser, `S34-E2E-UNVERIFIED`)** | reversible + **not** verifiable | autonomy -> human gate. Proposals are inert rows; a human ratifies at a checkpoint that already existed (brief review, before freeze); the accept rate is the graduation signal, derivable from `campaign_plan_proposals.status`. Nothing in Session 34 moves to the irreversible row |
 | T2.5 background agents | reversible + **not** verifiable | proposals only; accept rate is the graduation signal |
 | §11 pattern promotion | reversible + verifiable | n floor and confidence interval are the automatic check |
 | §12 backfill writes | reversible + partly verifiable | own data only; inferred voice routed through onboarding's ratification step |

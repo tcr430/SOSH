@@ -1591,6 +1591,33 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
     (`09dbd445`), confirmed.
   - **Next:** the Reviewer (K3, `security-reviewer` mandatory), reading at the commit range `origin/session-33-adr-0026..998030e8`, never HEAD.
 
+- **Session 34-D — Track K correction pass, D0-D12, CLOSED (2026-09-25), branch `session-34-adr-0027`, range `cad8790f..<D12 commit>`.**
+  The Reviewer's report (`docs/reviews/session-34-reviewer.md`, head `cad8790f`) found 20 findings (1 BLOCKER, 6 MAJOR,
+  8 MINOR, 5 NIT); the founder ruled none is deferred. **All 20 are dispositioned in the report's appendix; NIT-5 is the one
+  recorded closure** (a pushed commit body cannot be rewritten). One migration
+  (`20260924100000_apply_brief_proposals_exact_placement.sql`, forward, D5); one new constraint,
+  `AGENCY-REORDER-RATIFIED-EXACT` (47 `AGENCY-*` constraints now). The two claims that were not true at `cad8790f`
+  (ADR 0027 V.2 rows 34 and 35) are superseded by ADR 0027 §VI, not edited.
+  - **PR #14** (base `master`, head `session-34-adr-0027`) was opened to run CI: PR #13 had already merged into
+    `session-33-adr-0026`, and the required workflows run only on pull requests and `master` pushes. **Not merged.**
+  - **CI at `ac595776` (D11), `pull_request` events, read from the logs:** `app-tests`
+    [36110499833](https://github.com/tcr430/SOSH/actions/runs/36110499833) green, `skip-guard: 345 file(s) under [app, lib, components] all visible, zero failures — green. (4994/4994 tests passed)`;
+    `db-tests` [36110499747](https://github.com/tcr430/SOSH/actions/runs/36110499747) green, `skip-guard: 100 file(s) under [supabase/__tests__] all visible, zero failures — green. (826/826 tests passed)`,
+    zero `SIGSEGV`/`signal 11`/`OOMKilled`/`out of memory` lines; `eval-reported`/`eval-threshold`
+    [36110499930](https://github.com/tcr430/SOSH/actions/runs/36110499930) green. Counts are higher than at `998030e8`
+    (333 / 4837 and 93 / 782). All 47 constraints are re-dated to `ac595776` in ADR 0027 §VI.9.
+  - **`db-tests` promotion tally: unchanged.** Every run above is a `pull_request` event (PR #14); only consecutive
+    green `master` **push** runs move it. This pass neither advances nor resets it.
+  - **Measured p95 latency against ADR 0027 §7.3's predicted 30 000 ms: still NOT MEASURED.** No planner run has been
+    observed against a real model, in tests or elsewhere; the figure is a prediction and is not estimated here.
+  - **Delivered that was previously only claimed:** approve/revise now supersede proposals on the production path
+    (BLOCKER-1); a ratified reorder lands where its sentence says (MAJOR-1); edited or regenerated posts no longer show
+    stale claim flags (MAJOR-3); `planner_run_id` joins to its `ai_usage` row (MAJOR-4); set-redundancy flags reach the
+    approval gate, never blocking Approve (MAJOR-5, ADR 0017 F.4). **Disclosed, not closed:** `checkSetRedundancy` still
+    takes `proofType: null`, and it is structural word-overlap, not semantic.
+  - **Still unverified:** the whole agency path has never run in a browser or against a real model
+    (`S34-E2E-UNVERIFIED`); no finding row was added to `docs/backlog.md` (founder instruction).
+
 ## What's next
 
 Session 19D correction pass is applied. Voice model core is merge-ready. One open decision required before closing Session 19:

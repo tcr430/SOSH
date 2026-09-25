@@ -2208,3 +2208,87 @@ range, does not re-open a founder ruling (A-1 to A-9 stand), and does not change
 (`MODE2-BRIEF-FROZEN-GUARD` is untouched).
 
 _End of Correction pass verification (Session 34-D). Sections 0-14 and V.1-V.10 above were not modified._
+
+### VI.9 Addendum (D12, 2026-09-25): CI at the corrected head, and all 47 constraints re-dated
+
+**Additive; VI.1-VI.8 above are not edited.** The branch was pushed to `origin/session-34-adr-0027` (D0 to D11, head
+`ac595776`). PR #13 had already been merged into `session-33-adr-0026`, and `app-tests`/`db-tests` run only on pull
+requests or on pushes to `master`, so a plain push ran nothing; **PR #14** (base `master`, head `session-34-adr-0027`)
+was opened for the purpose. Read from the run logs, not the check summary:
+
+| Job | Run (event `pull_request`, head `ac595776`) | Result, quoted from the log |
+|---|---|---|
+| `app-tests` (tsc + eslint + vitest) | [36110499833](https://github.com/tcr430/SOSH/actions/runs/36110499833) | `skip-guard: 345 file(s) under [app, lib, components] all visible, zero failures — green. (4994/4994 tests passed)` |
+| `db-tests` incl. skip-guard | [36110499747](https://github.com/tcr430/SOSH/actions/runs/36110499747) | `skip-guard: 100 file(s) under [supabase/__tests__] all visible, zero failures — green. (826/826 tests passed)` |
+| `eval-reported`, `eval-threshold` | [36110499930](https://github.com/tcr430/SOSH/actions/runs/36110499930) | both pass |
+
+**The counts are higher, as they must be** (this pass only adds tests): `app-tests` 333 files / 4837 tests at `998030e8`
+to **345 / 4994**; `db-tests` 93 / 782 to **100 / 826**. The `db-tests` log contains **zero** lines matching
+`SIGSEGV`, `signal 11`, `OOMKilled=true` or `out of memory`. The Vercel preview deployed. The head is the D11 commit;
+the D12 commit that follows changes documentation and `.wolf/` only, so the constraint claims are dated to `ac595776`.
+
+**Correction to VI.2's tier totals.** VI.2 said §11's "16 Tier-1, 25 Tier-2, 22 Tier-3" becomes 20 / 26 / 23. That
+figure mixed two bases and is **wrong**. §11's tally and V.2's tier labels were never the same count (V.2's labels, before
+this pass, gave 14 / 24 / 20). Recounted from V.2's labels **as corrected below** (rows 18, 33, 34, 35 changed; row 47
+added), a constraint spanning tiers counting in each: **18 Tier-1, 25 Tier-2, 21 Tier-3, 47 constraints.** **Tier E: none.**
+§11's own line is not edited.
+
+**Re-dated map.** Tier 1 rows are executed by `db-tests`, itself green at this head. Tier 2 rows are executed by
+`app-tests`. Tier 3 rows are the source scans, **re-run at this head** as ordinary vitest files inside `app-tests` (and
+`db-tests` where a Tier-1 half exists). Each row is a **file-level** fact backed by the skip-guard (no file invisible,
+none red), not a claim that every case inside a file is exercised.
+
+| # | Constraint | Tier | Executed green in CI at `ac595776` |
+|---|---|---|---|
+| 1 | `AGENCY-TOOLS-READ-ONLY` | 3 | app-tests |
+| 2 | `AGENCY-TOOLS-CLOSED-INVENTORY` | 2 | app-tests |
+| 3 | `AGENCY-TOOLS-TENANT-BOUND` | 1 + 2 | db-tests + app-tests |
+| 4 | `AGENCY-NO-SERVICE-ROLE-IN-TOOLS` | 3 | db-tests + app-tests |
+| 5 | `AGENCY-NO-WRITE-TOOL` | 3 | app-tests |
+| 6 | `AGENCY-NO-EGRESS-IN-TOOLS` | 3 | app-tests |
+| 7 | `AGENCY-QUERY-CONTEXT-NOT-A-PREDICATE` | 3 | app-tests |
+| 8 | `AGENCY-TOOLS-ONCE-PER-CAMPAIGN` | 2 + 3 | app-tests |
+| 9 | `AGENCY-PLANNER-REQUEST-PATH-ONLY` | 2 + 3 | app-tests |
+| 10 | `AGENCY-LOOP-BOUNDS-PARAMETERISED` | 2 | app-tests |
+| 11 | `AGENCY-LOOP-SCHEMA-STRICT` | 2 + 3 | app-tests |
+| 12 | `AGENCY-LOOP-BOUNDED` | 2 | app-tests |
+| 13 | `AGENCY-BOUND-FAILURE-DEFINED` | 2 | app-tests |
+| 14 | `AGENCY-FAILURE-REASONS-RUNTIME` | 2 | app-tests |
+| 15 | `AGENCY-PLAN-STATUS-DEFAULT-NOT-OK` | 1 | db-tests |
+| 16 | `AGENCY-PLANNER-TRIAL-EXEMPT` | 2 | app-tests |
+| 17 | `AGENCY-PLANNER-PROMPT-ID-DISTINCT` | 2 | app-tests |
+| 18 | `AGENCY-CLAIMS-FLAGGED-NEVER-EDITED` | 1 + 2 + 3 | db-tests + app-tests |
+| 19 | `AGENCY-CLAIM-EVIDENCE-TRACEABLE` | 2 | app-tests |
+| 20 | `AGENCY-CLAIM-NO-CORPUS-DISTINCT` | 2 | app-tests |
+| 21 | `AGENCY-CLAIM-CITED-NOT-SUPPORTED` | 2 | app-tests |
+| 22 | `AGENCY-NO-ELEVENTH-DIMENSION` | 3 | app-tests |
+| 23 | `AGENCY-VERIFY-CROSS-REFERENCED` | 3 | app-tests |
+| 24 | `AGENCY-NO-EVIDENCE-WRITE-SURFACE` | 3 | app-tests |
+| 25 | `AGENCY-PLANNER-PROPOSES-ONLY` | 2 + 3 | app-tests |
+| 26 | `AGENCY-FROZEN-BRIEF-CONTRACT-INTACT` | 1 + 2 | db-tests + app-tests |
+| 27 | `AGENCY-ROLE-SEQUENCE-ORDER-UNIQUE` | 2 | app-tests |
+| 28 | `AGENCY-PROPOSAL-TRANSITION-ATOMIC` | 1 | db-tests |
+| 29 | `AGENCY-PROPOSAL-DECIDE-VIA-RPC` | 1 + 3 | db-tests + app-tests |
+| 30 | `AGENCY-PROPOSAL-WRITE-ONCE` | 1 | db-tests |
+| 31 | `AGENCY-PROPOSAL-ROLE-VOCABULARY` | 1 | db-tests |
+| 32 | `AGENCY-PROPOSAL-PROVENANCE` | 1 | db-tests |
+| 33 | `AGENCY-PROPOSAL-BOUNDED-QUERY` | 1 + 2 | db-tests + app-tests |
+| 34 | `AGENCY-FREEZE-SUPERSEDE-ATOMIC` | 1 + 2 + 3 | db-tests + app-tests |
+| 35 | `AGENCY-SET-REDUNDANCY-CHECKED` | 1 + 2 | db-tests + app-tests |
+| 36 | `AGENCY-PROPOSAL-PAYLOAD-NEUTRALISED` | 2 | db-tests + app-tests |
+| 37 | `AGENCY-TOOL-RESULTS-GUARDED` | 2 + 3 | app-tests |
+| 38 | `AGENCY-TOOL-RESULT-BRANDED` | 2 + 3 | app-tests |
+| 39 | `AGENCY-NO-SEVENTH-SANITIZER` | 3 | app-tests |
+| 40 | `AGENCY-NO-UNSAFE-HTML` | 3 | app-tests |
+| 41 | `AGENCY-COST-CEILING-EXTENDED` | 1 | db-tests |
+| 42 | `AGENCY-BUDGET-PURPOSE-ISOLATED` | 1 | db-tests |
+| 43 | `AGENCY-NO-SECOND-BUDGET-TABLE` | 3 | app-tests |
+| 44 | `AGENCY-GATES-UNCHANGED` | 1 + 2 + 3 | db-tests + app-tests (Tier-3 part (c) is a pasted transcript, not CI-executed) |
+| 45 | `AGENCY-RLS-ISOLATED` | 1 | db-tests |
+| 46 | `AGENCY-CASCADE-COMPLETE` | 1 | db-tests |
+| 47 | `AGENCY-REORDER-RATIFIED-EXACT` | 1 | db-tests |
+
+V.2 and V.10 still describe `998030e8`; they are superseded for rows 18, 33, 34, 35 and 47 by this table and left as
+written.
+
+_End of Correction pass verification (Session 34-D), including the D12 addendum._

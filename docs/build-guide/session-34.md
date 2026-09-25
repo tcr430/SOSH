@@ -3235,25 +3235,37 @@ and the diff proves nothing above the appendix changed. Track K closed." Then st
 
 ## §5 — Docs to update at close-out (Track K done)
 
-- [ ] `docs/decisions/0027-agency-in-generation.md` — Accepted, final constraint table, real
+- [x] `docs/decisions/0027-agency-in-generation.md` — Accepted, final constraint table, real
       post-correction counts verified executed green in CI at the head they are dated to.
-- [ ] `docs/decisions/0017-mode-2-upgrade.md` — **only if** Q4's freeze ordering required an amendment;
+- [x] `docs/decisions/0017-mode-2-upgrade.md` — **only if** Q4's freeze ordering required an amendment;
       otherwise a note recording that the frozen-brief contract is unchanged and which test proves it.
       Also record the `MODE2-REDUNDANCY-UNDEFER` disposition either way.
-- [ ] `docs/decisions/0021-mode-3-triage-and-opportunity-feed.md` — a note that `runToolLoop` now has a
+- [x] `docs/decisions/0021-mode-3-triage-and-opportunity-feed.md` — a note that `runToolLoop` now has a
       second consumer and that Stage C's behaviour is unchanged, with the test that proves it.
-- [ ] `docs/current-phase.md` — Session 34 entry; the `db-tests` tally with its event type; the measured
+- [x] `docs/current-phase.md` — Session 34 entry; the `db-tests` tally with its event type; the measured
       p95 latency against the ADR's predicted figure, stated honestly if they differ.
-- [ ] `docs/decisions/0010-legal-surface.md` Amendment 2 §D2.5 — cascade row(s) for the proposal table, or
+- [x] `docs/decisions/0010-legal-surface.md` Amendment 2 §D2.5 — cascade row(s) for the proposal table, or
       an explicit no-new-row note.
-- [ ] `docs/brainstorm/ai-quality-track-ideas-and-build-path.md` — T2.1, T2.2, T2.4 marked shipped; Part
+- [x] `docs/brainstorm/ai-quality-track-ideas-and-build-path.md` — T2.1, T2.2, T2.4 marked shipped; Part
       III §15's placement table updated with what actually shipped and where it now sits on the grid.
-- [ ] `docs/backlog.md` — memory-driven cards / background agents (with the note that they belong in the
+- [x] `docs/backlog.md` — memory-driven cards / background agents (with the note that they belong in the
       existing opportunity feed, not a new surface); `MODE2-REDUNDANCY-UNDEFER` if still deferred; anything
       else K1 deferred, each with an un-defer trigger.
-- [ ] `.wolf/anatomy.md`, `.wolf/memory.md`, `.wolf/cerebrum.md`.
-- [ ] `docs/reviews/session-34-reviewer.md` — exists, names its commit range, carries one appended
+- [x] `.wolf/anatomy.md`, `.wolf/memory.md`, `.wolf/cerebrum.md`.
+- [x] `docs/reviews/session-34-reviewer.md` — exists, names its commit range, carries one appended
       correction-pass section.
+
+**Close-out evidence (Session 34-D D12, 2026-09-25)** — per item, whether it applied and the evidence:
+
+1. **ADR 0027 — applied.** Status `Accepted`; §VI.9 re-dates all 47 constraints to `ac595776` from `app-tests` run 36110499833 (345 files / 4994 tests) and `db-tests` run 36110499747 (100 files / 826 tests), both `pull_request` events on PR #14.
+2. **ADR 0017 — applied (an amendment was required).** Amendment F (K2.11) and addendum F.4 (D11); the frozen-brief contract is unchanged and proved by `MODE2-BRIEF-FROZEN-GUARD` (`supabase/__tests__/mode2-brief-rls.test.ts`, unmodified). `MODE2-REDUNDANCY-UNDEFER` is **discharged at the approval gate from `eae53738` (D9)**, and was a log line before.
+3. **ADR 0021 — applied.** §18 Amendment C-1 (K2.11): `runToolLoop` has a second consumer; Stage C's behaviour is unchanged, proved by `lib/ai/tool-runner.test.ts` and `lib/signals/triage/orchestrator.test.ts`, which are byte-unchanged (D8's empty diff against `7c6761c2`).
+4. **`docs/current-phase.md` — applied.** The K2 entry and the Session 34-D entry; the `db-tests` tally is unchanged (all runs are `pull_request` events); p95 latency **NOT MEASURED** against the predicted 30 000 ms.
+5. **ADR 0010 §D2.5 — applied, and now verbatim.** The row landed with its migration (`09dbd445`); D11 (`ac595776`) restored it to ADR 0027 §9.3's text byte for byte.
+6. **Brainstorm doc — applied.** T2.1 and T2.2 marked shipped (K2.11); at D12 the T2.4 heading and the §15 placement row were corrected from "built, not yet reachable" to shipped and wired (K2.12/K2.13), never run against a real model.
+7. **`docs/backlog.md` — applied only for the K1 deferrals.** §3.2 already lists them with un-defer triggers (K2.11). **No finding row was added, by founder instruction.** `MODE2-REDUNDANCY-UNDEFER` is not still deferred; its older row's text in the deferral table is stale and was not edited by this pass.
+8. **`.wolf/anatomy.md`, `memory.md`, `cerebrum.md` (and `buglog.json`) — applied at D12.**
+9. **`docs/reviews/session-34-reviewer.md` — applied.** Exists, names its range, and carries one appended `## CORRECTION PASS (Session 34-D)` section.
 
 **Next:** Track L — memory as a platform substrate (`ai-quality-track-ideas-and-build-path.md` §10: many
 writers, the widened query contract, cross-type retrieval), then the memory-driven fourth signal source
