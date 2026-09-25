@@ -1,0 +1,126 @@
+// ADR 0029 — the founder input engine. Every number here is TRANSCRIBED from the ADR, never
+// re-derived, and none is read from the environment (config.ts is for secrets and deployment
+// facts; these are product rules with a named ADR section and a named loser).
+//
+// A value that is ALSO enforced in SQL (confidence, expiry, the 5..8 CHECK, the length bounds)
+// is documented here for the TypeScript callers and enforced by the migration that owns it —
+// this file is never the enforcement point for a governance field.
+
+// ─── Slots (§3.1) ────────────────────────────────────────────────────────────
+// The domain enums of ADR 0016 §3.1–§3.3, less 'other'. Order matters: it is the tie-break
+// order of §3.3 (types brand > audience > evidence, then this category order).
+export const INTERVIEW_MEMORY_TYPES = ['brand', 'audience', 'evidence'] as const
+export type InterviewMemoryType = (typeof INTERVIEW_MEMORY_TYPES)[number]
+
+export const INTERVIEW_SLOTS = [
+  { type: 'brand', category: 'positioning' },
+  { type: 'brand', category: 'capability' },
+  { type: 'brand', category: 'pricing' },
+  { type: 'brand', category: 'competitor' },
+  { type: 'audience', category: 'problem' },
+  { type: 'audience', category: 'objection' },
+  { type: 'audience', category: 'question' },
+  { type: 'audience', category: 'trigger' },
+  { type: 'evidence', category: 'quote' },
+  { type: 'evidence', category: 'case_study' },
+  { type: 'evidence', category: 'usage_data' },
+] as const
+export type InterviewSlot = (typeof INTERVIEW_SLOTS)[number]
+
+// ─── Thinness (§3.2) ─────────────────────────────────────────────────────────
+// Target T(s) per slot: the effective (recency-weighted) count at which a slot is "covered".
+// brand: positioning 2, capability 3, pricing 1, competitor 2
+// audience: problem 3, objection 3, question 3, trigger 2
+// evidence: quote 2, case_study 2, usage_data 2
+export const INTERVIEW_SLOT_TARGETS: Readonly<Record<string, number>> = {
+  'brand:positioning': 2,
+  'brand:capability': 3,
+  'brand:pricing': 1,
+  'brand:competitor': 2,
+  'audience:problem': 3,
+  'audience:objection': 3,
+  'audience:question': 3,
+  'audience:trigger': 2,
+  'evidence:quote': 2,
+  'evidence:case_study': 2,
+  'evidence:usage_data': 2,
+}
+
+/** §3.2: a row whose recency_at is within this many days (inclusive) weighs 1; older weighs 0.5. */
+export const INTERVIEW_RECENCY_WINDOW_DAYS = 180
+export const INTERVIEW_RECENT_WEIGHT = 1
+export const INTERVIEW_STALE_WEIGHT = 0.5
+
+/** §3.2: a slot is thin iff thinness(s) >= this. Exactly at the threshold is thin. */
+export const INTERVIEW_THIN_THRESHOLD = 0.5
+
+// ─── Selection (§3.3, §3.6) ──────────────────────────────────────────────────
+/** §3.3 rule 4: at most this many questions of one memory type per round. */
+export const INTERVIEW_MAX_PER_TYPE = 3
+/** §3.3 rule 5 / §3.6: fewer than this many selected questions means no round. */
+export const INTERVIEW_MIN_QUESTIONS = 5
+/** §3.3 rule 4 / §3.6: a round never holds more than this many questions. */
+export const INTERVIEW_MAX_QUESTIONS = 8
+/** §3.3: a key answered inside this window is not eligible again. */
+export const INTERVIEW_ANSWERED_COOLDOWN_DAYS = 180
+/** §3.3: a key skipped inside this window is not eligible again. */
+export const INTERVIEW_SKIPPED_COOLDOWN_DAYS = 60
+
+// ─── Confidence (§2.6) — documented here, ENFORCED in SQL ───────────────────
+// All below LEARN_PROMOTION_MIN_CONFIDENCE (0.7, lib/learning/promote.ts:16), so a founder
+// statement never reads as settled as a promoted learned pattern.
+export const INTERVIEW_CONFIDENCE: Readonly<Record<InterviewMemoryType, number>> = {
+  brand: 0.6,
+  audience: 0.5,
+  evidence: 0.4,
+}
+
+// ─── Length bounds (§4.2, §7.1, §8.4) ───────────────────────────────────────
+/** §7.1 / §6.2: a stored answer is at most this many characters (Zod and SQL). */
+export const INTERVIEW_ANSWER_MAX_CHARS = 2000
+/** §4.2: brand / audience record text. */
+export const INTERVIEW_RECORD_TEXT_MAX_CHARS = 280
+/** §4.2: evidence record text (equals its span). */
+export const INTERVIEW_EVIDENCE_TEXT_MAX_CHARS = 500
+/** §4.2: the verbatim answer substring a record is grounded in. */
+export const INTERVIEW_SPAN_MAX_CHARS = 500
+/** §4.2: at most this many records from one answer. */
+export const INTERVIEW_MAX_ITEMS_PER_ANSWER = 3
+/** §4.2: at most this many records from one round. */
+export const INTERVIEW_MAX_ITEMS_PER_ROUND = 24
+/** §4.5: existing active records of each type sent to the extraction call for conflict detection. */
+export const INTERVIEW_CONFLICT_CONTEXT_PER_TYPE = 10
+/** §4.2: `conflictsWith` ids per item. */
+export const INTERVIEW_MAX_CONFLICTS_PER_ITEM = 3
+
+// ─── Cost and bounds (§7.1, §7.2) ───────────────────────────────────────────
+/** §7.1: the extraction call's output ceiling. */
+export const INTERVIEW_MAX_TOKENS = 4500
+/** §7.2: cents reserved per attempt — the worst case of §7.1 (ceil of 2.61 + 6.75). */
+export const INTERVIEW_RESERVATION_CENTS = 10
+/** §7.2: per-round ceiling on the round row — three attempts of the reservation. */
+export const INTERVIEW_CEILING_CENTS = 30
+/** §7.2: extraction attempts per round. */
+export const INTERVIEW_MAX_ATTEMPTS = 3
+/** §5.2 / §7.2: a round stuck in `extracting` this long may be re-claimed. */
+export const INTERVIEW_RECLAIM_AFTER_MINUTES = 10
+
+// ─── Cadence (§5.1, §5.8) ────────────────────────────────────────────────────
+/** §5.1: a round is due only if none was created for the business in this many days (any status). */
+export const INTERVIEW_DUE_AFTER_DAYS = 30
+/** §5.8: "Not now" hides the card for this many days. */
+export const INTERVIEW_SNOOZE_DAYS = 7
+
+// ─── Retention (§5.4, §6.3, A-3) ─────────────────────────────────────────────
+/** §6.3: raw answer text and grounding span are redacted this many days after the round is terminal. */
+export const INTERVIEW_ANSWER_TTL_DAYS = 30
+
+// ─── Bounded lists (§9.5) ────────────────────────────────────────────────────
+/** rounds for a business, `created_at DESC`. */
+export const INTERVIEW_ROUNDS_LIMIT = 12
+/** answers for a round, by `position`. */
+export const INTERVIEW_ANSWERS_LIMIT = 8
+/** candidates for a round, per table, via the `interview_answer_id` index. */
+export const INTERVIEW_CANDIDATES_LIMIT_PER_TABLE = 24
+/** thinness counts, per table, over one business's active rows. */
+export const INTERVIEW_THINNESS_ROW_LIMIT = 500
