@@ -108,6 +108,10 @@ export type BusinessRow = {
   onboarding_completed: boolean
   total_posts_published: number
   deleted_at: string | null
+  // ADR 0029 §5.8: "Not now" hides the interview card until this time. Written ONLY by snooze_interview (service-role RPC).
+  // OPTIONAL on the type on purpose: thirteen unrelated test fixtures build a full BusinessRow, and every reader treats an
+  // absent value exactly like NULL (not snoozed). A select('*') row always carries it.
+  interview_snoozed_until?: string | null
   created_at: string
   updated_at: string
 }
@@ -132,7 +136,7 @@ export type BusinessInsert = {
   updated_at?: string
 }
 
-export type BusinessUpdate = Partial<Omit<BusinessRow, 'id' | 'created_at' | 'plan' | 'stripe_customer_id' | 'stripe_subscription_id' | 'deleted_at'>>
+export type BusinessUpdate = Partial<Omit<BusinessRow, 'id' | 'created_at' | 'plan' | 'stripe_customer_id' | 'stripe_subscription_id' | 'deleted_at' | 'interview_snoozed_until'>>
 
 // ---------------------------------------------------------------------------
 // 2. brand_voices
@@ -1766,3 +1770,99 @@ export type PostOutcomeRow = {
   measured_at: string
 }
 export type PostOutcomeInsert = PostOutcomeRow
+
+// ADR 0029 §5.2 / §9.1 (Session 35 M2.3-M2.4) — the founder input engine. BOTH tables are written ONLY by service-role
+// SECURITY DEFINER RPCs (no authenticated write grant, no write policy — §9.2), so there is deliberately NO *Insert / *Update
+// type here: nothing outside lib/db/founder-interview-*.ts may construct a row, and a write is an RPC call, not a row.
+export type FounderInterviewRoundStatus =
+  | 'open'
+  | 'submitted'
+  | 'skipped'
+  | 'extracting'
+  | 'extraction_failed'
+  | 'awaiting_ratification'
+  | 'no_records'
+  | 'ratified'
+  | 'expired'
+  | 'failed'
+
+export type FounderInterviewRoundRow = {
+  id: string
+  business_id: string
+  status: FounderInterviewRoundStatus
+  question_count: number
+  bank_version: number
+  created_by: string | null
+  created_at: string
+  submitted_at: string | null
+  claimed_at: string | null
+  extraction_attempts: number
+  spend_cents: number
+  ceiling_cents: number
+  error_code: string | null
+  extracted_at: string | null
+  ratified_at: string | null
+  ratified_by: string | null
+  terminal_at: string | null
+  items_proposed: number
+  dropped_ungrounded: number
+  dropped_performance_claim: number
+  candidates_written_brand: number
+  candidates_written_audience: number
+  candidates_written_evidence: number
+  accepted: number
+  rejected: number
+  edited: number
+  replaced: number
+  updated_at: string
+}
+
+export type FounderInterviewAnswerStatus = 'pending' | 'answered' | 'skipped'
+export type FounderInterviewSlotType = 'brand' | 'audience' | 'evidence'
+
+export type FounderInterviewAnswerRow = {
+  id: string
+  business_id: string
+  round_id: string
+  position: number
+  question_key: string
+  bank_version: number
+  slot_type: FounderInterviewSlotType
+  slot_category: string
+  status: FounderInterviewAnswerStatus
+  // NULL once retention redacts it (§6.3) and for a skipped or still-pending question.
+  answer_text: string | null
+  char_count: number | null
+  answered_by: string | null
+  // The COOLDOWN CLOCK (§3.3): when the question was answered OR skipped.
+  answered_at: string | null
+  redacted_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+// One selected question, as create_interview_round takes it (M2.7's selection produces these).
+export type FounderInterviewQuestionInput = {
+  questionKey: string
+  slotType: FounderInterviewSlotType
+  slotCategory: string
+  bankVersion: number
+}
+
+// The lifecycle RPCs' TYPED outcomes (supabase/migrations/20260925120000_founder_interview_lifecycle_rpcs.sql). An
+// authorisation failure is NOT a value: it raises 42501 and surfaces as a thrown Error from the lib/db wrapper.
+export type CreateInterviewRoundResult = { outcome: 'ok'; roundId: string } | { outcome: 'too_soon' | 'round_open' }
+export type SaveInterviewAnswerResult = { outcome: 'ok'; answerId: string } | { outcome: 'not_found' | 'not_open' }
+export type SkipInterviewAnswerResult = { outcome: 'ok'; answerId: string } | { outcome: 'not_found' | 'not_skippable' }
+export type SkipInterviewRoundResult = { outcome: 'ok'; skippedAnswers: number } | { outcome: 'not_found' | 'not_open' }
+export type SubmitInterviewRoundResult = { outcome: 'ok'; roundId: string } | { outcome: 'not_found' | 'not_open' | 'no_answers' }
+export type SnoozeInterviewResult = { outcome: 'ok'; snoozedUntil: string } | { outcome: 'already_snoozed' }
+export type ClaimInterviewExtractionResult =
+  | { outcome: 'claimed'; businessId: string; attempt: number; spendCents: number }
+  | { outcome: 'not_found' }
+  | { outcome: 'not_claimable'; status: FounderInterviewRoundStatus }
+  | { outcome: 'attempts'; attempts: number }
+  | { outcome: 'ceiling'; spendCents: number; ceilingCents: number }
+export type ReconcileInterviewSpendResult =
+  | { outcome: 'reconciled'; status: FounderInterviewRoundStatus; spendCents: number }
+  | { outcome: 'not_extracting' }

@@ -1,0 +1,115 @@
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import fs from 'node:fs'
+import path from 'node:path'
+import { createMockClient } from './__test-utils__/mock-client'
+
+vi.mock('@/lib/supabase/service', () => ({ createServiceRoleClient: vi.fn() }))
+
+import { createServiceRoleClient } from '@/lib/supabase/service'
+import { FounderInterviewRpcError } from './founder-interview-rounds'
+import { listAnswersForRound, listInterviewCooldownRows, saveInterviewAnswer, skipInterviewAnswer } from './founder-interview-answers'
+import { INTERVIEW_ANSWERS_LIMIT } from '@/lib/interview/constants'
+
+// ADR 0029 §9.5 INTERVIEW-BOUNDED-QUERIES (Tier 2) and the wrapper half of §2.5. The answer reads are BOUNDED and ORDERED
+// on an index: the answers of a round by `position` (founder_interview_answers_round_position_uq), the cooldown rows by
+// (question_key ASC, answered_at DESC) — the column order of founder_interview_answers_cooldown_idx. The save / skip
+// wrappers are service-role by lazy import and can name NO business (the RPCs derive it from the answer).
+//
+// SHARED-FUNCTION CALLERS: none yet — the Server Actions (M2.9: save / skip) and the /interview page (M2.10: the answer
+// list) are the future callers, and the pure selection (M2.7) is the sole caller of listInterviewCooldownRows. Until
+// those steps land, every caller is AUTHORED-NOT-EXECUTED and this file is the only executed proof.
+
+afterEach(() => vi.clearAllMocks())
+
+const calls = (fn: unknown) => (fn as { mock: { calls: unknown[][] } }).mock.calls
+
+function serviceRpc(result: { data: unknown; error: unknown }) {
+  const rpc = vi.fn().mockResolvedValue(result)
+  vi.mocked(createServiceRoleClient).mockReturnValue({ rpc } as unknown as ReturnType<typeof createServiceRoleClient>)
+  return rpc
+}
+
+describe('INTERVIEW-BOUNDED-QUERIES — founder-interview-answers reads', () => {
+  it("lists ONE round's answers in question order with an explicit limit (default 8)", async () => {
+    const { client, builder, from } = createMockClient([{ id: 'a-1' }], null)
+    const rows = await listAnswersForRound(client, 'round-1')
+    expect(from).toHaveBeenCalledWith('founder_interview_answers')
+    expect(builder.eq).toHaveBeenCalledWith('round_id', 'round-1')
+    expect(calls(builder.order)).toEqual([['position', { ascending: true }]])
+    expect(calls(builder.limit)).toEqual([[8]])
+    expect(INTERVIEW_ANSWERS_LIMIT).toBe(8)
+    expect(rows).toEqual([{ id: 'a-1' }])
+  })
+
+  it('honours a caller-supplied limit, and a database error throws', async () => {
+    const ok = createMockClient(null, null)
+    expect(await listAnswersForRound(ok.client, 'round-1', 4)).toEqual([])
+    expect(calls(ok.builder.limit)).toEqual([[4]])
+    const bad = createMockClient(null, { message: 'boom' })
+    await expect(listAnswersForRound(bad.client, 'round-1')).rejects.toThrow('boom')
+  })
+
+  it('the cooldown lookup reads ONE business, only answered / skipped rows that carry a clock, ordered (question_key ASC, answered_at DESC)', async () => {
+    const { client, builder, from } = createMockClient([{ question_key: 'k1', status: 'answered', answered_at: '2026-09-01T00:00:00Z' }], null)
+    const rows = await listInterviewCooldownRows(client, 'biz-1', 40)
+    expect(from).toHaveBeenCalledWith('founder_interview_answers')
+    expect(builder.select).toHaveBeenCalledWith('question_key, status, answered_at')
+    expect(builder.eq).toHaveBeenCalledWith('business_id', 'biz-1')
+    expect(builder.in).toHaveBeenCalledWith('status', ['answered', 'skipped'])
+    expect(builder.not).toHaveBeenCalledWith('answered_at', 'is', null)
+    expect(calls(builder.order)).toEqual([
+      ['question_key', { ascending: true }],
+      ['answered_at', { ascending: false }],
+    ])
+    expect(calls(builder.limit)).toEqual([[40]])
+    expect(rows).toHaveLength(1)
+  })
+
+  it('the cooldown lookup has NO default limit — the bound is required and comes from the bank size (§9.5)', () => {
+    expect(listInterviewCooldownRows.length).toBe(3) // (client, businessId, limit): no default value, so all three count
+    const src = fs.readFileSync(path.join(process.cwd(), 'lib', 'db', 'founder-interview-answers.ts'), 'utf8')
+    expect(src).toMatch(/listInterviewCooldownRows\(client: SupabaseClient, businessId: string, limit: number\)/)
+    expect(src).toMatch(/\.limit\(limit\)/)
+  })
+})
+
+describe('founder-interview-answers RPC wrappers — service-role by lazy import, no business id, p_* only', () => {
+  const USER = '00000000-0000-4000-8000-000000000001'
+  const ANSWER = '00000000-0000-4000-8000-000000000004'
+
+  it('saveInterviewAnswer calls save_interview_answer with EXACTLY (p_user_id, p_answer_id, p_text) and returns the typed outcome', async () => {
+    const spy = serviceRpc({ data: { outcome: 'not_open' }, error: null })
+    const result = await saveInterviewAnswer({ userId: USER, answerId: ANSWER, text: 'we ship weekly' })
+    expect(spy).toHaveBeenCalledWith('save_interview_answer', { p_user_id: USER, p_answer_id: ANSWER, p_text: 'we ship weekly' })
+    expect(result).toEqual({ outcome: 'not_open' })
+  })
+
+  it('skipInterviewAnswer calls skip_interview_answer with EXACTLY (p_user_id, p_answer_id)', async () => {
+    const spy = serviceRpc({ data: { outcome: 'ok', answerId: ANSWER }, error: null })
+    expect(await skipInterviewAnswer({ userId: USER, answerId: ANSWER })).toEqual({ outcome: 'ok', answerId: ANSWER })
+    expect(spy).toHaveBeenCalledWith('skip_interview_answer', { p_user_id: USER, p_answer_id: ANSWER })
+  })
+
+  it('neither wrapper forwards a business id or a governance value', async () => {
+    const spy = serviceRpc({ data: { outcome: 'ok' }, error: null })
+    await saveInterviewAnswer({ userId: USER, answerId: ANSWER, text: 'x' })
+    await skipInterviewAnswer({ userId: USER, answerId: ANSWER })
+    for (const [, args] of spy.mock.calls as [string, Record<string, unknown>][]) {
+      expect(Object.keys(args).every((k) => ['p_user_id', 'p_answer_id', 'p_text'].includes(k))).toBe(true)
+    }
+  })
+
+  it('an AUTHORISATION failure (42501) throws a FounderInterviewRpcError carrying the code, from BOTH wrappers', async () => {
+    serviceRpc({ data: null, error: { code: '42501', message: "save_interview_answer: x is not an author-level member of the answer's business" } })
+    await expect(saveInterviewAnswer({ userId: USER, answerId: ANSWER, text: 'x' })).rejects.toMatchObject({ code: '42501' })
+    await expect(skipInterviewAnswer({ userId: USER, answerId: ANSWER })).rejects.toBeInstanceOf(FounderInterviewRpcError)
+  })
+
+  it('no wrapper takes a `client` parameter, and the file never imports the service-role client itself', () => {
+    expect(saveInterviewAnswer.length).toBe(1)
+    expect(skipInterviewAnswer.length).toBe(1)
+    const src = fs.readFileSync(path.join(process.cwd(), 'lib', 'db', 'founder-interview-answers.ts'), 'utf8')
+    // it reaches the service-role client ONLY through founder-interview-rounds' callInterviewRpc (lazy import)
+    expect(src).not.toMatch(/@\/lib\/supabase\/service/)
+  })
+})
