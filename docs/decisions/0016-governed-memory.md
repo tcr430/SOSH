@@ -713,3 +713,44 @@ and no rule of §1-§9; it adds one writer to `performance_memory` and one retri
 
 **Constraints:** `OUTCOME-TWO-WRITERS-DISTINGUISHED`, `OUTCOME-KEY-COLLISION-DEFINED`, `OUTCOME-WRITE-PROTECTED`,
 `OUTCOME-SEPARATE-RETRIEVAL`, `OUTCOME-NO-EXTRA-WRITER` (ADR 0026 §13).
+
+---
+
+## Amendment E — `brand_memory`, `evidence_memory`, `audience_memory` gain a fourth `source`, `'interview'`; §4's deferred role-gating is discharged (2026-09-25, Session 35, M2.2 / M2.3)
+
+**Source:** ADR 0029 §2.1, §2.2, §2.4; founder ruling **A-2**. **Additive**, in this ADR's own append-only
+convention (Amendments A-D): nothing above this heading is edited.
+
+- **A fourth provenance, distinguished in the row.** `source` on the three tables above gains `'interview'` beside
+  `'manual'`, `'distilled'` and `'import'` (migration `20260925110000_founder_interview_schema.sql`). It is NOT added to
+  `performance_memory` (ADR 0029 D-4: the interview writer never touches it), whose `source` CHECK is unchanged. An
+  interview record is *written by a model from a member's answer and then ratified by a human* — a different provenance
+  from `'manual'` (a member typed it) — so it gets its own value rather than a second discriminator column, because no
+  biconditional CHECK can hold over a value that a future hand-typed writer would also use (ADR 0029 §2.1).
+- **The provenance marker.** Each of the three tables gains `interview_answer_id` (→ `founder_interview_answers`,
+  `ON DELETE NO ACTION`, exactly as `import_run_id`), `interview_span`, `interview_span_redacted_at`,
+  `interview_extracted_text` and `interview_edited`, under four named CHECKs: `(source = 'interview') =
+  (interview_answer_id IS NOT NULL)`, `(source = 'interview') = (interview_extracted_text IS NOT NULL)`, an interview
+  row always has its span or its redaction stamp, and a non-interview row carries none of the interview columns. A new
+  BEFORE UPDATE trigger, `enforce_memory_interview_immutable`, is a **sibling** of `enforce_memory_import_immutable`
+  (which is not edited): it rejects any change to `source`, `interview_answer_id` and `interview_extracted_text`, and
+  lets `interview_span` change only to NULL in the statement that sets `interview_span_redacted_at`. Provenance survives
+  (rule: *provenance survives*): interview rows stay permanently distinguishable from imported, distilled and
+  hand-typed ones, and an edit at ratification preserves the model's original text.
+- **§4's deferred role-gating is DISCHARGED — by closing, not gating.** §4 (and `20260719010000_governed_memory.sql:16-22`)
+  left the plain any-member INSERT/UPDATE/DELETE policies on `brand_memory`, `evidence_memory` and `audience_memory`
+  as "defense-in-depth for a future authenticated memory-management UI", with capability gating due "in the same session
+  that ships that UI". Session 35 is that session, and migration **`20260925100000_memory_member_writes_closed.sql`**
+  (M2.2) drops those nine policies and revokes `INSERT, UPDATE, DELETE, TRUNCATE` from `authenticated` and `anon`,
+  keeping only `<table>_select_own`. A `user_can`-gated INSERT would still let an approver set
+  `public_use_permission = true` or `confidence = 1.0` directly over PostgREST, bypassing the counsel gate (ADR 0025 A-6);
+  every writer to these tables is a service-role `SECURITY DEFINER` RPC (or the service-role client), none of which
+  depends on `authenticated` privileges. A future general memory-management UI re-opens a gated path of its own, through
+  its own RPC. **`performance_memory` is UNCHANGED** — its member INSERT narrowed to `source = 'manual'`, its
+  write-protection trigger and its delete guard (Amendment D, ADR 0026 §5.5) are untouched.
+- **Governance is fixed in SQL, never supplied.** The writer and ratify RPCs (M2.5, M2.6) fix `source`, `status`,
+  `confidence`, `sensitivity`, `public_use_permission`, `scope`, `scope_ref`, `expires_at`, `observation_count`,
+  `last_confirmed_at` and `business_id`; a record is a **candidate** until a human ratifies it, per item.
+
+**Constraints:** `INTERVIEW-PROVENANCE-DISTINCT`, `INTERVIEW-ANSWER-TRACEABLE`, `INTERVIEW-PROVENANCE-IMMUTABLE`,
+`INTERVIEW-MEMBER-WRITE-CLOSED`, `INTERVIEW-PERFORMANCE-POLICY-UNCHANGED` (ADR 0029 §11).
