@@ -2074,3 +2074,137 @@ asserted**; the column is the evidence, row by row, for the Reviewer to check.
 
 **`db-tests` promotion tally: unchanged.** Both runs are `pull_request` events; only consecutive green `master` push runs move it.
 _End of Builder verification (K2.11, with the K2.12, K2.13 and CI addenda). Sections 0-14 above were not modified._
+
+---
+
+## Correction pass verification (Session 34-D)
+
+**Additive.** This section is appended; sections 0-14 and V.1-V.10 above are **not** edited. Where a statement above is
+no longer true it is **superseded here by reference**, and the original stays as written. Range: `cad8790f` (the head
+the Reviewer read) to the D10 commit `fe23ebe0`; the findings are in `docs/reviews/session-34-reviewer.md`, and its
+`## CORRECTION PASS (Session 34-D)` appendix holds the per-finding rows, reddenings and SHAs. Every citation below is
+`file:line` **at the SHA named** (`git show <sha>:<path>`), not at HEAD. **No "executed green in CI" claim is made for
+this range:** the V.2 last column for it is filled only from a CI run that was opened and read, which is the correction
+pass's closing step, not this section.
+
+### VI.1 BLOCKER-1 — `AGENCY-FREEZE-SUPERSEDE-ATOMIC` now holds on the production path (D4, `7113ba00`)
+
+**V.2 row 34's claim was not true at `cad8790f` and is superseded here, not edited.** Row 34 cites
+`plan-proposals-freeze-supersede.test.ts`, which proves the *RPCs* (`approve_brief_and_supersede_proposals`,
+`revise_brief_and_supersede_proposals`) supersede atomically. It did not prove that the code a customer reaches called
+them: `approveBriefIfQualified` and both revise callers wrote `campaign_briefs` directly through PostgREST, so a
+proposal could stay `pending` behind a frozen brief. From `7113ba00` they call the typed wrappers
+`approveBriefAndSupersedeProposals` / `reviseBriefAndSupersedeProposals` (`lib/db/campaign-briefs.ts`); the old
+`approveBrief` / `reviseBrief` are deleted. **Proof at that SHA:** Tier-1 through the production functions,
+`supabase/__tests__/plan-proposals-approve-revise-path.test.ts:51` (approve: `frozen_at` set, both proposals
+`superseded`/`brief_frozen`), `:71` (below threshold: refused before any write, proposals stay pending), `:84` (revise:
+`version_advanced`), `:102` (stale `expectedVersion`: `null`, nothing superseded); Tier-2 per caller,
+`app/[locale]/(dashboard)/campaigns/[id]/brief/actions.supersede-callers.test.ts:85,95,104,114,132`; Tier-3,
+`lib/campaigns/__tests__/brief-write-paths.test.ts:74` (no module issues a PostgREST `.update()` on `campaign_briefs`
+setting `approved` or advancing `version`) and `:88` (the only callers). Row 34's tier label is therefore **1 + 2 + 3**.
+
+### VI.2 New constraint `AGENCY-REORDER-RATIFIED-EXACT` (D5, `59f0015c`) — 46 to 47
+
+**Placement rule, in one sentence:** `proposed_order` is the entry's 0-based position in the *resulting* sequence (after
+every accepted drop is removed), and every entry that is not the target of an accepted reorder keeps its original
+relative order and fills the remaining positions in order. This is the sentence the human ratifies ("reorder: move the
+post at targetOrder to proposedOrder", `lib/ai/prompts/campaign-planner.ts`); the RPC previously *ranked* by a sort key,
+which put a 3 to 0 reorder at position 1. **Tier 1.** `apply_brief_proposals` is replaced by a forward migration
+(`supabase/migrations/20260924100000_apply_brief_proposals_exact_placement.sql`; no committed migration was edited) and
+implements the rule; the same rule is the pure reference `placeRatifiedProposals`
+(`lib/campaigns/role-sequence.ts:96` at `59f0015c`, pinned by `lib/campaigns/role-sequence-placement.test.ts`).
+**Proof:** `supabase/__tests__/plan-proposals-ratify.test.ts:272` (3 to 0), `:276` (0 to 3), `:280`, `:285`, `:294`,
+`:303`; each accepted case asserts the RPC's `roleSequence` **equals** the TypeScript reference's output for the same
+input, and the refusals (`:323` two reorders to one slot, `:335` a slot past the end) assert a typed outcome and zero rows
+changed. **The constraint count is 47, not 46**; §1's and §11's "46" and V.1's "(46 constraints)" describe the ADR as
+accepted at `28aa23c6` and are not edited. **Tier totals**, recomputed from the rows' tier labels after the changes in
+VI.1-VI.7 (a constraint spanning tiers counts in each): §11's "16 Tier-1, 25 Tier-2, 22 Tier-3" becomes **20 Tier-1,
+26 Tier-2, 23 Tier-3**, the differences being row 47 (Tier 1), row 34 (gains Tier 2 and Tier 3), and a Tier-1 half added
+to rows 18 (VI.5), 33 (VI.7) and 35 (VI.6). **Tier E: still none.**
+
+### VI.3 MINOR-2 and MINOR-8 — typed refusals in `apply_brief_proposals` (D5, `59f0015c`)
+
+- **MINOR-2:** a brief that is not `critiqued` is refused with the typed outcome `not_critiqued`, and the final brief
+  `UPDATE` is also guarded `AND status = 'critiqued'`. Proof: `plan-proposals-ratify.test.ts:347` (proposal stays
+  `pending`; version and status unchanged). Guard order: frozen, concurrent_edit, the stale/conflicting checks,
+  `no_proposals_applied`, then `not_critiqued`.
+- **MINOR-8:** a result with zero entries returns `empty_sequence` **before** any proposal is marked accepted. Proof:
+  `plan-proposals-ratify.test.ts:359` (proposals stay pending; nothing changed).
+- The reorder refusals `conflicting_reorders` and `invalid_reorder_target` are typed the same way (`:323`, `:335`).
+- Also from D5's database review: the would-be-accepted proposals are locked `FOR UPDATE` so a concurrent reject cannot
+  be applied (`plan-proposals-apply-lock.test.ts:39`), and a latent partial commit now rolls back (`RAISE … 40001`).
+
+### VI.4 MAJOR-4 — `planner_run_id` is the `ai_usage` row id (D8, `f0b0d53a`)
+
+`RunToolLoopInput` gains an optional `usageId`; `runPlannerForCampaign` mints `plannerRunId` before the loop, passes it as
+`usageId`, and persists the same value as `planner_run_id`, so a proposal joins to its spend by value. **Decision: no
+foreign key and no migration; the loser is an FK from `campaign_plan_proposals.planner_run_id` to `ai_usage(id)`.** The
+cost of the choice: a failed `ai_usage` write (fail-soft by design) leaves a dangling id, so it is captured (Sentry, phase
+`planner-usage-record`, with the run id). Stage C triage passes no id and its test files are byte-unchanged
+(`lib/ai/tool-runner.test.ts`, `lib/signals/triage/orchestrator.test.ts`). **Proof:**
+`lib/ai/tool-runner-run-id.test.ts:68,75,85,92,107`; `lib/campaigns/planner/__tests__/orchestrator.test.ts:363,380`;
+Tier-1 `supabase/__tests__/plan-proposals-run-id-join.test.ts:69` (every proposal joins to its `ai_usage` row) and `:90`
+(a run id never given to the loop does not).
+
+### VI.5 MAJOR-3 — the fingerprint rule under `AGENCY-CLAIMS-FLAGGED-NEVER-EDITED` (D7, `7c6761c2`)
+
+A claim check indexes spans into `posts.content`, so it carries a **fingerprint of that exact text** (SHA-256 of the
+`posts.content` string alone, never content plus hashtags; `lib/campaigns/claim-fingerprint.ts`, the only hasher). Every
+reader treats an absent or mismatching fingerprint as "not checked", and the resolve path refuses to write against stale
+spans. This is read-side invalidation: a content writer added later is covered without anyone remembering to clear a key.
+The loser is per-writer clearing. Any pre-fix (K2.9-era) check has no fingerprint and reads "not checked", the existing
+state. **Proof:** Tier-1 `supabase/__tests__/claim-check-fingerprint.test.ts:62` (edited: no check), `:68`
+(hashtag-only edit: kept), `:74`, `:84` (regenerated, even with the old check riding along), `:121` (resolving and
+reading leave `posts.content` byte-identical); Tier-2 `lib/db/posts.claims-fingerprint.test.ts:31,37,42,47,58,64,78`,
+`lib/campaigns/generate.test.ts:1302`, and the one-hasher scan `lib/campaigns/__tests__/claim-fingerprint.test.ts:76,82,90`.
+Row 18's tier label is **1 + 2 + 3**.
+
+### VI.6 MAJOR-5 — `AGENCY-SET-REDUNDANCY-CHECKED`, half (b) delivered at the gate (D9, `eae53738`)
+
+**V.2 row 35 is superseded by reference.** It marked the constraint Tier 2 and closed by K2.8, when the flags were a
+console line only and ruling A-3's half (b) ("flagging at the approval gate") was not delivered. From `eae53738`,
+`checkSetRedundancy`'s flags are persisted on **both** posts of a flagged pair (`ai_generation_metadata.redundancy`,
+which also carries D7's fingerprint of that post's content, so an edited or regenerated post shows no flag) and rendered
+at the approvals gate beside the claim flags: informational only, **never blocking Approve, never editing text**.
+Row 35's tier label is **1 + 2**. **Proof:** `lib/campaigns/generate.test.ts:1376,1396,1406,1413,1427`;
+`lib/db/posts.redundancy.test.ts`; `app/[locale]/(dashboard)/approvals/ApprovalsInbox.test.tsx:923` block and
+`RedundancyFlag.test.tsx:45-97`; Tier-1 `supabase/__tests__/redundancy-flag-fingerprint.test.ts`.
+**Disclosed, not closed by this pass:** `checkSetRedundancy` is still called with `proofType: null` (a K2.8 limitation
+stated in that step, not a separate finding), and the check remains structural word-overlap, not semantic (§5.8). The
+threshold `REDUNDANCY_OVERLAP_THRESHOLD = 0.6` is unchanged.
+
+### VI.7 The remaining constraint records
+
+- **MAJOR-6, `AGENCY-PROPOSAL-DECIDE-VIA-RPC` (D1, `d5271652`):** the RPCs' grants are now proved rather than assumed.
+  `supabase/__tests__/plan-proposals-rpc-grants.test.ts:80,90,132,141` derives every function the two plan-proposal
+  migrations create and asserts anon, authenticated and PUBLIC hold no `EXECUTE`, `service_role` does, and an
+  authenticated or anon `rpc()` is refused `42501`.
+- **MINOR-7, `AGENCY-PROPOSAL-BOUNDED-QUERY` (D5 `59f0015c` for the index, D10 `fe23ebe0` for the query):** the brief page
+  reads the **current version's** proposals in every status, bounded, ordered `target_order, created_at, id`, through
+  `listCurrentVersionPlanProposals` (`lib/db/campaign-plan-proposals.ts`), which replaces `listPlanProposalsForBrief`; the
+  unused `listPendingPlanProposals` is deleted. D5's non-partial `campaign_plan_proposals_brief_version_idx` serves it:
+  the Tier-1 EXPLAIN in `supabase/__tests__/plan-proposals-current-version-read.test.ts` shows an index scan on it with no
+  Sort node. The constraint's Tier-2 test (`lib/db/campaign-plan-proposals.test.ts`, describe "AGENCY-PROPOSAL-BOUNDED-QUERY
+  — listCurrentVersionPlanProposals reads ONE VERSION") targets the function production calls; row 33's tier label is
+  **1 + 2**.
+- **MINOR-3 (D10, `fe23ebe0`):** `planBrief` reports a failed and a no-op plan-analysis record as distinct alerts, and the
+  panel renders proposals whenever rows exist (`lib/campaigns/plan-brief.test.ts`; `PlanReviewPanel.test.tsx`). This
+  refines §3.3's "distinguishable by the persisted column": the column can lag, so the panel no longer trusts it alone.
+- **MINOR-1, `AGENCY-TOOLS-TENANT-BOUND` (D2, `c4acce20`):** the Tier-1 tenancy test runs every tool under the member's
+  signed-in client as well as service-role (`supabase/__tests__/planner-tools-tenancy.test.ts:204,209`), and a Tier-2
+  recording-client test asserts the `business_id` filter on each hop of `getSignalForCampaign`
+  (`lib/db/signals-campaign-tenancy.test.ts:42,50`).
+- **MINOR-6, `AGENCY-NO-SERVICE-ROLE-IN-TOOLS` (D3, `b6e76bb6`):** the hand-maintained function list is replaced by a set
+  **derived from `tools.ts`' import graph** (`lib/campaigns/planner/__tests__/source-scans.test.ts:322,357,369`), so a
+  service-role function added to a tool's reach cannot be missed.
+- **MINOR-5 and NIT-3 (D3):** `toToolResultId` refuses a non-UUID value (`lib/ai/to-tool-result-id.test.ts:17,22,29,34`),
+  and the `wrapSignalForPrompt` caller allowlist scans `app/`, `lib/` and `components/`
+  (`lib/signals/source-scans.test.ts:211`).
+
+### VI.8 What this section does not claim
+
+It records what the corrections made true and where the proof lives. It does not fill any CI cell for the corrected
+range, does not re-open a founder ruling (A-1 to A-9 stand), and does not change the frozen-brief contract
+(`MODE2-BRIEF-FROZEN-GUARD` is untouched).
+
+_End of Correction pass verification (Session 34-D). Sections 0-14 and V.1-V.10 above were not modified._

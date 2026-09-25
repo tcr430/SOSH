@@ -1170,3 +1170,77 @@ The diff against D7's commit (`7c6761c2`) is EMPTY; both files are green (`lib/a
   commit for the query.
 - **What I did NOT touch:** the `not_run` DEFAULT and the request-path guard in `setBriefPlanAnalysis`;
   `supabase/.temp/cli-latest` (CLI churn, left out of the commit); D11's documentation amendments.
+
+### D10 — verification addendum (written in D11)
+
+D10's row above says the full `test:db` was not re-run because Docker was not running. It has since been run against the
+local stack (`127.0.0.1:54321/54322`) at the D10 commit `fe23ebe0`: `npm run test:db`, **100 files, 826 tests, all green**
+(D9's last full figure was 99 files / 822 tests; the difference is D10's new file and its 4 tests). That closes the
+"no fresh full-suite figure" caveat; nothing else in D10's row changes. The version-filter reddening was still not
+re-run against the live file.
+
+### D11 — MINOR-4, NIT-5, and the ADR half of MINOR-2
+
+No `.ts`, `.tsx` or `.sql` file changed in this step. Every citation in the ADR text below resolves at the SHA it
+names (checked with `git cat-file -e` and `git show <sha>:<path>` for the files, and line by line for a sample:
+`claim-check-fingerprint.test.ts:62,68,121` at `7c6761c2`, `generate.test.ts:1376,1413` at `eae53738`,
+`actions.supersede-callers.test.ts:85,132` at `7113ba00`, `plan-proposals-ratify.test.ts:272` and
+`lib/campaigns/role-sequence.ts:96` at `59f0015c`, and `plan-proposals-approve-revise-path.test.ts:51,71,84,102` at
+`7113ba00`). No "executed green in CI" cell is filled for the corrected range; that is D12's, from the logs.
+
+**MINOR-4**
+- **Finding:** MINOR-4 — ADR 0010 §D2.5's Session 34 row (`0010-legal-surface.md:1092`) is not ADR 0027 §9.3's
+  verbatim text and says "no third-party content", although `reason` is model text written after reading
+  `evidence_memory`.
+- **The row as it stood, quoted verbatim (before this step):**
+
+  ```
+  | campaign_plan_proposals | yes (business_id + brief_id + campaign_id) | CASCADE (all three) | yes | none — cascade = erasure (holds the planner's proposed reason text and role/order changes, no third-party content; decided_by is SET NULL, not CASCADE, so deleting the deciding auth user leaves the decision row intact per ADR 0027 §9.3; ADR 0027 §9.1) |
+  ```
+
+- **Fix (the only in-place edit of the pass):** that one line is replaced by ADR 0027 §9.3's text, byte for byte (the
+  replacement was taken from §9.3's blockquote by a script, not retyped):
+
+  ```
+  | campaign_plan_proposals | yes (business_id + campaign_id + brief_id) | CASCADE (all three) | yes | none — cascade = erasure (holds model-authored planner rationale about the customer's own campaign; decided_by is an auth.users id, ON DELETE SET NULL, so a user deletion anonymises the row rather than removing it; ADR 0027 §9) |
+  ```
+
+  It no longer says "no third-party content", and it states the `decided_by` behaviour as §9.3 does. Nothing else in
+  ADR 0010 changed: `git diff --stat docs/decisions/0010-legal-surface.md` is **1 insertion, 1 deletion**. The "Session 34
+  K2.5 note" beneath the table describes the row's *existence* and the `campaign_briefs` columns, not its wording, so
+  it stays accurate and was not touched.
+- **Legal MDX:** no `content/legal/*.mdx` file renders this row, and the Evidence Pack `docs/evidence/0010-legal-evidence.md`
+  does not mention `campaign_plan_proposals` (`grep` over both, empty), so CLAUDE.md's `evidenceRef` rule is not
+  triggered and no `evidenceRef` was bumped.
+- **Proof:** a diff, not a runtime test (Tier 3, diff-verified). The migration's cascade behaviour is unchanged and is
+  proved by `supabase/__tests__/plan-proposals-purge.test.ts` (constraint 46, `AGENCY-CASCADE-COMPLETE`).
+- **Commit:** this commit (D11; SHA back-filled by D12's sweep).
+
+**NIT-5 — recorded closure (this appendix only; a pushed commit body cannot be rewritten)**
+- **Finding:** NIT-5 — no commit body in the range records ECC invocation "1 of 4".
+- **The four Builder invocations, by SHA:**
+
+  | # | Invocation | Where | SHA |
+  |---|---|---|---|
+  | 1 of 4 | `ecc:code-explorer` — the K2.0 grounding pass | K2.0 has no commit (recorded in the build guide, not in a commit body) | none |
+  | 2 of 4 | `ecc:typescript-reviewer` | K2.3 | `5107c6df` |
+  | 3 of 4 | `ecc:database-reviewer` | K2.6 | `26e732fc` |
+  | 4 of 4 | `ecc:security-reviewer` | K2.7 | `9f7c44e6` |
+
+- **The budget of four was not exceeded** by the Builder. (The correction pass's own specialist invocations are recorded
+  in the D4 and D5 rows above; they are the correction pass's, not the Builder's.)
+- **Commit:** this commit (D11).
+
+**MINOR-2 — the ADR half** (the code half is D5's row above)
+- ADR 0027 §VI.3 records the `not_critiqued` refusal, its test and the guard order; ADR 0017 Amendment F's new
+  addendum F.4 dates F.1's "the brief must be critiqued" to `59f0015c`, and F.3's redundancy discharge at the gate to
+  `eae53738`. Both are appended; `git diff` of the two ADRs shows **additions only** (0 removed lines: 134 insertions in
+  ADR 0027, 23 in ADR 0017).
+
+**What ADR 0027 §VI supersedes by reference, not edit:** V.2 row 34's claim (`AGENCY-FREEZE-SUPERSEDE-ATOMIC` on the
+production path, BLOCKER-1) and row 35's tier and closing step (`AGENCY-SET-REDUNDANCY-CHECKED` half (b), MAJOR-5), plus
+the constraint count (46 to 47) and the tier tallies (16/25/22 to 20/26/23, derived from the rows' tier labels as
+§VI.2 shows).
+
+- **What I did NOT touch:** §§0-14 and V.1-V.10 of ADR 0027 (D12 back-fills SHAs and CI cells); ADR 0017 F.1-F.3; any
+  legal MDX; any code.

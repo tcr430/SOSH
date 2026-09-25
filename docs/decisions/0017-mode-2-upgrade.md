@@ -963,3 +963,26 @@ different evidence pass both halves (ADR 0027 §5.8).
 **Amendment D's table row for `MODE2-REDUNDANCY-UNDEFER`** cited `generate.ts:308` as untouched. `generate.ts` was
 modified in Session 34 (K2.8 added the `checkSetRedundancy` call; K2.9 added claim verification), so that citation is
 superseded by this amendment. Neither change alters what the frozen brief is or when it freezes.
+
+### F.4 — Addendum (Session 34-D, 2026-09-25): F.1 and F.3 dated to the commits that made them true
+
+**Additive.** F.1, F.2 and F.3 above are not edited. Two of their statements were **not true when written** and are
+dated here:
+
+- **F.1's "the brief must be `critiqued`" is true of the `apply_brief_proposals` RPC from `59f0015c` (D5), and was not
+  before.** At K2.11 the function's guards checked `frozen_at IS NULL` and `expected_version` but not `status`, so a
+  `draft` brief with a pending proposal could be applied. From `59f0015c` a non-critiqued brief is refused with the typed
+  outcome `not_critiqued`, and the final `UPDATE` is guarded `AND status = 'critiqued'`. Proven by
+  `supabase/__tests__/plan-proposals-ratify.test.ts:347` at that SHA. The same commit makes the RPC apply a ratified
+  reorder exactly where the ratified sentence says (ADR 0027 §VI.2, `AGENCY-REORDER-RATIFIED-EXACT`); F.1's
+  "the caller re-critiques before approval can happen again" is unchanged.
+- **F.3's discharge of `MODE2-REDUNDANCY-UNDEFER` is delivered at the approval gate from `eae53738` (D9), and was a log
+  line before.** F.3 says half (b), `checkSetRedundancy`, "flag[s] and never block[s] or edit[s]". Until `eae53738` the
+  flag was a `console.log` line and no reviewer saw it. From that commit each post of a flagged pair carries the flag in
+  `ai_generation_metadata.redundancy` and the approvals surface renders it, informationally, with Approve enabled and the
+  text untouched. Proven by `lib/campaigns/generate.test.ts:1376,1413` and
+  `app/[locale]/(dashboard)/approvals/ApprovalsInbox.test.tsx:923` block at that SHA. The residual F.3 states (a
+  structural check, not a semantic one) stands, and so does the disclosed `proofType: null` input to
+  `checkSetRedundancy`.
+
+The frozen-brief contract (§2.3, §2.4) is still unchanged by this addendum.

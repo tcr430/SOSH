@@ -1089,7 +1089,7 @@ GRANT EXECUTE ON FUNCTION public.purge_business(uuid) TO service_role;
 | post_dimensions | yes (business_id + post_id + ai_original_id) | CASCADE | yes | none — cascade = erasure (generation-time tags of the customer's posts; no content; ADR 0026 §4.2) |
 | post_outcomes | yes (business_id + post_id) | CASCADE | yes | none — cascade = erasure (per-post engagement measurements and baselines; no content; ADR 0026 §6.1) |
 | campaign_retrospectives | yes (business_id + campaign_id) | CASCADE | yes | none — cascade = erasure (holds the customer's hypothesis text and an optional member note; ADR 0026 §8.3) |
-| campaign_plan_proposals | yes (business_id + brief_id + campaign_id) | CASCADE (all three) | yes | none — cascade = erasure (holds the planner's proposed reason text and role/order changes, no third-party content; decided_by is SET NULL, not CASCADE, so deleting the deciding auth user leaves the decision row intact per ADR 0027 §9.3; ADR 0027 §9.1) |
+| campaign_plan_proposals | yes (business_id + campaign_id + brief_id) | CASCADE (all three) | yes | none — cascade = erasure (holds model-authored planner rationale about the customer's own campaign; decided_by is an auth.users id, ON DELETE SET NULL, so a user deletion anonymises the row rather than removing it; ADR 0027 §9) |
 
 Only `business_deletion_requests` (NO ACTION) would have blocked the root delete; D2.1 resolves it. Every other business-scoped table either cascades or is deliberately retained.
 
