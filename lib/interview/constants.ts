@@ -7,8 +7,8 @@
 // this file is never the enforcement point for a governance field.
 
 // ─── Slots (§3.1) ────────────────────────────────────────────────────────────
-// The domain enums of ADR 0016 §3.1–§3.3, less 'other'. Order matters: it is the tie-break
-// order of §3.3 (types brand > audience > evidence, then this category order).
+// The domain enums of ADR 0016 §3.1–§3.3, less 'other'. This is the §3.1 listing order; the
+// selection's tie-break is INTERVIEW_TIEBREAK_ORDER below, which is NOT this order (see there).
 export const INTERVIEW_MEMORY_TYPES = ['brand', 'audience', 'evidence'] as const
 export type InterviewMemoryType = (typeof INTERVIEW_MEMORY_TYPES)[number]
 
@@ -26,6 +26,27 @@ export const INTERVIEW_SLOTS = [
   { type: 'evidence', category: 'usage_data' },
 ] as const
 export type InterviewSlot = (typeof INTERVIEW_SLOTS)[number]
+
+// §3.3 rule 1 / §3.4 — the tie-break among slots of EQUAL thinness: type brand > audience > evidence, then a category
+// order. ADR 0029 §3.3 says that category order is "the category order of §3.1", but §3.4 (and the M2.7 build-guide
+// test) pin the first round over empty memory to brand positioning, capability, COMPETITOR; audience OBJECTION,
+// problem, question; evidence CASE_STUDY, USAGE_DATA. The §3.1 listing order (pricing before competitor, problem
+// before objection, quote first) cannot produce that under the per-type cap of 3 and the stop at 8. The two sections
+// contradict each other; this constant is the order that reproduces the pinned §3.4 outcome, and the contradiction is
+// reported for an ADR amendment rather than resolved here. It is a priority order, not a claim about importance.
+export const INTERVIEW_TIEBREAK_ORDER: readonly InterviewSlot[] = [
+  { type: 'brand', category: 'positioning' },
+  { type: 'brand', category: 'capability' },
+  { type: 'brand', category: 'competitor' },
+  { type: 'brand', category: 'pricing' },
+  { type: 'audience', category: 'objection' },
+  { type: 'audience', category: 'problem' },
+  { type: 'audience', category: 'question' },
+  { type: 'audience', category: 'trigger' },
+  { type: 'evidence', category: 'case_study' },
+  { type: 'evidence', category: 'usage_data' },
+  { type: 'evidence', category: 'quote' },
+]
 
 // ─── Thinness (§3.2) ─────────────────────────────────────────────────────────
 // Target T(s) per slot: the effective (recency-weighted) count at which a slot is "covered".
