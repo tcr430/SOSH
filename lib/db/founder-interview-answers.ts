@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { FounderInterviewAnswerRow, SaveInterviewAnswerResult, SkipInterviewAnswerResult } from './types'
 import { INTERVIEW_ANSWERS_LIMIT } from '@/lib/interview/constants'
-import { callInterviewRpc } from './founder-interview-rounds'
+import { callInterviewRpc, getInterviewServiceClient } from './founder-interview-rounds'
 import { getErrorMessage } from './utils'
 
 // ADR 0029 §5.8, §9.2 (Session 35 M2.4) — the founder_interview_answers data layer. ONE file per table.
@@ -72,4 +72,31 @@ export async function listInterviewCooldownRows(client: SupabaseClient, business
     .limit(limit)
   if (error) throw new Error(getErrorMessage(error))
   return (data as InterviewCooldownRow[] | null) ?? []
+}
+
+export type InterviewAnswerForExtraction = Pick<FounderInterviewAnswerRow, 'id' | 'question_key' | 'position' | 'answer_text'>
+
+// ADR 0029 §4 / §9.5 (Session 35 M2.8) — the WORKER read of one round's answered questions, for the extraction. It is a
+// SEPARATELY NAMED function that acquires the service-role client itself (through the shared lazy helper, no `client` parameter): the
+// member-facing listAnswersForRound above takes the caller's client, and an optional client that defaults to service-role
+// would let a caller reach RAW founder text without knowing it (the 33-D D1 rule, CLAUDE.md "Database access").
+//
+// Bounded (limit 8 — a round never holds more), ordered by `position` (founder_interview_answers_round_position_uq), and
+// SCOPED TWICE: by the round AND by `businessId`, the value claim_interview_extraction derived from the ROUND. A caller
+// therefore cannot pair a round with another tenant's business. Only ANSWERED rows with text: a skipped question has none,
+// and a redacted answer (NULL text) can no longer be extracted from. Returns RAW text — the extraction neutralises it at the
+// prompt boundary and re-checks every span against it.
+export async function listAnsweredForExtraction(roundId: string, businessId: string): Promise<InterviewAnswerForExtraction[]> {
+  const client = await getInterviewServiceClient()
+  const { data, error } = await client
+    .from('founder_interview_answers')
+    .select('id, question_key, position, answer_text')
+    .eq('round_id', roundId)
+    .eq('business_id', businessId)
+    .eq('status', 'answered')
+    .not('answer_text', 'is', null)
+    .order('position', { ascending: true })
+    .limit(INTERVIEW_ANSWERS_LIMIT)
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as InterviewAnswerForExtraction[] | null) ?? []
 }

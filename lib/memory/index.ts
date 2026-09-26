@@ -36,6 +36,7 @@ export {
   type RatifyInterviewCandidatesInput,
 } from './interview'
 export { readInterviewSlotRows } from './interview-coverage'
+export { readInterviewConflictContext, type InterviewConflictRecord } from './interview-conflicts'
 
 export type { MemoryQueryContext } from './scoring'
 export { BRAND_CAP, EVIDENCE_CAP, AUDIENCE_CAP, PERFORMANCE_CAP, MEMORY_SCORE_WEIGHTS } from './constants'

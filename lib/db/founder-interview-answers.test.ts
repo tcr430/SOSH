@@ -7,7 +7,7 @@ vi.mock('@/lib/supabase/service', () => ({ createServiceRoleClient: vi.fn() }))
 
 import { createServiceRoleClient } from '@/lib/supabase/service'
 import { FounderInterviewRpcError } from './founder-interview-rounds'
-import { listAnswersForRound, listInterviewCooldownRows, saveInterviewAnswer, skipInterviewAnswer } from './founder-interview-answers'
+import { listAnsweredForExtraction, listAnswersForRound, listInterviewCooldownRows, saveInterviewAnswer, skipInterviewAnswer } from './founder-interview-answers'
 import { INTERVIEW_ANSWERS_LIMIT } from '@/lib/interview/constants'
 
 // ADR 0029 §9.5 INTERVIEW-BOUNDED-QUERIES (Tier 2) and the wrapper half of §2.5. The answer reads are BOUNDED and ORDERED
@@ -111,5 +111,42 @@ describe('founder-interview-answers RPC wrappers — service-role by lazy import
     const src = fs.readFileSync(path.join(process.cwd(), 'lib', 'db', 'founder-interview-answers.ts'), 'utf8')
     // it reaches the service-role client ONLY through founder-interview-rounds' callInterviewRpc (lazy import)
     expect(src).not.toMatch(/@\/lib\/supabase\/service/)
+  })
+})
+
+// ADR 0029 §4 / §9.5 (Session 35 M2.8) — the WORKER read of a round's answered questions, for the extraction. Separately named,
+// service-role by the shared lazy helper, no `client` parameter, bounded, ordered, and scoped by the round AND the business the
+// claim derived from the round. SHARED-FUNCTION CALLERS: lib/interview/extract.ts is the only caller (tested in
+// lib/interview/extract.test.ts with this function mocked; this file is the executed proof of the query itself).
+describe('listAnsweredForExtraction (M2.8, the worker read)', () => {
+  function serviceReads(rows: unknown, error: unknown = null) {
+    const mock = createMockClient(rows, error)
+    vi.mocked(createServiceRoleClient).mockReturnValue(mock.client as unknown as ReturnType<typeof createServiceRoleClient>)
+    return mock
+  }
+
+  it('reads ONE round, scoped to the round AND its business, only ANSWERED rows that still have text, by position, limit 8', async () => {
+    const { builder, from } = serviceReads([{ id: 'a-1', question_key: 'k1', position: 1, answer_text: 'hello' }])
+    const rows = await listAnsweredForExtraction('round-1', 'biz-1')
+    expect(from).toHaveBeenCalledWith('founder_interview_answers')
+    expect(builder.select).toHaveBeenCalledWith('id, question_key, position, answer_text')
+    expect(builder.eq).toHaveBeenCalledWith('round_id', 'round-1')
+    expect(builder.eq).toHaveBeenCalledWith('business_id', 'biz-1')
+    expect(builder.eq).toHaveBeenCalledWith('status', 'answered')
+    expect(builder.not).toHaveBeenCalledWith('answer_text', 'is', null)
+    expect(calls(builder.order)).toEqual([['position', { ascending: true }]])
+    expect(builder.limit).toHaveBeenCalledWith(INTERVIEW_ANSWERS_LIMIT)
+    expect(rows).toEqual([{ id: 'a-1', question_key: 'k1', position: 1, answer_text: 'hello' }])
+  })
+
+  it('takes NO client parameter (it acquires service-role itself) and returns [] for a null result', async () => {
+    expect(listAnsweredForExtraction.length).toBe(2)
+    serviceReads(null)
+    expect(await listAnsweredForExtraction('round-1', 'biz-1')).toEqual([])
+  })
+
+  it('throws the database error rather than returning an empty list (an empty list would fail the round as no_answers)', async () => {
+    serviceReads(null, { message: 'boom' })
+    await expect(listAnsweredForExtraction('round-1', 'biz-1')).rejects.toThrow(/boom/)
   })
 })

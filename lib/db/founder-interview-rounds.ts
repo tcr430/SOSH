@@ -44,10 +44,17 @@ export class FounderInterviewRpcError extends Error {
   }
 }
 
+// The ONE place the interview data layer reaches the service-role client (lazy import, so it never reaches a bundle that does
+// not need it). founder-interview-answers.ts and memory-interview.ts go through this, never through their own import — a
+// source scan in founder-interview-answers.test.ts holds them to it. Shared, not exported from the barrel.
+export async function getInterviewServiceClient() {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  return createServiceRoleClient()
+}
+
 // Shared with founder-interview-answers.ts (the answer RPCs are the same shape). Not exported from the barrel.
 export async function callInterviewRpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
-  const { createServiceRoleClient } = await import('@/lib/supabase/service')
-  const client = createServiceRoleClient()
+  const client = await getInterviewServiceClient()
   const { data, error } = await client.rpc(fn, args)
   if (error) {
     const code = typeof error === 'object' && error !== null && 'code' in error ? String((error as { code: unknown }).code) : undefined

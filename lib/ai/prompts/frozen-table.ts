@@ -154,4 +154,14 @@ export const FROZEN_TABLE: Record<string, FrozenRow> = {
     maxTokens: undefined,
     useToolOutput: undefined,
   },
+  // ADR 0029 §4.1 / §7.1 (Session 35 M2.8) — the founder-interview extraction: Sonnet (fidelity to a hedge is the
+  // load-bearing risk, §4.1), output ceiling 4,500 tokens (the worst case §7.1's 10-cent reservation is priced on).
+  'interview-extraction': {
+    version: 1,
+    modelKey: 'SONNET_4_6',
+    temperature: undefined,
+    thinking: undefined,
+    maxTokens: 4500,
+    useToolOutput: undefined,
+  },
 }

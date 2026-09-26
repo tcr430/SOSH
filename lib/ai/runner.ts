@@ -69,8 +69,15 @@ function isScoringOnly(promptId: string): boolean {
   return promptId === RUBRIC_PROMPT_ID || promptId === CARD_GENERATION_PROMPT_ID
 }
 
+// ADR 0029 §5.7 INTERVIEW-TRIAL-UNTOUCHED (Session 35 M2.8) — the founder-interview extraction is the one Tier-1 feature that
+// works with ZERO connected accounts, so it runs on trial businesses by design and must NEITHER check NOR increment
+// posts_generated_count, the trial post cap or the brand-voice counter (the ADR 0025 §6.3 exemption, applied at the same
+// shared choke point so no future caller can forget it). Named separately from the backfill set because it is a different
+// feature; isBackfillPass below answers for both, since both skip Step 1 and Step 8 identically.
+const INTERVIEW_EXTRACTION_PROMPT_ID = 'interview-extraction'
+
 function isBackfillPass(promptId: string): boolean {
-  return BACKFILL_PASS_PROMPT_IDS.has(promptId)
+  return BACKFILL_PASS_PROMPT_IDS.has(promptId) || promptId === INTERVIEW_EXTRACTION_PROMPT_ID
 }
 
 async function sleep(ms: number): Promise<void> {

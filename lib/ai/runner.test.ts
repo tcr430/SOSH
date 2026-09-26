@@ -1175,3 +1175,46 @@ describe('runner trial classification — all ten pre-existing prompt ids (Sessi
     expect(incrementBrandVoiceAttempts).not.toHaveBeenCalled()
   })
 })
+
+// ADR 0029 §5.7 INTERVIEW-TRIAL-UNTOUCHED (Session 35 M2.8) — the founder-interview extraction is the one Tier-1 feature that
+// works with ZERO connected accounts, so it runs on trial businesses by design. It must NEITHER check NOR increment either
+// trial counter — even with BOTH exhausted — and, like every call, it is still recorded in ai_usage.
+describe('INTERVIEW-TRIAL-UNTOUCHED (ADR 0029 §5.7, Session 35 M2.8)', () => {
+  const trialExhaustedBoth: CustomerContext = {
+    ...mockContext,
+    trialState: { isTrial: true, postsRemaining: 0, campaignsRemaining: 0, brandVoiceAttemptsRemaining: 0 },
+  }
+  const interviewPrompt: Prompt<MockInput, MockOutput> = { ...mockPrompt, id: 'interview-extraction' }
+
+  it('runs with postsRemaining=0 AND brandVoiceAttemptsRemaining=0 (Step 1 never throws quota_exceeded)', async () => {
+    vi.clearAllMocks()
+    vi.mocked(getAnthropicClient).mockResolvedValue({ messages: { create: mockCreate } } as never)
+    mockCreate.mockResolvedValue(validSdkResponse)
+    vi.mocked(countRecentCalls).mockResolvedValue(0)
+
+    await expect(runPrompt(interviewPrompt, trialExhaustedBoth, { text: 'hi' })).resolves.toEqual(validOutput)
+  })
+
+  it('increments neither posts_generated_count nor the brand-voice counter, and still records the call in ai_usage', async () => {
+    vi.clearAllMocks()
+    vi.mocked(getAnthropicClient).mockResolvedValue({ messages: { create: mockCreate } } as never)
+    mockCreate.mockResolvedValue(validSdkResponse)
+    vi.mocked(countRecentCalls).mockResolvedValue(0)
+
+    await runPrompt(interviewPrompt, trialExhaustedBoth, { text: 'hi' })
+    expect(incrementPostsGenerated).not.toHaveBeenCalled()
+    expect(incrementBrandVoiceAttempts).not.toHaveBeenCalled()
+    expect(recordAiUsage).toHaveBeenCalledTimes(1)
+    expect(JSON.stringify(vi.mocked(recordAiUsage).mock.calls[0])).toContain('interview-extraction')
+  })
+
+  it('is a NARROW exemption: a prompt id that merely resembles it is still governed by the trial cap', async () => {
+    vi.clearAllMocks()
+    vi.mocked(getAnthropicClient).mockResolvedValue({ messages: { create: mockCreate } } as never)
+    mockCreate.mockResolvedValue(validSdkResponse)
+    vi.mocked(countRecentCalls).mockResolvedValue(0)
+
+    const lookalike: Prompt<MockInput, MockOutput> = { ...mockPrompt, id: 'interview-extraction-v2' }
+    await expect(runPrompt(lookalike, trialExhaustedBoth, { text: 'hi' })).rejects.toMatchObject({ code: 'quota_exceeded' })
+  })
+})
