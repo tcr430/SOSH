@@ -2076,6 +2076,811 @@ ahead of time produces a fictional resolution log.
 > argued in the appendix, not erased**. The Session 22-D failure (RESOLVED verdicts written *into* the
 > reviewer's findings) remains prohibited under condition 1.
 
+**✅ AUTHORED 2026-09-27 — the placeholder above is retained as the specification this section was written
+against; everything below is the section itself.**
+
+**Filled in from `docs/reviews/session-35-reviewer.md`** (Reviewer range **`bfb3bf72..5431fa84`**: 11 commits,
+`M2.1` `f1f33632` … `M2.11` `5431fa84`, on branch `session-35-adr-0029`, PR #15). **Twelve steps: D0–D11.**
+Correction passes are normal, not failures (constitution). **There is no independent re-review pass this
+session** (mirroring 23-D…34-D). This pass fixes the Reviewer's findings and records its own resolutions in
+the Reviewer's file. The founder adjudicates close-out.
+
+**Reviewer's tally: 1 BLOCKER, 4 MAJOR, 9 MINOR, 7 NIT, for 21 findings. Every one appears exactly once in
+the disposition table below, including every MINOR and NIT.** Five are wholly or partly **ADR findings**
+(MAJOR-1 §9.5, MAJOR-2 §5.3, MAJOR-3 §2.2/§2.3, MAJOR-4 §6.3, MINOR-6, MINOR-7). Each closes with an appended
+ADR 0029 entry as well as code where the table says so.
+
+> **Deferral is permitted in this pass, but only explicitly** — founder instruction, 2026-09-27: *"include all
+> items even if minor and/or mark as defer"*. This reverses the 34-D posture (no deferral). A deferred finding
+> therefore still has **a row in the disposition table, a `docs/backlog.md` entry with an un-defer trigger,
+> and an appendix row saying DEFERRED** — it is never silently dropped. **Exactly one finding is deferred
+> outright (NIT-4).** Two more (MAJOR-4, MINOR-6) are **gated on a founder ruling** (A-6, A-7 below). If the
+> founder rules to keep today's behaviour, they close as **RULED** (documentation, no code), not as deferred.
+
+**This pass starts from a pushed, RED range.** `5431fa84` is pushed (PR #15). `db-tests` is green at it (run
+36336820707, skip-guard 107 files / 1091 tests). **`app-tests` is red** (run 36336820699): Lint fails, vitest
+is skipped, and the skip-guard fails on the missing JSON. So **no Tier-2 or Tier-3 claim of this session has
+ever executed in CI** (the Reviewer's §9: 15/44 rows fully CI-green, all pure Tier 1). D11 is not a
+formality: it is the first time 29 of the 44 constraints execute in CI at all.
+
+**The BLOCKER and the four MAJORs are four different kinds of defect:**
+- **A gate that never ran.** BLOCKER-1: one lint error stops the required job before vitest, so every
+  locally green Tier-2/3 test is `AUTHORED-NOT-EXECUTED`. M2.10's verification loop omitted `eslint`.
+- **Green on a fixture smaller than production.** MAJOR-1: the cooldown query limits **rows** to the bank
+  size (33), so from about the sixth monthly round the product re-asks a question 31 days after it was
+  answered. The tests pass only because no fixture exceeds 33 rows.
+- **A safety net with no actor.** MAJOR-2: the 10-minute re-claim has no reachable caller, the `after()`
+  promise is voided with no capture, and the `extracting` screen does not poll. A lost extraction strands
+  the founder for 7 days, then locks them out for the rest of the month.
+- **A computation no human sees, and data nobody decided to keep.** MAJOR-3: hedge and conflict markers
+  are computed and discarded, so Replace is unreachable. MAJOR-4: rejected candidates, including verbatim
+  evidence excerpts, outlive the answer they were cut from.
+
+---
+
+### Founder adjudications — **two required (A-6, A-7), one instruction received (deferral permitted)**
+
+A-1…A-5 (§0.2) stand untouched and are **not** reopened. **The founder instruction consumed by this pass is
+the deferral permission quoted above.** Two findings change a founder-ruled behaviour (A-3 retention, D-5
+cadence), so this guide **does not decide them**. It records a recommendation, and **D4 does not begin until
+both rows are filled in**:
+
+| # | Question | M3's finding | Recommendation (this guide) | Decision |
+|---|---|---|---|---|
+| **A-6** | MAJOR-4: is a **rejected** candidate an *"unratified candidate"* under A-3, and so deleted? | ADR §6.3 is silent; the sweep keeps rejected rows of ratified rounds forever (`interview-sweep.test.ts:302` pins it). | **(a) Yes.** A rejected candidate is deleted at its round's **answer-redaction deadline** (`terminal_at + INTERVIEW_ANSWER_TTL_DAYS`, 30 d). It is **not** deleted 30 days *after* that, because a rejected evidence row's `content` is a verbatim excerpt of the answer: keeping it past the answer's redaction defeats the redaction. Loser (b): keep rejected rows as an audit trail, with the counsel line naming them. There is no reader of rejected rows, so (b) retains personal data with no purpose. | **⚑ PENDING — founder** |
+| **A-7** | MINOR-6: does a `failed` round count toward the 30-day one-round rule? | `create_interview_round` counts any status (`20260925150000:338-344`). A lost extraction (MAJOR-2) or an injected answer (three `invalid_response`) locks the tenant out for the month. | **(a) A `failed` round does not count, but at most two rounds may be *created* per 30 days.** This keeps A-4's spend argument (≤ 2 × 30¢ per 30 days, still structural, still no fifth budget purpose) and stops a deterministic self-lockout. Loser (b): keep the rule (the impact is the tenant's own interview only), plus a copy line saying when the next round opens. Loser (c): no cap on restarts, which breaks A-4's structural bound. | **⚑ PENDING — founder** |
+
+**If either ruling is (b):** D4 omits that half, and D10 records the ruling in ADR 0029 and, for A-6(b), in
+the launch-checklist counsel line. The finding then closes as **RULED**, not deferred.
+
+**Remedies that would need a ruling and are not taken:**
+
+| Finding | The remedy that would need a ruling | Why this pass does not take it |
+|---|---|---|
+| **MAJOR-3** | Drop the hedge and conflict markers from ADR §8.4 / §4.4 / §4.5. | §4.4 is **the** mitigation for the *"we think" → "we are"* sharpening that L-6 and A-1 were ruled against. Dropping it weakens a founder-confirmed control to match code written without it. Persisting the markers is what the ADR already requires; only the **storage** is unspecified, and storage is an engineering choice (ledger below). |
+| **MINOR-4** | Recompute `neutralize()` in SQL, so the writer relates stored forms to the raw span. | See the ledger below. It is an engineering loser, not a ruling. |
+
+**Engineering decisions this pass takes without a ruling, with the reason:**
+
+| Finding | Remedy chosen | Loser (rationale) |
+|---|---|---|
+| **MAJOR-1** | **Window the query, not the key set.** `listInterviewCooldownRows` reads only rows with `answered_at >= now − INTERVIEW_ANSWERED_COOLDOWN_DAYS` (180 d; the 60-day skip window nests inside it). It is bounded by a **derived** constant, `INTERVIEW_COOLDOWN_ROW_CAP = (floor(180 / 30) + 1) × 8 = 56`: at most seven rounds fit in 180 days at one per 30, with at most eight questions each. `selectQuestions` reads nothing older than the window (`select.ts:54-66`, `coolingDownKeys`), so nothing is lost. **No migration.** Under A-7(a), the cap becomes `(2 × 6 + 1) × 8 = 104` and is derived from the same constants. | A `DISTINCT ON (question_key)` RPC: correct, but it needs a migration and a new SECURITY DEFINER surface to fix what a WHERE clause fixes. Raising the LIMIT: that only moves the cliff. |
+| **MAJOR-2** | (1) Both `after()` callbacks **return** the promise, with a `.catch` that `Sentry.captureException`s using the route's tag shape (`interview-sweep/route.ts:67`). (2) `retryInterviewExtractionAction` also accepts a round whose status is claimable **and** whose `claimed_at` (or `submitted_at`) is older than 10 minutes. The claim RPC stays the atomic authority, and the action keeps its own membership check (`actions.ts:184-188`). (3) The `submitted` / `extracting` view polls with `BackfillPanel`'s shape (`POLL_MS = 4000`, `step-4/BackfillPanel.tsx:79`) and shows Retry once stale. New constraint **`INTERVIEW-EXTRACTION-RECOVERABLE`**. | A cron that claims stuck rounds: that is a model call from a cron, which ADR §5 excludes (*"no cron creates rounds"*). The same spirit forbids unattended extraction. The founder's own return is the trigger. |
+| **MAJOR-3** | **Two columns on the three interview-capable memory tables:** `interview_hedge_flagged boolean` and `interview_conflict_ids uuid[]` (cardinality ≤ 5). Both are NULL unless `source = 'interview'` (the biconditional CHECK pattern of `interview_answer_id`). Both are covered by `enforce_memory_interview_immutable`. The writer **re-verifies in SQL** that every conflict id is a row of the same business in the same table, and drops (and counts) any that is not. Replace is offered only when the conflict target is `active` and `source = 'interview'`, which the ratify RPC already re-verifies (`20260925140000:222-229`). New constraint **`INTERVIEW-MARKERS-SURFACED`**. | A side table `founder_interview_candidate_markers`: a new business-scoped table means a new RLS policy set, a new §D2.5 row and a new purge path, all for two facts that live and die with the candidate row. |
+| **MINOR-4** | **Record, in ADR 0029, that the stored forms are TS-trusted**, and make that trust enforceable: a Tier-3 scan asserts that `lib/db/memory-interview.ts`'s choke point (`:112-122`) is the **only** producer of `storedText` / `storedSpan` and the only caller of the writer RPC. `memory-interview.test.ts`'s literal cases are cited as the control. | `neutralize()` in plpgsql: that is a **sixth sanitizer**. The baseline count of 5 (`source-scans.test.ts:360`) exists to forbid exactly that, and two implementations of one rule drift. |
+| **NIT-2** | The per-answer cap drop gets a persisted counter, `dropped_cap`, beside the existing drop counters. It is written by the same writer call and carried in D4's migration. ON CONFLICT dedupes stay inferable (`proposed − dropped − written`), and that is stated in the ADR. | Counting only in the log line: the result object is discarded by `after()`, and that is the MAJOR-3 failure again. |
+| **NIT-6** | An **appended erratum** beside the §2a sentence (`:816`), not a rewrite. | Silent edit: it would hide that the Builder shipped against a guide that miscounted. |
+| **NIT-4** | **DEFERRED** (the one outright deferral): `docs/backlog.md` row, un-defer trigger *"the first tenant completes a round, or the next `/impeccable` pass over `/interview`, whichever is first"*. The `not_due` copy needs `due.ts` to expose the next-eligible instant, and a §8.2 layout decision. No tenant can reach the state before a round completes. | Fixing it here: it is the one UX change in this pass that needs a design decision, and the primer forbids taste-skill/impeccable. |
+| **NIT-5** | **Recorded closure, no code.** A pushed commit body cannot be rewritten. | — |
+
+---
+
+### What the Reviewer found — disposition of all 21 findings (`session-35-reviewer.md` is authoritative)
+
+| ID | Tier | One line | Disposition | Step |
+|---|---|---|---|---|
+| **MINOR-8** | MINOR (write access) | The step-4 page, the only member-RLS reader of backfill candidates, has no test | FIX | **D1** |
+| **MINOR-4** | MINOR (governance) + **ADR** | SQL grounding checks the raw span but stores unchecked `storedText` / `storedSpan` | FIX (Tier-3 choke-point scan) + ADR record | **D1 + D10** |
+| **NIT-7** | NIT (injection) | Neutralisation is tested for several answers but only one existing record | FIX | **D1** |
+| **BLOCKER-1** | BLOCKER | `react-hooks/set-state-in-effect` at `InterviewPanel.tsx:390-394`; `app-tests` red, vitest skipped | FIX (CI proof at D11) | **D2 + D11** |
+| **NIT-1** | NIT | The trial-scan test fails on a CRLF checkout (`extract.test.ts:386-394`) | FIX | **D2** |
+| **MAJOR-1** | MAJOR + **ADR** §9.5 | `INTERVIEW-NO-REPEAT` breaks past 33 history rows; the LIMIT truncates rows, not keys | FIX (no migration) | **D3 + D10** |
+| **MAJOR-3** | MAJOR + **ADR** §2.2/§2.3 | Hedge flag, conflict marker and Replace are computed but never persisted or shown | FIX (migration + writer + UI; new constraint) | **D4 + D5 + D10** |
+| **MAJOR-4** | MAJOR + **ADR** §6.3 | Rejected candidates, including verbatim evidence text, are retained indefinitely | FIX under **A-6(a)**, or RULED under A-6(b) | **D4 + D10** |
+| **MINOR-6** | MINOR (**ADR**) | A `failed` round locks the founder out for 30 days, deterministically via injection | FIX under **A-7(a)**, or RULED under A-7(b) | **D4 + D10** |
+| **NIT-2** | NIT | Per-answer cap drops are uncounted (`extract.ts:187`) | FIX (counter in D4's migration) | **D4 + D5** |
+| **MINOR-3** | MINOR | The D-4 *"N statements … set aside"* note is missing at ratification | FIX | **D5** |
+| **MAJOR-2** | MAJOR + **ADR** §5.3 | A lost extraction has no way out but the 7-day sweep; the 10-minute re-claim is unreachable | FIX (new constraint) | **D6 + D10** |
+| **MINOR-2** | MINOR | The card and nav badge ignore role | FIX | **D7** |
+| **MINOR-9** | MINOR | `loadInterviewPageState` runs on every dashboard render, and twice more on `/campaigns` | FIX | **D7** |
+| **MINOR-1** | MINOR | Action failures are swallowed; `performance_claim` has no message key | FIX | **D8** |
+| **NIT-3** | NIT | `INTERVIEW-NO-BUDGET-PURPOSE` misses `= ANY (ARRAY[…])` | FIX (detector widened + residual recorded in-file) | **D9** |
+| **MINOR-5** | MINOR (**ADR 0027**) | `AGENCY-NO-EVIDENCE-WRITE-SURFACE`'s scan was amended and never recorded | FIX (appended ADR 0027 note) | **D10** |
+| **MINOR-7** | MINOR (**ADR**) | The §3.3 tie-break contradicts §3.4 | FIX (ADR names `INTERVIEW_TIEBREAK_ORDER`) | **D10** |
+| **NIT-6** | NIT | `snooze_interview` is a second RPC taking a business id; the guide says "the one exception" | FIX (appended erratum) | **D10** |
+| **NIT-5** | NIT (process) | taste-skill was invoked at M2.10 and applied nothing | RECORDED CLOSURE | **D10** |
+| **NIT-4** | NIT | The `not_due` state is effectively unreachable once any round exists | **DEFERRED** (backlog row + trigger) | **D10** |
+
+**Count check, re-run at D11:** 21 rows, 21 distinct IDs, and every ID from the Reviewer's Findings section
+exactly once (BLOCKER-1; MAJOR-1…4; MINOR-1…9; NIT-1…7). **One DEFERRED (NIT-4), one RECORDED CLOSURE (NIT-5),
+and at most two RULED (MAJOR-4, MINOR-6).** If the check fails, the pass is not closed.
+
+---
+
+### Ordering rationale
+
+1. **D0 first.** `docs/reviews/session-35-reviewer.md` is **untracked**. It must enter git exactly as written,
+   so that the appendix diff proves itself additive. This §4 is the pass's work order and lands in the same
+   commit.
+2. **Write-access and governance findings come first, regardless of severity label** (the placeholder's
+   binding rule). **D1** takes MINOR-8 (the member-write closure's untested reader), MINOR-4 (the stored
+   forms the writer trusts) and NIT-7 (neutralisation of every record in the prompt). All three are
+   test-only or scan-only, and none changes production behaviour.
+3. **D2 (BLOCKER-1, NIT-1) next**, so every later step's `npm run lint` and `test:app` loop is meaningful on
+   every platform. It is not pushed: CI proof is D11's job.
+4. **D3 (MAJOR-1) before the migration.** It needs no SQL, and it fixes the selection that D4's A-7 ruling
+   then widens (the cap constant is derived once, at D3, and re-derived at D4 if A-7(a) holds).
+5. **D4 is the only migration, and it runs alone** (the 31-D / 32-D / 33-D / 34-D precedent). It carries
+   MAJOR-3's columns, MAJOR-4's sweep step, MINOR-6's round rule and NIT-2's counter. All of these are the
+   writer, the sweep or the round RPCs, and a second migration mid-pass would invalidate every earlier
+   `test:db` run. **It is gated on A-6 and A-7.**
+6. **D5 (MAJOR-3's TS and UI half, MINOR-3, NIT-2's TS half)** follows D4, because it writes and reads D4's
+   columns. MINOR-3 renders in the same ratify view.
+7. **D6 (MAJOR-2)** after D5, because the stale-retry control and polling sit in the same panel D5 changed,
+   and the retry path re-enters the writer D5 changed.
+8. **D7 (MINOR-2, MINOR-9)** both change `page-state` / `load-page-state` and the layout that calls them.
+9. **D8 (MINOR-1)** is last among the UI steps. Its error paths include D6's new retry outcome and D5's
+   Replace.
+10. **D9 (NIT-3)** is test-only, and it comes after D4 so that the widened detector runs over D4's
+    migration.
+11. **D10 is documentation truth, after every code step**, because every amendment cites the test that now
+    proves it.
+12. **D11 pushes last.** It produces the first green `app-tests` for this range and re-dates every
+    constraint claim.
+
+---
+
+### Where resolutions go (CLAUDE.md — `REVIEWER-REPORT APPEND-ONLY`, revised Session 23-D)
+
+Resolutions go **into `docs/reviews/session-35-reviewer.md`**, under one appended, attributed
+`## CORRECTION PASS (Session 35-D)` section at the end, below the Reviewer's closing line (*"Session 35 review
+complete - 21 findings …"*). There is no separate corrections file.
+
+**The Reviewer's text is immutable:**
+- Not one character is edited.
+- No verdict is flipped, and no `RESOLVED` is stamped.
+- This covers §0's "What I ran" table, the §1 caller table, §5's §6.2 walkthrough, §9's tier table and every
+  finding.
+
+**The appendix itself:**
+- It references findings **by ID** and records *finding → fix → proving test → reddening → SHA*.
+- A disputed finding is argued in the appendix, never erased. (If the pass disagrees with one, say so there.
+  It is not grounds to skip the finding.)
+- A **DEFERRED** row names its `docs/backlog.md` entry and trigger. A **RULED** row quotes the A-6 / A-7
+  decision.
+
+**Never weaken a test to reach green.** `interview-sweep.test.ts:302` ("NEVER deleted, at any age") is
+**inverted** under A-6(a) because a founder ruling changed the behaviour it pins, and the appendix quotes the
+ruling. That is not weakening, but it is the one test in this pass whose assertion flips, and the flip is
+recorded. **Never edit a committed migration**: D4 is a forward migration. ADR 0029 §0–§14 are **not**
+edited. Amendments are one appended section (D10). The two permitted in-place document edits are
+**`docs/launch-checklist.md`'s counsel line** (a checklist row, not an ADR, updated to name what is retained)
+and **`docs/current-phase.md`'s constraint→CI map** (re-dated at D11). The prior text of each is quoted in the
+appendix before it is replaced. **Do not fold D0 and the first resolution row into one commit.**
+
+**ECC budget: ≤ 1 subagent per step, and only where this guide names one.**
+- **D4** → `database-reviewer`: a forward migration replacing three SECURITY DEFINER bodies (the writer, the
+  sweep, `create_interview_round`), adding two columns under an immutability trigger and a CHECK.
+- **D5** → `security-reviewer`: model-derived conflict ids now flow into a persisted column and gate a
+  user-facing Replace. The path is the §6.2 walkthrough's stages 4 and 6.
+- **All other steps carry none.** Do not re-run the M2.6 / M2.8 reviewers. The proving test is the
+  confirmation. **`taste-skill` and `impeccable` are NOT invoked.** D5, D6 and D8 render states that ADR 0029
+  §8.2 / §8.4 / §8.7 already specify, in the panel's existing idiom. If one needs a design decision beyond
+  copy, **STOP** (that is why NIT-4 is deferred).
+
+**The highest-risk classes:**
+- **(a) D2.** The fix must keep §8.7's contract: announce at the 80% and 100% **crossings only**, never per
+  keystroke. Deriving the announcement during render with `remaining` in the string re-announces on every
+  keystroke. The crossing is detected in the **change handler** (an event, where `setState` is allowed).
+  No `eslint-disable` for `set-state-in-effect`.
+- **(b) D4.** The writer's conflict-id verification must be **tenant-bounded in SQL** (`business_id =
+  v_business_id`, the same table). A model-supplied id of another tenant is **dropped and counted**, and
+  never stored. This is `INTERVIEW-CONFLICT-TENANT-BOUNDED`, re-proved on the new column. The governance
+  smuggle (Reviewer §0) is re-run: the new keys are **computed** fields, not governance, and the regex over
+  `pg_proc.prosrc` must still find no jsonb read of any governance key.
+- **(c) D4, A-6(a).** The delete must take **only** `status = 'retired'` rows whose ratify decision was
+  reject, of **this** round's terminal deadline. An **active** ratified row is never deleted (only its span is
+  NULLed, as today at `20260925140000:246`). The test proves both at literal ±1-minute boundaries.
+- **(d) D6.** Widening retry must not widen **who** can trigger it: the action's membership check
+  (`actions.ts:184-188`) stays, and a Tier-2 test sends a non-member. The staleness is read from the row and
+  re-checked atomically by the claim, never trusted from the client.
+- **(e) D7.** Role-aware visibility is **presentation only**. The RPCs remain the authority, and no RPC
+  changes in D7.
+
+Each step ends by re-running the full existing suite for its files and confirming that no previously green
+assertion changed, other than the one A-6 inversion.
+
+---
+
+### §4.0 — Correction primer  (paste first · wait for acknowledgement)
+
+```
+You are the Session 35-D correction pass (Track M, ADR 0029, the founder input engine). You fix the findings
+in docs/reviews/session-35-reviewer.md - you do not re-review, and you do not re-litigate the Reviewer's
+verdicts. Acknowledge these twelve rules, then stop and wait for D0.
+
+1. THE REVIEWER'S TEXT IS IMMUTABLE. Resolutions go in ONE appended, attributed
+   "## CORRECTION PASS (Session 35-D)" section at the END of docs/reviews/session-35-reviewer.md, below the
+   Reviewer's closing line, opening with author, date and the commit range fixed. Not one character above
+   it changes. A disputed finding is argued in the appendix, never erased.
+2. ONE STEP, ONE COMMIT, THEN STOP. Each step's commit message is given; use it.
+3. EVERY FIX IS PROVED BY MUTATION. Break the fix, watch the new test go RED, restore, confirm
+   `git diff --stat` is empty. Record the exact mutation in the appendix.
+4. NEVER WEAKEN A TEST TO REACH GREEN. The single permitted assertion flip is interview-sweep.test.ts:302,
+   and only under founder ruling A-6(a). Amend ADR 0029 only as an APPENDED section (D10). Never edit a
+   committed migration; D4 is a forward migration.
+5. ALL 21 FINDINGS APPEAR IN THE APPENDIX. Deferral is permitted by FOUNDER INSTRUCTION (2026-09-27) but
+   only explicitly: NIT-4 is the ONE deferred finding (a docs/backlog.md row with an un-defer trigger).
+   NIT-5 is the ONE recorded closure. MAJOR-4 and MINOR-6 close per founder rulings A-6 and A-7 - as FIX
+   under option (a), as RULED (documentation only) under option (b). Every other finding closes in code
+   (plus ADR text where the section 4 tables say so). A finding you cannot close, you REPORT and STOP -
+   you do not defer it on your own authority.
+6. A-1..A-5 ARE RULED AND NOT REOPENED. A-6 and A-7 must be filled in section 4 of
+   docs/build-guide/session-35.md BEFORE D4 begins. If they are still PENDING when you reach D4, STOP.
+   Never invent a ruling.
+7. WRITE ACCESS AND GOVERNANCE FIRST, AND ONE MIGRATION, AT D4 ONLY. If another step appears to need SQL,
+   STOP.
+8. EVERY STEP'S LOOP: npx tsc --noEmit --skipLibCheck; npm run lint (M2.10 omitted this and it is the step
+   CI failed on - it is NOT optional); npm run test:app with app-tests.yml's env block; and for D1, D4, D5
+   and D6, npm run test:db against a running LOCAL Supabase stack. THE LOCAL STACK ONLY: env from
+   `supabase status -o env`, pointed at 127.0.0.1:54321/54322. The repo's .env.local targets the REMOTE
+   project - never run test:db or apply a migration with it. If the local stack cannot start, STOP - a
+   Tier-1 change is never committed unexecuted.
+9. SHARED-FUNCTION CALLERS. Before changing any function, `git grep` its production callers and name, per
+   caller, the test that exercises it. In particular: listInterviewCooldownRows (startInterviewRoundAction,
+   loadInterviewPageState), loadInterviewPageState (dashboard layout, InterviewCard, /interview page),
+   extractInterviewRound (submit, retry), write_interview_candidates (its one TS wrapper).
+10. DO NOT PUSH BEFORE D11. PR #15 is red at 5431fa84; D11 is what makes app-tests execute for the first time.
+11. SCOPE IS THE FINDINGS. L-1 binds: no write to performance_memory or brand_voices, no path setting
+    public_use_permission true, no new EmailKind, no fifth budget purpose, no new user_can capability, no
+    model-generated question, no cron that creates rounds or calls a model, no sixth sanitizeDataField (5 is
+    the baseline), no import from lib/campaigns/ or lib/signals/ in any interview module, and no
+    accept-all at ratification.
+12. taste-skill and impeccable are NOT invoked. ECC subagents: database-reviewer once at D4,
+    security-reviewer once at D5, none anywhere else.
+```
+
+---
+
+### §4.1 — Correction steps
+
+#### D0 — land the governing documents in git  ·  FIRST, by design  ·  no code
+
+```
+CORRECTION - Session 35-D · D0. No .ts/.tsx/.sql. No specialist.
+
+THE STATE: docs/reviews/session-35-reviewer.md is UNTRACKED. docs/build-guide/session-35.md is tracked but
+its committed version (bfb3bf72) predates this section 4, which is this pass's work order.
+
+DO - commit exactly these two paths, AS THEY STAND:
+- docs/reviews/session-35-reviewer.md  (EXACTLY as the Reviewer left it)
+- docs/build-guide/session-35.md       (with section 4 authored - say so in the commit message)
+Do NOT append the CORRECTION PASS section. Do NOT stage any code file; report any present and leave it.
+supabase/.temp/cli-latest is local noise - do not stage it.
+
+VERIFY: `git show <D0-sha>:docs/reviews/session-35-reviewer.md` byte-identical to the working tree and
+containing no "CORRECTION PASS"; `git show <D0-sha>:docs/build-guide/session-35.md | grep -c "### §4.1"`
+non-zero; no code file in the commit.
+On commit: "D0 - Session 35-D audit trail: the Reviewer's report enters git exactly as written (range
+bfb3bf72..5431fa84, 21 findings) before any resolution row, so the appendix is provably additive;
+session-35.md lands with section 4 authored, since section 4 is this pass's work order." Then stop.
+```
+
+#### D1 — MINOR-8 + MINOR-4 + NIT-7: the write-access reader, the writer's trusted forms, and every record neutralised
+
+```
+CORRECTION - Session 35-D · D1. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+Test-and-scan-only step: no production behaviour change, no migration.
+
+THE DEFECTS:
+- MINOR-8: app/[locale]/(dashboard)/onboarding/step-4/page.tsx is the ONLY member-RLS reader of backfill
+  candidates (listEvidenceCandidatesForRun, listAudienceCandidatesForRun) after M2.2 closed member writes on
+  three tables. It has no test: AUTHORED-NOT-EXECUTED at Tier 2 for the member-write closure. Its DB half
+  (member SELECT) is Tier 1 via interview-member-write-closed.test.ts.
+- MINOR-4: the writer's SQL grounding (20260925150000:469-470, 548, 557, 566) checks the RAW span but stores
+  storedText/storedSpan unchecked. Chosen remedy (section 4 ledger): the stored forms are TS-TRUSTED, and
+  that trust is made enforceable. Loser: neutralize() in plpgsql - a sixth sanitizer.
+- NIT-7: interview-extraction.test.ts:138-147 pins neutralisation for ONE existing record only.
+
+BUILD:
+1. MINOR-8: a page-level Tier-2 test for step-4/page.tsx. It asserts the page reads candidates through the
+   caller's SERVER (anon, RLS) client - never createServiceRoleClient - via the two list*CandidatesForRun
+   functions, and renders them. Mock at the lib/db boundary, as the other onboarding page tests do; do not
+   invent a second mocking idiom.
+2. MINOR-4: a Tier-3 scan in lib/interview/__tests__/source-scans.test.ts: across all five interview roots
+   plus lib/db/, (a) the RPC name write_interview_candidates appears in exactly ONE production file
+   (lib/db/memory-interview.ts), and (b) the identifiers storedText/storedSpan are ASSIGNED only inside that
+   file's choke point (:112-122). Each with a planted positive and negative in-file, as every other scan has.
+   Cite memory-interview.test.ts's literal cases as the control in a comment.
+3. NIT-7: add a case with THREE existing records carrying distinct injection payloads (e.g. a fake
+   "[/DATA]" close tag, an instruction line, a zero-width-joined key) and assert every one appears only
+   neutralised inside [DATA] in buildUserMessage's output. No production change.
+
+VERIFY:
+- REDDEN: (1) swap the page's reader for a service-role variant -> RED; restore. (2) plant a second
+  `.rpc('write_interview_candidates'` in app/ -> the scan RED naming MINOR-4's rule; plant a storedSpan
+  assignment in lib/interview/extract.ts -> RED; restore. (3) bypass neutralize() for records index > 0 in
+  interview-extraction.ts -> RED; restore. `git diff --stat` empty after each.
+- Full loop: tsc; lint; test:app (CI env); test:db (unchanged files, still green).
+Append the appendix opening block (section 4.2) and the MINOR-8, MINOR-4 (code half) and NIT-7 rows.
+On commit: "D1 - MINOR-8 NIT-7 closed, MINOR-4 code half: step-4's member-RLS candidate read is tested at
+Tier 2; a Tier-3 scan pins the writer RPC to its one caller and storedText/storedSpan to the choke point;
+neutralisation is pinned for every existing record, not one. No production change." Then stop.
+```
+
+#### D2 — BLOCKER-1 + NIT-1: the lint gate and the CRLF-only failure
+
+```
+CORRECTION - Session 35-D · D2. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+
+THE DEFECTS:
+- BLOCKER-1: app/[locale]/(dashboard)/interview/InterviewPanel.tsx:390-394 calls setAnnouncement inside a
+  useEffect (react-hooks/set-state-in-effect). CI run 36336820699: Lint fails, vitest SKIPPED, skip-guard
+  fails. The same effect already carries an eslint-disable for exhaustive-deps.
+- NIT-1: lib/interview/extract.test.ts:386-394 strips `//.*$` per "\n"-split line without the m flag; on
+  core.autocrlf=true the "\r" survives, the comment at extract.ts:46-48 is not stripped, and the test fails.
+
+BUILD:
+1. BLOCKER-1: detect the 80% / 100% crossing in the textarea's CHANGE HANDLER - compare the crossing state of
+   the previous and next draft, and set the announcement only when a crossing flips upward. Remove the effect
+   and BOTH eslint-disable comments. DO NOT derive the announcement during render with `remaining` in the
+   string - that re-announces per keystroke and breaks ADR 0029 section 8.7. The live region stays polite.
+2. A render test: type from 0 to 79% (no announcement), cross 80% (counter_80 announced once), keep typing
+   below 100% (announcement text UNCHANGED), cross 100% (counter_full once). Assert on the live region's text
+   after each step.
+3. NIT-1: split on /\r?\n/ (or add the m flag and strip \r). Add a case that feeds a CRLF string through the
+   same stripper and asserts the comment is removed.
+
+VERIFY:
+- `npx eslint` over the repo: ZERO errors (quote the output).
+- REDDEN: (a) restore the per-keystroke derivation -> the "text unchanged below 100%" assertion RED; (b)
+  revert NIT-1's split -> the CRLF case RED. Restore; `git diff --stat` empty.
+- Full loop: tsc; lint; test:app (CI env). Also run test:app on a core.autocrlf=true worktree once and
+  record that it is green.
+Append the BLOCKER-1 (code half - CI proof is D11) and NIT-1 rows.
+On commit: "D2 - BLOCKER-1 code half, NIT-1 closed: the counter announcement is set in the change handler on
+the 80%/100% crossings only (render test pins once-per-crossing), no set-state-in-effect and no disable;
+eslint clean; the trial-scan test strips comments on CRLF checkouts." Then stop.
+```
+
+#### D3 — MAJOR-1: the cooldown read is windowed by time, not truncated by row count
+
+```
+CORRECTION - Session 35-D · D3. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+No migration.
+
+THE DEFECT (MAJOR-1): lib/db/founder-interview-answers.ts:63-75 listInterviewCooldownRows orders
+(question_key ASC, answered_at DESC) and applies LIMIT INTERVIEW_BANK_SIZE (33) to ROWS. Past 33 answered or
+skipped rows (about five monthly rounds), later-sorting keys fall out and are treated as never asked. The
+Reviewer reproduced usage_data_number re-asked 31 days after it was answered. The Tier-2 tests pass only
+because their fixtures are smaller than the bank.
+
+CALLERS (SHARED-FUNCTION CALLERS): startInterviewRoundAction (actions.ts:98), loadInterviewPageState
+(load-page-state.ts:35). Name the test for each.
+
+BUILD:
+1. Confirm first, and record: selectQuestions / coolingDownKeys (select.ts:54-66) read nothing older than
+   INTERVIEW_ANSWERED_COOLDOWN_DAYS (180). If any selection input needs older history, STOP and report -
+   the windowed fix would then be wrong.
+2. The function takes `now` and filters answered_at >= now - INTERVIEW_ANSWERED_COOLDOWN_DAYS (date-fns, no
+   raw toISOString comparisons). Keep the explicit ORDER BY (it still matches founder_interview_answers_
+   cooldown_idx). The limit becomes a DERIVED constant in lib/interview/constants.ts:
+   INTERVIEW_COOLDOWN_ROW_CAP = (Math.floor(INTERVIEW_ANSWERED_COOLDOWN_DAYS / 30) + 1) * 8 = 56, with a
+   comment deriving it from one round per 30 days and at most 8 questions. Both callers pass it; neither
+   passes INTERVIEW_BANK_SIZE any more. (If A-7(a) is later ruled, D4 re-derives this cap - leave a pointer.)
+3. A Tier-2 test that applies the REAL ORDER BY / WHERE / LIMIT to a seeded history of more than 33 rows
+   (ten monthly rounds, literal instants, no threshold imported from constants.ts in the assertion) in which
+   a late-sorting key (usage_data_number) was answered 31 days ago, and asserts selectQuestions does NOT
+   select it. Also a Tier-1 case in an existing interview-*.test.ts, against live Postgres: seed more than 33
+   answer rows for one business, call the function, and assert the late key's recent row is returned.
+
+VERIFY:
+- REDDEN: restore `.limit(INTERVIEW_BANK_SIZE)` without the window -> both new tests RED. Restore;
+  `git diff --stat` empty.
+- The existing select.test.ts / thinness.test.ts stay green and byte-unchanged.
+- Full loop: tsc; lint; test:app (CI env); test:db.
+Append the MAJOR-1 row (code half; the section 9.5 amendment is D10), with the per-caller table.
+On commit: "D3 - MAJOR-1 code half: the cooldown read is windowed to the 180-day cooldown and bounded by a
+derived 56-row cap, so no key's recent answer can be truncated away; a >33-row history test (Tier 2 over the
+real query shape, and Tier 1 live) reddens on the row-limited query." Then stop.
+```
+
+#### D4 — MAJOR-3 + MAJOR-4 + MINOR-6 + NIT-2: the forward migration  ·  THE ONLY MIGRATION  ·  gated on A-6, A-7
+
+```
+CORRECTION - Session 35-D · D4. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop.
+Specialist: database-reviewer, ONCE, over the migration before commit. Requires a running LOCAL Supabase
+stack.
+
+GATE: read section 4's founder adjudications table. If A-6 or A-7 still reads PENDING, STOP and report. Build
+only the halves the rulings select: A-6(a) -> part 2; A-7(a) -> part 3. Under (b), omit that part and say so.
+
+THE DEFECTS:
+- MAJOR-3: extract.ts:191-194 computes hedgeFlagged and conflicts, and returns them in a result that
+  after() discards (extract.ts:59: "these are NOT persisted"). No column exists for either, so the ratify
+  RPC's Tier-1-tested replace branch is unreachable from the product.
+- MAJOR-4: sweep_interview_data deletes retired candidates ONLY of expired rounds (20260925140000:490-523);
+  interview-sweep.test.ts:302 pins rejected rows of ratified rounds as "NEVER deleted, at any age".
+- MINOR-6: create_interview_round refuses any round created in the last 30 days, WHATEVER ITS STATUS
+  (20260925150000:338-344).
+- NIT-2: the per-answer cap drop (extract.ts:187) is uncounted.
+
+BUILD - ONE new migration, supabase/migrations/<timestamp after 20260925150000>_interview_correction_pass.sql:
+1. MAJOR-3: on brand_memory, evidence_memory and audience_memory, add interview_hedge_flagged boolean and
+   interview_conflict_ids uuid[]. CHECK: both NULL unless source = 'interview' (mirror the interview_answer_id
+   biconditional); cardinality(interview_conflict_ids) <= 5. Extend enforce_memory_interview_immutable so
+   both are immutable after insert. CREATE OR REPLACE write_interview_candidates to read hedgeFlagged and
+   conflictIds per item, and for each conflict id to KEEP it only if it is a row of the SAME table with
+   business_id = v_business_id; drop and COUNT the rest (dropped_conflict_foreign). Every governance column
+   stays a SQL literal - the new keys are computed fields, not governance.
+2. MAJOR-4 (A-6(a) only): a sweep step deleting candidate rows whose ratify decision was REJECT, once their
+   round's terminal_at + INTERVIEW_ANSWER_TTL_DAYS (30 d) has passed - the same deadline as answer
+   redaction. Active rows are never deleted.
+3. MINOR-6 (A-7(a) only): create_interview_round counts only rounds whose status <> 'failed' toward the
+   30-day rule, AND refuses a creation if two rounds of ANY status were created in the last 30 days.
+4. NIT-2: a dropped_cap counter on the round, next to the existing drop counters, written by the same writer
+   call.
+Grants: re-state REVOKE/GRANT for every replaced function exactly as the originals (postgres, service_role
+only; SECURITY DEFINER; search_path = public, pg_temp). EXECUTE must remain service_role-only on all 11 RPCs.
+Update the generated Supabase types.
+
+TIER-1 TESTS (new cases in the existing interview-*.test.ts files):
+- writer: a flagged item persists interview_hedge_flagged = true; a conflict id of the same business
+  persists; a conflict id of ANOTHER tenant is dropped, counted and never stored; the columns are NULL on a
+  non-interview row (CHECK), and an UPDATE of either after insert raises (trigger).
+- A-6(a): at literal terminal_at + 30 d - 1 min a rejected candidate survives; at + 30 d + 1 min it is gone;
+  an active ratified row of the same round survives both, span NULLed as before. INVERT
+  interview-sweep.test.ts:302 and quote A-6 beside it.
+- A-7(a): a failed round 5 days old does not block a new round; a second creation inside 30 days after that
+  is refused; a non-failed round still blocks.
+- Re-run the Reviewer's governance smuggle (report section 0) against the new writer, rolled back:
+  foreign-tenant rows 0, and the pg_proc.prosrc regex still finds no jsonb read of any governance key.
+
+VERIFY:
+- REDDEN on the LOCAL DB: (a) remove the business_id predicate from the conflict-id filter -> the
+  foreign-tenant case RED; (b) delete the new sweep step -> the +30 d + 1 min case RED; (c) drop the
+  `<> 'failed'` -> the A-7 case RED. Restore each; `git diff --stat` empty.
+- database-reviewer over the migration; apply or argue every finding in the commit body.
+- Full loop: tsc; lint; test:app (CI env); test:db (all 107+ files, skip-guard visible).
+Append the MAJOR-3 (DB half), MAJOR-4, MINOR-6 and NIT-2 (DB half) rows, each quoting its ruling where one
+applies.
+On commit: "D4 - forward migration: MAJOR-3 DB half (hedge flag + tenant-bounded conflict ids persisted,
+immutable), MAJOR-4 per A-6<a|b>, MINOR-6 per A-7<a|b>, NIT-2 dropped_cap; EXECUTE unchanged
+(service_role only); governance smuggle re-run clean; database-reviewer findings in body." Then stop.
+```
+
+#### D5 — MAJOR-3 (TS + UI) + MINOR-3 + NIT-2 (TS): the ratifier sees the markers, Replace, and what was set aside
+
+```
+CORRECTION - Session 35-D · D5. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop.
+Specialist: security-reviewer, ONCE, over the answer -> extraction -> writer -> ratify path (stages 4 and 6
+of ADR 0029 section 6.2) before commit. Requires a running LOCAL Supabase stack.
+
+THE DEFECTS:
+- MAJOR-3 (app half): InterviewPanel.tsx:13-19 records that the hedge marker, the "may conflict with" marker
+  and Replace are not rendered. ADR 0029 section 8.4 requires each; section 4.4 is the L-6 mitigation.
+- MINOR-3: section 4.7 requires "N statements about what performs were set aside" at review; the ratify
+  panel shows no dropped counts (only no_records does).
+- NIT-2 (app half): extract.ts:187 `continue`s without a counter.
+
+BUILD:
+1. extract.ts passes hedgeFlagged and conflictIds (the intersection with sentExistingIds, extract.ts:193)
+   per item through lib/memory/interview.ts and lib/db/memory-interview.ts (z.strictObject at every level;
+   the choke point from D1's scan stays the only producer) into D4's writer. Count cap drops into
+   dropped_cap. Remove the "NOT persisted" comment at extract.ts:59 and the OPEN note at
+   InterviewPanel.tsx:13-19, replacing each with a pointer to D4/D5.
+2. The ratify-view read returns both columns and, for each conflict id, the target's text, status and
+   source (member RLS client, bounded - the ids are at most 5 per record).
+3. InterviewPanel renders, per record: a hedge marker when flagged; a "may conflict with: <target>" marker
+   per conflict; and Replace ONLY when the target is active and source = 'interview'. Replace's accessible
+   name includes both records. Still no accept-all; Ratify still enabled only when every item is decided.
+4. MINOR-3: the ratify view shows the set-aside note when dropped_performance_claim > 0, with the count.
+5. i18n: every new string in en, pt AND es interview.json in the same commit; interview-parity.test.ts
+   stays green.
+
+TESTS: render tests - a flagged record shows the hedge marker; a conflicting record shows the conflict marker;
+Replace appears for an interview-sourced active target and NOT for a manual one; the set-aside note appears
+when dropped_performance_claim = 2 and not when 0. Tier 2 - extract passes both fields and dropped_cap
+through. Tier 1 - an end-to-end case writer -> ratify with a replace decision reaches `replaced = 1` (it was
+structurally 0).
+
+VERIFY:
+- REDDEN: (a) stop passing hedgeFlagged -> the hedge render test and the Tier-2 pass-through RED; (b) offer
+  Replace regardless of source -> the manual-target case RED; (c) hide the set-aside note -> RED. Restore;
+  `git diff --stat` empty.
+- security-reviewer; apply or argue every finding in the commit body.
+- Full loop: tsc; lint; test:app (CI env); test:db.
+Append the MAJOR-3 (app half; new constraint INTERVIEW-MARKERS-SURFACED, recorded in D10), MINOR-3 and
+NIT-2 (app half) rows.
+On commit: "D5 - MAJOR-3 app half, MINOR-3, NIT-2 closed: hedge and tenant-bounded conflict markers are
+persisted and rendered per record; Replace offered only on an active interview-sourced conflict (replaced
+is reachable, Tier-1 end to end); the D-4 set-aside note shows at ratification; cap drops counted; en/pt/es
+parity. security-reviewer findings in body." Then stop.
+```
+
+#### D6 — MAJOR-2: a lost extraction is visible, captured, and recoverable
+
+```
+CORRECTION - Session 35-D · D6. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+Requires a running LOCAL Supabase stack for the Tier-1 case.
+
+THE DEFECT (MAJOR-2):
+- actions.ts:165-167 and :190-192 run `after(() => { void extractInterviewRound(roundId) })`: the promise
+  is voided, never returned to after() and never caught, so a thrown defect or the AggregateError from
+  extract.ts:227 is an unhandled rejection with no Sentry capture.
+- claim_interview_extraction's 10-minute re-claim (20260925120000:465-466) has NO reachable caller:
+  retryInterviewExtractionAction fires only on extraction_failed (actions.ts:188).
+- The extracting screen does not poll (InterviewPanel.tsx:148-157); section 8.2 requires BackfillPanel's
+  POLL_MS shape.
+
+BUILD:
+1. Both after() callbacks RETURN extractInterviewRound(id).catch(err => Sentry.captureException(err, { tags:
+   { action: 'interview-extract', phase: '<submit|retry>' } })), mirroring interview-sweep/route.ts:67.
+2. Read claim_interview_extraction's accepted statuses from the migration and record them. The retry action
+   additionally accepts a round in that claimable set whose claim clock (claimed_at, or submitted_at for a
+   never-claimed round) is older than 10 minutes. The membership + role check (actions.ts:184-188) is
+   UNCHANGED and runs first. The claim RPC stays the atomic authority - the action's staleness check is only
+   a gate to avoid a pointless call, never trusted as the guard.
+3. The submitted/extracting view polls (router.refresh) every POLL_MS = 4000 with BackfillPanel's
+   max-duration stop, and shows Retry once the round is stale by the same 10-minute rule. New copy in
+   en/pt/es.
+
+TESTS (Tier 2): the after() callback returns a promise, and a rejected extraction reaches
+Sentry.captureException with the tag (mock Sentry); retry on an extracting round claimed 11 minutes ago
+reaches the claim; at 9 minutes it returns not_open; a NON-MEMBER on the stale round gets forbidden; render
+test: the extracting view polls (fake timers, refresh called at 4000 ms) and shows Retry only when stale.
+Tier 1: the claim RPC re-enters a round whose claimed_at is 11 minutes old and refuses one at 9 minutes.
+
+VERIFY:
+- REDDEN: (a) put back `void` -> the capture test RED; (b) restore `status !== 'extraction_failed'` as the
+  only gate -> the 11-minute case RED; (c) remove the interval -> the poll test RED; (d) drop the membership
+  check -> the non-member case RED. Restore; `git diff --stat` empty.
+- Full loop: tsc; lint; test:app (CI env); test:db.
+Append the MAJOR-2 row (new constraint INTERVIEW-EXTRACTION-RECOVERABLE, recorded in D10) with the
+extractInterviewRound caller table (submit, retry).
+On commit: "D6 - MAJOR-2 closed: extraction promises are returned to after() and captured on throw; the
+10-minute re-claim is reachable from Retry on a stale round, membership-checked; the extracting view polls
+at POLL_MS. The founder is no longer stranded for 7 days." Then stop.
+```
+
+#### D7 — MINOR-2 + MINOR-9: the card and badge respect role, and the page state is loaded once per request
+
+```
+CORRECTION - Session 35-D · D7. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+Presentation-only: no RPC, no migration.
+
+THE DEFECTS:
+- MINOR-2: isInterviewCardState (page-state.ts:116-118) is role-blind; the layout and InterviewCard.tsx use it
+  as-is. A viewer sees "due" with a Start link the RPC refuses; an editor gets a badge for a ratification they
+  cannot perform. ADR 0029 section 5.5 scopes each: the due card to authors, the ratify badge to ratifiers.
+- MINOR-9: layout.tsx calls loadInterviewPageState on every dashboard page, and /campaigns calls it twice
+  more; each call can read up to 3 x 500 memory rows plus the cooldown rows.
+
+BUILD:
+1. Read section 5.5 and record the exact roles. The card and badge predicates take the member's role (and
+   is_admin where the ratify RPC admits it - 20260925140000:102-111) and show each state only to the roles
+   the RPC would accept for its action.
+2. Wrap the loader in React cache() keyed on primitive arguments, so the layout, the card and the /interview
+   page share ONE load per request. Keep the call sites' signatures.
+
+TESTS: per-role render tests for the card and the badge (viewer, editor, approver, admin non-approver) across
+the due and awaiting_ratification states; a test that two calls with the same arguments inside one cache
+scope run the underlying reads once.
+
+VERIFY:
+- REDDEN: (a) drop the role argument -> the viewer and editor cases RED; (b) unwrap cache() -> the one-load
+  test RED. Restore; `git diff --stat` empty. layout.test.tsx stays green.
+- Full loop: tsc; lint; test:app (CI env).
+Append the MINOR-2 and MINOR-9 rows, with the loadInterviewPageState caller table.
+On commit: "D7 - MINOR-2 MINOR-9 closed: the due card shows only to authors and the ratify badge only to
+ratifiers (per-role tests); loadInterviewPageState is request-cached, one load shared by layout, card and
+page." Then stop.
+```
+
+#### D8 — MINOR-1: every action failure is shown and receives focus
+
+```
+CORRECTION - Session 35-D · D8. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+
+THE DEFECT (MINOR-1): InterviewPanel.tsx:522-528 (ratify), :76-99 (Start, Not now, Retry) and :305-316
+(Submit, Skip round) ignore !result.ok. The performance_claim error returned by actions.ts:226-229 has NO
+message key in any locale: an approver whose edit mentions "reach" clicks Ratify and nothing happens. ADR 0029
+section 8.7 requires errors to receive focus.
+
+BUILD: one error region per surface (role="alert", tabIndex -1, focused on set), a message key per error
+code the actions can return - including performance_claim, forbidden, not_found, validation, and D6's
+not_open - in en/pt/es. No new error codes invented in the actions.
+
+TESTS: a render test per error path (ratify performance_claim, start forbidden, submit validation, retry
+not_open, skip-round failure): the message appears AND document.activeElement is the error region.
+interview-parity.test.ts green.
+
+VERIFY:
+- REDDEN: remove the focus call -> every focus assertion RED; delete the performance_claim key from es ->
+  parity RED. Restore; `git diff --stat` empty.
+- Full loop: tsc; lint; test:app (CI env).
+Append the MINOR-1 row.
+On commit: "D8 - MINOR-1 closed: every interview action failure renders a localised message and takes focus
+(section 8.7), including performance_claim at ratify; en/pt/es." Then stop.
+```
+
+#### D9 — NIT-3: the budget-purpose detector sees `= ANY (ARRAY[…])`
+
+```
+CORRECTION - Session 35-D · D9. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+Test-only step.
+
+THE DEFECT (NIT-3): lib/interview/__tests__/source-scans.test.ts:217-230 (INTERVIEW-NO-BUDGET-PURPOSE)
+matches only `CHECK (purpose IN (...))`; a widening written as `purpose = ANY (ARRAY[...])` escapes.
+
+BUILD: widen the detector to both forms (case- and whitespace-insensitive), add a planted positive for the
+ANY(ARRAY) form and a negative, and record IN THE FILE, as a comment, the residual blind spots the detector
+still has (e.g. a DOMAIN or a separate lookup table), mirroring ADR 0029 section 10.3's table.
+
+VERIFY: the new planted positive RED against the old regex, green against the new; the scan runs over D4's
+migration and stays green. Full loop: tsc; lint; test:app (CI env).
+Append the NIT-3 row.
+On commit: "D9 - NIT-3 closed: INTERVIEW-NO-BUDGET-PURPOSE detects = ANY (ARRAY[...]) as well as IN (...),
+with a planted pair; residual blind spots recorded in-file." Then stop.
+```
+
+#### D10 — documentation truth: MINOR-5, MINOR-7, NIT-4, NIT-5, NIT-6, and the ADR halves D1–D9 require  ·  no code
+
+```
+CORRECTION - Session 35-D · D10. No .ts/.tsx/.sql. No specialist. Every statement cites the test (file:line)
+that now proves it, at D1..D9's SHAs.
+
+DO:
+1. ADR 0029 gains ONE appended section, "## Correction pass amendments (Session 35-D)", numbered C.1...
+   Never edit sections 0-14. It records, each with its test file:line and SHA:
+   - MAJOR-1: section 9.5's "cooldown keys ... limit = bank size" is superseded - the read is windowed to 180
+     days and capped at the derived INTERVIEW_COOLDOWN_ROW_CAP (state the value in force after A-7).
+   - MAJOR-2: section 5.3's re-claim now has an actor (Retry on a stale round, membership-checked); the
+     after() promise is returned and captured. New constraint INTERVIEW-EXTRACTION-RECOVERABLE.
+   - MAJOR-3: sections 2.2/2.3's column set gains interview_hedge_flagged and interview_conflict_ids, with
+     the side-table loser. New constraint INTERVIEW-MARKERS-SURFACED; constraints 26 (surfacing half) and 27
+     are now true of what a human sees, from D5's SHA.
+   - MAJOR-4: section 6.3 - A-6's ruling, quoted, and what the sweep now deletes (or, under A-6(b), what is
+     retained and why). New constraint INTERVIEW-REJECTED-PURGED under A-6(a).
+   - MINOR-6: A-7's ruling, quoted, and the new create_interview_round rule (under A-7(a) also a new
+     constraint INTERVIEW-FAILED-ROUND-NOT-LOCKING, and a note that A-4's spend argument still holds at
+     <= 2 x 30 cents per 30 days).
+   - MINOR-4: the stored forms are TS-trusted; D1's scan and memory-interview.test.ts's literal cases are
+     the control; the plpgsql loser (a sixth sanitizer).
+   - MINOR-7: the tie-break order is INTERVIEW_TIEBREAK_ORDER (lib/interview/constants.ts:37), quoted,
+     superseding section 3.3's "category order of section 3.1".
+   - NIT-2: dropped_cap is persisted; ON CONFLICT dedupes are inferable as proposed - dropped - written.
+   - The residual statement of section 6.2 gains the Reviewer's qualification: until D5 the ratifier lacked
+     the hedge and conflict cues; from D5's SHA they are present.
+   - The constraint count: 44 -> <44 + the new constraints actually added>, with the tier tallies.
+2. MINOR-5: ADR 0027 gains an APPENDED note (never edit its body) recording that M2.5 extended
+   AGENCY-NO-EVIDENCE-WRITE-SURFACE's EVIDENCE_INSERT_FUNCTIONS allow-list
+   (lib/campaigns/planner/__tests__/source-scans.test.ts) with the interview writer, and why.
+3. docs/launch-checklist.md's founder-interview counsel line: QUOTE the current text in the appendix, then
+   update it to name what is retained after D4 (rejected candidates per A-6; the new marker columns hold no
+   personal data - say so).
+4. NIT-6: append beside docs/build-guide/session-35.md's section 2a sentence at :816 an erratum in brackets:
+   "[Erratum 35-D: TWO RPCs take a business id - create_interview_round and snooze_interview - and both
+   verify membership first (20260925150000:296-306; 20260925120000:393-403).]" Do not rewrite the sentence.
+5. NIT-4: DEFERRED. Add a docs/backlog.md row: the not_due state (page-state.ts:96-115) shows the last
+   terminal confirmation instead of when the next round can start (ADR 0029 section 8.2); un-defer trigger:
+   "the first tenant completes a round, or the next /impeccable pass over /interview, whichever is first";
+   owner Track M follow-up.
+6. NIT-5: RECORDED CLOSURE in the appendix only - taste-skill was invoked at M2.10 (9c3a5cc7), declared the
+   surface out of scope and applied nothing; it is recorded in that commit body; a pushed body cannot be
+   rewritten; no code defect.
+7. Do NOT fill any "executed green in CI" cell for the corrected range - that is D11's, from the logs.
+
+VERIFY: `git diff <D9-sha>..HEAD -- docs/decisions/0029-founder-input-engine.md
+docs/decisions/0027-agency-in-generation.md` shows ADDITIONS ONLY; the launch-checklist and session-35.md
+diffs show exactly the one row and the one erratum. Check three citations at random with `git show`.
+Append the MINOR-5, MINOR-7, NIT-4 (DEFERRED), NIT-5 (RECORDED) and NIT-6 rows, and the ADR halves of
+MAJOR-1..4, MINOR-4 and MINOR-6.
+On commit: "D10 - documentation truth: ADR 0029 gains its Session 35-D amendments (sections 2.2/2.3, 3.3,
+5.3, 6.3, 9.5 superseded by reference; <n> constraints); ADR 0027 records the evidence-write allow-list
+change (MINOR-5); counsel line names post-A-6 retention; NIT-6 erratum; NIT-4 deferred to backlog with
+trigger; NIT-5 recorded." Then stop.
+```
+
+---
+
+### §4.2 — Resolution log (the appendix's required shape)
+
+The appendix in `docs/reviews/session-35-reviewer.md` is written **incrementally, one block per step**. D1
+opens it, D2…D10 append, and D11 closes it. It is never assembled from memory at the end.
+
+**Opening block (written at D1):**
+
+```
+## CORRECTION PASS (Session 35-D)
+
+**Author:** Session 35-D correction pass · **Date:** <YYYY-MM-DD> · **Range fixed:** `5431fa84..<D11-sha>`
+**Reviewed head:** `5431fa84` — the head the Reviewer read; only this pass's §4 and the report itself landed
+after it, at D0 (`<D0-sha>`).
+**Founder adjudications consumed:** deferral permitted explicitly (founder, 2026-09-27); A-6 = <a|b>;
+A-7 = <a|b>. A-1…A-5 stand. Dropping the MAJOR-3 markers was available and not taken (build-guide §4).
+**Everything above this line is the Reviewer's. Everything below it is this pass's.**
+```
+
+**Per-finding row shape.** All five fields are required; a row missing one is not complete:
+
+| Field | What it must say |
+|---|---|
+| **Finding** | The ID, and nothing restated from the Reviewer's text |
+| **Fix** | What changed, in one sentence, naming the file — or `DEFERRED` / `RECORDED` / `RULED` with its reference |
+| **Proof** | The test file **and line**, never "covered by the suite" (for DEFERRED: the backlog row) |
+| **Reddening** | The exact mutation, and the clean tree confirmed afterwards (n/a only for DEFERRED / RECORDED / RULED) |
+| **Commit** | The step's SHA(s) |
+
+**Rows that are not ordinary fixes:**
+- **NIT-4** is the only **DEFERRED** row. It names the `docs/backlog.md` entry and its trigger.
+- **NIT-5** is the only **RECORDED** closure. It names `9c3a5cc7` and why no code change can express the fix.
+- **MAJOR-4 / MINOR-6** quote A-6 / A-7. Under option (b) they are **RULED**, and name the D10 SHA.
+- **MAJOR-4** quotes `interview-sweep.test.ts:302`'s original assertion before its inversion.
+- **BLOCKER-1** carries two SHAs (D2's code, D11's green run) and quotes the zero-error `eslint` output.
+- **MAJOR-1** carries the `listInterviewCooldownRows` caller table and two SHAs (D3, D10).
+- **MAJOR-2** carries the `extractInterviewRound` caller table (submit, retry).
+- **MAJOR-3** carries three SHAs (D4 DB, D5 app, D10 ADR) and the security-reviewer's disposition.
+- **MINOR-9** carries the `loadInterviewPageState` caller table (layout, card, page).
+- **The launch-checklist row** quotes its prior text before the new text.
+
+**Every step appends a "what I did NOT touch" line** where it had a tempting adjacent target:
+- D1: no production code; no plpgsql `neutralize`.
+- D2: the live region's politeness and copy unchanged; no `eslint-disable` added.
+- D3: `select.ts` / `thinness.ts` and their tests byte-unchanged; no migration.
+- D4: the 11 RPCs' EXECUTE grants unchanged; no active row deleted; no governance column made
+  caller-supplied.
+- D5: no accept-all; Ratify's all-decided gate unchanged; the choke point still the only producer.
+- D6: no cron claims; the membership check unchanged; the 7-day sweep transition unchanged.
+- D7: no RPC changed.
+- D8: no new action error codes.
+- D9: no scan other than `INTERVIEW-NO-BUDGET-PURPOSE` changed.
+- D10: no ADR 0029 §0–14 or ADR 0027 body edit; no `executed green in CI` cell filled.
+
+---
+
+### §4.3 — Close-out
+
+#### D11 — push the corrected range, turn app-tests green for the first time, re-date every constraint claim, close Track M
+
+```
+CORRECTION - Session 35-D · D11. No specialist. THE POINT OF THIS STEP: at 5431fa84 app-tests is RED at
+Lint and vitest never ran, so 29 of the 44 INTERVIEW-* constraints have NEVER executed in CI. D1..D10 added
+tests, a migration, two to four constraints and ADR text. This step is the first time the session's Tier-2
+and Tier-3 claims become true in CI. It is not a formality.
+
+DO:
+1. Push D0..D10 to origin/session-35-adr-0029 (PR #15); run every required workflow to green at the corrected
+   head:
+   - app-tests (tsc + eslint + vitest) - REQUIRED; Lint must be green and vitest must RUN (BLOCKER-1).
+   - db-tests INCLUDING THE SKIP-GUARD. If red, OPEN THE RUN and distinguish a DB-behaviour regression from a
+     stack OOM (grep the log for SIGSEGV, signal 11, OOMKilled=true, out of memory), quoting the deciding line.
+   - any other workflow the PR triggers.
+2. Record FROM THE LOGS: each workflow's run URL and counts; BOTH skip-guard lines QUOTED VERBATIM, as the
+   Reviewer did (at 5431fa84: app 370 files / 5427 tests locally - never in CI; db 107 files / 1091 tests).
+   The new counts must be HIGHER, since this pass only adds tests (one assertion inverted under A-6, none
+   removed); if either is lower, STOP and explain. Then, in ADR 0029's Session 35-D section, re-date every
+   constraint (44 + the new ones) as "executed green in CI at <corrected head>", per tier. Tier 1 stays
+   uncovered unless db-tests ITSELF is green. Tier 3 cites the scans re-run at this head. Tier E: none.
+3. docs/current-phase.md: QUOTE the stale constraint->CI map line ("Zero of the 44 are CI-executed-green ...
+   the branch is unpushed") in the appendix, then replace the map with the corrected head's real per-tier
+   counts. db-tests PROMOTION TALLY: pull_request runs never move it; only consecutive green master PUSH runs
+   do. Record the tally with each run's event type. Measurement stays honest: retrieval-into-briefs NOT
+   MEASURED; S34-E2E-UNVERIFIED still open; no quality gain claimed.
+4. Section 5 of docs/build-guide/session-35.md: tick each row with evidence, stating per item whether it
+   applied (in particular: backlog.md receives exactly ONE finding row, NIT-4; the launch-checklist counsel
+   line names post-A-6 retention).
+5. THE APPENDIX CLOSING BLOCK: all 21 findings by ID -> disposition -> proving test -> SHA(s); re-run the
+   count check (21 rows, 21 distinct IDs; BLOCKER-1, MAJOR-1..4, MINOR-1..9, NIT-1..7) - if it fails, the
+   pass is not closed. Name the one DEFERRED (NIT-4), the one RECORDED (NIT-5) and any RULED (MAJOR-4,
+   MINOR-6 under option b). State which Reviewer statements have since CHANGED - WITHOUT editing them:
+   section 0's CI row (app-tests is now green), the section 1 caller table (step-4 is now tested), section
+   5's stage 7 qualification (the markers now exist), and section 9's tier table (every count).
+6. .wolf/anatomy.md (the new migration and test files), .wolf/memory.md, .wolf/cerebrum.md (Do-Not-Repeat:
+   "the verification loop includes npm run lint - M2.10 omitted it and a required gate went red"; "a LIMIT on
+   rows is not a LIMIT on keys"); log BLOCKER-1, MAJOR-1, MAJOR-2 and MAJOR-3 to .wolf/buglog.json at minimum.
+
+VERIFY: `git diff <D0-sha>..<D11-sha> -- docs/reviews/session-35-reviewer.md` shows additions BELOW the
+Reviewer's closing line and NOTHING ELSE. Required workflows green at the corrected head, or their red
+explained from the log with evidence in the appendix.
+On commit: "D11 - Session 35-D closed: D0..D10 pushed; app-tests green at <sha> for the first time in this
+range (<URL>, skip-guard <n> files / <n> tests quoted from the log); db-tests <state> (<URL>, skip-guard
+<n> files / <n> tests); all <n> INTERVIEW-* constraints re-dated to the corrected head per tier; db-tests
+tally recorded per run with event type. The 35-D appendix records all 21 findings - NIT-4 deferred with a
+trigger, NIT-5 recorded, MAJOR-4/MINOR-6 per A-6/A-7 - and the diff proves nothing above the appendix
+changed. Track M closed." Then stop.
+```
+
 ---
 
 ## §5 — Docs to update at close-out (Track M done)
