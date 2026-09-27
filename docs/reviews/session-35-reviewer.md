@@ -515,3 +515,42 @@ test — the InterviewPanel change tightened an existing assertion rather than a
 
 **Note on `test:db` for this step:** D2 touches no migration and no `supabase/__tests__` file; `test:db`'s
 green result at `5431fa84` stands unchanged and is not re-claimed as re-executed by this step.
+
+### D3 — MAJOR-1 (code half)
+
+**SHARED-FUNCTION CALLERS of `listInterviewCooldownRows`, both updated in this step:**
+
+| Caller | File:line | Test that exercises it |
+|---|---|---|
+| `startInterviewRoundAction` | `app/[locale]/(dashboard)/interview/actions.ts:98` | `app/[locale]/(dashboard)/interview/actions.test.ts` (mocked) |
+| `loadInterviewPageState` | `lib/interview/load-page-state.ts:35` | `lib/interview/load-page-state.test.ts` (mocked) |
+
+**Precondition confirmed (BUILD step 1):** `coolingDownKeys` / `selectQuestions` (`lib/interview/select.ts:54-67`)
+read nothing older than `INTERVIEW_ANSWERED_COOLDOWN_DAYS` (180, the larger of the two windows — the skipped
+window is only 60). A windowed read at 180 days therefore loses nothing the pure selection could ever use.
+
+| Field | MAJOR-1 (code half) |
+|---|---|
+| **Finding** | MAJOR-1 |
+| **Fix** | `listInterviewCooldownRows` (`lib/db/founder-interview-answers.ts`) now takes `now: Date`, filters `answered_at >= now - INTERVIEW_ANSWERED_COOLDOWN_DAYS` via `date-fns` (`subDays` + `formatISO`, no raw `toISOString`), and keeps the explicit `ORDER BY (question_key ASC, answered_at DESC)`. The row `limit` becomes a DERIVED constant, `INTERVIEW_COOLDOWN_ROW_CAP = (Math.floor(180/30)+1)*8 = 56` (`lib/interview/constants.ts`) — a defensive backstop bounding what a realistic (rate-limited-to-one-round-per-30-days) history could ever return, never the correctness mechanism. Both callers now pass `now` and `INTERVIEW_COOLDOWN_ROW_CAP`; neither passes `INTERVIEW_BANK_SIZE` any more (its import is removed from both call sites). **The §9.5 ADR amendment naming this derived cap is D10's job**, per the disposition table ("D3 + D10"). |
+| **Proof** | Tier 2 (mocked, real query shape): `lib/db/founder-interview-answers.test.ts`, the `.gte('answered_at', cutoff)` assertion and the updated signature/source assertions. Tier 2 (pure, real `selectQuestions`, real bank, simulated real query shape over 10 monthly rounds): `lib/interview/select.test.ts`, describe block `"MAJOR-1 fix — a late-sorting key (usage_data_number) survives a >33-row history"` (two tests: one reproducing the bug under the OLD row-count-only shape, one proving the fix under the time-windowed shape). Tier 1 (live Postgres, real function, real RLS): `supabase/__tests__/interview-lifecycle.test.ts`, describe block `"MAJOR-1 fix — the cooldown read survives a >33-row history (live Postgres)"` — seeds 40 answered rows for one business (> the old 33-row limit, < the new 56-row cap), signs in as the member, and asserts the alphabetically-last key's row is returned. |
+| **Reddening** | Restored the pre-fix shape in `listInterviewCooldownRows` (dropped the `.gte` clause, hardcoded `.limit(33)`, `now`/`limit` params unused) → RED on both the Tier-2 mocked test (the `.gte` and source-pattern assertions) and the Tier-1 live test (`expected 33 to be greater than 33` — the seeded late key's row was truncated, reproducing the Reviewer's exact finding against real Postgres). Reverted; `git diff --stat -- lib/db/founder-interview-answers.ts` shows only the intended 16-line fix (confirmed via the two test runs bracketing the mutation). |
+| **Commit** | this commit (D3) |
+
+**`select.test.ts` / `thinness.test.ts` stayed green and byte-unchanged**, confirmed via
+`git diff --stat -- lib/interview/select.test.ts lib/interview/thinness.test.ts` before adding the new
+describe block (empty) and via `thinness.test.ts` remaining completely untouched throughout this step.
+
+**What this step did NOT touch:** no migration; no change to `founder_interview_answers_cooldown_idx` or any
+RLS policy; `select.ts` / `thinness.ts` production files untouched (only their test files gained new,
+additive describe blocks); `INTERVIEW_BANK_SIZE` itself is untouched in `lib/interview/bank.ts` — only its use
+as a cooldown-read bound is removed from the two callers (it may still be used elsewhere, e.g. `bank_version`
+literature, unaffected by this step).
+
+**Full-suite confirmation (D3):** `npx tsc --noEmit --skipLibCheck` clean. `npx eslint .`: `✖ 112 problems (0
+errors, 112 warnings)`, unchanged from D2. `npm run test:app` (CI env block): 371 files / 5437 tests green
+(was 371/5435 after D2; the delta is exactly `select.test.ts`'s two new tests — `founder-interview-answers.test.ts`'s
+tests were updated in place, not added). `npm run test:db` against the running LOCAL Supabase stack (env from
+`supabase status -o env`, 127.0.0.1:54321/54322): **107 files / 1092 tests green** (was 107/1091 at `5431fa84`;
+the delta is exactly this step's one new Tier-1 test in `interview-lifecycle.test.ts`, which alone runs 66/66,
+up from 65).

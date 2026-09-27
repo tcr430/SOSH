@@ -87,6 +87,19 @@ export const INTERVIEW_ANSWERED_COOLDOWN_DAYS = 180
 /** §3.3: a key skipped inside this window is not eligible again. */
 export const INTERVIEW_SKIPPED_COOLDOWN_DAYS = 60
 
+/**
+ * §9.5 (Session 35-D D3, MAJOR-1) — the row bound for listInterviewCooldownRows, a DEFENSIVE cap, not the
+ * correctness mechanism. The WHERE clause (answered_at >= now - INTERVIEW_ANSWERED_COOLDOWN_DAYS) is what
+ * keeps the read correct; this cap only bounds how many rows a correctly-windowed read could ever return.
+ * Derived from "at most one round created per 30 days" (create_interview_round's any-status 30-day rule)
+ * and "at most 8 questions per round": floor(180 / 30) + 1 = 7 rounds fit in a rolling 180-day window,
+ * 7 * 8 = 56. This REPLACES INTERVIEW_BANK_SIZE as the bound — the old bound truncated by ROW COUNT ordered
+ * by key (question_key ASC), which silently dropped a late-sorting key's recent answer past ~33 total rows
+ * (Session 35 Reviewer, MAJOR-1): a realistic history capped by the 30-day rule never reaches 56 rows, so
+ * this cap is never the thing actually doing the truncating.
+ */
+export const INTERVIEW_COOLDOWN_ROW_CAP = (Math.floor(INTERVIEW_ANSWERED_COOLDOWN_DAYS / 30) + 1) * 8
+
 // ─── Confidence (§2.6) — documented here, ENFORCED in SQL ───────────────────
 // All below LEARN_PROMOTION_MIN_CONFIDENCE (0.7, lib/learning/promote.ts:16), so a founder
 // statement never reads as settled as a promoted learned pattern.

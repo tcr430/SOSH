@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { subDays, formatISO } from 'date-fns'
 import type { FounderInterviewAnswerRow, SaveInterviewAnswerResult, SkipInterviewAnswerResult } from './types'
-import { INTERVIEW_ANSWERS_LIMIT } from '@/lib/interview/constants'
+import { INTERVIEW_ANSWERED_COOLDOWN_DAYS, INTERVIEW_ANSWERS_LIMIT } from '@/lib/interview/constants'
 import { callInterviewRpc, getInterviewServiceClient } from './founder-interview-rounds'
 import { getErrorMessage } from './utils'
 
@@ -58,15 +59,22 @@ export type InterviewCooldownRow = Pick<FounderInterviewAnswerRow, 'question_key
 // both (see skip_interview_answer). ORDER BY (question_key ASC, answered_at DESC) is exactly the column order of
 // founder_interview_answers_cooldown_idx (business_id, question_key, answered_at DESC) once business_id is fixed.
 //
-// `limit` has NO default on purpose: §9.5 fixes it at the BANK SIZE, which M2.7 authors, so the caller passes it. It is
-// still a required, explicit bound — an unbounded read is unrepresentable. The caller's client.
-export async function listInterviewCooldownRows(client: SupabaseClient, businessId: string, limit: number): Promise<InterviewCooldownRow[]> {
+// Session 35-D D3 (MAJOR-1): the read is WINDOWED BY TIME (answered_at >= now - INTERVIEW_ANSWERED_COOLDOWN_DAYS,
+// the larger of the two cooldown windows — coolingDownKeys never needs anything older) — that is what keeps the
+// read correct. `limit` is a DEFENSIVE row cap (INTERVIEW_COOLDOWN_ROW_CAP, derived from at most one round per
+// 30 days at 8 questions each), never the correctness mechanism: the OLD code applied a row-count LIMIT with no
+// time filter, ordered by key, which silently dropped a late-sorting key's recent answer once a business passed
+// ~33 total rows. `limit` still has NO default on purpose — an unbounded read is unrepresentable, so the caller
+// passes it explicitly. The caller's client.
+export async function listInterviewCooldownRows(client: SupabaseClient, businessId: string, now: Date, limit: number): Promise<InterviewCooldownRow[]> {
+  const cutoff = formatISO(subDays(now, INTERVIEW_ANSWERED_COOLDOWN_DAYS))
   const { data, error } = await client
     .from('founder_interview_answers')
     .select('question_key, status, answered_at')
     .eq('business_id', businessId)
     .in('status', ['answered', 'skipped'])
     .not('answered_at', 'is', null)
+    .gte('answered_at', cutoff)
     .order('question_key', { ascending: true })
     .order('answered_at', { ascending: false })
     .limit(limit)

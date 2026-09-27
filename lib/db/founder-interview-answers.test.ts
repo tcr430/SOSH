@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
+import { formatISO, subDays } from 'date-fns'
 import { createMockClient } from './__test-utils__/mock-client'
 
 vi.mock('@/lib/supabase/service', () => ({ createServiceRoleClient: vi.fn() }))
@@ -8,7 +9,7 @@ vi.mock('@/lib/supabase/service', () => ({ createServiceRoleClient: vi.fn() }))
 import { createServiceRoleClient } from '@/lib/supabase/service'
 import { FounderInterviewRpcError } from './founder-interview-rounds'
 import { listAnsweredForExtraction, listAnswersForRound, listInterviewCooldownRows, saveInterviewAnswer, skipInterviewAnswer } from './founder-interview-answers'
-import { INTERVIEW_ANSWERS_LIMIT } from '@/lib/interview/constants'
+import { INTERVIEW_ANSWERED_COOLDOWN_DAYS, INTERVIEW_ANSWERS_LIMIT } from '@/lib/interview/constants'
 
 // ADR 0029 §9.5 INTERVIEW-BOUNDED-QUERIES (Tier 2) and the wrapper half of §2.5. The answer reads are BOUNDED and ORDERED
 // on an index: the answers of a round by `position` (founder_interview_answers_round_position_uq), the cooldown rows by
@@ -49,14 +50,20 @@ describe('INTERVIEW-BOUNDED-QUERIES — founder-interview-answers reads', () => 
     await expect(listAnswersForRound(bad.client, 'round-1')).rejects.toThrow('boom')
   })
 
-  it('the cooldown lookup reads ONE business, only answered / skipped rows that carry a clock, ordered (question_key ASC, answered_at DESC)', async () => {
+  it('the cooldown lookup reads ONE business, only answered / skipped rows that carry a clock, WITHIN the cooldown window, ordered (question_key ASC, answered_at DESC)', async () => {
     const { client, builder, from } = createMockClient([{ question_key: 'k1', status: 'answered', answered_at: '2026-09-01T00:00:00Z' }], null)
-    const rows = await listInterviewCooldownRows(client, 'biz-1', 40)
+    const now = new Date('2026-09-27T00:00:00.000Z')
+    const rows = await listInterviewCooldownRows(client, 'biz-1', now, 40)
     expect(from).toHaveBeenCalledWith('founder_interview_answers')
     expect(builder.select).toHaveBeenCalledWith('question_key, status, answered_at')
     expect(builder.eq).toHaveBeenCalledWith('business_id', 'biz-1')
     expect(builder.in).toHaveBeenCalledWith('status', ['answered', 'skipped'])
     expect(builder.not).toHaveBeenCalledWith('answered_at', 'is', null)
+    // Session 35-D · D3 (MAJOR-1) — WINDOWED BY TIME: 180 days before `now`, via date-fns, never a raw
+    // toISOString comparison. The expected cutoff is computed with the SAME date-fns call, not a hardcoded
+    // literal, so the assertion doesn't depend on the test runner's local timezone (email-outbox.test.ts's
+    // idiom for the same pattern).
+    expect(builder.gte).toHaveBeenCalledWith('answered_at', formatISO(subDays(now, INTERVIEW_ANSWERED_COOLDOWN_DAYS)))
     expect(calls(builder.order)).toEqual([
       ['question_key', { ascending: true }],
       ['answered_at', { ascending: false }],
@@ -65,11 +72,12 @@ describe('INTERVIEW-BOUNDED-QUERIES — founder-interview-answers reads', () => 
     expect(rows).toHaveLength(1)
   })
 
-  it('the cooldown lookup has NO default limit — the bound is required and comes from the bank size (§9.5)', () => {
-    expect(listInterviewCooldownRows.length).toBe(3) // (client, businessId, limit): no default value, so all three count
+  it('the cooldown lookup has NO default limit — the bound is required and is the derived row cap, not the bank size (§9.5, D3)', () => {
+    expect(listInterviewCooldownRows.length).toBe(4) // (client, businessId, now, limit): no default value, so all four count
     const src = fs.readFileSync(path.join(process.cwd(), 'lib', 'db', 'founder-interview-answers.ts'), 'utf8')
-    expect(src).toMatch(/listInterviewCooldownRows\(client: SupabaseClient, businessId: string, limit: number\)/)
+    expect(src).toMatch(/listInterviewCooldownRows\(client: SupabaseClient, businessId: string, now: Date, limit: number\)/)
     expect(src).toMatch(/\.limit\(limit\)/)
+    expect(src).toMatch(/subDays\(now, INTERVIEW_ANSWERED_COOLDOWN_DAYS\)/)
   })
 })
 

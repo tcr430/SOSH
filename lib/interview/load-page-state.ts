@@ -3,7 +3,7 @@ import { listAnswersForRound, listInterviewCooldownRows } from '@/lib/db/founder
 import { getLatestInterviewRound } from '@/lib/db/founder-interview-rounds'
 import { listInterviewCandidatesForRound } from '@/lib/memory/interview'
 import { readInterviewSlotRows } from '@/lib/memory/interview-coverage'
-import { INTERVIEW_BANK_SIZE } from './bank'
+import { INTERVIEW_COOLDOWN_ROW_CAP } from './constants'
 import { computeInterviewPageState, INTERVIEW_TERMINAL_STATUSES, type InterviewPageState } from './page-state'
 import { computeSlotThinness } from './thinness'
 
@@ -32,7 +32,7 @@ export async function loadInterviewPageState(
 
   const needsSelection = round === null || INTERVIEW_TERMINAL_STATUSES.has(round.status)
   const [slotRows, cooldownRows] = needsSelection
-    ? await Promise.all([readInterviewSlotRows(client, business.id, now), listInterviewCooldownRows(client, business.id, INTERVIEW_BANK_SIZE)])
+    ? await Promise.all([readInterviewSlotRows(client, business.id, now), listInterviewCooldownRows(client, business.id, now, INTERVIEW_COOLDOWN_ROW_CAP)])
     : [[], []]
 
   return computeInterviewPageState({

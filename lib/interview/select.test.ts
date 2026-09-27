@@ -239,3 +239,73 @@ describe('selectQuestions — the bank is a parameter', () => {
     expect(selectQuestions({ thinness: t, cooldowns: [], now: NOW, bank: tiny })).toEqual([])
   })
 })
+
+// ═══ MAJOR-1 (Session 35-D · D3): the cooldown query's REAL shape, not just a row-count limit ═══════════════
+// Reviewer: past ~33 total answered/skipped rows (about five monthly rounds), a row-count-only LIMIT ordered
+// by question_key ASC drops a late-sorting key's row entirely, so selectQuestions wrongly treats it as never
+// asked. This drives the REAL selectQuestions through TEN monthly rounds (the real one-round-per-30-days
+// cadence), with the cooldown rows re-derived EACH round by applying the query's real WHERE/ORDER BY/LIMIT
+// shape to the accumulated history — literal 180 and literal limits, never imported from constants.ts (this
+// file's own [test-4] rule) — and proves the OLD shape re-selects usage_data_number 31 days after its own
+// answer, while the FIXED shape (a time WHERE before the LIMIT) does not.
+describe('MAJOR-1 fix — a late-sorting key (usage_data_number) survives a >33-row history', () => {
+  const MS_PER_DAY = 24 * 60 * 60 * 1000
+  const START = new Date('2025-01-01T00:00:00.000Z')
+  const ALWAYS_THIN = computeSlotThinness([], START) // rows=[] -> thinness 1 for every slot, independent of `now`
+
+  function byKeyAscThenRecencyDesc(a: CooldownRow, b: CooldownRow): number {
+    if (a.question_key !== b.question_key) return a.question_key < b.question_key ? -1 : 1
+    return Date.parse(b.answered_at as string) - Date.parse(a.answered_at as string)
+  }
+
+  /** The BUGGY shape the Reviewer found: ROW-COUNT limit only, no time filter. */
+  function oldRowLimitedQuery(history: readonly CooldownRow[], limit: number): CooldownRow[] {
+    return history.slice().sort(byKeyAscThenRecencyDesc).slice(0, limit)
+  }
+
+  /** The FIXED shape (lib/db/founder-interview-answers.ts, D3): a time WHERE, THEN the row limit. */
+  function fixedWindowedQuery(history: readonly CooldownRow[], now: Date, limit: number): CooldownRow[] {
+    const cutoffMs = now.getTime() - 180 * MS_PER_DAY // literal: mirrors INTERVIEW_ANSWERED_COOLDOWN_DAYS
+    return history
+      .filter((r) => r.answered_at !== null && Date.parse(r.answered_at) >= cutoffMs)
+      .sort(byKeyAscThenRecencyDesc)
+      .slice(0, limit)
+  }
+
+  function driveTenMonthlyRounds(query: (history: CooldownRow[], now: Date) => CooldownRow[]): { history: CooldownRow[]; lastAnsweredAt: Record<string, string> } {
+    const history: CooldownRow[] = []
+    const lastAnsweredAt: Record<string, string> = {}
+    for (let round = 0; round < 10; round++) {
+      const now = new Date(START.getTime() + round * 30 * MS_PER_DAY)
+      const cooldowns = query(history, now)
+      const selected = selectQuestions({ thinness: ALWAYS_THIN, cooldowns, now })
+      for (const q of selected) {
+        history.push({ question_key: q.questionKey, status: 'answered', answered_at: now.toISOString() })
+        lastAnsweredAt[q.questionKey] = now.toISOString()
+      }
+    }
+    return { history, lastAnsweredAt }
+  }
+
+  it('reproduces the bug: the OLD row-count-only LIMIT (33) wrongly re-selects usage_data_number 31 days after its own recent answer', () => {
+    const { history, lastAnsweredAt } = driveTenMonthlyRounds((h) => oldRowLimitedQuery(h, 33))
+    expect(history.length, 'the seeded history must exceed the old 33-row bound').toBeGreaterThan(33)
+    expect(lastAnsweredAt.usage_data_number, 'usage_data_number must have been answered at least once').toBeDefined()
+
+    const recheckNow = new Date(Date.parse(lastAnsweredAt.usage_data_number) + 31 * MS_PER_DAY)
+    const cooldowns = oldRowLimitedQuery(history, 33)
+    const reselected = selectQuestions({ thinness: ALWAYS_THIN, cooldowns, now: recheckNow })
+    expect(keysOf(reselected)).toContain('usage_data_number')
+  })
+
+  it('the fix: a time-windowed query (180d WHERE, THEN the row limit) correctly excludes usage_data_number 31 days after its own recent answer', () => {
+    const { history, lastAnsweredAt } = driveTenMonthlyRounds((h, now) => fixedWindowedQuery(h, now, 56))
+    expect(history.length, 'the seeded history must exceed the old 33-row bound').toBeGreaterThan(33)
+    expect(lastAnsweredAt.usage_data_number, 'usage_data_number must have been answered at least once').toBeDefined()
+
+    const recheckNow = new Date(Date.parse(lastAnsweredAt.usage_data_number) + 31 * MS_PER_DAY)
+    const cooldowns = fixedWindowedQuery(history, recheckNow, 56)
+    const reselected = selectQuestions({ thinness: ALWAYS_THIN, cooldowns, now: recheckNow })
+    expect(keysOf(reselected)).not.toContain('usage_data_number')
+  })
+})

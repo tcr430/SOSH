@@ -35,7 +35,8 @@ import { ratifyInterviewCandidates, type RatifyInterviewRoundResult } from '@/li
 import { readInterviewSlotRows } from '@/lib/memory/interview-coverage'
 import { computeSlotThinness } from '@/lib/interview/thinness'
 import { selectQuestions } from '@/lib/interview/select'
-import { INTERVIEW_BANK, INTERVIEW_BANK_SIZE, INTERVIEW_BANK_VERSION } from '@/lib/interview/bank'
+import { INTERVIEW_BANK, INTERVIEW_BANK_VERSION } from '@/lib/interview/bank'
+import { INTERVIEW_COOLDOWN_ROW_CAP } from '@/lib/interview/constants'
 import { extractInterviewRound } from '@/lib/interview/extract'
 import { mentionsPerformanceClaim } from '@/lib/interview/lexicon'
 import {
@@ -95,7 +96,7 @@ export async function startInterviewRoundAction(): Promise<ActionResult<StartInt
   const now = new Date()
   const [rows, cooldowns] = await Promise.all([
     readInterviewSlotRows(client, auth.businessId, now),
-    listInterviewCooldownRows(client, auth.businessId, INTERVIEW_BANK_SIZE),
+    listInterviewCooldownRows(client, auth.businessId, now, INTERVIEW_COOLDOWN_ROW_CAP),
   ])
   const thinness = computeSlotThinness(rows, now)
   const selected = selectQuestions({ thinness, cooldowns, now, bank: INTERVIEW_BANK })

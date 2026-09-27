@@ -790,4 +790,53 @@ describe('founder-interview lifecycle RPCs (ADR 0029 §5, §7.2, §9.2)', () => 
       expect(withBusiness.sort()).toEqual(['create_interview_round', 'snooze_interview'])
     })
   })
+
+  // ─── MAJOR-1 fix (Session 35-D · D3) — listInterviewCooldownRows, live Postgres ────────────────────────────
+  // The Reviewer reproduced a late-sorting question key's recent answer being dropped once a business's total
+  // answered/skipped row count passed ~33 (the old bank-size row-count LIMIT, ordered by question_key ASC).
+  // The fix windows the read by TIME (answered_at >= now - 180d) and only THEN applies a derived row cap
+  // (INTERVIEW_COOLDOWN_ROW_CAP = 56). This seeds 40 answered rows (> 33, < 56) directly — bypassing the
+  // lifecycle RPCs, since this test targets the READ, not round creation — for one business, with the
+  // alphabetically-LAST key answered most recently, and proves the member's own RLS client still gets it back.
+  describe('MAJOR-1 fix — the cooldown read survives a >33-row history (live Postgres)', () => {
+    it("returns a late-sorting key's recent row even past 33 total answered rows", async () => {
+      const w = await newWorld()
+      const TOTAL = 40
+      const roundIds: string[] = []
+      for (let r = 0; r < Math.ceil(TOTAL / 8); r++) {
+        const { rows } = await pg.query<{ id: string }>(
+          `INSERT INTO public.founder_interview_rounds (business_id, status, question_count, bank_version, created_by)
+           VALUES ($1, 'ratified', 8, 1, $2) RETURNING id`,
+          [w.businessId, w.owner],
+        )
+        roundIds.push(rows[0].id)
+      }
+      const lateKey = `interview-d3-key-${String(TOTAL - 1).padStart(3, '0')}`
+      for (let i = 0; i < TOTAL; i++) {
+        const roundId = roundIds[Math.floor(i / 8)]
+        const position = (i % 8) + 1
+        const key = `interview-d3-key-${String(i).padStart(3, '0')}`
+        const daysAgo = TOTAL - i // the alphabetically-LAST key (highest i) gets the SMALLEST daysAgo
+        await pg.query(
+          `INSERT INTO public.founder_interview_answers
+             (business_id, round_id, position, question_key, bank_version, slot_type, slot_category, status, answer_text, char_count, answered_by, answered_at)
+           VALUES ($1, $2, $3, $4, 1, 'brand', 'positioning', 'answered', 'x', 1, $5, now() - ($6 || ' days')::interval)`,
+          [w.businessId, roundId, position, key, w.owner, daysAgo],
+        )
+      }
+
+      const { createClient } = await import('@supabase/supabase-js')
+      const { data: userRow } = await admin.auth.admin.getUserById(w.owner)
+      const email = userRow.user.email as string
+      const client = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL as string, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string)
+      const { error: signInErr } = await client.auth.signInWithPassword({ email, password: PASSWORD })
+      expect(signInErr).toBeNull()
+
+      const { listInterviewCooldownRows } = await import('@/lib/db/founder-interview-answers')
+      const { INTERVIEW_COOLDOWN_ROW_CAP } = await import('@/lib/interview/constants')
+      const rows = await listInterviewCooldownRows(client, w.businessId, new Date(), INTERVIEW_COOLDOWN_ROW_CAP)
+      expect(rows.length, 'more rows were seeded than the OLD 33-row limit').toBeGreaterThan(33)
+      expect(rows.map((r) => r.question_key)).toContain(lateKey)
+    })
+  })
 })
