@@ -451,3 +451,36 @@ wording should be amended.
 ---
 
 Session 35 review complete - 21 findings (1 BLOCKER, 4 MAJOR, 9 MINOR, 7 NIT) over range bfb3bf72..5431fa84; 15/44 INTERVIEW-* constraints verified executed green in CI (Tier-1 rows 24/24, Tier-2 rows 0/18, Tier-3 rows 11/11 re-verified by me); Tier E: none declared, correctly.
+
+## CORRECTION PASS (Session 35-D)
+
+**Author:** Session 35-D correction pass · **Date:** 2026-09-27 · **Range fixed:** `5431fa84..<D11-sha>` (open; closes at D11)
+**Reviewed head:** `5431fa84` — the head the Reviewer read; only this pass's §4 and the report itself landed
+after it, at D0 (`a52ec87d`).
+**Founder adjudications consumed:** deferral permitted explicitly (founder, 2026-09-27); A-6 = PENDING;
+A-7 = PENDING (both required before D4 begins; not yet ruled at D1). A-1…A-5 stand. Dropping the MAJOR-3
+markers was available and not taken (build-guide §4).
+**Everything above this line is the Reviewer's. Everything below it is this pass's.**
+
+### D1 — MINOR-8 + MINOR-4 (code half) + NIT-7
+
+| Field | MINOR-8 | MINOR-4 (code half) | NIT-7 |
+|---|---|---|---|
+| **Finding** | MINOR-8 | MINOR-4 | NIT-7 |
+| **Fix** | Added a page-level Tier-2 test for `step-4/page.tsx` asserting it reads backfill candidates through the caller's own anon/RLS client (never `createServiceRoleClient`) via `listEvidenceCandidatesForRun`/`listAudienceCandidatesForRun`, and renders them via `BackfillPanel`. No production file changed. | Added a Tier-3 scan pinning (a) `write_interview_candidates` to its sole production file `lib/db/memory-interview.ts`, and (b) `storedText`/`storedSpan` production (a payload key or member assignment) to that file's choke point (`:112-122`) only — distinguished from `lib/interview/extract.ts`'s legitimate local re-validation copy in `isStorable()` (`:106-119`), which the detector does not flag. The ADR record that the stored forms are TS-trusted is D10's job (disposition table: "D1 + D10"). | Added a case with three existing records carrying distinct injection payloads (a fake `[/DATA]` closer, a plain instruction line, a zero-width-joined-key line) and asserted every one is neutralised, not just the first. |
+| **Proof** | `app/[locale]/(dashboard)/onboarding/step-4/page.test.tsx` (new file), both `it(...)` cases | `lib/interview/__tests__/source-scans.test.ts`, describe block `INTERVIEW-WRITER-SOLE-CALLER + stored-form choke point (ADR 0029 §2.3, MINOR-4, Session 35-D D1)` | `lib/ai/prompts/interview-extraction.test.ts`, `it('neutralises EVERY existing record, not just the first — three distinct injection payloads')` |
+| **Reddening** | Swapped `createClient()` / `'@/lib/supabase/server'` for `createServiceRoleClient()` / `'@/lib/supabase/service'` in `page.tsx` (import line, call-site line) → RED (suite failure: the page now reaches the service-role mock this test wires to throw). Reverted; `git diff --stat -- "app/[locale]/(dashboard)/onboarding/step-4/page.tsx"` empty. | (1) Planted `client.rpc('write_interview_candidates', {})` in `app/api/cron/interview-sweep/route.ts` → RED, naming that file as the second caller. Reverted; diff empty. (2) Planted an object literal `{ storedSpan: 'x' }` in `lib/interview/extract.ts` → RED, naming that file as a second producer. Reverted; diff empty. | Bypassed `neutralize()` for `input.existing` records at index > 0 in `lib/ai/prompts/interview-extraction.ts`'s `buildUserMessage` → RED (length assertions failed). Reverted; `git diff --stat -- lib/ai/prompts/interview-extraction.ts` empty. |
+| **Commit** | this commit (D1) | this commit (D1) | this commit (D1) |
+
+**What this step did NOT touch:** no production code; no plpgsql `neutralize`.
+
+**Full-suite confirmation (D1):** `npx tsc --noEmit --skipLibCheck` clean. `npm run lint`: 1 pre-existing
+error (`InterviewPanel.tsx:391:22`, `react-hooks/set-state-in-effect` — BLOCKER-1, D2's finding, untouched
+by this step) plus pre-existing warnings; no new lint error introduced. `npm run test:app` (CI env block):
+371 files / 5434 tests green (was 370/5427 at `5431fa84`; the delta is exactly this step's 2 + 4 + 1 new
+test cases across three files).
+
+**Note on `test:db` for this step:** D1 as authored here is scan-and-test-only over `app/`, `lib/ai/` and
+`lib/interview/` — it touches no `supabase/__tests__` file, no migration and no RLS/RPC behaviour, so there
+is nothing for this step to redden or re-run at Tier 1. `test:db`'s green result at `5431fa84` (107 files /
+1091 tests, skip-guard green) stands unchanged and is not re-claimed as re-executed by this step.

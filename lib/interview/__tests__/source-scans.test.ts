@@ -614,3 +614,73 @@ describe('INTERVIEW-PERFORMANCE-POLICY-UNCHANGED (ADR 0029 §2.4, constraint 14)
     expect(offenders, `scanned ${inRange.length} in-range migration(s)`).toEqual([])
   })
 })
+
+// ═══ INTERVIEW-WRITER-SOLE-CALLER (5) + the stored-form choke point — MINOR-4 (Session 35-D · D1) ═══
+// Session 35 review §1/§5 (MINOR-4): SQL grounding checks the RAW span but stores unchecked
+// storedText/storedSpan. Chosen remedy (build-guide §4 ledger): the stored forms are TS-TRUSTED, and
+// that trust is made enforceable by pinning BOTH (a) the RPC name to its one caller, and (b) the
+// PRODUCTION of storedText/storedSpan (as a payload key sent onward, not a local re-validation copy)
+// to that same file's choke point (lib/db/memory-interview.ts:112-122). The control is
+// memory-interview.test.ts's own literal RAW-vs-STORED cases ("sends the RAW text and span for the
+// SQL containment check and the NEUTRALISED forms for storage", :52-77, and the exact key set at
+// :103) — this scan does not re-test that invariant, only that nothing ELSE can produce it.
+//
+// lib/interview/extract.ts's isStorable() (:106-119) ALSO declares local consts named storedText /
+// storedSpan — deliberately: it recomputes the same neutralised length as a PRE-CHECK so an
+// oversized/blank stored form is dropped and counted before the writer would abort the whole atomic
+// write on it. That is a local, transient re-validation copy, never a payload key, and the detector
+// below must not conflate the two: it flags PRODUCTION (an object key or a member assignment), never
+// a `const`/`let` declaration. Known blind spot (ADR §10.3, matching this file's other scans): a
+// payload key built through computed-property syntax (`[name]: value`) or spread from another object.
+
+function findWriteInterviewCandidatesRpcRefs(source: string): string[] {
+  const code = stripTsComments(source)
+  return [...code.matchAll(/\bwrite_interview_candidates\b/g)].map((m) => m[0])
+}
+
+function findStoredFormProducers(source: string): string[] {
+  const code = stripTsComments(source)
+  const patterns = [/\bstoredText\s*:/g, /\bstoredSpan\s*:/g, /\.storedText\s*=(?!=)/g, /\.storedSpan\s*=(?!=)/g]
+  const hits: string[] = []
+  for (const p of patterns) for (const m of code.matchAll(p)) hits.push(m[0].trim())
+  return hits
+}
+
+function scanScopeFiles(): string[] {
+  const { files } = scannedRootFiles()
+  const dbFiles = collect(path.join(ROOT, 'lib', 'db'), isProdTs)
+  return [...new Set([...files, ...dbFiles])]
+}
+
+describe('INTERVIEW-WRITER-SOLE-CALLER + stored-form choke point (ADR 0029 §2.3, MINOR-4, Session 35-D D1)', () => {
+  it('the RPC-name detector flags the literal name and ignores comments (planted positive/negative)', () => {
+    expect(findWriteInterviewCandidatesRpcRefs("return callInterviewRpc('write_interview_candidates', {})")).toEqual(['write_interview_candidates'])
+    expect(findWriteInterviewCandidatesRpcRefs('// the ONLY TypeScript path onto write_interview_candidates')).toEqual([])
+  })
+
+  it('the stored-form detector flags a payload key or member assignment, but NOT a local re-validation const (planted positive/negative)', () => {
+    expect(findStoredFormProducers('storedText: neutralizeWithSentinels(item.text),')).toEqual(['storedText:'])
+    expect(findStoredFormProducers('storedSpan: neutralizeWithSentinels(item.span),')).toEqual(['storedSpan:'])
+    expect(findStoredFormProducers('row.storedText = neutralizeWithSentinels(x)')).toEqual(['.storedText ='])
+    expect(findStoredFormProducers('row.storedSpan = neutralizeWithSentinels(x)')).toEqual(['.storedSpan ='])
+    // the legitimate lib/interview/extract.ts isStorable() shape — a transient re-validation copy, not a producer
+    expect(findStoredFormProducers('const storedText = neutralizeWithSentinels(text)\nconst storedSpan = neutralizeWithSentinels(span)')).toEqual([])
+    // a read or a comparison is not a producer either
+    expect(findStoredFormProducers('if (row.storedText === expected) {}')).toEqual([])
+    expect(findStoredFormProducers('// storedText/storedSpan are the neutralised forms')).toEqual([])
+  })
+
+  it('write_interview_candidates appears in exactly ONE production file across the five roots + lib/db/: lib/db/memory-interview.ts', () => {
+    const files = scanScopeFiles()
+    expect(files.length, 'the scan matched too few files — it would pass vacuously').toBeGreaterThanOrEqual(ALL_ROOTS.length)
+    const offenders = files.filter((f) => findWriteInterviewCandidatesRpcRefs(fs.readFileSync(f, 'utf8')).length > 0)
+    expect(offenders.map(toRel)).toEqual(['lib/db/memory-interview.ts'])
+  })
+
+  it('storedText/storedSpan are produced only inside memory-interview.ts\'s choke point (:112-122), never elsewhere in the five roots + lib/db/', () => {
+    const files = scanScopeFiles()
+    expect(files.length, 'the scan matched too few files — it would pass vacuously').toBeGreaterThanOrEqual(ALL_ROOTS.length)
+    const offenders = files.filter((f) => findStoredFormProducers(fs.readFileSync(f, 'utf8')).length > 0)
+    expect(offenders.map(toRel)).toEqual(['lib/db/memory-interview.ts'])
+  })
+})
