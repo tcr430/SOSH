@@ -15,10 +15,11 @@ import path from 'node:path'
 // INTERVIEW-NO-EMAIL-KIND (33), INTERVIEW-NO-NEW-CAPABILITY (34), INTERVIEW-NO-NEW-SANITIZER (43).
 // INTERVIEW-WRITER-SOLE-CALLER (5) lives in lib/memory/import.test.ts, whose FORBIDDEN alternation
 // the ADR names; it is closed there.
-// AUTHORS the scan halves of INTERVIEW-NO-PERFORMANCE-WRITE (21), INTERVIEW-NO-VOICE-WRITE (23),
-// INTERVIEW-NO-UNATTENDED-ACTION (24) — these are ROOT-scoped and close only in M2.11, when all
-// five roots exist — INTERVIEW-EVIDENCE-PERMISSION-OFF (20, closes in M2.5 with its Tier-1 half)
-// and INTERVIEW-PERFORMANCE-POLICY-UNCHANGED (14, closes in M2.2 with its Tier-1 re-run).
+// CLOSES INTERVIEW-NO-PERFORMANCE-WRITE (21), INTERVIEW-NO-VOICE-WRITE (23),
+// INTERVIEW-NO-UNATTENDED-ACTION (24) — these are ROOT-scoped and close HERE, in M2.11, now that all
+// five roots exist (M2.1's authored scan half is unchanged; only the vacuity floor moved). Also
+// closed earlier: INTERVIEW-EVIDENCE-PERMISSION-OFF (20, M2.5's Tier-1 half) and
+// INTERVIEW-PERFORMANCE-POLICY-UNCHANGED (14, M2.2's Tier-1 re-run).
 
 const ROOT = process.cwd()
 const SKIP_DIRS = new Set(['node_modules', '.next', '.git', '__fixtures__', '.wolf', '.claude'])
@@ -86,9 +87,11 @@ function migrations(): { name: string; sql: string }[] {
 const BOUNDARY_MIGRATION = '20260924100000_apply_brief_proposals_exact_placement.sql'
 
 // ═══ The five ROOTS (ADR 0029 §10.3) ═════════════════════════════════════════
-// Only lib/interview/** exists at M2.1. The other four are PENDING and are NOT counted as
-// scanned — counting a scan over four empty directories as coverage would be a FALSE-GREEN
-// (ADR 0015). TODO(M2.11): every root must exist; raise the floor to all five and re-redden.
+// M2.11: all five roots now exist (lib/memory/interview.ts and lib/db/memory-interview.ts since
+// M2.5; app/**/interview/** since M2.10; app/api/cron/interview-sweep/** since M2.9). The floor is
+// raised: every root is scanned, none is PENDING. Counting a scan over an empty directory would be
+// a FALSE-GREEN (ADR 0015) — the test below now asserts every one of the five is non-empty, not
+// just accounted-for-as-pending.
 type RootName =
   | 'lib/interview/**'
   | 'lib/memory/interview.ts'
@@ -104,13 +107,9 @@ const ALL_ROOTS: RootName[] = [
   'app/api/cron/interview-sweep/**',
 ]
 
-// TODO(M2.11): the four roots below are created by M2.5 / M2.9 / M2.10; they close in M2.11.
-const PENDING_UNTIL_M2_11: RootName[] = [
-  'lib/memory/interview.ts',
-  'lib/db/memory-interview.ts',
-  'app/**/interview/**',
-  'app/api/cron/interview-sweep/**',
-]
+// M2.1-M2.10: these were PENDING until M2.11 closed all five roots. Kept as an empty list (not
+// deleted) so the "no root silently dropped" assertion below still has something to diff against.
+const PENDING_UNTIL_M2_11: RootName[] = []
 
 function appInterviewDirs(dir: string, out: string[] = []): string[] {
   if (!fs.existsSync(dir)) return out
@@ -150,18 +149,17 @@ function scannedRootFiles(): { scannedRoots: RootName[]; files: string[] } {
 }
 
 describe('INTERVIEW roots — the vacuity floor for the root-scoped scans (ADR 0029 §10.3)', () => {
-  it('lib/interview/** is a real, non-empty root, and the other four are recorded PENDING, never counted', () => {
+  it('M2.11: all FIVE roots are real, non-empty, and scanned — none PENDING, none silently dropped', () => {
     const { scannedRoots, files } = scannedRootFiles()
-    expect(rootFiles('lib/interview/**').length, 'lib/interview/** matched zero files — the scans would pass vacuously').toBeGreaterThanOrEqual(1)
-    expect(files.length).toBeGreaterThanOrEqual(1)
-    // Every root is either scanned or explicitly pending: none is silently dropped.
+    for (const root of ALL_ROOTS) {
+      expect(rootFiles(root).length, `${root} matched zero files — the scans would pass vacuously`).toBeGreaterThanOrEqual(1)
+    }
+    expect(scannedRoots).toHaveLength(ALL_ROOTS.length)
+    expect(files.length).toBeGreaterThanOrEqual(ALL_ROOTS.length)
+    // Every root is either scanned or explicitly pending: none is silently dropped. At M2.11 the
+    // pending list is empty, so this reduces to "every root is scanned."
     const accounted = new Set<RootName>([...scannedRoots, ...PENDING_UNTIL_M2_11])
     expect(accounted.size).toBe(ALL_ROOTS.length)
-    // A pending root that already exists is fine (a later step created it early) — but it is then
-    // scanned, not pending: the two lists must not contradict the tree.
-    for (const r of PENDING_UNTIL_M2_11) {
-      if (rootFiles(r).length > 0) expect(scannedRoots).toContain(r)
-    }
   })
 })
 
@@ -397,7 +395,7 @@ describe('INTERVIEW-NO-NEW-SANITIZER (ADR 0029 §6.2, constraint 43)', () => {
   })
 })
 
-// ═══ INTERVIEW-NO-PERFORMANCE-WRITE (21) — scan half, ROOT-scoped, closes M2.11 ═══
+// ═══ INTERVIEW-NO-PERFORMANCE-WRITE (21) — ROOT-scoped, CLOSED in M2.11 (all five roots) ═══
 // D-4: no interview code reaches performance_memory. Known blind spot (ADR §10.3): a write routed
 // through a generic helper outside the roots.
 
@@ -407,7 +405,7 @@ function findPerformanceWriteTokens(source: string): string[] {
   return [...code.matchAll(re)].map((m) => m[0])
 }
 
-describe('INTERVIEW-NO-PERFORMANCE-WRITE (ADR 0029 §4.7, D-4, constraint 21) — scan half', () => {
+describe('INTERVIEW-NO-PERFORMANCE-WRITE (ADR 0029 §4.7, D-4, constraint 21)', () => {
   it('the detector flags every performance-write token (planted violations)', () => {
     expect(findPerformanceWriteTokens("client.from('performance_memory').insert(x)")).toEqual(['performance_memory'])
     expect(findPerformanceWriteTokens("import { x } from '@/lib/db/memory-performance'")).toEqual(['memory-performance'])
@@ -422,15 +420,16 @@ describe('INTERVIEW-NO-PERFORMANCE-WRITE (ADR 0029 §4.7, D-4, constraint 21) �
     expect(findPerformanceWriteTokens('const performanceLexicon = ["reach"]')).toEqual([])
   })
 
-  it('the roots that exist today contain no performance-write token (pending roots close in M2.11)', () => {
-    const { files } = scannedRootFiles()
-    expect(files.length).toBeGreaterThanOrEqual(1)
+  it('ALL FIVE roots contain no performance-write token', () => {
+    const { files, scannedRoots } = scannedRootFiles()
+    expect(scannedRoots).toHaveLength(ALL_ROOTS.length)
+    expect(files.length).toBeGreaterThanOrEqual(ALL_ROOTS.length)
     const offenders = files.flatMap((f) => findPerformanceWriteTokens(fs.readFileSync(f, 'utf8')).map((t) => `${toRel(f)} -> ${t}`))
     expect(offenders).toEqual([])
   })
 })
 
-// ═══ INTERVIEW-NO-VOICE-WRITE (23) — scan half, ROOT-scoped, closes M2.11 ═════
+// ═══ INTERVIEW-NO-VOICE-WRITE (23) — ROOT-scoped, CLOSED in M2.11 (all five roots) ═══
 // L-1: an interview answer never writes brand_voices / brand_voice_variations. Known blind spot:
 // as above.
 
@@ -439,7 +438,7 @@ function findVoiceWriteTokens(source: string): string[] {
   return [...code.matchAll(/brand_voice\w*|upsertBrandVoice|addVariation|create_voice_variation/g)].map((m) => m[0])
 }
 
-describe('INTERVIEW-NO-VOICE-WRITE (ADR 0029 §1.2, L-1, constraint 23) — scan half', () => {
+describe('INTERVIEW-NO-VOICE-WRITE (ADR 0029 §1.2, L-1, constraint 23)', () => {
   it('the detector flags every voice-write token (planted violations)', () => {
     expect(findVoiceWriteTokens("client.from('brand_voices').update(x)")).toEqual(['brand_voices'])
     expect(findVoiceWriteTokens("client.from('brand_voice_variations').insert(x)")).toEqual(['brand_voice_variations'])
@@ -454,15 +453,16 @@ describe('INTERVIEW-NO-VOICE-WRITE (ADR 0029 §1.2, L-1, constraint 23) — scan
     expect(findVoiceWriteTokens("const positioning = 'brand positioning'")).toEqual([])
   })
 
-  it('the roots that exist today contain no voice-write token (pending roots close in M2.11)', () => {
-    const { files } = scannedRootFiles()
-    expect(files.length).toBeGreaterThanOrEqual(1)
+  it('ALL FIVE roots contain no voice-write token', () => {
+    const { files, scannedRoots } = scannedRootFiles()
+    expect(scannedRoots).toHaveLength(ALL_ROOTS.length)
+    expect(files.length).toBeGreaterThanOrEqual(ALL_ROOTS.length)
     const offenders = files.flatMap((f) => findVoiceWriteTokens(fs.readFileSync(f, 'utf8')).map((t) => `${toRel(f)} -> ${t}`))
     expect(offenders).toEqual([])
   })
 })
 
-// ═══ INTERVIEW-NO-UNATTENDED-ACTION (24) — scan half, ROOT-scoped, closes M2.11 ═══
+// ═══ INTERVIEW-NO-UNATTENDED-ACTION (24) — ROOT-scoped, CLOSED in M2.11 (all five roots) ═══
 // D-5: an answer becomes memory and NOTHING else. Interview roots import nothing from
 // lib/campaigns/ or lib/signals/, the brief / card / proposal DB modules, or a brief / card / seed
 // creator. Known blind spot (ADR §10.3): a Server Action outside the roots calling both.
@@ -483,7 +483,7 @@ function findUnattendedActionRefs(source: string, fileRel: string): string[] {
   return hits
 }
 
-describe('INTERVIEW-NO-UNATTENDED-ACTION (ADR 0029 §1.2, D-5, constraint 24) — scan half', () => {
+describe('INTERVIEW-NO-UNATTENDED-ACTION (ADR 0029 §1.2, D-5, constraint 24)', () => {
   const rel = 'lib/interview/probe.ts'
 
   it('the detector flags every import and call shape (planted violations)', () => {
@@ -504,9 +504,10 @@ describe('INTERVIEW-NO-UNATTENDED-ACTION (ADR 0029 §1.2, D-5, constraint 24) �
     expect(findUnattendedActionRefs("import { x } from '@/lib/campaignsish/y'", rel)).toEqual([])
   })
 
-  it('the roots that exist today reach no campaign, signal, brief or card code (pending roots close in M2.11)', () => {
-    const { files } = scannedRootFiles()
-    expect(files.length).toBeGreaterThanOrEqual(1)
+  it('ALL FIVE roots reach no campaign, signal, brief or card code', () => {
+    const { files, scannedRoots } = scannedRootFiles()
+    expect(scannedRoots).toHaveLength(ALL_ROOTS.length)
+    expect(files.length).toBeGreaterThanOrEqual(ALL_ROOTS.length)
     const offenders = files.flatMap((f) => findUnattendedActionRefs(fs.readFileSync(f, 'utf8'), toRel(f)).map((t) => `${toRel(f)} -> ${t}`))
     expect(offenders).toEqual([])
   })

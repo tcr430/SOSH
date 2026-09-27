@@ -64,6 +64,21 @@ actioned before its trigger fires, and each *must* be actioned when it does.
 
 **Resolved (Session 32-D D12, 2026-09-19):** `30.5-DBTESTS-READINESS-RACE` — the workflow now shadows the broken `17.6.1.111` image tag with `17.6.1.113` and fails unless the DB container runs it; db-tests green at `15beb540` (run 35436865202, 62 files / 452 tests). Un-defer trigger for removing the shim: a stable CLI release whose default image is >= 17.6.1.113.
 
+**Session 35 (ADR 0029 §12, founder input engine) — every deferral, each with its owner:**
+
+| ID | Item | Owner | Un-defer trigger |
+|----|------|-------|------------------|
+| **35-CROSS-TYPE-RETRIEVAL** | Cross-type memory retrieval, widening `MemoryQueryContext`, cross-writer contradiction resolution | Track L | Track L's own ADR |
+| **35-MEMORY-MGMT-UI** | A general memory-management UI (edit/retire any row) and its own gated write path | Track L or a later session | that session's ADR |
+| **35-VOICE-NOTE-ANSWERS** | Voice-note and transcript answers to interview questions | T2-B (`pre-launch-scope.md` §12.3) | the T2-B session, with its own counsel line |
+| **35-ANSWERS-TO-BRIEFS** | Turning interview answers into cards or briefs directly | `docs/ideas.md` §2.2 ruling R2 / `pre-launch-scope.md` §12.7's gate | that session |
+| **35-EVIDENCE-PERMISSION-ON** | Enabling `public_use_permission` on interview-sourced evidence | Counsel, ADR 0025 A-6 | counsel-approved copy in three locales |
+| **35-EMAIL-KIND-REMINDER** | A seventh `EmailKind` (an interview-reminder email) | A follow-on (A-5) | round completion < 40% over the first 20 due rounds |
+| **35-BUDGET-PURPOSE-FIFTH** | A fifth `ai_budget_daily` purpose for interview spend | A follow-on (A-4) | interview spend observed above the §7.2 ceilings, or on-demand rounds added |
+| **35-TIER-E-EXTRACTION-FIDELITY** | A Tier-E extraction-fidelity eval (does the model's extraction track what founders actually meant) | A follow-on | edit rate > 30% over >= 10 ratified rounds |
+| **35-BRIEF-RETRIEVAL-INSTRUMENTATION** | Instrumenting which memory ids a campaign brief actually used, so interview-sourced retrieval becomes MEASURED rather than NOT MEASURED (ADR §10.5) | A follow-on | **Already met**: M2.0's grounding pass (2026-09-27) confirmed `lib/campaigns/brief.ts` / `lib/db/campaign-briefs.ts` record no memory ids today — the trigger condition is live, no instrumentation was added this session per the ADR's own instruction |
+| **35-ON-DEMAND-ROUNDS** | On-demand ("ask me more") interview rounds outside the 30-day cadence | A follow-on | founder request; changes the §7 cost bound |
+
 ---
 
 ## 3. Post-launch / deferred (no trigger)

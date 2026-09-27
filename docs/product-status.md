@@ -111,8 +111,11 @@ voice"* genuinely closes.
 - **Video generation** — explicitly post-launch.
 - **Additional content sources** — Notion, Slack, Linear, call transcripts, support tickets. Only GitHub
   and RSS exist.
-- **A way to get information out of the founder's head** — everything Jemip knows comes from the website,
-  from published posts, or from watched sources. There is no interview or input mechanism.
+- **A way to get information out of the founder's head** — built (ADR 0029, Session 35): a periodic
+  in-app interview asks 5-8 questions drawn from thin spots in memory, extraction turns answers into
+  candidate brand/audience/evidence records via Claude, and a human ratifies each one before it enters
+  any prompt. Not yet reviewed: M3 (the independent Reviewer session) and its correction pass have not
+  run, and no production OAuth registration means no real founder has completed a round end-to-end.
 
 ---
 

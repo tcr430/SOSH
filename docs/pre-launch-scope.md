@@ -259,7 +259,7 @@ Launch when **all** of these hold:
 - [ ] **T1-A** engagement inbox shipped, with its counsel work closed
 - [ ] **T1-B** analytics surface + monthly report shipped
 - [ ] **T1-C** template carousels shipped
-- [ ] **T1-D** founder input engine shipped
+- [ ] **T1-D** founder input engine shipped — Session 35 (ADR 0029) M2.1-M2.11 (Builder) complete and locally green (`docs/current-phase.md`); M3 (independent Reviewer) and the correction pass have **not** run yet. Not checked until M3 closes.
 - [ ] **T1-E** founder/personal profile support shipped (promoted from T2-A, §12.2)
 - [ ] Sessions 31–34 closed (or explicitly descoped, in writing, with what is lost recorded)
 - [ ] Every Tier-2 item is **either shipped or explicitly deferred with a named un-defer trigger**

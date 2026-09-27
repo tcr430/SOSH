@@ -869,6 +869,15 @@ Every policy that exists uses the InitPlan-wrapped form. Neither table has an UP
   check, calls the existing voice writers (`upsertBrandVoice` or the `create_voice_variation` path), and then
   performs the conditional run-row UPDATE in §4.2.
 
+**Note (2026-09-27, Session 35, ADR 0029 §8.5):** `ratify_backfill_run`'s approver-or-admin predicate now has a
+second consumer, `ratify_interview_round`. The predicate is **copied**, not shared (each RPC re-implements the
+same `business_members` check independently — ADR 0029 §2.5 records this explicitly as "copied, not a call
+into it," since `user_can` cannot run under the service-role client that both RPCs use). The UX built around it
+is **deliberately not** shared: this backfill flow's accept-all-per-group affordance (§10.3, justified there by
+40+ import candidates from a two-year history) is the interview flow's named **loser** (ADR 0029 §8.4) — an
+interview round tops out at 24 candidates and ADR 0027 §6.5 found bulk accept there is friction, not a gate, so
+`ratify_interview_round` requires a decision on every candidate with no bulk verb.
+
 ---
 
 ## 10. Onboarding UX contract (specified, not designed)
