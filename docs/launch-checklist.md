@@ -133,6 +133,11 @@ Setup runbook: `docs/build-guide/runbooks/qstash-setup.md`
     schedule.** `/api/cron/backfill` exists and is bounded (one queued/fetching/extracting run's worth
     of work per tick), but no schedule entry has been added to `qstash-setup.md` or provisioned in the
     Upstash console. Owed before backfill can run unattended in production.
+  - **interview-sweep (`0 5 * * *`, daily — ADR 0029 §5.4, Session 35 M2.9) — NOT YET CREATED as a QStash
+    schedule.** `/api/cron/interview-sweep` exists (dual-auth, no model call: failed-stuck transition,
+    round expiry, answer/span redaction, retired-candidate deletion per §6.3) but no schedule entry has
+    been added to `qstash-setup.md` or provisioned in the Upstash console. Retention must not depend on
+    the founder returning, so this is owed before the interview feature can run unattended in production.
 - [ ] **Email cron schedules visible** in Upstash console: `drain-email-outbox` (`* * * * *`) and `trial-warnings` (`0 9 * * *`), status Active.
 - [ ] **First production tick observed** in Vercel logs with `triggeredBy: 'qstash'`:
   - `/api/cron/publish` — look for `{"kind":"publish-tick","triggeredBy":"qstash",...}` within 10 minutes of deploy.

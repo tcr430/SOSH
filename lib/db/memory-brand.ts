@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { BrandMemoryRow } from './types'
-import { INTERVIEW_THINNESS_ROW_LIMIT } from '@/lib/interview/constants'
+import { INTERVIEW_CANDIDATES_LIMIT_PER_TABLE, INTERVIEW_THINNESS_ROW_LIMIT } from '@/lib/interview/constants'
 import { getErrorMessage } from './utils'
 import { MEMORY_CANDIDATE_LIMIT } from './memory-constants'
 
@@ -51,4 +51,31 @@ export async function listBrandSlotRows(
     .limit(limit)
   if (error) throw new Error(getErrorMessage(error))
   return (data as BrandSlotRow[] | null) ?? []
+}
+
+// ADR 0029 §8.4/§9.5 (Session 35 M2.9) — the ratification read: one round's brand candidates, via the
+// `brand_memory_interview_answer_id_idx` (interview_answer_id IN ...), scoped a second time by
+// source = 'interview' and status = 'candidate' (the writer's own invariant, re-checked, not trusted).
+// Bounded (limit 24 = INTERVIEW_CANDIDATES_LIMIT_PER_TABLE — a round never proposes more). ORDER BY
+// created_at: the index covers the equality filter, not this table's sort key, so this is an accepted
+// scan within one round's candidates (at most 24 rows), the same trade-off as [db-NIT-3] elsewhere in this
+// file. The caller's client (RLS applies); `answerIds` comes from the round's OWN answers
+// (listAnswersForRound), never from client input directly.
+export async function listBrandInterviewCandidates(
+  client: SupabaseClient,
+  answerIds: string[],
+  limit = INTERVIEW_CANDIDATES_LIMIT_PER_TABLE,
+): Promise<BrandMemoryRow[]> {
+  if (answerIds.length === 0) return []
+  const { data, error } = await client
+    .from('brand_memory')
+    .select('*')
+    .in('interview_answer_id', answerIds)
+    .eq('source', 'interview')
+    .eq('status', 'candidate')
+    .is('deleted_at', null)
+    .order('created_at', { ascending: true })
+    .limit(limit)
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as BrandMemoryRow[] | null) ?? []
 }

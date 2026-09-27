@@ -10,6 +10,7 @@ import {
   FounderInterviewRpcError,
   claimInterviewExtraction,
   createInterviewRound,
+  getInterviewRoundById,
   getLatestInterviewRound,
   listInterviewRoundsForBusiness,
   reconcileInterviewSpend,
@@ -67,6 +68,25 @@ describe('INTERVIEW-BOUNDED-QUERIES — founder-interview-rounds reads', () => {
     expect(calls(found.builder.order)).toEqual([['created_at', { ascending: false }]])
     const none = createMockClient([], null)
     expect(await getLatestInterviewRound(none.client, 'biz-1')).toBeNull()
+  })
+
+  it('getInterviewRoundById reads a single round by id, on the caller client (RLS-scoped)', async () => {
+    const { client, builder, from } = createMockClient({ id: 'r-1', business_id: 'biz-1' }, null)
+    const row = await getInterviewRoundById(client, 'r-1')
+    expect(from).toHaveBeenCalledWith('founder_interview_rounds')
+    expect(builder.eq).toHaveBeenCalledWith('id', 'r-1')
+    expect(builder.maybeSingle).toHaveBeenCalled()
+    expect(row).toEqual({ id: 'r-1', business_id: 'biz-1' })
+  })
+
+  it('getInterviewRoundById returns null for an unknown or cross-tenant round (RLS filters it out)', async () => {
+    const { client } = createMockClient(null, null)
+    expect(await getInterviewRoundById(client, 'r-missing')).toBeNull()
+  })
+
+  it('getInterviewRoundById throws on a database error', async () => {
+    const { client } = createMockClient(null, { message: 'boom' })
+    await expect(getInterviewRoundById(client, 'r-1')).rejects.toThrow('boom')
   })
 
   it('a database error throws, never returns a partial list', async () => {

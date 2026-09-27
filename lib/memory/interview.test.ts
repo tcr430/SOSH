@@ -4,9 +4,21 @@ import path from 'node:path'
 import { ZodError } from 'zod'
 
 vi.mock('@/lib/db/memory-interview', () => ({ writeInterviewCandidates: vi.fn(), ratifyInterviewRound: vi.fn() }))
+vi.mock('@/lib/db/memory-brand', () => ({ listBrandInterviewCandidates: vi.fn() }))
+vi.mock('@/lib/db/memory-audience', () => ({ listAudienceInterviewCandidates: vi.fn() }))
+vi.mock('@/lib/db/memory-evidence', () => ({ listEvidenceInterviewCandidates: vi.fn() }))
 
 import { ratifyInterviewRound, writeInterviewCandidates } from '@/lib/db/memory-interview'
-import { ratifyInterviewCandidates, recordInterviewCandidates, type RatifyInterviewCandidatesInput, type RecordInterviewCandidatesInput } from './interview'
+import { listBrandInterviewCandidates } from '@/lib/db/memory-brand'
+import { listAudienceInterviewCandidates } from '@/lib/db/memory-audience'
+import { listEvidenceInterviewCandidates } from '@/lib/db/memory-evidence'
+import {
+  listInterviewCandidatesForRound,
+  ratifyInterviewCandidates,
+  recordInterviewCandidates,
+  type RatifyInterviewCandidatesInput,
+  type RecordInterviewCandidatesInput,
+} from './interview'
 
 // ADR 0029 §2.3 / §6.1 (Tier 2): lib/memory/interview.ts is the strict gate in front of the writer. A field the schema does
 // not name is REJECTED — confidence, status, source, public_use_permission, sensitivity, scope, scope_ref, expires_at,
@@ -290,5 +302,23 @@ describe('the barrel (lib/memory/index.ts) and the module boundary', () => {
     const src = fs.readFileSync(path.join(process.cwd(), 'lib', 'memory', 'interview.ts'), 'utf8')
     expect(src).not.toMatch(/from '@\/lib\/(?:campaigns|signals)/)
     expect(src).not.toMatch(/performance_memory|brand_voice/)
+  })
+})
+
+// ADR 0029 §8.4/§9.5 (Session 35 M2.9) — the ratification read: MEM-NO-DIRECT-TABLE-ACCESS routes it
+// through here, merging the three per-table bounded reads by type for the ratification UI.
+describe('listInterviewCandidatesForRound', () => {
+  it('reads all three tables in parallel with the same answerIds and groups the result by type', async () => {
+    vi.mocked(listBrandInterviewCandidates).mockResolvedValue([{ id: 'b1' }] as never)
+    vi.mocked(listAudienceInterviewCandidates).mockResolvedValue([{ id: 'a1' }, { id: 'a2' }] as never)
+    vi.mocked(listEvidenceInterviewCandidates).mockResolvedValue([] as never)
+
+    const client = {} as never
+    const result = await listInterviewCandidatesForRound(client, [A1, A2])
+
+    expect(listBrandInterviewCandidates).toHaveBeenCalledWith(client, [A1, A2])
+    expect(listAudienceInterviewCandidates).toHaveBeenCalledWith(client, [A1, A2])
+    expect(listEvidenceInterviewCandidates).toHaveBeenCalledWith(client, [A1, A2])
+    expect(result).toEqual({ brand: [{ id: 'b1' }], audience: [{ id: 'a1' }, { id: 'a2' }], evidence: [] })
   })
 })

@@ -32,8 +32,11 @@ export { retrieveVoice, type CoreVoiceRules } from './voice'
 export {
   recordInterviewCandidates,
   ratifyInterviewCandidates,
+  listInterviewCandidatesForRound,
   type RecordInterviewCandidatesInput,
   type RatifyInterviewCandidatesInput,
+  type InterviewCandidatesByType,
+  type RatifyInterviewRoundResult,
 } from './interview'
 export { readInterviewSlotRows } from './interview-coverage'
 export { readInterviewConflictContext, type InterviewConflictRecord } from './interview-conflicts'

@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 import {
   ratifyInterviewRound,
@@ -5,6 +6,12 @@ import {
   type RatifyInterviewRoundResult,
   type WriteInterviewCandidatesResult,
 } from '@/lib/db/memory-interview'
+
+export type { RatifyInterviewRoundResult, WriteInterviewCandidatesResult }
+import { listBrandInterviewCandidates } from '@/lib/db/memory-brand'
+import { listAudienceInterviewCandidates } from '@/lib/db/memory-audience'
+import { listEvidenceInterviewCandidates } from '@/lib/db/memory-evidence'
+import type { AudienceMemoryRow, BrandMemoryRow, EvidenceMemoryRow } from '@/lib/db/types'
 import {
   INTERVIEW_EVIDENCE_TEXT_MAX_CHARS,
   INTERVIEW_MAX_ITEMS_PER_ANSWER,
@@ -158,6 +165,23 @@ export type RatifyInterviewCandidatesInput = z.input<typeof ratifyInputSchema>
 // counters, `not_awaiting` for a round that is not awaiting ratification — a no-op that wrote nothing — or `not_found`); a
 // ZodError for input that fails the strict schema (nothing is sent); a FounderInterviewRpcError (42501) for a caller who is
 // not an approver or admin of the round's business, or (22023) for a decision set the database rejects.
+export type InterviewCandidatesByType = { brand: BrandMemoryRow[]; audience: AudienceMemoryRow[]; evidence: EvidenceMemoryRow[] }
+
+// ADR 0029 §8.4/§9.5 (Session 35 M2.9) — the ratification READ: one round's still-'candidate',
+// source='interview' rows across the three memory tables, grouped by type for the ratification UI. MEM-NO-
+// DIRECT-TABLE-ACCESS: the /interview page and its Server Actions call THIS, never lib/db/memory-*.ts
+// directly. `answerIds` is the round's OWN answer ids (from listAnswersForRound), never client input; each
+// underlying read is independently bounded (24 per table, §9.5) and re-checks source/status itself rather
+// than trusting the caller.
+export async function listInterviewCandidatesForRound(client: SupabaseClient, answerIds: string[]): Promise<InterviewCandidatesByType> {
+  const [brand, audience, evidence] = await Promise.all([
+    listBrandInterviewCandidates(client, answerIds),
+    listAudienceInterviewCandidates(client, answerIds),
+    listEvidenceInterviewCandidates(client, answerIds),
+  ])
+  return { brand, audience, evidence }
+}
+
 export async function ratifyInterviewCandidates(input: RatifyInterviewCandidatesInput): Promise<RatifyInterviewRoundResult> {
   const parsed = ratifyInputSchema.parse(input)
   return ratifyInterviewRound({

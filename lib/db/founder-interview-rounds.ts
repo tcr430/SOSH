@@ -162,3 +162,15 @@ export async function getLatestInterviewRound(client: SupabaseClient, businessId
   const rows = await listInterviewRoundsForBusiness(client, businessId, 1)
   return rows[0] ?? null
 }
+
+// ADR 0029 §8.5/§9.2 (Session 35 M2.9) — a single round BY ID, for the Server Actions that take a round id
+// from the client (submit, skip, retry, ratify). The caller's client, so the member SELECT policy (§9.2)
+// scopes it: a round belonging to another tenant returns null here, never another business's row. This is
+// a UX/defence-in-depth read only — the RPCs (M2.4-M2.6) derive business_id from the round themselves and
+// are the real enforcement (§2.5); a null here just lets the Action fail fast with a typed `not_found`
+// instead of paying a round-trip to the RPC to learn the same thing.
+export async function getInterviewRoundById(client: SupabaseClient, roundId: string): Promise<FounderInterviewRoundRow | null> {
+  const { data, error } = await client.from('founder_interview_rounds').select('*').eq('id', roundId).maybeSingle()
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as FounderInterviewRoundRow | null) ?? null
+}

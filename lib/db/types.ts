@@ -1185,7 +1185,20 @@ export type BusinessMemberUpdate = Partial<
 //     audience_memory, performance_memory
 // ---------------------------------------------------------------------------
 
-export type MemorySource = 'manual' | 'distilled' | 'import'
+export type MemorySource = 'manual' | 'distilled' | 'import' | 'interview'
+
+// ADR 0029 §2.2/§2.3 (Session 35 M2.9) — the interview provenance columns added to brand_memory,
+// audience_memory and evidence_memory ONLY (20260925110000_founder_interview_schema.sql). NULL on every
+// non-interview row; `(source = 'interview') = (interview_answer_id IS NOT NULL)` and the equivalent
+// marker CHECK for interview_extracted_text are enforced in SQL, not here. interview_span is NULL once
+// retention redacts it (§6.3), replaced by a non-null interview_span_redacted_at.
+type MemoryInterviewProvenance = {
+  interview_answer_id: string | null
+  interview_span: string | null
+  interview_span_redacted_at: string | null
+  interview_extracted_text: string | null
+  interview_edited: boolean
+}
 export type MemoryStatus = 'candidate' | 'active' | 'retired'
 export type MemorySensitivity = 'public' | 'internal' | 'confidential'
 export type MemoryScope = 'brand' | 'campaign' | 'platform' | 'contact'
@@ -1223,14 +1236,14 @@ type MemoryGovernanceRow = {
 
 export type BrandMemoryCategory = 'positioning' | 'capability' | 'pricing' | 'competitor' | 'other'
 
-export type BrandMemoryRow = MemoryGovernanceRow & {
+export type BrandMemoryRow = MemoryGovernanceRow & MemoryInterviewProvenance & {
   category: BrandMemoryCategory
   statement: string
 }
 
 export type EvidenceMemoryKind = 'quote' | 'case_study' | 'usage_data' | 'other'
 
-export type EvidenceMemoryRow = MemoryGovernanceRow & {
+export type EvidenceMemoryRow = MemoryGovernanceRow & MemoryInterviewProvenance & {
   kind: EvidenceMemoryKind
   content: string
   source_url: string | null
@@ -1238,7 +1251,7 @@ export type EvidenceMemoryRow = MemoryGovernanceRow & {
 
 export type AudienceMemoryKind = 'problem' | 'objection' | 'question' | 'trigger' | 'other'
 
-export type AudienceMemoryRow = MemoryGovernanceRow & {
+export type AudienceMemoryRow = MemoryGovernanceRow & MemoryInterviewProvenance & {
   segment: string | null
   kind: AudienceMemoryKind
   statement: string

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { EvidenceMemoryRow, EvidenceMemoryImportInsert } from './types'
-import { INTERVIEW_THINNESS_ROW_LIMIT } from '@/lib/interview/constants'
+import { INTERVIEW_CANDIDATES_LIMIT_PER_TABLE, INTERVIEW_THINNESS_ROW_LIMIT } from '@/lib/interview/constants'
 import { getErrorMessage } from './utils'
 import { MEMORY_CANDIDATE_LIMIT } from './memory-constants'
 import { neutralizeWithSentinels } from '@/lib/ai/wrap-evidence'
@@ -141,4 +141,25 @@ export async function listEvidenceSlotRows(
     .limit(limit)
   if (error) throw new Error(getErrorMessage(error))
   return (data as EvidenceSlotRow[] | null) ?? []
+}
+
+// ADR 0029 §8.4/§9.5 (Session 35 M2.9) — the ratification read, evidence half. See
+// listBrandInterviewCandidates (memory-brand.ts) for the shape and the ORDER BY rationale.
+export async function listEvidenceInterviewCandidates(
+  client: SupabaseClient,
+  answerIds: string[],
+  limit = INTERVIEW_CANDIDATES_LIMIT_PER_TABLE,
+): Promise<EvidenceMemoryRow[]> {
+  if (answerIds.length === 0) return []
+  const { data, error } = await client
+    .from('evidence_memory')
+    .select('*')
+    .in('interview_answer_id', answerIds)
+    .eq('source', 'interview')
+    .eq('status', 'candidate')
+    .is('deleted_at', null)
+    .order('created_at', { ascending: true })
+    .limit(limit)
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as EvidenceMemoryRow[] | null) ?? []
 }
