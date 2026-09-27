@@ -484,3 +484,34 @@ test cases across three files).
 `lib/interview/` — it touches no `supabase/__tests__` file, no migration and no RLS/RPC behaviour, so there
 is nothing for this step to redden or re-run at Tier 1. `test:db`'s green result at `5431fa84` (107 files /
 1091 tests, skip-guard green) stands unchanged and is not re-claimed as re-executed by this step.
+
+### D2 — BLOCKER-1 (code half) + NIT-1
+
+| Field | BLOCKER-1 (code half) | NIT-1 |
+|---|---|---|
+| **Finding** | BLOCKER-1 | NIT-1 |
+| **Fix** | Moved the 80%/100% counter announcement out of a `useEffect` (`react-hooks/set-state-in-effect`) and into the textarea's own change handler (`InterviewQuestionCard`'s new `handleDraftChange`), which compares the PREVIOUS render's crossing booleans (`crossedFull`/`crossed80`, closed over) against the NEXT draft's and sets the announcement only on an upward flip. Removed the effect and both `eslint-disable-next-line react-hooks/exhaustive-deps` comments (the one on the announcement effect; the file's other pre-existing `useEffect` at `:269` is untouched and out of scope). The live region stays `aria-live="polite"`; no per-keystroke re-derivation from `remaining`. **CI proof that `app-tests` actually executes green is D11's job** — this row closes only the code half. | Extracted the inline comment-stripper in `extract.test.ts`'s trial-layer source scan into a named `stripComments()` function and changed `.split('\n')` to `.split(/\r?\n/)`, so a CRLF-terminated line's trailing `\r` is removed by the split itself rather than left for `/\/\/.*$/` (no `m` flag) to strip — `.` in a JS regex never matches `\r`, so the old split left the comment un-stripped on any `core.autocrlf=true` checkout (this repo's Windows setting, CLAUDE.md). |
+| **Proof** | `app/[locale]/(dashboard)/interview/InterviewPanel.test.tsx`, describe block `"the character counter's live region announces politely at 80% and 100%, not per keystroke (§8.7)"`, the tightened assertion at the >=80%/<100% step (now an exact `toBe`, proving the text is byte-identical, not just containing the substring) | `lib/interview/extract.test.ts`, `it('strips a trailing-// comment on a CRLF-terminated line (regression: core.autocrlf=true checkouts)')` |
+| **Reddening** | Restored per-keystroke re-derivation (dropped the `!crossedFull` / `!crossed80` upward-flip guards) → RED: `expected 'ui.question.counter_80:{"remaining":300}' to be '...:{"remaining":400}'` (re-derived from the live draft length instead of staying stale). Reverted; `git diff --stat -- "app/[locale]/(dashboard)/interview/InterviewPanel.tsx"` shows only the intended 24-line fix (confirmed via the two test runs bracketing the mutation, both otherwise identical). | Reverted the split back to `.split('\n')` → RED: `expected '...trial-state here...' not to contain 'trial-state'` (the CRLF line survived un-stripped, reproducing NIT-1 exactly). Reverted; `git diff --stat -- lib/interview/extract.test.ts` after restore matches the intended fix only. |
+| **Commit** | this commit (D2) — CI proof at D11 | this commit (D2) |
+
+**Additional verification (beyond the standard loop):** the fix was also proven against a **genuine
+CRLF-terminated** copy of `lib/interview/extract.ts` / `extract.test.ts` (converted with `sed`, confirmed
+via `cat -A` showing `^M` line endings), not just a fixture string — `npx vitest run lib/interview/extract.test.ts`
+against that CRLF-converted worktree: 56/56 green. Both files were then restored to the repo's tracked LF
+form; `git diff --stat` afterwards shows only the intended source changes (a clean round-trip).
+
+**`npx eslint` over the whole repo, quoted:** `✖ 112 problems (0 errors, 112 warnings)` — zero errors,
+down from the 1 error (`BLOCKER-1`) present before this step.
+
+**What this step did NOT touch:** the live region's politeness (`aria-live="polite"`) and copy keys are
+unchanged; no `eslint-disable` was added anywhere; the file's other pre-existing `useEffect` (`:269`,
+unrelated to the counter) and its own lint warning (`Unused eslint-disable directive`, line 271) are
+untouched — that warning pre-dates this step and is out of BLOCKER-1's scope.
+
+**Full-suite confirmation (D2):** `npx tsc --noEmit --skipLibCheck` clean. `npm run test:app` (CI env
+block): 371 files / 5435 tests green (was 371/5434 after D1; the delta is exactly NIT-1's one new regression
+test — the InterviewPanel change tightened an existing assertion rather than adding a new one).
+
+**Note on `test:db` for this step:** D2 touches no migration and no `supabase/__tests__` file; `test:db`'s
+green result at `5431fa84` stands unchanged and is not re-claimed as re-executed by this step.

@@ -383,14 +383,29 @@ describe('INTERVIEW-TRIAL-UNTOUCHED (§5.7)', () => {
     }
   })
 
-  it('the orchestrator never imports the trial-state layer (source scan)', () => {
-    const source = fs
-      .readFileSync(path.join(process.cwd(), 'lib', 'interview', 'extract.ts'), 'utf8')
+  // Session 35-D · D2 (NIT-1) — stripComments is its own function (not inlined) so the CRLF case below can
+  // exercise it directly. Split on /\r?\n/, not '\n': on a core.autocrlf=true checkout (this repo's Windows
+  // setting) a bare '\n' split leaves a trailing \r on every line, and `.` in a JS regex never matches \r, so
+  // `/\/\/.*$/` (no `m` flag) can't reach `$` and the comment survives unstripped.
+  function stripComments(source: string): string {
+    return source
       .replace(/\/\*[\s\S]*?\*\//g, '')
-      .split('\n')
+      .split(/\r?\n/)
       .map((line) => line.replace(/\/\/.*$/, ''))
       .join('\n') // comments may NAME the trial layer; code may not use it
+  }
+
+  it('the orchestrator never imports the trial-state layer (source scan)', () => {
+    const source = stripComments(fs.readFileSync(path.join(process.cwd(), 'lib', 'interview', 'extract.ts'), 'utf8'))
     expect(source).not.toMatch(/trial-state|posts_generated|incrementPostsGenerated|incrementBrandVoiceAttempts|trial_state/)
+  })
+
+  it('strips a trailing-// comment on a CRLF-terminated line (regression: core.autocrlf=true checkouts)', () => {
+    const crlf = "const x = 1 // mentions trial-state here\r\nconst y = 2\r\n"
+    const stripped = stripComments(crlf)
+    expect(stripped).not.toContain('trial-state')
+    expect(stripped).toContain('const x = 1')
+    expect(stripped).toContain('const y = 2')
   })
 })
 

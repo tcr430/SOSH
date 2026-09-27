@@ -385,13 +385,21 @@ function InterviewQuestionCard({
   const crossedFull = pct >= 100
   const crossed80 = pct >= 80
 
-  // §8.7: the counter is announced POLITELY at 80% and 100% only — the effect's dependency array keys on the
-  // two BOOLEAN crossings, not on draft.length, so it never re-fires per keystroke.
-  useEffect(() => {
-    if (crossedFull) setAnnouncement(t('ui.question.counter_full'))
-    else if (crossed80) setAnnouncement(t('ui.question.counter_80', { remaining: Math.max(0, INTERVIEW_ANSWER_MAX_CHARS - draft.length) }))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [crossed80, crossedFull])
+  // §8.7: the counter is announced POLITELY at 80% and 100% only, on an UPWARD crossing — detected in the
+  // CHANGE HANDLER by comparing the previous render's crossing state (crossedFull/crossed80, closed over from
+  // this render) against the next draft's, never derived from `remaining` during render (that would re-announce
+  // every keystroke). No effect, so no dependency array and no eslint-disable.
+  function handleDraftChange(nextValue: string) {
+    const nextPct = (nextValue.length / INTERVIEW_ANSWER_MAX_CHARS) * 100
+    const nextCrossedFull = nextPct >= 100
+    const nextCrossed80 = nextPct >= 80
+    if (nextCrossedFull && !crossedFull) {
+      setAnnouncement(t('ui.question.counter_full'))
+    } else if (nextCrossed80 && !nextCrossedFull && !crossed80) {
+      setAnnouncement(t('ui.question.counter_80', { remaining: Math.max(0, INTERVIEW_ANSWER_MAX_CHARS - nextValue.length) }))
+    }
+    onDraftChange(nextValue)
+  }
 
   return (
     <div className="space-y-2">
@@ -405,7 +413,7 @@ function InterviewQuestionCard({
         id={id}
         ref={textareaRef}
         value={draft}
-        onChange={(e) => onDraftChange(e.target.value)}
+        onChange={(e) => handleDraftChange(e.target.value)}
         onBlur={onSave}
         maxLength={INTERVIEW_ANSWER_MAX_CHARS}
         aria-describedby={`${whyId} ${counterId}`}

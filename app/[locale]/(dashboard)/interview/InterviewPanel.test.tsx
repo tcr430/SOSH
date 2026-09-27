@@ -343,8 +343,11 @@ describe("the character counter's live region announces politely at 80% and 100%
     act(() => { typeInto(textarea, 'x'.repeat(1600)) }) // exactly 80%
     expect(liveRegion.textContent).toBe('ui.question.counter_80:{"remaining":400}')
 
-    act(() => { typeInto(textarea, 'x'.repeat(1700)) }) // still >= 80%, < 100% — same announcement text is fine, no crash
-    expect(liveRegion.textContent).toContain('ui.question.counter_80')
+    // Session 35-D · D2 (BLOCKER-1) — still >= 80%, < 100%: no new crossing, so the announcement text is
+    // UNCHANGED (still the stale "remaining: 400" from the 80% crossing above), not re-derived from the
+    // current draft length. A per-keystroke re-derivation would show "remaining: 300" here instead.
+    act(() => { typeInto(textarea, 'x'.repeat(1700)) })
+    expect(liveRegion.textContent).toBe('ui.question.counter_80:{"remaining":400}')
 
     act(() => { typeInto(textarea, 'x'.repeat(2000)) }) // 100%
     expect(liveRegion.textContent).toBe('ui.question.counter_full')
