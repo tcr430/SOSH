@@ -46,5 +46,125 @@
     "quote": "As palavras reais de um cliente são a prova mais forte. Só são usadas com a sua autorização.",
     "case_study": "Uma história concreta de um cliente dá às publicações algo específico a que se referir.",
     "usage_data": "Números reais dão credibilidade às publicações. Usamos apenas os que nos indicar."
+  },
+  "ui": {
+    "card": {
+      "title": "Contributo do fundador",
+      "due": "Algumas perguntas que só você pode responder — demora poucos minutos.",
+      "in_progress": "Tem uma ronda de entrevista em curso.",
+      "extracting": "A transformar as suas respostas em memória…",
+      "extraction_failed": "Algo correu mal ao transformar as suas respostas em memória.",
+      "awaiting_ratification": "Reveja o que encontrámos nas suas respostas.",
+      "cta": "Abrir"
+    },
+    "not_due": {
+      "title": "Nada pendente por agora",
+      "body": "Voltaremos a perguntar quando for útil.",
+      "body_snoozed": "Verificaremos novamente depois de {date}."
+    },
+    "nothing_thin": {
+      "title": "A memória parece bem coberta",
+      "body": "Verificaremos novamente conforme as suas campanhas e respostas acrescentarem mais."
+    },
+    "due": {
+      "title": "Algumas perguntas que só você pode responder",
+      "body": "{count} perguntas ajudariam a preencher o que ainda não sabemos.",
+      "start": "Começar",
+      "not_now": "Agora não"
+    },
+    "in_progress": {
+      "progress": "{answered} de {total} respondidas",
+      "save": "Guardar",
+      "saved": "Guardado",
+      "save_error": "Não foi possível guardar — tente novamente",
+      "skip_question": "Saltar esta pergunta",
+      "skip_round": "Saltar esta ronda",
+      "submit": "Enviar respostas",
+      "no_answers_error": "Responda a pelo menos uma pergunta antes de enviar."
+    },
+    "extracting": {
+      "title": "A ler as suas respostas",
+      "body": "Estamos a transformar as suas respostas em memória. Isto pode demorar um minuto."
+    },
+    "extraction_failed": {
+      "title": "Não conseguimos terminar isto",
+      "reason": "Motivo: {reason}",
+      "try_again": "Tentar novamente",
+      "ceiling_title": "Atingimos o limite de custo para esta ronda",
+      "ceiling_body": "Esta ronda não pode ser tentada novamente. As suas respostas estão seguras — inicie uma nova ronda quando for devida.",
+      "reasons": {
+        "invalid_response": "não foi possível ler a resposta do modelo",
+        "provider_error": "o fornecedor de IA teve um problema",
+        "rate_limit": "atingimos um limite de taxa",
+        "timeout": "o pedido demorou demasiado tempo",
+        "policy_violation": "a resposta não seguiu as regras que definimos",
+        "response_truncated": "a resposta foi cortada",
+        "no_answers": "nenhuma resposta tinha texto",
+        "write_failed": "não conseguimos guardar o resultado",
+        "unexpected_error": "aconteceu algo inesperado",
+        "unknown": "algo correu mal"
+      }
+    },
+    "failed": {
+      "title": "Esta ronda não foi concluída",
+      "body": "As suas respostas continuam registadas e serão eliminadas no prazo habitual. Nada foi registado."
+    },
+    "awaiting_ratification": {
+      "author_title": "A aguardar um aprovador",
+      "author_body": "Alguém com permissões de aprovação precisa de rever o que encontrámos antes de ser guardado.",
+      "ratify_title": "Reveja o que encontrámos",
+      "ratify_body": "Aceite ou rejeite cada um abaixo. Nada é guardado até decidir.",
+      "ratify_button": "Ratificar",
+      "decide_all_hint": "Decida sobre todos os itens antes de ratificar."
+    },
+    "ratified": {
+      "title": "Revisto",
+      "counts": "{accepted} aceites, {rejected} rejeitados, {edited} editados"
+    },
+    "no_records": {
+      "title": "Nada a registar nestas respostas",
+      "body": "Analisámos {proposed} itens possíveis das suas respostas mas não mantivemos nenhum: {ungrounded} não estavam fundamentados no que escreveu, {performance} eram sobre desempenho, que acompanhamos separadamente."
+    },
+    "skipped": {
+      "title": "Ronda saltada",
+      "body": "Nenhum candidato foi mantido."
+    },
+    "expired": {
+      "title": "Esta ronda expirou",
+      "body": "Já passaram mais de 30 dias, por isso deixámo-la expirar. Os candidatos não foram mantidos."
+    },
+    "question": {
+      "counter": "{count} / {max} carateres",
+      "counter_80": "Faltam {remaining} carateres",
+      "counter_full": "Atingiu o limite de carateres"
+    },
+    "ratify": {
+      "group_brand": "Sobre o seu negócio",
+      "group_audience": "Sobre os seus clientes",
+      "group_evidence": "Provas",
+      "from_answer": "Da sua resposta a:",
+      "category_label": "Categoria",
+      "categories": {
+        "positioning": "Posicionamento",
+        "capability": "Capacidade",
+        "pricing": "Preço",
+        "competitor": "Concorrente",
+        "problem": "Problema",
+        "objection": "Objeção",
+        "question": "Pergunta",
+        "trigger": "Gatilho",
+        "quote": "Citação",
+        "case_study": "Caso de estudo",
+        "usage_data": "Dados de utilização",
+        "other": "Outro"
+      },
+      "accept": "Aceitar",
+      "reject": "Rejeitar",
+      "accept_for": "Aceitar: {text}",
+      "reject_for": "Rejeitar: {text}",
+      "edit_label": "Editar antes de aceitar",
+      "span_redacted": "O texto original já não está guardado.",
+      "evidence_permission_off": "Pode conter palavras de outra pessoa — a permissão para publicar permanece desativada."
+    }
   }
 }

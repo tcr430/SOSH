@@ -27,6 +27,9 @@ vi.mock('@/lib/db/trial-state', () => ({
 vi.mock('@/lib/db/backfill-runs', () => ({
   getBackfillRunsForBusiness: vi.fn().mockResolvedValue([]),
 }))
+vi.mock('@/lib/interview/load-page-state', () => ({
+  loadInterviewPageState: vi.fn().mockResolvedValue({ kind: 'not_due', nextEligibleAt: null }),
+}))
 vi.mock('@/components/onboarding/BackfillBanner', () => ({
   BackfillBanner: () => null,
 }))

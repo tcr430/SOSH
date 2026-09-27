@@ -46,5 +46,125 @@
     "quote": "Real customer words are the strongest proof. They are only ever used with your permission.",
     "case_study": "A concrete customer story gives posts something specific to point to.",
     "usage_data": "Real numbers make posts credible. We use only the ones you give us."
+  },
+  "ui": {
+    "card": {
+      "title": "Founder input",
+      "due": "A few questions only you can answer — it takes a few minutes.",
+      "in_progress": "You have an interview round in progress.",
+      "extracting": "Turning your answers into memory…",
+      "extraction_failed": "Something went wrong turning your answers into memory.",
+      "awaiting_ratification": "Review what we found in your answers.",
+      "cta": "Open"
+    },
+    "not_due": {
+      "title": "Nothing due right now",
+      "body": "We'll ask again once it's useful.",
+      "body_snoozed": "We'll check back after {date}."
+    },
+    "nothing_thin": {
+      "title": "Memory looks well covered",
+      "body": "We'll check again as your campaigns and answers add more."
+    },
+    "due": {
+      "title": "A few questions only you can answer",
+      "body": "{count} questions would help fill in what we don't know yet.",
+      "start": "Start",
+      "not_now": "Not now"
+    },
+    "in_progress": {
+      "progress": "{answered} of {total} answered",
+      "save": "Save",
+      "saved": "Saved",
+      "save_error": "Couldn't save — try again",
+      "skip_question": "Skip this question",
+      "skip_round": "Skip this round",
+      "submit": "Submit answers",
+      "no_answers_error": "Answer at least one question before submitting."
+    },
+    "extracting": {
+      "title": "Reading your answers",
+      "body": "We're turning your answers into memory. This can take a minute."
+    },
+    "extraction_failed": {
+      "title": "We couldn't finish that",
+      "reason": "Reason: {reason}",
+      "try_again": "Try again",
+      "ceiling_title": "We've reached the cost limit for this round",
+      "ceiling_body": "This round can't be retried again. Your answers are safe — start a new round once one is due.",
+      "reasons": {
+        "invalid_response": "the model's response couldn't be read",
+        "provider_error": "the AI provider had an issue",
+        "rate_limit": "we hit a rate limit",
+        "timeout": "the request took too long",
+        "policy_violation": "the response didn't follow the rules we set",
+        "response_truncated": "the response was cut off",
+        "no_answers": "no answer had any text",
+        "write_failed": "we couldn't save the result",
+        "unexpected_error": "something unexpected happened",
+        "unknown": "something went wrong"
+      }
+    },
+    "failed": {
+      "title": "This round didn't go through",
+      "body": "Your answers are still on file and will be cleared on the usual schedule. Nothing was recorded."
+    },
+    "awaiting_ratification": {
+      "author_title": "Waiting for an approver",
+      "author_body": "Someone with approval rights needs to review what we found before it's kept.",
+      "ratify_title": "Review what we found",
+      "ratify_body": "Accept or reject each one below. Nothing is kept until you decide.",
+      "ratify_button": "Ratify",
+      "decide_all_hint": "Decide every item before ratifying."
+    },
+    "ratified": {
+      "title": "Reviewed",
+      "counts": "{accepted} accepted, {rejected} rejected, {edited} edited"
+    },
+    "no_records": {
+      "title": "Nothing to record in these answers",
+      "body": "We looked at {proposed} possible items from your answers but kept none: {ungrounded} weren't grounded in what you wrote, {performance} were about performance, which we track separately."
+    },
+    "skipped": {
+      "title": "Round skipped",
+      "body": "No candidates were kept."
+    },
+    "expired": {
+      "title": "This round expired",
+      "body": "It's been more than 30 days, so we let it go. Candidates were not kept."
+    },
+    "question": {
+      "counter": "{count} / {max} characters",
+      "counter_80": "{remaining} characters left",
+      "counter_full": "You've reached the character limit"
+    },
+    "ratify": {
+      "group_brand": "About your business",
+      "group_audience": "About your customers",
+      "group_evidence": "Evidence",
+      "from_answer": "From your answer to:",
+      "category_label": "Category",
+      "categories": {
+        "positioning": "Positioning",
+        "capability": "Capability",
+        "pricing": "Pricing",
+        "competitor": "Competitor",
+        "problem": "Problem",
+        "objection": "Objection",
+        "question": "Question",
+        "trigger": "Trigger",
+        "quote": "Quote",
+        "case_study": "Case study",
+        "usage_data": "Usage data",
+        "other": "Other"
+      },
+      "accept": "Accept",
+      "reject": "Reject",
+      "accept_for": "Accept: {text}",
+      "reject_for": "Reject: {text}",
+      "edit_label": "Edit before accepting",
+      "span_redacted": "The original wording is no longer stored.",
+      "evidence_permission_off": "May contain someone else's words — permission to publish stays off."
+    }
   }
 }

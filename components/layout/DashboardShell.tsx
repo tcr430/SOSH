@@ -10,6 +10,7 @@ import {
   BarChart2,
   Inbox,
   Lightbulb,
+  MessageCircleQuestion,
   Settings,
   Users,
   CreditCard,
@@ -39,6 +40,7 @@ export const ACTIVE_NAV = [
   // separate entry, not a repoint (founder-directed, Session 26 D2.9).
   { key: 'create',    href: 'create',              icon: Plus,         capability: null },
   { key: 'campaigns', href: 'campaigns',         icon: Megaphone,    capability: null },
+  { key: 'interview', href: 'interview',          icon: MessageCircleQuestion, capability: null },
   { key: 'calendar',  href: 'calendar',           icon: CalendarDays, capability: null },
   { key: 'billing',   href: 'billing',            icon: CreditCard,   capability: CAPABILITIES.MANAGE_BILLING },
   { key: 'team',      href: 'settings/team',      icon: Users,        capability: CAPABILITIES.MANAGE_MEMBERS },
@@ -68,11 +70,13 @@ export function DashboardShell({
   locale,
   hasSocialAccounts,
   daysRemaining,
+  interviewBadge,
   children,
 }: {
   locale: string
   hasSocialAccounts: boolean
   daysRemaining: number | null
+  interviewBadge: boolean
   children: React.ReactNode
 }) {
   const t = useTranslations('nav')
@@ -132,7 +136,7 @@ export function DashboardShell({
 
         {visibleNav.map(({ key, href, icon: Icon }) => {
           const isActive = pathname.includes(`/${href}`)
-          const showDot = key === 'settings' && !hasSocialAccounts
+          const showDot = (key === 'settings' && !hasSocialAccounts) || (key === 'interview' && interviewBadge)
           return (
             <Link
               key={key}

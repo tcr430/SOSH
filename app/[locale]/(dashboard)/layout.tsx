@@ -13,6 +13,8 @@ import { BusinessProvider } from '@/lib/contexts/business-context'
 import { DashboardShell } from '@/components/layout/DashboardShell'
 import { BackfillBanner } from '@/components/onboarding/BackfillBanner'
 import { getBackfillRunsForBusiness } from '@/lib/db/backfill-runs'
+import { loadInterviewPageState } from '@/lib/interview/load-page-state'
+import { isInterviewCardState } from '@/lib/interview/page-state'
 
 export default async function DashboardLayout({
   children,
@@ -45,6 +47,11 @@ export default async function DashboardLayout({
   const hasSocialAccounts = activeAccounts.length > 0
   // ADR 0014 §6 — resolved once here; BusinessProvider hands it to useCan().
   const member = resolveMemberContext(business, user.id, memberRow)
+  // ADR 0029 §5.5/§8.1 — the nav badge: due / open / awaiting ratification (for a ratifier), same shared
+  // orchestrator the /interview page and its dashboard card use. Sequential after `member` resolves (needs
+  // its role/isAdmin), not added to the Promise.all above.
+  const interviewState = await loadInterviewPageState(client, business, member.role === 'approver' || member.isAdmin)
+  const interviewBadge = isInterviewCardState(interviewState)
 
   let daysRemaining: number | null = null
   if (business.plan === 'trial' && trialState?.trial_started_at) {
@@ -68,7 +75,7 @@ export default async function DashboardLayout({
   return (
     <BusinessProvider user={user} activeBusiness={business} brandVoice={brandVoice} member={member}>
       {awaitingRun && <BackfillBanner locale={locale} runId={awaitingRun.id} />}
-      <DashboardShell locale={locale} hasSocialAccounts={hasSocialAccounts} daysRemaining={daysRemaining}>
+      <DashboardShell locale={locale} hasSocialAccounts={hasSocialAccounts} daysRemaining={daysRemaining} interviewBadge={interviewBadge}>
         {children}
       </DashboardShell>
     </BusinessProvider>
