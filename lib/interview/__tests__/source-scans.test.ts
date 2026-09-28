@@ -211,19 +211,39 @@ describe('INTERVIEW-WRITES-VIA-LIB-MEMORY (ADR 0029 §2.3, §10.3, constraint 4)
 // ═══ INTERVIEW-NO-BUDGET-PURPOSE (32) ════════════════════════════════════════
 // The ai_budget_daily purpose CHECK still has FOUR values (A-4: no fifth purpose). Read from the
 // LATEST migration that defines it, so a later widening is what gets caught.
+//
+// Session 35-D D9 (Reviewer NIT-3): the detector matched only `CHECK (purpose IN (...))`. A widening written as
+// `purpose = ANY (ARRAY[...])` — an equivalent, equally valid Postgres CHECK shape — escaped it entirely (the scan would have
+// found nothing and, per its own "found === null" assertion below, FAILED LOUD rather than passing vacuously — but a fifth
+// purpose added via that shape would never be caught as a violation of BASELINE_PURPOSES). Both forms are now matched,
+// case- and whitespace-insensitive.
+//
+// RESIDUAL BLIND SPOTS (recorded per ADR 0029 §10.3's table format — this scan's row there says "—"; it is not empty):
+//   - a CHECK expressed as a DOMAIN (`CREATE DOMAIN ai_budget_purpose AS text CHECK (...)`) applied to the column via its type,
+//     rather than a table-level or column-level CHECK naming `purpose` directly;
+//   - a purpose value list moved into a separate lookup table with an FK, instead of an inline CHECK;
+//   - a value added by altering an EXISTING constraint's body across two migrations in a way that never puts all five values
+//     in one CHECK clause the regex can see whole (e.g. `DROP CONSTRAINT` in one migration, a five-value `ADD CONSTRAINT` in a
+//     LATER one still IS caught, since "latest" wins; a value added by two overlapping ALTERs in the SAME migration, if
+//     Postgres itself would reject that as redefining the same constraint name, is not a real risk).
 
 const BASELINE_PURPOSES = ['backfill_cents', 'generation_posts', 'planner_cents', 'triage_cents']
 
 function latestBudgetPurposes(all: { name: string; sql: string }[]): { migration: string; values: string[] } | null {
   let found: { migration: string; values: string[] } | null = null
+  // Both CHECK shapes Postgres accepts for "purpose is one of these": `purpose IN ('a', 'b')` and `purpose = ANY (ARRAY['a', 'b'])`.
+  // \s+ throughout (not a literal space) so either form is caught across a line wrap or extra whitespace.
+  const IN_FORM = /CHECK\s*\(\s*purpose\s+IN\s*\(([^)]*)\)\s*\)/gi
+  const ANY_ARRAY_FORM = /CHECK\s*\(\s*purpose\s*=\s*ANY\s*\(\s*ARRAY\s*\[([^\]]*)\]/gi
   for (const { name, sql } of [...all].sort((a, b) => a.name.localeCompare(b.name))) {
     const code = stripSqlComments(sql)
     if (!/ai_budget_daily/i.test(code)) continue
-    const re = /CHECK\s*\(\s*purpose\s+IN\s*\(([^)]*)\)\s*\)/gi
-    let m: RegExpExecArray | null
-    while ((m = re.exec(code)) !== null) {
-      const values = [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1]).sort()
-      found = { migration: name, values }
+    for (const re of [IN_FORM, ANY_ARRAY_FORM]) {
+      let m: RegExpExecArray | null
+      while ((m = re.exec(code)) !== null) {
+        const values = [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1]).sort()
+        found = { migration: name, values }
+      }
     }
   }
   return found
@@ -251,6 +271,46 @@ describe('INTERVIEW-NO-BUDGET-PURPOSE (ADR 0029 §7.3, A-4, constraint 32)', () 
         sql: "ALTER TABLE ai_budget_daily ADD CONSTRAINT c CHECK (purpose IN ('x','y','z','w'));\n-- ALTER TABLE ai_budget_daily ADD CONSTRAINT c CHECK (purpose IN ('1','2','3','4','5'));",
       },
       { name: '20260902000000_b.sql', sql: "ALTER TABLE other ADD CONSTRAINT c CHECK (kind IN ('1','2','3','4','5'));" },
+    ]
+    expect(latestBudgetPurposes(fixture)?.values).toEqual(['w', 'x', 'y', 'z'])
+  })
+
+  // Session 35-D D9 (NIT-3): the `= ANY (ARRAY[...])` shape — a real Postgres CHECK form the old regex never matched at all.
+  it('the detector ALSO catches a widening written as `purpose = ANY (ARRAY[...])` (planted positive, the NIT-3 escape)', () => {
+    const fixture = [
+      { name: '20260901000000_a.sql', sql: "ALTER TABLE ai_budget_daily ADD CONSTRAINT c CHECK (purpose IN ('a','b'));" },
+      {
+        name: '20260930000000_b.sql',
+        sql: "ALTER TABLE ai_budget_daily ADD CONSTRAINT c CHECK (purpose = ANY (ARRAY['triage_cents', 'generation_posts', 'backfill_cents', 'planner_cents', 'interview_cents']));",
+      },
+    ]
+    const got = latestBudgetPurposes(fixture)
+    expect(got?.migration).toBe('20260930000000_b.sql')
+    expect(got?.values).toHaveLength(5)
+    expect(got?.values).toContain('interview_cents')
+  })
+
+  it('the ANY(ARRAY) form is caught across a line wrap, mixed case (`Any`, `array`) and extra whitespace (planted positive)', () => {
+    const fixture = [
+      {
+        name: '20260930010000_c.sql',
+        sql: "ALTER TABLE ai_budget_daily ADD CONSTRAINT c CHECK (\n  purpose  =  Any (\n    array['triage_cents','generation_posts','backfill_cents','planner_cents','interview_cents']\n  )\n);",
+      },
+    ]
+    expect(latestBudgetPurposes(fixture)?.values).toContain('interview_cents')
+  })
+
+  it('an unrelated `= ANY (ARRAY[...])` CHECK on another column, or another table, is ignored (planted negative)', () => {
+    const fixture = [
+      { name: '20260901000000_a.sql', sql: "ALTER TABLE ai_budget_daily ADD CONSTRAINT c CHECK (purpose IN ('w','x','y','z'));" },
+      {
+        name: '20260902000000_b.sql',
+        sql: "ALTER TABLE ai_budget_daily ADD CONSTRAINT c2 CHECK (status = ANY (ARRAY['1','2','3','4','5']));",
+      },
+      {
+        name: '20260903000000_c.sql',
+        sql: "ALTER TABLE other_table ADD CONSTRAINT c CHECK (purpose = ANY (ARRAY['1','2','3','4','5']));",
+      },
     ]
     expect(latestBudgetPurposes(fixture)?.values).toEqual(['w', 'x', 'y', 'z'])
   })

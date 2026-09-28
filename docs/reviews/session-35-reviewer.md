@@ -807,3 +807,23 @@ Presentation-only: no SQL, no RPC, no migration.
 **Full-suite confirmation (D8):** `npx tsc --noEmit --skipLibCheck` clean. `npx eslint .`: `✖ 112 problems (0 errors, 112 warnings)`, unchanged (the 3-error regression above was caught and fixed before this count). `npm run test:app` (CI env block): **374 files / 5547 tests** green (was 374/5535: +12 tests, no new file — `lib/i18n/interview-parity.test.ts` needed no change, since the parity test already walks every key). No `test:db`: D8 changes no SQL and no DB test.
 
 **What this step did NOT touch:** no SQL and no migration; no push (rule 10); `docs/decisions/*` untouched (D10); D9 (`INTERVIEW-NO-BUDGET-PURPOSE` scan widened) not started.
+
+### D9 — NIT-3: `INTERVIEW-NO-BUDGET-PURPOSE` detects `= ANY (ARRAY[...])` as well as `IN (...)`
+
+Test-only. No production file touched.
+
+| Field | NIT-3 |
+|---|---|
+| **Finding** | `lib/interview/__tests__/source-scans.test.ts:217-230`'s detector for constraint 32 (`INTERVIEW-NO-BUDGET-PURPOSE`, ADR 0029 §7.3, A-4) matched only `CHECK (purpose IN (...))`. A widening of the same CHECK written as `purpose = ANY (ARRAY[...])` — an equally valid, equivalent Postgres CHECK shape — escaped the regex entirely. |
+| **Fix** | `latestBudgetPurposes` now matches both `purpose IN (...)` and `purpose = ANY (ARRAY[...])`, case- and whitespace-insensitive (`\s*`/`\s+` throughout, so a line-wrapped or mixed-case `Any (Array[...])` is still caught), still scoped to the `ai_budget_daily` table and the `purpose` column, still reading the **latest** migration that defines it. A comment block above the function records the **residual blind spots** the detector still has, in ADR §10.3's table format: a `CREATE DOMAIN ... CHECK` applied via the column's type; a value list moved into a separate lookup table with an FK; and the (non-)risk of two overlapping `ALTER`s inside one migration. |
+| **Proof** | Two new planted positives: a `= ANY (ARRAY[...])` widening to five values is caught, with the fifth (`interview_cents`) present; the same form is caught across a line wrap, mixed case (`Any`, `array`) and extra whitespace. One new planted negative: an unrelated `= ANY (ARRAY[...])` CHECK on a **different column** (`status`) or a **different table** is ignored, and the real `purpose IN (...)` value list on `ai_budget_daily` still wins. The pre-existing "detector reads the LATEST definition" and "ignores commented-out / unrelated CHECKs" cases, and the real-migration assertion (still exactly the four baseline purposes), are unchanged and still pass. |
+| **Reddening** | (a) the detector reverted to the old `IN`-only regex -> both new planted positives RED (`expected undefined to be '20260930000000_b.sql'`, and the mixed-case/line-wrap case failing to contain `interview_cents`); every other assertion, including the planted negatives, stayed green -- confirming the mutation isolated exactly the intended gap. Restored byte-for-byte (`git diff --stat` empty). |
+| **Commit** | this commit (D9) |
+
+**The scan run over D4's migration.** `supabase/migrations/20260928100000_interview_correction_pass.sql` does not touch `ai_budget_daily` at all (one comment line mentions "budget purpose" in prose, no SQL). The widened detector's "the latest real definition has exactly the four baseline purposes" test therefore exercises the **whole real migration set unaffected by D4**, and stays green: the latest real `ai_budget_daily` purpose CHECK is still `20260922110000`'s four-value `IN (...)` form (M2.0 premise 9, unchanged since M2). This is the guide's VERIFY requirement ("the scan runs over D4's migration and stays green") -- satisfied because D4 adds nothing for the scan to see, not because the widened regex was exercised against new SQL. If the founder later widens the CHECK in a migration written as `= ANY (ARRAY[...])`, this step is what makes that visible instead of silently escaping.
+
+**SHARED-FUNCTION CALLERS** (rule 9): `latestBudgetPurposes` has one caller, `describe('INTERVIEW-NO-BUDGET-PURPOSE ...')` in the same file; no production code calls it (it is a scan over migration source, not a runtime function).
+
+**Full-suite confirmation (D9):** `npx tsc --noEmit --skipLibCheck` clean. `npx eslint .`: `✖ 112 problems (0 errors, 112 warnings)`, unchanged. `npm run test:app` (CI env block): **374 files / 5550 tests** green (was 374/5547: +3 tests, no new file). No `test:db`: D9 touches no SQL and no `supabase/__tests__` file.
+
+**What this step did NOT touch:** no SQL, no migration, no production TypeScript; no push (rule 10); `docs/decisions/*` untouched (D10); D10 (documentation truth) not started.
