@@ -168,3 +168,10 @@ export const INTERVIEW_ANSWERS_LIMIT = 8
 export const INTERVIEW_CANDIDATES_LIMIT_PER_TABLE = 24
 /** thinness counts, per table, over one business's active rows. */
 export const INTERVIEW_THINNESS_ROW_LIMIT = 500
+
+/**
+ * §9.5 (Session 35-D D5) — the row bound for the ratify view's conflict-target read, one query per memory table: a round holds
+ * at most INTERVIEW_CANDIDATES_LIMIT_PER_TABLE candidates per table and each names at most INTERVIEW_MAX_CONFLICTS_PER_ITEM
+ * conflict ids (the writer's column CHECK allows 5; the extraction sends at most 3), so 24 * 3 = 72 targets is the ceiling.
+ */
+export const INTERVIEW_CONFLICT_TARGETS_LIMIT = INTERVIEW_CANDIDATES_LIMIT_PER_TABLE * INTERVIEW_MAX_CONFLICTS_PER_ITEM

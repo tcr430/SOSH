@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { EvidenceMemoryRow, EvidenceMemoryImportInsert } from './types'
-import { INTERVIEW_CANDIDATES_LIMIT_PER_TABLE, INTERVIEW_THINNESS_ROW_LIMIT } from '@/lib/interview/constants'
+import type { EvidenceMemoryRow, EvidenceMemoryImportInsert, InterviewConflictTargetRow } from './types'
+import { INTERVIEW_CANDIDATES_LIMIT_PER_TABLE, INTERVIEW_CONFLICT_TARGETS_LIMIT, INTERVIEW_THINNESS_ROW_LIMIT } from '@/lib/interview/constants'
 import { getErrorMessage } from './utils'
 import { MEMORY_CANDIDATE_LIMIT } from './memory-constants'
 import { neutralizeWithSentinels } from '@/lib/ai/wrap-evidence'
@@ -162,4 +162,32 @@ export async function listEvidenceInterviewCandidates(
     .limit(limit)
   if (error) throw new Error(getErrorMessage(error))
   return (data as EvidenceMemoryRow[] | null) ?? []
+}
+
+// ADR 0029 §4.5/§8.4 (Session 35-D D5, MAJOR-3) — the ratify view's conflict-target read: the id, display text, status and
+// source of the evidence_memory rows a candidate's `interview_conflict_ids` name. The ids come from the candidates the SAME call
+// just read (never from client input), and the caller's own client applies RLS, so another tenant's row is simply not
+// returned. Soft-deleted rows are excluded. Bounded by INTERVIEW_CONFLICT_TARGETS_LIMIT; ORDER BY id (the primary key). It
+// only ever feeds a DISPLAY hint: ratify_interview_round re-verifies a replace target (active, source = 'interview', same
+// business) in SQL.
+export async function listEvidenceConflictTargets(
+  client: SupabaseClient,
+  ids: string[],
+  limit = INTERVIEW_CONFLICT_TARGETS_LIMIT,
+): Promise<InterviewConflictTargetRow[]> {
+  if (ids.length === 0) return []
+  const { data, error } = await client
+    .from('evidence_memory')
+    .select('id, content, status, source')
+    .in('id', ids)
+    .is('deleted_at', null)
+    .order('id', { ascending: true })
+    .limit(limit)
+  if (error) throw new Error(getErrorMessage(error))
+  return ((data as Array<{ id: string; content: string; status: InterviewConflictTargetRow['status']; source: InterviewConflictTargetRow['source'] }> | null) ?? []).map((r) => ({
+    id: r.id,
+    text: r.content,
+    status: r.status,
+    source: r.source,
+  }))
 }

@@ -54,7 +54,9 @@ export type InterviewYield = { proposed: number; droppedUngrounded: number; drop
 /**
  * A new record's possible conflicts with EXISTING active records of this business (§4.5), already intersected.
  * `itemIndex` is the record's position in the list handed to the writer (two records can share a span, so the span alone is
- * ambiguous). NOTE: these are NOT persisted — the M2.5 writer has no column for them; see the M2.8 commit body.
+ * ambiguous). Session 35-D D5 (MAJOR-3): since D4 these ARE persisted, per record, as `interview_conflict_ids` (each id
+ * re-verified in SQL to be a live row of the same table and business) — this round-level list stays only as the extraction's
+ * own return value. It is never rendered from here: the ratify view reads the persisted column.
  */
 export type InterviewConflict = { itemIndex: number; answerId: string; span: string; existingIds: string[] }
 
@@ -124,12 +126,18 @@ export type GroundedItem = {
   category: string
   text: string
   span: string
+  /** §4.4: the record dropped the founder's hedge ("we think" -> "we are"). A flag, never a drop. Always false for evidence. */
+  hedgeFlagged: boolean
+  /** §4.5: the ids of EXISTING active records of this business the model named, intersected with the ids that were sent. */
+  conflictIds: string[]
 }
 
 export type FilterResult = {
   kept: GroundedItem[]
   droppedUngrounded: number
   droppedPerformanceClaim: number
+  /** NIT-2: items beyond INTERVIEW_MAX_ITEMS_PER_ANSWER for their answer. Counted (persisted as dropped_cap), never silent. */
+  droppedCap: number
   hedgeFlagged: number
   conflicts: InterviewConflict[]
 }
@@ -151,6 +159,7 @@ export function filterExtractedItems(
   const perAnswer = new Map<string, number>()
   let droppedUngrounded = 0
   let droppedPerformanceClaim = 0
+  let droppedCap = 0
   let hedgeFlagged = 0
 
   for (const item of items) {
@@ -184,17 +193,20 @@ export function filterExtractedItems(
     }
 
     const seen = perAnswer.get(item.answerId) ?? 0
-    if (seen >= INTERVIEW_MAX_ITEMS_PER_ANSWER) continue
+    if (seen >= INTERVIEW_MAX_ITEMS_PER_ANSWER) {
+      droppedCap++ // NIT-2: counted, so proposed - dropped - written is inferable rather than a silent gap
+      continue
+    }
     perAnswer.set(item.answerId, seen + 1)
 
-    kept.push({ answerId: item.answerId, type: item.type, category: item.category, text, span })
-    if (item.type !== 'evidence' && isMoreCertainThanAnswer(span, text)) hedgeFlagged++
-
+    const isHedgeFlagged = item.type !== 'evidence' && isMoreCertainThanAnswer(span, text)
     const existingIds = [...new Set(item.conflictsWith.filter((id) => sentExistingIds.has(id)))].slice(0, INTERVIEW_MAX_CONFLICTS_PER_ITEM)
+    kept.push({ answerId: item.answerId, type: item.type, category: item.category, text, span, hedgeFlagged: isHedgeFlagged, conflictIds: existingIds })
+    if (isHedgeFlagged) hedgeFlagged++
     if (existingIds.length > 0) conflicts.push({ itemIndex: kept.length - 1, answerId: item.answerId, span, existingIds })
   }
 
-  return { kept, droppedUngrounded, droppedPerformanceClaim, hedgeFlagged, conflicts }
+  return { kept, droppedUngrounded, droppedPerformanceClaim, droppedCap, hedgeFlagged, conflicts }
 }
 
 // ─── the orchestrator ────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -270,16 +282,19 @@ export async function extractInterviewRound(roundId: string): Promise<InterviewE
     droppedUngrounded: filtered.droppedUngrounded,
     droppedPerformanceClaim: filtered.droppedPerformanceClaim,
   }
+  // D5 (NIT-2): the cap drop travels to the writer beside the yield counters but is NOT part of the returned `yield` shape.
+  const writerCounters = { ...counters, droppedCap: filtered.droppedCap }
 
   // 4. RECONCILE THE SUCCESS BEFORE THE WRITER (the order contract). Not extracting = a later attempt owns the round.
   const settled = await reconcileInterviewSpend({ roundId, attempt, actualCents: costCents, outcome: 'succeeded' })
   if (settled.outcome !== 'reconciled') return { outcome: 'superseded', attempt }
 
-  // 5. WRITE. Only these five keys per item cross: no governance value exists in this payload, and the writer fixes every
-  // governance column in SQL anyway. If the write throws, the round is still 'extracting' with its spend already
-  // corrected, so it is failed with a NEUTRAL reconcile (actual = the reservation leaves spend_cents as it is).
+  // 5. WRITE. Only these seven keys per item cross (the five record keys plus the two COMPUTED markers, hedgeFlagged and
+  // conflictIds): no governance value exists in this payload, and the writer fixes every governance column in SQL anyway.
+  // If the write throws, the round is still 'extracting' with its spend already corrected, so it is failed with a NEUTRAL
+  // reconcile (actual = the reservation leaves spend_cents as it is).
   try {
-    const written = await recordInterviewCandidates({ roundId, items: filtered.kept, counters })
+    const written = await recordInterviewCandidates({ roundId, items: filtered.kept, counters: writerCounters })
     if (written.outcome !== 'written') return { outcome: 'not_written', attempt, writer: written.outcome }
     return {
       outcome: 'written',

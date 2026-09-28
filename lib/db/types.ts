@@ -1902,3 +1902,14 @@ export type SweepInterviewDataResult = {
   spansRedacted: number
   candidatesDeleted: number
 }
+
+// Session 35-D D5 (MAJOR-3, ADR 0029 §4.5/§8.4) — what the ratify view needs to show, per conflict id on a candidate: the
+// target's display text, its status and its source. `text` is the brand/audience `statement` or the evidence `content`.
+// Read with the caller's own (member RLS) client. Replace is offered only when status = 'active' AND source = 'interview';
+// ratify_interview_round re-verifies exactly that in SQL, so this row is a display hint, never the authority.
+export type InterviewConflictTargetRow = {
+  id: string
+  text: string
+  status: MemoryStatus
+  source: MemorySource
+}

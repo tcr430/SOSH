@@ -90,7 +90,7 @@ describe('ratify_interview_round (ADR 0029 §8.5)', () => {
 
   // A business whose round is AWAITING RATIFICATION with five candidates, built through the real lifecycle and writer RPCs.
   // Passing an existing Round adds a SECOND round to the same business (the caller must have backdated the first).
-  async function awaitingRound(existing?: Round, textPrefix = ''): Promise<Round> {
+  async function awaitingRound(existing?: Round, textPrefix = '', itemExtras: Record<string, Record<string, unknown>> = {}): Promise<Round> {
     const owner = existing?.owner ?? (await newUser('owner'))
     let businessId: string
     let members = existing
@@ -123,7 +123,7 @@ describe('ratify_interview_round (ADR 0029 §8.5)', () => {
     await rpc('claim_interview_extraction', { p_round_id: roundId })
     const items = DEFAULT_ITEMS(ar).map((i) => {
       const text = i.type === 'evidence' ? i.text : `${textPrefix}${i.text}`
-      return { ...i, text, storedText: text, storedSpan: i.span }
+      return { ...i, text, storedText: text, storedSpan: i.span, ...(itemExtras[`${i.type}:${i.category}`] ?? {}) }
     })
     const w = await rpc('write_interview_candidates', { p_round_id: roundId, p_items: { items, counters: { proposed: items.length, droppedUngrounded: 0, droppedPerformanceClaim: 0 } } })
     expect(w.data.status).toBe('awaiting_ratification')
@@ -426,6 +426,29 @@ describe('ratify_interview_round (ADR 0029 §8.5)', () => {
       for (const c of second.cands.filter((x) => x.id !== rejected.id)) {
         expect(await row(c), `${c.type}:${c.category}`).toMatchObject({ status: 'active', interview_rejected: false })
       }
+    })
+
+    // Session 35-D D5 (MAJOR-3): before D4/D5 the hedge flag and the conflict ids were computed and discarded, so a Replace
+    // decision could never carry a real conflict target and `replaced` was structurally 0 from the product. END TO END, live
+    // Postgres: the writer persists the id the extraction named (and drops and counts a foreign one), the ratify decision uses
+    // ONLY the persisted id, and the round reaches replaced = 1 with the old row retired and NOT marked rejected.
+    it('[D5 MAJOR-3] END TO END: the writer persists the conflict id, and a Replace decision built from the PERSISTED id reaches replaced = 1', async () => {
+      const { first, target } = await withActiveInterviewRow()
+      const foreign = '00000000-0000-4000-8000-0000000000ee'
+      const second = await awaitingRound(first, 'Second ', { 'brand:positioning': { hedgeFlagged: true, conflictIds: [target.id, foreign] } })
+      const cand = at(second, 'brand:positioning')
+
+      const persisted = await row(cand)
+      expect(persisted.interview_hedge_flagged).toBe(true)
+      expect(persisted.interview_conflict_ids, 'the real target is kept; the id that is no row of this business is dropped').toEqual([target.id])
+      expect((await round(second.roundId)).dropped_conflict_foreign).toBe(1)
+
+      const decisions = acceptAll(second).map((d) => (d.id === cand.id ? { ...d, replaces: { type: 'brand', id: (persisted.interview_conflict_ids as string[])[0] } } : d))
+      const res = await ratify(second, second.owner, decisions)
+      expect(res.data).toMatchObject({ outcome: 'ratified', accepted: 5, replaced: 1 })
+      expect(await row(target)).toMatchObject({ status: 'retired', interview_rejected: false })
+      expect((await row(cand)).status).toBe('active')
+      expect(await round(second.roundId)).toMatchObject({ replaced: 1 })
     })
 
     it('a replace target in ANOTHER BUSINESS is rejected (the business is re-verified in SQL) and nothing changes', async () => {

@@ -164,7 +164,12 @@
       "reject_for": "Reject: {text}",
       "edit_label": "Edit before accepting",
       "span_redacted": "The original wording is no longer stored.",
-      "evidence_permission_off": "May contain someone else's words — permission to publish stays off."
+      "evidence_permission_off": "May contain someone else's words — permission to publish stays off.",
+      "hedge_marker": "This sounds more certain than your own words. Check it says only what you meant.",
+      "conflict_marker": "May conflict with something already saved: {target}",
+      "replace": "Replace it",
+      "replace_for": "Replace \"{target}\" with \"{text}\"",
+      "set_aside": "{count, plural, one {# statement about what performs was set aside.} other {# statements about what performs were set aside.}}"
     }
   }
 }

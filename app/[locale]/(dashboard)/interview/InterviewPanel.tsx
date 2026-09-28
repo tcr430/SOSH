@@ -10,13 +10,12 @@
 // the answer span by default, make evidence editable, add a time limit, move answer state into browser
 // storage, or render markdown/dangerouslySetInnerHTML — the server is the source of truth throughout.
 //
-// KNOWN GAP, recorded rather than faked (ADR finding, not an M2.10 defect): the hedge flag (§4.4) and the
-// "may conflict with" marker (§4.5) are NOT rendered here, because neither is persisted anywhere upstream —
-// M2.8's orchestrator computes both but only ever returns them as ROUND-LEVEL aggregates
-// (InterviewExtractionResult.hedgeFlagged: number, .conflicts: InterviewConflict[]), and no migration through
-// M2.9 added a column to store either per candidate. Replace (§4.5) is omitted for the same reason: there is
-// no conflict target to replace. The evidence permission-off marker (§4.6) needs no such column — it is fixed
-// for every evidence-type interview candidate — and IS rendered below.
+// CLOSED in Session 35-D (D4 + D5, Reviewer MAJOR-3): the hedge flag (§4.4) and the "may conflict with" marker
+// (§4.5) are persisted per candidate (interview_hedge_flagged / interview_conflict_ids, D4's migration) and rendered
+// per record below, and Replace (§4.5) is offered ONLY on a conflict whose target is active AND source =
+// 'interview' — ratify_interview_round re-verifies exactly that in SQL, so this file's check is presentation. The
+// ratify view also states how many statements about what performs were set aside (§4.7 D-4, MINOR-3). The
+// evidence permission-off marker (§4.6) is fixed for every evidence-type interview candidate and IS rendered too.
 
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { useTranslations } from 'next-intl'
@@ -449,6 +448,17 @@ type RatifyItem = {
   span: string | null
   spanRedacted: boolean
   question: string | null
+  /** §4.4: the record sounds more certain than the founder's own words. A marker for the ratifier, never a block. */
+  hedgeFlagged: boolean
+  /** §4.5: existing records of this business this one may conflict with, resolved from the persisted ids. */
+  conflicts: RatifyConflict[]
+}
+
+type RatifyConflict = {
+  id: string
+  text: string
+  /** Replace is offered only when the target is ACTIVE and source = 'interview' (ratify re-verifies both in SQL). */
+  replaceable: boolean
 }
 
 function itemsFromCandidates(candidates: InterviewCandidatesByType, answers: FounderInterviewAnswerRow[], t: ReturnType<typeof useTranslations>): RatifyItem[] {
@@ -457,6 +467,18 @@ function itemsFromCandidates(candidates: InterviewCandidatesByType, answers: Fou
     if (!answerId) return null
     const answer = answerById.get(answerId)
     return answer ? t(questionMessagePath(answer.question_key) as never) : null
+  }
+  // A conflict id is resolved ONLY against the targets of the candidate's OWN type; an id that resolves to nothing (deleted, or
+  // not visible to this member) renders no marker rather than a wrong one.
+  const markers = (type: FounderInterviewSlotType, hedge: boolean | null, ids: string[] | null): Pick<RatifyItem, 'hedgeFlagged' | 'conflicts'> => {
+    const targets = candidates.conflictTargets?.[type] ?? []
+    return {
+      hedgeFlagged: hedge === true,
+      conflicts: (ids ?? []).flatMap((id) => {
+        const target = targets.find((x) => x.id === id)
+        return target ? [{ id, text: target.text, replaceable: target.status === 'active' && target.source === 'interview' }] : []
+      }),
+    }
   }
   return [
     ...candidates.brand.map((row) => ({
@@ -468,6 +490,7 @@ function itemsFromCandidates(candidates: InterviewCandidatesByType, answers: Fou
       span: row.interview_span,
       spanRedacted: row.interview_span_redacted_at !== null,
       question: question(row.interview_answer_id),
+      ...markers('brand', row.interview_hedge_flagged, row.interview_conflict_ids),
     })),
     ...candidates.audience.map((row) => ({
       key: `audience:${row.id}`,
@@ -478,6 +501,7 @@ function itemsFromCandidates(candidates: InterviewCandidatesByType, answers: Fou
       span: row.interview_span,
       spanRedacted: row.interview_span_redacted_at !== null,
       question: question(row.interview_answer_id),
+      ...markers('audience', row.interview_hedge_flagged, row.interview_conflict_ids),
     })),
     ...candidates.evidence.map((row) => ({
       key: `evidence:${row.id}`,
@@ -488,6 +512,7 @@ function itemsFromCandidates(candidates: InterviewCandidatesByType, answers: Fou
       span: row.interview_span,
       spanRedacted: row.interview_span_redacted_at !== null,
       question: question(row.interview_answer_id),
+      ...markers('evidence', row.interview_hedge_flagged, row.interview_conflict_ids),
     })),
   ]
 }
@@ -498,7 +523,7 @@ export function InterviewRatifyPanel({
   answers,
   onRatified,
 }: {
-  round: { id: string }
+  round: { id: string; dropped_performance_claim?: number }
   candidates: InterviewCandidatesByType
   answers: FounderInterviewAnswerRow[]
   onRatified: () => void
@@ -506,6 +531,10 @@ export function InterviewRatifyPanel({
   const t = useTranslations('interview')
   const items = itemsFromCandidates(candidates, answers, t)
   const [decisions, setDecisions] = useState<Record<string, 'accept' | 'reject'>>({})
+  // §4.5 Replace: at most ONE conflict target per record, and one target replaced by at most one record (ratify_interview_round
+  // raises on a target used twice). Selecting a target for a record clears it from every other record. It is only SENT with an
+  // ACCEPT (see handleRatify) and only when it is still one of that record's replaceable conflicts.
+  const [replaceTarget, setReplaceTarget] = useState<Record<string, string | null>>({})
   const [editedText, setEditedText] = useState<Record<string, string>>(() => Object.fromEntries(items.map((i) => [i.key, i.text])))
   const [editedCategory, setEditedCategory] = useState<Record<string, string>>(() => Object.fromEntries(items.map((i) => [i.key, i.category])))
   const [isPending, startTransition] = useTransition()
@@ -519,12 +548,14 @@ export function InterviewRatifyPanel({
       if (decision !== 'accept') {
         return { type: item.type, id: item.id, decision: 'reject' as const }
       }
+      const target = item.conflicts.find((c) => c.replaceable && c.id === replaceTarget[item.key])
       return {
         type: item.type,
         id: item.id,
         decision: 'accept' as const,
         category: editedCategory[item.key],
         ...(item.type !== 'evidence' ? { text: editedText[item.key] } : {}),
+        ...(target ? { replaces: { type: item.type, id: target.id } } : {}),
       }
     })
     startTransition(async () => {
@@ -547,6 +578,12 @@ export function InterviewRatifyPanel({
       <div>
         <h1 className="text-xl font-semibold">{t('ui.awaiting_ratification.ratify_title')}</h1>
         <p className="text-sm text-muted-foreground">{t('ui.awaiting_ratification.ratify_body')}</p>
+        {/* §4.7 D-4 (MINOR-3): how many statements about what performs were set aside, so their absence is not a silent gap. */}
+        {(round.dropped_performance_claim ?? 0) > 0 && (
+          <p data-state="set-aside" className="mt-2 text-sm text-muted-foreground">
+            {t('ui.ratify.set_aside', { count: round.dropped_performance_claim ?? 0 })}
+          </p>
+        )}
       </div>
 
       {groups.map(({ type, titleKey }) => {
@@ -601,6 +638,42 @@ export function InterviewRatifyPanel({
                   </blockquote>
 
                   {item.type === 'evidence' && <p className="text-xs text-muted-foreground">{t('ui.ratify.evidence_permission_off')}</p>}
+
+                  {/* §4.4 (L-6): the record is worded MORE CERTAINLY than the founder's own words. A marker, never a block. */}
+                  {item.hedgeFlagged && (
+                    <p data-marker="hedge" className="text-xs text-amber-700 dark:text-amber-400">
+                      {t('ui.ratify.hedge_marker')}
+                    </p>
+                  )}
+
+                  {/* §4.5: existing records this one may conflict with, from the persisted ids. Replace only when the target is
+                      ACTIVE and source = 'interview'; its accessible name carries BOTH records (§8.7). */}
+                  {item.conflicts.map((conflict) => (
+                    <div key={conflict.id} data-marker="conflict" className="space-y-1">
+                      <p className="text-xs text-amber-700 dark:text-amber-400">{t('ui.ratify.conflict_marker', { target: conflict.text })}</p>
+                      {conflict.replaceable && (
+                        <button
+                          type="button"
+                          aria-label={t('ui.ratify.replace_for', { text: item.text, target: conflict.text })}
+                          aria-pressed={replaceTarget[item.key] === conflict.id}
+                          disabled={decisions[item.key] === 'reject'}
+                          onClick={() =>
+                            setReplaceTarget((prev) => {
+                              const selected = prev[item.key] === conflict.id
+                              const next: Record<string, string | null> = {}
+                              // a target is replaced by at most one record: clear it everywhere, then set it here unless toggling off
+                              for (const [key, value] of Object.entries(prev)) next[key] = value === conflict.id ? null : value
+                              next[item.key] = selected ? null : conflict.id
+                              return next
+                            })
+                          }
+                          className={`min-h-11 rounded-md px-3 text-xs ${replaceTarget[item.key] === conflict.id ? 'bg-primary text-primary-foreground' : 'border border-input'} disabled:opacity-50`}
+                        >
+                          {t('ui.ratify.replace')}
+                        </button>
+                      )}
+                    </div>
+                  ))}
 
                   <div className="flex items-center gap-2">
                     <button

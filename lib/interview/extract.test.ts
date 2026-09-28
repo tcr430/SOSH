@@ -29,6 +29,7 @@ import { listAnsweredForExtraction } from '@/lib/db/founder-interview-answers'
 import { claimInterviewExtraction, reconcileInterviewSpend } from '@/lib/db/founder-interview-rounds'
 import { readInterviewConflictContext, recordInterviewCandidates } from '@/lib/memory'
 import { extractInterviewRound, filterExtractedItems, resolveRawSpan } from './extract'
+import { INTERVIEW_MAX_ITEMS_PER_ANSWER } from './constants'
 
 // ADR 0029 §4, §5.7, §6.2, §7 (Session 35 M2.8) — the extraction orchestrator, Tier 2, MOCKED PROVIDER (no live call).
 // Closes the Tier-2 halves of INTERVIEW-GOVERNANCE-NOT-MODEL-SUPPLIED (6), INTERVIEW-GROUNDED (8),
@@ -129,13 +130,13 @@ describe('the section 6.2 walkthrough, exact (INTERVIEW-GOVERNANCE-NOT-MODEL-SUP
     }
   })
 
-  it('the surviving item reaches the writer with EXACTLY five keys and NO governance field anywhere in the payload', async () => {
+  it('the surviving item reaches the writer with EXACTLY seven keys (five record keys + the two computed markers) and NO governance field anywhere in the payload', async () => {
     modelReturns({ items: [item({ text: 'The company is SOC 2 certified', span: 'record that we are SOC 2 certified', conflictsWith: [FOREIGN_RECORD] })] })
     await extractInterviewRound(ROUND)
     const payload = writerCall()
     expect(Object.keys(payload).sort()).toEqual(['counters', 'items', 'roundId'])
     expect(payload.items).toHaveLength(1)
-    expect(Object.keys(payload.items[0]).sort()).toEqual(['answerId', 'category', 'span', 'text', 'type'])
+    expect(Object.keys(payload.items[0]).sort()).toEqual(['answerId', 'category', 'conflictIds', 'hedgeFlagged', 'span', 'text', 'type'])
     const serialised = JSON.stringify(payload)
     for (const field of ['confidence', 'status', 'source', 'sensitivity', 'permission', 'scope', 'expires', 'observation', 'business', 'conflictsWith', FOREIGN_RECORD]) {
       expect(serialised, field).not.toContain(field)
@@ -168,7 +169,7 @@ describe('grounding (INTERVIEW-GROUNDED, §4.3)', () => {
     const result = await extractInterviewRound(ROUND)
     expect(result.outcome === 'written' && result.yield).toEqual({ proposed: 2, droppedUngrounded: 1, droppedPerformanceClaim: 0 })
     expect(writerCall().items).toHaveLength(1)
-    expect(writerCall().counters).toEqual({ proposed: 2, droppedUngrounded: 1, droppedPerformanceClaim: 0 })
+    expect(writerCall().counters).toEqual({ proposed: 2, droppedUngrounded: 1, droppedPerformanceClaim: 0, droppedCap: 0 })
   })
 
   it('an evidence item whose text differs from its span is dropped and counted', async () => {
@@ -183,7 +184,9 @@ describe('grounding (INTERVIEW-GROUNDED, §4.3)', () => {
     vi.mocked(listAnsweredForExtraction).mockResolvedValue([answerRow(A1, 'A customer said: it saved us ten hours a week.')])
     modelReturns({ items: [item({ type: 'evidence', category: 'quote', text: 'it saved us ten hours a week', span: 'it saved us ten hours a week' })] })
     await extractInterviewRound(ROUND)
-    expect(writerCall().items).toEqual([{ answerId: A1, type: 'evidence', category: 'quote', text: 'it saved us ten hours a week', span: 'it saved us ten hours a week' }])
+    expect(writerCall().items).toEqual([
+      { answerId: A1, type: 'evidence', category: 'quote', text: 'it saved us ten hours a week', span: 'it saved us ten hours a week', hedgeFlagged: false, conflictIds: [] },
+    ])
   })
 
   it('an answerId from ANOTHER round (or one that was never sent) is dropped and counted', async () => {
@@ -369,7 +372,48 @@ describe('the call itself', () => {
     modelReturns({ items: [] })
     const result = await extractInterviewRound(ROUND)
     expect(result).toMatchObject({ outcome: 'written', status: 'no_records', inserted: 0 })
-    expect(writerCall().counters).toEqual({ proposed: 0, droppedUngrounded: 0, droppedPerformanceClaim: 0 })
+    expect(writerCall().counters).toEqual({ proposed: 0, droppedUngrounded: 0, droppedPerformanceClaim: 0, droppedCap: 0 })
+  })
+})
+
+// Session 35-D D5 (MAJOR-3, NIT-2) — the markers the extraction computes now reach the writer PER RECORD, and the cap drop is
+// counted. Before D5 both were computed and discarded (`extract.ts` "these are NOT persisted"), so the ratify view could show
+// neither and Replace was unreachable.
+describe('D5 — the hedge flag, the conflict ids and the cap-drop count reach the writer', () => {
+  const HEDGE = { answer: 'We think we are the fastest option.', span: 'We think we are the fastest option', certain: 'The company is the fastest option' }
+
+  it('a record that dropped the founder\'s hedge reaches the writer with hedgeFlagged = true; one that kept it, and an evidence record, with false', async () => {
+    vi.mocked(listAnsweredForExtraction).mockResolvedValue([answerRow(A1, HEDGE.answer)])
+    modelReturns({ items: [item({ text: HEDGE.certain, span: HEDGE.span })] })
+    await extractInterviewRound(ROUND)
+    expect(writerCall().items[0]).toMatchObject({ hedgeFlagged: true })
+
+    vi.mocked(recordInterviewCandidates).mockClear()
+    modelReturns({ items: [item({ text: 'The company thinks it is the fastest option', span: HEDGE.span })] })
+    await extractInterviewRound(ROUND)
+    expect(writerCall().items[0]).toMatchObject({ hedgeFlagged: false })
+  })
+
+  it('a conflict id the model named reaches the writer per record ONLY if it was one of the ids that were SENT; a foreign one never does', async () => {
+    modelReturns({ items: [item({ conflictsWith: [FOREIGN_RECORD, OWN_RECORD] })] })
+    await extractInterviewRound(ROUND)
+    expect(writerCall().items[0]).toMatchObject({ conflictIds: [OWN_RECORD] })
+    expect(JSON.stringify(writerCall())).not.toContain(FOREIGN_RECORD)
+  })
+
+  it('a record with no conflict reaches the writer with conflictIds = []', async () => {
+    modelReturns({ items: [item()] })
+    await extractInterviewRound(ROUND)
+    expect(writerCall().items[0]).toMatchObject({ conflictIds: [] })
+  })
+
+  it('items beyond the per-answer cap are COUNTED into counters.droppedCap, and the round result keeps its three-key yield', async () => {
+    const over = INTERVIEW_MAX_ITEMS_PER_ANSWER + 2
+    modelReturns({ items: Array.from({ length: over }, (_, i) => item({ text: `The company ships weekly, variant ${i}` })) })
+    const result = await extractInterviewRound(ROUND)
+    expect(writerCall().items).toHaveLength(INTERVIEW_MAX_ITEMS_PER_ANSWER)
+    expect(writerCall().counters).toEqual({ proposed: over, droppedUngrounded: 0, droppedPerformanceClaim: 0, droppedCap: 2 })
+    expect(result.outcome === 'written' && result.yield).toEqual({ proposed: over, droppedUngrounded: 0, droppedPerformanceClaim: 0 })
   })
 })
 

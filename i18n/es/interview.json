@@ -164,7 +164,12 @@
       "reject_for": "Rechazar: {text}",
       "edit_label": "Editar antes de aceptar",
       "span_redacted": "El texto original ya no está guardado.",
-      "evidence_permission_off": "Puede contener palabras de otra persona — el permiso para publicar permanece desactivado."
+      "evidence_permission_off": "Puede contener palabras de otra persona — el permiso para publicar permanece desactivado.",
+      "hedge_marker": "Esto suena más seguro que sus propias palabras. Compruebe que dice solo lo que quiso decir.",
+      "conflict_marker": "Puede entrar en conflicto con algo ya guardado: {target}",
+      "replace": "Reemplazar",
+      "replace_for": "Reemplazar \"{target}\" por \"{text}\"",
+      "set_aside": "{count, plural, one {# afirmación sobre lo que funciona se dejó de lado.} other {# afirmaciones sobre lo que funciona se dejaron de lado.}}"
     }
   }
 }

@@ -4,14 +4,14 @@ import path from 'node:path'
 import { ZodError } from 'zod'
 
 vi.mock('@/lib/db/memory-interview', () => ({ writeInterviewCandidates: vi.fn(), ratifyInterviewRound: vi.fn() }))
-vi.mock('@/lib/db/memory-brand', () => ({ listBrandInterviewCandidates: vi.fn() }))
-vi.mock('@/lib/db/memory-audience', () => ({ listAudienceInterviewCandidates: vi.fn() }))
-vi.mock('@/lib/db/memory-evidence', () => ({ listEvidenceInterviewCandidates: vi.fn() }))
+vi.mock('@/lib/db/memory-brand', () => ({ listBrandInterviewCandidates: vi.fn(), listBrandConflictTargets: vi.fn().mockResolvedValue([]) }))
+vi.mock('@/lib/db/memory-audience', () => ({ listAudienceInterviewCandidates: vi.fn(), listAudienceConflictTargets: vi.fn().mockResolvedValue([]) }))
+vi.mock('@/lib/db/memory-evidence', () => ({ listEvidenceInterviewCandidates: vi.fn(), listEvidenceConflictTargets: vi.fn().mockResolvedValue([]) }))
 
 import { ratifyInterviewRound, writeInterviewCandidates } from '@/lib/db/memory-interview'
-import { listBrandInterviewCandidates } from '@/lib/db/memory-brand'
-import { listAudienceInterviewCandidates } from '@/lib/db/memory-audience'
-import { listEvidenceInterviewCandidates } from '@/lib/db/memory-evidence'
+import { listBrandConflictTargets, listBrandInterviewCandidates } from '@/lib/db/memory-brand'
+import { listAudienceConflictTargets, listAudienceInterviewCandidates } from '@/lib/db/memory-audience'
+import { listEvidenceConflictTargets, listEvidenceInterviewCandidates } from '@/lib/db/memory-evidence'
 import {
   listInterviewCandidatesForRound,
   ratifyInterviewCandidates,
@@ -319,6 +319,61 @@ describe('listInterviewCandidatesForRound', () => {
     expect(listBrandInterviewCandidates).toHaveBeenCalledWith(client, [A1, A2])
     expect(listAudienceInterviewCandidates).toHaveBeenCalledWith(client, [A1, A2])
     expect(listEvidenceInterviewCandidates).toHaveBeenCalledWith(client, [A1, A2])
-    expect(result).toEqual({ brand: [{ id: 'b1' }], audience: [{ id: 'a1' }, { id: 'a2' }], evidence: [] })
+    expect(result).toEqual({
+      brand: [{ id: 'b1' }],
+      audience: [{ id: 'a1' }, { id: 'a2' }],
+      evidence: [],
+      conflictTargets: { brand: [], audience: [], evidence: [] },
+    })
+  })
+
+  // Session 35-D D5 (MAJOR-3): each candidate's persisted conflict ids are resolved to display rows, against the table of the
+  // candidate that names them, with the SAME caller client (RLS applies), deduplicated, and never for a table with no ids.
+  it('resolves every conflict id against the table of the candidate that names it, once, with the caller client', async () => {
+    const T1 = '3f0c1d52-7a54-4a55-9d8e-0d9a1b2c3d4e'
+    const T2 = '4a1c1d52-7a54-4a55-9d8e-0d9a1b2c3d4f'
+    vi.mocked(listBrandInterviewCandidates).mockResolvedValue([
+      { id: 'b1', interview_conflict_ids: [T1, T2] },
+      { id: 'b2', interview_conflict_ids: [T1] },
+    ] as never)
+    vi.mocked(listAudienceInterviewCandidates).mockResolvedValue([{ id: 'a1', interview_conflict_ids: null }] as never)
+    vi.mocked(listEvidenceInterviewCandidates).mockResolvedValue([] as never)
+    const brandTargets = [{ id: T1, text: 'An active brand row', status: 'active', source: 'interview' }]
+    vi.mocked(listBrandConflictTargets).mockResolvedValue(brandTargets as never)
+
+    const client = {} as never
+    const result = await listInterviewCandidatesForRound(client, [A1])
+
+    expect(listBrandConflictTargets).toHaveBeenCalledWith(client, [T1, T2]) // deduplicated across the two candidates
+    expect(listAudienceConflictTargets).toHaveBeenCalledWith(client, []) // nothing to resolve, and the reader returns [] for it
+    expect(listEvidenceConflictTargets).toHaveBeenCalledWith(client, [])
+    expect(result.conflictTargets).toEqual({ brand: brandTargets, audience: [], evidence: [] })
+  })
+})
+
+describe('recordInterviewCandidates — the D5 markers are strict (z.strictObject), bounded and passed through', () => {
+  const CONFLICT = '3f0c1d52-7a54-4a55-9d8e-0d9a1b2c3d4e'
+  const withItem = (over: Record<string, unknown>) => input({ items: [{ ...item(), ...over }] })
+
+  it('passes hedgeFlagged and conflictIds (and counters.droppedCap) through to the writer', async () => {
+    writerReturns({ outcome: 'written', status: 'awaiting_ratification', inserted: 1, candidates: { brand: 1, audience: 0, evidence: 0 } })
+    await recordInterviewCandidates({ ...withItem({ hedgeFlagged: true, conflictIds: [CONFLICT] }), counters: { proposed: 1, ...NO_DROPS, droppedCap: 2 } })
+    const sent = vi.mocked(writeInterviewCandidates).mock.calls[0][0]
+    expect(sent.items[0]).toMatchObject({ hedgeFlagged: true, conflictIds: [CONFLICT] })
+    expect(sent.counters.droppedCap).toBe(2)
+  })
+
+  it.each([
+    ['hedgeFlagged is a string', { hedgeFlagged: 'yes' }],
+    ['conflictIds holds a non-uuid', { conflictIds: ['not-a-uuid'] }],
+    ['conflictIds holds more than three ids', { conflictIds: [CONFLICT, CONFLICT, CONFLICT, CONFLICT] }],
+    ['an unknown key rides along', { confidence: 1 }],
+  ])('rejects at the boundary and writes nothing: %s', async (_label, over) => {
+    await rejects(withItem(over))
+  })
+
+  it('rejects a negative or fractional droppedCap', async () => {
+    await rejects({ ...input(), counters: { proposed: 1, ...NO_DROPS, droppedCap: -1 } } as RecordInterviewCandidatesInput)
+    await rejects({ ...input(), counters: { proposed: 1, ...NO_DROPS, droppedCap: 1.5 } } as RecordInterviewCandidatesInput)
   })
 })

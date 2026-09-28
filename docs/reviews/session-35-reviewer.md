@@ -651,3 +651,54 @@ block): **372 files / 5440 tests** green (was 371/5437: +1 file, `constants.test
 
 **What this step did NOT touch:** no push (rule 10); no `extract.ts`, `lib/db/memory-interview.ts` or UI change (D5); `docs/decisions/*` untouched
 (ADR amendments are D10); `docs/launch-checklist.md` untouched (D10).
+
+### D5 — MAJOR-3 (TS + UI), MINOR-3, NIT-2 (TS): the ratifier sees the markers, Replace, and what was set aside
+
+D5 is the app half of what D4's migration made possible. No SQL, no migration. It closes MAJOR-3 (with D4), MINOR-3 and NIT-2.
+
+| Field | MAJOR-3 (TS + UI half) |
+|---|---|
+| **Finding** | MAJOR-3: the hedge flag and conflict markers were computed and discarded; the ratify view could show neither and Replace was unreachable (`InterviewPanel.tsx:13-19`, `extract.ts:59`). |
+| **Fix** | `extract.ts` (`filterExtractedItems`) now puts `hedgeFlagged` and `conflictIds` (the model's ids intersected with the ids that were SENT, at most 3) on each kept record. They go through `lib/memory/interview.ts` (`z.strictObject`; `hedgeFlagged` boolean, `conflictIds` at most 3 uuid strings) and `lib/db/memory-interview.ts` (named-key picking) into D4's writer. `listInterviewCandidatesForRound` also resolves each candidate's persisted conflict ids to `{ id, text, status, source }` with three new bounded readers (`list{Brand,Audience,Evidence}ConflictTargets`, the caller's member-RLS client, `ORDER BY id`, limit 72), each id looked up only in the table of the candidate that names it. `InterviewPanel` renders per record: a hedge marker when flagged; a "may conflict with: <target>" marker per resolved conflict; and **Replace only when the target is `active` AND `source = 'interview'`**, with an accessible name naming both records. One target is replaced by at most one record, and `replaces` is sent only with an ACCEPT. Still no accept-all and no checkbox; Ratify is enabled only when every item is decided. The two stale comments (`extract.ts:59`, `InterviewPanel.tsx:13-19`) now point at D4/D5. |
+| **Proof** | Tier 2 render (`InterviewPanel.test.tsx`, 12 new cases): flagged shows the marker and unflagged / pre-D5 (null) do not; a conflicting record shows the marker naming its target; an unresolved id and a cross-type id show none; **Replace appears for an active interview target and NOT for a manual or a retired one** (the marker still shows for all three); Replace's accessible name carries both records; an accepted record with Replace sends `replaces { type, id }`; a rejected record never does; choosing a target for a second record clears it from the first. Tier 2 pass-through: `extract.test.ts` (per-record `hedgeFlagged`, per-record `conflictIds` with a foreign id absent from the payload, `[]` when none, cap drop counted), `memory/interview.test.ts` (strict schema: malformed inputs rejected; pass-through; conflict targets resolved per table, deduplicated, with the caller's client), `db/memory-interview.test.ts` (exactly nine item keys and four counter keys; defaults false / [] / 0). **Tier 1, live Postgres, end to end** (`interview-ratify.test.ts`): the writer persists the real conflict id and drops and counts a foreign one; a Replace decision built from the PERSISTED id reaches **`replaced = 1`** (it was structurally 0), the old row is retired and not marked rejected. |
+| **Reddening** | 12 mutations, each source file backed up and restored byte-for-byte: (a1) `hedgeFlagged` not passed by `extract.ts` -> the Tier-2 pass-through RED; (a2) the panel never derives the hedge flag -> the hedge render test RED; (b) Replace offered regardless of source or status -> the manual/retired case RED; (d) `conflictIds` dropped in `extract.ts` -> RED; (f) the memory layer drops `hedgeFlagged` -> RED; (f2) the schema no longer requires uuid / max 3 -> two rejection cases RED; (g) the DB wrapper sends `hedgeFlagged: false` -> RED; (h) brand targets resolved from audience ids -> RED; (i) a target selectable by two records -> RED; (j) `replaces` sent for a rejected record -> RED. |
+| **Commit** | this commit (D5) |
+
+| Field | MINOR-3 |
+|---|---|
+| **Finding** | MINOR-3: the D-4 "N statements about what performs were set aside" note (ADR 0029 §4.7) was missing at ratification. |
+| **Fix** | The ratify view shows `ui.ratify.set_aside` (ICU plural, with the count) when `round.dropped_performance_claim > 0`. |
+| **Proof / Reddening** | Render tests: shown with the count when it is 2, absent when 0. (c) Hiding the note -> the "count 2" case RED. |
+| **Commit** | this commit (D5) |
+
+| Field | NIT-2 (TS half) |
+|---|---|
+| **Finding** | NIT-2: `extract.ts:187` `continue`d past the per-answer cap without a counter. |
+| **Fix** | `droppedCap++` at that branch; `counters.droppedCap` travels to the writer beside the yield counters and lands in D4's `dropped_cap`. The returned `yield` keeps its three keys, so no existing assertion on it changed. |
+| **Proof / Reddening** | `extract.test.ts`: `INTERVIEW_MAX_ITEMS_PER_ANSWER + 2` items -> `droppedCap: 2` reaches the writer. (e) Removing the increment -> RED. |
+| **Commit** | this commit (D5) |
+
+**i18n (rule: en, pt AND es in the same commit).** `ui.ratify.{hedge_marker, conflict_marker, replace, replace_for, set_aside}` added to all three `interview.json`, additions only (the diff shows the five keys and one trailing comma). `lib/i18n/interview-parity.test.ts` stays green.
+
+**Assertions that changed, and why (none weakened).** D5's own build step changes the payload the extraction sends, so the tests that pin its exact key set were updated to the new exact set: item keys 5 -> 7 (`extract.test.ts`), 7 -> 9 (`memory-interview.test.ts`); counters 3 -> 4 keys (`droppedCap`); an evidence item now also carries `hedgeFlagged: false, conflictIds: []`; `listInterviewCandidatesForRound` now also returns `conflictTargets`. Each is still an exact-shape assertion, and the governance-key scans over the serialised payload are untouched.
+
+**SHARED-FUNCTION CALLERS** (rule 9):
+
+| Function | Production callers | Tests |
+|---|---|---|
+| `filterExtractedItems` / `extractInterviewRound` | `interview/actions.ts` (submit, retry) | `extract.test.ts` |
+| `recordInterviewCandidates` | `lib/interview/extract.ts` only | `memory/interview.test.ts`, `extract.test.ts` (mocked), `interview-writer.test.ts` (Tier 1) |
+| `listInterviewCandidatesForRound` | `lib/interview/load-page-state.ts` (dashboard layout, `InterviewCard`, `/interview`) | `memory/interview.test.ts`, `load-page-state.test.ts` |
+| `InterviewRatifyPanel` | `InterviewPanel` (the `/interview` page) | `InterviewPanel.test.tsx` |
+
+**security-reviewer (ECC, once) over the answer -> extraction -> writer -> ratify path.** No BLOCKER or MAJOR; areas (a) prompt-injection id flow, (b) tenant isolation of the new reads, (c) rendering, (e) governance, (f) information exposure and (g) bounds found nothing. Disposition:
+
+| # | Finding | Disposition |
+|---|---|---|
+| MINOR-1 | `ratify_interview_round` does not bind `replaces` to the candidate's own `interview_conflict_ids`, nor to its type. An approver or admin who hand-crafts a Server Action call can replace ANY active interview record of their own business, including one of another type. The UI never offers it. | **NOT APPLIED — reported.** The fix is a change to a committed `SECURITY DEFINER` function, which is SQL, and rule 7 permits SQL at D4 only ("if another step appears to need SQL, STOP"). Impact is bounded: the caller is already an approver or admin of that business, the target must be an active `source = 'interview'` row of the same business, and manual, foreign-tenant and reused targets are already rejected `22023`. It needs a founder / next-session decision on a small forward migration (`v_rep_id = ANY (candidate.interview_conflict_ids)`, and `v_rep_type = v_type` unless a cross-type replace is intended). |
+| NIT-1 | The writer stores any live same-table, same-business row as a conflict id, including retired or manual ones. | **No change.** Harmless by design: replace-eligibility is decided at render time from the live status and source, and again in SQL. The cost is a "may conflict" marker that is not actionable for a stale target. |
+| NIT-2 | The target read uses `.in('id', ids)` with no chunking. | **No change.** At most 24 candidates x 3 ids = 72 per table, a bounded URL, and the read is limited to 72 and ordered by primary key. |
+
+**Full-suite confirmation (D5):** `npx tsc --noEmit --skipLibCheck` clean. `npx eslint .`: `✖ 112 problems (0 errors, 112 warnings)`, unchanged. `npm run test:app` (CI env block): **372 files / 5464 tests** green (was 372/5440 after D4: +24 tests, no new file). `npm run test:db` against the LOCAL stack only: **107 files / 1127 tests green** (was 1126 after D4; the +1 is the end-to-end writer -> ratify Replace case). The skip-guard is satisfied: no file executed zero tests.
+
+**What this step did NOT touch:** no SQL and no migration; no push (rule 10); `docs/decisions/*` untouched (D10 records the new constraint `INTERVIEW-MARKERS-SURFACED`); the D6 work (after() capture, stale retry, polling) is not started.

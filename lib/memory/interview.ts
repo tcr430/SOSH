@@ -8,12 +8,13 @@ import {
 } from '@/lib/db/memory-interview'
 
 export type { RatifyInterviewRoundResult, WriteInterviewCandidatesResult }
-import { listBrandInterviewCandidates } from '@/lib/db/memory-brand'
-import { listAudienceInterviewCandidates } from '@/lib/db/memory-audience'
-import { listEvidenceInterviewCandidates } from '@/lib/db/memory-evidence'
-import type { AudienceMemoryRow, BrandMemoryRow, EvidenceMemoryRow } from '@/lib/db/types'
+import { listBrandConflictTargets, listBrandInterviewCandidates } from '@/lib/db/memory-brand'
+import { listAudienceConflictTargets, listAudienceInterviewCandidates } from '@/lib/db/memory-audience'
+import { listEvidenceConflictTargets, listEvidenceInterviewCandidates } from '@/lib/db/memory-evidence'
+import type { AudienceMemoryRow, BrandMemoryRow, EvidenceMemoryRow, InterviewConflictTargetRow } from '@/lib/db/types'
 import {
   INTERVIEW_EVIDENCE_TEXT_MAX_CHARS,
+  INTERVIEW_MAX_CONFLICTS_PER_ITEM,
   INTERVIEW_MAX_ITEMS_PER_ANSWER,
   INTERVIEW_MAX_ITEMS_PER_ROUND,
   INTERVIEW_RECORD_TEXT_MAX_CHARS,
@@ -49,6 +50,10 @@ const itemSchema = z
     category: z.string().min(1),
     text: z.string().trim().min(1),
     span: z.string().trim().min(1).max(INTERVIEW_SPAN_MAX_CHARS),
+    // Session 35-D D5 (MAJOR-3): the computed markers. Strict like every other key here: a boolean and at most
+    // INTERVIEW_MAX_CONFLICTS_PER_ITEM uuid strings. The SQL re-verifies each id against the round's business and the same table.
+    hedgeFlagged: z.boolean().optional(),
+    conflictIds: z.array(z.string().uuid()).max(INTERVIEW_MAX_CONFLICTS_PER_ITEM).optional(),
   })
   .superRefine((item, ctx) => {
     if (!(CATEGORY_BY_TYPE[item.type] as readonly string[]).includes(item.category)) {
@@ -72,6 +77,7 @@ const inputSchema = z
       proposed: z.number().int().min(0),
       droppedUngrounded: z.number().int().min(0),
       droppedPerformanceClaim: z.number().int().min(0),
+      droppedCap: z.number().int().min(0).optional(),
     }),
   })
   .superRefine((input, ctx) => {
@@ -98,7 +104,15 @@ export async function recordInterviewCandidates(input: RecordInterviewCandidates
   const parsed = inputSchema.parse(input)
   return writeInterviewCandidates({
     roundId: parsed.roundId,
-    items: parsed.items.map((item) => ({ answerId: item.answerId, type: item.type, category: item.category, text: item.text, span: item.span })),
+    items: parsed.items.map((item) => ({
+      answerId: item.answerId,
+      type: item.type,
+      category: item.category,
+      text: item.text,
+      span: item.span,
+      ...(item.hedgeFlagged !== undefined ? { hedgeFlagged: item.hedgeFlagged } : {}),
+      ...(item.conflictIds !== undefined ? { conflictIds: item.conflictIds } : {}),
+    })),
     counters: parsed.counters,
   })
 }
@@ -165,7 +179,16 @@ export type RatifyInterviewCandidatesInput = z.input<typeof ratifyInputSchema>
 // counters, `not_awaiting` for a round that is not awaiting ratification — a no-op that wrote nothing — or `not_found`); a
 // ZodError for input that fails the strict schema (nothing is sent); a FounderInterviewRpcError (42501) for a caller who is
 // not an approver or admin of the round's business, or (22023) for a decision set the database rejects.
-export type InterviewCandidatesByType = { brand: BrandMemoryRow[]; audience: AudienceMemoryRow[]; evidence: EvidenceMemoryRow[] }
+// `conflictTargets` (Session 35-D D5, MAJOR-3): for every conflict id a candidate names, the target's text, status and source,
+// keyed by table so an id can never be resolved against the wrong type. Optional: a page state built without it renders no
+// conflict marker (and no Replace), never a wrong one.
+export type InterviewConflictTargetsByType = { brand: InterviewConflictTargetRow[]; audience: InterviewConflictTargetRow[]; evidence: InterviewConflictTargetRow[] }
+export type InterviewCandidatesByType = {
+  brand: BrandMemoryRow[]
+  audience: AudienceMemoryRow[]
+  evidence: EvidenceMemoryRow[]
+  conflictTargets?: InterviewConflictTargetsByType
+}
 
 // ADR 0029 §8.4/§9.5 (Session 35 M2.9) — the ratification READ: one round's still-'candidate',
 // source='interview' rows across the three memory tables, grouped by type for the ratification UI. MEM-NO-
@@ -179,7 +202,16 @@ export async function listInterviewCandidatesForRound(client: SupabaseClient, an
     listAudienceInterviewCandidates(client, answerIds),
     listEvidenceInterviewCandidates(client, answerIds),
   ])
-  return { brand, audience, evidence }
+  // Session 35-D D5: resolve each candidate's conflict ids (at most INTERVIEW_MAX_CONFLICTS_PER_ITEM per record, so bounded) to
+  // display rows, one bounded read per table, with the SAME caller client. Each id is looked up in the table of the candidate
+  // that names it: the writer only keeps an id that is a live row of the candidate's own table.
+  const idsOf = (rows: readonly { interview_conflict_ids: string[] | null }[]): string[] => [...new Set(rows.flatMap((r) => r.interview_conflict_ids ?? []))]
+  const [brandTargets, audienceTargets, evidenceTargets] = await Promise.all([
+    listBrandConflictTargets(client, idsOf(brand)),
+    listAudienceConflictTargets(client, idsOf(audience)),
+    listEvidenceConflictTargets(client, idsOf(evidence)),
+  ])
+  return { brand, audience, evidence, conflictTargets: { brand: brandTargets, audience: audienceTargets, evidence: evidenceTargets } }
 }
 
 export async function ratifyInterviewCandidates(input: RatifyInterviewCandidatesInput): Promise<RatifyInterviewRoundResult> {

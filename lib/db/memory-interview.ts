@@ -31,6 +31,11 @@ export type InterviewCandidateItem = {
   category: string
   text: string
   span: string
+  // Session 35-D D5 (MAJOR-3): the two COMPUTED markers the extraction derives per record (ADR 0029 §4.4 the hedge flag, §4.5
+  // conflict ids already intersected with the ids that were SENT). Neither is governance. The SQL persists them and re-verifies
+  // every conflict id (a live row of the SAME table and business) before storing it. Optional: absent = false / none.
+  hedgeFlagged?: boolean
+  conflictIds?: readonly string[]
 }
 
 // The yield counters (ADR 0029 §10.5) for items dropped BEFORE this call: only the extraction knows them.
@@ -38,6 +43,8 @@ export type InterviewYieldCounters = {
   proposed: number
   droppedUngrounded: number
   droppedPerformanceClaim: number
+  // Session 35-D D5 (NIT-2): answers beyond the per-answer cap that were not written. Optional: absent = 0.
+  droppedCap?: number
 }
 
 export type WriteInterviewCandidatesResult =
@@ -119,11 +126,15 @@ export async function writeInterviewCandidates(args: {
         // NEUTRALISED: what is stored
         storedText: neutralizeWithSentinels(item.text),
         storedSpan: neutralizeWithSentinels(item.span),
+        // COMPUTED markers (D5, MAJOR-3), picked by name like every other key. The SQL re-verifies each conflict id.
+        hedgeFlagged: item.hedgeFlagged ?? false,
+        conflictIds: [...(item.conflictIds ?? [])],
       })),
       counters: {
         proposed: args.counters.proposed,
         droppedUngrounded: args.counters.droppedUngrounded,
         droppedPerformanceClaim: args.counters.droppedPerformanceClaim,
+        droppedCap: args.counters.droppedCap ?? 0,
       },
     },
   })

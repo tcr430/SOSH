@@ -44,6 +44,7 @@ vi.mock('./actions', () => ({
 
 import { InterviewPanel } from './InterviewPanel'
 import type { InterviewPageState } from '@/lib/interview/page-state'
+import type { InterviewCandidatesByType } from '@/lib/memory/interview'
 import type { FounderInterviewAnswerRow, FounderInterviewRoundRow, BrandMemoryRow, AudienceMemoryRow, EvidenceMemoryRow } from '@/lib/db/types'
 
 function round(over: Partial<FounderInterviewRoundRow> = {}): FounderInterviewRoundRow {
@@ -383,5 +384,181 @@ describe('no dangerouslySetInnerHTML or markdown rendering on the interview surf
   it('InterviewPanel.tsx never uses dangerouslySetInnerHTML as a JSX prop (a mention in an explanatory comment is fine)', () => {
     const src = fs.readFileSync(path.join(process.cwd(), 'app', '[locale]', '(dashboard)', 'interview', 'InterviewPanel.tsx'), 'utf8')
     expect(src).not.toMatch(/dangerouslySetInnerHTML\s*=/)
+  })
+})
+
+// ── Session 35-D D5 — MAJOR-3 (app half) and MINOR-3: the ratifier sees the markers, Replace, and what was set aside ────────────
+// INTERVIEW-MARKERS-SURFACED. Before D5 the hedge flag (§4.4, the L-6 mitigation) and the "may conflict with" marker (§4.5) were
+// computed and discarded, Replace was unreachable, and the ratify view never said how many statements about what performs were
+// set aside (§4.7 D-4). ratify_interview_round re-verifies a replace target in SQL (active, source = 'interview', same business);
+// everything asserted here is what the ratifier is SHOWN and what the Server Action is SENT.
+
+describe('the ratify view surfaces the hedge flag, the conflict marker and Replace (§4.4, §4.5, §8.4)', () => {
+  const T_INTERVIEW = 'tg-interview'
+  const T_MANUAL = 'tg-manual'
+  const T_RETIRED = 'tg-retired'
+  type Targets = { id: string; text: string; status: 'active' | 'retired' | 'candidate'; source: 'interview' | 'manual' }
+  const target = (id: string, over: Partial<Targets> = {}): Targets => ({ id, text: `Existing record ${id}`, status: 'active', source: 'interview', ...over })
+
+  function ratifyPanel(candidates: Partial<InterviewCandidatesByType>, roundOver: Partial<FounderInterviewRoundRow> = {}) {
+    const view = renderPanel({
+      kind: 'awaiting_ratification',
+      round: round({ status: 'awaiting_ratification', ...roundOver }),
+      isRatifier: true,
+      candidates: { brand: [], audience: [], evidence: [], ...candidates },
+      answers: [answer({ status: 'answered' })],
+    })
+    cleanupFns.push(view.cleanup)
+    return view.container
+  }
+  const buttonsNamed = (c: HTMLElement, prefix: string) => Array.from(c.querySelectorAll('button')).filter((b) => b.getAttribute('aria-label')?.startsWith(prefix))
+
+  it('a FLAGGED record shows the hedge marker; an unflagged one and a pre-D5 row (flag null) do not', () => {
+    const c = ratifyPanel({
+      brand: [
+        brandCandidate({ id: 'bm-flagged', interview_hedge_flagged: true }),
+        brandCandidate({ id: 'bm-plain', interview_hedge_flagged: false }),
+        brandCandidate({ id: 'bm-legacy', interview_hedge_flagged: null }),
+      ],
+    })
+    const flagged = c.querySelector('[data-candidate-id="bm-flagged"]')!
+    expect(flagged.querySelector('[data-marker="hedge"]')?.textContent).toBe('ui.ratify.hedge_marker')
+    expect(c.querySelector('[data-candidate-id="bm-plain"] [data-marker="hedge"]')).toBeNull()
+    expect(c.querySelector('[data-candidate-id="bm-legacy"] [data-marker="hedge"]')).toBeNull()
+  })
+
+  it('a CONFLICTING record shows the conflict marker naming its target; a record with no conflict shows none', () => {
+    const c = ratifyPanel({
+      brand: [brandCandidate({ id: 'bm-1', interview_conflict_ids: [T_INTERVIEW] }), brandCandidate({ id: 'bm-2', interview_conflict_ids: [] })],
+      conflictTargets: { brand: [target(T_INTERVIEW)], audience: [], evidence: [] },
+    })
+    const marker = c.querySelector('[data-candidate-id="bm-1"] [data-marker="conflict"]')!
+    expect(marker.textContent).toContain('ui.ratify.conflict_marker:{"target":"Existing record tg-interview"}')
+    expect(c.querySelector('[data-candidate-id="bm-2"] [data-marker="conflict"]')).toBeNull()
+  })
+
+  it('an id that resolves to nothing (deleted, or not visible to this member) renders no marker rather than a wrong one', () => {
+    const c = ratifyPanel({ brand: [brandCandidate({ id: 'bm-1', interview_conflict_ids: ['tg-gone'] })], conflictTargets: { brand: [], audience: [], evidence: [] } })
+    expect(c.querySelector('[data-marker="conflict"]')).toBeNull()
+  })
+
+  it("a target is looked up ONLY among the targets of the candidate's OWN type: an audience record cannot resolve a brand target", () => {
+    const c = ratifyPanel({
+      audience: [audienceCandidate({ id: 'au-1', interview_conflict_ids: [T_INTERVIEW] })],
+      conflictTargets: { brand: [target(T_INTERVIEW)], audience: [], evidence: [] },
+    })
+    expect(c.querySelector('[data-marker="conflict"]')).toBeNull()
+  })
+
+  it('Replace is offered for an ACTIVE, interview-sourced target and NOT for a manual one, nor a retired one — the marker still shows for all three', () => {
+    const c = ratifyPanel({
+      brand: [
+        brandCandidate({ id: 'bm-a', interview_conflict_ids: [T_INTERVIEW] }),
+        brandCandidate({ id: 'bm-b', interview_conflict_ids: [T_MANUAL] }),
+        brandCandidate({ id: 'bm-c', interview_conflict_ids: [T_RETIRED] }),
+      ],
+      conflictTargets: {
+        brand: [target(T_INTERVIEW), target(T_MANUAL, { source: 'manual' }), target(T_RETIRED, { status: 'retired' })],
+        audience: [],
+        evidence: [],
+      },
+    })
+    expect(c.querySelectorAll('[data-marker="conflict"]')).toHaveLength(3)
+    expect(c.querySelector('[data-candidate-id="bm-a"]')!.querySelector('button[aria-label^="ui.ratify.replace_for"]')).not.toBeNull()
+    expect(c.querySelector('[data-candidate-id="bm-b"]')!.querySelector('button[aria-label^="ui.ratify.replace_for"]')).toBeNull()
+    expect(c.querySelector('[data-candidate-id="bm-c"]')!.querySelector('button[aria-label^="ui.ratify.replace_for"]')).toBeNull()
+  })
+
+  it("Replace's accessible name carries BOTH records (the new one and the one it replaces)", () => {
+    const c = ratifyPanel({
+      brand: [brandCandidate({ id: 'bm-a', statement: 'A distinctive new claim', interview_conflict_ids: [T_INTERVIEW] })],
+      conflictTargets: { brand: [target(T_INTERVIEW)], audience: [], evidence: [] },
+    })
+    const label = buttonsNamed(c, 'ui.ratify.replace_for')[0].getAttribute('aria-label')!
+    expect(label).toContain('A distinctive new claim')
+    expect(label).toContain('Existing record tg-interview')
+  })
+
+  it('there is still NO accept-all and NO checkbox with the new controls present', () => {
+    const c = ratifyPanel({
+      brand: [brandCandidate({ id: 'bm-a', interview_hedge_flagged: true, interview_conflict_ids: [T_INTERVIEW] })],
+      conflictTargets: { brand: [target(T_INTERVIEW)], audience: [], evidence: [] },
+    })
+    expect(c.querySelectorAll('input[type="checkbox"]')).toHaveLength(0)
+    expect(c.innerHTML).not.toMatch(/accept_all|reject_all/i)
+  })
+
+  async function clickRatify(c: HTMLElement) {
+    const ratify = Array.from(c.querySelectorAll('button')).find((b) => b.textContent === 'ui.awaiting_ratification.ratify_button')!
+    await act(async () => { ratify.click() })
+  }
+  const sentDecisions = () => (ratifyInterviewRoundAction.mock.calls[0][0] as { decisions: Array<Record<string, unknown>> }).decisions
+
+  it('an ACCEPTED record with Replace selected sends replaces { type, id }; without Replace it sends none', async () => {
+    const c = ratifyPanel({
+      brand: [brandCandidate({ id: 'bm-a', interview_conflict_ids: [T_INTERVIEW] }), brandCandidate({ id: 'bm-b' })],
+      conflictTargets: { brand: [target(T_INTERVIEW)], audience: [], evidence: [] },
+    })
+    const accept = buttonsNamed(c, 'ui.ratify.accept_for')
+    act(() => { accept[0].click(); accept[1].click() })
+    act(() => { buttonsNamed(c, 'ui.ratify.replace_for')[0].click() })
+    expect(buttonsNamed(c, 'ui.ratify.replace_for')[0].getAttribute('aria-pressed')).toBe('true')
+    await clickRatify(c)
+    const decisions = sentDecisions()
+    expect(decisions.find((d) => d.id === 'bm-a')).toMatchObject({ decision: 'accept', replaces: { type: 'brand', id: T_INTERVIEW } })
+    expect(decisions.find((d) => d.id === 'bm-b')).not.toHaveProperty('replaces')
+  })
+
+  it('a record that is REJECTED never sends replaces, even if Replace was toggled before the rejection', async () => {
+    const c = ratifyPanel({
+      brand: [brandCandidate({ id: 'bm-a', interview_conflict_ids: [T_INTERVIEW] })],
+      conflictTargets: { brand: [target(T_INTERVIEW)], audience: [], evidence: [] },
+    })
+    act(() => { buttonsNamed(c, 'ui.ratify.accept_for')[0].click() })
+    act(() => { buttonsNamed(c, 'ui.ratify.replace_for')[0].click() })
+    act(() => { buttonsNamed(c, 'ui.ratify.reject_for')[0].click() })
+    expect(buttonsNamed(c, 'ui.ratify.replace_for')[0].hasAttribute('disabled')).toBe(true)
+    await clickRatify(c)
+    expect(sentDecisions()[0]).toEqual({ type: 'brand', id: 'bm-a', decision: 'reject' })
+  })
+
+  it('a target is replaced by at most ONE record: choosing it for a second record clears it from the first', async () => {
+    const c = ratifyPanel({
+      brand: [brandCandidate({ id: 'bm-a', interview_conflict_ids: [T_INTERVIEW] }), brandCandidate({ id: 'bm-b', interview_conflict_ids: [T_INTERVIEW] })],
+      conflictTargets: { brand: [target(T_INTERVIEW)], audience: [], evidence: [] },
+    })
+    const accept = buttonsNamed(c, 'ui.ratify.accept_for')
+    act(() => { accept[0].click(); accept[1].click() })
+    const replace = buttonsNamed(c, 'ui.ratify.replace_for')
+    act(() => { replace[0].click() })
+    act(() => { replace[1].click() })
+    expect(replace[0].getAttribute('aria-pressed')).toBe('false')
+    expect(replace[1].getAttribute('aria-pressed')).toBe('true')
+    await clickRatify(c)
+    const decisions = sentDecisions()
+    expect(decisions.find((d) => d.id === 'bm-a')).not.toHaveProperty('replaces')
+    expect(decisions.find((d) => d.id === 'bm-b')).toMatchObject({ replaces: { type: 'brand', id: T_INTERVIEW } })
+  })
+})
+
+describe('the ratify view says how many statements about what performs were set aside (§4.7 D-4, MINOR-3)', () => {
+  const view = (dropped: number) => {
+    const { container, cleanup } = renderPanel({
+      kind: 'awaiting_ratification',
+      round: round({ status: 'awaiting_ratification', dropped_performance_claim: dropped }),
+      isRatifier: true,
+      candidates: { brand: [brandCandidate()], audience: [], evidence: [] },
+      answers: [answer({ status: 'answered' })],
+    })
+    cleanupFns.push(cleanup)
+    return container
+  }
+
+  it('shows the note with the count when dropped_performance_claim is 2', () => {
+    expect(view(2).querySelector('[data-state="set-aside"]')?.textContent).toBe('ui.ratify.set_aside:{"count":2}')
+  })
+
+  it('shows no note when it is 0', () => {
+    expect(view(0).querySelector('[data-state="set-aside"]')).toBeNull()
   })
 })

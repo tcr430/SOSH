@@ -6,7 +6,7 @@ vi.mock('@/lib/supabase/service', () => ({ createServiceRoleClient: vi.fn() }))
 
 import { createServiceRoleClient } from '@/lib/supabase/service'
 import { FounderInterviewRpcError } from './founder-interview-rounds'
-import { ratifyInterviewRound, writeInterviewCandidates, type InterviewCandidateItem, type InterviewDecision } from './memory-interview'
+import { ratifyInterviewRound, writeInterviewCandidates, type InterviewCandidateItem, type InterviewDecision, type InterviewYieldCounters } from './memory-interview'
 
 // ADR 0029 §2.3 THE RAW-vs-STORED INVARIANT (Tier 2, the wrapper half of INTERVIEW-GROUNDED and
 // INTERVIEW-GOVERNANCE-NOT-MODEL-SUPPLIED). The wrapper must send BOTH forms of every text and span: the RAW values, which
@@ -41,7 +41,7 @@ const baseItem = (over: Partial<InterviewCandidateItem> = {}): InterviewCandidat
 })
 
 type Sent = { p_round_id: string; p_items: { items: Record<string, unknown>[]; counters: Record<string, unknown> } }
-async function send(items: InterviewCandidateItem[], counters = COUNTERS): Promise<{ name: string; args: Sent }> {
+async function send(items: InterviewCandidateItem[], counters: InterviewYieldCounters = COUNTERS): Promise<{ name: string; args: Sent }> {
   const rpc = serviceRpc({ data: { outcome: 'written', status: 'awaiting_ratification', inserted: items.length, candidates: { brand: items.length, audience: 0, evidence: 0 } }, error: null })
   await writeInterviewCandidates({ roundId: ROUND, items, counters })
   const [name, args] = rpc.mock.calls[0] as [string, Sent]
@@ -85,10 +85,10 @@ describe('writeInterviewCandidates — the payload, key by key', () => {
     expect(Object.keys(args).sort()).toEqual(['p_items', 'p_round_id'])
     expect(args.p_round_id).toBe(ROUND)
     expect(Object.keys(args.p_items).sort()).toEqual(['counters', 'items'])
-    expect(args.p_items.counters).toEqual(COUNTERS)
+    expect(args.p_items.counters).toEqual({ ...COUNTERS, droppedCap: 0 }) // D5: droppedCap is always sent, 0 when the caller omits it
   })
 
-  it('every item carries EXACTLY the seven declared keys — a smuggled governance key cannot cross even through a cast', async () => {
+  it('every item carries EXACTLY the nine declared keys — a smuggled governance key cannot cross even through a cast', async () => {
     const smuggled = {
       ...baseItem(),
       confidence: 1,
@@ -100,22 +100,34 @@ describe('writeInterviewCandidates — the payload, key by key', () => {
       expires_at: '2099-01-01',
     } as unknown as InterviewCandidateItem
     const { args } = await send([smuggled])
-    expect(Object.keys(args.p_items.items[0]).sort()).toEqual(['answerId', 'category', 'span', 'storedSpan', 'storedText', 'text', 'type'])
+    // the seven record keys plus the two COMPUTED markers (D5, MAJOR-3) — neither is governance
+    expect(Object.keys(args.p_items.items[0]).sort()).toEqual(['answerId', 'category', 'conflictIds', 'hedgeFlagged', 'span', 'storedSpan', 'storedText', 'text', 'type'])
     const flat = JSON.stringify(args)
     for (const key of ['confidence', 'status', 'source', 'public_use_permission', 'business_id', 'scope', 'expires_at']) {
       expect(flat, key).not.toContain(`"${key}"`)
     }
   })
 
-  it('smuggled keys on the counters are dropped too (only the three named counters cross)', async () => {
+  it('smuggled keys on the counters are dropped too (only the four named counters cross)', async () => {
     const { args } = await send([baseItem()], { ...COUNTERS, status: 'active', confidence: 1 } as unknown as typeof COUNTERS)
-    expect(Object.keys(args.p_items.counters).sort()).toEqual(['droppedPerformanceClaim', 'droppedUngrounded', 'proposed'])
+    expect(Object.keys(args.p_items.counters).sort()).toEqual(['droppedCap', 'droppedPerformanceClaim', 'droppedUngrounded', 'proposed'])
   })
 
   it('an empty item list is sent as an empty array (the zero-valid-items → no_records path)', async () => {
     const { args } = await send([])
     expect(args.p_items.items).toEqual([])
-    expect(args.p_items.counters).toEqual(COUNTERS)
+    expect(args.p_items.counters).toEqual({ ...COUNTERS, droppedCap: 0 })
+  })
+
+  // Session 35-D D5 (MAJOR-3, NIT-2): the markers and the cap-drop counter cross, picked by name.
+  it('passes hedgeFlagged, conflictIds and droppedCap through, and defaults them to false / [] / 0 when the caller omits them', async () => {
+    const CONFLICT = '3f0c1d52-7a54-4a55-9d8e-0d9a1b2c3d4e'
+    const flagged = await send([baseItem({ hedgeFlagged: true, conflictIds: [CONFLICT] } as Partial<InterviewCandidateItem>)], { ...COUNTERS, droppedCap: 3 })
+    expect(flagged.args.p_items.items[0]).toMatchObject({ hedgeFlagged: true, conflictIds: [CONFLICT] })
+    expect(flagged.args.p_items.counters.droppedCap).toBe(3)
+    const plain = await send([baseItem()])
+    expect(plain.args.p_items.items[0]).toMatchObject({ hedgeFlagged: false, conflictIds: [] })
+    expect(plain.args.p_items.counters.droppedCap).toBe(0)
   })
 
   it('preserves item order (the SQL writes them in array order)', async () => {
