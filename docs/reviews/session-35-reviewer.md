@@ -733,3 +733,55 @@ No SQL, no migration. New constraint **`INTERVIEW-EXTRACTION-RECOVERABLE`** (rec
 **Full-suite confirmation (D6):** `npx tsc --noEmit --skipLibCheck` clean. `npx eslint .`: `✖ 112 problems (0 errors, 112 warnings)`, unchanged. `npm run test:app` (CI env block): **373 files / 5493 tests** green (was 372/5464: +1 file, `stale.test.ts`, +29 tests). `npm run test:db` against the LOCAL stack only (no migration or DB test file changed in this step; the run is the full-loop confirmation): **107 files / 1127 tests green** (unchanged from D5, as expected: no DB test or migration changed). The skip-guard is satisfied: no file executed zero tests.
 
 **What this step did NOT touch:** no SQL and no migration; no push (rule 10); `docs/decisions/*` untouched (D10); D7 (role-aware card and badge, single page-state load) not started.
+
+### D7 — MINOR-2 + MINOR-9: the card and badge respect role, and the page state is loaded once per request
+
+Presentation-only: no SQL, no RPC, no migration.
+
+**ADR 0029 §5.5, read and recorded (BUILD step 1):** the card and badge are *"shown to members with author rights when a round is **due** or **open**, and to ratifiers when one is **awaiting ratification**"*. The exact roles, each mirroring the RPC it stands in front of:
+
+| Predicate | Rule | The RPCs it mirrors |
+|---|---|---|
+| `canAuthorInterview` | `role` is `editor` or `approver` (the `AUTHOR` capability; `is_admin` does **not** admit these) | `create_interview_round`, `save_/skip_interview_answer`, `skip_/submit_interview_round`, the retry action |
+| `canRatifyInterview` | `role` is `approver` **or** `is_admin` | `ratify_interview_round` (`20260925140000:102-111`); deliberately **not** the `APPROVE` capability |
+
+State visibility: `due`, `in_progress`, `extracting`, `extraction_failed` -> authors; `awaiting_ratification` -> ratifiers; every other state -> nobody.
+
+| Field | MINOR-2 |
+|---|---|
+| **Finding** | MINOR-2: `isInterviewCardState` was role-blind, and the layout and `InterviewCard.tsx` used it as is. A viewer saw "due" with a Start link the RPC refuses; an editor got a badge for a ratification they cannot perform. |
+| **Fix** | `isInterviewCardState(state, member)` now takes the member (`MemberCapabilityContext`, so role and `is_admin`) and applies the table above; `canAuthorInterview` / `canRatifyInterview` are exported beside it. `InterviewCard` takes `member` instead of `isRatifier`, and returns null **without loading** for a member holding neither role. The layout's badge goes through a new `loadInterviewBadge(client, business, member)` in `load-page-state.ts` (see deviations), which applies the same rule and skips the load for a viewer. The campaigns page passes `member` to both of its `InterviewCard` renders. |
+| **Proof** | Tier 2, per role (`page-state.test.ts`, 26 new): viewer, editor, approver, **editor + admin** and **viewer + admin** across `due`, `in_progress`, `extracting`, `extraction_failed` and `awaiting_ratification`, plus the two predicates directly. `InterviewCard.test.tsx` (5 new): a viewer sees no card in any state and the load is not made; an editor sees due and open but not a ratification; an approver sees all three; an admin who cannot author sees the awaiting card and no due card; the loader is told `isRatifier` exactly when the member can ratify. `load-page-state.cache.test.ts` (`loadInterviewBadge`, 4 new): the same rule for the nav badge. |
+| **Reddening** | (a) the author states made role-blind -> the viewer and admin-viewer cases RED; (a2) the ratification state made role-blind -> the viewer and editor cases RED; (a3) ratifier narrowed to `approver` only (the `APPROVE` capability) -> every admin case RED; (a4) author widened to include admin -> the admin-viewer cases RED; (a5) the card's viewer short-circuit removed -> RED; (a6) the badge's viewer short-circuit removed -> RED. Restored each byte-for-byte. |
+| **Commit** | this commit (D7) |
+
+| Field | MINOR-9 |
+|---|---|
+| **Finding** | MINOR-9: `layout.tsx` called `loadInterviewPageState` on every dashboard page, and `/campaigns` called it again through the card; each call can read up to 3 x 500 memory rows plus the cooldown rows. |
+| **Fix** | `loadInterviewPageState` keeps its signature and is memoised per request with React `cache()` keyed on primitives only (`business.id`, `interview_snoozed_until`, `isRatifier`): the layout, the card and the `/interview` page of one request share one load. The first caller's `client` does the reads, so a client is deliberately not part of the key. A Server Action's revalidation and the panel's polling `router.refresh()` are new requests and read fresh state. A rejection is shared within the request. |
+| **Proof** | `load-page-state.cache.test.ts` (new, 7 cases plus the 4 badge cases): two calls with the same arguments run the reads **once** and share the result; three callers with three different client objects share one load; the first caller's client does the reads; a different business, snooze instant or ratifier flag is a different key; a new request reads fresh state; the badge and a card share one load; a failure is shared. React's `cache()` only memoises inside a server render, so the file replaces it with a faithful memoiser and an explicit "new request" reset (stated in the file). |
+| **Reddening** | (b) `cache(` unwrapped -> five cases RED. Restored byte-for-byte. |
+| **Commit** | this commit (D7) |
+
+**Deviations and gaps, stated.**
+1. **`loadInterviewBadge` (new).** The layout is an async Server Component, and its badge expression would otherwise have been authored but never executed by a test. The rule moved into `loadInterviewBadge` next to the loader, where it is tested; the layout is one call.
+2. **`layout.test.tsx` was not "stays green" as is.** It mocks `@/lib/interview/load-page-state` wholesale, so it needed the new export in its mock (`loadInterviewBadge` resolving `false`, replacing `loadInterviewPageState`). Only the mock changed; its Sentry and onboarding-guard assertions are untouched and green.
+3. **`InterviewCard`'s props changed** (`isRatifier` -> `member`), and its one production caller, `campaigns/page.tsx`, changed with it. `loadInterviewPageState`'s signature is unchanged, as the guide requires.
+4. **"`/campaigns` calls it twice more"** is two mutually exclusive render branches (empty state and list), so one request renders one card; the shared load matters for the layout + card + page.
+5. **Residual, not fixed (out of D7's scope).** The `/interview` page itself still renders the `due` state, with its Start button, to a viewer who follows the URL. D7 fixes the card and the badge, which is what MINOR-2 and §5.5 name; the RPC refuses the action.
+
+**SHARED-FUNCTION CALLERS** (rule 9), `loadInterviewPageState`:
+
+| Caller | Now | Test |
+|---|---|---|
+| `app/[locale]/(dashboard)/layout.tsx` | via `loadInterviewBadge` (skipped for a viewer) | `load-page-state.cache.test.ts` (`loadInterviewBadge`), `layout.test.tsx` (mocked) |
+| `components/interview/InterviewCard.tsx` (from `campaigns/page.tsx`) | direct, skipped for a viewer | `InterviewCard.test.tsx` |
+| `app/[locale]/(dashboard)/interview/page.tsx` | direct (unchanged) | `load-page-state.test.ts` (uncached behaviour), `InterviewPanel.test.tsx` |
+
+`isInterviewCardState` callers: `loadInterviewBadge`, `InterviewCard.tsx` (the layout no longer imports it), tested in `page-state.test.ts`.
+
+**Assertions that changed, none weakened:** the five pre-D7 `isInterviewCardState` assertions and the `InterviewCard` cases now pass an approver (who holds both roles) as the member, so they assert exactly what they did before. `layout.test.tsx` changed only its mock.
+
+**Full-suite confirmation (D7):** `npx tsc --noEmit --skipLibCheck` clean. `npx eslint .`: `✖ 112 problems (0 errors, 112 warnings)`, unchanged. `npm run test:app` (CI env block): **374 files / 5535 tests** green (was 373/5493: +1 file, `load-page-state.cache.test.ts`, +42 tests). No `test:db`: D7 changes no SQL and no DB test (the guide's loop for this step is tsc, lint, `test:app`).
+
+**What this step did NOT touch:** no SQL and no migration; no push (rule 10); `docs/decisions/*` untouched (D10); D8 (action failures shown and focused) not started.

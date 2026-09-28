@@ -4,6 +4,7 @@ import { INTERVIEW_BANK, type InterviewQuestion } from './bank'
 import { INTERVIEW_MAX_ATTEMPTS, INTERVIEW_CEILING_CENTS } from './constants'
 import { isInterviewDue } from './due'
 import { isExtractionStale } from './stale'
+import { CAPABILITIES, hasCapability, type MemberCapabilityContext } from '@/lib/members/capabilities'
 import { type CooldownRow, selectQuestions } from './select'
 import type { SlotThinness } from './thinness'
 
@@ -116,6 +117,32 @@ export function computeInterviewPageState(input: ComputeInterviewPageStateInput)
 }
 
 /** The dashboard card (§8.1) shows a SUBSET: due, any non-terminal ("open"), or awaiting ratification — hidden otherwise. */
-export function isInterviewCardState(state: InterviewPageState): boolean {
-  return state.kind === 'due' || state.kind === 'in_progress' || state.kind === 'extracting' || state.kind === 'extraction_failed' || state.kind === 'awaiting_ratification'
+export function isInterviewCardState(state: InterviewPageState, member: MemberCapabilityContext): boolean {
+  switch (state.kind) {
+    // Author states: the RPCs behind them (create / save / skip / submit / retry) admit role editor OR approver only.
+    case 'due':
+    case 'in_progress':
+    case 'extracting':
+    case 'extraction_failed':
+      return canAuthorInterview(member)
+    // Ratification: the ratify RPC admits an approver OR an admin (a different predicate from the AUTHOR capability).
+    case 'awaiting_ratification':
+      return canRatifyInterview(member)
+    default:
+      return false
+  }
+}
+
+// ADR 0029 §5.5 (Session 35-D D7, Reviewer MINOR-2) — the card and the nav badge are "shown to members with author rights when
+// a round is due or open, and to ratifiers when one is awaiting ratification". Each predicate mirrors the RPC it stands in front
+// of, so a member is never invited to a control the RPC refuses (UX echo only; the RPCs are the boundary, L-3):
+//   author   <=> role editor OR approver   -- create_interview_round, save/skip/submit_interview_*, the retry action
+//                                             (= the AUTHOR capability; is_admin does NOT admit these RPCs)
+//   ratifier <=> role approver OR is_admin -- ratify_interview_round (20260925140000:102-111), NOT the APPROVE capability
+export function canAuthorInterview(member: MemberCapabilityContext): boolean {
+  return hasCapability(member, CAPABILITIES.AUTHOR)
+}
+
+export function canRatifyInterview(member: MemberCapabilityContext): boolean {
+  return member.role === 'approver' || member.isAdmin
 }

@@ -4,7 +4,8 @@ import { cn } from '@/lib/utils'
 import { buttonVariants } from '@/components/ui/button'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { loadInterviewPageState } from '@/lib/interview/load-page-state'
-import { isInterviewCardState } from '@/lib/interview/page-state'
+import { canAuthorInterview, canRatifyInterview, isInterviewCardState } from '@/lib/interview/page-state'
+import type { MemberCapabilityContext } from '@/lib/members/capabilities'
 
 // ADR 0029 §8.1/§5.5 (Session 35 M2.10) — the dashboard card: due / open / awaiting ratification, hidden while
 // snoozed or when nothing is due/in progress (§5.8: overdue never escalates — the card just stays, it never
@@ -14,15 +15,18 @@ export async function InterviewCard({
   client,
   business,
   locale,
-  isRatifier,
+  member,
 }: {
   client: SupabaseClient
   business: { id: string; interview_snoozed_until?: string | null }
   locale: string
-  isRatifier: boolean
+  member: MemberCapabilityContext
 }) {
-  const state = await loadInterviewPageState(client, business, isRatifier)
-  if (!isInterviewCardState(state)) return null
+  // §5.5 (D7, MINOR-2): each state is shown only to the roles whose RPCs would accept its action, so a viewer never sees a Start
+  // link the RPC refuses and an editor is never invited to ratify. A member with neither role skips the load entirely.
+  if (!canAuthorInterview(member) && !canRatifyInterview(member)) return null
+  const state = await loadInterviewPageState(client, business, canRatifyInterview(member))
+  if (!isInterviewCardState(state, member)) return null
 
   const t = await getTranslations('interview')
   const body =

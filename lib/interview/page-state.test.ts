@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeInterviewPageState, isInterviewCardState, type ComputeInterviewPageStateInput } from './page-state'
+import { canAuthorInterview, canRatifyInterview, computeInterviewPageState, isInterviewCardState, type ComputeInterviewPageStateInput, type InterviewPageState } from './page-state'
 import { INTERVIEW_BANK } from './bank'
 import { computeSlotThinness } from './thinness'
 import type { FounderInterviewRoundRow } from '@/lib/db/types'
@@ -170,20 +170,64 @@ describe('computeInterviewPageState', () => {
   })
 })
 
+// An approver holds BOTH interview roles (author: editor|approver; ratifier: approver|admin), so these pre-D7 assertions stay as they were.
+const APPROVER = { role: 'approver', isAdmin: false } as const
+
 describe('isInterviewCardState — the dashboard card shows due / open / awaiting ratification only', () => {
   it('shown for due, in_progress, extracting, extraction_failed, awaiting_ratification', () => {
-    expect(isInterviewCardState({ kind: 'due', questionCount: 6 })).toBe(true)
-    expect(isInterviewCardState({ kind: 'in_progress', round: round(), answers: [] })).toBe(true)
-    expect(isInterviewCardState({ kind: 'extracting', round: round(), stale: false })).toBe(true)
-    expect(isInterviewCardState({ kind: 'extraction_failed', round: round(), canRetry: true, ceilingReached: false })).toBe(true)
-    expect(isInterviewCardState({ kind: 'awaiting_ratification', round: round(), isRatifier: true, candidates: null, answers: [] })).toBe(true)
+    expect(isInterviewCardState({ kind: 'due', questionCount: 6 }, APPROVER)).toBe(true)
+    expect(isInterviewCardState({ kind: 'in_progress', round: round(), answers: [] }, APPROVER)).toBe(true)
+    expect(isInterviewCardState({ kind: 'extracting', round: round(), stale: false }, APPROVER)).toBe(true)
+    expect(isInterviewCardState({ kind: 'extraction_failed', round: round(), canRetry: true, ceilingReached: false }, APPROVER)).toBe(true)
+    expect(isInterviewCardState({ kind: 'awaiting_ratification', round: round(), isRatifier: true, candidates: null, answers: [] }, APPROVER)).toBe(true)
   })
 
   it('hidden for not_due, nothing_thin, and every terminal confirmation kind', () => {
-    expect(isInterviewCardState({ kind: 'not_due', nextEligibleAt: null })).toBe(false)
-    expect(isInterviewCardState({ kind: 'nothing_thin' })).toBe(false)
+    expect(isInterviewCardState({ kind: 'not_due', nextEligibleAt: null }, APPROVER)).toBe(false)
+    expect(isInterviewCardState({ kind: 'nothing_thin' }, APPROVER)).toBe(false)
     for (const kind of ['ratified', 'no_records', 'skipped', 'expired', 'failed'] as const) {
-      expect(isInterviewCardState({ kind, round: round({ status: kind }) })).toBe(false)
+      expect(isInterviewCardState({ kind, round: round({ status: kind }) }, APPROVER)).toBe(false)
     }
+  })
+})
+
+// ADR 0029 §5.5, Session 35-D D7 (MINOR-2): "shown to members with author rights when a round is due or open, and to ratifiers
+// when one is awaiting ratification". Author = role editor|approver (the create/save/submit/retry RPCs); ratifier = role
+// approver OR is_admin (ratify_interview_round) — deliberately NOT the APPROVE capability. Before D7 the predicate was role-blind.
+describe('isInterviewCardState — per role (§5.5): each state only to the roles whose RPC would accept its action', () => {
+  const STATES: Array<[string, InterviewPageState, 'author' | 'ratifier']> = [
+    ['due', { kind: 'due', questionCount: 6 }, 'author'],
+    ['in_progress', { kind: 'in_progress', round: round(), answers: [] }, 'author'],
+    ['extracting', { kind: 'extracting', round: round(), stale: false }, 'author'],
+    ['extraction_failed', { kind: 'extraction_failed', round: round(), canRetry: true, ceilingReached: false }, 'author'],
+    ['awaiting_ratification', { kind: 'awaiting_ratification', round: round(), isRatifier: true, candidates: null, answers: [] }, 'ratifier'],
+  ]
+  const MEMBERS = {
+    viewer: { role: 'viewer', isAdmin: false },
+    editor: { role: 'editor', isAdmin: false },
+    approver: { role: 'approver', isAdmin: false },
+    'admin who is not an approver (editor + admin)': { role: 'editor', isAdmin: true },
+    'admin who is not an approver (viewer + admin)': { role: 'viewer', isAdmin: true },
+  } as const
+  // who may SEE each state, per role
+  const CAN: Record<keyof typeof MEMBERS, { author: boolean; ratifier: boolean }> = {
+    viewer: { author: false, ratifier: false },
+    editor: { author: true, ratifier: false },
+    approver: { author: true, ratifier: true },
+    'admin who is not an approver (editor + admin)': { author: true, ratifier: true },
+    'admin who is not an approver (viewer + admin)': { author: false, ratifier: true },
+  }
+
+  for (const [memberLabel, member] of Object.entries(MEMBERS) as Array<[keyof typeof MEMBERS, (typeof MEMBERS)[keyof typeof MEMBERS]]>) {
+    it.each(STATES)(`${memberLabel}: %s`, (_kind, state, needs) => {
+      expect(isInterviewCardState(state, member)).toBe(CAN[memberLabel][needs])
+    })
+  }
+
+  it('the predicates themselves: a viewer holds neither role, an editor authors only, an approver both, an admin ratifies', () => {
+    expect([canAuthorInterview(MEMBERS.viewer), canRatifyInterview(MEMBERS.viewer)]).toEqual([false, false])
+    expect([canAuthorInterview(MEMBERS.editor), canRatifyInterview(MEMBERS.editor)]).toEqual([true, false])
+    expect([canAuthorInterview(MEMBERS.approver), canRatifyInterview(MEMBERS.approver)]).toEqual([true, true])
+    expect([canAuthorInterview({ role: 'viewer', isAdmin: true }), canRatifyInterview({ role: 'viewer', isAdmin: true })]).toEqual([false, true])
   })
 })

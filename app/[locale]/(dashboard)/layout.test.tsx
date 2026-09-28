@@ -27,8 +27,9 @@ vi.mock('@/lib/db/trial-state', () => ({
 vi.mock('@/lib/db/backfill-runs', () => ({
   getBackfillRunsForBusiness: vi.fn().mockResolvedValue([]),
 }))
+// Session 35-D D7: the layout asks for the nav badge (a boolean) through loadInterviewBadge; no badge here.
 vi.mock('@/lib/interview/load-page-state', () => ({
-  loadInterviewPageState: vi.fn().mockResolvedValue({ kind: 'not_due', nextEligibleAt: null }),
+  loadInterviewBadge: vi.fn().mockResolvedValue(false),
 }))
 vi.mock('@/components/onboarding/BackfillBanner', () => ({
   BackfillBanner: () => null,
