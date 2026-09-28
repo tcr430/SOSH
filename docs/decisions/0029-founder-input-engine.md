@@ -1112,3 +1112,244 @@ The yield counters (§10.5) are covered by #8, #22 and #41; they are a report, n
 | SUGGESTION-7 — a reconciliation test | **Accepted** (§10.1). |
 
 **No finding was rejected.** One severity (database BLOCKER-1) is disputed above, with the reason.
+
+
+---
+
+## Correction pass amendments (Session 35-D)
+
+Sections 0–14 above are **not edited**. This section is appended, records only what changed, and cites the test
+file:line and commit SHA that now proves each statement. Range: `bfb3bf84..c95dcd77` (D0–D9); this section itself
+lands at D10.
+
+### C.1 MAJOR-1 — §9.5's "cooldown keys … limit = bank size" is superseded
+
+§9.5 said: *"cooldown keys (`question_key, answered_at DESC`, limit = bank size)"*. That row-count limit truncated
+by **key**, ordered `question_key ASC`, so past ~33 total answered/skipped rows a late-sorting key's own recent
+answer fell outside the limit and was silently omitted from the cooldown set — `selectQuestions` could then
+re-select a key answered 31 days ago.
+
+**Superseded by:** `listInterviewCooldownRows` (`lib/db/founder-interview-answers.ts`) now filters
+`answered_at >= now - INTERVIEW_ANSWERED_COOLDOWN_DAYS` (180 days) FIRST — the correctness mechanism — and only
+THEN applies a row cap, `INTERVIEW_COOLDOWN_ROW_CAP`, a DEFENSIVE bound derived from
+`INTERVIEW_MAX_ROUNDS_PER_30_DAYS` (§C.5 below) and the 8-question round cap. **Value in force after A-7(a):**
+`(2 × 6 + 1) × 8 = 104` (`lib/interview/constants.ts`; re-derived from D3's provisional 56 once A-7(a) let a second
+round land inside 30 days).
+
+**Proof:** `lib/interview/select.test.ts` "the fix: a time-windowed query …" (D3, `103f6b74`); Tier-1 live Postgres
+`supabase/__tests__/interview-lifecycle.test.ts` "MAJOR-1 fix — the cooldown read survives a >33-row history" (D3,
+`103f6b74`); `lib/interview/constants.test.ts` (authored at the A-7 re-derivation, D4 `619fb62a`) pins the value
+104. **SHAs:** D3 `103f6b74`, D10 (this section).
+
+**`listInterviewCooldownRows` callers (unchanged by this amendment, re-verified at D3):**
+
+| Caller | File:line | Test |
+|---|---|---|
+| `startInterviewRoundAction` | `app/[locale]/(dashboard)/interview/actions.ts:99` | `actions.test.ts` (mocked) |
+| `loadInterviewPageState` | `lib/interview/load-page-state.ts:35` | `load-page-state.test.ts` (mocked) |
+
+### C.2 MAJOR-2 — §5.3's re-claim now has an actor
+
+§5.3 said the 10-minute re-claim and the 7-day sweep are "the safety net" for `after()`'s best-effort dispatch, but
+named no path that ever entered the re-claim: `retryInterviewExtractionAction` fired only on `extraction_failed`,
+and the `after()` promise was voided (`void extractInterviewRound(id)`), so a throw was an unhandled rejection with
+no capture.
+
+**Now:** both `after()` callbacks return `extractInBackground(id, phase)`, which awaits the extraction and, on a
+throw, calls `Sentry.captureException(err, { tags: { action: 'interview-extract', phase: 'submit' | 'retry' } })`
+— it never rejects. `retryInterviewExtractionAction` admits `extraction_failed` **or** a round judged stale by the
+new pure rule `lib/interview/stale.ts` (`isExtractionStale`: an `extracting` round whose `claimed_at` is more than
+`INTERVIEW_EXTRACTION_STALE_MINUTES` = 10 minutes old, or a `submitted` round never claimed, by `submitted_at`) —
+the membership/role check still runs first and unchanged; the claim RPC re-evaluates everything atomically and
+stays the sole authority. The `extracting` page state carries `stale`, and the panel polls at `POLL_MS = 4000` and
+shows Retry only once stale.
+
+**New constraint `INTERVIEW-EXTRACTION-RECOVERABLE`** (Tier 2): a lost extraction is captured (Sentry) and
+recoverable by the founder within one polling interval of the 10-minute mark, without waiting for the 7-day sweep.
+
+**Proof:** `app/[locale]/(dashboard)/interview/actions.test.ts`, describe "D6 — the after() callbacks RETURN the
+extraction promise and CAPTURE a throw" (submit/retry tags, AggregateError capture, the 11-vs-9-minute boundary,
+the non-member-on-stale-round case); `lib/interview/stale.test.ts` (the literal boundary); Tier-1 live Postgres
+`supabase/__tests__/interview-lifecycle.test.ts:471` (9 minutes refused) and `:479` (11 minutes admitted) —
+pre-existing, cited, not re-authored. **SHA:** D6 `bc38ceb6`.
+
+**`extractInterviewRound` callers:**
+
+| Caller | File:line | Test |
+|---|---|---|
+| `submitInterviewRoundAction` | `interview/actions.ts` (via `extractInBackground(id, 'submit')`) | `actions.test.ts` |
+| `retryInterviewExtractionAction` | `interview/actions.ts` (via `extractInBackground(id, 'retry')`) | `actions.test.ts` |
+
+### C.3 MAJOR-3 — §2.2/§2.3's column set gains the two markers
+
+§2.2's column table and §2.3's writer are extended, not replaced. Two new columns on `brand_memory`,
+`evidence_memory` and `audience_memory`:
+
+| Column | Meaning |
+|---|---|
+| `interview_hedge_flagged boolean` | §4.4's hedge flag, persisted (was computed and discarded) |
+| `interview_conflict_ids uuid[]` (≤ 5) | §4.5's conflict ids, tenant- and table-bound, persisted (was computed and discarded) |
+
+Both NULL unless `source = 'interview'` (a CHECK, the `interview_answer_id` biconditional idiom); both immutable
+after insert (the sibling trigger, extended); a conflict id is kept only if it is a live row of the SAME table and
+the round's business, verified in SQL — a foreign or cross-table id is dropped and counted
+(`founder_interview_rounds.dropped_conflict_foreign`), never stored. **Loser, restated from the build guide:** a
+side table `founder_interview_candidate_markers` — a new business-scoped table for two facts that live and die
+with the candidate row, needing its own RLS policy set, its own §D2.5 cascade row and its own purge path.
+
+The ratify view (`InterviewPanel.tsx`) now reads the persisted columns (via three new bounded readers,
+`list{Brand,Audience,Evidence}ConflictTargets`, the caller's own RLS client) and renders a hedge marker, a
+"may conflict with" marker per resolved conflict, and **Replace, offered only when the target is `active` AND
+`source = 'interview'`** — `ratify_interview_round` re-verifies exactly that in SQL before retiring the target.
+
+**New constraint `INTERVIEW-MARKERS-SURFACED`** (Tier 1 + Tier 2): the markers a human is shown are the same ones
+persisted, and Replace is reachable end to end. **Constraints 26 (surfacing half) and 27 are now true of what a
+human sees, from D5's SHA (`68e23ac1`).**
+
+**Proof:** `supabase/__tests__/interview-writer.test.ts`, describe "D4 MAJOR-3" (persistence, tenant-bounded
+verification, immutability, the re-run governance smuggle); `app/[locale]/(dashboard)/interview/InterviewPanel.test.tsx`,
+describe "the ratify view surfaces the hedge flag, the conflict marker and Replace" (12 cases: markers rendered
+correctly, Replace gated on active+interview, one target per record, accessible names carry both records);
+`supabase/__tests__/interview-ratify.test.ts`, "[D5 MAJOR-3] END TO END: the writer persists the conflict id, and a
+Replace decision built from the PERSISTED id reaches replaced = 1" — `replaced` was structurally 0 from the product
+before this. **SHAs:** D4 `619fb62a` (DB half), D5 `68e23ac1` (app half), D10 (this section, ADR half).
+
+**security-reviewer's disposition (D5, over the answer → extraction → writer → ratify path):** no BLOCKER or
+MAJOR. One MINOR **not applied**: `ratify_interview_round` does not bind a `replaces` target to the candidate's
+own `interview_conflict_ids` or to its type — an approver/admin who hand-crafts a Server Action call could replace
+any active interview record of their own business, including a different type, though the UI never offers it.
+Deferred to a future forward migration (D4 was the pass's only permitted migration); tracked as **open** at D10 —
+see §C.9.
+
+### C.4 MAJOR-4 — §6.3, founder ruling A-6, quoted
+
+**A-6, quoted verbatim (`docs/build-guide/session-35.md` §4):** *"(a) Yes. A rejected candidate is deleted at its
+round's answer-redaction deadline (`terminal_at + INTERVIEW_ANSWER_TTL_DAYS`, 30 d). It is not deleted 30 days
+after that, because a rejected evidence row's `content` is a verbatim excerpt of the answer: keeping it past the
+answer's redaction defeats the redaction."* **Ruled 2026-09-28**, on the user's explicit instruction at D4 ("do d4,
+assuming recommendations for founder rullings") — recorded as an instruction to assume the recommendation, not as
+an independent founder sign-off obtained outside this pass.
+
+§6.3's retention table row *"Unratified candidates | `*_memory`, status `candidate` | retired when the round
+expires … deleted 30 days after retirement"* is now **also** true of a **rejected** candidate of a **ratified**
+round, at the same 30-day deadline measured from the round's `terminal_at` (the ratification instant, not
+expiry). A three-table boolean, `interview_rejected`, set only by `ratify_interview_round`'s REJECT branch in the
+statement that retires the candidate (and never settable outside that, nor reversible — the sibling trigger
+guards both), distinguishes a rejected candidate from a row a **later round replaced** (also `retired`, but
+`interview_rejected = false`, and never deleted).
+
+**New constraint `INTERVIEW-REJECTED-PURGED`** (Tier 1) under A-6(a): a rejected candidate's text (including a
+verbatim evidence excerpt) does not outlive its answer's own redaction deadline.
+
+**The one permitted assertion flip (build guide rule 4):** `interview-sweep.test.ts:302` originally read *"a
+RATIFIED round's retired rows — a rejected candidate, and a row a later round replaced — are NEVER deleted, at any
+age"* (quoted verbatim, at `103f6b74`, before this change). It is inverted for the **rejected** half only, with
+A-6 quoted beside it in the file; the **replaced** half and the **active-row** half hold exactly as before, proven
+by a dedicated test (`interview-sweep.test.ts`, "a row a LATER round replaced … is NEVER deleted, at any age").
+
+**Proof:** `supabase/__tests__/interview-sweep.test.ts`, describe "[A-6(a)] REJECTED candidates of RATIFIED rounds
+are deleted at terminal_at + 30 days" (the literal ±1-minute boundary, the replaced-row survival, the skipped-round
+exclusion, idempotency); `interview-ratify.test.ts`, "[A-6(a)] REJECT marks interview_rejected on the rejected
+candidate ONLY". **SHA:** D4 `619fb62a`.
+
+### C.5 MINOR-6 — §5.1/§7.2, founder ruling A-7, quoted
+
+**A-7, quoted verbatim:** *"(a) A `failed` round does not count, but at most two rounds may be created per 30
+days. This keeps A-4's spend argument (≤ 2 × 30¢ per 30 days, still structural, still no fifth budget purpose) and
+stops a deterministic self-lockout."* **Ruled 2026-09-28**, same instruction as A-6.
+
+`create_interview_round`'s 30-day rule (previously: any round of any status created in the last 30 days blocks a
+new one) now has two clauses: a **non-failed** round created in the last 30 days still blocks; **and** two rounds
+of **any** status created in the last 30 days is the ceiling — so a `failed` round (a lost extraction, or three
+`invalid_response` attempts from an injected answer) no longer locks the tenant out for the rest of the month, but
+a business cannot manufacture unlimited attempts either. **A-4's spend argument still holds, restated for the
+new ceiling: at most 2 × 30¢ = 60¢ of extraction spend per business per 30 days, still structural, still no fifth
+`ai_budget_daily` purpose** (re-verified in the same commit by the widened `INTERVIEW-NO-BUDGET-PURPOSE` scan,
+§C.8).
+
+**New constraint `INTERVIEW-FAILED-ROUND-NOT-LOCKING`** (Tier 1 + Tier 2) under A-7(a): a `failed` round does not,
+by itself, prevent a new round for the remainder of its 30-day window.
+
+**Proof:** `supabase/__tests__/interview-lifecycle.test.ts`, describe "MINOR-6 / A-7(a) — a failed round does not
+block a new round, but two creations per 30 days is the ceiling" (the failed-round-does-not-block case, the
+two-creation ceiling at its literal boundary, every other status still blocking, the per-business advisory-lock
+race fix from the database-reviewer's D4 pass); `lib/interview/constants.test.ts` (the re-derivation to 104,
+§C.1). **SHA:** D4 `619fb62a`.
+
+### C.6 MINOR-4 — the stored forms are TS-trusted
+
+§2.3 step 2's SQL grounding check reads the **raw** span for containment; it does not re-verify that `storedText`
+/ `storedSpan` (the neutralised forms actually stored) are a faithful transform of the raw forms — the writer
+**trusts** the single TypeScript choke point (`lib/db/memory-interview.ts:112-122`) that calls
+`neutralizeWithSentinels`. This is now **recorded as a stated design position**, not a silent gap: a Tier-3 scan
+(`lib/interview/__tests__/source-scans.test.ts`, D1) asserts that choke point is the **only** producer of
+`storedText`/`storedSpan` and the only caller of `write_interview_candidates`, with `lib/db/memory-interview.test.ts`'s
+literal cases as the control proving what that choke point actually does.
+
+**Loser, restated:** re-implementing `neutralize()` in plpgsql as a **sixth sanitizer** — the baseline count of
+five (`source-scans.test.ts:360`) exists precisely to forbid a second implementation of one rule, which would
+drift from the first.
+
+**Proof:** `lib/interview/__tests__/source-scans.test.ts`, the MINOR-4 describe block (D1, `66526d0a`);
+`lib/db/memory-interview.test.ts`'s literal neutralisation cases (pre-existing, cited). **SHA:** D1 `66526d0a`.
+
+### C.7 MINOR-7 — the tie-break order is `INTERVIEW_TIEBREAK_ORDER`, quoted
+
+§3.3 step 1 said ties are broken *"by type order brand > audience > evidence, then by the category order of
+§3.1"*. §3.1's own listing order and the actual tie-break order used by `selectQuestions` (`lib/interview/select.ts:70`)
+were never the same sequence — a documentation contradiction the Reviewer caught, not a code defect (the code was
+always internally consistent with itself, just not with this sentence).
+
+**§3.3 step 1 is corrected to:** ties are broken by type order **brand > audience > evidence**, then by the
+explicit order of the exported constant **`INTERVIEW_TIEBREAK_ORDER`** (`lib/interview/constants.ts:37`), which
+**supersedes** "the category order of §3.1" as the tie-break's authority. `constants.ts:11`'s own comment already
+flagged this ("selection's tie-break is `INTERVIEW_TIEBREAK_ORDER` below, which is NOT this order") — the ADR
+prose had simply not been updated to match.
+
+**Proof:** `lib/interview/constants.ts:37-45` (the constant itself, quoted by reference — not reproduced here to
+avoid a second copy drifting from the source); `lib/interview/select.test.ts`'s existing tie-break assertions
+(pre-existing, cited, unchanged by this pass). **SHA:** D10 (documentation-only; no code changed for this
+finding — it was always correct, only the ADR sentence was stale).
+
+### C.8 NIT-2 — `dropped_cap` is persisted
+
+§10.5's yield-counter list gains `dropped_cap`: items dropped past `INTERVIEW_MAX_ITEMS_PER_ANSWER` for their
+answer, counted (`extract.ts`) and persisted on the round (`founder_interview_rounds.dropped_cap`, D4's
+migration) rather than silently `continue`d past. **ON CONFLICT dedupe counts are inferable** as
+`items_proposed - dropped_ungrounded - dropped_performance_claim - dropped_cap - dropped_conflict_foreign =`
+candidates actually written (the writer's `inserted` return value can be below this when a duplicate collapses
+within one call, per the pre-existing dedupe test).
+
+**Proof:** `lib/interview/extract.test.ts`, "items beyond the per-answer cap are COUNTED into counters.droppedCap";
+`supabase/__tests__/interview-writer.test.ts`, "D4 NIT-2". **SHAs:** D4 `619fb62a` (DB half), D5 `68e23ac1` (TS
+half).
+
+### C.9 §6.2's residual, qualified
+
+§6.2's worst-case walkthrough named the residual as *"a plausible-sounding false claim, pasted into an answer and
+ratified by a human who did not read the span."* **Qualification, from D5's SHA (`68e23ac1`) onward:** until D5,
+the ratifier also lacked the hedge marker (§4.4, a cue that the record sounds more certain than the founder's own
+words) and the conflict marker (§4.5, a cue that it may contradict something already saved) — both computed since
+M2.8 but never shown. From D5, both cues are present at the ratification step named in §6.2's own walkthrough
+(step 7, "SECOND KILL"), strengthening — not replacing — the human-judgement control the ADR already named as the
+residual's mitigation.
+
+**Open, not closed by this pass** (see C.3's security-reviewer note): `ratify_interview_round`'s `replaces`
+target is not yet bound to the candidate's own persisted conflict ids or type. This does not weaken §6.2's
+walkthrough (Replace only ever retires an **already-active, interview-sourced, same-business** row — never a
+manual row or a foreign tenant's), but it means a hand-crafted call could point Replace at an unrelated interview
+record of the same business. Tracked for a future forward migration.
+
+### C.10 The constraint count
+
+**44 → 48 `INTERVIEW-*` constraints.** Four added by this pass: `INTERVIEW-EXTRACTION-RECOVERABLE` (MAJOR-2, Tier
+2), `INTERVIEW-MARKERS-SURFACED` (MAJOR-3, Tier 1 + 2), `INTERVIEW-REJECTED-PURGED` (MAJOR-4/A-6a, Tier 1),
+`INTERVIEW-FAILED-ROUND-NOT-LOCKING` (MINOR-6/A-7a, Tier 1 + 2). No constraint was removed or renamed; §11's table
+above is **not edited** — these four are recorded here, additively, pending a future full-table rewrite session.
+**Executed-green-in-CI status for the corrected range is D11's, from the CI logs — no cell here claims it.**
+
+### C.11 Founder rulings consumed
+
+A-6 = (a). A-7 = (a). Both recorded 2026-09-28, on the user's explicit instruction at D4 ("do d4, assuming
+recommendations for founder rullings"), read as an instruction to assume the guide's own recommendations rather
+than as an independently obtained founder sign-off. A-1…A-5 stand, untouched, not reopened by this pass.

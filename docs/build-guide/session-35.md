@@ -814,6 +814,8 @@ the Builder already holds, and the Reviewer (`M3`) exists for that audit.
   - **eleven `SECURITY DEFINER` RPCs** (create, save, skip ×2, submit, snooze, claim, reconcile, write,
     ratify, sweep) taking an explicit `p_user_id` or a round id, each of which must derive
     the business rather than accept it (the one exception, `create_interview_round`, must verify it);
+    [Erratum 35-D: TWO RPCs take a business id — create_interview_round and snooze_interview — and both
+    verify membership first (20260925150000:296-306; 20260925120000:393-403).]
   - a reservation that must be a conditional UPDATE and **never** an upsert (ADR §7.2 `[db-BLOCKER-1]`);
   - a ratify RPC whose **lock → status re-check → write** order is the whole of its atomicity claim.
 - **One `ecc:security-reviewer`** at the end of `M2.8`, **before it commits**. It covers the seam the session

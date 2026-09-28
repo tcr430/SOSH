@@ -827,3 +827,70 @@ Test-only. No production file touched.
 **Full-suite confirmation (D9):** `npx tsc --noEmit --skipLibCheck` clean. `npx eslint .`: `✖ 112 problems (0 errors, 112 warnings)`, unchanged. `npm run test:app` (CI env block): **374 files / 5550 tests** green (was 374/5547: +3 tests, no new file). No `test:db`: D9 touches no SQL and no `supabase/__tests__` file.
 
 **What this step did NOT touch:** no SQL, no migration, no production TypeScript; no push (rule 10); `docs/decisions/*` untouched (D10); D10 (documentation truth) not started.
+
+### D10 — documentation truth: MINOR-5, MINOR-7, NIT-4, NIT-5, NIT-6, and the ADR halves D1-D9 require
+
+No `.ts`/`.tsx`/`.sql`. No specialist. Every statement below cites the test file:line that proves it and the SHA at
+which it was proved.
+
+| Field | MINOR-5 |
+|---|---|
+| **Finding** | M2.5 (`4a96fdfa`) extended `AGENCY-NO-EVIDENCE-WRITE-SURFACE`'s `EVIDENCE_INSERT_FUNCTIONS` allow-list (`lib/campaigns/planner/__tests__/source-scans.test.ts:632`) with `write_interview_candidates`, but the change was never recorded in ADR 0027. |
+| **Fix** | ADR 0027 gains an appended `## Correction pass note (Session 35-D, MINOR-5)` section (body not edited), recording the change, why it belongs on the allow-list (the interview writer is not on the campaign-generation path A-9 governs), and citing the scan's own planted pair as still discriminating correctly. |
+| **Proof** | `lib/campaigns/planner/__tests__/source-scans.test.ts:632` (the allow-list) and its planted positive/negative (re-run clean at D1, `66526d0a`). |
+| **Reddening** | n/a -- documentation only. |
+| **Commit** | D10 |
+
+| Field | MINOR-7 |
+|---|---|
+| **Finding** | ADR 0029 §3.3 step 1 says ties break "by the category order of §3.1", which is not the order `INTERVIEW_TIEBREAK_ORDER` (`lib/interview/constants.ts:37`) actually uses -- a documentation contradiction, not a code defect. |
+| **Fix** | ADR §C.7 (appended) corrects the sentence's superseding authority to `INTERVIEW_TIEBREAK_ORDER`, quoting `constants.ts:11`'s own comment that already flagged the mismatch. |
+| **Proof** | `lib/interview/constants.ts:37-45`; `lib/interview/select.test.ts`'s pre-existing tie-break assertions (unchanged). |
+| **Reddening** | n/a -- no code changed; the code was always correct, only the ADR prose was stale. |
+| **Commit** | D10 |
+
+| Field | NIT-4 -- **DEFERRED** |
+|---|---|
+| **Finding** | `not_due` (`page-state.ts:96-115`) shows the last terminal confirmation, not when the next round can start, and is reached on almost every render once any round exists. |
+| **Fix** | `docs/backlog.md`, row `35D-NIT-4-NOT-DUE-COPY`, appended to the existing Session 35 deferral table. **Un-defer trigger:** the first tenant completes a round, or the next `/impeccable` pass over `/interview`, whichever is first. Owner: Track M follow-up. |
+| **Proof** | The backlog row itself is the proof of deferral; no test, by design (a `not_due` copy fix needs a §8.2 layout decision the correction pass's primer forbids taste-skill/impeccable from making). |
+| **Reddening** | n/a -- DEFERRED. |
+| **Commit** | D10 |
+
+| Field | NIT-5 -- **RECORDED CLOSURE** |
+|---|---|
+| **Finding** | taste-skill was invoked at M2.10 and applied nothing to the interview surface. |
+| **Fix** | Recorded here only: M2.10's commit (`9c3a5cc7`) already states taste-skill and impeccable were run against ADR 0029 §8 and declared the surface out of scope, applying nothing. A pushed commit body cannot be rewritten, and there is no code defect to fix. |
+| **Proof** | `git show 9c3a5cc7` -- the commit body itself. |
+| **Reddening** | n/a -- RECORDED. |
+| **Commit** | 9c3a5cc7 (the original record); D10 (this closure note) |
+
+| Field | NIT-6 |
+|---|---|
+| **Finding** | `docs/build-guide/session-35.md:816`'s §2a sentence says `create_interview_round` is "the one exception" that must verify a business id it takes; `snooze_interview` also takes one and also verifies it, so the sentence undercounts. |
+| **Fix** | An appended erratum in brackets, immediately after the sentence, not a rewrite: *"[Erratum 35-D: TWO RPCs take a business id -- create_interview_round and snooze_interview -- and both verify membership first (20260925150000:296-306; 20260925120000:393-403).]"* |
+| **Proof** | Both citations verified against the migration files directly: `20260925150000_interview_review_fixes.sql:296-306` (`create_interview_round`'s membership check, step 1, "before anything else is read or written") and `20260925120000_founder_interview_lifecycle_rpcs.sql:393-403` (`snooze_interview`'s membership check). |
+| **Reddening** | n/a -- documentation only. |
+| **Commit** | D10 |
+
+**The ADR 0029 amendment (`## Correction pass amendments (Session 35-D)`, sections C.1-C.11), appended below §14, sections 0-14 untouched (268 total insertions across both ADRs, 0 deletions -- confirmed by `git diff --stat HEAD`):**
+
+| Section | Covers | SHA(s) cited |
+|---|---|---|
+| C.1 | MAJOR-1 -- §9.5 superseded; `INTERVIEW_COOLDOWN_ROW_CAP` now 104 after A-7(a); the `listInterviewCooldownRows` caller table | D3 `103f6b74`, D10 |
+| C.2 | MAJOR-2 -- §5.3's re-claim now has an actor; new constraint `INTERVIEW-EXTRACTION-RECOVERABLE`; the `extractInterviewRound` caller table | D6 `bc38ceb6` |
+| C.3 | MAJOR-3 -- §2.2/§2.3's column set; new constraint `INTERVIEW-MARKERS-SURFACED`; the security-reviewer's un-applied MINOR-1, tracked open | D4 `619fb62a`, D5 `68e23ac1`, D10 |
+| C.4 | MAJOR-4 -- §6.3, A-6 quoted verbatim; new constraint `INTERVIEW-REJECTED-PURGED`; `interview-sweep.test.ts:302`'s original text quoted before its one permitted inversion | D4 `619fb62a` |
+| C.5 | MINOR-6 -- §5.1/§7.2, A-7 quoted verbatim; new constraint `INTERVIEW-FAILED-ROUND-NOT-LOCKING`; A-4's spend bound restated at ≤ 60¢/30 days | D4 `619fb62a` |
+| C.6 | MINOR-4 -- the stored forms are TS-trusted; the plpgsql loser (a sixth sanitizer) | D1 `66526d0a` |
+| C.7 | MINOR-7 -- see above | D10 |
+| C.8 | NIT-2 -- `dropped_cap` persisted; dedupe counts inferable | D4 `619fb62a`, D5 `68e23ac1` |
+| C.9 | §6.2's residual qualified: the ratifier has held the hedge/conflict cues since D5; the open MAJOR-3 security note restated | D5 `68e23ac1` |
+| C.10 | The constraint count: 44 -> 48 (four added, none removed or renamed) | D10 |
+| C.11 | Founder rulings consumed: A-6 = (a), A-7 = (a), both 2026-09-28 on the user's instruction; A-1...A-5 stand | D10 |
+
+**VERIFY (build guide's own checks, re-run here):** `git diff --stat HEAD -- docs/decisions/0029-founder-input-engine.md docs/decisions/0027-agency-in-generation.md` shows **0 deletions, 268 insertions** across both files. `docs/launch-checklist.md` and `docs/build-guide/session-35.md` diffs each touch exactly the one row / one erratum claimed above (confirmed by reading the full diffs, not just the stat). Three citations checked at random against the actual commits with `git show`: `select.test.ts:301` at `103f6b74` ("the fix: a time-windowed query..."), `actions.test.ts:258` at `bc38ceb6` ("D6 -- the after() callbacks RETURN..."), `source-scans.test.ts:655` at `66526d0a` ("INTERVIEW-WRITER-SOLE-CALLER + stored-form choke point ... MINOR-4, Session 35-D D1") -- all three matched exactly.
+
+**No "executed green in CI" cell was filled for the corrected range** (rule 7 of this step) -- that is D11's, from the actual CI logs, not asserted here from local runs.
+
+**What this step did NOT touch:** no ADR 0029 §0-14 or ADR 0027 body edit (both are append-only in this pass); no code, no test, no migration; no push (rule 10 of the twelve governing rules); D11 (the first CI-executed run, and the close-out) not started.
