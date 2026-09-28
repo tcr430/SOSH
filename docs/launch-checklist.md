@@ -133,6 +133,11 @@ Setup runbook: `docs/build-guide/runbooks/qstash-setup.md`
     schedule.** `/api/cron/backfill` exists and is bounded (one queued/fetching/extracting run's worth
     of work per tick), but no schedule entry has been added to `qstash-setup.md` or provisioned in the
     Upstash console. Owed before backfill can run unattended in production.
+  - **interview-sweep (`0 5 * * *`, daily — ADR 0029 §5.4, Session 35 M2.9) — NOT YET CREATED as a QStash
+    schedule.** `/api/cron/interview-sweep` exists (dual-auth, no model call: failed-stuck transition,
+    round expiry, answer/span redaction, retired-candidate deletion per §6.3) but no schedule entry has
+    been added to `qstash-setup.md` or provisioned in the Upstash console. Retention must not depend on
+    the founder returning, so this is owed before the interview feature can run unattended in production.
 - [ ] **Email cron schedules visible** in Upstash console: `drain-email-outbox` (`* * * * *`) and `trial-warnings` (`0 9 * * *`), status Active.
 - [ ] **First production tick observed** in Vercel logs with `triggeredBy: 'qstash'`:
   - `/api/cron/publish` — look for `{"kind":"publish-tick","triggeredBy":"qstash",...}` within 10 minutes of deploy.
@@ -295,6 +300,7 @@ These items are required by ADR 0010 and are not yet in the codebase. Each block
 - [x] **`/subprocessors` route.** `content/legal/subprocessors.en.mdx` transcribed (ADR 0010 §14 + A1 deltas). Route live at `app/[locale]/(marketing)/subprocessors/page.tsx`. Footer link "Subprocessors" added (Session 17B).
 - [x] **Legal MDX transcription.** `content/legal/terms.en.mdx` and `content/legal/privacy.en.mdx` transcribed from ADR 0010 §12/§13 with all A1 deltas applied. `evidenceRef: 5f7a2e4` set in all three files (Session 17B).
 - [x] **Vault deletion Sentry alert.** Silent `catch {}` blocks in `lib/db/social-accounts.ts` replaced with `captureException(err, { tags: { operation: 'vault_delete_secret' } })` (Session 17B). (A1.4/T11)
+- [ ] **Founder-interview retention — counsel line (ADR 0029 §6.3, flagged, not written).** `/privacy` and the Evidence Pack (`docs/evidence/0010-legal-evidence.md`) do not yet describe founder-interview answers. Retention as of Session 35-D D4 (founder ruling A-6(a), `docs/decisions/0029-founder-input-engine.md` §C.4): raw answer text and grounding spans are retained 30 days after a round closes, then redacted; unratified **and rejected** candidates are both deleted 30 days after the round's terminal status is reached — a rejected candidate no longer outlives its own answer's redaction deadline, closing the gap MAJOR-4 named (rejected rows were previously retained indefinitely). The two new marker columns added at D4 (`interview_hedge_flagged`, `interview_conflict_ids`) hold no personal data of their own: a boolean and, at most, references to other existing memory-row ids of the same business — no new text, no new answer content. Owed before launch: an Evidence Pack entry, `/privacy` prose, and the `evidenceRef` bump on the touched `content/legal/*.mdx` files. No legal prose written and no `[LEGAL ENTITY]` placeholder touched by Session 35 or Session 35-D — this row only records the gap and its current retention shape.
 
 **From A1.2 (Path A — no AI training at launch):**
 - [ ] Confirmed: no `ai_training_opt_in` column exists in production schema (no migration required at launch). (A1.2)

@@ -2292,3 +2292,30 @@ V.2 and V.10 still describe `998030e8`; they are superseded for rows 18, 33, 34,
 written.
 
 _End of Correction pass verification (Session 34-D), including the D12 addendum._
+
+---
+
+## Correction pass note (Session 35-D, MINOR-5)
+
+The body above is not edited. This is an appended record only.
+
+`AGENCY-NO-EVIDENCE-WRITE-SURFACE`'s allow-list, `EVIDENCE_INSERT_FUNCTIONS`
+(`lib/campaigns/planner/__tests__/source-scans.test.ts:632`), was extended by Session 35's M2.5
+(`4a96fdfa`) from `['import_evidence_memory']` to `['import_evidence_memory', 'write_interview_candidates']`,
+so that the founder-interview writer (ADR 0029 §2.3) — a second, legitimate creator of `evidence_memory`
+rows outside the campaign-generation surface this constraint governs — does not trip the scan. The change
+was made in M2.5's commit but never recorded here, which the Session 35 Reviewer flagged (MINOR-5).
+
+**Why it belongs on the allow-list rather than being a violation of A-9:** A-9 (`AGENCY-NO-EVIDENCE-WRITE-SURFACE`,
+§1.4/§1.1 above) forbids a **campaign-generation-path** creator of evidence — "cite existing evidence" selects,
+never creates. `write_interview_candidates` is not on that path: it is the founder's own answer becoming a
+candidate record, gated by the founder's own ratification (ADR 0029 §8.5), not by an agent proposing content. The
+constraint's intent — no agent-driven evidence fabrication — is unaffected; the allow-list widening only excludes
+a second, independently-governed writer from a scan whose purpose was never to enumerate every legitimate writer
+of `evidence_memory` in the codebase, only to catch a new one appearing on the generation path this ADR covers.
+
+**Proof:** `lib/campaigns/planner/__tests__/source-scans.test.ts:632` (the allow-list), and the scan's own planted
+positive/negative pairs (unchanged, re-run at Session 35-D D1, `66526d0a`) confirm `write_interview_candidates` is
+recognised and `rogue_writer` still is not.
+
+**SHA of the original (unrecorded) change:** M2.5 `4a96fdfa`. **SHA of this note:** D10 of Session 35-D.

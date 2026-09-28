@@ -1090,6 +1090,8 @@ GRANT EXECUTE ON FUNCTION public.purge_business(uuid) TO service_role;
 | post_outcomes | yes (business_id + post_id) | CASCADE | yes | none — cascade = erasure (per-post engagement measurements and baselines; no content; ADR 0026 §6.1) |
 | campaign_retrospectives | yes (business_id + campaign_id) | CASCADE | yes | none — cascade = erasure (holds the customer's hypothesis text and an optional member note; ADR 0026 §8.3) |
 | campaign_plan_proposals | yes (business_id + campaign_id + brief_id) | CASCADE (all three) | yes | none — cascade = erasure (holds model-authored planner rationale about the customer's own campaign; decided_by is an auth.users id, ON DELETE SET NULL, so a user deletion anonymises the row rather than removing it; ADR 0027 §9) |
+| founder_interview_rounds | yes (business_id) | CASCADE | yes | none — cascade = erasure (round metadata, spend and yield counts; created_by/ratified_by are auth.users ids, ON DELETE SET NULL, so a user deletion anonymises the row; ADR 0029 §9) |
+| founder_interview_answers | yes (business_id + round_id) | CASCADE (both) | yes | none — cascade = erasure (holds the founder's free-text answers, which may contain founder personal data and third-party personal data; answer_text is redacted 30 days after the round closes and the row survives as a provenance stub referenced by interview memory rows ON DELETE NO ACTION; answered_by is an auth.users id, ON DELETE SET NULL; ADR 0029 §6.3, §9) |
 
 Only `business_deletion_requests` (NO ACTION) would have blocked the root delete; D2.1 resolves it. Every other business-scoped table either cascades or is deliberately retained.
 

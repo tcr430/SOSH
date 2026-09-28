@@ -5,10 +5,12 @@ import { cn } from '@/lib/utils'
 import { buttonVariants } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
+import { getMemberForUser } from '@/lib/db/business-members'
 import { listCampaigns } from '@/lib/db/campaigns'
 import { CampaignCard } from '@/components/campaigns/CampaignCard'
+import { InterviewCard } from '@/components/interview/InterviewCard'
 import { canServer } from '@/lib/members/can-server'
-import { CAPABILITIES } from '@/lib/members/capabilities'
+import { CAPABILITIES, resolveMemberContext } from '@/lib/members/capabilities'
 
 type Props = {
   params: Promise<{ locale: string }>
@@ -31,23 +33,29 @@ export default async function CampaignsPage({ params }: Props) {
 
   // ADR 0014 §6 — capability-gate echo (UX only, DB is the boundary — L-3).
   const canAuthor = await canServer(client, business, user.id, CAPABILITIES.AUTHOR)
+  // ADR 0029 §5.5/§8.1 — the card is role-aware (D7): authors see due/open, ratifiers (approver-or-admin, the predicate
+  // ratify_interview_round enforces, not the plain AUTHOR capability) see awaiting ratification; UX echo only.
+  const member = resolveMemberContext(business, user.id, business.owner_id === user.id ? null : await getMemberForUser(client, business.id, user.id))
 
   if (campaigns.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
-        <div className="flex flex-col items-center gap-6 max-w-sm">
-          <CampaignEmptyIcon />
-          <div className="space-y-2">
-            <h2 className="text-xl font-semibold tracking-tight">{t('empty.title')}</h2>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              {t('empty.description')}
-            </p>
+      <div className="max-w-3xl mx-auto py-8 px-4 sm:px-6">
+        <InterviewCard client={client} business={business} locale={locale} member={member} />
+        <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
+          <div className="flex flex-col items-center gap-6 max-w-sm">
+            <CampaignEmptyIcon />
+            <div className="space-y-2">
+              <h2 className="text-xl font-semibold tracking-tight">{t('empty.title')}</h2>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {t('empty.description')}
+              </p>
+            </div>
+            {canAuthor && (
+              <Link href={`/${locale}/campaigns/new`} className={cn(buttonVariants())}>
+                {t('empty.cta')}
+              </Link>
+            )}
           </div>
-          {canAuthor && (
-            <Link href={`/${locale}/campaigns/new`} className={cn(buttonVariants())}>
-              {t('empty.cta')}
-            </Link>
-          )}
         </div>
       </div>
     )
@@ -55,6 +63,7 @@ export default async function CampaignsPage({ params }: Props) {
 
   return (
     <div className="max-w-3xl mx-auto py-8 px-4 sm:px-6">
+      <InterviewCard client={client} business={business} locale={locale} member={member} />
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-2xl font-semibold tracking-tight">{t('title')}</h1>
         {canAuthor && (

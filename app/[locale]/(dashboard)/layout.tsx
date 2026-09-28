@@ -13,6 +13,7 @@ import { BusinessProvider } from '@/lib/contexts/business-context'
 import { DashboardShell } from '@/components/layout/DashboardShell'
 import { BackfillBanner } from '@/components/onboarding/BackfillBanner'
 import { getBackfillRunsForBusiness } from '@/lib/db/backfill-runs'
+import { loadInterviewBadge } from '@/lib/interview/load-page-state'
 
 export default async function DashboardLayout({
   children,
@@ -45,6 +46,13 @@ export default async function DashboardLayout({
   const hasSocialAccounts = activeAccounts.length > 0
   // ADR 0014 §6 — resolved once here; BusinessProvider hands it to useCan().
   const member = resolveMemberContext(business, user.id, memberRow)
+  // ADR 0029 §5.5/§8.1 — the nav badge: due / open / awaiting ratification (for a ratifier), same shared
+  // orchestrator the /interview page and its dashboard card use. Sequential after `member` resolves (needs
+  // its role/isAdmin), not added to the Promise.all above.
+  // D7 (MINOR-2, MINOR-9): the badge follows the same role rule as the card (authors: due/open; ratifiers: awaiting ratification),
+  // and a member with neither role (a viewer) skips the load entirely. The load is request-cached, so the card and the
+  // /interview page below share this one.
+  const interviewBadge = await loadInterviewBadge(client, business, member)
 
   let daysRemaining: number | null = null
   if (business.plan === 'trial' && trialState?.trial_started_at) {
@@ -68,7 +76,7 @@ export default async function DashboardLayout({
   return (
     <BusinessProvider user={user} activeBusiness={business} brandVoice={brandVoice} member={member}>
       {awaitingRun && <BackfillBanner locale={locale} runId={awaitingRun.id} />}
-      <DashboardShell locale={locale} hasSocialAccounts={hasSocialAccounts} daysRemaining={daysRemaining}>
+      <DashboardShell locale={locale} hasSocialAccounts={hasSocialAccounts} daysRemaining={daysRemaining} interviewBadge={interviewBadge}>
         {children}
       </DashboardShell>
     </BusinessProvider>

@@ -259,7 +259,7 @@ Launch when **all** of these hold:
 - [ ] **T1-A** engagement inbox shipped, with its counsel work closed
 - [ ] **T1-B** analytics surface + monthly report shipped
 - [ ] **T1-C** template carousels shipped
-- [ ] **T1-D** founder input engine shipped
+- [x] **T1-D** founder input engine shipped — Session 35 (ADR 0029) M2.1-M2.11 (Builder), M3 (Reviewer, 21 findings, `docs/reviews/session-35-reviewer.md`) and the Session 35-D correction pass (D0-D11, all 21 findings closed) are all done; the branch is pushed and CI-executed-green at `6f7b26d7` (`app-tests` and `db-tests` both green, `docs/decisions/0029-founder-input-engine.md` §C.12). **Not yet true:** no production OAuth app is registered with LinkedIn or X, so no real founder has connected an account or completed a round end-to-end (`docs/product-status.md`); `ratify_interview_round`'s `replaces`-binding gap (D5 security review, ADR §C.3/§C.9) remains open, tracked for a future forward migration.
 - [ ] **T1-E** founder/personal profile support shipped (promoted from T2-A, §12.2)
 - [ ] Sessions 31–34 closed (or explicitly descoped, in writing, with what is lost recorded)
 - [ ] Every Tier-2 item is **either shipped or explicitly deferred with a named un-defer trigger**

@@ -1,0 +1,186 @@
+{
+  "questions": {
+    "positioning_one_line": "In one or two sentences, how would you describe what you do, and for whom, to someone who has never heard of you?",
+    "positioning_different": "What do you do differently from the other options a customer could pick, and why does that matter to them?",
+    "positioning_not_for": "Who is your product not for? Which kinds of customer do you turn away or steer elsewhere?",
+    "capability_core": "What are the two or three things your product does that customers rely on most?",
+    "capability_underrated": "What can your product do that customers often don't realise until they've been using it for a while?",
+    "capability_recent": "What is the most useful thing you've shipped or improved recently, and what does it let a customer do now?",
+    "pricing_model": "How do you charge, and what does a typical customer pay? Share whatever you're comfortable saying publicly.",
+    "pricing_who_pays": "Who usually decides to pay for your product, and who uses it day to day?",
+    "pricing_change": "Has how you price changed, or is it about to? What would you want customers to understand about why?",
+    "competitor_alternatives": "What do customers use or do today instead of your product, including doing nothing?",
+    "competitor_switch": "When customers switch to you from something else, what usually made them switch?",
+    "competitor_wrong": "What do people get wrong about how you compare with the alternatives?",
+    "problem_before": "What is a customer's situation like just before they find you? What is going wrong for them?",
+    "problem_cost": "What does that problem cost them in time, money or stress? Use their numbers or words if you have them.",
+    "problem_workaround": "What workaround do customers put up with before they find you?",
+    "objection_lost_deal": "Think of a deal or signup you lost. What reason did the person give, or what do you think it really was?",
+    "objection_hesitation": "What makes people hesitate before they buy or start a trial?",
+    "objection_answer": "For the objection you hear most, what do you say that actually settles it?",
+    "question_first_call": "What are the first questions people ask when they talk to you or your team?",
+    "question_repeated": "Which question do you find yourself answering again and again?",
+    "question_misunderstood": "What do people commonly misunderstand about your product until someone explains it?",
+    "trigger_moment": "What moment makes someone start looking for a product like yours?",
+    "trigger_event": "What event in a customer's business, such as a hire, a launch or a deadline, tends to lead them to you?",
+    "trigger_search": "When customers first go looking, what words do they use to describe what they need?",
+    "quote_customer_words": "Is there something a customer said about the problem or about you that you keep coming back to? Paste it as they said it.",
+    "quote_praise": "What is the nicest thing a customer has said about you, in their own words? Only share it if they were happy for it to be used.",
+    "quote_review": "Is there a review, message or testimonial you are proud of? Paste the part that matters, as written.",
+    "case_study_win": "Tell us about a customer who got a clear result with you. Who were they and what happened?",
+    "case_study_before_after": "For one customer, what was the situation before and what is it now?",
+    "case_study_surprise": "Has a customer used your product in a way you did not expect? What did they do?",
+    "usage_data_number": "What is a real number about your product or customers that you would be happy to publish, and where does it come from?",
+    "usage_data_trend": "What has clearly changed in how customers use your product over the last year?",
+    "usage_data_behaviour": "What do your most successful customers do differently from the rest?"
+  },
+  "why": {
+    "positioning": "Positioning is how every post frames who you are and who you are for. Your own words keep it consistent.",
+    "capability": "Posts stay accurate when they describe what your product really does, so we ask you rather than guess.",
+    "pricing": "Pricing claims are risky to invent. We only write about it the way you say it.",
+    "competitor": "How you compare with the alternatives shapes how carefully we word anything competitive.",
+    "problem": "Posts land when they start from the problem your customers actually have, in the terms they use.",
+    "objection": "The reasons people hesitate rarely appear in what you have already published, so only you can tell us.",
+    "question": "Repeated questions are ready-made post topics that people are already asking about.",
+    "trigger": "Knowing what sets someone off looking lets posts meet them at the right moment.",
+    "quote": "Real customer words are the strongest proof. They are only ever used with your permission.",
+    "case_study": "A concrete customer story gives posts something specific to point to.",
+    "usage_data": "Real numbers make posts credible. We use only the ones you give us."
+  },
+  "ui": {
+    "card": {
+      "title": "Founder input",
+      "due": "A few questions only you can answer — it takes a few minutes.",
+      "in_progress": "You have an interview round in progress.",
+      "extracting": "Turning your answers into memory…",
+      "extraction_failed": "Something went wrong turning your answers into memory.",
+      "awaiting_ratification": "Review what we found in your answers.",
+      "cta": "Open"
+    },
+    "not_due": {
+      "title": "Nothing due right now",
+      "body": "We'll ask again once it's useful.",
+      "body_snoozed": "We'll check back after {date}."
+    },
+    "nothing_thin": {
+      "title": "Memory looks well covered",
+      "body": "We'll check again as your campaigns and answers add more."
+    },
+    "due": {
+      "title": "A few questions only you can answer",
+      "body": "{count} questions would help fill in what we don't know yet.",
+      "start": "Start",
+      "not_now": "Not now"
+    },
+    "in_progress": {
+      "progress": "{answered} of {total} answered",
+      "save": "Save",
+      "saved": "Saved",
+      "save_error": "Couldn't save — try again",
+      "skip_question": "Skip this question",
+      "skip_round": "Skip this round",
+      "submit": "Submit answers",
+      "no_answers_error": "Answer at least one question before submitting."
+    },
+    "extracting": {
+      "title": "Reading your answers",
+      "body": "We're turning your answers into memory. This can take a minute.",
+      "stale_body": "This is taking longer than it should, so it may have been interrupted. You can try again.",
+      "retry": "Try again"
+    },
+    "extraction_failed": {
+      "title": "We couldn't finish that",
+      "reason": "Reason: {reason}",
+      "try_again": "Try again",
+      "ceiling_title": "We've reached the cost limit for this round",
+      "ceiling_body": "This round can't be retried again. Your answers are safe — start a new round once one is due.",
+      "reasons": {
+        "invalid_response": "the model's response couldn't be read",
+        "provider_error": "the AI provider had an issue",
+        "rate_limit": "we hit a rate limit",
+        "timeout": "the request took too long",
+        "policy_violation": "the response didn't follow the rules we set",
+        "response_truncated": "the response was cut off",
+        "no_answers": "no answer had any text",
+        "write_failed": "we couldn't save the result",
+        "unexpected_error": "something unexpected happened",
+        "unknown": "something went wrong"
+      }
+    },
+    "failed": {
+      "title": "This round didn't go through",
+      "body": "Your answers are still on file and will be cleared on the usual schedule. Nothing was recorded."
+    },
+    "awaiting_ratification": {
+      "author_title": "Waiting for an approver",
+      "author_body": "Someone with approval rights needs to review what we found before it's kept.",
+      "ratify_title": "Review what we found",
+      "ratify_body": "Accept or reject each one below. Nothing is kept until you decide.",
+      "ratify_button": "Ratify",
+      "decide_all_hint": "Decide every item before ratifying."
+    },
+    "ratified": {
+      "title": "Reviewed",
+      "counts": "{accepted} accepted, {rejected} rejected, {edited} edited"
+    },
+    "no_records": {
+      "title": "Nothing to record in these answers",
+      "body": "We looked at {proposed} possible items from your answers but kept none: {ungrounded} weren't grounded in what you wrote, {performance} were about performance, which we track separately."
+    },
+    "skipped": {
+      "title": "Round skipped",
+      "body": "No candidates were kept."
+    },
+    "expired": {
+      "title": "This round expired",
+      "body": "It's been more than 30 days, so we let it go. Candidates were not kept."
+    },
+    "question": {
+      "counter": "{count} / {max} characters",
+      "counter_80": "{remaining} characters left",
+      "counter_full": "You've reached the character limit"
+    },
+    "ratify": {
+      "group_brand": "About your business",
+      "group_audience": "About your customers",
+      "group_evidence": "Evidence",
+      "from_answer": "From your answer to:",
+      "category_label": "Category",
+      "categories": {
+        "positioning": "Positioning",
+        "capability": "Capability",
+        "pricing": "Pricing",
+        "competitor": "Competitor",
+        "problem": "Problem",
+        "objection": "Objection",
+        "question": "Question",
+        "trigger": "Trigger",
+        "quote": "Quote",
+        "case_study": "Case study",
+        "usage_data": "Usage data",
+        "other": "Other"
+      },
+      "accept": "Accept",
+      "reject": "Reject",
+      "accept_for": "Accept: {text}",
+      "reject_for": "Reject: {text}",
+      "edit_label": "Edit before accepting",
+      "span_redacted": "The original wording is no longer stored.",
+      "evidence_permission_off": "May contain someone else's words — permission to publish stays off.",
+      "hedge_marker": "This sounds more certain than your own words. Check it says only what you meant.",
+      "conflict_marker": "May conflict with something already saved: {target}",
+      "replace": "Replace it",
+      "replace_for": "Replace \"{target}\" with \"{text}\"",
+      "set_aside": "{count, plural, one {# statement about what performs was set aside.} other {# statements about what performs were set aside.}}"
+    },
+    "errors": {
+      "unauthenticated": "Your session has expired. Sign in again to continue.",
+      "forbidden": "You don't have permission to do that in this business.",
+      "not_found": "We couldn't find that. Reload the page and try again.",
+      "validation": "That couldn't be processed. Check what you entered and try again.",
+      "performance_claim": "One of your edits describes how something performs, such as a result or a metric. Rephrase it as a plain statement about your business, or reject that record.",
+      "not_open": "That step is no longer available. The page has been refreshed to show where things stand.",
+      "generic": "Something went wrong. Please try again."
+    }
+  }
+}

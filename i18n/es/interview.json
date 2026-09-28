@@ -1,0 +1,186 @@
+{
+  "questions": {
+    "positioning_one_line": "En una o dos frases, ¿cómo describirías lo que haces, y para quién, a alguien que nunca ha oído hablar de tu empresa?",
+    "positioning_different": "¿Qué haces de forma distinta a las otras opciones que un cliente podría elegir, y por qué le importa eso?",
+    "positioning_not_for": "¿Para quién no es tu producto? ¿A qué tipos de cliente rechazas o derivas hacia otro lado?",
+    "capability_core": "¿Cuáles son las dos o tres cosas que hace tu producto y en las que más confían los clientes?",
+    "capability_underrated": "¿Qué hace tu producto que los clientes a menudo solo descubren tras usarlo durante un tiempo?",
+    "capability_recent": "¿Cuál es la mejora o novedad más útil que has lanzado recientemente y qué permite hacer ahora a un cliente?",
+    "pricing_model": "¿Cómo cobras y cuánto paga en promedio un cliente típico? Comparte solo lo que te resulte cómodo hacer público.",
+    "pricing_who_pays": "¿Quién suele decidir pagar por tu producto y quién lo usa en el día a día?",
+    "pricing_change": "¿Ha cambiado tu forma de fijar precios o está a punto de cambiar? ¿Qué te gustaría que los clientes entendieran sobre el motivo?",
+    "competitor_alternatives": "¿Qué usan o hacen hoy los clientes en lugar de tu producto, incluido no hacer nada?",
+    "competitor_switch": "Cuando los clientes cambian otra solución por la tuya, ¿qué suele haberlos motivado a cambiar?",
+    "competitor_wrong": "¿Qué entiende mal la gente cuando compara tu solución con las alternativas?",
+    "problem_before": "¿Cómo es la situación de un cliente justo antes de encontrarte? ¿Qué le está saliendo mal?",
+    "problem_cost": "¿Cuánto le cuesta ese problema en tiempo, dinero o desgaste? Usa sus números o sus palabras si los tienes.",
+    "problem_workaround": "¿Qué solución improvisada soportan los clientes antes de encontrarte?",
+    "objection_lost_deal": "Piensa en una venta o un registro que perdiste. ¿Qué razón dio la persona, o cuál crees que fue la razón verdadera?",
+    "objection_hesitation": "¿Qué hace dudar a la gente antes de comprar o de empezar una prueba?",
+    "objection_answer": "Ante la objeción que más escuchas, ¿qué dices que de verdad la resuelve?",
+    "question_first_call": "¿Cuáles son las primeras preguntas que hace la gente cuando habla contigo o con alguien de tu empresa?",
+    "question_repeated": "¿Qué pregunta acabas respondiendo una y otra vez?",
+    "question_misunderstood": "¿Qué suele entender mal la gente de tu producto hasta que alguien se lo explica?",
+    "trigger_moment": "¿Qué momento lleva a alguien a empezar a buscar un producto como el tuyo?",
+    "trigger_event": "¿Qué acontecimiento en la empresa de un cliente, como una contratación, un lanzamiento o una fecha límite, suele llevarlo hasta ti?",
+    "trigger_search": "Cuando los clientes empiezan a buscar, ¿qué palabras usan para describir lo que necesitan?",
+    "quote_customer_words": "¿Hay algo que un cliente dijo sobre el problema o sobre ti y a lo que vuelves con frecuencia? Pégalo exactamente como lo dijo.",
+    "quote_praise": "¿Qué es lo mejor que un cliente ha dicho de ti, con sus propias palabras? Compártelo solo si estuvo de acuerdo con que se use.",
+    "quote_review": "¿Hay una reseña, mensaje o testimonio del que te sientas orgulloso? Pega la parte que importa, tal como está escrita.",
+    "case_study_win": "Cuéntanos sobre un cliente que obtuvo un resultado claro contigo. ¿Quién era y qué pasó?",
+    "case_study_before_after": "Para un cliente en concreto, ¿cuál era la situación antes y cuál es ahora?",
+    "case_study_surprise": "¿Algún cliente ha usado tu producto de una forma que no esperabas? ¿Qué hizo?",
+    "usage_data_number": "¿Cuál es un número real sobre tu producto o tus clientes que te gustaría publicar y de dónde sale?",
+    "usage_data_trend": "¿Qué ha cambiado claramente en la forma en que los clientes usan tu producto durante el último año?",
+    "usage_data_behaviour": "¿Qué hacen de distinto tus clientes con más éxito en comparación con el resto?"
+  },
+  "why": {
+    "positioning": "El posicionamiento es cómo cada publicación presenta quién eres y para quién trabajas. Tus propias palabras lo mantienen coherente.",
+    "capability": "Las publicaciones se mantienen precisas cuando describen lo que tu producto realmente hace, por eso preguntamos en lugar de suponer.",
+    "pricing": "Inventar afirmaciones sobre precios es arriesgado. Solo escribimos sobre ello tal como tú lo dices.",
+    "competitor": "Cómo te comparas con las alternativas determina el cuidado con que redactamos todo lo que sea competitivo.",
+    "problem": "Las publicaciones funcionan cuando parten del problema que tus clientes realmente tienen, en los términos que ellos usan.",
+    "objection": "Las razones por las que la gente duda rara vez aparecen en lo que ya has publicado, así que solo tú puedes contárnoslas.",
+    "question": "Las preguntas repetidas son temas de publicación ya listos, sobre los que la gente ya pregunta.",
+    "trigger": "Saber qué lleva a alguien a empezar a buscar permite que las publicaciones lleguen en el momento adecuado.",
+    "quote": "Las palabras reales de un cliente son la prueba más sólida. Solo se usan con tu autorización.",
+    "case_study": "Una historia concreta de un cliente da a las publicaciones algo específico a lo que referirse.",
+    "usage_data": "Los números reales dan credibilidad a las publicaciones. Usamos solo los que tú nos des."
+  },
+  "ui": {
+    "card": {
+      "title": "Aportación del fundador",
+      "due": "Algunas preguntas que solo tú puedes responder — lleva pocos minutos.",
+      "in_progress": "Tienes una ronda de entrevista en curso.",
+      "extracting": "Convirtiendo tus respuestas en memoria…",
+      "extraction_failed": "Algo salió mal al convertir tus respuestas en memoria.",
+      "awaiting_ratification": "Revisa lo que encontramos en tus respuestas.",
+      "cta": "Abrir"
+    },
+    "not_due": {
+      "title": "Nada pendiente por ahora",
+      "body": "Volveremos a preguntar cuando sea útil.",
+      "body_snoozed": "Volveremos a comprobar después del {date}."
+    },
+    "nothing_thin": {
+      "title": "La memoria parece bien cubierta",
+      "body": "Lo comprobaremos de nuevo a medida que tus campañas y respuestas añadan más."
+    },
+    "due": {
+      "title": "Algunas preguntas que solo tú puedes responder",
+      "body": "{count} preguntas ayudarían a completar lo que aún no sabemos.",
+      "start": "Empezar",
+      "not_now": "Ahora no"
+    },
+    "in_progress": {
+      "progress": "{answered} de {total} respondidas",
+      "save": "Guardar",
+      "saved": "Guardado",
+      "save_error": "No se pudo guardar — inténtalo de nuevo",
+      "skip_question": "Omitir esta pregunta",
+      "skip_round": "Omitir esta ronda",
+      "submit": "Enviar respuestas",
+      "no_answers_error": "Responde al menos una pregunta antes de enviar."
+    },
+    "extracting": {
+      "title": "Leyendo tus respuestas",
+      "body": "Estamos convirtiendo tus respuestas en memoria. Esto puede tardar un minuto.",
+      "stale_body": "Esto está tardando más de lo debido, así que puede haberse interrumpido. Puedes intentarlo de nuevo.",
+      "retry": "Intentar de nuevo"
+    },
+    "extraction_failed": {
+      "title": "No pudimos terminar esto",
+      "reason": "Motivo: {reason}",
+      "try_again": "Intentar de nuevo",
+      "ceiling_title": "Hemos alcanzado el límite de coste de esta ronda",
+      "ceiling_body": "Esta ronda no se puede reintentar. Tus respuestas están seguras — inicia una nueva ronda cuando corresponda.",
+      "reasons": {
+        "invalid_response": "no se pudo leer la respuesta del modelo",
+        "provider_error": "el proveedor de IA tuvo un problema",
+        "rate_limit": "alcanzamos un límite de frecuencia",
+        "timeout": "la solicitud tardó demasiado",
+        "policy_violation": "la respuesta no siguió las reglas que establecimos",
+        "response_truncated": "la respuesta se cortó",
+        "no_answers": "ninguna respuesta tenía texto",
+        "write_failed": "no pudimos guardar el resultado",
+        "unexpected_error": "ocurrió algo inesperado",
+        "unknown": "algo salió mal"
+      }
+    },
+    "failed": {
+      "title": "Esta ronda no se completó",
+      "body": "Tus respuestas siguen archivadas y se eliminarán según el calendario habitual. No se registró nada."
+    },
+    "awaiting_ratification": {
+      "author_title": "Esperando a un aprobador",
+      "author_body": "Alguien con permisos de aprobación necesita revisar lo que encontramos antes de conservarlo.",
+      "ratify_title": "Revisa lo que encontramos",
+      "ratify_body": "Acepta o rechaza cada uno a continuación. Nada se conserva hasta que decidas.",
+      "ratify_button": "Ratificar",
+      "decide_all_hint": "Decide sobre cada elemento antes de ratificar."
+    },
+    "ratified": {
+      "title": "Revisado",
+      "counts": "{accepted} aceptados, {rejected} rechazados, {edited} editados"
+    },
+    "no_records": {
+      "title": "Nada que registrar en estas respuestas",
+      "body": "Revisamos {proposed} posibles elementos de tus respuestas pero no conservamos ninguno: {ungrounded} no estaban fundamentados en lo que escribiste, {performance} eran sobre rendimiento, que rastreamos por separado."
+    },
+    "skipped": {
+      "title": "Ronda omitida",
+      "body": "No se conservó ningún candidato."
+    },
+    "expired": {
+      "title": "Esta ronda expiró",
+      "body": "Han pasado más de 30 días, así que la dejamos expirar. Los candidatos no se conservaron."
+    },
+    "question": {
+      "counter": "{count} / {max} caracteres",
+      "counter_80": "Quedan {remaining} caracteres",
+      "counter_full": "Has alcanzado el límite de caracteres"
+    },
+    "ratify": {
+      "group_brand": "Sobre tu negocio",
+      "group_audience": "Sobre tus clientes",
+      "group_evidence": "Pruebas",
+      "from_answer": "De tu respuesta a:",
+      "category_label": "Categoría",
+      "categories": {
+        "positioning": "Posicionamiento",
+        "capability": "Capacidad",
+        "pricing": "Precio",
+        "competitor": "Competidor",
+        "problem": "Problema",
+        "objection": "Objeción",
+        "question": "Pregunta",
+        "trigger": "Detonante",
+        "quote": "Cita",
+        "case_study": "Caso de estudio",
+        "usage_data": "Datos de uso",
+        "other": "Otro"
+      },
+      "accept": "Aceptar",
+      "reject": "Rechazar",
+      "accept_for": "Aceptar: {text}",
+      "reject_for": "Rechazar: {text}",
+      "edit_label": "Editar antes de aceptar",
+      "span_redacted": "El texto original ya no está guardado.",
+      "evidence_permission_off": "Puede contener palabras de otra persona — el permiso para publicar permanece desactivado.",
+      "hedge_marker": "Esto suena más seguro que sus propias palabras. Compruebe que dice solo lo que quiso decir.",
+      "conflict_marker": "Puede entrar en conflicto con algo ya guardado: {target}",
+      "replace": "Reemplazar",
+      "replace_for": "Reemplazar \"{target}\" por \"{text}\"",
+      "set_aside": "{count, plural, one {# afirmación sobre lo que funciona se dejó de lado.} other {# afirmaciones sobre lo que funciona se dejaron de lado.}}"
+    },
+    "errors": {
+      "unauthenticated": "Tu sesión ha caducado. Inicia sesión de nuevo para continuar.",
+      "forbidden": "No tienes permiso para hacer eso en este negocio.",
+      "not_found": "No hemos encontrado eso. Recarga la página e inténtalo de nuevo.",
+      "validation": "No se pudo procesar. Revisa lo que has introducido e inténtalo de nuevo.",
+      "performance_claim": "Una de tus ediciones describe cómo rinde algo, como un resultado o una métrica. Reformúlala como una afirmación sencilla sobre tu negocio, o rechaza ese registro.",
+      "not_open": "Este paso ya no está disponible. La página se ha actualizado para mostrar la situación actual.",
+      "generic": "Algo salió mal. Inténtalo de nuevo."
+    }
+  }
+}

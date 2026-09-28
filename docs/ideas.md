@@ -65,6 +65,13 @@ question the existing ADR 0020/0023 blockers do **not** cover.
 **committed** to Sessions 31–34 and are therefore not listed here.*
 
 ### 2.1 Memory as a platform substrate — many writers · `OPEN`
+**Note (2026-09-27, Session 35):** memory now has a **second writer**. ADR 0029's founder interview
+(`lib/memory/interview.ts`, gated behind human ratification, one-decision-per-candidate) is the second
+customer-authored write path onto `brand_memory` / `audience_memory` / `evidence_memory` alongside
+`lib/learning/orchestrator.ts`. It inherits, rather than closes, this idea: it is one more decision
+surface, not the general many-writers architecture (provenance, contradiction detection and confidence
+arithmetic across an arbitrary number of writers) this section still describes.
+
 Memory has **eight readers and one writer** (`lib/learning/orchestrator.ts`). Every human decision in the
 product is a labelled example, and almost all are discarded: approvals rejections, feed dismissals, card
 expiries, calendar reschedules, Studio discards, brief regenerations, and the dismiss *reasons* signals
@@ -129,6 +136,12 @@ long enough to produce a baseline.
 ---
 
 ### 2.7 Outbound-activity backfill — their own comments and reactions · `OPEN` (feasibility-gated)
+**Note (2026-09-27, Session 35):** ADR 0029's founder interview now serves PART of this section's
+cold-start role — it fills thin brand/audience/evidence slots from the founder's own words, asked
+directly, from day zero. It does **not** replace this idea: the interview is authored answers to fixed
+questions, never the founder's own outbound comments/reactions on other people's content, which stays
+open and feasibility-gated exactly as below.
+
 **The third leg of cold-start, and the one no session covers.** Session 32 backfills what the customer
 **published**; ADR 0016 / Session 32 L-2 deliberately excludes comments and replies **on** their posts
 (third-party personal data, deferred to counsel, un-parked by the engagement inbox). Neither covers the

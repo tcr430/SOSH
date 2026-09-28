@@ -2123,3 +2123,127 @@ COVERED, stands exactly as recorded above.
 **Session 31 Track H is closed.** BLOCKER-1's Tier-1 CI gap is not this session's to close — it is an
 environment defect (`30.5-DBTESTS-READINESS-RACE`) with three named, unattempted remedies, tracked
 separately from Track H's own scope.
+
+### Session 35 — Track M (ADR 0029, the founder input engine) — M2.1 through M2.11 close-out (2026-09-27)
+
+**M1 (Architect) and M2.1–M2.11 (Builder) are complete** on `session-35-adr-0029`, one commit per step
+(`d8b2010a` M2.4 .. `9c3a5cc7` M2.10 .. the M2.11 commit). **M3 (Reviewer) and M4 (correction pass, if
+needed) have NOT run yet.** This branch **has not been pushed** — `git status` shows no
+`origin/session-35-adr-0029`, so exactly like Session 31's H2.13 close-out, **no CI run exists for any row
+below**, Tier 1, 2 or 3. A local-green claim is not a CI-green claim, and this entry does not make one.
+
+**Superseded 2026-09-28: M3 (Reviewer) ran** (`docs/reviews/session-35-reviewer.md`, 21 findings) and **M4
+(the Session 35-D correction pass) ran D0–D11**, fixing every finding, pushing the branch, and getting the
+first CI-executed-green run of this range — see the corrected constraint-to-CI map below this section's
+original (unedited) table.
+
+#### The constraint-to-CI map (ADR 0029 §11, 44 `INTERVIEW-*` constraints)
+
+Grouped by the test file that proves each one — every file re-run at this session's HEAD (see the per-step
+transcripts in this session's own tool history; M2.11 additionally re-ran the full `source-scans.test.ts`
+with the vacuity floor raised to all five roots, and reddened it three times with a planted violation in a
+different root each, for constraints 21/23/24, then reverted each plant before the next).
+
+| Test file | Tier | Constraints proven | CI job | Status |
+|---|---|---|---|---|
+| `supabase/__tests__/interview-schema.test.ts` | 1 | 1, 2, 3, 15 (SQL half), 18 | `db-tests` | Green locally (M2.3: 71/71 post-migration, per that commit's own REDDEN log). **Not CI-executed** |
+| `supabase/__tests__/interview-rls-cascade.test.ts` | 1 | 38, 39 | `db-tests` | Green locally (M2.3: 15/15). **Not CI-executed** |
+| `supabase/__tests__/interview-member-write-closed.test.ts` | 1 | 13 | `db-tests` | Green locally (M2.2). **Not CI-executed** |
+| `supabase/__tests__/interview-lifecycle.test.ts` | 1 | 12 (Tier-1 half), 30, 31 | `db-tests` | Green locally (M2.4). **Not CI-executed** |
+| `supabase/__tests__/interview-writer.test.ts` | 1 | 6 (Tier-1 half), 7, 8 (Tier-1 half), 9, 20 (Tier-1 half) | `db-tests` | Green locally (M2.5). **Not CI-executed** |
+| `supabase/__tests__/interview-ratify.test.ts` | 1 | 10, 11 (Tier-1 half), 26 (Tier-1 half), 28, 29 (Tier-1 half) | `db-tests` | Green locally (M2.6). **Not CI-executed** |
+| `supabase/__tests__/interview-sweep.test.ts` | 1 | 36, 37 | `db-tests` | Green locally (M2.6). **Not CI-executed** |
+| `lib/interview/__tests__/source-scans.test.ts` | 3 | 4, 14 (Tier-3 half), 20 (Tier-3 half), 21, 23, 24, 32, 33, 34, 43 | `app-tests` | Green locally (M2.1; floor raised to all 5 roots M2.11): **33/33 at this HEAD**. **Not CI-executed** |
+| `lib/memory/import.test.ts` | 3 | 5 | `app-tests` | Green locally (M2.5): 13/13 at this HEAD. **Not CI-executed** |
+| `lib/ai/prompts/interview-extraction.test.ts` | 2 | 6 (Tier-2 half), 25 | `app-tests` | Green locally (M2.8). **Not CI-executed** |
+| `lib/interview/extract.test.ts` | 2 | 8 (Tier-2 half), 22 (Tier-2 half), 26 (Tier-2 half), 35 (Tier-2 half) | `app-tests` | Green locally (M2.8). **Not CI-executed** |
+| `lib/interview/lexicon.test.ts` | 2 | 22 (lexicon half), 27 | `app-tests` | Green locally (M2.8). **Not CI-executed** |
+| `lib/ai/runner.test.ts` | 2 | 35 (trial-exemption half) | `app-tests` | Green locally (M2.8). **Not CI-executed** |
+| `lib/db/memory-interview.test.ts` + `lib/memory/interview.test.ts` | 1 + 2 | 6, 7, 9, 20, 26, 29 (Tier-2 halves) | `app-tests` | Green locally (M2.5): 46/46 at this HEAD. **Not CI-executed** |
+| `lib/interview/select.test.ts` | 2 | 15 (Zod half), 16 (part), 17 | `app-tests` | Green locally (M2.7). **Not CI-executed** |
+| `lib/interview/thinness.test.ts` | 2 | 16 (part) | `app-tests` | Green locally (M2.7). **Not CI-executed** |
+| `lib/interview/due.test.ts` | 2 | 19 | `app-tests` | Green locally (M2.7). **Not CI-executed** |
+| `lib/interview/bank.test.ts` + `lib/i18n/interview-parity.test.ts` | 2 | 15 (bank half), 42 | `app-tests` | Green locally (M2.7/M2.10): 6/6 at this HEAD. **Not CI-executed** |
+| `lib/db/founder-interview-rounds.test.ts` + `founder-interview-answers.test.ts` + `memory-{brand,audience,evidence}.test.ts` (candidate/round-read halves) | 2 | 40 | `app-tests` | Green locally (M2.4/M2.9). **Not CI-executed** |
+| `app/[locale]/(dashboard)/interview/actions.test.ts` | 2 | 11 (Tier-2 half), 12 (Tier-2 half), 29 (Tier-2 half) | `app-tests` | Green locally (M2.9): 35/35. **Not CI-executed** |
+| `app/api/cron/interview-sweep/route.test.ts` | 2 | 44 | `app-tests` | Green locally (M2.9): 8/8. **Not CI-executed** |
+| `app/[locale]/(dashboard)/interview/InterviewPanel.test.tsx` + `lib/interview/page-state.test.ts` + `load-page-state.test.ts` + `components/interview/InterviewCard.test.tsx` | 2 | 41 | `app-tests` | Green locally (M2.10): 27 + 17 + 6 + 10 = 60/60 at this HEAD. **Not CI-executed** |
+| `supabase/__tests__/interview-schema.test.ts` (performance-policy re-run) | 1 + 3 | 14 (Tier-1 half) | `db-tests` | Existing outcome/performance tests re-run unchanged at every migration commit (M2.2 onward). **Not CI-executed** |
+
+~~**Every one of the 44 constraints has a named test file and is green locally at this HEAD. Zero of the 44
+are CI-executed-green, because CI has not run — the branch is unpushed.** The next concrete action before
+this branch merges is the same one Session 31 named: push, let `app-tests` (and, once promoted, `db-tests`)
+run for real, and read the actual run, not infer it.~~
+
+**Superseded 2026-09-28 (Session 35-D D11) — the branch was pushed and CI ran.** The table above, and the
+"Zero of the 44" line, are left as a dated historical record of the state at `5431fa84` (before the
+correction pass). See the entry below for the corrected head's real, CI-executed counts.
+
+#### The constraint-to-CI map, corrected (Session 35-D D11, at `6f7b26d7`)
+
+D0–D10 pushed to `origin/session-35-adr-0029` (PR #15). All three triggered workflows are **green**:
+
+| Workflow | Run | Conclusion | Skip-guard (quoted verbatim) |
+|---|---|---|---|
+| `app-tests` | [`36470516513`](https://github.com/tcr430/SOSH/actions/runs/36470516513) | success | *"skip-guard: 371 file(s) under [app, lib, components] all visible, zero failures — green. (5550/5550 tests passed)"* |
+| `db-tests` | [`36470516626`](https://github.com/tcr430/SOSH/actions/runs/36470516626) | success | *"skip-guard: 107 file(s) under [supabase/__tests__] all visible, zero failures — green. (1127/1127 tests passed)"* |
+| `eval-triage` | [`36470516682`](https://github.com/tcr430/SOSH/actions/runs/36470516682) | success | n/a |
+
+**Counts are higher than the Reviewer's baseline, as the correction pass requires** (only tests were added;
+one assertion inverted under founder ruling A-6, none removed): app-tests 370/5427 (local only, never CI) →
+**371/5550, CI-executed-green**; db-tests 107/1091 → **107/1127, CI-executed-green**.
+
+**Per-tier status at `6f7b26d7`, superseding "Not CI-executed" for every row above:**
+
+| Tier | Status at `6f7b26d7` |
+|---|---|
+| 1 (DB-behaviour rows, plus the two new Tier-1 constraints from the correction pass) | **CI-executed-green** — `db-tests` run `36470516626`. |
+| 2 (app-layer rows, plus the new Tier-2 halves) | **CI-executed-green** — `app-tests` run `36470516513`. This is the FIRST time these 29 rows have executed in CI at all: BLOCKER-1 (the Session 35-D correction pass, D2) fixed the lint error that stopped `app-tests` before vitest ran at `5431fa84`. |
+| 3 (scan rows, incl. the D9-widened `INTERVIEW-NO-BUDGET-PURPOSE`) | **CI-executed-green** — same `app-tests` run (the scans are `vitest` suites under `lib/`). |
+| E | None declared. |
+
+**Constraint count: 44 → 48** (four added by the correction pass: `INTERVIEW-EXTRACTION-RECOVERABLE`,
+`INTERVIEW-MARKERS-SURFACED`, `INTERVIEW-REJECTED-PURGED`, `INTERVIEW-FAILED-ROUND-NOT-LOCKING` — see
+`docs/decisions/0029-founder-input-engine.md` §C.1–C.12 for the full per-finding detail and citations).
+
+**`db-tests` promotion tally: unaffected by this push.** Both runs above are `pull_request`-event runs against
+PR #15, not `master`-push events; only consecutive green `master` push runs move the tally, which separately
+already stands at the required threshold (see "Remaining pre-launch work" item 4) and awaits only the
+founder's branch-protection decision — unrelated to this session.
+
+**Measurement, unchanged from the pre-push entry below:** retrieval-into-briefs is still NOT MEASURED;
+`S34-E2E-UNVERIFIED` remains open; no quality gain is claimed by this session.
+
+#### Measurement (ADR §10.5) — what this session can and cannot claim
+
+- **The yield counters exist**, on `founder_interview_rounds`: `items_proposed`, `dropped_ungrounded`,
+  `dropped_performance_claim`, `candidates_written_{brand,audience,evidence}`, `accepted`, `rejected`,
+  `edited`, `replaced` — written by the M2.5 writer RPC and the M2.6 ratify RPC. The edit and reject rates
+  are the fidelity signal (constraints 8, 22, 41 cover them; they are a **report**, not a constraint, per
+  the ADR's own §11 closing line).
+- **Retrieval into briefs is NOT MEASURED.** `grep` over `lib/campaigns/brief.ts` and
+  `lib/db/campaign-briefs.ts` at this HEAD finds no field recording which memory ids a brief used — M2.0's
+  grounding pass premise 13 confirmed this, and no instrumentation was added this session (the ADR's own
+  instruction: state NOT MEASURED, don't add it). `35-BRIEF-RETRIEVAL-INSTRUMENTATION` is filed in
+  `docs/backlog.md` §2, its un-defer trigger already met.
+- **Nothing in this session proves posts got better.** No number here should be read as evidence of it.
+  `S34-E2E-UNVERIFIED` (the Sessions 31-34 real-model smoke, ADR §1.4) **stays open** — it is named
+  specifically as the reason an interview that produced zero observable downstream effect must not be
+  attributed to this session without that smoke having run: the interview could be working exactly as
+  specified and still show nothing, because nothing downstream has been verified against a real model yet.
+
+#### Tier E
+
+**Zero Tier-E rows declared**, and that absence is stated rather than left silent (ADR §10.4): nothing this
+session measured was scoped as "no deterministic test can express this." A Tier-E-shaped follow-on
+(`35-TIER-E-EXTRACTION-FIDELITY` — does the model's extraction track what founders actually meant) is filed
+in `docs/backlog.md` §2 with its own un-defer trigger (edit rate > 30% over >= 10 ratified rounds); it is not
+declared here because the corpus to measure it against does not exist yet, the same shape as Session 31's
+own reasoning for not declaring Tier E ahead of a corpus.
+
+**db-tests promotion tally: unaffected.** No run of any kind exists for this branch — it has not been
+pushed — so neither `db-tests` nor `app-tests` has executed, and the tally (independent of this session,
+tracked in the "Remaining pre-launch work" section above) does not move.
+
+**Session 35 Track M is NOT yet closed.** M3 (independent Reviewer) and, if it finds anything, M4
+(correction pass) remain before ADR 0029 can be marked Accepted at a head it is dated to.

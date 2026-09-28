@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { AudienceMemoryRow, AudienceMemoryImportInsert } from './types'
+import type { AudienceMemoryRow, AudienceMemoryImportInsert, InterviewConflictTargetRow } from './types'
+import { INTERVIEW_CANDIDATES_LIMIT_PER_TABLE, INTERVIEW_CONFLICT_TARGETS_LIMIT, INTERVIEW_THINNESS_ROW_LIMIT } from '@/lib/interview/constants'
 import { getErrorMessage } from './utils'
 import { MEMORY_CANDIDATE_LIMIT } from './memory-constants'
 import { neutralizeWithSentinels } from '@/lib/ai/wrap-evidence'
@@ -74,4 +75,81 @@ export async function listAudienceCandidatesForRun(
     .limit(25)
   if (error) throw new Error(getErrorMessage(error))
   return (data as AudienceMemoryRow[]) ?? []
+}
+
+// ADR 0029 §3.2 (Session 35 M2.7) — the THINNESS read: one business's ACTIVE, undeleted, unexpired audience_memory rows, from
+// EVERY source, reduced to the columns the pure thinness function reads. Business-scoped and bounded (limit 500 =
+// INTERVIEW_THINNESS_ROW_LIMIT, §9.5). The per-slot grouping happens in TypeScript over this one business's rows: the
+// audience_memory_retrieval_idx partial index covers business_id + status = 'active' but NOT kind, so this is an ACCEPTED
+// SCAN within one business, not claimed index coverage [db-NIT-3]. ORDER BY matches the retrieval index. Reached only
+// through lib/memory/interview-coverage.ts (MEM-NO-DIRECT-TABLE-ACCESS). `nowIso` is a parameter — no hidden clock.
+export type AudienceSlotRow = Pick<AudienceMemoryRow, 'kind' | 'status' | 'recency_at' | 'expires_at' | 'deleted_at'>
+
+export async function listAudienceSlotRows(
+  client: SupabaseClient,
+  businessId: string,
+  nowIso: string,
+  limit: number = INTERVIEW_THINNESS_ROW_LIMIT,
+): Promise<AudienceSlotRow[]> {
+  const { data, error } = await client
+    .from('audience_memory')
+    .select('kind, status, recency_at, expires_at, deleted_at')
+    .eq('business_id', businessId)
+    .eq('status', 'active')
+    .is('deleted_at', null)
+    .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
+    .order('confidence', { ascending: false })
+    .order('recency_at', { ascending: false })
+    .limit(limit)
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as AudienceSlotRow[] | null) ?? []
+}
+
+// ADR 0029 §8.4/§9.5 (Session 35 M2.9) — the ratification read, audience half. See
+// listBrandInterviewCandidates (memory-brand.ts) for the shape and the ORDER BY rationale.
+export async function listAudienceInterviewCandidates(
+  client: SupabaseClient,
+  answerIds: string[],
+  limit = INTERVIEW_CANDIDATES_LIMIT_PER_TABLE,
+): Promise<AudienceMemoryRow[]> {
+  if (answerIds.length === 0) return []
+  const { data, error } = await client
+    .from('audience_memory')
+    .select('*')
+    .in('interview_answer_id', answerIds)
+    .eq('source', 'interview')
+    .eq('status', 'candidate')
+    .is('deleted_at', null)
+    .order('created_at', { ascending: true })
+    .limit(limit)
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as AudienceMemoryRow[] | null) ?? []
+}
+
+// ADR 0029 §4.5/§8.4 (Session 35-D D5, MAJOR-3) — the ratify view's conflict-target read: the id, display text, status and
+// source of the audience_memory rows a candidate's `interview_conflict_ids` name. The ids come from the candidates the SAME call
+// just read (never from client input), and the caller's own client applies RLS, so another tenant's row is simply not
+// returned. Soft-deleted rows are excluded. Bounded by INTERVIEW_CONFLICT_TARGETS_LIMIT; ORDER BY id (the primary key). It
+// only ever feeds a DISPLAY hint: ratify_interview_round re-verifies a replace target (active, source = 'interview', same
+// business) in SQL.
+export async function listAudienceConflictTargets(
+  client: SupabaseClient,
+  ids: string[],
+  limit = INTERVIEW_CONFLICT_TARGETS_LIMIT,
+): Promise<InterviewConflictTargetRow[]> {
+  if (ids.length === 0) return []
+  const { data, error } = await client
+    .from('audience_memory')
+    .select('id, statement, status, source')
+    .in('id', ids)
+    .is('deleted_at', null)
+    .order('id', { ascending: true })
+    .limit(limit)
+  if (error) throw new Error(getErrorMessage(error))
+  return ((data as Array<{ id: string; statement: string; status: InterviewConflictTargetRow['status']; source: InterviewConflictTargetRow['source'] }> | null) ?? []).map((r) => ({
+    id: r.id,
+    text: r.statement,
+    status: r.status,
+    source: r.source,
+  }))
 }

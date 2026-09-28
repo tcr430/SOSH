@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { createMockClient } from './__test-utils__/mock-client'
-import { listBrandMemoryCandidates } from './memory-brand'
+import { listBrandInterviewCandidates, listBrandMemoryCandidates } from './memory-brand'
 import type { BrandMemoryRow } from './types'
+import { INTERVIEW_CANDIDATES_LIMIT_PER_TABLE } from '@/lib/interview/constants'
 
 function makeRow(overrides: Partial<BrandMemoryRow> = {}): BrandMemoryRow {
   return {
@@ -23,6 +24,11 @@ function makeRow(overrides: Partial<BrandMemoryRow> = {}): BrandMemoryRow {
     updated_at: '2026-07-01T00:00:00Z',
     import_run_id: null,
     import_source_post_ids: null,
+    interview_answer_id: null,
+    interview_span: null,
+    interview_span_redacted_at: null,
+    interview_extracted_text: null,
+    interview_edited: false, interview_hedge_flagged: null, interview_conflict_ids: null, interview_rejected: false,
     category: 'positioning',
     statement: 'We integrate natively with every platform',
     ...overrides,
@@ -103,5 +109,34 @@ describe('listBrandMemoryCandidates', () => {
     const { client } = createMockClient([], null)
     const result = await listBrandMemoryCandidates(client, 'biz-1')
     expect(result).toEqual([])
+  })
+})
+
+// ADR 0029 §8.4/§9.5 (Session 35 M2.9) INTERVIEW-BOUNDED-QUERIES — the ratification read: one round's brand
+// candidates via interview_answer_id, bounded (24), source/status re-checked, ORDER BY created_at.
+describe('listBrandInterviewCandidates', () => {
+  it('filters by interview_answer_id IN, source=interview, status=candidate, undeleted, ordered by created_at ASC, limit 24', async () => {
+    const { client, builder, from } = createMockClient([makeRow({ id: 'bm-cand', status: 'candidate', source: 'interview' })], null)
+    const result = await listBrandInterviewCandidates(client, ['ans-1', 'ans-2'])
+    expect(from).toHaveBeenCalledWith('brand_memory')
+    expect(builder.in).toHaveBeenCalledWith('interview_answer_id', ['ans-1', 'ans-2'])
+    expect(builder.eq).toHaveBeenCalledWith('source', 'interview')
+    expect(builder.eq).toHaveBeenCalledWith('status', 'candidate')
+    expect(builder.is).toHaveBeenCalledWith('deleted_at', null)
+    expect(builder.order).toHaveBeenCalledWith('created_at', { ascending: true })
+    expect(builder.limit).toHaveBeenCalledWith(24)
+    expect(INTERVIEW_CANDIDATES_LIMIT_PER_TABLE).toBe(24)
+    expect(result).toHaveLength(1)
+  })
+
+  it('returns [] without querying when answerIds is empty', async () => {
+    const { client, from } = createMockClient([{ id: 'unreachable' }], null)
+    expect(await listBrandInterviewCandidates(client, [])).toEqual([])
+    expect(from).not.toHaveBeenCalled()
+  })
+
+  it('throws on a database error', async () => {
+    const { client } = createMockClient(null, { message: 'boom' })
+    await expect(listBrandInterviewCandidates(client, ['ans-1'])).rejects.toThrow('boom')
   })
 })

@@ -108,6 +108,10 @@ export type BusinessRow = {
   onboarding_completed: boolean
   total_posts_published: number
   deleted_at: string | null
+  // ADR 0029 §5.8: "Not now" hides the interview card until this time. Written ONLY by snooze_interview (service-role RPC).
+  // OPTIONAL on the type on purpose: thirteen unrelated test fixtures build a full BusinessRow, and every reader treats an
+  // absent value exactly like NULL (not snoozed). A select('*') row always carries it.
+  interview_snoozed_until?: string | null
   created_at: string
   updated_at: string
 }
@@ -132,7 +136,7 @@ export type BusinessInsert = {
   updated_at?: string
 }
 
-export type BusinessUpdate = Partial<Omit<BusinessRow, 'id' | 'created_at' | 'plan' | 'stripe_customer_id' | 'stripe_subscription_id' | 'deleted_at'>>
+export type BusinessUpdate = Partial<Omit<BusinessRow, 'id' | 'created_at' | 'plan' | 'stripe_customer_id' | 'stripe_subscription_id' | 'deleted_at' | 'interview_snoozed_until'>>
 
 // ---------------------------------------------------------------------------
 // 2. brand_voices
@@ -1181,7 +1185,29 @@ export type BusinessMemberUpdate = Partial<
 //     audience_memory, performance_memory
 // ---------------------------------------------------------------------------
 
-export type MemorySource = 'manual' | 'distilled' | 'import'
+export type MemorySource = 'manual' | 'distilled' | 'import' | 'interview'
+
+// ADR 0029 §2.2/§2.3 (Session 35 M2.9) — the interview provenance columns added to brand_memory,
+// audience_memory and evidence_memory ONLY (20260925110000_founder_interview_schema.sql). NULL on every
+// non-interview row; `(source = 'interview') = (interview_answer_id IS NOT NULL)` and the equivalent
+// marker CHECK for interview_extracted_text are enforced in SQL, not here. interview_span is NULL once
+// retention redacts it (§6.3), replaced by a non-null interview_span_redacted_at.
+type MemoryInterviewProvenance = {
+  interview_answer_id: string | null
+  interview_span: string | null
+  interview_span_redacted_at: string | null
+  interview_extracted_text: string | null
+  interview_edited: boolean
+  // Session 35-D D4 (20260928100000_interview_correction_pass.sql). MAJOR-3: the hedge flag and the conflict ids the
+  // extraction computes, persisted by write_interview_candidates and immutable thereafter. Both are NULL on every
+  // non-interview row (CHECK) and on an interview row written before D4 ("unknown"); a new interview row always carries
+  // false / a uuid[] (possibly empty, at most 5), each id verified in SQL to be a live row of the SAME table and business.
+  // MAJOR-4 (founder ruling A-6(a)): interview_rejected is set true ONLY by ratify_interview_round's REJECT branch, in the
+  // statement that retires the candidate; it is how the sweep tells a rejected candidate from a row a later round replaced.
+  interview_hedge_flagged: boolean | null
+  interview_conflict_ids: string[] | null
+  interview_rejected: boolean
+}
 export type MemoryStatus = 'candidate' | 'active' | 'retired'
 export type MemorySensitivity = 'public' | 'internal' | 'confidential'
 export type MemoryScope = 'brand' | 'campaign' | 'platform' | 'contact'
@@ -1219,14 +1245,14 @@ type MemoryGovernanceRow = {
 
 export type BrandMemoryCategory = 'positioning' | 'capability' | 'pricing' | 'competitor' | 'other'
 
-export type BrandMemoryRow = MemoryGovernanceRow & {
+export type BrandMemoryRow = MemoryGovernanceRow & MemoryInterviewProvenance & {
   category: BrandMemoryCategory
   statement: string
 }
 
 export type EvidenceMemoryKind = 'quote' | 'case_study' | 'usage_data' | 'other'
 
-export type EvidenceMemoryRow = MemoryGovernanceRow & {
+export type EvidenceMemoryRow = MemoryGovernanceRow & MemoryInterviewProvenance & {
   kind: EvidenceMemoryKind
   content: string
   source_url: string | null
@@ -1234,7 +1260,7 @@ export type EvidenceMemoryRow = MemoryGovernanceRow & {
 
 export type AudienceMemoryKind = 'problem' | 'objection' | 'question' | 'trigger' | 'other'
 
-export type AudienceMemoryRow = MemoryGovernanceRow & {
+export type AudienceMemoryRow = MemoryGovernanceRow & MemoryInterviewProvenance & {
   segment: string | null
   kind: AudienceMemoryKind
   statement: string
@@ -1766,3 +1792,124 @@ export type PostOutcomeRow = {
   measured_at: string
 }
 export type PostOutcomeInsert = PostOutcomeRow
+
+// ADR 0029 §5.2 / §9.1 (Session 35 M2.3-M2.4) — the founder input engine. BOTH tables are written ONLY by service-role
+// SECURITY DEFINER RPCs (no authenticated write grant, no write policy — §9.2), so there is deliberately NO *Insert / *Update
+// type here: nothing outside lib/db/founder-interview-*.ts may construct a row, and a write is an RPC call, not a row.
+export type FounderInterviewRoundStatus =
+  | 'open'
+  | 'submitted'
+  | 'skipped'
+  | 'extracting'
+  | 'extraction_failed'
+  | 'awaiting_ratification'
+  | 'no_records'
+  | 'ratified'
+  | 'expired'
+  | 'failed'
+
+export type FounderInterviewRoundRow = {
+  id: string
+  business_id: string
+  status: FounderInterviewRoundStatus
+  question_count: number
+  bank_version: number
+  created_by: string | null
+  created_at: string
+  submitted_at: string | null
+  claimed_at: string | null
+  extraction_attempts: number
+  spend_cents: number
+  ceiling_cents: number
+  error_code: string | null
+  extracted_at: string | null
+  ratified_at: string | null
+  ratified_by: string | null
+  terminal_at: string | null
+  items_proposed: number
+  dropped_ungrounded: number
+  dropped_performance_claim: number
+  // Session 35-D D4: the per-answer cap drop (NIT-2) and the conflict ids the writer dropped as not-a-live-row-of-this-
+  // business-and-table (MAJOR-3). Both 0 by default; written by write_interview_candidates in the same call.
+  dropped_cap: number
+  dropped_conflict_foreign: number
+  candidates_written_brand: number
+  candidates_written_audience: number
+  candidates_written_evidence: number
+  accepted: number
+  rejected: number
+  edited: number
+  replaced: number
+  updated_at: string
+}
+
+export type FounderInterviewAnswerStatus = 'pending' | 'answered' | 'skipped'
+export type FounderInterviewSlotType = 'brand' | 'audience' | 'evidence'
+
+export type FounderInterviewAnswerRow = {
+  id: string
+  business_id: string
+  round_id: string
+  position: number
+  question_key: string
+  bank_version: number
+  slot_type: FounderInterviewSlotType
+  slot_category: string
+  status: FounderInterviewAnswerStatus
+  // NULL once retention redacts it (§6.3) and for a skipped or still-pending question.
+  answer_text: string | null
+  char_count: number | null
+  answered_by: string | null
+  // The COOLDOWN CLOCK (§3.3): when the question was answered OR skipped.
+  answered_at: string | null
+  redacted_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+// One selected question, as create_interview_round takes it (M2.7's selection produces these).
+export type FounderInterviewQuestionInput = {
+  questionKey: string
+  slotType: FounderInterviewSlotType
+  slotCategory: string
+  bankVersion: number
+}
+
+// The lifecycle RPCs' TYPED outcomes (supabase/migrations/20260925120000_founder_interview_lifecycle_rpcs.sql). An
+// authorisation failure is NOT a value: it raises 42501 and surfaces as a thrown Error from the lib/db wrapper.
+export type CreateInterviewRoundResult = { outcome: 'ok'; roundId: string } | { outcome: 'too_soon' | 'round_open' }
+export type SaveInterviewAnswerResult = { outcome: 'ok'; answerId: string } | { outcome: 'not_found' | 'not_open' }
+export type SkipInterviewAnswerResult = { outcome: 'ok'; answerId: string } | { outcome: 'not_found' | 'not_skippable' }
+export type SkipInterviewRoundResult = { outcome: 'ok'; skippedAnswers: number } | { outcome: 'not_found' | 'not_open' }
+export type SubmitInterviewRoundResult = { outcome: 'ok'; roundId: string } | { outcome: 'not_found' | 'not_open' | 'no_answers' }
+export type SnoozeInterviewResult = { outcome: 'ok'; snoozedUntil: string } | { outcome: 'already_snoozed' }
+export type ClaimInterviewExtractionResult =
+  | { outcome: 'claimed'; businessId: string; attempt: number; spendCents: number }
+  | { outcome: 'not_found' }
+  | { outcome: 'not_claimable'; status: FounderInterviewRoundStatus }
+  | { outcome: 'attempts'; attempts: number }
+  | { outcome: 'ceiling'; spendCents: number; ceilingCents: number }
+export type ReconcileInterviewSpendResult =
+  | { outcome: 'reconciled'; status: FounderInterviewRoundStatus; spendCents: number; clamped: boolean }
+  | { outcome: 'not_extracting' }
+
+// ADR 0029 §5.4 / §6.3 (M2.6) — what one run of the daily retention sweep did, for the route's one canonical log line.
+export type SweepInterviewDataResult = {
+  failedStuck: number
+  expired: number
+  candidatesRetired: number
+  answersRedacted: number
+  spansRedacted: number
+  candidatesDeleted: number
+}
+
+// Session 35-D D5 (MAJOR-3, ADR 0029 §4.5/§8.4) — what the ratify view needs to show, per conflict id on a candidate: the
+// target's display text, its status and its source. `text` is the brand/audience `statement` or the evidence `content`.
+// Read with the caller's own (member RLS) client. Replace is offered only when status = 'active' AND source = 'interview';
+// ratify_interview_round re-verifies exactly that in SQL, so this row is a display hint, never the authority.
+export type InterviewConflictTargetRow = {
+  id: string
+  text: string
+  status: MemoryStatus
+  source: MemorySource
+}

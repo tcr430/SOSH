@@ -204,7 +204,10 @@ describe('importPerformanceItem', () => {
 describe('MEM-NO-DIRECT-TABLE-ACCESS (import path, Tier-2 source scan)', () => {
   const ROOT = path.join(__dirname, '..', '..')
   const SCAN_DIRS = ['lib', 'app']
-  const FORBIDDEN = /\bimport(?:Evidence|Audience|Performance)Memory\b/
+  // ADR 0029 §2.3 INTERVIEW-WRITER-SOLE-CALLER: the interview writer joins the alternation. Its
+  // exported name is FIXED as writeInterviewCandidates (lib/db/memory-interview.ts, M2.5) and its
+  // sole caller is lib/memory/interview.ts.
+  const FORBIDDEN = /\bimport(?:Evidence|Audience|Performance)Memory\b|\bwriteInterviewCandidates\b/
 
   function collectTsFiles(dir: string): string[] {
     const entries = fs.readdirSync(dir, { withFileTypes: true })
@@ -241,6 +244,82 @@ describe('MEM-NO-DIRECT-TABLE-ACCESS (import path, Tier-2 source scan)', () => {
       }
     }
 
+    expect(offenders).toEqual([])
+  })
+
+  // ADR 0029 §2.3 / §10.3 INTERVIEW-WRITER-SOLE-CALLER (Tier 3). The line filter above only sees
+  // static `import` lines that mention `memory-`; a dynamic `await import('.../memory-interview')`,
+  // a multi-line destructure, or a direct `.rpc('write_interview_candidates')` slips past it. This
+  // detector reads the comment-stripped WHOLE source and flags all four shapes. The allowed files
+  // are lib/memory/ (the sole caller) and lib/db/memory-interview.ts (the definition).
+  // Known blind spot (ADR §10.3): none known.
+  function stripComments(source: string): string {
+    return source
+      .replace(/\r\n/g, '\n')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .split('\n')
+      .map((line) => line.replace(/(?<!:)\/\/.*$/, ''))
+      .join('\n')
+  }
+
+  function findInterviewWriterCallers(source: string): string[] {
+    const code = stripComments(source)
+    const hits: string[] = []
+    for (const m of code.matchAll(/(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*|\bimport\s+)['"]([^'"]*memory-interview)['"]/g)) hits.push(m[1])
+    for (const m of code.matchAll(/\bwriteInterviewCandidates\b/g)) hits.push(m[0])
+    for (const m of code.matchAll(/['"`]write_interview_candidates['"`]/g)) hits.push(m[0])
+    // ADR 0029 §8.5 (M2.6): the ACTIVATION path is fenced the same way — the db-level ratify wrapper and its RPC name.
+    for (const m of code.matchAll(/\bratifyInterviewRound\b/g)) hits.push(m[0])
+    for (const m of code.matchAll(/['"`]ratify_interview_round['"`]/g)) hits.push(m[0])
+    return hits
+  }
+
+  it('the interview-writer detector flags static, dynamic, multi-line and rpc shapes (planted violations)', () => {
+    expect(findInterviewWriterCallers("import { writeInterviewCandidates } from '@/lib/db/memory-interview'")).toEqual([
+      '@/lib/db/memory-interview',
+      'writeInterviewCandidates',
+    ])
+    expect(findInterviewWriterCallers("const { writeInterviewCandidates } = await import('@/lib/db/memory-interview')")).toEqual([
+      '@/lib/db/memory-interview',
+      'writeInterviewCandidates',
+    ])
+    expect(findInterviewWriterCallers("const m = await import(\n  '../db/memory-interview'\n)")).toEqual(['../db/memory-interview'])
+    expect(findInterviewWriterCallers("import {\n  writeInterviewCandidates,\n} from './x'")).toEqual(['writeInterviewCandidates'])
+    expect(findInterviewWriterCallers("await client.rpc('write_interview_candidates', args)")).toEqual(["'write_interview_candidates'"])
+    // the activation path (M2.6): the db wrapper, dynamically, and the RPC name
+    expect(findInterviewWriterCallers("const { ratifyInterviewRound } = await import('@/lib/db/memory-interview')")).toEqual(['@/lib/db/memory-interview', 'ratifyInterviewRound'])
+    expect(findInterviewWriterCallers("await client.rpc('ratify_interview_round', args)")).toEqual(["'ratify_interview_round'"])
+  })
+
+  it('the interview-writer detector does NOT flag unrelated imports, comments or lookalike names (planted negative)', () => {
+    expect(findInterviewWriterCallers("import { importEvidenceMemory } from '@/lib/db/memory-evidence'")).toEqual([])
+    expect(findInterviewWriterCallers("// import { writeInterviewCandidates } from '@/lib/db/memory-interview'")).toEqual([])
+    expect(findInterviewWriterCallers("/* client.rpc('write_interview_candidates') */ const x = 1")).toEqual([])
+    expect(findInterviewWriterCallers("import { INTERVIEW_SLOTS } from '@/lib/interview/constants'")).toEqual([])
+    expect(findInterviewWriterCallers('const writeInterviewCandidatesLike = 1')).toEqual([])
+    // the memory-layer entry points are the LEGITIMATE way in, from anywhere, and must never be flagged
+    expect(findInterviewWriterCallers("import { ratifyInterviewCandidates, recordInterviewCandidates } from '@/lib/memory'")).toEqual([])
+    expect(findInterviewWriterCallers("// await client.rpc('ratify_interview_round', args) — never from a route")).toEqual([])
+  })
+
+  it('no file outside lib/memory/ and lib/db/memory-interview.ts references the interview writer', () => {
+    const memoryDir = path.join(ROOT, 'lib', 'memory')
+    const definition = path.join(ROOT, 'lib', 'db', 'memory-interview.ts')
+    const offenders: string[] = []
+    let scanned = 0
+
+    for (const scanDir of SCAN_DIRS) {
+      const files = collectTsFiles(path.join(ROOT, scanDir))
+      expect(files.length, `${scanDir} contributed zero files to the scan`).toBeGreaterThan(0)
+      for (const file of files) {
+        if (file.startsWith(memoryDir) || file === definition) continue
+        scanned += 1
+        const hits = findInterviewWriterCallers(fs.readFileSync(file, 'utf8'))
+        if (hits.length > 0) offenders.push(`${path.relative(ROOT, file)}: ${hits.join(', ')}`)
+      }
+    }
+
+    expect(scanned, 'the scan matched too few files — it would pass vacuously').toBeGreaterThanOrEqual(300)
     expect(offenders).toEqual([])
   })
 })

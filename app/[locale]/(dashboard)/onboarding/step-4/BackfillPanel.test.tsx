@@ -120,6 +120,7 @@ function makeAudienceCandidate(run: SocialBackfillRunRow, id: string, statement:
     last_confirmed_at: null, recency_at: '2026-09-01T00:00:00Z', expires_at: null, deleted_at: null,
     created_at: '2026-09-01T00:00:00Z', updated_at: '2026-09-01T00:00:00Z', import_run_id: run.id,
     import_source_post_ids: ['p1'], segment: null, kind: 'problem', statement,
+    interview_answer_id: null, interview_span: null, interview_span_redacted_at: null, interview_extracted_text: null, interview_edited: false, interview_hedge_flagged: null, interview_conflict_ids: null, interview_rejected: false,
   }
 }
 
@@ -130,6 +131,7 @@ function makeEvidenceCandidate(run: SocialBackfillRunRow, id: string, content: s
     last_confirmed_at: null, recency_at: '2026-09-01T00:00:00Z', expires_at: null, deleted_at: null,
     created_at: '2026-09-01T00:00:00Z', updated_at: '2026-09-01T00:00:00Z', import_run_id: run.id,
     import_source_post_ids: ['p1'], kind: 'usage_data', content, source_url: null,
+    interview_answer_id: null, interview_span: null, interview_span_redacted_at: null, interview_extracted_text: null, interview_edited: false, interview_hedge_flagged: null, interview_conflict_ids: null, interview_rejected: false,
   }
 }
 
@@ -382,6 +384,11 @@ describe('BackfillPanel — Section 10.2 states', () => {
           segment: null,
           kind: 'question',
           statement: 'How do you price seats?',
+          interview_answer_id: null,
+          interview_span: null,
+          interview_span_redacted_at: null,
+          interview_extracted_text: null,
+          interview_edited: false, interview_hedge_flagged: null, interview_conflict_ids: null, interview_rejected: false,
         },
       ],
     })

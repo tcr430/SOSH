@@ -66,6 +66,8 @@ export default async function Step4Page({
         <div className="text-5xl" aria-hidden="true">🎉</div>
         <h1 className="text-2xl font-semibold tracking-tight">{t('step4.title')}</h1>
         <p className="text-sm text-muted-foreground max-w-sm mx-auto">{t('step4.subtitle')}</p>
+        {/* ADR 0029 §5.6 — no fifth onboarding step; a one-line pointer only. */}
+        <p className="text-sm text-muted-foreground max-w-sm mx-auto">{t('step4.interview_pointer')}</p>
       </div>
 
       <BackfillPanel

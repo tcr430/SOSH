@@ -15,7 +15,8 @@
     "billing": "Facturación",
     "coming_soon": "Próximamente",
     "approvals": "Aprobaciones",
-    "opportunities": "Oportunidades"
+    "opportunities": "Oportunidades",
+    "interview": "Entrevista"
   },
   "dashboard": {
     "banner": {
@@ -105,6 +106,7 @@
     "step4": {
       "title": "¡Todo listo!",
       "subtitle": "Tu espacio de trabajo está listo. Crea tu primera campaña para empezar a generar contenido.",
+      "interview_pointer": "A continuación: algunas preguntas que solo tú puedes responder",
       "cta": "Crear primera campaña"
     },
     "backfill": {
