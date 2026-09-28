@@ -48,6 +48,78 @@ const DATE_FNS_LOCALES: Record<string, Locale> = { en: enUS, pt, es }
 const POLL_MS = 4000
 const POLL_MAX_MS = 20 * 60 * 1000
 
+// ─── Action failures are SHOWN and FOCUSED (Session 35-D D8, Reviewer MINOR-1; ADR 0029 §8.7) ───────────────────────────────
+// Before D8 the handlers ignored `!result.ok` (and a typed non-success outcome such as `not_open`), so a founder who clicked
+// Ratify with an edit that mentions "reach" (the D-4 performance-claim filter) saw NOTHING happen: `performance_claim` had no
+// message key in any locale. One error region per surface (role="alert", tabIndex -1), focused when it is set, with a message
+// key per code the actions can return. No new error codes are invented here: the union is InterviewActionError (actions.ts) plus
+// `not_open`, the message for the typed outcomes a stale page provokes (D6's retry `not_open`, a round that already moved on).
+type ActionErrorKey = 'unauthenticated' | 'not_found' | 'forbidden' | 'validation' | 'performance_claim' | 'generic' | 'not_open'
+const ACTION_ERROR_KEYS: ReadonlySet<string> = new Set<ActionErrorKey>(['unauthenticated', 'not_found', 'forbidden', 'validation', 'performance_claim', 'generic', 'not_open'])
+// The outcomes that mean the action DID what was asked (or, for `already_snoozed`, that the state is already what was asked).
+const SUCCESS_OUTCOMES: ReadonlySet<string> = new Set(['ok', 'retrying', 'nothing_thin', 'ratified', 'already_snoozed'])
+
+type ActionResultLike = { ok: true; result: { outcome?: string } } | { ok: false; error: string }
+
+function errorKeyFor(result: ActionResultLike): ActionErrorKey | null {
+  if (!result.ok) return ACTION_ERROR_KEYS.has(result.error) ? (result.error as ActionErrorKey) : 'generic'
+  const outcome = result.result.outcome
+  if (outcome === undefined || SUCCESS_OUTCOMES.has(outcome)) return null
+  if (outcome === 'not_found') return 'not_found'
+  if (outcome === 'no_answers') return 'validation'
+  // not_open, not_skippable, not_awaiting, too_soon, round_open: the round is not in the state this action needs
+  return 'not_open'
+}
+
+function useActionErrors(onStateMoved: () => void) {
+  // `failure` is a fresh object per failure (not just the key), so the focus effect below runs for EVERY failure, including the
+  // same code twice in a row. The effect runs after React has committed the region, so the element exists when it is focused
+  // (a requestAnimationFrame here would race the commit).
+  const [failure, setFailure] = useState<{ key: ActionErrorKey } | null>(null)
+  const error = failure?.key ?? null
+  const regionRef = useRef<HTMLParagraphElement>(null)
+
+  useEffect(() => {
+    if (failure) regionRef.current?.focus()
+  }, [failure])
+
+  function fail(key: ActionErrorKey) {
+    setFailure({ key })
+  }
+
+  // Runs one action: a throw, an `ok: false`, or a typed non-success outcome becomes a visible, focused message. A `not_open`
+  // means the page is stale (the round already moved on), so the state is re-read as well.
+  async function run(call: () => Promise<ActionResultLike>, onSuccess: () => void): Promise<void> {
+    setFailure(null)
+    let result: ActionResultLike
+    try {
+      result = await call()
+    } catch {
+      fail('generic')
+      return
+    }
+    const key = errorKeyFor(result)
+    if (key === null) {
+      onSuccess()
+      return
+    }
+    fail(key)
+    if (key === 'not_open') onStateMoved()
+  }
+
+  return { error, regionRef, run, fail }
+}
+
+function ActionErrorRegion({ error, regionRef }: { error: ActionErrorKey | null; regionRef: React.Ref<HTMLParagraphElement> }) {
+  const t = useTranslations('interview')
+  if (error === null) return null
+  return (
+    <p ref={regionRef} role="alert" tabIndex={-1} data-error={error} className="text-sm text-destructive outline-none">
+      {t(`ui.errors.${error}` as never)}
+    </p>
+  )
+}
+
 const CATEGORY_OPTIONS: Record<FounderInterviewSlotType, readonly string[]> = {
   brand: ['positioning', 'capability', 'pricing', 'competitor', 'other'],
   audience: ['problem', 'objection', 'question', 'trigger', 'other'],
@@ -77,20 +149,21 @@ export function InterviewPanel({ state, locale }: { state: InterviewPageState; l
     requestAnimationFrame(() => headingRef.current?.focus())
   }
 
+  // D8: one error region for the top-level actions (Start, Not now, Retry). A `not_open` also re-reads the page state.
+  const { error: actionError, regionRef: actionErrorRef, run: runAction } = useActionErrors(() => router.refresh())
+
   function handleStart() {
     startTransition(async () => {
-      const result = await startInterviewRoundAction()
-      if (result.ok) {
+      await runAction(startInterviewRoundAction, () => {
         router.refresh()
         focusHeading()
-      }
+      })
     })
   }
 
   function handleNotNow() {
     startTransition(async () => {
-      const result = await snoozeInterviewAction()
-      if (result.ok) router.refresh()
+      await runAction(snoozeInterviewAction, () => router.refresh())
     })
   }
 
@@ -115,8 +188,7 @@ export function InterviewPanel({ state, locale }: { state: InterviewPageState; l
   function handleRetry() {
     if (state.kind !== 'extraction_failed' && state.kind !== 'extracting') return
     startTransition(async () => {
-      const result = await retryInterviewExtractionAction({ roundId: state.round.id })
-      if (result.ok) router.refresh()
+      await runAction(() => retryInterviewExtractionAction({ roundId: state.round.id }), () => router.refresh())
     })
   }
 
@@ -161,6 +233,7 @@ export function InterviewPanel({ state, locale }: { state: InterviewPageState; l
               {t('ui.due.not_now')}
             </button>
           </div>
+          <ActionErrorRegion error={actionError} regionRef={actionErrorRef} />
         </div>
       )
 
@@ -185,6 +258,7 @@ export function InterviewPanel({ state, locale }: { state: InterviewPageState; l
               </Button>
             </div>
           )}
+          <ActionErrorRegion error={actionError} regionRef={actionErrorRef} />
         </div>
       )
 
@@ -207,6 +281,7 @@ export function InterviewPanel({ state, locale }: { state: InterviewPageState; l
               {t('ui.extraction_failed.try_again')}
             </Button>
           )}
+          <ActionErrorRegion error={actionError} regionRef={actionErrorRef} />
         </div>
       )
     }
@@ -295,6 +370,8 @@ export function InterviewAnswerPanel({
   const [isPending, startTransition] = useTransition()
   const firstTextareaRef = useRef<HTMLTextAreaElement>(null)
   const errorRef = useRef<HTMLParagraphElement>(null)
+  // D8: failures of skip-question / Submit / Skip round are shown and focused here; a `not_open` re-reads the round.
+  const { error: actionError, regionRef: actionErrorRef, run: runAction } = useActionErrors(onRoundChanged)
 
   // §8.7: after Start, focus moves to the first question. This component mounts exactly when a round
   // transitions to 'open' (fresh Start) or the page is loaded/refreshed while open — both are the right time.
@@ -323,8 +400,10 @@ export function InterviewAnswerPanel({
 
   function skipQuestion(answerId: string) {
     startTransition(async () => {
-      const result = await skipInterviewQuestionAction({ answerId })
-      if (result.ok) setAnswers((prev) => prev.map((a) => (a.id === answerId ? { ...a, status: 'skipped' } : a)))
+      await runAction(
+        () => skipInterviewQuestionAction({ answerId }),
+        () => setAnswers((prev) => prev.map((a) => (a.id === answerId ? { ...a, status: 'skipped' } : a))),
+      )
     })
   }
 
@@ -335,15 +414,13 @@ export function InterviewAnswerPanel({
       return
     }
     startTransition(async () => {
-      const result = await submitInterviewRoundAction({ roundId: round.id })
-      if (result.ok) onRoundChanged()
+      await runAction(() => submitInterviewRoundAction({ roundId: round.id }), onRoundChanged)
     })
   }
 
   function handleSkipRound() {
     startTransition(async () => {
-      const result = await skipInterviewRoundAction({ roundId: round.id })
-      if (result.ok) onRoundChanged()
+      await runAction(() => skipInterviewRoundAction({ roundId: round.id }), onRoundChanged)
     })
   }
 
@@ -387,6 +464,7 @@ export function InterviewAnswerPanel({
           {t('ui.in_progress.no_answers_error')}
         </p>
       )}
+      <ActionErrorRegion error={actionError} regionRef={actionErrorRef} />
     </div>
   )
 }
@@ -572,6 +650,8 @@ export function InterviewRatifyPanel({
   const [editedCategory, setEditedCategory] = useState<Record<string, string>>(() => Object.fromEntries(items.map((i) => [i.key, i.category])))
   const [isPending, startTransition] = useTransition()
   const statusRef = useRef<HTMLParagraphElement>(null)
+  // D8: a failed ratify (a performance claim in an edit, a forbidden caller, a stale round) is shown and focused, never silent.
+  const { error: actionError, regionRef: actionErrorRef, run: runAction } = useActionErrors(onRatified)
 
   const allDecided = items.length > 0 && items.every((i) => decisions[i.key] !== undefined)
 
@@ -592,11 +672,10 @@ export function InterviewRatifyPanel({
       }
     })
     startTransition(async () => {
-      const result = await ratifyInterviewRoundAction({ roundId: round.id, decisions: decisionsPayload })
-      if (result.ok) {
+      await runAction(() => ratifyInterviewRoundAction({ roundId: round.id, decisions: decisionsPayload }), () => {
         onRatified()
         requestAnimationFrame(() => statusRef.current?.focus())
-      }
+      })
     })
   }
 
@@ -740,6 +819,7 @@ export function InterviewRatifyPanel({
           {t('ui.awaiting_ratification.ratify_button')}
         </Button>
         {!allDecided && <p className="text-xs text-muted-foreground">{t('ui.awaiting_ratification.decide_all_hint')}</p>}
+        <ActionErrorRegion error={actionError} regionRef={actionErrorRef} />
         <p ref={statusRef} tabIndex={-1} className="sr-only outline-none" aria-live="polite" />
       </div>
     </div>

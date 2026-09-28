@@ -172,6 +172,15 @@
       "replace": "Reemplazar",
       "replace_for": "Reemplazar \"{target}\" por \"{text}\"",
       "set_aside": "{count, plural, one {# afirmación sobre lo que funciona se dejó de lado.} other {# afirmaciones sobre lo que funciona se dejaron de lado.}}"
+    },
+    "errors": {
+      "unauthenticated": "Tu sesión ha caducado. Inicia sesión de nuevo para continuar.",
+      "forbidden": "No tienes permiso para hacer eso en este negocio.",
+      "not_found": "No hemos encontrado eso. Recarga la página e inténtalo de nuevo.",
+      "validation": "No se pudo procesar. Revisa lo que has introducido e inténtalo de nuevo.",
+      "performance_claim": "Una de tus ediciones describe cómo rinde algo, como un resultado o una métrica. Reformúlala como una afirmación sencilla sobre tu negocio, o rechaza ese registro.",
+      "not_open": "Este paso ya no está disponible. La página se ha actualizado para mostrar la situación actual.",
+      "generic": "Algo salió mal. Inténtalo de nuevo."
     }
   }
 }

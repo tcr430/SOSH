@@ -172,6 +172,15 @@
       "replace": "Replace it",
       "replace_for": "Replace \"{target}\" with \"{text}\"",
       "set_aside": "{count, plural, one {# statement about what performs was set aside.} other {# statements about what performs were set aside.}}"
+    },
+    "errors": {
+      "unauthenticated": "Your session has expired. Sign in again to continue.",
+      "forbidden": "You don't have permission to do that in this business.",
+      "not_found": "We couldn't find that. Reload the page and try again.",
+      "validation": "That couldn't be processed. Check what you entered and try again.",
+      "performance_claim": "One of your edits describes how something performs, such as a result or a metric. Rephrase it as a plain statement about your business, or reject that record.",
+      "not_open": "That step is no longer available. The page has been refreshed to show where things stand.",
+      "generic": "Something went wrong. Please try again."
     }
   }
 }

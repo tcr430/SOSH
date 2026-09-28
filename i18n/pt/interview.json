@@ -172,6 +172,15 @@
       "replace": "Substituir",
       "replace_for": "Substituir \"{target}\" por \"{text}\"",
       "set_aside": "{count, plural, one {# afirmação sobre o que resulta foi posta de lado.} other {# afirmações sobre o que resulta foram postas de lado.}}"
+    },
+    "errors": {
+      "unauthenticated": "A sua sessão expirou. Inicie sessão novamente para continuar.",
+      "forbidden": "Não tem permissão para fazer isto neste negócio.",
+      "not_found": "Não encontrámos isso. Recarregue a página e tente novamente.",
+      "validation": "Não foi possível processar isso. Verifique o que introduziu e tente novamente.",
+      "performance_claim": "Uma das suas edições descreve o desempenho de algo, como um resultado ou uma métrica. Reformule-a como uma afirmação simples sobre o seu negócio, ou rejeite esse registo.",
+      "not_open": "Este passo já não está disponível. A página foi atualizada para mostrar o ponto da situação.",
+      "generic": "Algo correu mal. Tente novamente."
     }
   }
 }

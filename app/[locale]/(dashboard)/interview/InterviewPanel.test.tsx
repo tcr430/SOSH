@@ -463,6 +463,135 @@ describe('D6 — the extracting view polls at POLL_MS and offers Retry only when
   })
 })
 
+// ── Session 35-D D8 (MINOR-1, ADR 0029 §8.7) — every action failure is SHOWN and receives FOCUS ─────────────────────────────────
+// Before D8 the handlers ignored `!result.ok`: a founder whose ratify edit mentioned "reach" (the D-4 performance-claim filter)
+// clicked Ratify and nothing happened, because `performance_claim` had no message key in any locale. Each surface now has one
+// error region (role="alert", tabIndex -1), focused when it is set, with a message per code the actions can return.
+
+describe('D8 — a failed action shows its message and focuses the error region', () => {
+  // The panel focuses the region in an effect that runs after the region is committed, so no timer is needed here.
+  const buttonWithText = (c: HTMLElement, text: string) => Array.from(c.querySelectorAll('button')).find((b) => b.textContent === text)!
+  const alertOf = (c: HTMLElement) => c.querySelector('[role="alert"]') as HTMLElement | null
+  // The answering panel moves focus to the first question one frame after it mounts (§8.7). A user acts long after that frame, so
+  // let it pass before clicking, otherwise the pending frame would steal focus from the error region in the test only.
+  const settleMountFocus = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 40)) })
+
+  function expectShownAndFocused(c: HTMLElement, code: string) {
+    const region = alertOf(c)
+    expect(region, `no role="alert" region for ${code}`).not.toBeNull()
+    expect(region!.textContent).toBe(`ui.errors.${code}`)
+    expect(region!.getAttribute('tabindex')).toBe('-1')
+    expect(document.activeElement, 'the error region must hold focus (§8.7)').toBe(region)
+  }
+
+  it('RATIFY performance_claim: the message appears (it had no key before) and takes focus; the round is NOT refreshed as if it had succeeded', async () => {
+    ratifyInterviewRoundAction.mockResolvedValueOnce({ ok: false, error: 'performance_claim' })
+    const { container, cleanup } = renderPanel({
+      kind: 'awaiting_ratification',
+      round: round({ status: 'awaiting_ratification' }),
+      isRatifier: true,
+      candidates: { brand: [brandCandidate()], audience: [], evidence: [] },
+      answers: [answer({ status: 'answered' })],
+    })
+    cleanupFns.push(cleanup)
+    act(() => { (Array.from(container.querySelectorAll('button')).find((b) => b.getAttribute('aria-label')?.startsWith('ui.ratify.accept_for')))!.click() })
+    await act(async () => { buttonWithText(container, 'ui.awaiting_ratification.ratify_button').click() })
+    expectShownAndFocused(container, 'performance_claim')
+    expect(routerRefresh).not.toHaveBeenCalled()
+  })
+
+  it('START forbidden: the message appears and takes focus, and the page is not refreshed', async () => {
+    startInterviewRoundAction.mockResolvedValueOnce({ ok: false, error: 'forbidden' })
+    const { container, cleanup } = renderPanel({ kind: 'due', questionCount: 6 })
+    cleanupFns.push(cleanup)
+    await act(async () => { buttonWithText(container, 'ui.due.start').click() })
+    expectShownAndFocused(container, 'forbidden')
+    expect(routerRefresh).not.toHaveBeenCalled()
+  })
+
+  it('NOT NOW failing (unauthenticated) is shown and focused too', async () => {
+    snoozeInterviewAction.mockResolvedValueOnce({ ok: false, error: 'unauthenticated' })
+    const { container, cleanup } = renderPanel({ kind: 'due', questionCount: 6 })
+    cleanupFns.push(cleanup)
+    await act(async () => { buttonWithText(container, 'ui.due.not_now').click() })
+    expectShownAndFocused(container, 'unauthenticated')
+  })
+
+  it('SUBMIT validation: the message appears and takes focus, and the round is not treated as submitted', async () => {
+    submitInterviewRoundAction.mockResolvedValueOnce({ ok: false, error: 'validation' })
+    const { container, cleanup } = renderPanel({ kind: 'in_progress', round: round(), answers: [answer({ status: 'answered', answer_text: 'We ship weekly' })] })
+    cleanupFns.push(cleanup)
+    await settleMountFocus()
+    await act(async () => { buttonWithText(container, 'ui.in_progress.submit').click() })
+    expectShownAndFocused(container, 'validation')
+    expect(routerRefresh).not.toHaveBeenCalled()
+  })
+
+  it('SKIP ROUND failing (not_found) is shown and focused', async () => {
+    skipInterviewRoundAction.mockResolvedValueOnce({ ok: false, error: 'not_found' })
+    const { container, cleanup } = renderPanel({ kind: 'in_progress', round: round(), answers: [answer()] })
+    cleanupFns.push(cleanup)
+    await settleMountFocus()
+    await act(async () => { buttonWithText(container, 'ui.in_progress.skip_round').click() })
+    expectShownAndFocused(container, 'not_found')
+  })
+
+  it('RETRY not_open (D6): a typed non-success outcome is shown and focused, AND the stale page state is re-read', async () => {
+    retryInterviewExtractionAction.mockResolvedValueOnce({ ok: true, result: { outcome: 'not_open' } })
+    const { container, cleanup } = renderPanel({ kind: 'extraction_failed', round: round({ status: 'extraction_failed', error_code: 'timeout' }), canRetry: true, ceilingReached: false })
+    cleanupFns.push(cleanup)
+    await act(async () => { buttonWithText(container, 'ui.extraction_failed.try_again').click() })
+    expectShownAndFocused(container, 'not_open')
+    expect(routerRefresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('a THROWN action (a network failure, an unhandled server error) becomes the generic message, never an unhandled rejection', async () => {
+    startInterviewRoundAction.mockRejectedValueOnce(new Error('network'))
+    const { container, cleanup } = renderPanel({ kind: 'due', questionCount: 6 })
+    cleanupFns.push(cleanup)
+    await act(async () => { buttonWithText(container, 'ui.due.start').click() })
+    expectShownAndFocused(container, 'generic')
+  })
+
+  it('an error code the panel does not know (or a failure the action types as generic) maps to the generic message', async () => {
+    startInterviewRoundAction.mockResolvedValueOnce({ ok: false, error: 'something_new' })
+    const { container, cleanup } = renderPanel({ kind: 'due', questionCount: 6 })
+    cleanupFns.push(cleanup)
+    await act(async () => { buttonWithText(container, 'ui.due.start').click() })
+    expectShownAndFocused(container, 'generic')
+  })
+
+  it.each([
+    ['too_soon', 'not_open'],
+    ['round_open', 'not_open'],
+  ])('START outcome %s (the round cannot be started now) is shown as %s, not swallowed', async (outcome, code) => {
+    startInterviewRoundAction.mockResolvedValueOnce({ ok: true, result: { outcome } })
+    const { container, cleanup } = renderPanel({ kind: 'due', questionCount: 6 })
+    cleanupFns.push(cleanup)
+    await act(async () => { buttonWithText(container, 'ui.due.start').click() })
+    expectShownAndFocused(container, code)
+  })
+
+  it('a SUCCESS shows no error region, and a later success clears an earlier error', async () => {
+    startInterviewRoundAction.mockResolvedValueOnce({ ok: false, error: 'forbidden' })
+    const { container, cleanup } = renderPanel({ kind: 'due', questionCount: 6 })
+    cleanupFns.push(cleanup)
+    expect(alertOf(container)).toBeNull()
+    await act(async () => { buttonWithText(container, 'ui.due.start').click() })
+    expect(alertOf(container)).not.toBeNull()
+    await act(async () => { buttonWithText(container, 'ui.due.start').click() }) // the default mock resolves ok
+    expect(alertOf(container)).toBeNull()
+  })
+
+  it('the message key exists for EVERY code the actions can return, in en, pt AND es', () => {
+    const CODES = ['unauthenticated', 'not_found', 'forbidden', 'validation', 'performance_claim', 'generic', 'not_open']
+    for (const locale of ['en', 'pt', 'es']) {
+      const messages = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'i18n', locale, 'interview.json'), 'utf8')).ui.errors as Record<string, string>
+      for (const code of CODES) expect(messages[code]?.trim(), `${locale}: ui.errors.${code}`).toBeTruthy()
+    }
+  })
+})
+
 // ── Session 35-D D5 — MAJOR-3 (app half) and MINOR-3: the ratifier sees the markers, Replace, and what was set aside ────────────
 // INTERVIEW-MARKERS-SURFACED. Before D5 the hedge flag (§4.4, the L-6 mitigation) and the "may conflict with" marker (§4.5) were
 // computed and discarded, Replace was unreachable, and the ratify view never said how many statements about what performs were
