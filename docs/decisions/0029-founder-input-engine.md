@@ -1387,3 +1387,50 @@ status every row carried before this push:
 
 **48 total constraints** (44 + the four added by this pass, §C.10), all now dated to `6f7b26d7` for their
 respective tier's CI-executed status.
+
+### C.13 The D5 security finding (§C.3, §C.9) is now closed
+
+The one item this pass surfaced and left open — `ratify_interview_round`'s `replaces` target not bound to the
+accepting candidate's own persisted `interview_conflict_ids` or type (D5 security-reviewer, MINOR-1) — is
+**closed**, on the user's explicit instruction, before merge (2026-09-29).
+
+**Fix:** a forward migration (`20260929100000_ratify_replace_conflict_bound.sql`) restates
+`ratify_interview_round` with two added checks in the replace-validation block: `v_rep_type = v_type` (the
+target must be the SAME type as the accepting candidate — matching `InterviewPanel.tsx`'s own resolution,
+which never offers a cross-type conflict) and `v_rep_id = ANY (v_cur_conflict_ids)` (the target must be one of
+THIS candidate's own persisted conflict ids, read alongside its category/text in the existing candidate
+lookup). Both checks run before the pre-existing active/source/business probe, so a target that fails either
+is rejected without ever reaching that probe.
+
+**Why this is closeable as a small forward migration, not a re-opening of D4's "one migration" rule:** D4's
+rule governed the correction pass's own steps (D0-D11); this fix is a POST-close follow-up, explicitly
+requested by the user, scoped to one function, one check added, restated in full per the house convention for
+`CREATE OR REPLACE`.
+
+**A pre-D4 candidate, or any candidate with no detected conflict, cannot carry a Replace at all** (`ANY (NULL)`
+is never true) — the same outcome the UI already produces for it (no conflicts to resolve, no Replace
+button). No legitimate call is affected: the UI has only ever sent a `replaces` target drawn from
+`item.conflicts`, which is itself resolved from the persisted `interview_conflict_ids`.
+
+**Proof:** `supabase/__tests__/interview-ratify.test.ts`, the `INTERVIEW-CONFLICT-TENANT-BOUNDED` describe
+block — all five pre-existing replace tests updated to construct a candidate whose `interview_conflict_ids`
+legitimately contains its intended target (set at WRITE time via `awaitingRound`'s `itemExtras`, since the
+column is immutable after insert), so each continues to exercise the SAME deeper check it always tested
+(business, source, active, dedupe, reject-guard); one new test proves the type-match check independently, by
+inserting a candidate row directly (bypassing the writer, which would never itself produce a cross-type
+conflict id) with a same-business, in-conflict-ids, wrong-type target.
+
+**Reddening:** two mutations, each restated by `sed` on the exact line and restored byte-for-byte: (a) the
+ownership check (`IF v_cur_conflict_ids IS NULL OR NOT (v_rep_id = ANY (v_cur_conflict_ids))`) replaced with
+`IF false` → the "ANOTHER BUSINESS" test (which now depends on the ownership gate, since the writer's own
+tenant-bound check means a foreign id can never legitimately appear in `interview_conflict_ids`) went RED; (b)
+the type-match check replaced with `IF false` → the new type-mismatch test went RED. `pg_get_functiondef`'s
+md5 confirmed identical before and after each mutation.
+
+**Full-suite confirmation:** `npx tsc --noEmit --skipLibCheck` clean. `npx eslint .`: `0 errors, 112 warnings`,
+unchanged. `npm run test:app`: 374 files / 5550 tests, unchanged (this fix touches no file under
+`app/lib/components`). `npm run test:db`, local stack rebuilt from scratch (`supabase db reset --local`,
+proving the whole migration chain including this new file applies clean): **107 files / 1128 tests** (+1 from
+D11's 1127 — the new type-mismatch test).
+
+**SHA:** the commit immediately following D11, before this branch merges.

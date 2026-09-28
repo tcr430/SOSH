@@ -398,7 +398,8 @@ describe('ratify_interview_round (ADR 0029 §8.5)', () => {
 
     it('REPLACE retires the old ACTIVE interview row in the same transaction the new one is accepted (replaced = 1)', async () => {
       const { first, target } = await withActiveInterviewRow()
-      const second = await awaitingRound(first, 'Second ')
+      // [post-D11] a replace target must be one of the ACCEPTING candidate's own persisted conflict ids.
+      const second = await awaitingRound(first, 'Second ', { 'brand:positioning': { conflictIds: [target.id] } })
       const decisions = acceptAll(second).map((d) => (d.id === at(second, 'brand:positioning').id ? { ...d, replaces: { type: target.type, id: target.id } } : d))
       const res = await ratify(second, second.owner, decisions)
       expect(res.data).toMatchObject({ outcome: 'ratified', accepted: 5, replaced: 1 })
@@ -407,12 +408,39 @@ describe('ratify_interview_round (ADR 0029 §8.5)', () => {
       expect(await round(second.roundId)).toMatchObject({ replaced: 1 })
     })
 
+    // [post-D11 follow-up] The writer (D4) only ever keeps a conflict id that is a row of the SAME TABLE as the item's own
+    // type, so a real extraction can never produce a cross-type conflict id — ratify's own type-match check is defence in
+    // depth for that invariant, provable only by writing a row directly (bypassing the writer), as this test does.
+    it('a replace target of a DIFFERENT TYPE than the candidate — even if present in its own conflict_ids (a hand-written row, bypassing the writer) — is rejected', async () => {
+      const { first, target } = await withActiveInterviewRow() // target is an ACTIVE brand row
+      const second = await awaitingRound(first, 'Second ')
+      const anyAnswerId = second.answers[0].id
+      const { rows } = await pg.query<{ id: string }>(
+        `INSERT INTO public.audience_memory
+           (business_id, source, confidence, status, sensitivity, public_use_permission, scope, observation_count,
+            last_confirmed_at, kind, statement, interview_answer_id, interview_span, interview_extracted_text, interview_conflict_ids)
+         VALUES ($1, 'interview', 0.5, 'candidate', 'internal', false, 'brand', 1,
+                 now(), 'objection', 'A hand-written audience candidate', $2, 'span text', 'A hand-written audience candidate', ARRAY[$3::uuid])
+         RETURNING id`,
+        [second.businessId, anyAnswerId, target.id],
+      )
+      const decisions = [
+        ...acceptAll(second),
+        { type: 'audience', id: rows[0].id, decision: 'accept', category: 'objection', replaces: { type: target.type, id: target.id } },
+      ]
+      const res = await ratify(second, second.owner, decisions)
+      expect(res.error?.code).toBe('22023')
+      expect(res.error?.message).toMatch(/not the same type as the candidate replacing it/)
+      expect((await row(target)).status).toBe('active')
+      expect((await pg.query('SELECT status FROM public.audience_memory WHERE id = $1', [rows[0].id])).rows[0].status).toBe('candidate')
+    })
+
     // Session 35-D D4, founder ruling A-6(a): the sweep deletes a REJECTED candidate 30 days after its round's terminal_at, and
     // must never delete a row a later round REPLACED (both are 'retired'). interview_rejected is the marker that tells them
     // apart, set ONLY by the reject branch, in the same UPDATE that retires the candidate.
     it('[A-6(a)] REJECT marks interview_rejected on the rejected candidate ONLY: an accepted row, and a row a later round REPLACED, stay false', async () => {
       const { first, target } = await withActiveInterviewRow()
-      const second = await awaitingRound(first, 'Second ')
+      const second = await awaitingRound(first, 'Second ', { 'brand:positioning': { conflictIds: [target.id] } })
       const rejected = at(second, 'evidence:usage_data')
       const decisions = acceptAll(second).map((d) => {
         if (d.id === at(second, 'brand:positioning').id) return { ...d, replaces: { type: target.type, id: target.id } }
@@ -451,44 +479,57 @@ describe('ratify_interview_round (ADR 0029 §8.5)', () => {
       expect(await round(second.roundId)).toMatchObject({ replaced: 1 })
     })
 
-    it('a replace target in ANOTHER BUSINESS is rejected (the business is re-verified in SQL) and nothing changes', async () => {
+    it("a replace target in ANOTHER BUSINESS is rejected — [post-D11] caught even earlier than the business check: the writer's own tenant-bound conflict-id verification (MAJOR-3) means a foreign tenant's id can never appear in a candidate's OWN interview_conflict_ids in the first place, so a hand-crafted call naming one is rejected by the new ownership gate before the business/active/source check is even reached — nothing changes", async () => {
       const { target } = await withActiveInterviewRow() // an active interview row of business A
-      const other = await awaitingRound()
+      const other = await awaitingRound() // a fresh business B; its candidates' conflict_ids never contain business A's ids
       const before = await snapshot(other.businessId)
       const decisions = acceptAll(other).map((d) => (d.id === at(other, 'brand:positioning').id ? { ...d, replaces: { type: target.type, id: target.id } } : d))
       const res = await ratify(other, other.owner, decisions)
       expect(res.error?.code).toBe('22023')
-      expect(res.error?.message).toMatch(/not an active interview record of this business/)
+      expect(res.error?.message).toMatch(/not one of this candidate's own conflict ids/)
       expect(await snapshot(other.businessId)).toBe(before)
       expect((await row(target)).status).toBe('active') // the foreign row was NOT retired
     })
 
     it.each(['manual', 'distilled'])("a replace target with source '%s' is rejected — only an interview row may be retired here", async (source) => {
-      const r = await awaitingRound()
+      const first = await awaitingRound()
+      // terminalise and backdate so a second round can be created in the same business (withActiveInterviewRow's pattern).
+      await ratify(first, first.owner, acceptAll(first))
+      await pg.query("UPDATE public.founder_interview_rounds SET created_at = now() - interval '40 days' WHERE id = $1", [first.roundId])
       const { rows } = await pg.query<{ id: string }>(
         `INSERT INTO public.brand_memory (business_id, source, scope, category, statement, status) VALUES ($1, $2, 'brand', 'positioning', 'A ${source} row', 'active') RETURNING id`,
-        [r.businessId, source],
+        [first.businessId, source],
       )
-      const decisions = acceptAll(r).map((d) => (d.id === at(r, 'brand:positioning').id ? { ...d, replaces: { type: 'brand', id: rows[0].id } } : d))
+      // [post-D11] a SECOND round of the SAME business, with the extra row named as a conflict at WRITE time — the only way
+      // interview_conflict_ids can legitimately carry it (the column is immutable after insert), so the call reaches the
+      // source check this test is actually about, rather than the new ownership gate.
+      const r = await awaitingRound(first, 'Second ', { 'brand:positioning': { conflictIds: [rows[0].id] } })
+      const cand = at(r, 'brand:positioning')
+      const decisions = acceptAll(r).map((d) => (d.id === cand.id ? { ...d, replaces: { type: 'brand', id: rows[0].id } } : d))
       const res = await ratify(r, r.owner, decisions)
       expect(res.error?.code).toBe('22023')
       expect((await pg.query('SELECT status FROM public.brand_memory WHERE id = $1', [rows[0].id])).rows[0].status).toBe('active')
     })
 
     it("a replace target with source 'import' is rejected (a real import row, with its run)", async () => {
-      const r = await awaitingRound()
+      const first = await awaitingRound()
+      await ratify(first, first.owner, acceptAll(first))
+      await pg.query("UPDATE public.founder_interview_rounds SET created_at = now() - interval '40 days' WHERE id = $1", [first.roundId])
       const { rows: acct } = await pg.query<{ id: string }>(
         `INSERT INTO public.social_accounts (business_id, platform, platform_user_id, platform_username, vault_access_token_id, connected_at)
          VALUES ($1, 'twitter', $2, 'ratify_handle', '00000000-0000-4000-8000-0000000000c1', now()) RETURNING id`,
-        [r.businessId, `x-ratify-${seq++}`],
+        [first.businessId, `x-ratify-${seq++}`],
       )
-      const { rows: run } = await pg.query<{ id: string }>("INSERT INTO public.social_backfill_runs (business_id, social_account_id, platform) VALUES ($1, $2, 'twitter') RETURNING id", [r.businessId, acct[0].id])
+      const { rows: run } = await pg.query<{ id: string }>("INSERT INTO public.social_backfill_runs (business_id, social_account_id, platform) VALUES ($1, $2, 'twitter') RETURNING id", [first.businessId, acct[0].id])
       const { rows } = await pg.query<{ id: string }>(
         `INSERT INTO public.brand_memory (business_id, source, scope, category, statement, status, import_run_id, import_source_post_ids)
          VALUES ($1, 'import', 'brand', 'positioning', 'An imported row', 'active', $2, ARRAY['p1']) RETURNING id`,
-        [r.businessId, run[0].id],
+        [first.businessId, run[0].id],
       )
-      const decisions = acceptAll(r).map((d) => (d.id === at(r, 'brand:positioning').id ? { ...d, replaces: { type: 'brand', id: rows[0].id } } : d))
+      // [post-D11] same pattern: a second same-business round, the import row named as a conflict at write time.
+      const r = await awaitingRound(first, 'Second ', { 'brand:positioning': { conflictIds: [rows[0].id] } })
+      const cand = at(r, 'brand:positioning')
+      const decisions = acceptAll(r).map((d) => (d.id === cand.id ? { ...d, replaces: { type: 'brand', id: rows[0].id } } : d))
       const res = await ratify(r, r.owner, decisions)
       expect(res.error?.code).toBe('22023')
       expect(res.error?.message).toMatch(/not an active interview record of this business/)
@@ -497,10 +538,17 @@ describe('ratify_interview_round (ADR 0029 §8.5)', () => {
 
     it('a replace target that is not ACTIVE, the SAME target used twice, and a replace on a REJECT are rejected', async () => {
       const { first, target } = await withActiveInterviewRow()
-      const second = await awaitingRound(first, 'Second ')
+      // [post-D11] both positioning and pricing need target.id in their OWN conflict_ids to reach the "twice" sub-case's
+      // dedup check below (it sends replaces: target.id on EVERY brand-type decision). interview_conflict_ids is immutable
+      // after insert, so this must be set at WRITE time.
+      const second = await awaitingRound(first, 'Second ', {
+        'brand:positioning': { conflictIds: [target.id] },
+        'brand:pricing': { conflictIds: [target.id] },
+      })
       const own = at(second, 'brand:positioning')
       const pricing = at(second, 'brand:pricing')
-      // a candidate of this same round is not an ACTIVE row
+      // a candidate of this same round is not an ACTIVE row — positioning's OWN conflict_ids do not include pricing.id, so
+      // this is rejected at the ownership gate rather than the deeper "not active" check; still 22023, nothing changes.
       const asCandidate = acceptAll(second).map((d) => (d.id === own.id ? { ...d, replaces: { type: pricing.type, id: pricing.id } } : d))
       expect((await ratify(second, second.owner, asCandidate)).error?.code).toBe('22023')
       // the same target twice

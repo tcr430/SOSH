@@ -987,3 +987,21 @@ A-6(a) and A-7(a). D0-D11, twelve commits, one step per commit, nothing pushed b
 closed pending the founder's decision on the one open item this pass surfaced and did not close: the
 `ratify_interview_round` `replaces`-binding gap from the D5 security review (ADR 0029 §C.3/§C.9), which needs a
 forward migration in a future session.
+
+### Post-D11 follow-up — the D5 security finding is closed (2026-09-29)
+
+D5's un-applied MINOR-1 (`ratify_interview_round`'s `replaces` not bound to the accepting candidate's own
+`interview_conflict_ids` or type) is closed, on the user's explicit instruction, before this branch merges.
+Full detail: `docs/decisions/0029-founder-input-engine.md` §C.13.
+
+| Field | D5 MINOR-1 (security-reviewer, un-applied at D5) |
+|---|---|
+| **Finding** | `ratify_interview_round` verified a replace target was active/source=interview/same-business, but not that it was one of the accepting candidate's own persisted conflict ids, nor the same type. |
+| **Fix** | Forward migration `20260929100000_ratify_replace_conflict_bound.sql`: `v_rep_type = v_type` and `v_rep_id = ANY (v_cur_conflict_ids)`, both checked before the pre-existing active/source/business probe. |
+| **Proof** | `supabase/__tests__/interview-ratify.test.ts`: all five pre-existing replace tests updated to construct a candidate whose conflict ids legitimately contain the target (set at write time, since the column is immutable after insert); one new test proves the type-match check via a directly-inserted, bypass-the-writer candidate row. |
+| **Reddening** | Two mutations (the ownership check and the type-match check, each replaced with `IF false`), each RED against its exact test, restored byte-for-byte; `pg_get_functiondef` md5 confirmed identical. |
+| **Commit** | the commit immediately following D11 |
+
+**Full-suite confirmation:** tsc clean; eslint 0 errors; test:app 374 files / 5550 (unchanged, no app/lib/components file touched); test:db, local stack rebuilt from scratch, **107 files / 1128 tests** (+1 from D11's 1127).
+
+This closes the one item Track M's close-out (D11) named as still open. Nothing else in the range changed.
