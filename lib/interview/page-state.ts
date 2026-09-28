@@ -3,6 +3,7 @@ import type { InterviewCandidatesByType } from '@/lib/memory/interview'
 import { INTERVIEW_BANK, type InterviewQuestion } from './bank'
 import { INTERVIEW_MAX_ATTEMPTS, INTERVIEW_CEILING_CENTS } from './constants'
 import { isInterviewDue } from './due'
+import { isExtractionStale } from './stale'
 import { type CooldownRow, selectQuestions } from './select'
 import type { SlotThinness } from './thinness'
 
@@ -32,7 +33,9 @@ export type InterviewPageState =
   | { kind: 'nothing_thin' }
   | { kind: 'due'; questionCount: number }
   | { kind: 'in_progress'; round: FounderInterviewRoundRow; answers: FounderInterviewAnswerRow[] }
-  | { kind: 'extracting'; round: FounderInterviewRoundRow }
+  // `stale` (Session 35-D D6, MAJOR-2): the claim went quiet for > INTERVIEW_EXTRACTION_STALE_MINUTES (or a submitted round was never
+  // claimed), so the extraction was probably lost and the founder may Retry. Computed from `now`, never trusted as the guard.
+  | { kind: 'extracting'; round: FounderInterviewRoundRow; stale: boolean }
   | { kind: 'extraction_failed'; round: FounderInterviewRoundRow; canRetry: boolean; ceilingReached: boolean }
   | { kind: 'failed'; round: FounderInterviewRoundRow }
   | { kind: 'awaiting_ratification'; round: FounderInterviewRoundRow; isRatifier: boolean; candidates: InterviewCandidatesByType | null; answers: FounderInterviewAnswerRow[] }
@@ -65,7 +68,7 @@ export function computeInterviewPageState(input: ComputeInterviewPageStateInput)
         return { kind: 'in_progress', round, answers: input.answers }
       case 'submitted':
       case 'extracting':
-        return { kind: 'extracting', round }
+        return { kind: 'extracting', round, stale: isExtractionStale(round, input.now) }
       case 'extraction_failed':
         return {
           kind: 'extraction_failed',

@@ -129,7 +129,7 @@ describe('InterviewPanel — every Section 8.2 state renders with its own data-s
     ['nothing_thin', { kind: 'nothing_thin' }],
     ['due', { kind: 'due', questionCount: 6 }],
     ['in_progress', { kind: 'in_progress', round: round(), answers: [answer()] }],
-    ['extracting', { kind: 'extracting', round: round({ status: 'extracting' }) }],
+    ['extracting', { kind: 'extracting', round: round({ status: 'extracting' }), stale: false }],
     ['extraction_failed', { kind: 'extraction_failed', round: round({ status: 'extraction_failed', error_code: 'timeout' }), canRetry: true, ceilingReached: false }],
     ['failed', { kind: 'failed', round: round({ status: 'failed' }) }],
     ['awaiting_ratification (author)', { kind: 'awaiting_ratification', round: round({ status: 'awaiting_ratification' }), isRatifier: false, candidates: null, answers: [] }],
@@ -384,6 +384,82 @@ describe('no dangerouslySetInnerHTML or markdown rendering on the interview surf
   it('InterviewPanel.tsx never uses dangerouslySetInnerHTML as a JSX prop (a mention in an explanatory comment is fine)', () => {
     const src = fs.readFileSync(path.join(process.cwd(), 'app', '[locale]', '(dashboard)', 'interview', 'InterviewPanel.tsx'), 'utf8')
     expect(src).not.toMatch(/dangerouslySetInnerHTML\s*=/)
+  })
+})
+
+// ── Session 35-D D6 (MAJOR-2, INTERVIEW-EXTRACTION-RECOVERABLE) — the extracting view polls, and offers Retry only once stale ─────────
+// §8.2: BackfillPanel's POLL_MS = 4000 shape. Before D6 the extracting screen never polled (a founder had to reload) and never
+// offered a way out of a lost extraction. Retry appears ONLY once the claim went quiet for > 10 minutes (computed server-side into
+// state.stale); the claim RPC is the authority on whether the retry is admitted.
+
+describe('D6 — the extracting view polls at POLL_MS and offers Retry only when stale', () => {
+  const POLL_MS = 4000
+  const POLL_MAX_MS = 20 * 60 * 1000
+  const extracting = (stale: boolean): InterviewPageState => ({ kind: 'extracting', round: round({ status: 'extracting' }), stale })
+
+  function useFakeTimers() {
+    vi.useFakeTimers()
+    cleanupFns.push(() => vi.useRealTimers())
+  }
+
+  it('refreshes the page state every 4000 ms while extracting: nothing at 3999 ms, one at 4000, three by 12000', () => {
+    useFakeTimers()
+    const { cleanup } = renderPanel(extracting(false))
+    cleanupFns.push(cleanup)
+    act(() => { vi.advanceTimersByTime(POLL_MS - 1) })
+    expect(routerRefresh).not.toHaveBeenCalled()
+    act(() => { vi.advanceTimersByTime(1) })
+    expect(routerRefresh).toHaveBeenCalledTimes(1)
+    act(() => { vi.advanceTimersByTime(POLL_MS * 2) })
+    expect(routerRefresh).toHaveBeenCalledTimes(3)
+  })
+
+  it('does NOT poll in any other state (an open round the founder is typing into must never be refreshed under them)', () => {
+    useFakeTimers()
+    for (const state of [
+      { kind: 'in_progress', round: round(), answers: [answer()] },
+      { kind: 'extraction_failed', round: round({ status: 'extraction_failed', error_code: 'timeout' }), canRetry: true, ceilingReached: false },
+      { kind: 'awaiting_ratification', round: round({ status: 'awaiting_ratification' }), isRatifier: false, candidates: null, answers: [] },
+    ] as InterviewPageState[]) {
+      const { cleanup } = renderPanel(state)
+      cleanupFns.push(cleanup)
+    }
+    act(() => { vi.advanceTimersByTime(POLL_MS * 10) })
+    expect(routerRefresh).not.toHaveBeenCalled()
+  })
+
+  it('stops polling when the view unmounts (the state moved on), and after a MAX duration for a tab left open on a stalled round', () => {
+    useFakeTimers()
+    const mounted = renderPanel(extracting(false))
+    act(() => { vi.advanceTimersByTime(POLL_MS) })
+    expect(routerRefresh).toHaveBeenCalledTimes(1)
+    mounted.cleanup()
+    act(() => { vi.advanceTimersByTime(POLL_MS * 5) })
+    expect(routerRefresh).toHaveBeenCalledTimes(1) // no more after unmount
+
+    routerRefresh.mockClear()
+    const stalled = renderPanel(extracting(true))
+    cleanupFns.push(stalled.cleanup)
+    act(() => { vi.advanceTimersByTime(POLL_MAX_MS + POLL_MS * 15) })
+    expect(routerRefresh).toHaveBeenCalledTimes(POLL_MAX_MS / POLL_MS - 1) // the tick AT the max stops instead of refreshing
+  })
+
+  it('shows NO Retry while the extraction is fresh (not stale)', () => {
+    const { container, cleanup } = renderPanel(extracting(false))
+    cleanupFns.push(cleanup)
+    expect(container.querySelector('[data-state="extracting"]')).not.toBeNull()
+    expect(container.querySelector('[data-state="extracting-stale"]')).toBeNull()
+    expect(Array.from(container.querySelectorAll('button')).some((b) => b.textContent === 'ui.extracting.retry')).toBe(false)
+  })
+
+  it('shows the stale copy and a Retry once stale; Retry calls the retry action for THIS round and refreshes', async () => {
+    const { container, cleanup } = renderPanel(extracting(true))
+    cleanupFns.push(cleanup)
+    expect(container.querySelector('[data-state="extracting-stale"]')?.textContent).toContain('ui.extracting.stale_body')
+    const retry = Array.from(container.querySelectorAll('button')).find((b) => b.textContent === 'ui.extracting.retry')!
+    await act(async () => { retry.click() })
+    expect(retryInterviewExtractionAction).toHaveBeenCalledWith({ roundId: 'round-1' })
+    expect(routerRefresh).toHaveBeenCalled()
   })
 })
 

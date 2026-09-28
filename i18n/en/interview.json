@@ -84,7 +84,9 @@
     },
     "extracting": {
       "title": "Reading your answers",
-      "body": "We're turning your answers into memory. This can take a minute."
+      "body": "We're turning your answers into memory. This can take a minute.",
+      "stale_body": "This is taking longer than it should, so it may have been interrupted. You can try again.",
+      "retry": "Try again"
     },
     "extraction_failed": {
       "title": "We couldn't finish that",

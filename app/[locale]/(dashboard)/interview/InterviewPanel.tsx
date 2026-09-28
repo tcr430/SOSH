@@ -43,6 +43,11 @@ import type { InterviewCandidatesByType } from '@/lib/memory/interview'
 
 const DATE_FNS_LOCALES: Record<string, Locale> = { en: enUS, pt, es }
 
+// §8.2 (D6): the extracting view's polling shape is BackfillPanel's POLL_MS. The MAX duration is this file's own: a tab left open
+// on a stalled round stops polling after this long (the Retry it shows once stale does not depend on polling).
+const POLL_MS = 4000
+const POLL_MAX_MS = 20 * 60 * 1000
+
 const CATEGORY_OPTIONS: Record<FounderInterviewSlotType, readonly string[]> = {
   brand: ['positioning', 'capability', 'pricing', 'competitor', 'other'],
   audience: ['problem', 'objection', 'question', 'trigger', 'other'],
@@ -89,8 +94,26 @@ export function InterviewPanel({ state, locale }: { state: InterviewPageState; l
     })
   }
 
+  // §8.2 / D6 (MAJOR-2): while the round is submitted / extracting, re-read the page state every POLL_MS so the founder sees the
+  // result (or that it stalled) without reloading. BackfillPanel's POLL_MS shape (4 s), with a MAX duration it does not have: a
+  // stalled extraction must not keep a tab polling for ever. router.refresh() re-runs the Server Component, so the server stays
+  // the source of truth (§8: no state in browser storage).
+  const polling = state.kind === 'extracting'
+  useEffect(() => {
+    if (!polling) return
+    const startedAt = Date.now()
+    const id = setInterval(() => {
+      if (Date.now() - startedAt >= POLL_MAX_MS) {
+        clearInterval(id)
+        return
+      }
+      router.refresh()
+    }, POLL_MS)
+    return () => clearInterval(id)
+  }, [polling, router])
+
   function handleRetry() {
-    if (state.kind !== 'extraction_failed') return
+    if (state.kind !== 'extraction_failed' && state.kind !== 'extracting') return
     startTransition(async () => {
       const result = await retryInterviewExtractionAction({ roundId: state.round.id })
       if (result.ok) router.refresh()
@@ -152,6 +175,16 @@ export function InterviewPanel({ state, locale }: { state: InterviewPageState; l
             {t('ui.extracting.title')}
           </h1>
           <p className="text-sm text-muted-foreground">{t('ui.extracting.body')}</p>
+          {/* D6: the claim went quiet for > 10 minutes (or the round was never claimed): the extraction was probably lost. The
+              claim RPC decides whether the retry is admitted; this only offers it. */}
+          {state.stale && (
+            <div data-state="extracting-stale" className="space-y-2 pt-2">
+              <p className="text-sm text-muted-foreground">{t('ui.extracting.stale_body')}</p>
+              <Button onClick={handleRetry} disabled={isPending}>
+                {t('ui.extracting.retry')}
+              </Button>
+            </div>
+          )}
         </div>
       )
 

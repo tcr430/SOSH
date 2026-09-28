@@ -84,7 +84,9 @@
     },
     "extracting": {
       "title": "Leyendo tus respuestas",
-      "body": "Estamos convirtiendo tus respuestas en memoria. Esto puede tardar un minuto."
+      "body": "Estamos convirtiendo tus respuestas en memoria. Esto puede tardar un minuto.",
+      "stale_body": "Esto está tardando más de lo debido, así que puede haberse interrumpido. Puedes intentarlo de nuevo.",
+      "retry": "Intentar de nuevo"
     },
     "extraction_failed": {
       "title": "No pudimos terminar esto",

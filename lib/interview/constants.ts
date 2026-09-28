@@ -175,3 +175,10 @@ export const INTERVIEW_THINNESS_ROW_LIMIT = 500
  * conflict ids (the writer's column CHECK allows 5; the extraction sends at most 3), so 24 * 3 = 72 targets is the ceiling.
  */
 export const INTERVIEW_CONFLICT_TARGETS_LIMIT = INTERVIEW_CANDIDATES_LIMIT_PER_TABLE * INTERVIEW_MAX_CONFLICTS_PER_ITEM
+
+/**
+ * §5.3 / Session 35-D D6 (MAJOR-2) — a round is RE-CLAIMABLE when it has sat in a claimable status this long:
+ * claim_interview_extraction admits `status = 'extracting' AND claimed_at < now() - interval '10 minutes'`. This is the
+ * SAME number, restated for the UI and the retry action's gate (never the guard: the claim RPC is the atomic authority).
+ */
+export const INTERVIEW_EXTRACTION_STALE_MINUTES = 10

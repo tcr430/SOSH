@@ -37,7 +37,9 @@ import { computeSlotThinness } from '@/lib/interview/thinness'
 import { selectQuestions } from '@/lib/interview/select'
 import { INTERVIEW_BANK, INTERVIEW_BANK_VERSION } from '@/lib/interview/bank'
 import { INTERVIEW_COOLDOWN_ROW_CAP } from '@/lib/interview/constants'
+import * as Sentry from '@sentry/nextjs'
 import { extractInterviewRound } from '@/lib/interview/extract'
+import { isExtractionStale } from '@/lib/interview/stale'
 import { mentionsPerformanceClaim } from '@/lib/interview/lexicon'
 import {
   ratifyInterviewRoundSchema,
@@ -149,8 +151,21 @@ export async function skipInterviewRoundAction(input: unknown): Promise<ActionRe
   return result
 }
 
+// The after() callbacks RETURN this promise (D6, MAJOR-2). Before, they were `void extractInterviewRound(id)`: never returned to
+// after() and never caught, so a thrown defect, or the AggregateError extract.ts throws when it cannot even settle a failed
+// attempt, was an unhandled rejection with no capture. It resolves to undefined on success AND after capturing a throw, so after()
+// never sees a rejection; the route's tag shape mirrors app/api/cron/interview-sweep/route.ts. The typed outcomes the orchestrator
+// RETURNS (refused, superseded, failed) are not errors and are not captured here.
+async function extractInBackground(roundId: string, phase: 'submit' | 'retry'): Promise<void> {
+  try {
+    await extractInterviewRound(roundId)
+  } catch (err) {
+    Sentry.captureException(err, { tags: { action: 'interview-extract', phase } })
+  }
+}
+
 // §5.3 — Submit hands the round to the M2.8 orchestrator via after() (best-effort; the 10-minute re-claim
-// and the sweep's 7-day failed transition are the safety net, §5.3). The kick-off is safe without its own
+// (reachable from Retry on a stale round, D6) and the sweep's 7-day failed transition are the safety net, §5.3). The kick-off is safe without its own
 // membership check: it only ever fires for the roundId THIS call just authorised via submit_interview_round
 // (which derives business_id from the round and checks author-level membership itself).
 export async function submitInterviewRoundAction(input: unknown): Promise<ActionResult<SubmitInterviewRoundResult>> {
@@ -163,9 +178,7 @@ export async function submitInterviewRoundAction(input: unknown): Promise<Action
   const result = await runRpc(() => submitInterviewRound({ userId, roundId: parsed.data.roundId }))
   if (result.ok && result.result.outcome === 'ok') {
     const roundId = result.result.roundId
-    after(() => {
-      void extractInterviewRound(roundId)
-    })
+    after(() => extractInBackground(roundId, 'submit'))
   }
   if (result.ok) revalidatePath(INTERVIEW_PAGE, 'page')
   return result
@@ -186,11 +199,14 @@ export async function retryInterviewExtractionAction(input: unknown): Promise<Ac
   if (!round) return { ok: false, error: 'not_found' }
   const member = await getMemberForUser(client, round.business_id, userId)
   if (!member || !(member.role === 'editor' || member.role === 'approver')) return { ok: false, error: 'forbidden' }
-  if (round.status !== 'extraction_failed') return { ok: true, result: { outcome: 'not_open' } }
+  // D6 (MAJOR-2): retry is offered for an extraction_failed round AND for a STALE one (a submitted / extracting round whose claim
+  // went quiet for > 10 minutes — its after() was lost), which claim_interview_extraction re-enters. The membership + role check
+  // above runs FIRST and is unchanged. This staleness test is only a gate against a pointless call: the claim RPC re-evaluates
+  // status and claimed_at atomically and stays the authority, so a wrong clock or a race with the original extraction is refused
+  // there (`not_claimable`), never trusted here.
+  if (round.status !== 'extraction_failed' && !isExtractionStale(round, new Date())) return { ok: true, result: { outcome: 'not_open' } }
 
-  after(() => {
-    void extractInterviewRound(round.id)
-  })
+  after(() => extractInBackground(round.id, 'retry'))
   revalidatePath(INTERVIEW_PAGE, 'page')
   return { ok: true, result: { outcome: 'retrying' } }
 }

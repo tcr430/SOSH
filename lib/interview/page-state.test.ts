@@ -100,6 +100,19 @@ describe('computeInterviewPageState', () => {
     expect(computeInterviewPageState(input({ round: round({ status: 'extracting' }) })).kind).toBe('extracting')
   })
 
+  // Session 35-D D6 (MAJOR-2): the extracting state says whether the claim went quiet, so the panel can offer Retry.
+  it('extracting carries `stale`: claimed 11 minutes ago is stale, 9 minutes ago is not; a never-claimed submitted round is judged by submitted_at', () => {
+    const minutesAgo = (m: number) => new Date(NOW.getTime() - m * 60 * 1000).toISOString()
+    const stale = (over: Partial<FounderInterviewRoundRow>) => {
+      const state = computeInterviewPageState(input({ round: round(over) }))
+      return state.kind === 'extracting' ? state.stale : `not extracting: ${state.kind}`
+    }
+    expect(stale({ status: 'extracting', claimed_at: minutesAgo(11) })).toBe(true)
+    expect(stale({ status: 'extracting', claimed_at: minutesAgo(9) })).toBe(false)
+    expect(stale({ status: 'submitted', claimed_at: null, submitted_at: minutesAgo(11) })).toBe(true)
+    expect(stale({ status: 'submitted', claimed_at: null, submitted_at: minutesAgo(9) })).toBe(false)
+  })
+
   it('extraction_failed: canRetry while attempts < 3 and under the ceiling; ceilingReached is distinct from a plain retryable failure', () => {
     const retryable = computeInterviewPageState(input({ round: round({ status: 'extraction_failed', extraction_attempts: 1, spend_cents: 10, ceiling_cents: 30 }) }))
     expect(retryable).toMatchObject({ kind: 'extraction_failed', canRetry: true, ceilingReached: false })
@@ -161,7 +174,7 @@ describe('isInterviewCardState — the dashboard card shows due / open / awaitin
   it('shown for due, in_progress, extracting, extraction_failed, awaiting_ratification', () => {
     expect(isInterviewCardState({ kind: 'due', questionCount: 6 })).toBe(true)
     expect(isInterviewCardState({ kind: 'in_progress', round: round(), answers: [] })).toBe(true)
-    expect(isInterviewCardState({ kind: 'extracting', round: round() })).toBe(true)
+    expect(isInterviewCardState({ kind: 'extracting', round: round(), stale: false })).toBe(true)
     expect(isInterviewCardState({ kind: 'extraction_failed', round: round(), canRetry: true, ceilingReached: false })).toBe(true)
     expect(isInterviewCardState({ kind: 'awaiting_ratification', round: round(), isRatifier: true, candidates: null, answers: [] })).toBe(true)
   })

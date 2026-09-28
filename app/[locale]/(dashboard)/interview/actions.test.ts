@@ -29,7 +29,9 @@ vi.mock('@/lib/db/founder-interview-answers', () => ({
 vi.mock('@/lib/memory/interview', () => ({ ratifyInterviewCandidates: vi.fn() }))
 vi.mock('@/lib/memory/interview-coverage', () => ({ readInterviewSlotRows: vi.fn() }))
 vi.mock('@/lib/interview/extract', () => ({ extractInterviewRound: vi.fn() }))
+vi.mock('@sentry/nextjs', () => ({ captureException: vi.fn() }))
 
+import * as Sentry from '@sentry/nextjs'
 import { after } from 'next/server'
 import { getBusinessForUser } from '@/lib/db/businesses'
 import { getMemberForUser } from '@/lib/db/business-members'
@@ -245,6 +247,109 @@ describe('retryInterviewExtractionAction — the RPC it re-enters has NO members
     const scheduled = vi.mocked(after).mock.calls[0][0] as () => unknown
     await scheduled()
     expect(extractInterviewRound).toHaveBeenCalledWith(ROUND_ID)
+  })
+})
+
+// ── Session 35-D D6 (MAJOR-2, INTERVIEW-EXTRACTION-RECOVERABLE) ─────────────────────────────────────────────────────────────
+// Before D6 both after() callbacks were `void extractInterviewRound(id)`: never returned to after(), never caught, so a thrown
+// defect (or extract.ts's AggregateError when it cannot even settle a failed attempt) was an unhandled rejection with no capture;
+// and claim_interview_extraction's 10-minute re-claim had NO reachable caller (Retry fired only on extraction_failed).
+
+describe('D6 — the after() callbacks RETURN the extraction promise and CAPTURE a throw (submit and retry)', () => {
+  const minutesAgo = (m: number) => new Date(Date.now() - m * 60 * 1000).toISOString()
+
+  async function scheduledFromSubmit() {
+    vi.mocked(submitInterviewRound).mockResolvedValue({ outcome: 'ok', roundId: ROUND_ID })
+    await submitInterviewRoundAction({ roundId: ROUND_ID })
+    return vi.mocked(after).mock.calls[0][0] as () => Promise<void>
+  }
+  async function scheduledFromRetry() {
+    vi.mocked(getInterviewRoundById).mockResolvedValue({ id: ROUND_ID, business_id: BUSINESS_ID, status: 'extraction_failed' } as never)
+    vi.mocked(getMemberForUser).mockResolvedValue({ role: 'editor', is_admin: false } as never)
+    await retryInterviewExtractionAction({ roundId: ROUND_ID })
+    return vi.mocked(after).mock.calls[0][0] as () => Promise<void>
+  }
+
+  it('the submit callback returns a promise (not undefined), which resolves once extraction settles', async () => {
+    vi.mocked(extractInterviewRound).mockResolvedValue({ outcome: 'written' } as never)
+    const scheduled = await scheduledFromSubmit()
+    const returned = scheduled()
+    expect(returned).toBeInstanceOf(Promise)
+    await expect(returned).resolves.toBeUndefined()
+    expect(Sentry.captureException).not.toHaveBeenCalled()
+  })
+
+  it('a REJECTED extraction (submit) reaches Sentry.captureException with the action and phase tags, and the callback still resolves', async () => {
+    const boom = new Error('extraction blew up')
+    vi.mocked(extractInterviewRound).mockRejectedValue(boom)
+    const scheduled = await scheduledFromSubmit()
+    await expect(scheduled()).resolves.toBeUndefined()
+    expect(Sentry.captureException).toHaveBeenCalledTimes(1)
+    expect(Sentry.captureException).toHaveBeenCalledWith(boom, { tags: { action: 'interview-extract', phase: 'submit' } })
+  })
+
+  it('the retry callback does the same, tagged phase: retry — an AggregateError (a failed settle) is captured whole', async () => {
+    const aggregate = new AggregateError([new Error('original'), new Error('settle failed')], 'interview extraction: could not settle round')
+    vi.mocked(extractInterviewRound).mockRejectedValue(aggregate)
+    const scheduled = await scheduledFromRetry()
+    expect(scheduled()).toBeInstanceOf(Promise)
+    await expect(scheduled()).resolves.toBeUndefined()
+    expect(Sentry.captureException).toHaveBeenCalledWith(aggregate, { tags: { action: 'interview-extract', phase: 'retry' } })
+  })
+
+  it('a typed non-success outcome the orchestrator RETURNS (refused, failed) is not an error and is not captured', async () => {
+    vi.mocked(extractInterviewRound).mockResolvedValue({ outcome: 'refused', refusal: { outcome: 'not_claimable', status: 'ratified' } } as never)
+    const scheduled = await scheduledFromSubmit()
+    await scheduled()
+    expect(Sentry.captureException).not.toHaveBeenCalled()
+  })
+
+  describe('retry on a STALE round re-enters the 10-minute claim', () => {
+    const roundWith = (over: Record<string, unknown>) =>
+      vi.mocked(getInterviewRoundById).mockResolvedValue({ id: ROUND_ID, business_id: BUSINESS_ID, claimed_at: null, submitted_at: minutesAgo(60), ...over } as never)
+
+    it('an extracting round claimed 11 minutes ago reaches the orchestrator (retrying)', async () => {
+      roundWith({ status: 'extracting', claimed_at: minutesAgo(11) })
+      vi.mocked(getMemberForUser).mockResolvedValue({ role: 'editor', is_admin: false } as never)
+      const result = await retryInterviewExtractionAction({ roundId: ROUND_ID })
+      expect(result).toEqual({ ok: true, result: { outcome: 'retrying' } })
+      expect(after).toHaveBeenCalledTimes(1)
+      await (vi.mocked(after).mock.calls[0][0] as () => Promise<void>)()
+      expect(extractInterviewRound).toHaveBeenCalledWith(ROUND_ID)
+    })
+
+    it('at 9 minutes it returns not_open and never schedules extraction', async () => {
+      roundWith({ status: 'extracting', claimed_at: minutesAgo(9) })
+      vi.mocked(getMemberForUser).mockResolvedValue({ role: 'editor', is_admin: false } as never)
+      const result = await retryInterviewExtractionAction({ roundId: ROUND_ID })
+      expect(result).toEqual({ ok: true, result: { outcome: 'not_open' } })
+      expect(after).not.toHaveBeenCalled()
+    })
+
+    it('a submitted round never claimed and submitted 11 minutes ago is retryable; at 9 minutes it is not', async () => {
+      vi.mocked(getMemberForUser).mockResolvedValue({ role: 'approver', is_admin: false } as never)
+      roundWith({ status: 'submitted', submitted_at: minutesAgo(9) })
+      expect(await retryInterviewExtractionAction({ roundId: ROUND_ID })).toEqual({ ok: true, result: { outcome: 'not_open' } })
+      expect(after).not.toHaveBeenCalled()
+      roundWith({ status: 'submitted', submitted_at: minutesAgo(11) })
+      expect(await retryInterviewExtractionAction({ roundId: ROUND_ID })).toEqual({ ok: true, result: { outcome: 'retrying' } })
+      expect(after).toHaveBeenCalledTimes(1)
+    })
+
+    it('a NON-MEMBER (and a viewer) on the stale round is forbidden — the membership check still runs FIRST and extraction never fires', async () => {
+      roundWith({ status: 'extracting', claimed_at: minutesAgo(11) })
+      vi.mocked(getMemberForUser).mockResolvedValue(null)
+      expect(await retryInterviewExtractionAction({ roundId: ROUND_ID })).toEqual({ ok: false, error: 'forbidden' })
+      vi.mocked(getMemberForUser).mockResolvedValue({ role: 'viewer', is_admin: true } as never)
+      expect(await retryInterviewExtractionAction({ roundId: ROUND_ID })).toEqual({ ok: false, error: 'forbidden' })
+      expect(after).not.toHaveBeenCalled()
+    })
+
+    it('an extraction_failed round is still retryable at once (unchanged), whatever its age', async () => {
+      roundWith({ status: 'extraction_failed', claimed_at: minutesAgo(1) })
+      vi.mocked(getMemberForUser).mockResolvedValue({ role: 'editor', is_admin: false } as never)
+      expect(await retryInterviewExtractionAction({ roundId: ROUND_ID })).toEqual({ ok: true, result: { outcome: 'retrying' } })
+    })
   })
 })
 
