@@ -894,3 +894,96 @@ which it was proved.
 **No "executed green in CI" cell was filled for the corrected range** (rule 7 of this step) -- that is D11's, from the actual CI logs, not asserted here from local runs.
 
 **What this step did NOT touch:** no ADR 0029 §0-14 or ADR 0027 body edit (both are append-only in this pass); no code, no test, no migration; no push (rule 10 of the twelve governing rules); D11 (the first CI-executed run, and the close-out) not started.
+
+### D11 — push the corrected range, turn app-tests green for the first time, re-date every constraint claim, close Track M
+
+**THE POINT OF THIS STEP, discharged:** at `5431fa84` `app-tests` was RED (Lint failed, vitest never ran), so 29 of
+the 44 `INTERVIEW-*` constraints had never executed in CI. D0-D10 pushed as `origin/session-35-adr-0029` (PR #15)
+at `6f7b26d7`. All three triggered workflows are **green**:
+
+| Workflow | Run | Conclusion | Skip-guard (quoted verbatim from the log) |
+|---|---|---|---|
+| `app-tests` | [`36470516513`](https://github.com/tcr430/SOSH/actions/runs/36470516513) | success | *"skip-guard: 371 file(s) under [app, lib, components] all visible, zero failures — green. (5550/5550 tests passed)"* |
+| `db-tests` | [`36470516626`](https://github.com/tcr430/SOSH/actions/runs/36470516626) | success | *"skip-guard: 107 file(s) under [supabase/__tests__] all visible, zero failures — green. (1127/1127 tests passed)"* |
+| `eval-triage` | [`36470516682`](https://github.com/tcr430/SOSH/actions/runs/36470516682) | success | n/a (not a skip-guard job) |
+
+**Counts are higher than the Reviewer's own baseline, as required** (this pass only adds tests; one assertion
+inverted under founder ruling A-6, none removed): app-tests **370 files / 5427 tests, local-only, never CI**
+(Reviewer §0, at `5431fa84`) -> **371 files / 5550 tests, CI-executed-green** (`36470516513`, at `6f7b26d7`).
+db-tests **107 files / 1091 tests** (Reviewer §0) -> **107 files / 1127 tests** (`36470516626`). Neither count
+is lower; both are higher, purely from added tests.
+
+**Every `INTERVIEW-*` constraint is now re-dated to `6f7b26d7`, per tier** (full detail: `docs/decisions/0029-founder-input-engine.md`
+§C.12; the corrected constraint-to-CI map: `docs/current-phase.md`, Session 35 entry):
+
+| Tier | Rows | Status at `6f7b26d7` |
+|---|---|---|
+| Tier 1 | 24 (unchanged) + the Tier-1 halves of `INTERVIEW-REJECTED-PURGED` and `INTERVIEW-FAILED-ROUND-NOT-LOCKING` | **CI-executed-green** -- `db-tests` run `36470516626`. |
+| Tier 2 | 18 (unchanged) + `INTERVIEW-EXTRACTION-RECOVERABLE`, the Tier-2 half of `INTERVIEW-MARKERS-SURFACED` and of `INTERVIEW-FAILED-ROUND-NOT-LOCKING` | **CI-executed-green, for the FIRST time in this range** -- `app-tests` run `36470516513` (BLOCKER-1, fixed at D2, is what made this possible). |
+| Tier 3 | 11 (unchanged), plus the D9-widened `INTERVIEW-NO-BUDGET-PURPOSE` re-verified | **CI-executed-green** -- same `app-tests` run. |
+| Tier E | 0 | None declared (§10.4, unchanged). |
+| **Total** | **48** (44 + `INTERVIEW-EXTRACTION-RECOVERABLE`, `INTERVIEW-MARKERS-SURFACED`, `INTERVIEW-REJECTED-PURGED`, `INTERVIEW-FAILED-ROUND-NOT-LOCKING`) | **48/48 CI-executed-green at `6f7b26d7`** (vs. the Reviewer's 15/44 at `5431fa84`). |
+
+**`docs/current-phase.md`:** the stale line *"Zero of the 44 are CI-executed-green ... the branch is unpushed"* was
+QUOTED (struck through, not deleted) and the constraint-to-CI map replaced with the corrected counts above, in
+the same section.
+
+**`db-tests` promotion tally: unaffected by this push**, recorded per run's event type -- both `36470516513` and
+`36470516626` (and `36470516682`) are `pull_request`-event runs against PR #15, not `master`-push events; only
+consecutive green `master` push runs move the tally, which separately already stood at the required 7-consecutive
+threshold before this session and is untouched by it.
+
+**Measurement stays honest, unchanged:** retrieval-into-briefs remains NOT MEASURED (`docs/current-phase.md`);
+`S34-E2E-UNVERIFIED` remains open; no quality gain is claimed anywhere in this pass.
+
+**§5 of this build guide (docs to update at close-out), ticked with evidence:**
+
+| Item | Applied? | Evidence |
+|---|---|---|
+| ADR 0029: constraint table + counts CI-verified | v | §C.12 above, this range's four new constraints and the 48-total re-date |
+| ADR 0016 Amendment E (discharge of deferred role-gating, `'interview'` source) | v (already landed, M2.2/M2.3) | `docs/decisions/0016-governed-memory.md` "Amendment E ... (2026-09-25, Session 35, M2.2/M2.3)" |
+| ADR 0010 Amendment 2 §D2.5 (cascade rows) | v (already landed with the migration, M2.3) | `docs/decisions/0010-legal-surface.md`, `founder_interview_rounds` / `founder_interview_answers` rows present |
+| ADR 0025 note (second ratification consumer) | v (already landed, M2.11 close-out) | `docs/decisions/0025-social-read-path-and-backfill.md:872-877` |
+| `docs/current-phase.md` Session 35 entry + tally + stale header | v | this section; the tally note above; the "has not been pushed" sentence superseded in place |
+| `docs/pre-launch-scope.md` §10 T1-D | v checked, with evidence and an honest caveat | the row now names M3, D0-D11, the push and the two green runs, and states plainly what is still NOT true (no production OAuth, the open D5 security note) |
+| `docs/product-status.md:115`'s stale "not yet reviewed" line | v superseded in place | the M3/M4 closure noted, the OAuth caveat kept |
+| `docs/ideas.md` §2.1 / §2.7 | v (already landed, M2.11 close-out) | the "Note (2026-09-27, Session 35)" blocks already present in both sections |
+| `docs/launch-checklist.md` counsel line | v (D10) | names post-A-6 retention and the marker columns' no-personal-data status; prior text quoted in D10's appendix row |
+| **`docs/backlog.md` -- exactly ONE finding row** | v | `35D-NIT-4-NOT-DUE-COPY`, appended to the existing Session 35 table (D10); no other finding added a backlog row |
+| `.wolf/anatomy.md`, `.wolf/memory.md`, `.wolf/cerebrum.md` | v | all five new files (D4's migration, `stale.ts`/`stale.test.ts`, `constants.test.ts`, `load-page-state.cache.test.ts`) already in `anatomy.md`; the two mandated Do-Not-Repeat lines (lint-in-the-loop; a row LIMIT is not a key LIMIT) added this step; BLOCKER-1, MAJOR-1, MAJOR-2, MAJOR-3 logged to `buglog.json` (`bug-1675`..`bug-1678`) |
+| `docs/reviews/session-35-reviewer.md` | v | this file; append-only confirmed below |
+
+**Reviewer statements that have since CHANGED -- recorded here, WITHOUT editing the Reviewer's original text:**
+- **§0's CI row** (*"`app-tests` RED ... Lint X ... vitest skipped"*, at `5431fa84`): **superseded** -- `app-tests` is
+  green at `6f7b26d7` (`36470516513`, quoted above). The Reviewer's row is accurate for the head it describes and
+  is not touched.
+- **§1's caller table / MINOR-8** (*"step-4/page.tsx"* named as the untested member-RLS reader): **superseded** --
+  `app/[locale]/(dashboard)/onboarding/step-4/page.test.tsx` now exists (D1, `66526d0a`), proving the page reads via
+  the caller's own RLS client, never service-role.
+- **§5's stage 7 qualification** (*"the ratifier also lacks the hedge and conflict cues §4.4 and §4.5 promised"*):
+  **superseded, from D5's SHA (`68e23ac1`)** -- both cues are now rendered at ratification (ADR §C.3, §C.9).
+- **§9's tier table** (*"15/44: the 15 pure-Tier-1 rows ... 0/18 ... 0/11 in CI"*): **superseded** -- 48/48
+  CI-executed-green at `6f7b26d7`, per the table above.
+
+**The count check, re-run:** 21 rows, 21 distinct finding IDs (`BLOCKER-1`; `MAJOR-1`-`4`; `MINOR-1`-`9`; `NIT-1`-`7`)
+present across the appendix (`MAJOR-3` and `NIT-2` legitimately split into DB/TS half-rows per the build guide's own
+instruction for those two -- see D10's appendix entry, which ran this same check). **One DEFERRED** (`NIT-4`, backlog
+row `35D-NIT-4-NOT-DUE-COPY` with its trigger). **One RECORDED** (`NIT-5`, citing `9c3a5cc7`). **No RULED findings**:
+both `MAJOR-4` and `MINOR-6` closed as **FIX** under option (a) (A-6(a), A-7(a) were the rulings; neither was (b)).
+Every other finding closed as a code fix with a proving test. **The count check passes.**
+
+**Append-only verification (rule 1, and this step's own VERIFY):** `git diff a52ec87d..HEAD -- docs/reviews/session-35-reviewer.md`
+shows **zero deletions** -- every line from `## CORRECTION PASS (Session 35-D)` (D0) through this closing block is
+additive; nothing above the Reviewer's own closing line (*"Session 35 review complete ..."*) changed, checked
+directly against the diff, not inferred.
+
+**Full-suite confirmation (D11):** the two required workflows (`app-tests`, `db-tests`) are green in CI at the
+corrected head, quoted above from the actual run logs, not inferred from local runs.
+
+**Session 35-D correction pass CLOSED.** All 21 Reviewer findings from `docs/reviews/session-35-reviewer.md`
+(range `bfb3bf72..5431fa84`) are disposed: BLOCKER-1, MAJOR-1-4, MINOR-1-9, NIT-1-3/6-7 fixed in code with a
+proving test; NIT-4 deferred with a trigger; NIT-5 recorded; MAJOR-4 and MINOR-6 fixed under founder rulings
+A-6(a) and A-7(a). D0-D11, twelve commits, one step per commit, nothing pushed before this step. Track M is
+closed pending the founder's decision on the one open item this pass surfaced and did not close: the
+`ratify_interview_round` `replaces`-binding gap from the D5 security review (ADR 0029 §C.3/§C.9), which needs a
+forward migration in a future session.

@@ -1353,3 +1353,37 @@ above is **not edited** — these four are recorded here, additively, pending a 
 A-6 = (a). A-7 = (a). Both recorded 2026-09-28, on the user's explicit instruction at D4 ("do d4, assuming
 recommendations for founder rullings"), read as an instruction to assume the guide's own recommendations rather
 than as an independently obtained founder sign-off. A-1…A-5 stand, untouched, not reopened by this pass.
+
+### C.12 D11 — the first CI-executed run of this range
+
+D0–D10 pushed to `origin/session-35-adr-0029` (PR #15) at `6f7b26d7`. **All three triggered workflows green:**
+
+| Workflow | Run | Conclusion | Skip-guard (quoted verbatim from the log) |
+|---|---|---|---|
+| `app-tests` | [`36470516513`](https://github.com/tcr430/SOSH/actions/runs/36470516513) | success | *"skip-guard: 371 file(s) under [app, lib, components] all visible, zero failures — green. (5550/5550 tests passed)"* |
+| `db-tests` | [`36470516626`](https://github.com/tcr430/SOSH/actions/runs/36470516626) | success | *"skip-guard: 107 file(s) under [supabase/__tests__] all visible, zero failures — green. (1127/1127 tests passed)"* |
+| `eval-triage` | [`36470516682`](https://github.com/tcr430/SOSH/actions/runs/36470516682) | success | n/a (not a skip-guard job) |
+
+**Higher than the Reviewer's baseline, as required (rule: this pass only adds tests, one assertion inverted
+under A-6, none removed):** app-tests was **370 files / 5427 tests, locally, never in CI** at `5431fa84`
+(BLOCKER-1: Lint failed before vitest ran) → now **371 files / 5550 tests, CI-executed-green**, at `6f7b26d7`
+(the app-tests skip-guard scopes to `[app, lib, components]`, narrower than this pass's own local `test:app`
+runs which also cover `scripts/eval/`; the file and test counts above are the CI skip-guard's own numbers,
+quoted, not reconciled against local run counts). db-tests was **107 files / 1091 tests** at `5431fa84` → now
+**107 files / 1127 tests** (+36 tests, no new file — D3, D4 and D5 each added Tier-1 cases to existing files).
+
+**Every constraint below is now CI-executed-green at `6f7b26d7`**, per tier, superseding the "Not CI-executed"
+status every row carried before this push:
+
+- **Tier 1** (the DB-behaviour rows in ADR §11's table, plus `INTERVIEW-REJECTED-PURGED` and the Tier-1 half of
+  `INTERVIEW-FAILED-ROUND-NOT-LOCKING`, C.4/C.5 above): CI-executed-green via `db-tests` run `36470516626`.
+- **Tier 2** (the app-layer rows, plus `INTERVIEW-EXTRACTION-RECOVERABLE`, the Tier-2 half of
+  `INTERVIEW-MARKERS-SURFACED` and `INTERVIEW-FAILED-ROUND-NOT-LOCKING`): CI-executed-green via `app-tests` run
+  `36470516513` — this is the FIRST time these 29 rows have ever executed in CI at all (BLOCKER-1's fix,
+  proven, not just claimed).
+- **Tier 3** (the scan rows, including the D9-widened `INTERVIEW-NO-BUDGET-PURPOSE`): CI-executed-green via the
+  same `app-tests` run (the scans are `vitest` suites under `lib/`).
+- **Tier E**: none declared (§10.4, unchanged).
+
+**48 total constraints** (44 + the four added by this pass, §C.10), all now dated to `6f7b26d7` for their
+respective tier's CI-executed status.

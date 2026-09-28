@@ -114,8 +114,10 @@ voice"* genuinely closes.
 - **A way to get information out of the founder's head** — built (ADR 0029, Session 35): a periodic
   in-app interview asks 5-8 questions drawn from thin spots in memory, extraction turns answers into
   candidate brand/audience/evidence records via Claude, and a human ratifies each one before it enters
-  any prompt. Not yet reviewed: M3 (the independent Reviewer session) and its correction pass have not
-  run, and no production OAuth registration means no real founder has completed a round end-to-end.
+  any prompt. ~~Not yet reviewed: M3 (the independent Reviewer session) and its correction pass have not
+  run~~ — **superseded 2026-09-28: M3 ran (21 findings) and the Session 35-D correction pass (M4) closed
+  all 21, pushed, and got the first CI-executed-green run** (`docs/decisions/0029-founder-input-engine.md`
+  §C.12). No production OAuth registration still means no real founder has completed a round end-to-end.
 
 ---
 

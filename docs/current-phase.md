@@ -2132,6 +2132,11 @@ needed) have NOT run yet.** This branch **has not been pushed** — `git status`
 `origin/session-35-adr-0029`, so exactly like Session 31's H2.13 close-out, **no CI run exists for any row
 below**, Tier 1, 2 or 3. A local-green claim is not a CI-green claim, and this entry does not make one.
 
+**Superseded 2026-09-28: M3 (Reviewer) ran** (`docs/reviews/session-35-reviewer.md`, 21 findings) and **M4
+(the Session 35-D correction pass) ran D0–D11**, fixing every finding, pushing the branch, and getting the
+first CI-executed-green run of this range — see the corrected constraint-to-CI map below this section's
+original (unedited) table.
+
 #### The constraint-to-CI map (ADR 0029 §11, 44 `INTERVIEW-*` constraints)
 
 Grouped by the test file that proves each one — every file re-run at this session's HEAD (see the per-step
@@ -2165,10 +2170,49 @@ different root each, for constraints 21/23/24, then reverted each plant before t
 | `app/[locale]/(dashboard)/interview/InterviewPanel.test.tsx` + `lib/interview/page-state.test.ts` + `load-page-state.test.ts` + `components/interview/InterviewCard.test.tsx` | 2 | 41 | `app-tests` | Green locally (M2.10): 27 + 17 + 6 + 10 = 60/60 at this HEAD. **Not CI-executed** |
 | `supabase/__tests__/interview-schema.test.ts` (performance-policy re-run) | 1 + 3 | 14 (Tier-1 half) | `db-tests` | Existing outcome/performance tests re-run unchanged at every migration commit (M2.2 onward). **Not CI-executed** |
 
-**Every one of the 44 constraints has a named test file and is green locally at this HEAD. Zero of the 44
+~~**Every one of the 44 constraints has a named test file and is green locally at this HEAD. Zero of the 44
 are CI-executed-green, because CI has not run — the branch is unpushed.** The next concrete action before
 this branch merges is the same one Session 31 named: push, let `app-tests` (and, once promoted, `db-tests`)
-run for real, and read the actual run, not infer it.
+run for real, and read the actual run, not infer it.~~
+
+**Superseded 2026-09-28 (Session 35-D D11) — the branch was pushed and CI ran.** The table above, and the
+"Zero of the 44" line, are left as a dated historical record of the state at `5431fa84` (before the
+correction pass). See the entry below for the corrected head's real, CI-executed counts.
+
+#### The constraint-to-CI map, corrected (Session 35-D D11, at `6f7b26d7`)
+
+D0–D10 pushed to `origin/session-35-adr-0029` (PR #15). All three triggered workflows are **green**:
+
+| Workflow | Run | Conclusion | Skip-guard (quoted verbatim) |
+|---|---|---|---|
+| `app-tests` | [`36470516513`](https://github.com/tcr430/SOSH/actions/runs/36470516513) | success | *"skip-guard: 371 file(s) under [app, lib, components] all visible, zero failures — green. (5550/5550 tests passed)"* |
+| `db-tests` | [`36470516626`](https://github.com/tcr430/SOSH/actions/runs/36470516626) | success | *"skip-guard: 107 file(s) under [supabase/__tests__] all visible, zero failures — green. (1127/1127 tests passed)"* |
+| `eval-triage` | [`36470516682`](https://github.com/tcr430/SOSH/actions/runs/36470516682) | success | n/a |
+
+**Counts are higher than the Reviewer's baseline, as the correction pass requires** (only tests were added;
+one assertion inverted under founder ruling A-6, none removed): app-tests 370/5427 (local only, never CI) →
+**371/5550, CI-executed-green**; db-tests 107/1091 → **107/1127, CI-executed-green**.
+
+**Per-tier status at `6f7b26d7`, superseding "Not CI-executed" for every row above:**
+
+| Tier | Status at `6f7b26d7` |
+|---|---|
+| 1 (DB-behaviour rows, plus the two new Tier-1 constraints from the correction pass) | **CI-executed-green** — `db-tests` run `36470516626`. |
+| 2 (app-layer rows, plus the new Tier-2 halves) | **CI-executed-green** — `app-tests` run `36470516513`. This is the FIRST time these 29 rows have executed in CI at all: BLOCKER-1 (the Session 35-D correction pass, D2) fixed the lint error that stopped `app-tests` before vitest ran at `5431fa84`. |
+| 3 (scan rows, incl. the D9-widened `INTERVIEW-NO-BUDGET-PURPOSE`) | **CI-executed-green** — same `app-tests` run (the scans are `vitest` suites under `lib/`). |
+| E | None declared. |
+
+**Constraint count: 44 → 48** (four added by the correction pass: `INTERVIEW-EXTRACTION-RECOVERABLE`,
+`INTERVIEW-MARKERS-SURFACED`, `INTERVIEW-REJECTED-PURGED`, `INTERVIEW-FAILED-ROUND-NOT-LOCKING` — see
+`docs/decisions/0029-founder-input-engine.md` §C.1–C.12 for the full per-finding detail and citations).
+
+**`db-tests` promotion tally: unaffected by this push.** Both runs above are `pull_request`-event runs against
+PR #15, not `master`-push events; only consecutive green `master` push runs move the tally, which separately
+already stands at the required threshold (see "Remaining pre-launch work" item 4) and awaits only the
+founder's branch-protection decision — unrelated to this session.
+
+**Measurement, unchanged from the pre-push entry below:** retrieval-into-briefs is still NOT MEASURED;
+`S34-E2E-UNVERIFIED` remains open; no quality gain is claimed by this session.
 
 #### Measurement (ADR §10.5) — what this session can and cannot claim
 
