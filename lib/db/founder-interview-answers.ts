@@ -61,8 +61,9 @@ export type InterviewCooldownRow = Pick<FounderInterviewAnswerRow, 'question_key
 //
 // Session 35-D D3 (MAJOR-1): the read is WINDOWED BY TIME (answered_at >= now - INTERVIEW_ANSWERED_COOLDOWN_DAYS,
 // the larger of the two cooldown windows — coolingDownKeys never needs anything older) — that is what keeps the
-// read correct. `limit` is a DEFENSIVE row cap (INTERVIEW_COOLDOWN_ROW_CAP, derived from at most one round per
-// 30 days at 8 questions each), never the correctness mechanism: the OLD code applied a row-count LIMIT with no
+// read correct. `limit` is a DEFENSIVE row cap (INTERVIEW_COOLDOWN_ROW_CAP, derived from at most
+// INTERVIEW_MAX_ROUNDS_PER_30_DAYS rounds per 30 days at 8 questions each — re-derived at D4 under A-7(a)), never
+// the correctness mechanism: the OLD code applied a row-count LIMIT with no
 // time filter, ordered by key, which silently dropped a late-sorting key's recent answer once a business passed
 // ~33 total rows. `limit` still has NO default on purpose — an unbounded read is unrepresentable, so the caller
 // passes it explicitly. The caller's client.

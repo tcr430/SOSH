@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { Client } from 'pg'
+import { randomUUID } from 'node:crypto'
 
 // ADR 0029 §2.3, §2.6, §4.3 — INTERVIEW-WRITER-TENANT-BOUND (7), INTERVIEW-RATIFY-BEFORE-ACTIVE (9),
 // INTERVIEW-EVIDENCE-PERMISSION-OFF (20, Tier-1 half), INTERVIEW-RETRY-IDEMPOTENT (31), and the Tier-1 halves of
@@ -655,6 +656,188 @@ describe('write_interview_candidates (ADR 0029 §2.3, §2.6)', () => {
       expect(r.error?.code).toBe('22023')
       expect(await candidateCount(s.roundId)).toBe(0)
       expect((await roundRow(s.roundId)).status).toBe('extracting')
+    })
+  })
+
+  // ─── Session 35-D D4 — MAJOR-3 (DB half), NIT-2 (DB half) ───────────────────
+
+  describe('D4 MAJOR-3 — the hedge flag and the conflict ids are PERSISTED, tenant-bounded and immutable', () => {
+    const manualBrandRow = async (businessId: string, statement: string): Promise<string> =>
+      (
+        await pg.query<{ id: string }>(
+          "INSERT INTO public.brand_memory (business_id, source, scope, category, statement, status) VALUES ($1, 'manual', 'brand', 'positioning', $2, 'active') RETURNING id",
+          [businessId, statement],
+        )
+      ).rows[0].id
+
+    it('a flagged item persists interview_hedge_flagged = true, an unflagged one false, and a marker-less item false / {} (never NULL: NULL means "written before D4")', async () => {
+      const s = await extractingRound()
+      const r = await write(s.roundId, [
+        item(s.answers[0].id, 'brand', 'positioning', 'Flagged record', SPAN_BRAND, { hedgeFlagged: true }),
+        item(s.answers[0].id, 'brand', 'pricing', 'Explicitly unflagged record', SPAN_PRICING, { hedgeFlagged: false }),
+        item(s.answers[1].id, 'audience', 'problem', 'Marker-less record', SPAN_AUDIENCE),
+      ])
+      expect(r.error).toBeNull()
+      const brand = await pg.query('SELECT statement, interview_hedge_flagged, interview_conflict_ids FROM public.brand_memory WHERE business_id = $1 ORDER BY statement', [s.businessId])
+      expect(brand.rows).toEqual([
+        { statement: 'Explicitly unflagged record', interview_hedge_flagged: false, interview_conflict_ids: [] },
+        { statement: 'Flagged record', interview_hedge_flagged: true, interview_conflict_ids: [] },
+      ])
+      const audience = await pg.query('SELECT interview_hedge_flagged, interview_conflict_ids FROM public.audience_memory WHERE business_id = $1', [s.businessId])
+      expect(audience.rows).toEqual([{ interview_hedge_flagged: false, interview_conflict_ids: [] }])
+    })
+
+    it('INTERVIEW-CONFLICT-TENANT-BOUNDED: a conflict id of the SAME business and table persists; one of ANOTHER tenant, one that does not exist, and one that lives in ANOTHER table are dropped, COUNTED and never stored', async () => {
+      const s = await extractingRound()
+      const other = await extractingRound()
+      const own = await manualBrandRow(s.businessId, 'An own active brand row')
+      const foreign = await manualBrandRow(other.businessId, 'A foreign active brand row')
+      const missing = randomUUID()
+      const r = await write(s.roundId, [
+        item(s.answers[0].id, 'brand', 'positioning', 'Conflicts with three ids', SPAN_BRAND, { conflictIds: [own, foreign, missing] }),
+        // `own` is a brand_memory row: for an AUDIENCE item it is not a row of the same table, so it is dropped too
+        item(s.answers[1].id, 'audience', 'problem', 'Conflicts with a brand id', SPAN_AUDIENCE, { conflictIds: [own] }),
+      ])
+      expect(r.error).toBeNull()
+      expect(r.data).toMatchObject({ outcome: 'written', inserted: 2 })
+
+      const brand = await pg.query<{ interview_conflict_ids: string[] }>('SELECT interview_conflict_ids FROM public.brand_memory WHERE business_id = $1 AND source = $2', [s.businessId, 'interview'])
+      expect(brand.rows[0].interview_conflict_ids).toEqual([own])
+      const audience = await pg.query<{ interview_conflict_ids: string[] }>('SELECT interview_conflict_ids FROM public.audience_memory WHERE business_id = $1', [s.businessId])
+      expect(audience.rows[0].interview_conflict_ids).toEqual([])
+      expect((await roundRow(s.roundId)).dropped_conflict_foreign, 'foreign + missing + cross-table').toBe(3)
+
+      // the foreign tenant's id is stored NOWHERE, in any table
+      for (const t of ['brand_memory', 'audience_memory', 'evidence_memory']) {
+        const { rows } = await pg.query<{ n: string }>(`SELECT count(*)::text AS n FROM public.${t} WHERE $1::uuid = ANY (interview_conflict_ids)`, [foreign])
+        expect(rows[0].n, `${t} stores the foreign id`).toBe('0')
+      }
+      // and the other tenant's own round is untouched
+      expect((await roundRow(other.roundId)).dropped_conflict_foreign).toBe(0)
+    })
+
+    it('duplicate conflict ids collapse to one', async () => {
+      const s = await extractingRound()
+      const own = await manualBrandRow(s.businessId, 'Own row')
+      await write(s.roundId, [item(s.answers[0].id, 'brand', 'positioning', 'Dup ids', SPAN_BRAND, { conflictIds: [own, own, own.toUpperCase()] })])
+      const { rows } = await pg.query<{ interview_conflict_ids: string[] }>('SELECT interview_conflict_ids FROM public.brand_memory WHERE business_id = $1 AND source = $2', [s.businessId, 'interview'])
+      expect(rows[0].interview_conflict_ids).toEqual([own])
+    })
+
+    it.each([
+      ['hedgeFlagged is a string', { hedgeFlagged: 'yes' }, /hedgeFlagged must be a boolean/],
+      ['conflictIds is not an array', { conflictIds: 'x' }, /conflictIds must be an array/],
+      ['conflictIds holds a non-uuid', { conflictIds: ['not-a-uuid'] }, /conflictIds must be an array/],
+      ['conflictIds holds a non-string', { conflictIds: [42] }, /conflictIds must be an array/],
+      ['conflictIds holds six ids', { conflictIds: Array.from({ length: 6 }, () => randomUUID()) }, /conflictIds must be an array/],
+    ])('a malformed marker RAISES 22023 and writes nothing: %s', async (_label, extra, message) => {
+      const s = await extractingRound()
+      const r = await write(s.roundId, [item(s.answers[0].id, 'brand', 'positioning', 'Bad marker', SPAN_BRAND, extra as Partial<Item>)])
+      expect(r.error?.code).toBe('22023')
+      expect(r.error?.message).toMatch(message)
+      expect(await candidateCount(s.roundId)).toBe(0)
+      expect((await roundRow(s.roundId)).status).toBe('extracting')
+    })
+
+    it('the markers are NULL on every non-interview row (CHECK) and interview_rejected cannot be true there either', async () => {
+      const s = await extractingRound()
+      for (const [column, value] of [['interview_hedge_flagged', 'true'], ['interview_conflict_ids', "'{}'"], ['interview_rejected', 'true']]) {
+        await expect(
+          pg.query(`INSERT INTO public.brand_memory (business_id, source, scope, category, statement, status, ${column}) VALUES ($1, 'manual', 'brand', 'positioning', 'x', 'active', ${value})`, [s.businessId]),
+          column,
+        ).rejects.toMatchObject({ code: '23514', constraint: 'brand_memory_interview_markers_clean_check' })
+      }
+      // cardinality <= 5, as a column CHECK behind the writer's own bound
+      const six = Array.from({ length: 6 }, () => randomUUID())
+      await expect(
+        pg.query(
+          "INSERT INTO public.brand_memory (business_id, source, confidence, status, scope, last_confirmed_at, category, statement, interview_answer_id, interview_span, interview_extracted_text, interview_conflict_ids) VALUES ($1, 'interview', 0.6, 'candidate', 'brand', now(), 'positioning', 'y', $2, 's', 'y', $3)",
+          [s.businessId, s.answers[0].id, six],
+        ),
+      ).rejects.toMatchObject({ code: '23514', constraint: 'brand_memory_interview_conflict_ids_len_check' })
+    })
+
+    it('the markers are IMMUTABLE after insert (trigger), and interview_rejected only goes false -> true while a CANDIDATE is retired', async () => {
+      const s = await extractingRound()
+      const own = await manualBrandRow(s.businessId, 'Own row')
+      await write(s.roundId, [
+        item(s.answers[0].id, 'brand', 'positioning', 'Immutable markers', SPAN_BRAND, { hedgeFlagged: true, conflictIds: [own] }),
+        item(s.answers[0].id, 'brand', 'pricing', 'Second row', SPAN_PRICING),
+      ])
+      const id = (await pg.query<{ id: string }>("SELECT id FROM public.brand_memory WHERE business_id = $1 AND statement = 'Immutable markers'", [s.businessId])).rows[0].id
+      const id2 = (await pg.query<{ id: string }>("SELECT id FROM public.brand_memory WHERE business_id = $1 AND statement = 'Second row'", [s.businessId])).rows[0].id
+
+      await expect(pg.query('UPDATE public.brand_memory SET interview_hedge_flagged = false WHERE id = $1', [id])).rejects.toThrow(/markers .* immutable/)
+      await expect(pg.query("UPDATE public.brand_memory SET interview_conflict_ids = '{}' WHERE id = $1", [id])).rejects.toThrow(/markers .* immutable/)
+      await expect(pg.query('UPDATE public.brand_memory SET interview_conflict_ids = NULL WHERE id = $1', [id])).rejects.toThrow(/markers .* immutable/)
+
+      // rejected: not without retiring, not on an already-active row, then once on a candidate -> retired, never back
+      await expect(pg.query('UPDATE public.brand_memory SET interview_rejected = true WHERE id = $1', [id2])).rejects.toThrow(/interview_rejected may only be set/)
+      await pg.query("UPDATE public.brand_memory SET status = 'active' WHERE id = $1", [id2])
+      await expect(pg.query("UPDATE public.brand_memory SET status = 'retired', interview_rejected = true WHERE id = $1", [id2])).rejects.toThrow(/interview_rejected may only be set/)
+      await pg.query("UPDATE public.brand_memory SET status = 'retired', interview_rejected = true WHERE id = $1", [id])
+      await expect(pg.query('UPDATE public.brand_memory SET interview_rejected = false WHERE id = $1', [id])).rejects.toThrow(/interview_rejected may only be set/)
+      // [db-review MINOR-2] a rejected row STAYS retired: restoring it would let a later retirement + the sweep delete it
+      for (const status of ['active', 'candidate']) {
+        await expect(pg.query('UPDATE public.brand_memory SET status = $2 WHERE id = $1', [id, status]), status).rejects.toThrow(/stays retired/)
+      }
+      // an unrelated update of a marked row is still allowed
+      await pg.query("UPDATE public.brand_memory SET statement = 'Immutable markers (edited)' WHERE id = $1", [id])
+    })
+  })
+
+  describe('D4 NIT-2 — the per-answer cap drop is COUNTED', () => {
+    it('counters.droppedCap is persisted as dropped_cap; absent counts as 0 (an older caller still works)', async () => {
+      const s = await extractingRound()
+      const r = await write(s.roundId, [item(s.answers[0].id, 'brand', 'positioning', 'Capped', SPAN_BRAND)], { ...counters(4, 0, 0), droppedCap: 3 })
+      expect(r.error).toBeNull()
+      expect(await roundRow(s.roundId)).toMatchObject({ dropped_cap: 3, dropped_conflict_foreign: 0 })
+
+      const s2 = await extractingRound()
+      await write(s2.roundId, [item(s2.answers[0].id, 'brand', 'positioning', 'Not capped', SPAN_BRAND)])
+      expect((await roundRow(s2.roundId)).dropped_cap).toBe(0)
+    })
+
+    it.each([['negative', -1], ['fractional', 1.5], ['a string', 'x'], ['null', null]])('a droppedCap that is %s RAISES 22023 and writes nothing', async (_label, bad) => {
+      const s = await extractingRound()
+      const r = await write(s.roundId, [item(s.answers[0].id, 'brand', 'positioning', 'Bad cap', SPAN_BRAND)], { ...counters(1), droppedCap: bad })
+      expect(r.error?.code).toBe('22023')
+      expect(r.error?.message).toMatch(/droppedCap must be a non-negative integer/)
+      expect(await candidateCount(s.roundId)).toBe(0)
+    })
+  })
+
+  describe('D4 governance smuggle, re-run — the new writer reads no governance key from the payload', () => {
+    it('pg_proc.prosrc of the writer and of ratify contains no jsonb read (-> / ->>) of any governance key', async () => {
+      const { rows } = await pg.query<{ proname: string; prosrc: string }>(
+        "SELECT proname, prosrc FROM pg_proc WHERE pronamespace = 'public'::regnamespace AND proname IN ('write_interview_candidates', 'ratify_interview_round')",
+      )
+      expect(rows.map((r) => r.proname).sort()).toEqual(['ratify_interview_round', 'write_interview_candidates'])
+      const governance = ['confidence', 'status', 'source', 'sensitivity', 'public_use_permission', 'scope', 'scope_ref', 'expires_at', 'observation_count', 'last_confirmed_at', 'business_id']
+      const read = new RegExp(`(->>?|#>>?)\\s*'(${governance.join('|')})'`)
+      for (const r of rows) expect(r.prosrc, `${r.proname} reads a governance key`).not.toMatch(read)
+      // the detector is not vacuous: the two COMPUTED marker keys ARE read, and it does see a planted governance read
+      const writer = rows.find((r) => r.proname === 'write_interview_candidates')!.prosrc
+      expect(writer).toMatch(/->> 'hedgeFlagged'/)
+      expect("v_item ->> 'confidence'").toMatch(read)
+    })
+
+    it('a payload smuggling governance AND the markers still yields fixed governance, a tenant-bounded conflict list and zero foreign-tenant rows', async () => {
+      const s = await extractingRound()
+      const other = await extractingRound()
+      const foreign = (
+        await pg.query<{ id: string }>(
+          "INSERT INTO public.brand_memory (business_id, source, scope, category, statement, status) VALUES ($1, 'manual', 'brand', 'positioning', 'foreign', 'active') RETURNING id",
+          [other.businessId],
+        )
+      ).rows[0].id
+      const smuggle = { confidence: 1, status: 'active', source: 'manual', public_use_permission: true, business_id: other.businessId, scope: 'campaign', interview_rejected: true }
+      const r = await write(s.roundId, [item(s.answers[0].id, 'brand', 'positioning', 'Smuggler', SPAN_BRAND, { ...smuggle, conflictIds: [foreign] })])
+      expect(r.error).toBeNull()
+      const { rows } = await pg.query('SELECT business_id, source, status, confidence, public_use_permission, interview_rejected, interview_conflict_ids FROM public.brand_memory WHERE business_id = $1 AND source = $2', [s.businessId, 'interview'])
+      expect(rows).toEqual([{ business_id: s.businessId, source: 'interview', status: 'candidate', confidence: '0.60', public_use_permission: false, interview_rejected: false, interview_conflict_ids: [] }])
+      const foreignRows = await pg.query("SELECT count(*)::int AS n FROM public.brand_memory WHERE business_id = $1 AND source = 'interview'", [other.businessId])
+      expect(foreignRows.rows[0].n).toBe(0)
     })
   })
 })

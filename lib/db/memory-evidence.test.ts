@@ -40,7 +40,7 @@ function makeRow(overrides: Partial<EvidenceMemoryRow> = {}): EvidenceMemoryRow 
     interview_span: null,
     interview_span_redacted_at: null,
     interview_extracted_text: null,
-    interview_edited: false,
+    interview_edited: false, interview_hedge_flagged: null, interview_conflict_ids: null, interview_rejected: false,
     kind: 'quote',
     content: 'This tool saved us hours every week',
     source_url: null,

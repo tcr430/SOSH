@@ -554,3 +554,100 @@ tests were updated in place, not added). `npm run test:db` against the running L
 `supabase status -o env`, 127.0.0.1:54321/54322): **107 files / 1092 tests green** (was 107/1091 at `5431fa84`;
 the delta is exactly this step's one new Tier-1 test in `interview-lifecycle.test.ts`, which alone runs 66/66,
 up from 65).
+
+### D4 — MAJOR-3 (DB half), MAJOR-4, MINOR-6, NIT-2 (DB half): the one forward migration
+
+**File:** `supabase/migrations/20260928100000_interview_correction_pass.sql`. It is the only migration of this pass. It
+edits no committed migration; five functions are replaced by `CREATE OR REPLACE`.
+
+**Founder rulings consumed (build-guide §4, now filled in there).** Both were taken as the guide's recommendation **(a)**, on
+the user's explicit instruction at D4 (2026-09-28): *"do d4, assuming recommendations for founder rullings"*. Read this as an
+instruction to assume the recommendations, not as a separate founder sign-off. If the founder later rules the other way,
+reversing either is a further forward migration, and each half is isolated (A-6 = sweep step 4b + the marker; A-7 = step 3 of
+`create_interview_round`).
+
+| Ruling | Recorded as | What D4 builds |
+|---|---|---|
+| **A-6(a)** | *"a rejected candidate is an unratified candidate under A-3 and so deleted at its round's answer-redaction deadline (`terminal_at + 30 d`), not 30 days after that"* | sweep step **4b**; ratify's REJECT sets a marker |
+| **A-7(a)** | *"a `failed` round does not count toward the 30-day rule, but at most two rounds may be created per 30 days"* | `create_interview_round` step 3; the cooldown cap re-derived 56 → 104 |
+
+**One deviation from the guide's BUILD list, and why.** The guide names three `SECURITY DEFINER` bodies (writer, sweep,
+`create_interview_round`). This step replaces a **fourth**: `ratify_interview_round`, by **one added assignment** in its REJECT
+branch (`interview_rejected = true`), plus the immutability trigger function. The guide's part 2 says the sweep deletes *"candidate rows
+whose ratify decision was REJECT"*. The schema cannot say that. A rejected candidate and a row a later round *replaced* are both
+`status = 'retired'` in a ratified round, and `interview-sweep.test.ts:302` (the test A-6 inverts) pinned exactly that ("a rejected
+candidate, **and a row a later round replaced**"). Deleting "every retired row of a ratified round" would therefore have deleted
+replaced rows too, which A-6 does not rule on. A three-table boolean, `interview_rejected`, set only by the REJECT UPDATE, is the
+smallest thing that makes the ruling implementable. The trigger only allows `false -> true` in the statement that moves a `candidate` to
+`retired`, and (db-review MINOR-2) a rejected row can never leave `retired`.
+**Residual, stated:** an interview row rejected *before* this migration carries no marker and is not deleted. The feature has shipped to
+no customer (`docs/current-phase.md`), so none should exist in production. I have **not** queried the remote project to confirm that.
+
+| Field | MAJOR-3 (DB half) |
+|---|---|
+| **Finding** | MAJOR-3: hedge flag and conflict markers were computed and discarded (`extract.ts:59` "these are NOT persisted"); the ratify replace branch was unreachable. |
+| **Fix** | `interview_hedge_flagged boolean` and `interview_conflict_ids uuid[]` (<= 5) on `brand_memory`, `evidence_memory`, `audience_memory`. Both are NULL unless `source = 'interview'` (CHECK `*_interview_markers_clean_check`), and immutable after insert (`enforce_memory_interview_immutable`). `write_interview_candidates` takes optional `hedgeFlagged` / `conflictIds` per item, and **keeps a conflict id only if it is a non-deleted row of the SAME table with `business_id` = the LOCKED ROUND's business**. Any other id is dropped and counted in `founder_interview_rounds.dropped_conflict_foreign`, and is never stored. The return object is unchanged. |
+| **Proof** | `interview-writer.test.ts` (Tier 1, live Postgres), "D4 MAJOR-3": flag persisted true/false/`{}` defaults; **`INTERVIEW-CONFLICT-TENANT-BOUNDED`** (own id kept; foreign-tenant, non-existent and cross-table ids dropped, counted, stored in no table; the other tenant's round counter 0); dedupe by uuid; five malformed-marker cases raise `22023` and write nothing; the CHECKs (`23514` with the constraint name); trigger immutability. The **governance smuggle was re-run**: a payload smuggling `confidence`, `status`, `source`, `public_use_permission`, `business_id`, `scope` **and** `interview_rejected` still yields fixed governance, `interview_rejected = false`, and 0 foreign-tenant rows. `pg_proc.prosrc` of the writer and ratify has **no jsonb read of any governance key**, and the regex is shown non-vacuous. |
+| **Reddening** | On the LOCAL DB, each mutant applied by `psql`, tests run, original restored: (a) dropped `business_id = v_business_id` from the conflict filter -> the tenant-bounded test RED; (a2) checked audience items against `brand_memory` -> RED; (e) removed the marker-immutability clause from the trigger -> RED; (g) stored the hedge flag as `false` -> RED. Restored each; **`pg_get_functiondef` md5 of all five functions identical before and after.** |
+| **Commit** | this commit (D4) |
+
+| Field | MAJOR-4 (per A-6(a)) |
+|---|---|
+| **Finding** | MAJOR-4: rejected candidates, including verbatim evidence excerpts, outlive the answer they were cut from (`sweep_interview_data` deleted retired rows of *expired* rounds only). |
+| **Fix** | `interview_rejected boolean NOT NULL DEFAULT false` (three tables; CHECK: false unless `source = 'interview'`). `ratify_interview_round`'s REJECT UPDATE sets it. **Sweep step 4b** deletes `source = 'interview' AND status = 'retired' AND interview_rejected` rows of **RATIFIED** rounds with `terminal_at < now() - 30 d`, bounded to 500 per table per run, and counted in `candidatesDeleted`. The return object stays exactly six counters. |
+| **Proof** | `interview-sweep.test.ts`, "[A-6(a)]": at literal **+30 d + 1 min** the rejected candidate is gone; at **+30 d - 1 min** it survives; the ACTIVE row of the same round survives both, with its span redacted as before; **a row a later round replaced (retired, `interview_rejected = false`) survives at 400 days**; a `skipped` round's marked row is out of scope; a second run changes nothing. `interview-ratify.test.ts`, "[A-6(a)] REJECT marks...": the marker is set on the rejected candidate only, and accepted and replaced rows stay `false`. |
+| **The one assertion flip** | `interview-sweep.test.ts:302` ("a RATIFIED round's retired rows ... are NEVER deleted, at any age") is **inverted for the rejected half only**, with A-6 quoted beside it in the file. The active-row half and the replaced-row half hold as before. **No other previously green assertion changed.** All 266 pre-existing interview Tier-1 tests were green on the migration before any new test was added. |
+| **Reddening** | (b) deleted step 4b -> the `+30 d + 1 min` case and the counter case RED; (d) ratify's REJECT no longer sets the marker -> the ratify marker test RED. Restored; hashes identical. |
+| **Commit** | this commit (D4) |
+
+| Field | MINOR-6 (per A-7(a)) |
+|---|---|
+| **Finding** | MINOR-6: a `failed` round locks the founder out for 30 days, deterministically via an injected answer. |
+| **Fix** | `create_interview_round` step 3: a non-`failed` round created in the last 30 days blocks (`too_soon`), **and so do two rounds of any status** created in the last 30 days. A-4's spend bound stays structural (<= 2 x 30 cents per 30 days, no fifth budget purpose). `INTERVIEW_COOLDOWN_ROW_CAP` is re-derived from the D3 pointer: `(2 x 6 + 1) x 8 = 104` (`INTERVIEW_MAX_ROUNDS_PER_30_DAYS = 2`). Per db-review MINOR-1, creations for one business are serialised by `pg_advisory_xact_lock`. |
+| **Proof** | `interview-lifecycle.test.ts`, "MINOR-6 / A-7(a)": a `failed` round 5 days old does not block; after a failed round and a second, failed, round a third is `too_soon`, and it is created once the older one is 31 days old; the ceiling at the literal 30-day boundary (`30 d - 1 min` blocks, `30 d + 1 min` does not); nine other statuses (`open` ... `expired`) **still block** at 5 days; the advisory lock is proved deterministically (a second connection holds the business's lock, the RPC waits and completes on release, and an unrelated business is not blocked). `lib/interview/constants.test.ts` (new) pins the derivation and the value 104. `select.test.ts`'s two D3 cases now read the real constant instead of a hardcoded 56 (D3's "byte-unchanged" was a D3 precondition). |
+| **Reddening** | (c) dropped `<> 'failed'` -> the "failed does not block" case and the ceiling case RED; (c2) dropped the `>= 2` clause -> the ceiling cases RED; (h) removed the advisory lock -> the lock test RED. Restored; hashes identical. |
+| **Commit** | this commit (D4) |
+
+| Field | NIT-2 (DB half) |
+|---|---|
+| **Finding** | NIT-2: the per-answer cap drop (`extract.ts:187`) is uncounted. |
+| **Fix** | `founder_interview_rounds.dropped_cap int NOT NULL DEFAULT 0`, written by the same writer call from an **optional** `counters.droppedCap`. An older caller that omits it still works (counts as 0). A present-but-invalid value raises `22023`. |
+| **Proof** | `interview-writer.test.ts`, "D4 NIT-2": persisted; absent -> 0; negative, fractional, string and JSON-null values raise. |
+| **Reddening** | (f) the writer no longer sets `dropped_cap` -> RED. Restored. |
+| **Open** | The **TS half** (passing `droppedCap`, `hedgeFlagged` and `conflictIds` from `extract.ts` through `lib/db/memory-interview.ts`, and showing the counts) is **D5**. Until D5 no production caller sends the new keys, so the columns are written with their defaults. D4 is deliberately DB-only. |
+
+**SHARED-FUNCTION CALLERS** (rule 9). Every replaced function, its production callers, and the test that exercises each:
+
+| Function | Production caller | Tier-1 (live DB) | Tier-2 (mocked) |
+|---|---|---|---|
+| `write_interview_candidates` | `lib/db/memory-interview.ts:109` <- `lib/memory/interview.ts` <- `lib/interview/extract.ts` | `interview-writer.test.ts` (all cases + D4) | `lib/db/memory-interview.test.ts`, `lib/memory/interview.test.ts`, `lib/interview/extract.test.ts` |
+| `ratify_interview_round` | `lib/db/memory-interview.ts:83` <- `lib/memory/interview.ts` <- the ratify Server Action | `interview-ratify.test.ts` (all + D4) | `lib/db/memory-interview.test.ts`, `lib/memory/interview.test.ts` |
+| `sweep_interview_data` | `lib/db/founder-interview-rounds.ts:136` <- `app/api/cron/interview-sweep/route.ts` | `interview-sweep.test.ts` (all + D4) | `app/api/cron/interview-sweep/route.test.ts`, `lib/db/founder-interview-rounds.test.ts` |
+| `create_interview_round` | `lib/db/founder-interview-rounds.ts:73` <- `startInterviewRoundAction` (`interview/actions.ts`) | `interview-lifecycle.test.ts` (all + D4) | `app/[locale]/(dashboard)/interview/actions.test.ts`, `lib/db/founder-interview-rounds.test.ts` |
+| `enforce_memory_interview_immutable` (trigger) | fires on every UPDATE of the three memory tables: ratify, the sweep's redaction, the writer's `ON CONFLICT` path | `interview-writer.test.ts` "IMMUTABLE after insert", `interview-ratify.test.ts`, `interview-sweep.test.ts`, `interview-schema.test.ts` | none |
+
+`INTERVIEW_COOLDOWN_ROW_CAP` (the re-derived constant) callers, unchanged and both re-verified by `test:app`: `startInterviewRoundAction`
+(`actions.ts:99`) and `loadInterviewPageState` (`load-page-state.ts:35`).
+
+**database-reviewer (ECC, once) over the migration. No BLOCKER or MAJOR.** Its report and my disposition:
+
+| # | Finding | Disposition |
+|---|---|---|
+| MINOR-1 | `create_interview_round` has no lock, so the ceiling can be exceeded by a millisecond race once the first round goes terminal instantly. | **Applied.** `pg_advisory_xact_lock(hashtextextended(p_business_id::text, 0))` before step 3. Proved and reddened (mutation h). |
+| MINOR-2 | `interview_rejected` is not tied to `status` staying `retired`; a restored-then-retired row would be deleted by the sweep. | **Applied.** Trigger: `OLD.interview_rejected AND NEW.status <> 'retired'` raises. Proved and reddened (mutation i). |
+| MINOR-3 | `interview_conflict_ids` has no FK, so ids can dangle. | **Applied as documentation.** `COMMENT ON COLUMN` x3: advisory, no FK, and the ratify RPC re-verifies any replace target in SQL. Deliberately no FK, because the sweep deletes rows and the ids are display hints. |
+| NIT-4 | The partial index does not match the sweep's `status = 'retired'` predicate. | **Applied.** `WHERE interview_rejected AND status = 'retired'`. |
+| NIT-5 | The `ALTER TABLE`s take `ACCESS EXCLUSIVE` and validate. | **No change.** Pre-launch, no large tables, and the constant default avoids a rewrite. Revisit if the migration were ever re-run on a large table. |
+| NIT-6 | `droppedCap` rejects `5.0` and JSON null. | **No change.** Defensible; D5's TS caller sends a non-negative integer. |
+
+The reviewer verified by `diff` that the ratify, sweep and create-round bodies differ from the committed migrations **only** at the intended
+lines, and that `EXECUTE` is `service_role`-only with `search_path = public, pg_temp` on all four `SECURITY DEFINER` functions (the trigger function is not one).
+The ADR 0010 Amendment 2 §D2.5 erasure cascade is unaffected: no new table, and the new columns sit on already-cascaded tables.
+
+**Full-suite confirmation (D4):** `npx tsc --noEmit --skipLibCheck` clean (the three new memory columns and two round columns required 15 typed
+test fixtures to gain the fields; no assertion changed). `npx eslint .`: `✖ 112 problems (0 errors, 112 warnings)`, unchanged. `npm run test:app` (CI env
+block): **372 files / 5440 tests** green (was 371/5437: +1 file, `constants.test.ts`, +3 tests). `npm run test:db` against the LOCAL stack only
+(env from `supabase status -o env`, 127.0.0.1:54321/54322; the DB was rebuilt from scratch with `supabase db reset --local`, so the whole chain including this migration applied clean): **107 files / 1126 tests green** (was 107/1092 after D3; the +34 are this step's new Tier-1 cases, no file added). The skip-guard is satisfied: no file executed zero tests.
+
+**What this step did NOT touch:** no push (rule 10); no `extract.ts`, `lib/db/memory-interview.ts` or UI change (D5); `docs/decisions/*` untouched
+(ADR amendments are D10); `docs/launch-checklist.md` untouched (D10).

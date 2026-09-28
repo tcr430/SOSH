@@ -1198,6 +1198,15 @@ type MemoryInterviewProvenance = {
   interview_span_redacted_at: string | null
   interview_extracted_text: string | null
   interview_edited: boolean
+  // Session 35-D D4 (20260928100000_interview_correction_pass.sql). MAJOR-3: the hedge flag and the conflict ids the
+  // extraction computes, persisted by write_interview_candidates and immutable thereafter. Both are NULL on every
+  // non-interview row (CHECK) and on an interview row written before D4 ("unknown"); a new interview row always carries
+  // false / a uuid[] (possibly empty, at most 5), each id verified in SQL to be a live row of the SAME table and business.
+  // MAJOR-4 (founder ruling A-6(a)): interview_rejected is set true ONLY by ratify_interview_round's REJECT branch, in the
+  // statement that retires the candidate; it is how the sweep tells a rejected candidate from a row a later round replaced.
+  interview_hedge_flagged: boolean | null
+  interview_conflict_ids: string[] | null
+  interview_rejected: boolean
 }
 export type MemoryStatus = 'candidate' | 'active' | 'retired'
 export type MemorySensitivity = 'public' | 'internal' | 'confidential'
@@ -1820,6 +1829,10 @@ export type FounderInterviewRoundRow = {
   items_proposed: number
   dropped_ungrounded: number
   dropped_performance_claim: number
+  // Session 35-D D4: the per-answer cap drop (NIT-2) and the conflict ids the writer dropped as not-a-live-row-of-this-
+  // business-and-table (MAJOR-3). Both 0 by default; written by write_interview_candidates in the same call.
+  dropped_cap: number
+  dropped_conflict_foreign: number
   candidates_written_brand: number
   candidates_written_audience: number
   candidates_written_evidence: number

@@ -32,6 +32,8 @@ function round(over: Partial<FounderInterviewRoundRow> = {}): FounderInterviewRo
     items_proposed: 0,
     dropped_ungrounded: 0,
     dropped_performance_claim: 0,
+    dropped_cap: 0,
+    dropped_conflict_foreign: 0,
     candidates_written_brand: 0,
     candidates_written_audience: 0,
     candidates_written_evidence: 0,

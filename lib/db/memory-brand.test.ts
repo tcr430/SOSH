@@ -28,7 +28,7 @@ function makeRow(overrides: Partial<BrandMemoryRow> = {}): BrandMemoryRow {
     interview_span: null,
     interview_span_redacted_at: null,
     interview_extracted_text: null,
-    interview_edited: false,
+    interview_edited: false, interview_hedge_flagged: null, interview_conflict_ids: null, interview_rejected: false,
     category: 'positioning',
     statement: 'We integrate natively with every platform',
     ...overrides,

@@ -407,6 +407,27 @@ describe('ratify_interview_round (ADR 0029 §8.5)', () => {
       expect(await round(second.roundId)).toMatchObject({ replaced: 1 })
     })
 
+    // Session 35-D D4, founder ruling A-6(a): the sweep deletes a REJECTED candidate 30 days after its round's terminal_at, and
+    // must never delete a row a later round REPLACED (both are 'retired'). interview_rejected is the marker that tells them
+    // apart, set ONLY by the reject branch, in the same UPDATE that retires the candidate.
+    it('[A-6(a)] REJECT marks interview_rejected on the rejected candidate ONLY: an accepted row, and a row a later round REPLACED, stay false', async () => {
+      const { first, target } = await withActiveInterviewRow()
+      const second = await awaitingRound(first, 'Second ')
+      const rejected = at(second, 'evidence:usage_data')
+      const decisions = acceptAll(second).map((d) => {
+        if (d.id === at(second, 'brand:positioning').id) return { ...d, replaces: { type: target.type, id: target.id } }
+        if (d.id === rejected.id) return { ...d, decision: 'reject' }
+        return d
+      })
+      const res = await ratify(second, second.owner, decisions)
+      expect(res.data).toMatchObject({ outcome: 'ratified', accepted: 4, rejected: 1, replaced: 1 })
+      expect(await row(rejected)).toMatchObject({ status: 'retired', interview_rejected: true })
+      expect(await row(target), 'a row a later round REPLACED is retired but NOT rejected').toMatchObject({ status: 'retired', interview_rejected: false })
+      for (const c of second.cands.filter((x) => x.id !== rejected.id)) {
+        expect(await row(c), `${c.type}:${c.category}`).toMatchObject({ status: 'active', interview_rejected: false })
+      }
+    })
+
     it('a replace target in ANOTHER BUSINESS is rejected (the business is re-verified in SQL) and nothing changes', async () => {
       const { target } = await withActiveInterviewRow() // an active interview row of business A
       const other = await awaitingRound()

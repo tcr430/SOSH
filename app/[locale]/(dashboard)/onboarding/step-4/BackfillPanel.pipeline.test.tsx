@@ -215,7 +215,7 @@ vi.mock('@/lib/memory/import', () => ({
         interview_span: null,
         interview_span_redacted_at: null,
         interview_extracted_text: null,
-        interview_edited: false,
+        interview_edited: false, interview_hedge_flagged: null, interview_conflict_ids: null, interview_rejected: false,
         kind: args.kind as EvidenceMemoryRow['kind'],
         content: args.content,
         source_url: args.sourceUrl,

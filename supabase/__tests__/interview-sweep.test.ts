@@ -9,8 +9,9 @@ import { Client } from 'pg'
 //       their candidates retired
 //   (3) answer_text (NULL + redacted_at) AND interview_span (NULL + interview_span_redacted_at) 30 days after terminal_at
 //   (4) retired candidates of EXPIRED rounds deleted 30 days after their retirement (= the round's terminal_at)
+//   (4b) [D4, founder ruling A-6(a)] REJECTED candidates of RATIFIED rounds deleted at terminal_at + 30 days
 // It never changes the status, text or expiry of a ratified round's ACTIVE rows, and it never deletes a row a founder
-// ratified or replaced. It is bounded per run and idempotent.
+// ratified (active) or a row a later round replaced. It is bounded per run and idempotent.
 //
 // Deadlines are LITERAL: timestamps are backdated in the fixture and each rule is asserted at deadline + 1 minute (acts) and
 // deadline - 1 minute (does not). The sweep is global, so assertions are on THIS test's rows, never on global counts.
@@ -299,14 +300,75 @@ describe('sweep_interview_data (ADR 0029 §5.4, §6.3)', () => {
       expect((await answers(due.roundId)).length).toBe(5)
     })
 
-    it("a RATIFIED round's retired rows — a rejected candidate, and a row a later round replaced — are NEVER deleted, at any age", async () => {
-      const f = await makeRound({ candidates: true })
-      await setRound(f.roundId, "status = 'ratified', terminal_at = now() - interval '400 days'")
-      await pg.query("UPDATE public.brand_memory SET status = 'retired' WHERE id = $1", [f.brandId]) // e.g. rejected or replaced
-      await pg.query("UPDATE public.audience_memory SET status = 'active' WHERE id = $1", [f.audienceId])
-      await sweep()
-      expect(await exists('brand_memory', f.brandId)).toBe(true)
-      expect((await memRow('audience_memory', f.audienceId as string)).status).toBe('active')
+    // ── INVERTED in Session 35-D D4 (the pass's ONE permitted assertion flip; build-guide section 4, rule 4). This test used to
+    // pin "a RATIFIED round's retired rows — a rejected candidate, and a row a later round replaced — are NEVER deleted, at any
+    // age", because ADR 0029 6.3 was silent on a rejected candidate. Founder ruling A-6(a) (2026-09-28, adopting the guide's
+    // recommendation): "a rejected candidate is an unratified candidate under A-3, and so deleted at its round's
+    // answer-redaction deadline (terminal_at + INTERVIEW_ANSWER_TTL_DAYS, 30 d) — not 30 days after that, because a rejected
+    // evidence row's content is a verbatim excerpt of the answer". Only the REJECTED half flips. The other two halves hold
+    // exactly as before: an ACTIVE row is never deleted, and a row a later round REPLACED (retired, interview_rejected = false)
+    // is never deleted, at any age. The replaced case is the one that would fail if the sweep deleted "every retired row of a
+    // ratified round", which is why the schema carries interview_rejected (set by ratify's REJECT branch alone).
+    describe('[A-6(a)] REJECTED candidates of RATIFIED rounds are deleted at terminal_at + 30 days', () => {
+      async function ratifiedWithRejected(minutesPastDeadline: number) {
+        const f = await makeRound({ candidates: true })
+        await setRound(f.roundId, `status = 'ratified', terminal_at = ${ago(30, -minutesPastDeadline)}`)
+        // a REJECT, exactly as ratify_interview_round writes it: candidate -> retired with the marker in ONE statement
+        await pg.query("UPDATE public.brand_memory SET status = 'retired', interview_rejected = true WHERE id = $1", [f.brandId])
+        await pg.query("UPDATE public.audience_memory SET status = 'active' WHERE id = $1", [f.audienceId])
+        return f
+      }
+
+      it('a rejected candidate is deleted at + 30 days + 1 minute and survives at + 30 days - 1 minute; the ACTIVE row of the same round survives both, its span redacted at the same deadline as before', async () => {
+        const due = await ratifiedWithRejected(1)
+        const notYet = await ratifiedWithRejected(-1)
+        await sweep()
+        expect(await exists('brand_memory', due.brandId), 'rejected, + 30 d + 1 min').toBe(false)
+        expect(await exists('brand_memory', notYet.brandId), 'rejected, + 30 d - 1 min').toBe(true)
+        expect((await memRow('brand_memory', notYet.brandId as string)).status).toBe('retired')
+
+        const dueActive = await memRow('audience_memory', due.audienceId as string)
+        expect(dueActive.status).toBe('active')
+        expect(dueActive.interview_span, 'span redacted, as before').toBeNull()
+        expect(dueActive.interview_span_redacted_at).not.toBeNull()
+        const notYetActive = await memRow('audience_memory', notYet.audienceId as string)
+        expect(notYetActive.status).toBe('active')
+        expect(notYetActive.interview_span).toBe(SPAN_AUDIENCE)
+        // the answers' stubs survive (an answer row is never hard-deleted)
+        expect((await answers(due.roundId)).length).toBe(5)
+      })
+
+      it('a row a LATER round replaced — retired, interview_rejected = false — is NEVER deleted, at any age, and neither is an active row', async () => {
+        const f = await makeRound({ candidates: true })
+        await setRound(f.roundId, "status = 'ratified', terminal_at = now() - interval '400 days'")
+        await pg.query("UPDATE public.brand_memory SET status = 'active' WHERE id = $1", [f.brandId])
+        await pg.query("UPDATE public.brand_memory SET status = 'retired' WHERE id = $1", [f.brandId]) // replaced: NOT rejected
+        await pg.query("UPDATE public.audience_memory SET status = 'active' WHERE id = $1", [f.audienceId])
+        await sweep()
+        expect(await exists('brand_memory', f.brandId)).toBe(true)
+        expect((await memRow('brand_memory', f.brandId as string)).interview_rejected).toBe(false)
+        expect((await memRow('audience_memory', f.audienceId as string)).status).toBe('active')
+      })
+
+      it('only a RATIFIED round is in scope: a rejected-marked row of a round in another terminal status (skipped) is left alone by step 4b', async () => {
+        const f = await makeRound({ candidates: true })
+        await setRound(f.roundId, `status = 'skipped', terminal_at = ${ago(31, 0)}`)
+        await pg.query("UPDATE public.brand_memory SET status = 'retired', interview_rejected = true WHERE id = $1", [f.brandId])
+        await sweep()
+        expect(await exists('brand_memory', f.brandId)).toBe(true)
+      })
+
+      it('is counted in candidatesDeleted (the run still returns the same six counters) and is IDEMPOTENT', async () => {
+        const f = await ratifiedWithRejected(1)
+        const first = await sweep()
+        expect(Object.keys(first).sort()).toEqual(['answersRedacted', 'candidatesDeleted', 'candidatesRetired', 'expired', 'failedStuck', 'spansRedacted'])
+        expect(first.candidatesDeleted).toBeGreaterThanOrEqual(1)
+        expect(await exists('brand_memory', f.brandId)).toBe(false)
+        const snap = async () => JSON.stringify([await round(f.roundId), await answers(f.roundId), await memRow('audience_memory', f.audienceId as string)])
+        const before = await snap()
+        await sweep()
+        expect(await snap()).toBe(before)
+      })
     })
 
     it('only RETIRED rows of an expired round are deleted: a still-CANDIDATE row of one survives', async () => {

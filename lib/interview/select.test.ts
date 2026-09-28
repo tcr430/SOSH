@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { INTERVIEW_BANK, type InterviewQuestion } from './bank'
+import { INTERVIEW_COOLDOWN_ROW_CAP } from './constants'
 import { coolingDownKeys, interviewSelectionSchema, selectQuestions, type CooldownRow } from './select'
 import { computeSlotThinness, type SlotThinness } from './thinness'
 
@@ -299,12 +300,12 @@ describe('MAJOR-1 fix — a late-sorting key (usage_data_number) survives a >33-
   })
 
   it('the fix: a time-windowed query (180d WHERE, THEN the row limit) correctly excludes usage_data_number 31 days after its own recent answer', () => {
-    const { history, lastAnsweredAt } = driveTenMonthlyRounds((h, now) => fixedWindowedQuery(h, now, 56))
+    const { history, lastAnsweredAt } = driveTenMonthlyRounds((h, now) => fixedWindowedQuery(h, now, INTERVIEW_COOLDOWN_ROW_CAP))
     expect(history.length, 'the seeded history must exceed the old 33-row bound').toBeGreaterThan(33)
     expect(lastAnsweredAt.usage_data_number, 'usage_data_number must have been answered at least once').toBeDefined()
 
     const recheckNow = new Date(Date.parse(lastAnsweredAt.usage_data_number) + 31 * MS_PER_DAY)
-    const cooldowns = fixedWindowedQuery(history, recheckNow, 56)
+    const cooldowns = fixedWindowedQuery(history, recheckNow, INTERVIEW_COOLDOWN_ROW_CAP)
     const reselected = selectQuestions({ thinness: ALWAYS_THIN, cooldowns, now: recheckNow })
     expect(keysOf(reselected)).not.toContain('usage_data_number')
   })

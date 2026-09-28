@@ -40,7 +40,7 @@ function makeRow(overrides: Partial<AudienceMemoryRow> = {}): AudienceMemoryRow 
     interview_span: null,
     interview_span_redacted_at: null,
     interview_extracted_text: null,
-    interview_edited: false,
+    interview_edited: false, interview_hedge_flagged: null, interview_conflict_ids: null, interview_rejected: false,
     segment: 'CTOs at seed-stage SaaS',
     kind: 'problem',
     statement: 'CTOs struggle to keep a consistent posting cadence',

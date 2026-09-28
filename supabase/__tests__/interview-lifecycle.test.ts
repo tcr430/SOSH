@@ -839,4 +839,91 @@ describe('founder-interview lifecycle RPCs (ADR 0029 §5, §7.2, §9.2)', () => 
       expect(rows.map((r) => r.question_key)).toContain(lateKey)
     })
   })
+
+  // ─── Session 35-D D4 — MINOR-6, founder ruling A-7(a) ─────────────────────────
+  // Ruling A-7(a) (2026-09-28, adopting the build guide's recommendation): "A `failed` round does not count [toward the 30-day
+  // rule], but at most two rounds may be created per 30 days. This keeps A-4's spend argument (<= 2 x 30c per 30 days, still
+  // structural, still no fifth budget purpose) and stops a deterministic self-lockout." Before this, a lost extraction or an
+  // injected answer (three invalid_response attempts) left a `failed` round that locked the tenant out for 30 days.
+  describe('MINOR-6 / A-7(a) — a failed round does not block a new round, but two creations per 30 days is the ceiling', () => {
+    const create = (w: World) => rpc('create_interview_round', { p_user_id: w.owner, p_business_id: w.businessId, p_questions: GOOD_QUESTIONS(5) })
+    const setRound = (id: string, sets: string) => pg.query(`UPDATE public.founder_interview_rounds SET ${sets} WHERE id = $1`, [id])
+
+    it('a failed round 5 days old does NOT block a new round', async () => {
+      const w = await newWorld()
+      const first = await createRound(w)
+      await setRound(first, "status = 'failed', terminal_at = now() - interval '5 days', created_at = now() - interval '5 days', error_code = 'invalid_response'")
+      const r = await create(w)
+      expect(r.error).toBeNull()
+      expect(r.data.outcome).toBe('ok')
+      expect(await countRounds(w.businessId)).toBe(2)
+    })
+
+    it('...but the SECOND creation inside 30 days is the last: after a failed round and a second, failed, round, a third is refused with too_soon', async () => {
+      const w = await newWorld()
+      const first = await createRound(w)
+      await setRound(first, "status = 'failed', terminal_at = now() - interval '5 days', created_at = now() - interval '5 days'")
+      const second = (await create(w)).data.roundId as string
+      // the second round is OPEN and not failed: it blocks on the (unchanged) 30-day rule
+      expect((await create(w)).data.outcome).toBe('too_soon')
+      // fail the second one too: neither round counts toward the 30-day rule, yet TWO were created inside 30 days
+      await setRound(second, "status = 'failed', terminal_at = now() - interval '1 day', created_at = now() - interval '1 day'")
+      expect((await create(w)).data.outcome).toBe('too_soon')
+      expect(await countRounds(w.businessId)).toBe(2)
+      // once the older of the two leaves the 30-day window only ONE round is inside it, and a new round is created
+      await setRound(first, "created_at = now() - interval '31 days'")
+      expect((await create(w)).data.outcome).toBe('ok')
+    })
+
+    it('the two-creations ceiling counts rounds of ANY status, at the literal 30-day boundary', async () => {
+      const w = await newWorld()
+      const a = await createRound(w)
+      await setRound(a, "status = 'failed', terminal_at = now() - interval '29 days', created_at = now() - interval '30 days' + interval '1 minute'")
+      const b = (await create(w)).data.roundId as string
+      await setRound(b, "status = 'failed', terminal_at = now() - interval '3 days', created_at = now() - interval '3 days'")
+      expect((await create(w)).data.outcome, 'two rounds inside the window (a is 30 d - 1 min old)').toBe('too_soon')
+      await setRound(a, "created_at = now() - interval '30 days' - interval '1 minute'")
+      expect((await create(w)).data.outcome, 'a is 30 d + 1 min old: only b is inside the window').toBe('ok')
+    })
+
+    // [db-review MINOR-1] The ">= 2 in 30 days" ceiling is a read-then-insert, and the one-open-round unique index stops a
+    // concurrent pair only while the first round is still non-terminal. create_interview_round therefore SERIALISES creations
+    // for one business on a transaction-scoped advisory lock. Proved deterministically: a second connection holds that very lock,
+    // the RPC must WAIT for it, and it completes only once the lock is released.
+    it('serialises concurrent creations for ONE business on a per-business advisory lock (it waits while the lock is held, other businesses are not blocked)', async () => {
+      const w = await newWorld()
+      const other = await newWorld()
+      const holder = new Client({ connectionString: process.env.DATABASE_URL })
+      await holder.connect()
+      try {
+        await holder.query('BEGIN')
+        await holder.query('SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))', [w.businessId])
+        let done = false
+        const pending = create(w).then((r) => {
+          done = true
+          return r
+        })
+        // an UNRELATED business is not blocked by that lock
+        expect((await create(other)).data.outcome).toBe('ok')
+        await new Promise((resolve) => setTimeout(resolve, 1500))
+        expect(done, 'the RPC ran while another transaction held the business lock').toBe(false)
+        await holder.query('COMMIT')
+        expect((await pending).data.outcome).toBe('ok')
+      } finally {
+        await holder.end()
+      }
+    })
+
+    it.each(['open', 'submitted', 'extracting', 'extraction_failed', 'awaiting_ratification', 'no_records', 'ratified', 'skipped', 'expired'])(
+      'a %s round created 5 days ago STILL blocks (only `failed` is exempt)',
+      async (status) => {
+        const w = await newWorld()
+        const first = await createRound(w)
+        const terminal = ['no_records', 'ratified', 'skipped', 'expired'].includes(status)
+        await setRound(first, `status = '${status}', created_at = now() - interval '5 days'${terminal ? ", terminal_at = now() - interval '5 days'" : ''}`)
+        expect((await create(w)).data.outcome).toBe('too_soon')
+        expect(await countRounds(w.businessId)).toBe(1)
+      },
+    )
+  })
 })

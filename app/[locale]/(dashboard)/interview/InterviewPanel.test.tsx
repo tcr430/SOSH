@@ -52,7 +52,7 @@ function round(over: Partial<FounderInterviewRoundRow> = {}): FounderInterviewRo
     created_by: null, created_at: '2026-09-26T12:00:00.000Z', submitted_at: null, claimed_at: null,
     extraction_attempts: 0, spend_cents: 0, ceiling_cents: 30, error_code: null, extracted_at: null,
     ratified_at: null, ratified_by: null, terminal_at: null, items_proposed: 0, dropped_ungrounded: 0,
-    dropped_performance_claim: 0, candidates_written_brand: 0, candidates_written_audience: 0,
+    dropped_performance_claim: 0, dropped_cap: 0, dropped_conflict_foreign: 0, candidates_written_brand: 0, candidates_written_audience: 0,
     candidates_written_evidence: 0, accepted: 0, rejected: 0, edited: 0, replaced: 0,
     updated_at: '2026-09-26T12:00:00.000Z',
     ...over,
@@ -77,7 +77,7 @@ function memoryGovernance() {
     expires_at: null, deleted_at: null, created_at: '2026-09-26T12:00:00.000Z', updated_at: '2026-09-26T12:00:00.000Z',
     import_run_id: null, import_source_post_ids: null,
     interview_answer_id: 'a-1', interview_span: 'we integrate natively', interview_span_redacted_at: null,
-    interview_extracted_text: 'We integrate natively with every platform', interview_edited: false,
+    interview_extracted_text: 'We integrate natively with every platform', interview_edited: false, interview_hedge_flagged: null, interview_conflict_ids: null, interview_rejected: false,
   }
 }
 
