@@ -1316,3 +1316,90 @@ none, query context +confidenceFloor (−objective, −audience, −role; `task`
 budget per task (brief 15 with no performance, others 14), consumers moved brief assembly, contradiction structural
 (none automated; human Replace widened to import), proof writer dismiss_reason → audience candidate (active at n ≥ 3
 and n/m ≥ 0.75; recomputed on dismiss/approve/save; read by triage only), LLM cents at write 0, new tables none.**
+
+
+---
+
+## Builder verification (L2)
+
+> Appended by the Builder (Session 36, L2). Nothing above this heading is edited. `BASE` = `e9de7b25` (the docs-only
+> commit on `session-36-adr-0030`, cut from `master` `5a4d6583`). The `L2.0` run was read-only, on a tree whose code is
+> identical to `fb5fcb3f` / `5a4d6583`. All counts below were produced by the exact commands quoted.
+
+### V.1 Baselines (recorded at L2.0, before any code moved)
+
+**V.1a. The L-2 writer set.** Every later step from `L2.2` on re-runs exactly these two commands and compares counts. CI's
+dummy env from `app-tests.yml` is exported for the first; the local stack env from `supabase status -o env` plus the same
+dummy env for the second.
+
+| Set | Command | Files | Tests | Result |
+|---|---|---|---|---|
+| Unit | `npx vitest run lib/learning lib/backfill lib/outcomes lib/interview lib/memory lib/db/memory-` | 61 | 971 | all pass |
+| DB (Tier 1) | `npx vitest run $(ls supabase/__tests__ \| grep -E "memory\|backfill\|outcome\|interview\|learning\|promote" \| sed 's#^#supabase/__tests__/#') --no-file-parallelism --retry=2` | 53 | 680 | all pass, 0 skipped |
+
+Note: the Unit set grows by `lib/memory/writers.test.ts` and `lib/memory/substrate-scans.test.ts` from `L2.1`
+(both under `lib/memory`). A later step compares against 971 **plus** those two files' tests, never against 971 alone.
+A first DB run with shortened dummy env values produced `70 failed / 610 skipped`; that was config validation rejecting the
+values, not a regression. The 680 above is the real baseline.
+
+**V.1b. `function sanitizeDataField`** (production, `lib/` and `app/`, tests excluded): **5** (`prompts/brief.ts:15`,
+`formats/native-generation-prompt.ts:11`, `post-generation.ts:8`, `post-regeneration.ts:9`, `rubric.ts:9`). The rule is that
+the count is unchanged. `lib/memory/substrate-scans.test.ts` pins it.
+
+**V.1c. `SIGNAL3-TRIAGE-QUALITY`** (`npm run test:eval`, a cassette replay, run 2026-09-29 before any change): corpusVersion 2;
+github precision 1.000 (24/24), recall 1.000 (24/24), dismissMatch 1.000 (16/16); market_responsive precision null (0/0),
+recall 0.000 (0/24), dismissMatch 0.563 (9/16), with the harness's advisory "below a floor" warning. Not compared to the
+last value in `docs/current-phase.md` (which quotes the constraint but not these figures). The replay rewrites
+`lib/signals/__fixtures__/eval/latest-run.json`; the Builder reverted that file.
+
+**V.1d. `briefAssemblyPrompt.version`**: 3 (`lib/ai/prompts/brief.ts:72`).
+
+### V.2 Pre-VALIDATE audit
+
+The audit as specified (max confidence by `(table, source)` after a full `test:db` seed) cannot be produced: the four
+memory tables are **empty** after the suite because the tests clean up after themselves (0 rows in all four). Recorded
+instead, from the code that sets each value: import ≤ `BACKFILL_CONFIDENCE_CEILING` 0.60; interview brand 0.6 / audience
+0.5 / evidence 0.4 (`lib/interview/constants.ts:117-119`, fixed in SQL); distilled ≤ `LEARN_CONFIDENCE_CEILING` 0.95.
+Every value is within its ADR §4.1 ceiling, and the populations are CI and dev data only, so `VALIDATE CONSTRAINT` cannot
+fail on any existing row. `L2.3` re-runs the query at the point of the swap.
+
+### V.3 L2.0 premise results
+
+| # | Premise | Result |
+|---|---|---|
+| 1 | four writers and their `.rpc(` wrappers | confirmed, with two corrections (V.4 D1, D2) |
+| 2 | W1 live | all 30 writer RPCs queried: `SECURITY DEFINER`, `search_path = public, pg_temp`, **no** EXECUTE for `anon`, `authenticated` or `public`. **No privilege-narrowing migration is needed** |
+| 3 | performance member path | no authenticated production writer (`scripts/learning-report.ts:122` only reads). Member-client writes in Tier 1: `performance-memory-outcome-schema.test.ts:357,361,481`, `outcome-delete-guard.test.ts:30,40`, and the two ADR-named sites |
+| 4 | four named source CHECKs | exactly one per table; the by-definition test regex is `^CHECK \(\(<col> = ANY \(ARRAY\[` (`performance-memory-outcome-schema.test.ts:152`) |
+| 6 | `remove_import_source_post` | tolerates a retired import row (`20260913140000:432-454`: DELETE on evidence and audience regardless of status; performance is an idempotent `status='retired'`) |
+| 7 | card transitions | only the three Server Actions, through `attemptTransition`. Card-expiry sweeps were not audited by name |
+| 8 | caller table | seven `vi.mock('@/lib/memory')` factories (`generate.test.ts:74` spreads `importOriginal`; the other six replace the barrel wholesale) |
+| 9 | where `source` reaches the UI | `InterviewPanel` (conflict targets, used only for `replaceable`), `BackfillPanel` (typed on props, not rendered); **not** `approvals/page.tsx` (`evidenceOptions` = `{id, snippet}`) |
+| 10 | i18n | 17 namespaces, no `memory.json`; registered in `i18n/request.ts:13` and `:47` |
+| 12 | brief records memory ids | no column records brand or audience ids; the bundle-share measurement is a seeded-fixture measurement only |
+
+### V.4 Drift found, reported and not decided
+
+- **D1.** `lib/db/memory-interview.ts` reaches its RPCs through `callInterviewRpc<T>(…)` (generic call, defined in
+  `founder-interview-rounds.ts`), so a `.rpc(` grep sees neither interview writer. Scan arm 1 matches `callInterviewRpc`
+  with an optional generic argument. Found by the first real-tree run.
+- **D2.** The registry needs three fields the ADR's field list does not name: `wrappers` (arms 1 and 2 need the wrapper
+  names, not just RPC names), `checkTables` (`distilled`, `import` and `manual` are in the brand CHECK though none writes
+  brand) and, beside the registry, `RPC_INSERT_TABLES` (arm 4 needs which RPCs INSERT into evidence).
+- **D3.** `distilled` has **two** calling modules (`lib/learning/promote.ts` and `summarize.ts`), so its
+  `soleCallerModule` is the directory `lib/learning/`, not a file.
+- **D4.** `outcome` emits `scope='campaign'` (the hypothesis row of `acknowledge_campaign_retrospective`,
+  `20260919140000:376-381`), so its registered scopes are `['platform', 'campaign']`. The ADR's "no writer emits
+  `scope='campaign'`" (§1.1 item 2) is true of `campaignId` matching only insofar as no *retrieval* path reads it.
+- **D5.** ADR §2.5 arm 3 says any `.from('<memory table>')` outside `lib/db/memory-*.ts` is a violation. **One exists**:
+  `scripts/learning-report.ts:122`, a select-only operator diagnostic on `performance_memory`. The scan pins it as an exact
+  known exception (fails if a second appears, or if this one disappears). Whether it moves behind `lib/db` is for the
+  founder.
+- **D6.** V.2 as specified is vacuous on the live tables (above).
+
+### V.5 L2.1 — registry and scans
+
+Shipped: `lib/memory/writers.ts`, `lib/memory/writers.test.ts` (Tier 2, literal expected sets),
+`lib/memory/substrate-scans.test.ts` (Tier 3); `lib/memory/index.ts` re-exports the registry and its stale "Production
+consumers today" comment is corrected. The three older scans are **unedited**. Redden transcripts are in the `L2.1` commit
+body.
