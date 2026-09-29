@@ -754,3 +754,36 @@ convention (Amendments A-D): nothing above this heading is edited.
 
 **Constraints:** `INTERVIEW-PROVENANCE-DISTINCT`, `INTERVIEW-ANSWER-TRACEABLE`, `INTERVIEW-PROVENANCE-IMMUTABLE`,
 `INTERVIEW-MEMBER-WRITE-CLOSED`, `INTERVIEW-PERFORMANCE-POLICY-UNCHANGED` (ADR 0029 §11).
+
+
+## Amendment F — the substrate: `performance_memory`'s member write path closed (2026-09-29, Session 36, L2.2 · ADR 0030)
+
+> Appended by the Session 36 Builder. Nothing above is edited. Later Session 36 steps append F.2 onward (the `'dismissal'`
+> source, the per-source confidence ceilings, the `decision_key` provenance marker); this section carries F.1 only.
+
+### F.1 `performance_memory` joins the other three memory tables: no member write path (founder ruling A-5)
+
+- **Before.** Amendment E left `performance_memory` alone on purpose: its member INSERT was narrowed to `source = 'manual'`
+  (Amendments C/D, ADR 0026 §5.5), its write-protection trigger and delete guard stayed, and the blanket
+  `GRANT … ON ALL TABLES … TO authenticated` (`20260707190000:28,32`) was never revoked on it. ADR 0030 §1.1 fact 6 records the
+  consequence, confirmed independently by `[sec-1]` (HIGH) and `[db-8]` (MAJOR): a member could INSERT an `active`,
+  `confidence = 1.0`, `public_use_permission = true` row over PostgREST and it entered every generation prompt
+  (`listPerformanceMemoryCandidates` excludes only `'outcome'`). Nothing in the product writes `source = 'manual'`.
+  Reproduced at L2.2 before the migration: a member's INSERT returned the row with `status: active, confidence: 1,
+  public_use_permission: true`.
+- **After** (`20260929110000_performance_memory_member_writes_closed.sql`, copied from `20260925100000:39-56`): the three
+  member write policies (`performance_memory_insert_own`, `_update_own`, `_delete_own`) are dropped;
+  `INSERT, UPDATE, DELETE, TRUNCATE` are revoked from `authenticated` and `anon`; `performance_memory_select_own` is kept.
+  A direct write now fails at the GRANT layer with `42501` (`permission denied for table`), before RLS is consulted.
+  Reproduced after the migration: the same INSERT returns `42501`.
+- **Not edited.** `enforce_performance_memory_write_protection` (`20260919130000:217-255`) and the outcome-row delete guard
+  (`20260919160000`) are kept as defence in depth. Clients can no longer reach either.
+- **Every writer is unaffected.** Each real writer is a `service_role` `SECURITY DEFINER` RPC or the service-role client
+  (`upsert_distilled_performance_pattern`, `import_performance_memory`, `upsert_outcome_performance_pattern`,
+  `promote_*`, `demote_*`). The full Tier-1 suite (108 files, 1143 tests) and the L2.0 baseline set (DB 53 files / 680
+  tests) are green at the L2.2 commit.
+- **Effect on `'manual'`.** It stays in `performance_memory_source_check` for history and is now a **retired, writerless**
+  source (registered so in `lib/memory/writers.ts`).
+
+**Constraint:** `SUBSTRATE-MEMBER-WRITE-CLOSED` (ADR 0030 §12 #6): Tier 1 (`supabase/__tests__/substrate-member-write-closed.test.ts`)
+and Tier 3 (the policy/grant scan in `lib/memory/substrate-scans.test.ts`).

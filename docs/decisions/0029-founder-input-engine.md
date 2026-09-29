@@ -1434,3 +1434,24 @@ proving the whole migration chain including this new file applies clean): **107 
 D11's 1127 — the new type-mismatch test).
 
 **SHA:** the commit immediately following D11, before this branch merges.
+
+
+---
+
+## Note (2026-09-29, Session 36 L2.2 · ADR 0030 §2.4) — `INTERVIEW-PERFORMANCE-POLICY-UNCHANGED` is superseded for its `performance_memory` arm
+
+> Appended, dated and attributed to the Session 36 Builder. Nothing above is edited.
+
+`INTERVIEW-PERFORMANCE-POLICY-UNCHANGED` (§11 #14) recorded that Session 35 left `performance_memory`'s policies and member
+grants untouched. ADR 0030 §2.4 (founder ruling A-5) closes that path, so the constraint is **superseded for its
+`performance_memory` arm by `SUBSTRATE-MEMBER-WRITE-CLOSED`** (ADR 0030 §12 #6). The id stays in this table. Both halves were
+**amended in place, never deleted**:
+
+- **Tier 1** (`supabase/__tests__/interview-member-write-closed.test.ts`): the case now asserts that only
+  `performance_memory_select_own` remains and that `authenticated` holds no INSERT/UPDATE/DELETE.
+- **Tier 3** (`lib/interview/__tests__/source-scans.test.ts`): the scan that forbade any post-boundary migration from naming a
+  `performance_memory` policy, grant or trigger now allows exactly one named file
+  (`20260929110000_performance_memory_member_writes_closed.sql`), asserted to contain exactly three `DROP POLICY` and one
+  `REVOKE`. Any other migration naming the table still fails it.
+
+`INTERVIEW-MEMBER-WRITE-CLOSED` (brand, evidence, audience) is unchanged and still proven.

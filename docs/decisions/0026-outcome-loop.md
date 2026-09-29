@@ -1282,3 +1282,22 @@ roughly T0 + 150 days, and T0 is undefined today.
 `performance-memory-outcome-schema.test.ts`), row 30 (D1, whose `no-cross-business` scan now hands the page readers a client)
 and row 33 (D1, the new Tier-1 `outcome-campaign-view-rls.test.ts`), plus the §10.2 surface rows (D5). Each was exercised by
 its own file in the runs above.
+
+
+---
+
+## Note (2026-09-29, Session 36 L2.2 · ADR 0030 §2.4) — §5.5's member surface is now closed
+
+> Appended, dated and attributed to the Session 36 Builder. Nothing above is edited.
+
+§5.5 narrowed a member's write surface on `performance_memory` (INSERT only with `source = 'manual'`; outcome rows
+retire-or-soft-delete only; the delete guard). ADR 0030 §2.4 (founder ruling A-5, ADR 0016 Amendment F.1) **closes that
+surface entirely**: the three member write policies are dropped and `INSERT, UPDATE, DELETE, TRUNCATE` are revoked from
+`authenticated` and `anon`, so a member can no longer retire or soft-delete an outcome row either. Retirement happens through
+the `service_role` RPCs (`demote_outcome_pattern`).
+
+`OUTCOME-WRITE-PROTECTED` is **unchanged in SQL** and its id survives. The trigger it names is kept, now unreachable by
+clients. Its **member arm asserts `42501`**: the cases in `supabase/__tests__/performance-memory-outcome-schema.test.ts`
+that once showed a member INSERT/UPDATE succeeding (manual INSERT, retire, un-retire, manual edit) were **amended, not
+deleted**, to assert the refusal. `supabase/__tests__/outcome-delete-guard.test.ts` likewise. `OUTCOME-SEPARATE-RETRIEVAL`
+is untouched.

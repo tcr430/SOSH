@@ -1403,3 +1403,30 @@ Shipped: `lib/memory/writers.ts`, `lib/memory/writers.test.ts` (Tier 2, literal 
 `lib/memory/substrate-scans.test.ts` (Tier 3); `lib/memory/index.ts` re-exports the registry and its stale "Production
 consumers today" comment is corrected. The three older scans are **unedited**. Redden transcripts are in the `L2.1` commit
 body.
+
+### V.6 L2.2 — `performance_memory`'s member path closed (`20260929110000_performance_memory_member_writes_closed.sql`)
+
+- **Redden, both directions.** Before the migration a member's INSERT (`source='manual'`, `status='active'`,
+  `confidence=1.0`, `public_use_permission=true`) **succeeded and the row was ACTIVE**
+  (`{"error":null,"row":[{"source":"manual","status":"active","confidence":1,"public_use_permission":true}]}`); the new Tier-1
+  file was red on 5 of its 15 tests (the three `performance_memory` write cases, the grant check and the policy check). After it,
+  the same INSERT returns `42501` and 15/15 are green. Restoring `performance_memory_insert_own` plus the INSERT grant on the
+  live DB reddens 3 of 15.
+- **Tier 1:** `supabase/__tests__/substrate-member-write-closed.test.ts` (15 tests: INSERT/UPDATE/DELETE on
+  `performance_memory` and `audience_memory` each asserting `42501` AND "permission denied"; ACTIVE-row SELECT positive control;
+  other-business SELECT negative; grants and policies from the catalog; triggers kept).
+- **Fallout, found by running the whole Tier-1 suite (108 files) against the migrated schema: 9 tests in exactly 3 files.**
+  All **amended, none deleted**, titles and ids kept: `interview-member-write-closed.test.ts` (1),
+  `outcome-delete-guard.test.ts` (1), `performance-memory-outcome-schema.test.ts` (7).
+- **A fourth file the build guide did not list.** `lib/interview/__tests__/source-scans.test.ts` (ADR 0029's Tier-3 half of
+  `INTERVIEW-PERFORMANCE-POLICY-UNCHANGED`) forbade any post-Session-35 migration from naming a `performance_memory` policy or
+  grant, and failed on 4 hits (the 3 `DROP POLICY` and the `REVOKE`). Found by the unit baseline re-run, not by the DB suite.
+  Amended, not deleted: it now allows exactly the one named closure file and asserts that file contains exactly those four
+  statements; any other migration naming the table still fails it.
+- **Counts.** Tier 1 full suite: 108 files / 1143 tests, 0 failed (CI at `6f7b26d7` was 107 / 1127; +1 file, +15 tests, +1 from
+  the split of an amended case). L2.0 DB baseline set: 53 files / 680 tests, identical. Unit baseline set: 63 files / 1025 tests
+  (971 + the 54 of `L2.1`), 0 failed after the fourth-file amendment. `test:app`: 376 files / 5598 passed / 6 skipped (the
+  `L2.1` four range-scans now run because this range has a migration).
+- **Amendments appended:** ADR 0016 Amendment F.1; ADR 0026 (dated note on §5.5); ADR 0029 (dated note on
+  `INTERVIEW-PERFORMANCE-POLICY-UNCHANGED`). Nothing above any of them is edited.
+- **`enforce_performance_memory_write_protection` and the delete guard: not edited** (`git diff` shows neither).
