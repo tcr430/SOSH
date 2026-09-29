@@ -787,3 +787,35 @@ convention (Amendments A-D): nothing above this heading is edited.
 
 **Constraint:** `SUBSTRATE-MEMBER-WRITE-CLOSED` (ADR 0030 §12 #6): Tier 1 (`supabase/__tests__/substrate-member-write-closed.test.ts`)
 and Tier 3 (the policy/grant scan in `lib/memory/substrate-scans.test.ts`).
+
+### F.2 `audience_memory` gains a fifth `source`, `'dismissal'`, and a `decision_key` provenance marker; eight confidence ceilings (2026-09-29, Session 36, L2.3 · founder rulings A-3 and A-4)
+
+`20260929120000_memory_substrate_schema.sql`, one migration (the ADR requires the ceilings "in the same migration as the source swap").
+
+- **The source swap, by name.** `audience_memory_source_check` is dropped, re-added `NOT VALID` with
+  `('manual', 'distilled', 'import', 'interview', 'dismissal')`, and `VALIDATE`d. No definition lookup (Amendment E's migration re-added
+  all four CHECKs explicitly named so this would be cheap). The other three tables' source CHECKs are untouched, so
+  `brand_memory`, `evidence_memory` and `performance_memory` still refuse `'dismissal'` with `23514`.
+- **`decision_key text NULL`** on `audience_memory`, with `audience_memory_decision_key_marker_check`
+  `((source = 'dismissal') = (decision_key IS NOT NULL))`, `audience_memory_decision_key_namespace_check`
+  `(source <> 'dismissal' OR decision_key LIKE 'dismissal:%')`, the partial `UNIQUE` `audience_memory_dismissal_key_uq`
+  `(business_id, decision_key) WHERE source = 'dismissal' AND deleted_at IS NULL`, and a **sibling** `BEFORE UPDATE` trigger
+  `enforce_memory_dismissal_immutable` (function of the same name, `WHEN (OLD.source = 'dismissal' OR NEW.source = 'dismissal')`, so it cannot
+  touch any other source's UPDATE path). It rejects a change to `source` or `decision_key` and permits `statement`, `confidence`,
+  `observation_count`, `status`, `last_confirmed_at` and `expires_at`. `enforce_memory_import_immutable` and
+  `enforce_memory_interview_immutable` are **not edited**. **No foreign key.**
+- **Eight ceiling CHECKs**, each named, each `NOT VALID` then `VALIDATE`, predicate `source <> 'X' OR confidence <= N`:
+  `<t>_import_confidence_ceiling` ≤ **0.60** (evidence, audience, performance) · `<t>_interview_confidence_ceiling` ≤ **0.60** (brand,
+  evidence, audience) · `audience_memory_dismissal_confidence_ceiling` ≤ **0.50** · `performance_memory_distilled_confidence_ceiling` ≤ **0.95**.
+  None begins `CHECK ((source = ANY (ARRAY[`.
+- **Why `outcome` and `manual` have none.** `outcome`: `acknowledge_campaign_retrospective` computes `round((wilson bound) × n/(n+10), 2)`
+  with no clamp (`20260919140000:366-367`), which can exceed 0.95 at large n, so a CHECK would abort a legitimate recompute; the existing
+  `0..1` CHECK is its bound. `manual`: the member path is closed (F.1), so nothing can write it.
+- **Every ceiling equals the writer's shipped maximum** (`BACKFILL_CONFIDENCE_CEILING` 0.60, interview brand 0.6, `LEARN_CONFIDENCE_CEILING` 0.95),
+  so `VALIDATE` cannot fail on existing rows (L-2). No shipped constant changed. The pre-VALIDATE audit is recorded in ADR 0030 V.2 and V.7.
+- **`confidence` is `numeric(3,2)`**: 0.605 is stored as 0.61, so it is over the 0.60 import ceiling and is refused.
+- **`WriterConfidence`** (`lib/memory/writers.ts`): the import and distilled wrappers take a branded `WriterConfidence<'import' | 'distilled'>`
+  that only `importConfidence()` (band (0, 0.60]) and `distilledConfidence()` (band [0, 0.95]) can mint. A first line only; the CHECKs above enforce.
+
+**Constraints:** `SUBSTRATE-PROVENANCE-DISTINCT`, `SUBSTRATE-CONFIDENCE-CALIBRATED` (ADR 0030 §12 #3, #8), Tier 1
+(`supabase/__tests__/substrate-schema.test.ts`) and Tier 2 (`lib/memory/writers.test.ts`).

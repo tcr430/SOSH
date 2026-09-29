@@ -101,6 +101,46 @@ export const MEMORY_WRITERS = {
   },
 } as const satisfies Record<string, WriterSpec>
 
+// ─── WriterConfidence (ADR 0030 §2.2, [type-4]) ─────────────────────────────────────────────────────────────────────
+//
+// For the two writers whose confidence is legitimately COMPUTED IN TS and forwarded (import, distilled), the wrapper's
+// `confidence` parameter is a branded type that only a per-writer constructor below can make, and each constructor THROWS
+// outside that writer's band. This is a FIRST line, not the guarantee: the SQL ceiling CHECK (20260929120000) is what
+// enforces the band, and this ADR does not claim a governance field is unrepresentable for these two writers. What the brand
+// buys is that a bare `number` (a model-derived value, a mistyped constant) no longer type-checks at the wrapper.
+//
+// The constructors forward the value UNCHANGED (`toBe` in the tests): threading them through the wrappers changes no value
+// any writer sends (L-2).
+declare const writerConfidenceBrand: unique symbol
+export type WriterConfidence<W extends 'import' | 'distilled'> = number & { readonly [writerConfidenceBrand]: W }
+
+/** A wrapper input whose `confidence` must be a minted WriterConfidence, every other field unchanged. */
+export type WithWriterConfidence<T extends { confidence: number }, W extends 'import' | 'distilled'> = Omit<T, 'confidence'> & {
+  confidence: WriterConfidence<W>
+}
+
+const IMPORT_CONFIDENCE_CEILING = MEMORY_WRITERS.import.confidenceCeiling.evidence_memory
+const DISTILLED_CONFIDENCE_CEILING = MEMORY_WRITERS.distilled.confidenceCeiling.performance_memory
+
+/** import band (0, 0.60]: every shipped import confidence is positive (audience 0.3, evidence 0.5, performance 0.6*n/(n+5)). */
+export function importConfidence(value: number): WriterConfidence<'import'> {
+  if (!Number.isFinite(value) || value <= 0 || value > IMPORT_CONFIDENCE_CEILING) {
+    throw new Error(`importConfidence: ${value} is outside (0, ${IMPORT_CONFIDENCE_CEILING}]`)
+  }
+  return value as WriterConfidence<'import'>
+}
+
+/**
+ * distilled band [0, 0.95]. Unlike import, 0 is IN the band: computeConfidence (lib/learning/promote.ts) returns 0 when
+ * contradictions >= observations and that 0 is forwarded today, so throwing on it would change the writer (L-2).
+ */
+export function distilledConfidence(value: number): WriterConfidence<'distilled'> {
+  if (!Number.isFinite(value) || value < 0 || value > DISTILLED_CONFIDENCE_CEILING) {
+    throw new Error(`distilledConfidence: ${value} is outside [0, ${DISTILLED_CONFIDENCE_CEILING}]`)
+  }
+  return value as WriterConfidence<'distilled'>
+}
+
 export type WriterId = keyof typeof MEMORY_WRITERS
 /** A `source` column value. Registered writers and source values are the same set. */
 export type SourceValue = WriterId

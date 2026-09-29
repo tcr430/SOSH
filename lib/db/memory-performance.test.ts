@@ -16,6 +16,7 @@ import {
   importPerformanceMemory,
 } from './memory-performance'
 import type { PerformanceMemoryRow, PerformanceMemoryInsert, PerformanceMemoryImportInsert } from './types'
+import { importConfidence, distilledConfidence, type WithWriterConfidence } from '@/lib/memory'
 
 const mockCreateServiceRoleClient = vi.mocked(createServiceRoleClient)
 
@@ -172,7 +173,9 @@ describe('listDistilledPatternsForSummary', () => {
   })
 })
 
-function makeInsert(overrides: Partial<PerformanceMemoryInsert> = {}): PerformanceMemoryInsert {
+// ADR 0030 §2.2 (Session 36 L2.3): the distilled wrapper's `confidence` is a WriterConfidence<'distilled'>, so the fixture
+// mints it with distilledConfidence() — the value forwarded to the RPC is exactly the number given here.
+function makeInsert(overrides: Partial<PerformanceMemoryInsert> = {}): WithWriterConfidence<PerformanceMemoryInsert, 'distilled'> {
   return {
     business_id: 'biz-1',
     dimension: 'format',
@@ -181,9 +184,9 @@ function makeInsert(overrides: Partial<PerformanceMemoryInsert> = {}): Performan
     platform: 'linkedin',
     scope: 'platform',
     scope_ref: 'linkedin',
-    confidence: 0.714,
     observation_count: 5,
     ...overrides,
+    confidence: distilledConfidence(overrides.confidence ?? 0.714),
   }
 }
 
@@ -397,7 +400,7 @@ describe('demotePerformancePattern', () => {
   })
 })
 
-function makeImportInsert(overrides: Partial<PerformanceMemoryImportInsert> = {}): PerformanceMemoryImportInsert {
+function makeImportInsert(overrides: Partial<PerformanceMemoryImportInsert> = {}): WithWriterConfidence<PerformanceMemoryImportInsert, 'import'> {
   return {
     business_id: 'biz-1',
     import_run_id: 'run-1',
@@ -407,11 +410,11 @@ function makeImportInsert(overrides: Partial<PerformanceMemoryImportInsert> = {}
     platform: 'linkedin',
     scope: 'platform',
     scope_ref: 'linkedin',
-    confidence: 0.3,
     observation_count: 5,
     last_confirmed_at: '2026-07-01T00:00:00Z',
     expires_at: '2027-07-01T00:00:00Z',
     ...overrides,
+    confidence: importConfidence(overrides.confidence ?? 0.3),
   }
 }
 

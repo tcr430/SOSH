@@ -9,6 +9,7 @@ import { createServiceRoleClient } from '@/lib/supabase/service'
 import { listAudienceInterviewCandidates, listAudienceMemoryCandidates, importAudienceMemory } from './memory-audience'
 import type { AudienceMemoryRow, AudienceMemoryImportInsert } from './types'
 import { INTERVIEW_CANDIDATES_LIMIT_PER_TABLE } from '@/lib/interview/constants'
+import { importConfidence, type WithWriterConfidence } from '@/lib/memory'
 
 const mockCreateServiceRoleClient = vi.mocked(createServiceRoleClient)
 
@@ -120,7 +121,9 @@ describe('listAudienceMemoryCandidates', () => {
   })
 })
 
-function makeImportInsert(overrides: Partial<AudienceMemoryImportInsert> = {}): AudienceMemoryImportInsert {
+// ADR 0030 §2.2 (Session 36 L2.3): the wrapper's `confidence` is a WriterConfidence<'import'>, so the fixture mints it with
+// importConfidence() — the value forwarded to the RPC is exactly the number given here.
+function makeImportInsert(overrides: Partial<AudienceMemoryImportInsert> = {}): WithWriterConfidence<AudienceMemoryImportInsert, 'import'> {
   return {
     business_id: 'biz-1',
     import_run_id: 'run-1',
@@ -130,10 +133,10 @@ function makeImportInsert(overrides: Partial<AudienceMemoryImportInsert> = {}): 
     statement: 'CTOs struggle to keep a consistent posting cadence',
     scope: 'platform',
     scope_ref: 'twitter',
-    confidence: 0.3,
     last_confirmed_at: '2026-07-01T00:00:00Z',
     expires_at: null,
     ...overrides,
+    confidence: importConfidence(overrides.confidence ?? 0.3),
   }
 }
 

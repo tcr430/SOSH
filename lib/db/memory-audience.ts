@@ -4,6 +4,7 @@ import { INTERVIEW_CANDIDATES_LIMIT_PER_TABLE, INTERVIEW_CONFLICT_TARGETS_LIMIT,
 import { getErrorMessage } from './utils'
 import { MEMORY_CANDIDATE_LIMIT } from './memory-constants'
 import { neutralizeWithSentinels } from '@/lib/ai/wrap-evidence'
+import type { WithWriterConfidence } from '@/lib/memory'
 
 // ADR 0016 §5.1 (Q4) — candidate query only. No scoring, no capping; that is
 // lib/memory/audience.ts's job (B2). business_id is filtered explicitly
@@ -38,7 +39,10 @@ export async function listAudienceMemoryCandidates(
 // importEvidenceMemory and the MEM-PATTERN-SENTINEL-GUARDED precedent.
 // Governance columns are fixed inside the RPC — this type has no field for
 // them.
-export async function importAudienceMemory(insert: AudienceMemoryImportInsert): Promise<AudienceMemoryRow[]> {
+export async function importAudienceMemory(
+  // ADR 0030 §2.2 [type-4] — `confidence` is a WriterConfidence<'import'> (importConfidence(), band (0, 0.60]); value unchanged.
+  insert: WithWriterConfidence<AudienceMemoryImportInsert, 'import'>,
+): Promise<AudienceMemoryRow[]> {
   const { createServiceRoleClient } = await import('@/lib/supabase/service')
   const client = createServiceRoleClient()
   const { data, error } = await client.rpc('import_audience_memory', {

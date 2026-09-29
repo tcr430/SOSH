@@ -1430,3 +1430,32 @@ body.
 - **Amendments appended:** ADR 0016 Amendment F.1; ADR 0026 (dated note on §5.5); ADR 0029 (dated note on
   `INTERVIEW-PERFORMANCE-POLICY-UNCHANGED`). Nothing above any of them is edited.
 - **`enforce_performance_memory_write_protection` and the delete guard: not edited** (`git diff` shows neither).
+
+### V.7 L2.3 — the source swap, the `decision_key` marker, eight ceilings, `WriterConfidence` (`20260929120000_memory_substrate_schema.sql`)
+
+- **Redden (Tier 1), against the live schema, each restored.** Dropping `audience_memory_decision_key_marker_check` reddens 2 of 42
+  (`source=dismissal` with a NULL key; a non-null key on any other source). Raising `evidence_memory_import_confidence_ceiling` to `<= 0.61`
+  reddens 3 of 42 (its violating-insert case, the numeric(3,2) `0.605 → 0.61` case, and its re-validation case). Before the migration the
+  new file was red on 25 of its cases (over-ceiling inserts all SUCCEEDED; `decision_key` did not exist).
+- **Redden (Tier 2).** Raising the registry's evidence import ceiling to 0.61 reddens 3 of 18 in `writers.test.ts`.
+- **VALIDATE on writer output.** `substrate-schema.test.ts` seeds rows through `import_evidence_memory`, `import_audience_memory`,
+  `import_performance_memory`, `upsert_distilled_performance_pattern` (at exactly 0.95), `upsert_outcome_performance_pattern` (a real 10-observation
+  cell) and `write_interview_candidates` (a real claimed round: brand 0.6, audience 0.5, evidence 0.4), then re-runs
+  `DROP / ADD … NOT VALID / VALIDATE` for all eight ceilings inside a transaction that is rolled back. This supersedes V.2's code-constant reasoning
+  for the seeded populations; the live tables are still empty after the suite, so V.2's original query stays vacuous.
+- **Privilege narrowing: not required** (V.3 #2: all 30 writer RPCs already closed to `anon`, `authenticated`, `public`).
+- **DRIFT D7 (reported, not decided).** The build guide gives the distilled band as `(0, 0.95]` and says the constructor throws at 0. But
+  `computeConfidence` (`lib/learning/promote.ts:31`) returns **0** whenever contradictions ≥ observations, and that 0 is forwarded to
+  `upsert_distilled_performance_pattern` today. Throwing there would change an existing writer (L-2). The distilled band is therefore **[0, 0.95]**
+  and a test pins that 0 is accepted; the import band stays `(0, 0.60]`.
+- **DRIFT D8: the brand exposed a silent `NaN`.** `promote.test.ts` mocked only the first `countProcessedSignalsForPattern` call, so contradictions were
+  `undefined`, `computeConfidence(5, undefined)` was `NaN`, and that `NaN` flowed silently into the mocked upsert. `distilledConfidence` refuses a
+  non-finite value, so the test failed. In production the count is always a number, so no live path is affected. The mock was completed
+  (`.mockResolvedValueOnce(0)`) and the amendment is commented in the test.
+- **Wrapper threading.** `importEvidenceMemory`, `importAudienceMemory`, `importPerformanceMemory` and `upsertDistilledPerformancePattern` take
+  `WithWriterConfidence<…>`. `lib/memory/import.ts` mints with `importConfidence()`; `lib/learning/promote.ts` and `summarize.ts` mint with
+  `distilledConfidence()`. **No forwarded value changed** (the constructors return the same number; `toBe` in the tests). Three wrapper test files
+  (`memory-audience`, `memory-evidence`, `memory-performance`) had their fixture helpers updated to mint.
+- **Counts at this commit.** Full Tier 1: 109 files / 1185 tests, 0 failed (was 108 / 1143). L2.0 DB baseline set: 53 files / 680 tests, identical.
+  Unit baseline set: 63 files / 1031 tests (1025 passed, 6 skipped; was 1025 + 6 new constructor tests). `test:app`: 376 files / 5604 passed / 6 skipped.
+- **Constraints closed:** `SUBSTRATE-PROVENANCE-DISTINCT` (#3), `SUBSTRATE-CONFIDENCE-CALIBRATED` (#8). ADR 0016 Amendment F.2 appended.

@@ -1,5 +1,52 @@
 import { describe, it, expect } from 'vitest'
-import { MEMORY_WRITERS, MEMORY_TABLES, SOURCES_BY_TABLE, RPC_INSERT_TABLES, WRITER_IDS } from './writers'
+import {
+  MEMORY_WRITERS,
+  MEMORY_TABLES,
+  SOURCES_BY_TABLE,
+  RPC_INSERT_TABLES,
+  WRITER_IDS,
+  importConfidence,
+  distilledConfidence,
+} from './writers'
+
+// ADR 0030 §2.2 / §11.2 #10 (Session 36 L2.3) — the WriterConfidence constructors are a FIRST line; the SQL ceiling CHECK
+// (supabase/__tests__/substrate-schema.test.ts) is what enforces the band. A constructor must throw outside its band and
+// hand back the SAME number inside it: "WITHOUT changing a single value they forward".
+describe('WriterConfidence constructors (ADR 0030 §2.2)', () => {
+  it('importConfidence throws at 0, below 0, above 0.60, on NaN and on Infinity', () => {
+    for (const bad of [0, -0.01, -1, 0.61, 0.6000001, 1, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      expect(() => importConfidence(bad), String(bad)).toThrow(/importConfidence/)
+    }
+  })
+
+  it('importConfidence accepts its exact ceiling and the shipped constants, and returns the SAME value', () => {
+    for (const ok of [0.6, 0.5, 0.3, 0.01, 0.6 * (5 / (5 + 5))]) expect(importConfidence(ok)).toBe(ok)
+  })
+
+  it('distilledConfidence throws below 0, above 0.95, on NaN and on Infinity', () => {
+    for (const bad of [-0.01, -1, 0.96, 0.9500001, 1, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      expect(() => distilledConfidence(bad), String(bad)).toThrow(/distilledConfidence/)
+    }
+  })
+
+  it('distilledConfidence accepts its exact ceiling and the values computeConfidence produces, and returns the SAME value', () => {
+    for (const ok of [0.95, 0.714, 1 / 3, 0.01]) expect(distilledConfidence(ok)).toBe(ok)
+  })
+
+  // DRIFT from the build guide, reported in the ADR 0030 Builder verification (V.7): the guide says the distilled band
+  // (0, 0.95] throws at 0. But computeConfidence (lib/learning/promote.ts:31) returns 0 whenever contradictions >= observations,
+  // and that 0 is forwarded to upsert_distilled_performance_pattern today. Throwing there would change an existing writer's
+  // behaviour (L-2), so the distilled band is [0, 0.95]; the import band stays (0, 0.60].
+  it('distilledConfidence ACCEPTS 0: computeConfidence legitimately returns it when net <= 0 (L-2)', () => {
+    expect(distilledConfidence(0)).toBe(0)
+  })
+
+  it('the constructors read their ceilings from the registry, so the registry and the band cannot drift apart', () => {
+    expect(() => importConfidence(MEMORY_WRITERS.import.confidenceCeiling.evidence_memory + 0.01)).toThrow()
+    expect(importConfidence(MEMORY_WRITERS.import.confidenceCeiling.evidence_memory)).toBe(0.6)
+    expect(distilledConfidence(MEMORY_WRITERS.distilled.confidenceCeiling.performance_memory)).toBe(0.95)
+  })
+})
 
 // ADR 0030 §2.1 (Session 36 L2.1). Every expectation below is a LITERAL, deliberately not derived from
 // writers.ts: a test that computes its expected value from the thing under test cannot fail. The value sets are

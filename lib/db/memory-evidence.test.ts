@@ -9,6 +9,7 @@ import { createServiceRoleClient } from '@/lib/supabase/service'
 import { listEvidenceInterviewCandidates, listEvidenceMemoryCandidates, getEvidenceMemoryByIds, importEvidenceMemory } from './memory-evidence'
 import type { EvidenceMemoryRow, EvidenceMemoryImportInsert } from './types'
 import { INTERVIEW_CANDIDATES_LIMIT_PER_TABLE } from '@/lib/interview/constants'
+import { importConfidence, type WithWriterConfidence } from '@/lib/memory'
 
 const mockCreateServiceRoleClient = vi.mocked(createServiceRoleClient)
 
@@ -171,7 +172,9 @@ describe('getEvidenceMemoryByIds', () => {
   })
 })
 
-function makeImportInsert(overrides: Partial<EvidenceMemoryImportInsert> = {}): EvidenceMemoryImportInsert {
+// ADR 0030 §2.2 (Session 36 L2.3): the wrapper's `confidence` is a WriterConfidence<'import'>, so the fixture mints it with
+// importConfidence() — the value forwarded to the RPC is exactly the number given here.
+function makeImportInsert(overrides: Partial<EvidenceMemoryImportInsert> = {}): WithWriterConfidence<EvidenceMemoryImportInsert, 'import'> {
   return {
     business_id: 'biz-1',
     import_run_id: 'run-1',
@@ -181,10 +184,10 @@ function makeImportInsert(overrides: Partial<EvidenceMemoryImportInsert> = {}): 
     source_url: 'https://x.com/acme/status/1',
     scope: 'platform',
     scope_ref: 'twitter',
-    confidence: 0.5,
     last_confirmed_at: '2026-07-01T00:00:00Z',
     expires_at: null,
     ...overrides,
+    confidence: importConfidence(overrides.confidence ?? 0.5),
   }
 }
 
