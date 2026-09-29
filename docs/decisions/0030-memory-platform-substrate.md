@@ -1459,3 +1459,28 @@ body.
 - **Counts at this commit.** Full Tier 1: 109 files / 1185 tests, 0 failed (was 108 / 1143). L2.0 DB baseline set: 53 files / 680 tests, identical.
   Unit baseline set: 63 files / 1031 tests (1025 passed, 6 skipped; was 1025 + 6 new constructor tests). `test:app`: 376 files / 5604 passed / 6 skipped.
 - **Constraints closed:** `SUBSTRATE-PROVENANCE-DISTINCT` (#3), `SUBSTRATE-CONFIDENCE-CALIBRATED` (#8). ADR 0016 Amendment F.2 appended.
+
+### V.8 L2.4 — ratify Replace admits `import` (`20260929130000_ratify_replace_admits_import.sql`)
+
+- **Copy, not retype.** The function block is lines 25–327 of `20260929100000` (ACLs included), patched by `sed`. `diff` of the original block against
+  the new block shows **exactly three changed lines** (the probe, the retire UPDATE's guard, the error text). `has_function_privilege` after applying:
+  `anon` / `authenticated` / `public` false, `service_role` true; `SECURITY DEFINER`, `search_path = public, pg_temp`; one definition.
+- **Order.** The migration was authored before its Tier-1 test (out of TDD order, disclosed in the commit). The redden was done afterwards by putting
+  the previous function back on the live DB: the new file was **9 of 12 green, 3 red** (the three new-capability arms: the import retire, the
+  `remove_import_source_post` follow-up, the explicit `source IN (…)` body assertion), and 12/12 with the new function. The rejection arms
+  pass on both, as they must (those bounds did not move).
+- **Constraint redden (the guide's).** Widening both sites to `source <> 'outcome'` on the live DB reddens 4 of 12 (the `distilled`, `manual` and `dismissal`
+  rejection arms and the explicit-allow-list assertion); restored, 12/12.
+- **UI redden.** Reverting `replaceable` to `target.source === 'interview'` reddens the new `InterviewPanel` test (1 of 57); restored, 57/57.
+- **DRIFT D9 (reported, not decided): the guide says re-run `interview-ratify*.test.ts` UNCHANGED, which cannot hold.** One case there
+  (`a replace target with source 'import' is rejected`) asserts precisely the behaviour A-6 reverses. It is amended in place (same setup, now asserts
+  the row is retired and keeps `source='import'` and its `import_run_id`), with a comment naming ADR 0030 §4.2. The error-text prefix is kept so that no
+  *other* assertion needed to change.
+- **DRIFT D10:** `MemorySource` (`lib/db/types.ts:1188`) still lacks `'dismissal'` although the DB accepts it since `20260929120000`. It belongs with the
+  dismissal reader (L2.6). The UI test that needs a dismissal-sourced fixture casts it in one clearly commented place.
+- **Coverage of the replace outcomes.** Import retired + provenance kept; same import id not listed → `22023`; a business-B import id in an A candidate's list
+  is dropped at write time and refused at ratify; interview target unchanged; distilled / manual / dismissal refused even when listed; an outcome row
+  (`performance_memory`) can never be a conflict of a brand candidate; a retired import row is not replaceable.
+- **Counts.** Full Tier 1: 110 files / 1197 tests, 0 failed (was 109 / 1185). L2.0 DB baseline set: 53 files / 680 tests, identical. `interview-ratify.test.ts`: 45/45.
+  Unit baseline set: 63 files / 1031 tests, identical. `test:app`: 376 files / 5605 passed / 6 skipped.
+- **Constraint closed:** `SUBSTRATE-CONTRADICTION-CROSS-WRITER` (#9), Tier 1 + Tier 2. ADR 0029 amendment appended.

@@ -1455,3 +1455,33 @@ grants untouched. ADR 0030 §2.4 (founder ruling A-5) closes that path, so the c
   `REVOKE`. Any other migration naming the table still fails it.
 
 `INTERVIEW-MEMBER-WRITE-CLOSED` (brand, evidence, audience) is unchanged and still proven.
+
+
+---
+
+## Amendment (2026-09-29, Session 36 L2.4 · ADR 0030 §4.2, founder ruling A-6) — §4.5: Replace admits `import`-sourced targets
+
+> Appended, dated and attributed to the Session 36 Builder. Nothing above is edited.
+
+§4.5 allowed an approver or admin, while ratifying an interview candidate, to **Replace** a conflicting row only if that row was an
+`interview` row. ADR 0030 §4.2 widens that to **`interview` or `import`**, by an explicit allow-list (never "everything except"),
+because interview extraction already receives active rows of every source and `write_interview_candidates` already persists an import
+row's id as a conflict, so the human could see a conflict they could not resolve.
+
+- **What changed** (`20260929130000_ratify_replace_admits_import.sql`): `ratify_interview_round` restated whole with `CREATE OR REPLACE`,
+  copied from `20260929100000` by `sed`, exactly **three** lines differ: the replace-target probe, the retire UPDATE's guard, and the error
+  text (`source = 'interview'` → `source IN ('interview', 'import')`; the existing error phrase is kept as a prefix, because
+  `interview-ratify.test.ts` pins it). Its ACLs are unchanged (`service_role` only).
+- **Every other bound is unchanged:** `v_rep_type` limited to brand/audience/evidence; the target must be one of the accepting candidate's
+  own persisted `interview_conflict_ids`, of the same type, the same business, `active`, and used at most once.
+- **Never an earned or manual row:** distilled, outcome and dismissal targets (and manual) are refused (`22023`).
+- **Provenance survives:** a retired import row keeps `source = 'import'`, its `import_run_id` and its `import_source_post_ids`
+  (`enforce_memory_import_immutable` guards only those three columns, so a status change passes). A later backfill can re-import the same
+  claim as a new candidate, which re-enters ratification normally. `remove_import_source_post` tolerates a retired import row.
+- **Authority is not widened:** the same approver or admin can already retire an import candidate through `ratify_backfill_run`.
+- **`INTERVIEW-CONFLICT-TENANT-BOUNDED` and the §4.5 replace rule are widened, not weakened;** re-proven by
+  `supabase/__tests__/substrate-ratify-import.test.ts` (`SUBSTRATE-CONTRADICTION-CROSS-WRITER`).
+- **One existing Tier-1 case reversed, amended in place:** `interview-ratify.test.ts` "a replace target with source 'import' is rejected"
+  now asserts the import row is retired and keeps its provenance. The `manual` and `distilled` cases are unchanged.
+- **UI:** `InterviewPanel.tsx` offers Replace when the target is `active` and its source is `interview` or `import`. No label or copy change
+  (those are L2.10).

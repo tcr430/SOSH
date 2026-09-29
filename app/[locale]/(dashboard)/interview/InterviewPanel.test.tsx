@@ -45,7 +45,7 @@ vi.mock('./actions', () => ({
 import { InterviewPanel } from './InterviewPanel'
 import type { InterviewPageState } from '@/lib/interview/page-state'
 import type { InterviewCandidatesByType } from '@/lib/memory/interview'
-import type { FounderInterviewAnswerRow, FounderInterviewRoundRow, BrandMemoryRow, AudienceMemoryRow, EvidenceMemoryRow } from '@/lib/db/types'
+import type { FounderInterviewAnswerRow, FounderInterviewRoundRow, BrandMemoryRow, AudienceMemoryRow, EvidenceMemoryRow, MemorySource } from '@/lib/db/types'
 
 function round(over: Partial<FounderInterviewRoundRow> = {}): FounderInterviewRoundRow {
   return {
@@ -602,7 +602,10 @@ describe('the ratify view surfaces the hedge flag, the conflict marker and Repla
   const T_INTERVIEW = 'tg-interview'
   const T_MANUAL = 'tg-manual'
   const T_RETIRED = 'tg-retired'
-  type Targets = { id: string; text: string; status: 'active' | 'retired' | 'candidate'; source: 'interview' | 'manual' }
+  type Targets = { id: string; text: string; status: 'active' | 'retired' | 'candidate'; source: MemorySource }
+  // 'dismissal' is a real audience_memory source since migration 20260929120000 (ADR 0030 §6.6), but the MemorySource TS union
+  // gains it with the dismissal reader in L2.6. Until then this fixture value is cast, on purpose and only here.
+  const DISMISSAL_SOURCE = 'dismissal' as unknown as MemorySource
   const target = (id: string, over: Partial<Targets> = {}): Targets => ({ id, text: `Existing record ${id}`, status: 'active', source: 'interview', ...over })
 
   function ratifyPanel(candidates: Partial<InterviewCandidatesByType>, roundOver: Partial<FounderInterviewRoundRow> = {}) {
@@ -672,6 +675,32 @@ describe('the ratify view surfaces the hedge flag, the conflict marker and Repla
     expect(c.querySelector('[data-candidate-id="bm-a"]')!.querySelector('button[aria-label^="ui.ratify.replace_for"]')).not.toBeNull()
     expect(c.querySelector('[data-candidate-id="bm-b"]')!.querySelector('button[aria-label^="ui.ratify.replace_for"]')).toBeNull()
     expect(c.querySelector('[data-candidate-id="bm-c"]')!.querySelector('button[aria-label^="ui.ratify.replace_for"]')).toBeNull()
+  })
+
+  // ADR 0030 §4.2 (Session 36 L2.4, A-6, SUBSTRATE-CONTRADICTION-CROSS-WRITER): Replace is offered for an ACTIVE conflict whose
+  // source is 'interview' OR 'import', and for nothing else. ratify_interview_round re-verifies both in SQL; this is the UI
+  // half, so a Replace the RPC would refuse is never offered.
+  it("Replace is offered for an ACTIVE import target and an ACTIVE interview target, and NOT for manual, distilled, dismissal, nor any non-active target (import included)", () => {
+    const cases: Array<[string, Partial<Targets>, boolean]> = [
+      ['import-active', { source: 'import' }, true],
+      ['interview-active', { source: 'interview' }, true],
+      ['manual-active', { source: 'manual' }, false],
+      ['distilled-active', { source: 'distilled' }, false],
+      ['dismissal-active', { source: DISMISSAL_SOURCE }, false],
+      ['import-retired', { source: 'import', status: 'retired' }, false],
+      ['import-candidate', { source: 'import', status: 'candidate' }, false],
+      ['interview-retired', { source: 'interview', status: 'retired' }, false],
+    ]
+    const c = ratifyPanel({
+      brand: cases.map(([key]) => brandCandidate({ id: `bm-${key}`, interview_conflict_ids: [`tg-${key}`] })),
+      conflictTargets: { brand: cases.map(([key, over]) => target(`tg-${key}`, over)), audience: [], evidence: [] },
+    })
+    // the marker shows for every case; only Replace differs
+    expect(c.querySelectorAll('[data-marker="conflict"]')).toHaveLength(cases.length)
+    for (const [key, , offered] of cases) {
+      const btn = c.querySelector(`[data-candidate-id="bm-${key}"]`)!.querySelector('button[aria-label^="ui.ratify.replace_for"]')
+      expect(btn !== null, `${key}: Replace offered`).toBe(offered)
+    }
   })
 
   it("Replace's accessible name carries BOTH records (the new one and the one it replaces)", () => {

@@ -568,7 +568,7 @@ type RatifyItem = {
 type RatifyConflict = {
   id: string
   text: string
-  /** Replace is offered only when the target is ACTIVE and source = 'interview' (ratify re-verifies both in SQL). */
+  /** Replace is offered only when the target is ACTIVE and its source is 'interview' or 'import' (ratify re-verifies both in SQL; ADR 0030 §4.2, A-6). */
   replaceable: boolean
 }
 
@@ -587,7 +587,7 @@ function itemsFromCandidates(candidates: InterviewCandidatesByType, answers: Fou
       hedgeFlagged: hedge === true,
       conflicts: (ids ?? []).flatMap((id) => {
         const target = targets.find((x) => x.id === id)
-        return target ? [{ id, text: target.text, replaceable: target.status === 'active' && target.source === 'interview' }] : []
+        return target ? [{ id, text: target.text, replaceable: target.status === 'active' && (target.source === 'interview' || target.source === 'import') }] : []
       }),
     }
   }
@@ -759,7 +759,7 @@ export function InterviewRatifyPanel({
                   )}
 
                   {/* §4.5: existing records this one may conflict with, from the persisted ids. Replace only when the target is
-                      ACTIVE and source = 'interview'; its accessible name carries BOTH records (§8.7). */}
+                      ACTIVE and its source is 'interview' or 'import' (ADR 0030 §4.2); its accessible name carries BOTH records (§8.7). */}
                   {item.conflicts.map((conflict) => (
                     <div key={conflict.id} data-marker="conflict" className="space-y-1">
                       <p className="text-xs text-amber-700 dark:text-amber-400">{t('ui.ratify.conflict_marker', { target: conflict.text })}</p>
