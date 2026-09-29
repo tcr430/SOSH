@@ -536,6 +536,49 @@ describe('recompute_dismissal_audience_signal (ADR 0030 §6)', () => {
     })
   })
 
+  // ─── #14 the default exclusion and the one dedicated reader (L2.6, ADR 0030 §6.8) ─
+
+  describe('SUBSTRATE-DISMISSAL-SCOPED-CONSUMER — the default exclusion, against live Postgres (§11.1 #14)', () => {
+    it('one ACTIVE dismissal row + one ACTIVE import audience row: listAudienceMemoryCandidates returns ONLY the import row, listSourceDismissalCandidates ONLY the dismissal row', async () => {
+      const { listAudienceMemoryCandidates, listSourceDismissalCandidates } = await import('@/lib/db/memory-audience')
+      const b = await biz('exclusion')
+      const repo = await seedRepo(admin, b, { owner: 'acme', name: 'excluded' })
+      const cards = await dismissed(b, repo, 3)
+      await recompute(admin, cards[0])
+      const [dismissalRow] = await dismissalRows(pg, b.id)
+      expect(dismissalRow.status, 'the seed dismissal row must be ACTIVE').toBe('active')
+
+      const { rows: acct } = await pg.query(
+        `INSERT INTO public.social_accounts (business_id, platform, platform_user_id, platform_username, vault_access_token_id, connected_at)
+         VALUES ($1, 'twitter', $2, 'excl_handle', '00000000-0000-4000-8000-0000000000e1', now()) RETURNING id`,
+        [b.id, `x-excl-${Math.random().toString(36).slice(2)}`],
+      )
+      const { rows: run } = await pg.query("INSERT INTO public.social_backfill_runs (business_id, social_account_id, platform) VALUES ($1, $2, 'twitter') RETURNING id", [b.id, acct[0].id])
+      const { rows: imp } = await pg.query(
+        `INSERT INTO public.audience_memory (business_id, source, scope, kind, statement, status, confidence, import_run_id, import_source_post_ids)
+         VALUES ($1, 'import', 'brand', 'objection', 'Imported audience fact', 'active', 0.3, $2, ARRAY['p1']) RETURNING id`,
+        [b.id, run[0].id],
+      )
+
+      const shared = await listAudienceMemoryCandidates(admin, b.id)
+      expect(shared.map((r) => r.id)).toEqual([imp[0].id])
+      const dedicated = await listSourceDismissalCandidates(admin, b.id)
+      expect(dedicated.map((r) => r.id)).toEqual([dismissalRow.id])
+    })
+
+    it("listSourceDismissalCandidates never returns another business's dismissal row, nor a candidate or retired one", async () => {
+      const { listSourceDismissalCandidates } = await import('@/lib/db/memory-audience')
+      const a = await biz('dedicated-a')
+      const other = await biz('dedicated-b')
+      const repoA = await seedRepo(admin, a)
+      const repoB = await seedRepo(admin, other)
+      await recompute(admin, (await dismissed(a, repoA, 2))[0]) // n = 2 -> candidate
+      await recompute(admin, (await dismissed(other, repoB, 3))[0]) // n = 3 -> active, but ANOTHER business
+      expect((await listSourceDismissalCandidates(admin, a.id)).map((r) => r.id), 'a candidate row is not returned').toEqual([])
+      expect((await listSourceDismissalCandidates(admin, other.id)).length).toBe(1)
+    })
+  })
+
   // ─── the function's body, read from the catalog ─────────────────────────────
 
   describe('the function reads NO text column and has the step order the ADR fixes (§6.3, §6.5)', () => {

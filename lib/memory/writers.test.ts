@@ -154,6 +154,7 @@ describe('MEMORY_WRITERS (ADR 0030 §2.1)', () => {
     expect([...d.scopes]).toEqual(['brand'])
     expect([...d.mayRetire]).toEqual(['dismissal'])
     expect(d.soleCallerModule).toBe('lib/memory/dismissal.ts')
-    expect([...d.wrappers]).toEqual([]) // recomputeDismissalAudienceSignal is added with the TS writer (L2.6)
+    // AMENDED (Session 36 L2.6): the wrapper was [] at L2.5 ("added with the TS writer"); the TS writer is here, so it is registered.
+    expect([...d.wrappers]).toEqual(['recomputeDismissalAudienceSignal'])
   })
 })

@@ -35,6 +35,9 @@ export {
 } from './interview'
 export { readInterviewSlotRows } from './interview-coverage'
 export { readInterviewConflictContext, type InterviewConflictRecord } from './interview-conflicts'
+// ADR 0030 §6 (Session 36 L2.6) — the dismissal writer's entry point and its ONE reader. retrieveSourceDismissals is for triage's
+// list_audience_notes tool ONLY (scan-enforced); dismissal rows are excluded from every other audience read.
+export { recomputeDismissalSignal, retrieveSourceDismissals } from './dismissal'
 
 export {
   MEMORY_WRITERS,
@@ -54,4 +57,4 @@ export {
 } from './writers'
 
 export type { MemoryQueryContext } from './scoring'
-export { BRAND_CAP, EVIDENCE_CAP, AUDIENCE_CAP, PERFORMANCE_CAP, MEMORY_SCORE_WEIGHTS } from './constants'
+export { BRAND_CAP, EVIDENCE_CAP, AUDIENCE_CAP, PERFORMANCE_CAP, SOURCE_DISMISSAL_CAP, MEMORY_SCORE_WEIGHTS } from './constants'

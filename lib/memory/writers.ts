@@ -100,13 +100,13 @@ export const MEMORY_WRITERS = {
     scopes: ['brand'],
   },
   // ADR 0030 §6 — the ONE decision-derived writer (L-6): card dismissal reasons -> audience_memory. A recompute-in-place writer
-  // (W7, W9), deterministic (L-7). Its wrapper (recomputeDismissalAudienceSignal) and its sole caller (lib/memory/dismissal.ts) land with
-  // the TS half in L2.6, so `wrappers` is empty until then; the SQL half (recompute_dismissal_audience_signal) is registered now.
+  // (W7, W9), deterministic (L-7). The SQL half was registered in L2.5; the TS half (wrapper + sole caller) lands here in L2.6.
+  // listSourceDismissalCandidates is the reader, not a writer, so it is not a wrapper.
   dismissal: {
     tables: ['audience_memory'],
     checkTables: ['audience_memory'],
     rpcNames: ['recompute_dismissal_audience_signal'],
-    wrappers: [],
+    wrappers: ['recomputeDismissalAudienceSignal'],
     soleCallerModule: 'lib/memory/dismissal.ts',
     gate: 'min_n',
     confidenceCeiling: { audience_memory: 0.5 },

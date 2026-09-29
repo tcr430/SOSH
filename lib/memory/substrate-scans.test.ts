@@ -304,9 +304,9 @@ describe('SUBSTRATE-WRITES-VIA-LIB-MEMORY (ADR 0030 §2.5, constraint 5) — ove
     for (const id of WRITER_IDS) {
       const spec = MEMORY_WRITERS[id]
       if (spec.soleCallerModule === null) continue
-      // PENDING (Session 36 L2.5): the dismissal writer is registered with its SQL half only; its wrapper and its sole caller
-      // (lib/memory/dismissal.ts) arrive with the TS writer in L2.6, so there is nothing to import yet. It is skipped, not counted.
-      if (spec.wrappers.length === 0) continue
+      // AMENDED (Session 36 L2.6): at L2.5 this skipped a writer registered with no wrappers (the dismissal writer's SQL half only). Its TS half is
+      // here, so EVERY writer that names a soleCallerModule must also register a wrapper — asserted, not skipped.
+      expect(spec.wrappers.length, `${id} names a soleCallerModule but registers no wrapper`).toBeGreaterThan(0)
       const files = spec.soleCallerModule.endsWith('/')
         ? collect(path.join(ROOT, spec.soleCallerModule), isProdTs).map(toRel)
         : [spec.soleCallerModule]
@@ -592,7 +592,9 @@ describe('SUBSTRATE-DISMISS-DETERMINISTIC / SUBSTRATE-NO-MODEL-ON-WRITE (ADR 003
 // The registry has exactly ONE decision-derived source: 'dismissal'. It was 0 at L2.1, when the count was authored; the dismissal writer's
 // SQL half is registered in L2.5 (its TS half is L2.6), so the expected count is raised to 1 here — one step earlier than the L2.1 note said,
 // because the registry entry is what this scan counts.
-const DECISION_SOURCES = ['dismissal'] as const
+// The decision-derived sources ADR 0030 §6.7 names: the one shipped ('dismissal') and every DEFERRED decision surface (brief rejection, post skip,
+// reschedule, Studio discard, claim removal). A registry entry with any of these ids other than the one shipped is a second decision writer (L-6).
+const DECISION_SOURCES = ['dismissal', 'brief_rejection', 'post_skip', 'reschedule', 'studio_discard', 'claim_removal'] as const
 const EXPECTED_DECISION_WRITERS = 1
 
 describe('SUBSTRATE-ONE-DECISION-WRITER (ADR 0030 §6, constraint 22) — registry count', () => {

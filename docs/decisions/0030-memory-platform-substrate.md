@@ -1523,3 +1523,51 @@ The lock test is a genuine race: session A dismisses and recomputes inside an op
 
 **Constraints closed (Tier 1):** `SUBSTRATE-WRITER-REGISTERED` (#1), `SUBSTRATE-WRITER-CONTRACT` (#2), `SUBSTRATE-DISMISS-IDEMPOTENT` (#19), `SUBSTRATE-DISMISS-TENANT-BOUND` (#20), `SUBSTRATE-DISMISS-IDENTIFIER-CHECKED` (#21), `SUBSTRATE-CASCADE-COMPLETE` (#25, Tier 1 + 3; no table added, `purge_business` removes the row).
 **Counts.** Full Tier 1: 113 files / 1283 tests, 0 failed (was 110 / 1197). L2.0 DB baseline set: 53 files / 680 tests, identical. Unit baseline set: 63 files / 1031 tests (1025 passed, 6 skipped), identical. `test:app`: 376 files / 5605 passed / 6 skipped.
+
+### V.10 L2.6 — the TS writer, the dedicated reader and the default exclusion
+
+**Shipped.** `recomputeDismissalAudienceSignal(cardId)` and `listSourceDismissalCandidates(client, businessId, limit)` in `lib/db/memory-audience.ts`; `listAudienceMemoryCandidates`
+gains `.neq('source', 'dismissal')` **in the query, before `.limit()`** (the `memory-performance.ts` `'outcome'` precedent); `lib/memory/dismissal.ts` (`recomputeDismissalSignal`,
+`retrieveSourceDismissals`); `SOURCE_DISMISSAL_CAP = 3` in `lib/memory/constants.ts`; both entry points and the constant exported from `lib/memory/index.ts`; the registry's `dismissal`
+wrapper (`recomputeDismissalAudienceSignal`). Nothing in `lib/ai` is imported on this path.
+
+**The wrapper's input is the card id and nothing else, and it is Zod-validated as a UUID before any service-role client is created.** A smuggled-key object (`confidence`, `status`, `source`,
+`business_id`, `decision_key`, `statement`) is refused with zero RPC calls; so is a non-UUID, a UUID with a trailing newline, and an injection-shaped string. The RPC receives exactly
+`{ p_card_id }`. This is the Tier-2 half of `SUBSTRATE-GOVERNANCE-NOT-SUPPLIED` (the Tier-1 half is L2.5's RPC-computes-everything tests).
+
+**SHARED-FUNCTION CALLERS for `listAudienceMemoryCandidates`** (each proved in `lib/memory/dismissal.test.ts` against a fake client that APPLIES the query's own filters over an in-memory table
+holding an active import row AND an active, more-confident, unexpired dismissal row, so the dismissal row is excluded only by the source predicate):
+
+| Reader | Reached from | Proved by |
+|---|---|---|
+| `listAudienceMemoryCandidates` | the shared read | case 1 (+ `memory-audience.test.ts`: `.neq` present, and called BEFORE `.limit()`) |
+| `retrieveAudienceMemory` (`lib/memory/audience.ts`) | brief assembly (`lib/campaigns/brief.ts`, and the bundle in L2.8), planner tools, Studio (`studio/actions.ts`) | case 2 |
+| `readInterviewConflictContext` | interview extraction (`lib/interview/extract.ts`) | case 3: a dismissal row is never a conflict candidate, so it can never be offered for Replace |
+| `listSourceDismissalCandidates` / `retrieveSourceDismissals` | triage `list_audience_notes` (L2.9) | cases 4 and 5 (only dismissal rows; ranked and capped at 3; tenant-bounded) |
+
+Tier 1, live Postgres (ADR §11.1 #14): with one ACTIVE dismissal row and one ACTIVE import audience row, `listAudienceMemoryCandidates` returns only the import row and
+`listSourceDismissalCandidates` only the dismissal row; a candidate row and another business's row are never returned by the dedicated reader.
+
+**Redden, each planted in the real tree and reverted (242 passed and 4 skipped before and after):** `.neq` removed → 6 Tier-2 cases red plus the Tier-1 exclusion case; a model constant
+(`MODELS` from `lib/ai/models.ts`) imported into `lib/memory/dismissal.ts` → the `SUBSTRATE-DISMISS-DETERMINISTIC` / `SUBSTRATE-NO-MODEL-ON-WRITE` scan red; a second decision-derived registry
+entry (`post_skip`) → the `SUBSTRATE-ONE-DECISION-WRITER` scan red; `recomputeDismissalAudienceSignal` imported from `app/` → `SUBSTRATE-WRITES-VIA-LIB-MEMORY` arm 2 red (names the sole caller);
+`retrieveSourceDismissals` imported from `app/` → the `SUBSTRATE-DISMISSAL-SCOPED-CONSUMER` scan red.
+
+**Scans that now run (were pending on `lib/memory/dismissal.ts`):** the model-reach scan (over `dismissal.ts` and the `lib/db` wrapper's file) and the dismissal-consumer scan. Scans that stay skipped
+until their root exists (`lib/memory/bundle.ts`, L2.8): 4 in total (was 6).
+
+**DECISION_SOURCES** in the one-decision-writer scan now lists the shipped source and every deferred decision surface ADR §6.7 names (`brief_rejection`, `post_skip`, `reschedule`,
+`studio_discard`, `claim_removal`), so a second decision writer under any of those ids fails the count, which is exactly 1.
+
+**DRIFT D13 (reported, not decided): the guide says to update every `vi.mock('@/lib/memory')` factory from L2.0 premise 8 in this commit.** None of those seven factories' systems under test
+imports the new exports (`recomputeDismissalSignal`, `retrieveSourceDismissals`); their consumers arrive in L2.9 (the three opportunities Server Actions and triage's tools). A factory that
+does not carry an export its SUT never imports cannot fail, so none was edited. The factories that WILL need them are the opportunities-actions and triage-tools tests, and L2.9 updates
+them in the commit that adds the import.
+
+**Amended in place:** the L2.5 `substrate-scans.test.ts` case that skipped a writer with no wrappers is now an assertion that every writer naming a `soleCallerModule` registers a wrapper
+(TypeScript proved the skip had become dead code).
+
+**Counts.** Full Tier 1: 113 files / 1285 tests, 0 failed (was 1283; +2 for #14). L2.0 DB baseline set: 53 files / 680 tests, identical. Unit baseline set: 64 files / 1055 tests
+(1051 passed, 4 skipped; was 63 / 1031). `test:app`: 377 files / 5631 passed / 4 skipped.
+**Constraints closed:** `SUBSTRATE-GOVERNANCE-NOT-SUPPLIED` (#4, Tier 1 + 2), `SUBSTRATE-DISMISS-DETERMINISTIC` (#18), `SUBSTRATE-ONE-DECISION-WRITER` (#22), `SUBSTRATE-NO-MODEL-ON-WRITE` (#23).
+`SUBSTRATE-DISMISSAL-SCOPED-CONSUMER` (#28) has its Tier-1 and Tier-2 halves; its consumer scan half stays open until L2.9 wires the one consumer.
