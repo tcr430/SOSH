@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { briefAssemblyPrompt, CampaignBriefContentSchema, type BriefAssemblyInput } from './brief'
 import type { CustomerContext } from '@/lib/ai/context'
+import type { BoundEvidence } from '@/lib/ai/wrap-evidence'
+import type { RenderedMemory } from '@/lib/memory'
 
 // ADR 0017 Amendment E / ADR 0026 §8.1, §8.4 (J2.10) — Stage A proposes the hypothesis and criteria, rejects
 // out-of-range output, and is the ONLY renderer of the brand's prior hypothesis results.
@@ -12,7 +14,8 @@ const ctx: CustomerContext = {
 
 const input = (over: Partial<BriefAssemblyInput> = {}): BriefAssemblyInput => ({
   objective: 'Drive trial signups', platforms: ['linkedin'], specialInstructions: null,
-  evidenceCandidates: [], audienceCandidates: [], brandCandidates: [], ...over,
+  evidenceCandidates: { rendered: '', sentIds: new Set() } as unknown as BoundEvidence,
+  audienceCandidates: '' as unknown as RenderedMemory, brandCandidates: '' as unknown as RenderedMemory, ...over,
 })
 
 const base = {
@@ -55,7 +58,7 @@ describe('brief prompt', () => {
     expect(system).toContain('median_lift')
     expect(system).toMatch(/0\.5 and 0\.95/)
     expect(system).toMatch(/7 to 60/)
-    expect(briefAssemblyPrompt.version).toBe(3)
+    expect(briefAssemblyPrompt.version).toBe(4)
   })
 
   it("renders the brand's prior hypothesis results with n, neutralised", () => {

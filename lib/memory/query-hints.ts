@@ -22,5 +22,5 @@ export const MEMORY_QUERY_HINTS_JSON_SCHEMA = {
   type: 'object' as const,
   properties: {
     platform: { type: 'string' },
-  },
+  } satisfies Record<keyof ModelQueryHints, unknown>,
 }

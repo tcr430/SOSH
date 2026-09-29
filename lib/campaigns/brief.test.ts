@@ -32,9 +32,9 @@ vi.mock('@/lib/ai/wrap-evidence', () => ({
 }))
 
 vi.mock('@/lib/memory', () => ({
-  retrieveEvidenceMemory: vi.fn().mockResolvedValue([]),
-  retrieveAudienceMemory: vi.fn().mockResolvedValue([]),
-  retrieveBrandMemory: vi.fn().mockResolvedValue([]),
+  // ADR 0030 §5 (L2.8) — Stage A reads ONE opaque bundle and renders it through the bundle guard.
+  retrieveMemoryBundle: vi.fn(),
+  renderMemoryBundleForPrompt: vi.fn(),
   // ADR 0026 J2.10 — Stage A's acknowledged-hypothesis reader.
   retrieveHypothesisResults: vi.fn().mockResolvedValue([]),
 }))
@@ -51,9 +51,9 @@ import { getBriefByCampaign, createBrief, submitBriefForCritique, approveBriefAn
 import { buildCustomerContext } from '@/lib/ai/context'
 import { runPrompt } from '@/lib/ai/runner'
 import { wrapEvidenceForPrompt, neutralize } from '@/lib/ai/wrap-evidence'
-import { retrieveEvidenceMemory, retrieveAudienceMemory, retrieveBrandMemory } from '@/lib/memory'
+import { retrieveMemoryBundle, renderMemoryBundleForPrompt } from '@/lib/memory'
 import { listPostsByCampaign } from '@/lib/db/posts'
-import type { CampaignRow, CampaignBriefRow, CampaignBriefContent, EvidenceMemoryRow } from '@/lib/db/types'
+import type { CampaignRow, CampaignBriefRow, CampaignBriefContent } from '@/lib/db/types'
 import type { CustomerContext } from '@/lib/ai/context'
 import type { RubricOutput } from '@/lib/ai/prompts/rubric'
 
@@ -132,6 +132,16 @@ function makeRubricOutput(overall: number): RubricOutput {
   }
 }
 
+const fakeBundle = { count: () => 0, evidenceIds: () => [], toJSON: () => ({}) }
+function renderedWith(evidenceIds: string[]) {
+  return {
+    brand: '[DATA]\n- (positioning) brand fact\n[/DATA]',
+    audience: '[DATA]\n- (problem) audience fact\n[/DATA]',
+    performance: '',
+    evidence: { rendered: evidenceIds.map((id) => `Evidence id: ${id}`).join('\n\n'), sentIds: new Set(evidenceIds) },
+  } as never
+}
+
 beforeEach(() => {
   vi.mocked(getCampaignById).mockReset().mockResolvedValue(mockCampaign)
   vi.mocked(moveCampaignToAwaitingBrief).mockReset().mockResolvedValue(mockCampaign)
@@ -142,45 +152,45 @@ beforeEach(() => {
   vi.mocked(buildCustomerContext).mockReset().mockResolvedValue(makeCtx())
   vi.mocked(runPrompt).mockReset()
   vi.mocked(wrapEvidenceForPrompt).mockReset().mockResolvedValue('' as never)
-  vi.mocked(retrieveEvidenceMemory).mockReset().mockResolvedValue([])
-  vi.mocked(retrieveAudienceMemory).mockReset().mockResolvedValue([])
-  vi.mocked(retrieveBrandMemory).mockReset().mockResolvedValue([])
+  vi.mocked(retrieveMemoryBundle).mockReset().mockResolvedValue(fakeBundle as never)
+  vi.mocked(renderMemoryBundleForPrompt).mockReset().mockResolvedValue(renderedWith([]))
   vi.mocked(listPostsByCampaign).mockReset().mockResolvedValue([])
 })
 
 describe('assembleBrief — Stage A (MODE2-MEMORY-WIRED)', () => {
-  it('retrieves evidence/audience/brand memory and feeds it into the assembly prompt input', async () => {
-    const evidenceRow = { id: 'ev-1', content: 'A great customer quote' } as EvidenceMemoryRow
-    vi.mocked(retrieveEvidenceMemory).mockResolvedValue([evidenceRow])
+  it('reads ONE bundle for the brief task (exactly { task: "brief" }) and feeds the RENDERED memory into the assembly prompt input', async () => {
+    const rendered = renderedWith(['ev-1'])
+    vi.mocked(renderMemoryBundleForPrompt).mockResolvedValue(rendered)
     vi.mocked(getBriefByCampaign).mockResolvedValue(null)
     vi.mocked(runPrompt).mockResolvedValue(mockContent)
     vi.mocked(createBrief).mockResolvedValue(makeBrief())
 
     await assembleBrief('camp-1')
 
-    expect(retrieveEvidenceMemory).toHaveBeenCalledWith(expect.anything(), 'biz-1', {})
-    expect(retrieveAudienceMemory).toHaveBeenCalledWith(expect.anything(), 'biz-1', {})
-    expect(retrieveBrandMemory).toHaveBeenCalledWith(expect.anything(), 'biz-1', {})
+    // SUBSTRATE-CALLERS-ENUMERATED: brief assembly is a bundle caller; the request carries the task and nothing else (no hints, no scope)
+    expect(retrieveMemoryBundle).toHaveBeenCalledTimes(1)
+    expect(retrieveMemoryBundle).toHaveBeenCalledWith(expect.anything(), 'biz-1', { task: 'brief' })
+    expect(renderMemoryBundleForPrompt).toHaveBeenCalledWith(fakeBundle)
 
-    const promptInput = vi.mocked(runPrompt).mock.calls[0][2] as { evidenceCandidates: Array<{ id: string }> }
-    expect(promptInput.evidenceCandidates).toEqual([{ id: 'ev-1', guardedContent: '' }])
+    const promptInput = vi.mocked(runPrompt).mock.calls[0][2] as { evidenceCandidates: unknown; audienceCandidates: unknown; brandCandidates: unknown }
+    const r = rendered as unknown as { evidence: unknown; audience: unknown; brand: unknown }
+    expect(promptInput.evidenceCandidates).toBe(r.evidence)
+    expect(promptInput.audienceCandidates).toBe(r.audience)
+    expect(promptInput.brandCandidates).toBe(r.brand)
   })
 
-  it('renders each evidence candidate through wrapEvidenceForPrompt (MODE2-EVIDENCE-DATA-GUARDED)', async () => {
-    const evidenceRow = { id: 'ev-1', content: 'quote' } as EvidenceMemoryRow
-    vi.mocked(retrieveEvidenceMemory).mockResolvedValue([evidenceRow])
+  it('does not render evidence itself: the bundle renderer binds it (MODE2-EVIDENCE-DATA-GUARDED moved to bindEvidenceForPrompt)', async () => {
     vi.mocked(getBriefByCampaign).mockResolvedValue(null)
     vi.mocked(runPrompt).mockResolvedValue(mockContent)
     vi.mocked(createBrief).mockResolvedValue(makeBrief())
 
     await assembleBrief('camp-1')
 
-    expect(wrapEvidenceForPrompt).toHaveBeenCalledWith(expect.anything(), 'biz-1', ['ev-1'])
+    expect(wrapEvidenceForPrompt).not.toHaveBeenCalled()
   })
 
   it('persists a draft brief and atomically moves the campaign to awaiting_brief', async () => {
-    const evidenceRow = { id: 'ev-1', content: 'A great customer quote' } as EvidenceMemoryRow
-    vi.mocked(retrieveEvidenceMemory).mockResolvedValue([evidenceRow])
+    vi.mocked(renderMemoryBundleForPrompt).mockResolvedValue(renderedWith(['ev-1']))
     vi.mocked(getBriefByCampaign).mockResolvedValue(null)
     vi.mocked(runPrompt).mockResolvedValue(mockContent)
     const created = makeBrief()
@@ -194,8 +204,7 @@ describe('assembleBrief — Stage A (MODE2-MEMORY-WIRED)', () => {
   })
 
   it('rejects a pinnedEvidence id the model cited but was never shown as a candidate (MAJOR-1 acceptance-gap close)', async () => {
-    const evidenceRow = { id: 'ev-1', content: 'A great customer quote' } as EvidenceMemoryRow
-    vi.mocked(retrieveEvidenceMemory).mockResolvedValue([evidenceRow])
+    vi.mocked(renderMemoryBundleForPrompt).mockResolvedValue(renderedWith(['ev-1']))
     vi.mocked(getBriefByCampaign).mockResolvedValue(null)
     vi.mocked(runPrompt).mockResolvedValue({
       ...mockContent,

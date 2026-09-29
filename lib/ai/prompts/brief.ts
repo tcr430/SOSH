@@ -2,8 +2,9 @@ import { z } from 'zod'
 import type { Prompt } from './types'
 import type { CustomerContext } from '@/lib/ai/context'
 import type { Platform } from '@/lib/db/types'
-import type { RenderedEvidence } from '@/lib/ai/wrap-evidence'
+import type { BoundEvidence } from '@/lib/ai/wrap-evidence'
 import { neutralize } from '@/lib/ai/wrap-evidence'
+import type { RenderedMemory } from '@/lib/memory'
 import { HypothesisSchema, SuccessCriteriaSchema } from '@/lib/outcomes/hypothesis'
 import { RoleSequenceSchema } from '@/lib/campaigns/role-sequence'
 
@@ -44,24 +45,21 @@ export const CampaignBriefContentSchema = z.object({
 
 export type CampaignBriefContentOutput = z.infer<typeof CampaignBriefContentSchema>
 
-// Each candidate arrives PRE-GUARDED — evidence via wrapEvidenceForPrompt
-// (B2.3, ADR §9's single choke point, called once per id by the orchestrator
-// since that function's committed contract returns one joined string, not a
-// per-item structure). Audience/brand candidates get the SAME Unicode-hardened
-// neutralize() applied inline below — B2.5 security-reviewer correction pass:
-// an earlier draft gave them only a lighter local [DATA]-wrap on the theory
-// that AI-distilled statements are lower-risk than third-party evidence
-// quotes, but that's a provenance argument, not an enforced invariant (a
-// compromised distillation worker corrupts audience_memory/brand_memory
-// identically to how a third-party quote could be corrupted) — audience/brand
-// candidates now get the identical guard evidence gets, not a weaker one.
+// Each candidate arrives PRE-GUARDED, and since ADR 0030 §7.2 (Session 36 L2.8) by ONE path: renderMemoryBundleForPrompt (lib/memory/bundle.ts).
+// Evidence goes through bindEvidenceForPrompt (ADR 0017 §9's choke point: re-fetched, business-scoped, capped); audience and brand go through
+// neutralizeWithSentinels with a 500-character per-row cap and a [DATA] envelope. This closes the B2.5 finding's remaining half: the old inline
+// neutralize() had no per-row cap and no sentinel handling, although imported audience rows came from model extraction over published posts.
+// The parameters are RenderedMemory / BoundEvidence, so a raw string does not type-check; the `as RenderedMemory` cast that would defeat that
+// is scan-closed to lib/memory/bundle.ts (SUBSTRATE-CROSS-TYPE-GUARDED).
 export interface BriefAssemblyInput {
   objective: string
   platforms: Platform[]
   specialInstructions: string | null
-  evidenceCandidates: Array<{ id: string; guardedContent: RenderedEvidence }>
-  audienceCandidates: Array<{ statement: string; kind: string }>
-  brandCandidates: Array<{ statement: string; category: string }>
+  // ADR 0030 §5.4 / §7.2 (Session 36 L2.8): all three arrive from renderMemoryBundleForPrompt, already guarded. `evidenceCandidates` is the
+  // BoundEvidence (the text AND the set of ids shown); audience and brand are RenderedMemory, so a raw string cannot be passed in their place.
+  evidenceCandidates: BoundEvidence
+  audienceCandidates: RenderedMemory
+  brandCandidates: RenderedMemory
   // ADR 0026 §8.4 (J2.10) — the brand's last acknowledged hypothesis results, each with its n. Stage A is the
   // ONLY reader of these. Absent or empty -> nothing is rendered.
   priorHypotheses?: Array<{ pattern: string; n: number }>
@@ -69,7 +67,9 @@ export interface BriefAssemblyInput {
 
 export const briefAssemblyPrompt: Prompt<BriefAssemblyInput, CampaignBriefContentOutput> = {
   id: 'brief-assembly',
-  version: 3,
+  // version 4: ADR 0030 §5.4 (L2.8) — audience/brand rows now arrive through the bundle renderer (500-char per-row cap, sentinel handling), and
+  // the evidence label reads "Evidence id:" (bindEvidenceForPrompt) where it read "Candidate id:". Headings and their order are unchanged.
+  version: 4,
   modelKey: 'SONNET_4_6',
   outputSchema: CampaignBriefContentSchema,
   // ADR 0024 §3.3/§3.3a — founder ruling A-4. Stage A brief assembly is the
@@ -119,25 +119,17 @@ Platforms: ${input.platforms.join(', ')}
 ${input.specialInstructions ? `Special instructions: ${sanitizeDataField(input.specialInstructions)}` : ''}
 [/DATA]`)
 
-    if (input.evidenceCandidates.length > 0) {
-      const evidenceBlocks = input.evidenceCandidates
-        .map((c) => `Candidate id: ${c.id}\n${c.guardedContent}`)
-        .join('\n\n')
-      sections.push(`## Evidence Candidates (cite by id in pinnedEvidence, or omit)\n${evidenceBlocks}`)
+    if (input.evidenceCandidates.sentIds.size > 0) {
+      sections.push(`## Evidence Candidates (cite by id in pinnedEvidence, or omit)\n${input.evidenceCandidates.rendered}`)
     }
 
+    // Already inside a [DATA] envelope, guarded and capped per row by the bundle renderer — rendered verbatim, never re-sanitized here.
     if (input.audienceCandidates.length > 0) {
-      const audienceList = input.audienceCandidates
-        .map((c) => `- (${c.kind}) ${neutralize(c.statement)}`)
-        .join('\n')
-      sections.push(`## Audience Signals\n[DATA]\n${audienceList}\n[/DATA]`)
+      sections.push(`## Audience Signals\n${input.audienceCandidates}`)
     }
 
     if (input.brandCandidates.length > 0) {
-      const brandList = input.brandCandidates
-        .map((c) => `- (${c.category}) ${neutralize(c.statement)}`)
-        .join('\n')
-      sections.push(`## Brand Facts\n[DATA]\n${brandList}\n[/DATA]`)
+      sections.push(`## Brand Facts\n${input.brandCandidates}`)
     }
 
     if (input.priorHypotheses && input.priorHypotheses.length > 0) {

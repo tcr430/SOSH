@@ -222,6 +222,25 @@ export async function bindEvidenceForPrompt(
   })
 }
 
+// ─── Memory rows in a bundle (ADR 0030 §7.2, Session 36 L2.8) ───────────────────
+//
+// The 500-character per-row cap and the Unicode-hardened guard the cross-type bundle renderer (lib/memory/bundle.ts) applies to brand /
+// audience / performance rows. Before L2 those rows reached the brief prompt under a [/DATA]-closer replace only: no length cap and no
+// sentinel handling, although imported audience rows came from model extraction over published posts. This is a SIBLING of
+// wrapToolResultForPrompt (same neutralizeWithSentinels, same suffix), NOT a sixth sanitizeDataField, and it returns a plain string: the
+// RenderedMemory brand is minted by the bundle renderer alone, so a caller cannot obtain a branded value from here.
+export const MEMORY_ROW_MAX_CHARS = 500
+
+export function guardMemoryRowText(rawText: string): string {
+  const neutralized = neutralizeWithSentinels(rawText)
+  const capped =
+    neutralized.length <= MEMORY_ROW_MAX_CHARS
+      ? neutralized
+      : neutralized.slice(0, MEMORY_ROW_MAX_CHARS - TRUNCATION_SUFFIX.length) + TRUNCATION_SUFFIX
+  // same post-truncation closer pass as guard() and wrapToolResultForPrompt()
+  return capped.replace(/\[\/DATA\]/gi, '[/data-blocked]')
+}
+
 // ─── Signal text (ADR 0020 §7.3/§7.4) ───────────────────────────────────────
 
 // A DISTINCT brand from RenderedEvidence, deliberately — NOT a reuse.

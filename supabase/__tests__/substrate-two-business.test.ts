@@ -169,3 +169,94 @@ describe('hasActiveEvidence — an existence read under service role (ADR 0030 �
     expect(await hasActiveEvidence(adm, a.id)).toBe(false)
   })
 })
+
+// ADR 0030 §5 / §7.3 (Session 36 L2.8) — the bundle arm of SUBSTRATE-RLS-ISOLATED (24), SUBSTRATE-CROSS-TYPE-BUDGET (14) and
+// SUBSTRATE-OUTCOME-SEPARATE (16). retrieveMemoryBundle runs under SERVICE ROLE on the brief path (RLS bypassed), so `.eq('business_id')` inside
+// the four listers is the ONLY tenant boundary. Business B holds an ACTIVE row of EVERY type, plus an ACTIVE 'outcome' performance row and an
+// ACTIVE 'dismissal' audience row: "A gets nothing of B's" and "the bundle omits outcome and dismissal rows" are meaningless without them.
+describe('retrieveMemoryBundle — a service-role cross-type read (ADR 0030 §5)', () => {
+  let pgb: Client
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let adm: any
+  const bizs: string[] = []
+  const users: string[] = []
+
+  beforeAll(async () => {
+    pgb = new Client({ connectionString: process.env.DATABASE_URL })
+    await pgb.connect()
+    const { createServiceRoleClient } = await import('@/lib/supabase/service')
+    adm = createServiceRoleClient()
+  })
+  afterAll(async () => {
+    await destroy(adm, pgb, bizs, users)
+    await pgb.end()
+  }, 120_000)
+
+  async function bundleBiz(label: string): Promise<Biz> {
+    const u = await createUser(adm, label)
+    users.push(u.id)
+    const b = await createBiz(adm, label, u)
+    bizs.push(b.id)
+    return b
+  }
+
+  async function seedEveryType(biz: Biz, tag: string) {
+    await pgb.query(`INSERT INTO public.brand_memory (business_id, source, scope, category, statement, status) VALUES ($1, 'manual', 'brand', 'positioning', $2, 'active')`, [biz.id, `${tag} brand fact`])
+    await pgb.query(`INSERT INTO public.evidence_memory (business_id, source, scope, kind, content, status) VALUES ($1, 'manual', 'brand', 'quote', $2, 'active')`, [biz.id, `${tag} evidence quote`])
+    await pgb.query(`INSERT INTO public.audience_memory (business_id, source, scope, kind, statement, status) VALUES ($1, 'manual', 'brand', 'problem', $2, 'active')`, [biz.id, `${tag} audience note`])
+    await pgb.query(`INSERT INTO public.performance_memory (business_id, source, scope, dimension, pattern, status, observation_count) VALUES ($1, 'manual', 'brand', 'topic', $2, 'active', 9)`, [biz.id, `${tag} governed pattern`])
+  }
+
+  it("A's bundle holds none of B's rows of any type while B holds one ACTIVE row of every type (positive control)", async () => {
+    const { retrieveMemoryBundle, renderMemoryBundleForPrompt } = await import('@/lib/memory')
+    const a = await bundleBiz('bundle-a')
+    const b = await bundleBiz('bundle-b')
+    await seedEveryType(b, 'B-only')
+
+    const forB = await retrieveMemoryBundle(adm, b.id, { task: 'post' })
+    expect({ brand: forB.count('brand'), evidence: forB.count('evidence'), audience: forB.count('audience'), performance: forB.count('performance') }, 'the positive control did not materialise')
+      .toEqual({ brand: 1, evidence: 1, audience: 1, performance: 1 })
+
+    const forA = await retrieveMemoryBundle(adm, a.id, { task: 'post' })
+    expect(JSON.parse(JSON.stringify(forA))).toEqual({ brand: 0, evidence: 0, audience: 0, performance: 0 })
+    expect(forA.evidenceIds()).toEqual([])
+    const rendered = await renderMemoryBundleForPrompt(forA)
+    expect(`${rendered.brand}${rendered.audience}${rendered.performance}${rendered.evidence.rendered}`).not.toContain('B-only')
+  })
+
+  it("the brief bundle reads NO performance even when the business has an ACTIVE governed pattern (ceiling 0)", async () => {
+    const { retrieveMemoryBundle } = await import('@/lib/memory')
+    const b = await bundleBiz('bundle-brief')
+    await seedEveryType(b, 'brief')
+    const bundle = await retrieveMemoryBundle(adm, b.id, { task: 'brief' })
+    expect(bundle.count('performance')).toBe(0)
+    expect([bundle.count('brand'), bundle.count('evidence'), bundle.count('audience')]).toEqual([1, 1, 1])
+  })
+
+  it("an ACTIVE 'outcome' performance row and an ACTIVE 'dismissal' audience row never enter the bundle (positive controls exist)", async () => {
+    const { retrieveMemoryBundle, renderMemoryBundleForPrompt } = await import('@/lib/memory')
+    const b = await bundleBiz('bundle-separate')
+    await seedEveryType(b, 'sep')
+    await pgb.query(
+      `INSERT INTO public.performance_memory (business_id, source, scope, dimension, pattern, pattern_key, status, observation_count, outcome_n, outcome_wins, outcome_distinct_campaigns, interval_low, interval_high, metric_basis, baseline_seeded)
+       VALUES ($1, 'outcome', 'brand', 'role', 'OUTCOME-ROW-MARKER', 'outcome:role:sep', 'active', 8, 8, 6, 2, 0.4, 0.9, 'count', false)`,
+      [b.id],
+    )
+    const repo = await seedRepo(adm, b, { owner: 'sepcorp', name: `widgets-${Math.random().toString(36).slice(2, 8)}` })
+    const cards = await Promise.all([1, 2, 3].map(() => seedCard(adm, b, repo, { status: 'dismissed', reason: 'not_relevant' })))
+    await recompute(adm, cards[0])
+    const dismissals = (await dismissalRows(pgb, b.id)).filter((r) => r.status === 'active')
+    expect(dismissals.length, 'the dismissal positive control did not materialise').toBeGreaterThanOrEqual(1)
+    const { rows: outcome } = await pgb.query(`SELECT count(*)::int AS n FROM public.performance_memory WHERE business_id = $1 AND source = 'outcome' AND status = 'active'`, [b.id])
+    expect(outcome[0].n, 'the outcome positive control did not materialise').toBe(1)
+
+    const bundle = await retrieveMemoryBundle(adm, b.id, { task: 'post' })
+    expect(bundle.count('performance')).toBe(1)
+    expect(bundle.count('audience')).toBe(1)
+    const r = await renderMemoryBundleForPrompt(bundle)
+    expect(r.performance).not.toContain('OUTCOME-ROW-MARKER')
+    expect(r.performance).toContain('sep governed pattern')
+    expect(r.audience).not.toContain('sepcorp/')
+    expect(r.audience).toContain('sep audience note')
+  })
+})

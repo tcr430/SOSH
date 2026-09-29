@@ -56,6 +56,17 @@ export {
   type WriterSpec,
 } from './writers'
 
+// ADR 0030 §5 (Session 36 L2.8) — the cross-type bundle. The rows are opaque (a module-private WeakMap); the only way to text is
+// renderMemoryBundleForPrompt, which returns RenderedMemory. Nothing outside lib/memory imports ./bundle directly (scan-enforced).
+export {
+  MEMORY_TASK_BUDGET,
+  retrieveMemoryBundle,
+  renderMemoryBundleForPrompt,
+  type MemoryBundle,
+  type RenderedMemory,
+  type RenderedMemoryBundle,
+} from './bundle'
+
 export type { MemoryQueryContext, RetrieveScope, MemoryTask, BundleRequest } from './scoring'
 // ADR 0030 §3.2 (Session 36 L2.7) — the ONE model-facing query schema; the planner and triage tools import these, never their own.
 export { memoryQueryHintsSchema, MEMORY_QUERY_HINTS_JSON_SCHEMA, type ModelQueryHints } from './query-hints'
