@@ -1,7 +1,14 @@
 import { z } from 'zod'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { TriageTool } from '@/lib/ai/tool-runner'
-import { retrieveEvidenceMemory, retrieveAudienceMemory, retrieveBrandMemory, type MemoryQueryContext } from '@/lib/memory'
+import {
+  retrieveEvidenceMemory,
+  retrieveAudienceMemory,
+  retrieveBrandMemory,
+  memoryQueryHintsSchema,
+  MEMORY_QUERY_HINTS_JSON_SCHEMA,
+  type MemoryQueryContext,
+} from '@/lib/memory'
 import { listCampaigns } from '@/lib/db/campaigns'
 import { getSignalForCampaign } from '@/lib/db/signals'
 import { listRecentPublishedPostTexts } from '@/lib/db/posts'
@@ -31,29 +38,20 @@ import { PLANNER_TOOL_NAMES } from './constants'
 const RECENT_CAMPAIGNS_LIMIT = 5
 const RECENT_POSTS_LIMIT = 5
 
-const QUERY_CONTEXT_JSON_SCHEMA = {
-  type: 'object' as const,
-  properties: {
-    objective: { type: 'string' },
-    platform: { type: 'string' },
-    audience: { type: 'string' },
-  },
-}
+// ADR 0030 §3.2 (Session 36 L2.7, A-7) — the model-facing query schema is NO LONGER DECLARED HERE. It is memoryQueryHintsSchema /
+// MEMORY_QUERY_HINTS_JSON_SCHEMA from lib/memory (the one owner; the triage tools import the same two), so there is one schema to keep in step and the
+// dependency runs one way (tools -> lib/memory). A model may set { platform } only; `objective` and `audience` had no scoring term and are gone. A stale
+// call that still sends one fails the strict parse, execute() throws, and the dispatcher (lib/ai/tool-runner.ts) absorbs it into an is_error tool
+// result with a constant message: a RETRYABLE tool error, never an unhandled throw ([sec-8]). `campaignId` stays closure-bound, never a tool input.
+const QUERY_CONTEXT_JSON_SCHEMA = MEMORY_QUERY_HINTS_JSON_SCHEMA
 
 const EMPTY_JSON_SCHEMA = { type: 'object' as const, properties: {} }
 
-// z.strictObject (§2.4 layer (b)) — a smuggled key is REJECTED, not silently stripped. Exported so the
-// Tier-2 test can derive its expected JSON-Schema key set FROM the zod shape (test-Q1(b)) rather than hand-
-// duplicating a second, driftable list of key names.
-export const queryContextInputSchema = z.strictObject({
-  objective: z.string().optional(),
-  platform: z.string().optional(),
-  audience: z.string().optional(),
-})
+// z.strictObject (§2.4 layer (b)) — a smuggled key is REJECTED, not silently stripped.
 export const emptyInputSchema = z.strictObject({})
 
 function parseQueryContext(input: unknown): MemoryQueryContext {
-  return queryContextInputSchema.parse(input)
+  return memoryQueryHintsSchema.parse(input)
 }
 
 // businessId AND campaignId are bound by closure — §2.4: neither is a property in any model-facing JSON

@@ -158,9 +158,9 @@ describe('assembleBrief — Stage A (MODE2-MEMORY-WIRED)', () => {
 
     await assembleBrief('camp-1')
 
-    expect(retrieveEvidenceMemory).toHaveBeenCalledWith(expect.anything(), 'biz-1', { objective: 'Drive trial signups' })
-    expect(retrieveAudienceMemory).toHaveBeenCalledWith(expect.anything(), 'biz-1', { objective: 'Drive trial signups' })
-    expect(retrieveBrandMemory).toHaveBeenCalledWith(expect.anything(), 'biz-1', { objective: 'Drive trial signups' })
+    expect(retrieveEvidenceMemory).toHaveBeenCalledWith(expect.anything(), 'biz-1', {})
+    expect(retrieveAudienceMemory).toHaveBeenCalledWith(expect.anything(), 'biz-1', {})
+    expect(retrieveBrandMemory).toHaveBeenCalledWith(expect.anything(), 'biz-1', {})
 
     const promptInput = vi.mocked(runPrompt).mock.calls[0][2] as { evidenceCandidates: Array<{ id: string }> }
     expect(promptInput.evidenceCandidates).toEqual([{ id: 'ev-1', guardedContent: '' }])

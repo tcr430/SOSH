@@ -6,7 +6,7 @@ vi.mock('@/lib/supabase/service', () => ({
 }))
 
 import { createServiceRoleClient } from '@/lib/supabase/service'
-import { listEvidenceInterviewCandidates, listEvidenceMemoryCandidates, getEvidenceMemoryByIds, importEvidenceMemory } from './memory-evidence'
+import { listEvidenceInterviewCandidates, listEvidenceMemoryCandidates, getEvidenceMemoryByIds, importEvidenceMemory, hasActiveEvidence } from './memory-evidence'
 import type { EvidenceMemoryRow, EvidenceMemoryImportInsert } from './types'
 import { INTERVIEW_CANDIDATES_LIMIT_PER_TABLE } from '@/lib/interview/constants'
 import { importConfidence, type WithWriterConfidence } from '@/lib/memory'
@@ -276,5 +276,33 @@ describe('listEvidenceInterviewCandidates', () => {
   it('throws on a database error', async () => {
     const { client } = createMockClient(null, { message: 'boom' })
     await expect(listEvidenceInterviewCandidates(client, ['ans-1'])).rejects.toThrow('boom')
+  })
+})
+
+// ADR 0030 §3.4 (Session 36 L2.7) — SUBSTRATE-EXISTENCE-READ (13), Tier 2 half. generate.ts:580 only needs to know WHETHER an evidence corpus exists;
+// it used `retrieveEvidenceMemory({}).length > 0`, a ranked, capped, 50-row-windowed read used as a boolean. hasActiveEvidence is a dedicated LIMIT 1 read.
+describe('hasActiveEvidence (ADR 0030 §3.4)', () => {
+  it('reads evidence_memory for ONE business: active, undeleted, unexpired, LIMIT 1, ordered on the retrieval index', async () => {
+    const { client, builder } = createMockClient([{ id: 'ev-1' }], null)
+    await hasActiveEvidence(client, 'biz-9')
+    expect(client.from).toHaveBeenCalledWith('evidence_memory')
+    expect(builder.eq).toHaveBeenCalledWith('business_id', 'biz-9')
+    expect(builder.eq).toHaveBeenCalledWith('status', 'active')
+    expect(builder.is).toHaveBeenCalledWith('deleted_at', null)
+    expect(builder.or).toHaveBeenCalledWith('expires_at.is.null,expires_at.gt.now()')
+    expect(builder.order).toHaveBeenNthCalledWith(1, 'confidence', { ascending: false })
+    expect(builder.order).toHaveBeenNthCalledWith(2, 'recency_at', { ascending: false })
+    expect(builder.limit).toHaveBeenCalledWith(1)
+  })
+
+  it('is true for one row and false for none', async () => {
+    expect(await hasActiveEvidence(createMockClient([{ id: 'ev-1' }], null).client, 'biz-1')).toBe(true)
+    expect(await hasActiveEvidence(createMockClient([], null).client, 'biz-1')).toBe(false)
+    expect(await hasActiveEvidence(createMockClient(null, null).client, 'biz-1')).toBe(false)
+  })
+
+  it('takes the CALLER\'s client (the generation path passes service-role and must not acquire it lazily) and throws on a database error', async () => {
+    expect(hasActiveEvidence.length).toBe(2)
+    await expect(hasActiveEvidence(createMockClient(null, { message: 'boom' }).client, 'biz-1')).rejects.toThrow('boom')
   })
 })

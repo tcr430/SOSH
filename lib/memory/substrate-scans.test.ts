@@ -702,3 +702,55 @@ describe('sanitizeDataField count tripwire (ADR 0020 §7.4) — supporting, unco
     expect(total).toBe(SANITIZER_BASELINE)
   })
 })
+
+// ─── SUBSTRATE-QUERY-MODEL-FIELDS-BOUNDED (11), Tier 3 half · closes L2.7 ─────────────────────────────────────────
+// ADR 0030 §3.2 [type-1]: the model-facing query schema has ONE owner (lib/memory/query-hints.ts). A tool file that declares its OWN schema — a
+// z.strictObject naming query fields, or a JSON-Schema literal with `properties` carrying them — reopens the gap this closes: an intersection in a
+// type does not stop a model setting a field if a duplicated schema still carries it.
+// Blind spot: a schema built by a helper function or spread from a constant elsewhere is invisible; only the two tool files are scanned.
+export function findLocalQueryContextSchema(source: string): string[] {
+  const code = stripComments(source)
+  const hits: string[] = []
+  if (/\bqueryContextInputSchema\b/.test(code)) hits.push('queryContextInputSchema')
+  if (/\bQUERY_CONTEXT_JSON_SCHEMA\s*=\s*\{/.test(code)) hits.push('a QUERY_CONTEXT_JSON_SCHEMA object literal')
+  for (const m of code.matchAll(/z\.strictObject\(\{([^}]*)\}\)/g)) {
+    if (/\b(?:objective|platform|audience|campaignId|confidenceFloor)\b/.test(m[1])) hits.push('a z.strictObject naming query-context fields')
+  }
+  for (const m of code.matchAll(/properties:\s*\{([^}]*(?:\{[^}]*\}[^}]*)*)\}/g)) {
+    if (/\b(?:objective|audience)\b/.test(m[1])) hits.push('a JSON-Schema properties block naming objective/audience')
+  }
+  return hits
+}
+export function importsSharedQuerySchema(source: string): boolean {
+  const code = stripComments(source)
+  return /\bmemoryQueryHintsSchema\b/.test(code) && /\bMEMORY_QUERY_HINTS_JSON_SCHEMA\b/.test(code) && /from\s*['"]@\/lib\/memory['"]/.test(code)
+}
+
+const MODEL_FACING_TOOL_FILES = ['lib/campaigns/planner/tools.ts', 'lib/signals/triage/tools.ts'] as const
+
+describe('SUBSTRATE-QUERY-MODEL-FIELDS-BOUNDED (ADR 0030 §3.2, constraint 11) — no tool file declares its own query-context schema', () => {
+  it('flags a local queryContextInputSchema, a QUERY_CONTEXT_JSON_SCHEMA literal, a z.strictObject of query fields and a properties block naming objective/audience (planted)', () => {
+    expect(findLocalQueryContextSchema('export const queryContextInputSchema = z.strictObject({ objective: z.string() })').length).toBeGreaterThanOrEqual(2)
+    expect(findLocalQueryContextSchema("const QUERY_CONTEXT_JSON_SCHEMA = { type: 'object', properties: { platform: { type: 'string' } } }")).toContain('a QUERY_CONTEXT_JSON_SCHEMA object literal')
+    expect(findLocalQueryContextSchema('const s = z.strictObject({ platform: z.string().optional() })')).toHaveLength(1)
+    expect(findLocalQueryContextSchema("const j = { type: 'object', properties: { objective: { type: 'string' }, platform: { type: 'string' } } }")).toHaveLength(1)
+  })
+
+  it('allows the shared alias, the empty schema and comments (planted negatives)', () => {
+    expect(findLocalQueryContextSchema('const QUERY_CONTEXT_JSON_SCHEMA = MEMORY_QUERY_HINTS_JSON_SCHEMA')).toEqual([])
+    expect(findLocalQueryContextSchema('export const emptyInputSchema = z.strictObject({})')).toEqual([])
+    expect(findLocalQueryContextSchema('// const queryContextInputSchema = z.strictObject({ objective: z.string() })')).toEqual([])
+    expect(findLocalQueryContextSchema("const EMPTY_JSON_SCHEMA = { type: 'object', properties: {} }")).toEqual([])
+  })
+
+  it.each(MODEL_FACING_TOOL_FILES)('%s declares no query-context schema of its own, and imports the shared one from lib/memory', (rel) => {
+    const src = read(rel)
+    expect(findLocalQueryContextSchema(src)).toEqual([])
+    expect(importsSharedQuerySchema(src), `${rel} does not import memoryQueryHintsSchema + MEMORY_QUERY_HINTS_JSON_SCHEMA from @/lib/memory`).toBe(true)
+  })
+
+  it('importsSharedQuerySchema detects the import and its absence (planted)', () => {
+    expect(importsSharedQuerySchema("import { memoryQueryHintsSchema, MEMORY_QUERY_HINTS_JSON_SCHEMA } from '@/lib/memory'")).toBe(true)
+    expect(importsSharedQuerySchema("import { retrieveEvidenceMemory } from '@/lib/memory'")).toBe(false)
+  })
+})

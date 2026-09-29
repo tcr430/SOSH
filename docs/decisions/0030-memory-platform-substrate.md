@@ -1571,3 +1571,37 @@ them in the commit that adds the import.
 (1051 passed, 4 skipped; was 63 / 1031). `test:app`: 377 files / 5631 passed / 4 skipped.
 **Constraints closed:** `SUBSTRATE-GOVERNANCE-NOT-SUPPLIED` (#4, Tier 1 + 2), `SUBSTRATE-DISMISS-DETERMINISTIC` (#18), `SUBSTRATE-ONE-DECISION-WRITER` (#22), `SUBSTRATE-NO-MODEL-ON-WRITE` (#23).
 `SUBSTRATE-DISMISSAL-SCOPED-CONSUMER` (#28) has its Tier-1 and Tier-2 halves; its consumer scan half stays open until L2.9 wires the one consumer.
+
+### V.11 L2.7 — the query contract, narrowed (A-7) — one atomic commit across every caller except brief
+
+**Shipped.** `lib/memory/query-hints.ts` (`memoryQueryHintsSchema`, `ModelQueryHints`, `MEMORY_QUERY_HINTS_JSON_SCHEMA`); `lib/memory/scoring.ts` (`RetrieveScope`, `MemoryQueryContext = ModelQueryHints & RetrieveScope`,
+`MemoryTask`, `BundleRequest`, and `rankAndCap`'s inclusive `confidenceFloor`, which throws on NaN, < 0, > 1, ±Infinity); `hasActiveEvidence(client, businessId)` in `lib/db/memory-evidence.ts`, reached through
+`lib/memory`; both model-facing tool files delete their local schema and import the shared one; the callers below. Everything is exported from `lib/memory/index.ts`.
+
+**ADR §3.4, row by row** (Tier 2 asserts the EXACT argument object each time):
+
+| Call site | After | Proved by |
+|---|---|---|
+| `lib/campaigns/brief.ts` | **temporarily `{}`**: the one caller left for L2.8, which replaces the three reads with `retrieveMemoryBundle(client, biz, { task: 'brief' })`. `objective` never influenced ranking, so behaviour is unchanged | `brief.test.ts` (exact `{}`) |
+| `lib/campaigns/generate.ts` campaign level | `{ campaignId }`; the `getBrandVoice` read deleted | `generate.test.ts`, `generate.context-equivalence.test.ts` (exact object; `getBrandVoice` not called) |
+| `lib/campaigns/generate.ts` per post | `{ campaignId, platform }` (no `role`, no `objective`) | `generate.test.ts` (exact object per entry) |
+| `lib/ai/context.ts` | `withPostQueryContext` takes `MemoryQueryContext & { platform }` | `context.test.ts` (six calls updated) |
+| `lib/campaigns/generate.ts` claim check | `hasActiveEvidence(client, businessId)` | `generate.test.ts` (no-corpus and uncited arms, mock updated) + Tier 1 |
+| `lib/campaigns/planner/tools.ts`, `lib/signals/triage/tools.ts` | shared schema by identity; `campaignId` stays closure-bound; a stale `objective` / `audience` fails the strict parse | both tool tests + the Tier-3 scan |
+| `studio/actions.ts`, `approvals/claim-actions.ts`, `approvals/page.tsx`, `interview-conflicts.ts`, `lib/memory/outcomes.ts` | **unchanged**, re-run and named; their `vi.mock('@/lib/memory')` factories carry only exports they use, so none needed an edit | the existing suites (green) |
+
+**Tier 1, live Postgres:** `hasActiveEvidence`: A with none and B holding one ACTIVE row gives `false` for A and `true` for B (positive control); an expired-only corpus gives `false`, and one unexpired active row alongside gives `true`; candidate, retired and soft-deleted rows do not count.
+
+**Redden, each planted and restored:** `objective` re-added to the schema turned 8 tests red across `query-hints` and both tool tests; the floor made exclusive (`>`) turned 3 `scoring` cases red (the edge row, the 0/1 bounds, the before-cap case); a local `queryContextInputSchema` re-added to `lib/signals/triage/tools.ts` turned the Tier-3 model-fields scan red.
+
+**The retryable-tool-error claim ([sec-8]).** `execute()` throwing on a stale key is not an unhandled throw: `lib/ai/tool-runner.ts` catches it (`:544`), logs server-side, and returns `{ type: 'tool_result', is_error: true, content: TOOL_EXECUTION_ERROR_MESSAGE }` (a constant, so no schema text reaches the model). The tool tests assert the `ZodError` with an `unrecognized_keys` issue; the runner's absorption is the existing behaviour of the dispatcher.
+
+**Findings while implementing (reported, not decided).**
+- **D14: no prompt text needed updating.** The build guide asked to update the prompt text that describes these tools' arguments to name only `platform`. A search of `lib/ai/prompts`, `lib/signals` and `lib/campaigns` found none: the tool descriptions never named `objective` or `audience`, and the model learns the arguments from the JSON Schema, which is now the shared one.
+- **D15: the planner's `campaignId` never reached retrieval, and still does not.** The guide says it "stays closure-bound". It was never passed into the planner tools' memory query, and adding it now would change ranking. It stays a closure value in `buildPlannerTools`.
+- **`hasActiveEvidence` widens on purpose** (recorded in the function): the expiry predicate is applied in SQL, where the shared candidate read leaves expiry to `rankAndCap`'s JS filter.
+
+**Amended in place** (comments name ADR 0030 §3 / A-7): `generate.test.ts` (2 cases replaced, 1 rewritten, the mock now carries `hasActiveEvidence`), `generate.context-equivalence.test.ts`, `brief.test.ts`, `context.test.ts`, `scoring.test.ts`, both tool tests. `planner/__tests__/source-scans.test.ts` had only a COMMENT corrected (its detectors are untouched). The stale comments at `generate.ts` (twice) and `context.ts` are corrected.
+
+**Counts.** Full Tier 1: 113 files / 1288 tests, 0 failed (was 1285). L2.0 DB baseline set: 53 files / 680 tests, identical. Unit baseline set: 65 files / 1092 tests (1088 passed, 4 skipped; was 64 / 1055). `test:app`: 378 files / 5675 passed / 4 skipped.
+**Constraints closed:** `SUBSTRATE-QUERY-FIELD-CONSUMED` (#10, Tier 2), `SUBSTRATE-QUERY-MODEL-FIELDS-BOUNDED` (#11, Tier 2 + 3), `SUBSTRATE-EXISTENCE-READ` (#13, Tier 2 + the Tier-1 arm). `SUBSTRATE-CALLERS-ENUMERATED` (#12) stays open: brief's row moves in L2.8.

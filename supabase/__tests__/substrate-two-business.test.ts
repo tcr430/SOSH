@@ -107,3 +107,65 @@ describe('two businesses, one user (ADR 0030 §7.3)', () => {
     expect((await dismissalRows(pg, B.id)).every((r) => r.business_id === B.id)).toBe(true)
   })
 })
+
+// ADR 0030 §3.4 / §7.3 (Session 36 L2.7) — SUBSTRATE-EXISTENCE-READ (13) Tier 2 + the authored two-businesses arm of SUBSTRATE-RLS-ISOLATED (24).
+// hasActiveEvidence runs under SERVICE ROLE on the generation path (which bypasses RLS), so `.eq('business_id')` is the ONLY tenant boundary. The
+// positive control is B holding an ACTIVE, unexpired evidence row: "A gets false" is meaningless unless the row exists for someone.
+describe('hasActiveEvidence — an existence read under service role (ADR 0030 §3.4)', () => {
+  let pgc: Client
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let adm: any
+  const bizs: string[] = []
+  const users: string[] = []
+
+  beforeAll(async () => {
+    pgc = new Client({ connectionString: process.env.DATABASE_URL })
+    await pgc.connect()
+    const { createServiceRoleClient } = await import('@/lib/supabase/service')
+    adm = createServiceRoleClient()
+  })
+  afterAll(async () => {
+    await destroy(adm, pgc, bizs, users)
+    await pgc.end()
+  }, 120_000)
+
+  async function evBiz(label: string): Promise<Biz> {
+    const u = await createUser(adm, label)
+    users.push(u.id)
+    const b = await createBiz(adm, label, u)
+    bizs.push(b.id)
+    return b
+  }
+  const evidence = (businessId: string, over: Record<string, unknown> = {}) =>
+    pgc.query(
+      `INSERT INTO public.evidence_memory (business_id, source, scope, kind, content, status, expires_at) VALUES ($1, 'manual', 'brand', 'quote', $2, $3, $4)`,
+      [businessId, `evidence ${Math.random().toString(36).slice(2)}`, over.status ?? 'active', over.expires_at ?? null],
+    )
+
+  it('A has NO evidence and B holds one ACTIVE row -> false for A, true for B (positive control)', async () => {
+    const { hasActiveEvidence } = await import('@/lib/db/memory-evidence')
+    const a = await evBiz('ev-a')
+    const b = await evBiz('ev-b')
+    await evidence(b.id)
+    expect(await hasActiveEvidence(adm, b.id), 'the positive control did not materialise').toBe(true)
+    expect(await hasActiveEvidence(adm, a.id)).toBe(false)
+  })
+
+  it('an EXPIRED-only corpus -> false; one unexpired active row alongside -> true', async () => {
+    const { hasActiveEvidence } = await import('@/lib/db/memory-evidence')
+    const a = await evBiz('ev-expired')
+    await evidence(a.id, { expires_at: new Date(Date.now() - 86_400_000).toISOString().replace(/\.\d+Z$/, 'Z') })
+    expect(await hasActiveEvidence(adm, a.id)).toBe(false)
+    await evidence(a.id, { expires_at: null })
+    expect(await hasActiveEvidence(adm, a.id)).toBe(true)
+  })
+
+  it('candidate and retired rows do not count; a soft-deleted active row does not count', async () => {
+    const { hasActiveEvidence } = await import('@/lib/db/memory-evidence')
+    const a = await evBiz('ev-inactive')
+    await evidence(a.id, { status: 'candidate' })
+    await evidence(a.id, { status: 'retired' })
+    await pgc.query(`INSERT INTO public.evidence_memory (business_id, source, scope, kind, content, status, deleted_at) VALUES ($1, 'manual', 'brand', 'quote', 'soft deleted', 'active', now())`, [a.id])
+    expect(await hasActiveEvidence(adm, a.id)).toBe(false)
+  })
+})

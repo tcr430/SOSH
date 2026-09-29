@@ -164,15 +164,18 @@ export async function buildCustomerContext(
 // Session 31-D, D4 (MAJOR-4): `postContext` now MERGES onto the
 // campaign-level MemoryQueryContext instead of replacing it outright.
 // Before this fix, this function only ever received {platform, role} and
-// built a query with THOSE TWO FIELDS ALONE — the campaign-level
-// {objective, audience, campaignId} STEP 4 in lib/campaigns/generate.ts
-// spent a whole retrieval computing was discarded, unused, every single
-// time. That silently undid §5.1's stated purpose for `campaignId` ("makes
-// the existing 0.2 scope-match weight do work it currently cannot") on the
-// product's only production call path. The caller now spreads its own
-// campaign-level MemoryQueryContext into postContext (`{ ...queryContext,
-// platform, role }`) so campaignId/objective/audience survive alongside
-// the per-post platform/role — see lib/campaigns/generate.ts:297.
+// built a query with THOSE TWO FIELDS ALONE — the campaign-level context
+// STEP 4 in lib/campaigns/generate.ts spent a whole retrieval computing was
+// discarded, unused, every single time. That silently undid §5.1's stated
+// purpose for `campaignId` ("makes the existing 0.2 scope-match weight do
+// work it currently cannot") on the product's only production call path.
+// The caller spreads its own campaign-level MemoryQueryContext into
+// postContext (`{ ...queryContext, platform }`) so campaignId survives
+// alongside the per-post platform.
+//
+// ADR 0030 §3.4 (Session 36 L2.7, A-7): `role`, `objective` and `audience`
+// are GONE from MemoryQueryContext — no scoring term read them. The post's
+// role still reaches the generation PROMPT; it just isn't a memory query.
 //
 // Takes NO client parameter, exactly like buildCustomerContext (§5.3):
 // acquires its own service-role client via the lazy-import pattern. Adding
@@ -180,7 +183,7 @@ export async function buildCustomerContext(
 // service-role read path and get silent permission failures.
 export async function withPostQueryContext(
   ctx: CustomerContext,
-  postContext: MemoryQueryContext & { platform: Platform; role: string },
+  postContext: MemoryQueryContext & { platform: Platform },
 ): Promise<CustomerContext> {
   const { createServiceRoleClient } = await import('@/lib/supabase/service')
   const client = createServiceRoleClient()

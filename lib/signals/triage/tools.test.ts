@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { createMockClient } from '@/lib/db/__test-utils__/mock-client'
 import { buildTriageTools } from './tools'
+import { MEMORY_QUERY_HINTS_JSON_SCHEMA } from '@/lib/memory'
 
 const NOW_ISO = new Date().toISOString()
 
@@ -48,7 +49,7 @@ describe('buildTriageTools (ADR 0021 §2.2/§2.3, Session 28 E5.5)', () => {
     async (toolName) => {
       const tools = buildTriageTools(createMockClient([], null).client, 'biz-1')
       const tool = tools.find((t) => t.name === toolName)!
-      await expect(tool.execute({ objective: 'x', businessId: 'attacker-biz' })).rejects.toThrow()
+      await expect(tool.execute({ platform: 'x', businessId: 'attacker-biz' })).rejects.toThrow()
     },
   )
 
@@ -58,12 +59,27 @@ describe('buildTriageTools (ADR 0021 §2.2/§2.3, Session 28 E5.5)', () => {
     await expect(tool.execute({ businessId: 'attacker-biz' })).rejects.toThrow()
   })
 
+  // AMENDED (Session 36 L2.7, ADR 0030 §3.2, A-7): this case sent { objective, platform, audience } and expected it to be ACCEPTED. `objective` and `audience`
+  // left the query context (no scoring term read them), so a clean input is now { platform } only, and the stale keys are REFUSED (below).
   it.each(['list_evidence', 'list_audience_notes', 'list_brand_claims'])(
-    '%s accepts a clean MemoryQueryContext input',
+    '%s accepts a clean MemoryQueryContext input ({ platform })',
     async (toolName) => {
       const tools = buildTriageTools(createMockClient([], null).client, 'biz-1')
       const tool = tools.find((t) => t.name === toolName)!
-      await expect(tool.execute({ objective: 'x', platform: 'linkedin', audience: 'CTOs' })).resolves.not.toThrow()
+      await expect(tool.execute({ platform: 'linkedin' })).resolves.not.toThrow()
+      await expect(tool.execute({})).resolves.not.toThrow()
+    },
+  )
+
+  it.each(['list_evidence', 'list_audience_notes', 'list_brand_claims'])(
+    '%s: SUBSTRATE-QUERY-MODEL-FIELDS-BOUNDED — inputSchema IS (by identity) MEMORY_QUERY_HINTS_JSON_SCHEMA, and a stale `objective` / `audience` call is refused (retryable via the dispatcher, [sec-8])',
+    async (toolName) => {
+      const tools = buildTriageTools(createMockClient([], null).client, 'biz-1')
+      const tool = tools.find((t) => t.name === toolName)!
+      expect(tool.inputSchema).toBe(MEMORY_QUERY_HINTS_JSON_SCHEMA)
+      for (const stale of [{ objective: 'x' }, { audience: 'CTOs' }, { platform: 'linkedin', objective: 'x', audience: 'CTOs' }]) {
+        await expect(tool.execute(stale), JSON.stringify(stale)).rejects.toThrow()
+      }
     },
   )
 

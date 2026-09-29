@@ -3,7 +3,7 @@ import { runPrompt } from '@/lib/ai/runner'
 import { briefAssemblyPrompt } from '@/lib/ai/prompts/brief'
 import { rubricPrompt, BRIEF_QUALITY_THRESHOLD, type RubricOutput } from '@/lib/ai/prompts/rubric'
 import { wrapEvidenceForPrompt, neutralize } from '@/lib/ai/wrap-evidence'
-import { retrieveEvidenceMemory, retrieveAudienceMemory, retrieveBrandMemory, retrieveHypothesisResults } from '@/lib/memory'
+import { retrieveEvidenceMemory, retrieveAudienceMemory, retrieveBrandMemory, retrieveHypothesisResults, type MemoryQueryContext } from '@/lib/memory'
 import { getCampaignById, moveCampaignToAwaitingBrief } from '@/lib/db/campaigns'
 import {
   getBriefByCampaign,
@@ -90,7 +90,10 @@ export async function assembleBrief(campaignId: string): Promise<CampaignBriefRo
     throw new Error(`A brief already exists for campaign ${campaignId}`)
   }
 
-  const queryContext = { objective: campaign.objective }
+  // ADR 0030 §3.4 (Session 36 L2.7, A-7): `objective` is no longer a MemoryQueryContext field (no scoring term read it), so brief assembly passes
+  // {} for now. TEMPORARY: this is the ONE caller left for L2.8, which replaces the three reads below with retrieveMemoryBundle(client, biz,
+  // { task: 'brief' }). It keeps compiling here by passing an empty context, and ranks exactly as it did (the objective never influenced ranking).
+  const queryContext: MemoryQueryContext = {}
   const [evidenceRows, audienceRows, brandRows, priorHypotheses] = await Promise.all([
     retrieveEvidenceMemory(client, campaign.business_id, queryContext),
     retrieveAudienceMemory(client, campaign.business_id, queryContext),

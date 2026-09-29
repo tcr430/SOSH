@@ -14,7 +14,7 @@
 // recordInterviewCandidates activates nothing; ratifyInterviewCandidates has no accept-all.
 
 export { retrieveRelevant as retrieveBrandMemory } from './brand'
-export { retrieveRelevant as retrieveEvidenceMemory } from './evidence'
+export { retrieveRelevant as retrieveEvidenceMemory, hasActiveEvidence } from './evidence'
 export { retrieveRelevant as retrieveAudienceMemory } from './audience'
 export {
   retrieveRelevant as retrievePerformancePatterns,
@@ -56,5 +56,7 @@ export {
   type WriterSpec,
 } from './writers'
 
-export type { MemoryQueryContext } from './scoring'
+export type { MemoryQueryContext, RetrieveScope, MemoryTask, BundleRequest } from './scoring'
+// ADR 0030 §3.2 (Session 36 L2.7) — the ONE model-facing query schema; the planner and triage tools import these, never their own.
+export { memoryQueryHintsSchema, MEMORY_QUERY_HINTS_JSON_SCHEMA, type ModelQueryHints } from './query-hints'
 export { BRAND_CAP, EVIDENCE_CAP, AUDIENCE_CAP, PERFORMANCE_CAP, SOURCE_DISMISSAL_CAP, MEMORY_SCORE_WEIGHTS } from './constants'

@@ -1,7 +1,14 @@
 import { z } from 'zod'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { TriageTool } from '@/lib/ai/tool-runner'
-import { retrieveEvidenceMemory, retrieveAudienceMemory, retrieveBrandMemory, type MemoryQueryContext } from '@/lib/memory'
+import {
+  retrieveEvidenceMemory,
+  retrieveAudienceMemory,
+  retrieveBrandMemory,
+  memoryQueryHintsSchema,
+  MEMORY_QUERY_HINTS_JSON_SCHEMA,
+  type MemoryQueryContext,
+} from '@/lib/memory'
 import { listCampaigns } from '@/lib/db/campaigns'
 import { wrapEvidenceForPrompt, wrapToolResultForPrompt, toToolResultId } from '@/lib/ai/wrap-evidence'
 import type { CardCitableContext } from './verify'
@@ -34,30 +41,19 @@ import type { CardCitableContext } from './verify'
 
 const RECENT_CAMPAIGNS_LIMIT = 5
 
-// §2.3 layer 1 — the model-facing JSON Schema for every memory tool has NO
-// businessId property; it can only express objective/platform/audience.
-const QUERY_CONTEXT_JSON_SCHEMA = {
-  type: 'object' as const,
-  properties: {
-    objective: { type: 'string' },
-    platform: { type: 'string' },
-    audience: { type: 'string' },
-  },
-}
+// §2.3 layer 1 — the model-facing JSON Schema for every memory tool has NO businessId property; it can only express `platform`.
+// ADR 0030 §3.2 (Session 36 L2.7, A-7): it is NOT DECLARED HERE. It is MEMORY_QUERY_HINTS_JSON_SCHEMA from lib/memory, the ONE schema the planner
+// tools import too. `objective` and `audience` had no scoring term and were removed; a stale call that still sends one fails the strict parse,
+// execute() throws, and lib/ai/tool-runner.ts absorbs it into an is_error tool result with a constant message (a retryable tool error, [sec-8]).
+const QUERY_CONTEXT_JSON_SCHEMA = MEMORY_QUERY_HINTS_JSON_SCHEMA
 
 const EMPTY_JSON_SCHEMA = { type: 'object' as const, properties: {} }
 
-// §2.3 layer 2 — z.strictObject REJECTS a smuggled businessId (or any other
-// unknown key) before dispatch, rather than silently stripping it.
-const queryContextInputSchema = z.strictObject({
-  objective: z.string().optional(),
-  platform: z.string().optional(),
-  audience: z.string().optional(),
-})
+// §2.3 layer 2 — z.strictObject REJECTS a smuggled businessId (or any other unknown key) before dispatch, rather than silently stripping it.
 const emptyInputSchema = z.strictObject({})
 
 function parseQueryContext(input: unknown): MemoryQueryContext {
-  return queryContextInputSchema.parse(input)
+  return memoryQueryHintsSchema.parse(input)
 }
 
 // businessId and client are bound by closure — never accepted as a

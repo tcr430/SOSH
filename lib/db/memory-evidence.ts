@@ -28,6 +28,28 @@ export async function listEvidenceMemoryCandidates(
   return (data as EvidenceMemoryRow[]) ?? []
 }
 
+// ADR 0030 §3.4 (Session 36 L2.7, SUBSTRATE-EXISTENCE-READ) — "does this business have ANY usable evidence?", as a dedicated read. lib/campaigns/generate.ts
+// used `retrieveEvidenceMemory(client, businessId, {}).length > 0`: a ranked, capped, 50-row-windowed read used as a boolean. This is one indexed
+// probe (evidence_memory_retrieval_idx) and returns as soon as ONE row qualifies. It takes the CALLER's client on purpose — the generation path
+// passes service-role and must not acquire it lazily here — and filters business_id explicitly, because that path bypasses RLS (ADR 0016 §4).
+//
+// RECORDED AS AN INTENTIONAL WIDENING: it drops the window and the rank artifacts of `.length > 0`, and it applies the expiry predicate in SQL
+// (the shared candidate read leaves expiry to rankAndCap's JS filter). Both agree on every corpus that holds an unexpired active row.
+export async function hasActiveEvidence(client: SupabaseClient, businessId: string): Promise<boolean> {
+  const { data, error } = await client
+    .from('evidence_memory')
+    .select('id')
+    .eq('business_id', businessId)
+    .eq('status', 'active')
+    .is('deleted_at', null)
+    .or('expires_at.is.null,expires_at.gt.now()')
+    .order('confidence', { ascending: false })
+    .order('recency_at', { ascending: false }) // matches evidence_memory_retrieval_idx
+    .limit(1)
+  if (error) throw new Error(getErrorMessage(error))
+  return (data?.length ?? 0) > 0
+}
+
 // ADR 0017 §9 [db-NIT-2] — the citation-by-id re-fetch that closes the
 // freeze→generate staleness gap: a brief pins evidence ids at assembly time,
 // but a row can retire between then and generation. Bounded by the caller's

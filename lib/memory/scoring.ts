@@ -1,19 +1,33 @@
 import { differenceInDays } from 'date-fns'
 import type { MemoryScope, MemoryStatus } from '@/lib/db/types'
 import { MEMORY_SCORE_WEIGHTS } from './constants'
+import type { ModelQueryHints } from './query-hints'
 
-// ADR 0016 §5.2 — the task shape already known at generation time. ADR 0024
-// §5.1 (Session 31, H2.11) adds `role` and `campaignId`: role is the post's
-// role in the frozen roleSequence (the strongest task discriminator WITHIN
-// one campaign, threaded through even though no MemoryScope value maps to
-// it yet); campaignId makes the EXISTING 'campaign' scope-match branch below
-// do real work — nothing ever supplied it before.
-export type MemoryQueryContext = {
-  objective?: string
-  platform?: string
-  audience?: string
-  role?: string
+// ADR 0016 §5.2 — the task shape already known at generation time.
+//
+// ADR 0030 §3 (Session 36 L2.7, founder ruling A-7) NARROWS this. ADR 0024 §5.1 had added `role` and `campaignId`, and `role` was "threaded through
+// even though no MemoryScope value maps to it yet"; `objective` and `audience` were the same: NO scoring term read any of the three. A field with
+// no consuming term is removed (SUBSTRATE-QUERY-FIELD-CONSUMED), and ADR 0024 §5.1 is amended by name.
+//
+//   ModelQueryHints  what a MODEL may set — { platform } — derived from the ONE schema in ./query-hints.
+//   RetrieveScope    CALLER-ONLY fields that narrow scope: `campaignId` (makes the 'campaign' scope-match branch below do real work) and
+//                    `confidenceFloor` (an inclusive eligibility filter on STORED confidence, consumed by rankAndCap). Neither is in any
+//                    model-facing schema.
+//   MemoryQueryContext = ModelQueryHints & RetrieveScope, what the per-type retrieve* take.
+//   MemoryTask / BundleRequest exist only for the cross-type bundle (L2.8): `task` is never seen by retrieve*, scoreRecord or rankAndCap.
+export type RetrieveScope = {
   campaignId?: string
+  confidenceFloor?: number
+}
+
+export type MemoryQueryContext = ModelQueryHints & RetrieveScope
+
+export type MemoryTask = 'brief' | 'post' | 'plan' | 'triage'
+
+export type BundleRequest = {
+  task: MemoryTask
+  hints?: ModelQueryHints
+  scope?: RetrieveScope
 }
 
 type Scorable = {
@@ -109,8 +123,17 @@ export function rankAndCap<T extends Scorable>(
   if (!Number.isInteger(cap) || cap < 0) {
     throw new Error(`rankAndCap: cap must be a non-negative integer, got ${cap}`)
   }
+  // ADR 0030 §3.2 (Session 36 L2.7) — `confidenceFloor` is CALLER-ONLY and an INCLUSIVE eligibility filter on STORED confidence: a row is eligible
+  // iff confidence >= floor, so a row exactly AT the floor is admitted. It must be a finite number in [0, 1]; anything else THROWS, in the same
+  // shape as the cap check above and recencyDecay's non-finite throw — a bad floor must fail loudly, not silently admit or exclude everything.
+  // Its consumer is the cross-type bundle (L2.8), which sets it per task so a slot freed by an empty type never goes to filler below the floor.
+  const floor = queryContext.confidenceFloor
+  if (floor !== undefined && (!Number.isFinite(floor) || floor < 0 || floor > 1)) {
+    throw new Error(`rankAndCap: confidenceFloor must be a finite number in [0, 1], got ${floor}`)
+  }
   return candidates
     .filter(record => isEligible(record, now))
+    .filter(record => floor === undefined || record.confidence >= floor)
     .map(record => ({ record, score: scoreRecord(record, queryContext, now) }))
     .sort(
       (a, b) =>
