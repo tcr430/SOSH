@@ -1484,3 +1484,42 @@ body.
 - **Counts.** Full Tier 1: 110 files / 1197 tests, 0 failed (was 109 / 1185). L2.0 DB baseline set: 53 files / 680 tests, identical. `interview-ratify.test.ts`: 45/45.
   Unit baseline set: 63 files / 1031 tests, identical. `test:app`: 376 files / 5605 passed / 6 skipped.
 - **Constraint closed:** `SUBSTRATE-CONTRADICTION-CROSS-WRITER` (#9), Tier 1 + Tier 2. ADR 0029 amendment appended.
+
+### V.9 L2.5 — the dismissal writer's SQL half, the registry entry and the drift test (`20260929140000_dismissal_audience_writer.sql`)
+
+**Shipped.** `dismissal_feed_host(text)` (`IMMUTABLE`, six fixed steps in order, not callable by clients) and `recompute_dismissal_audience_signal(uuid)` (`SECURITY DEFINER`,
+`search_path = public, pg_temp`, `service_role` only, ONE argument, returns text). The registry gains the `dismissal` entry (its wrapper and sole caller arrive with the TS writer in L2.6).
+Tier 1: `substrate-dismissal-writer.test.ts` (63), `substrate-two-business.test.ts` (3), `substrate-writer-registry.test.ts` (20), all written before the migration
+(RED first: every RPC-dependent case failed with a missing function; 80 of 85 green once it existed, the other 5 were fixture errors, below).
+
+**Redden, each against the live function and restored** (85/85 before and after): advisory lock removed → 2 red (the real two-connection race, and the body-order assertion);
+chain re-check removed → 2 red (mismatched signal, mismatched candidate); `GRANT EXECUTE … TO authenticated` → 2 red (the RPC's own ACL test and the registry drift test);
+repo regex widened to allow a space → 2 red; a planted `CREATE TABLE` with no ADR 0010 §D2.5 row in a range migration → the `SUBSTRATE-CASCADE-COMPLETE` scan red.
+The lock test is a genuine race: session A dismisses and recomputes inside an open transaction (it has counted n = 1), session B dismisses and recomputes, and only the lock makes B wait and count n = 2.
+
+**database-reviewer** (ADR 0030 budget invocation 2 of 4, once, read-only, over the L2.2–L2.5 migrations). No BLOCKER, no MAJOR. `20260929130000` is a clean three-line diff. Dispositions:
+
+| # | Sev | Finding | Disposition |
+|---|---|---|---|
+| M3 | MINOR | The invalid-identifier retire ran before the advisory lock | **FIXED in place** (this migration was uncommitted): the lock is taken inside that branch before the UPDATE, `AND status <> 'retired'` added; a test was red before (1 failed) and green after |
+| M1 | MINOR | `REFERENCES` / `TRIGGER` (and `MAINTAIN` on PG17) stay granted to anon / authenticated on all four memory tables via platform default privileges | **Deferred, recorded.** Not reachable over PostgREST; ADR 0029's migration has the same residue on the other three tables. A single `REVOKE ALL … FROM anon, authenticated` + `GRANT SELECT` across the four tables is a small forward migration for a hardening pass |
+| M2 | MINOR | The ceiling `VALIDATE`s abort a deploy if any live import / interview / distilled row is over its ceiling (import RPCs have no SQL clamp) | **Recorded as an operational precondition.** No production tenant holds memory (ADR §1.4); before the first production deploy run `SELECT count(*) … WHERE source='import' AND confidence > 0.60` (and the interview > 0.60 and distilled > 0.95 equivalents) |
+| M4 | MINOR | The count walks the source's lifetime signals and applies the 180-day bound only at `insight_cards` | **Accepted for launch, recorded.** Not measured (no EXPLAIN on a seeded high-volume feed); a bound on `signals.occurred_at` is not semantically equivalent, so it is not added |
+| M5 | MINOR | ADR §6.3's host regex `^[a-z0-9.-]{1,253}$` accepts degenerate hosts (`.`, `..`, `a..b`); only ONE trailing dot is stripped | **Not changed: the ADR fixes both literally** and the Tier-1 table pins `example.com..` → `example.com.`. Harmless for a display label. A label-structured regex is an ADR follow-up |
+| M6 | MINOR | A row retired for an invalid identifier is never hard-deleted | **Accepted, recorded.** Bounded at ≤ 1 row per watched source; removed at business purge |
+| M7 | MINOR | A member changing `dismiss_reason` on an already-dismissed card leaves the row stale until the next transition for that source | **Accepted: ADR §6.4 states it** ("stale-until-recompute"); the row expires within 180 days |
+| M8 | MINOR | A transaction recomputing several sources in inconsistent order could deadlock on the advisory locks | **Recorded.** Each production call is its own single-source transaction (one RPC per Server Action) |
+| N1–N5 | NIT | NOT VALID/VALIDATE gives no lock benefit inside a single-transaction migration; the `20260929120000` comment says dismissal confidence "never reaches 0.50" (it can round to exactly 0.50 from n ≈ 300, and the CHECK is `<= 0.50`); IDN hosts fail closed; a backslash is not treated as `/`; a validated but instruction-like name reaches a statement | **Recorded.** N2 is a comment in an already-committed migration and is corrected here rather than re-edited. N5 is what ADR §7.2 already handles (every read path neutralises and quotes it) |
+
+**Found by the tests, not the reviewer.**
+- `signals` carries `trg_signals_guard_identity_update` (ADR 0020 §3.3): `business_id` and `watched_*_id` are immutable, so a broken card → candidate → signal chain is unreachable through normal writes and the RPC's re-check is **defence in depth**. The Tier-1 chain tests disable that one trigger inside a rolled-forward transaction to prove the re-check still fires.
+- `github_connections` allows one row per business; the fixture reuses it.
+- The registry drift test also covers `acknowledge_campaign_retrospective` (an outcome writer RPC that L2.0's live check did not include): SECURITY DEFINER, `search_path` pinned, no EXECUTE for anon / authenticated / PUBLIC. No narrowing is needed.
+
+**Drift (reported, not decided).**
+- **D11.** The build guide said `SUBSTRATE-ONE-DECISION-WRITER`'s expected count is raised in L2.6. The registry entry that scan counts lands in L2.5, so the count is raised to 1 here; the scan stays open in the guide's terms (closes L2.6).
+- **D12.** The `dismissal` registry entry has `wrappers: []` until L2.6 adds `recomputeDismissalAudienceSignal`, and the L2.1 scan that proves each `soleCallerModule` really imports a wrapper skips a writer with no wrappers (a skip, not a pass).
+- Three L2.1 Tier-2 cases (`writers.test.ts`) that literally pinned "five sources", the pre-L2.3 source sets, "12 RPCs" and "dismissal NOT registered yet" were amended in place with comments.
+
+**Constraints closed (Tier 1):** `SUBSTRATE-WRITER-REGISTERED` (#1), `SUBSTRATE-WRITER-CONTRACT` (#2), `SUBSTRATE-DISMISS-IDEMPOTENT` (#19), `SUBSTRATE-DISMISS-TENANT-BOUND` (#20), `SUBSTRATE-DISMISS-IDENTIFIER-CHECKED` (#21), `SUBSTRATE-CASCADE-COMPLETE` (#25, Tier 1 + 3; no table added, `purge_business` removes the row).
+**Counts.** Full Tier 1: 113 files / 1283 tests, 0 failed (was 110 / 1197). L2.0 DB baseline set: 53 files / 680 tests, identical. Unit baseline set: 63 files / 1031 tests (1025 passed, 6 skipped), identical. `test:app`: 376 files / 5605 passed / 6 skipped.

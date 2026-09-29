@@ -53,18 +53,22 @@ describe('WriterConfidence constructors (ADR 0030 §2.2)', () => {
 // ADR 0030 §2.1's table AS IT STANDS BEFORE L2.3 (audience_memory has no 'dismissal' yet).
 
 describe('MEMORY_WRITERS (ADR 0030 §2.1)', () => {
-  it('registers exactly the five sources that exist today, in declaration order', () => {
-    expect([...WRITER_IDS]).toEqual(['manual', 'distilled', 'import', 'outcome', 'interview'])
+  // AMENDED (Session 36 L2.5): the dismissal writer is registered with its RPC in this step, as ADR 0030 §2.1 and the L2.1 comment said it
+  // would be. It was five sources at L2.1; it is six now, 'dismissal' last.
+  it('registers exactly the six sources that exist today, in declaration order', () => {
+    expect([...WRITER_IDS]).toEqual(['manual', 'distilled', 'import', 'outcome', 'interview', 'dismissal'])
   })
 
   it('the four tables are the four governed stores', () => {
     expect([...MEMORY_TABLES]).toEqual(['brand_memory', 'evidence_memory', 'audience_memory', 'performance_memory'])
   })
 
-  it("each table's source CHECK value set equals ADR 0030 §2.1's table before L2.3", () => {
+  // AMENDED (Session 36 L2.5): ADR 0030 §2.1's table AFTER L2.3's source swap — audience_memory admits 'dismissal', and the registry
+  // now lists it (the L2.1 version of this case pinned the pre-swap sets).
+  it("each table's source CHECK value set equals ADR 0030 §2.1's table (audience with 'dismissal')", () => {
     expect([...SOURCES_BY_TABLE.brand_memory].sort()).toEqual(['distilled', 'import', 'interview', 'manual'])
     expect([...SOURCES_BY_TABLE.evidence_memory].sort()).toEqual(['distilled', 'import', 'interview', 'manual'])
-    expect([...SOURCES_BY_TABLE.audience_memory].sort()).toEqual(['distilled', 'import', 'interview', 'manual'])
+    expect([...SOURCES_BY_TABLE.audience_memory].sort()).toEqual(['dismissal', 'distilled', 'import', 'interview', 'manual'])
     expect([...SOURCES_BY_TABLE.performance_memory].sort()).toEqual(['distilled', 'import', 'manual', 'outcome'])
   })
 
@@ -96,7 +100,7 @@ describe('MEMORY_WRITERS (ADR 0030 §2.1)', () => {
   })
 
   it('every writer may retire only its own source (ADR 0030 §4.2)', () => {
-    for (const id of ['distilled', 'import', 'outcome', 'interview'] as const) {
+    for (const id of ['distilled', 'import', 'outcome', 'interview', 'dismissal'] as const) {
       expect([...MEMORY_WRITERS[id].mayRetire]).toEqual([id])
     }
   })
@@ -127,7 +131,7 @@ describe('MEMORY_WRITERS (ADR 0030 §2.1)', () => {
   it('every RPC of every writer has an insert-target entry, and no entry names an unregistered RPC', () => {
     const registered = WRITER_IDS.flatMap((id) => [...MEMORY_WRITERS[id].rpcNames]).sort()
     expect(Object.keys(RPC_INSERT_TABLES).sort()).toEqual(registered)
-    expect(registered).toHaveLength(12)
+    expect(registered).toHaveLength(13) // 12 at L2.1 + recompute_dismissal_audience_signal (L2.5)
   })
 
   it('the evidence-inserting RPC set is exactly import_evidence_memory and write_interview_candidates', () => {
@@ -138,8 +142,18 @@ describe('MEMORY_WRITERS (ADR 0030 §2.1)', () => {
     expect(evidence).toEqual(['import_evidence_memory', 'write_interview_candidates'])
   })
 
-  it('the dismissal writer is NOT registered yet (it lands with its RPC in L2.5)', () => {
-    expect(WRITER_IDS as string[]).not.toContain('dismissal')
-    expect(SOURCES_BY_TABLE.audience_memory as readonly string[]).not.toContain('dismissal')
+  // AMENDED (Session 36 L2.5): this case asserted the dismissal writer was NOT registered yet ("it lands with its RPC in L2.5"). It now is.
+  it('the dismissal writer is registered with EXACTLY its recompute RPC, one table, min-n gate, the 0.50 ceiling and scope brand; its wrapper lands in L2.6', () => {
+    const d = MEMORY_WRITERS.dismissal
+    expect(WRITER_IDS as string[]).toContain('dismissal')
+    expect([...d.rpcNames]).toEqual(['recompute_dismissal_audience_signal'])
+    expect([...d.tables]).toEqual(['audience_memory'])
+    expect([...d.checkTables]).toEqual(['audience_memory']) // brand, evidence and performance still refuse 'dismissal'
+    expect(d.gate).toBe('min_n')
+    expect(d.confidenceCeiling).toEqual({ audience_memory: 0.5 })
+    expect([...d.scopes]).toEqual(['brand'])
+    expect([...d.mayRetire]).toEqual(['dismissal'])
+    expect(d.soleCallerModule).toBe('lib/memory/dismissal.ts')
+    expect([...d.wrappers]).toEqual([]) // recomputeDismissalAudienceSignal is added with the TS writer (L2.6)
   })
 })

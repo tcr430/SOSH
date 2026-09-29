@@ -99,6 +99,20 @@ export const MEMORY_WRITERS = {
     mayRetire: ['interview'],
     scopes: ['brand'],
   },
+  // ADR 0030 §6 — the ONE decision-derived writer (L-6): card dismissal reasons -> audience_memory. A recompute-in-place writer
+  // (W7, W9), deterministic (L-7). Its wrapper (recomputeDismissalAudienceSignal) and its sole caller (lib/memory/dismissal.ts) land with
+  // the TS half in L2.6, so `wrappers` is empty until then; the SQL half (recompute_dismissal_audience_signal) is registered now.
+  dismissal: {
+    tables: ['audience_memory'],
+    checkTables: ['audience_memory'],
+    rpcNames: ['recompute_dismissal_audience_signal'],
+    wrappers: [],
+    soleCallerModule: 'lib/memory/dismissal.ts',
+    gate: 'min_n',
+    confidenceCeiling: { audience_memory: 0.5 },
+    mayRetire: ['dismissal'],
+    scopes: ['brand'],
+  },
 } as const satisfies Record<string, WriterSpec>
 
 // ─── WriterConfidence (ADR 0030 §2.2, [type-4]) ─────────────────────────────────────────────────────────────────────
@@ -161,6 +175,7 @@ export const RPC_INSERT_TABLES: Readonly<Record<string, readonly MemoryTable[]>>
   acknowledge_campaign_retrospective: ['performance_memory'],
   write_interview_candidates: ['brand_memory', 'evidence_memory', 'audience_memory'],
   ratify_interview_round: [],
+  recompute_dismissal_audience_signal: ['audience_memory'],
 }
 
 /** The `source` values each table's named CHECK admits, derived from the registry. */
