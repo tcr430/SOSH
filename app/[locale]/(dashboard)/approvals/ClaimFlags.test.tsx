@@ -35,8 +35,8 @@ const span = (text: string) => {
 }
 
 const EVIDENCE: EvidenceOption[] = [
-  { id: '22222222-2222-4222-8222-222222222222', snippet: 'Customer A cut churn by 42% last year' },
-  { id: '33333333-3333-4333-8333-333333333333', snippet: 'Customer B saved 10 hours a week' },
+  { id: '22222222-2222-4222-8222-222222222222', snippet: 'Customer A cut churn by 42% last year', source: 'import' },
+  { id: '33333333-3333-4333-8333-333333333333', snippet: 'Customer B saved 10 hours a week', source: 'interview' },
 ]
 
 type C = Extract<PersistedClaimCheck, { status: 'checked' }>['claims'][number]
@@ -206,7 +206,11 @@ describe('the four HUMAN actions (§4.8)', () => {
     const select = c.querySelector('select[name="evidenceMemoryId"]') as HTMLSelectElement
     const options = [...select.querySelectorAll('option')].filter((o) => o.value)
     expect(options.map((o) => o.value)).toEqual(EVIDENCE.map((e) => e.id))
-    expect(options.map((o) => o.textContent)).toEqual(EVIDENCE.map((e) => e.snippet))
+    // AMENDED (Session 36 L2.10, ADR 0030 §9.2): an option's text is now its snippet FOLLOWED BY the label of its own source. The property this case
+    // guards is unchanged and still asserted: the options are exactly the evidence offered, each one plain text beginning with its own snippet. The
+    // exact rendered text, per locale, is asserted in "the evidence picker shows where each piece of evidence came from" below.
+    expect(options).toHaveLength(EVIDENCE.length)
+    options.forEach((o, i) => expect(o.textContent!.endsWith(EVIDENCE[i].snippet), EVIDENCE[i].snippet).toBe(true))
     const submit = [...c.querySelectorAll('button')].find((b) => b.textContent === 'Link this evidence')!
     expect(submit.getAttribute('value')).toBe('cited')
     expect(select.required).toBe(true)
@@ -280,5 +284,55 @@ describe('accessibility and layout floor', () => {
     expect(tokens.some((t) => t.startsWith('rounded'))).toBe(false)
     expect(tokens).not.toContain('border')
     expect(tokens).toContain('divide-y')
+  })
+})
+
+// ADR 0030 §9.2 (Session 36 L2.10) — SUBSTRATE-UX-DISCLOSED, the approvals evidence picker. Each option carries the label of the evidence row's OWN
+// source, read from the row (the page passes it through), never inferred here. A native <option> holds text only, so the label is part of the option
+// text; the option's value (the evidence id the Server Action receives) is unchanged.
+describe('§9.2 the evidence picker shows where each piece of evidence came from', () => {
+  const options = (c: HTMLElement) => Array.from(c.querySelectorAll('select[name="evidenceMemoryId"] option')).filter((o) => (o as HTMLOptionElement).value !== '') as HTMLOptionElement[]
+  const LABELS = {
+    en: { import: 'From your posts', interview: 'From your interview', manual: 'Added by you' },
+    pt: { import: 'Das suas publicações', interview: 'Da sua entrevista', manual: 'Adicionado por si' },
+    es: { import: 'De tus publicaciones', interview: 'De tu entrevista', manual: 'Añadido por ti' },
+  } as const
+
+  it.each(['en', 'pt', 'es'] as const)('%s: each option is the label of ITS OWN source, then its snippet, in real strings (the label LEADS: a long snippet truncates in a closed select)', async (locale) => {
+    const c = await mount(flags(checked([unsupported(S1)])), locale)
+    const opts = options(c)
+    expect(opts.map((o) => o.textContent)).toEqual([
+      `${LABELS[locale].import}: Customer A cut churn by 42% last year`,
+      `${LABELS[locale].interview}: Customer B saved 10 hours a week`,
+    ])
+  })
+
+  it('the label follows the row: the same snippet with a different source shows a different label', async () => {
+    const c = await mount(flags(checked([unsupported(S1)]), {
+      evidenceOptions: [
+        { id: '22222222-2222-4222-8222-222222222222', snippet: 'Same words', source: 'manual' },
+        { id: '33333333-3333-4333-8333-333333333333', snippet: 'Same words', source: 'import' },
+      ],
+    }))
+    expect(options(c).map((o) => o.textContent)).toEqual(['Added by you: Same words', 'From your posts: Same words'])
+  })
+
+  it('the option VALUE stays the evidence id — the Server Action input is unchanged', async () => {
+    const c = await mount(flags(checked([unsupported(S1)])))
+    expect(options(c).map((o) => o.value)).toEqual(EVIDENCE.map((e) => e.id))
+  })
+
+  it('a value that is not one of the six sources renders the snippet ALONE — the component never guesses a label', async () => {
+    const c = await mount(flags(checked([unsupported(S1)]), {
+      evidenceOptions: [{ id: '22222222-2222-4222-8222-222222222222', snippet: 'Odd row', source: 'evidence_memory' as never }],
+    }))
+    expect(options(c).map((o) => o.textContent)).toEqual(['Odd row'])
+  })
+
+  it('adds no control to the cite disclosure: still one select and one submit', async () => {
+    const c = await mount(flags(checked([unsupported(S1)])))
+    const details = c.querySelector('details')!
+    expect(details.querySelectorAll('select')).toHaveLength(1)
+    expect(details.querySelectorAll('button')).toHaveLength(1)
   })
 })

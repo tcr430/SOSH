@@ -40,6 +40,7 @@ import { questionMessagePath, whyMessagePath } from '@/lib/interview/bank'
 import { INTERVIEW_ANSWER_MAX_CHARS, INTERVIEW_RECORD_TEXT_MAX_CHARS } from '@/lib/interview/constants'
 import type { FounderInterviewAnswerRow, FounderInterviewSlotType } from '@/lib/db/types'
 import type { InterviewCandidatesByType } from '@/lib/memory/interview'
+import { ProvenanceLabel } from '@/components/memory/ProvenanceLabel'
 
 const DATE_FNS_LOCALES: Record<string, Locale> = { en: enUS, pt, es }
 
@@ -568,6 +569,8 @@ type RatifyItem = {
 type RatifyConflict = {
   id: string
   text: string
+  /** The row's OWN source (ADR 0030 §9.2): shown as its provenance label, and one of the two inputs to `replaceable`. */
+  source: string
   /** Replace is offered only when the target is ACTIVE and its source is 'interview' or 'import' (ratify re-verifies both in SQL; ADR 0030 §4.2, A-6). */
   replaceable: boolean
 }
@@ -587,7 +590,7 @@ function itemsFromCandidates(candidates: InterviewCandidatesByType, answers: Fou
       hedgeFlagged: hedge === true,
       conflicts: (ids ?? []).flatMap((id) => {
         const target = targets.find((x) => x.id === id)
-        return target ? [{ id, text: target.text, replaceable: target.status === 'active' && (target.source === 'interview' || target.source === 'import') }] : []
+        return target ? [{ id, text: target.text, source: target.source, replaceable: target.status === 'active' && (target.source === 'interview' || target.source === 'import') }] : []
       }),
     }
   }
@@ -763,6 +766,14 @@ export function InterviewRatifyPanel({
                   {item.conflicts.map((conflict) => (
                     <div key={conflict.id} data-marker="conflict" className="space-y-1">
                       <p className="text-xs text-amber-700 dark:text-amber-400">{t('ui.ratify.conflict_marker', { target: conflict.text })}</p>
+                      {/* ADR 0030 §9.2: where that record came from — the row's own source, plain muted text. */}
+                      <ProvenanceLabel source={conflict.source} />
+                      {/* §9.3: a record this ratification cannot replace says why, to assistive technology only. Named for neither source (the copy
+                          stays true for any future non-replaceable writer), and shown only when it is TRUE: an interview or import row that is merely
+                          not active is not "added by something else", so it gets the label and no Replace and no hint. */}
+                      {!conflict.replaceable && conflict.source !== 'interview' && conflict.source !== 'import' && (
+                        <span className="sr-only">{t('ui.ratify.cannotReplace')}</span>
+                      )}
                       {conflict.replaceable && (
                         <button
                           type="button"
