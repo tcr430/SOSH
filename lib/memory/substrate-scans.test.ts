@@ -12,8 +12,8 @@ import { MEMORY_WRITERS, RPC_INSERT_TABLES, WRITER_IDS } from './writers'
 //
 // Every scan has TWO halves: a pure DETECTOR unit-tested against a PLANTED POSITIVE and a PLANTED NEGATIVE, and
 // the detector run over the REAL tree asserting it scanned a NUMERICALLY non-empty set. A scan whose root does
-// not exist yet is PENDING (`it.skipIf`), which vitest reports as SKIPPED, never as passed: a scan over an empty
-// root is a FALSE-GREEN, so it is not counted. Each pending scan names the step that closes it.
+// not exist is a hard FAILURE, never a skip (a scan over an empty root is a FALSE-GREEN). Through L2.10 some scans were PENDING
+// (`it.skipIf`) until the step that created their root; L2.11 closed the last one, so none can silently skip any more.
 //
 // REDDEN TRANSCRIPTS: a scan without a pasted redden transcript is AUTHORED, not proven — see the L2.1 commit body.
 
@@ -106,6 +106,20 @@ const RANGE_AFTER = '20260929100000'
 const rangeMigrations = collect(path.join(ROOT, 'supabase', 'migrations'), isSql).filter(
   (f) => path.basename(f).slice(0, 14) > RANGE_AFTER,
 )
+
+describe('the roots the scans below read exist (no scan below can skip or pass by scanning nothing)', () => {
+  it('the bundle, the dismissal writer, the registry and the one dismissal consumer are all present', () => {
+    for (const rel of ['lib/memory/bundle.ts', 'lib/memory/dismissal.ts', 'lib/memory/writers.ts', 'lib/signals/triage/tools.ts', 'lib/outcomes/constants.ts', 'lib/learning/promote.ts']) {
+      expect(exists(rel), rel).toBe(true)
+    }
+  })
+})
+
+describe('the Session 36 migration range (no range scan below is vacuous)', () => {
+  it('holds the four migrations of this session (L2.2, L2.3, L2.4, L2.5)', () => {
+    expect(rangeMigrations.map((p) => path.basename(p).slice(0, 14)).sort()).toEqual(['20260929110000', '20260929120000', '20260929130000', '20260929140000'])
+  })
+})
 
 // ═══ SUBSTRATE-WRITES-VIA-LIB-MEMORY (5) — four arms, driven by MEMORY_WRITERS ═══════════════════════════════
 //
@@ -395,8 +409,8 @@ describe('SUBSTRATE-MEMBER-WRITE-CLOSED (ADR 0030 §2.4, constraint 6) — polic
     expect(findMemberWriteViolations('-- CREATE POLICY p ON public.brand_memory FOR ALL USING (true);\nSELECT 1;')).toEqual([])
   })
 
-  // PENDING until this range has a migration (L2.2 lands the first). Skipped, not passed, while the range is empty.
-  it.skipIf(rangeMigrations.length === 0)('no migration of this range opens a member write path on a *_memory table', () => {
+  // Closed in L2.11: the range has migrations (asserted below), so this can no longer pass by scanning nothing.
+  it('no migration of this range opens a member write path on a *_memory table', () => {
     const offenders = rangeMigrations.flatMap((f) => findMemberWriteViolations(fs.readFileSync(f, 'utf8')).map((h) => `${toRel(f)}: ${h}`))
     expect(rangeMigrations.length, 'scanned no migrations').toBeGreaterThan(0)
     expect(offenders).toEqual([])
@@ -464,7 +478,7 @@ describe('SUBSTRATE-EXISTING-WRITERS-UNCHANGED (ADR 0030 §2.3/§4.3, constraint
     expect(readNumericConstants(read('lib/learning/promote.ts'), /^LEARN_CONFIDENCE_/)).toEqual(PINNED_CONFIDENCE_CONSTANTS)
   })
 
-  it.skipIf(rangeMigrations.length === 0)('no migration of this range redefines promote_performance_pattern or promote_outcome_pattern', () => {
+  it('no migration of this range redefines promote_performance_pattern or promote_outcome_pattern', () => {
     const offenders = rangeMigrations.flatMap((f) => redefinesPromoteFunction(fs.readFileSync(f, 'utf8')).map((n) => `${toRel(f)}: ${n}`))
     expect(rangeMigrations.length, 'scanned no migrations').toBeGreaterThan(0)
     expect(offenders).toEqual([])
@@ -472,7 +486,7 @@ describe('SUBSTRATE-EXISTING-WRITERS-UNCHANGED (ADR 0030 §2.3/§4.3, constraint
 })
 
 // ─── SUBSTRATE-CROSS-TYPE-GUARDED (15) and SUBSTRATE-OUTCOME-SEPARATE (16), scan halves · close L2.8 ──────────
-// PENDING: lib/memory/bundle.ts does not exist until L2.8.
+// lib/memory/bundle.ts exists since L2.8; a missing file now fails the read below rather than skipping the scan.
 const BUNDLE = 'lib/memory/bundle.ts'
 
 export function findRenderedMemoryCasts(source: string): string[] {
@@ -521,14 +535,13 @@ describe('SUBSTRATE-CROSS-TYPE-GUARDED / SUBSTRATE-OUTCOME-SEPARATE (ADR 0030 §
     expect(findOutcomeReach('// retrieveOutcomePatterns is separate (ADR 0026)')).toEqual([])
   })
 
-  const pending = !exists(BUNDLE)
-  it.skipIf(pending)('`as RenderedMemory` appears ONLY in lib/memory/bundle.ts, and only there', () => {
+  it('`as RenderedMemory` appears ONLY in lib/memory/bundle.ts, and only there', () => {
     const { files, offenders } = scanRoot(PROD_ROOTS, isProdTs, (src, rel) => (rel === BUNDLE ? [] : findRenderedMemoryCasts(src)))
     expect(files.length).toBeGreaterThan(400)
     expect(offenders).toEqual([])
     expect(findRenderedMemoryCasts(read(BUNDLE)).length, 'bundle.ts has no cast — the detector would pass vacuously').toBeGreaterThan(0)
   })
-  it.skipIf(pending)('nothing outside lib/memory/ imports the bundle module, and no JSON.stringify takes a bundle', () => {
+  it('nothing outside lib/memory/ imports the bundle module, and no JSON.stringify takes a bundle', () => {
     const { offenders } = scanRoot(PROD_ROOTS, isProdTs, (src, rel) => {
       const hits: string[] = []
       if (!rel.startsWith('lib/memory/') && importsBundleModule(src, rel)) hits.push('imports lib/memory/bundle')
@@ -537,16 +550,16 @@ describe('SUBSTRATE-CROSS-TYPE-GUARDED / SUBSTRATE-OUTCOME-SEPARATE (ADR 0030 §
     })
     expect(offenders).toEqual([])
   })
-  it.skipIf(pending)('lib/ai/prompts/brief.ts declares no string brand or audience candidate parameter', () => {
+  it('lib/ai/prompts/brief.ts declares no string brand or audience candidate parameter', () => {
     expect(findStringBrandParams(read('lib/ai/prompts/brief.ts'))).toEqual([])
   })
-  it.skipIf(pending)('lib/memory/bundle.ts reaches no outcome reader (D-7, ADR 0026 OUTCOME-SEPARATE-RETRIEVAL)', () => {
+  it('lib/memory/bundle.ts reaches no outcome reader (D-7, ADR 0026 OUTCOME-SEPARATE-RETRIEVAL)', () => {
     expect(findOutcomeReach(read(BUNDLE))).toEqual([])
   })
 })
 
 // ─── SUBSTRATE-DISMISS-DETERMINISTIC (18) / SUBSTRATE-NO-MODEL-ON-WRITE (23), scan halves · close L2.6 ────────
-// PENDING: lib/memory/dismissal.ts does not exist until L2.6. Guards are the ONLY lib/ai import allowed.
+// lib/memory/dismissal.ts exists since L2.6 (a missing file fails the read, never skips). Guards are the ONLY lib/ai import allowed.
 const DISMISSAL = 'lib/memory/dismissal.ts'
 const ALLOWED_AI_GUARD_SPECS = new Set(['lib/ai/wrap-evidence'])
 
@@ -581,8 +594,7 @@ describe('SUBSTRATE-DISMISS-DETERMINISTIC / SUBSTRATE-NO-MODEL-ON-WRITE (ADR 003
     expect(findModelReach("// await client.messages.create({}) — never here\nconst a = 1", 'lib/memory/dismissal.ts')).toEqual([])
   })
 
-  const pending = !exists(DISMISSAL)
-  it.skipIf(pending)('lib/memory/dismissal.ts and the lib/db dismissal wrapper reach no model', () => {
+  it('lib/memory/dismissal.ts and the lib/db dismissal wrapper reach no model', () => {
     const offenders = [DISMISSAL, 'lib/db/memory-audience.ts'].flatMap((f) => findModelReach(read(f), f).map((h) => `${f}: ${h}`))
     expect(offenders).toEqual([])
   })
@@ -620,8 +632,7 @@ describe('SUBSTRATE-DISMISSAL-SCOPED-CONSUMER (ADR 0030 §6.8, constraint 28) �
     expect(findNameReach("const s = 'listSourceDismissalCandidates'", 'listSourceDismissalCandidates')).toBe(false)
   })
 
-  const pending = !exists(DISMISSAL)
-  it.skipIf(pending)('retrieveSourceDismissals is reached only by triage tools; listSourceDismissalCandidates only by dismissal.ts; bundle.ts by neither', () => {
+  it('retrieveSourceDismissals is reached only by triage tools; listSourceDismissalCandidates only by dismissal.ts; bundle.ts by neither', () => {
     // EXACT, not a directory prefix: the definition, its re-export, and the one consumer. A second reader under lib/memory/ is a violation.
     const allowedRetrieve = (rel: string) => rel === 'lib/signals/triage/tools.ts' || rel === DISMISSAL || rel === 'lib/memory/index.ts'
     const allowedList = (rel: string) => rel === DISMISSAL || rel === 'lib/db/memory-audience.ts'
@@ -657,7 +668,7 @@ describe('SUBSTRATE-CASCADE-COMPLETE (ADR 0030 §10, constraint 25) — scan hal
     expect(findCreatedTables('ALTER TABLE public.foo ADD COLUMN x int;')).toEqual([])
   })
 
-  it.skipIf(rangeMigrations.length === 0)('every table this range creates has a row in ADR 0010 Amendment 2 §D2.5', () => {
+  it('every table this range creates has a row in ADR 0010 Amendment 2 §D2.5', () => {
     const adr0010 = read('docs/decisions/0010-legal-surface.md')
     const created = rangeMigrations.flatMap((f) => findCreatedTables(fs.readFileSync(f, 'utf8')))
     expect(rangeMigrations.length, 'scanned no migrations').toBeGreaterThan(0)
@@ -690,7 +701,7 @@ describe('L-1 dependency tripwire (no pgvector / vector( / embedding) — suppor
     expect(pkg.includes('"dependencies"'), 'package.json was not read').toBe(true)
     expect(findVectorReferences(pkg)).toEqual([])
   })
-  it.skipIf(rangeMigrations.length === 0)('no migration of this range references pgvector, vector( or embedding', () => {
+  it('no migration of this range references pgvector, vector( or embedding', () => {
     const offenders = rangeMigrations.flatMap((f) => findVectorReferences(stripSqlComments(fs.readFileSync(f, 'utf8'))).map((h) => `${toRel(f)}: ${h}`))
     expect(rangeMigrations.length, 'scanned no migrations').toBeGreaterThan(0)
     expect(offenders).toEqual([])

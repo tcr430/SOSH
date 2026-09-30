@@ -1485,3 +1485,7 @@ row's id as a conflict, so the human could see a conflict they could not resolve
   now asserts the import row is retired and keeps its provenance. The `manual` and `distilled` cases are unchanged.
 - **UI:** `InterviewPanel.tsx` offers Replace when the target is `active` and its source is `interview` or `import`. No label or copy change
   (those are L2.10).
+
+## Note (2026-09-30, Session 36 L2.11 · ADR 0030 §1.3) — the five provisional choices of §1.3 now have platform answers
+
+This pointer was owed by ADR 0030 §13.2 and was not in the commits that changed §4.5 (`a7e91e98`) or §2.4 (`c07a2c5e`); it is added at close-out. **Additive; nothing above is edited.** §1.3 listed five choices as "provisional and scoped to this writer". ADR 0030 §1.3 answers each: (1) contradiction handling is **generalised** (retire authority depends on the source's class; a human ratifier may retire `interview` or `import` rows, never earned ones; no automated detection), see §4.5's Amendment above; (2) closing the memory tables to member writes is **kept as the platform answer and extended** to `performance_memory`; (3) thinness targets are **kept, writer-scoped**; (4) `scope = 'brand'` for every interview record is **kept**, as the platform rule that a writer sets scope only from what it structurally knows; (5) confidence placement is **generalised** into ADR 0030 §4.1's verification bands and per-source ceiling CHECKs, with values unchanged.

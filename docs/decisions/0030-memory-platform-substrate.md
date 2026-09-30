@@ -1692,3 +1692,105 @@ Keyboard parity: no new tab stop (the label and the hidden hint are not focusabl
 **Counts.** `test:app`: 382 files / 5792 tests, 0 failed (was 380 / 5735 at V.13). L-2 Unit baseline set: 66 files / 1119 tests, identical. L-2 DB baseline set (the V.1a command): 53 files / 680 tests, identical. tsc clean; `npm run lint` 0 errors, 112 warnings (unchanged; the 3 warnings in the touched directories are on lines this step did not write). Full Tier 1 was not re-run: no SQL, migration, RPC or `lib/db` file changed in this step.
 
 **Constraints closed:** `SUBSTRATE-UX-DISCLOSED` (#26), `SUBSTRATE-I18N-COMPLETE` (#27).
+
+### V.15 L2.11 — L-2 closed against the baseline, the Tier-3 re-verification, and the measurement
+
+**L-2, closed against the baseline.** The exact V.1a commands, re-run at HEAD (`ad054eb8` plus this step's working tree), against the same commands run in a throwaway worktree of the base `5a4d6583` (whose code is what the L2.0 run read):
+
+| Writer (its test directory) | L2.0 base: files / tests | HEAD: files / tests | Change explained by |
+|---|---|---|---|
+| distilled (`lib/learning`) | 8 / 120 | 8 / 120 | none (one existing case amended in place, count unchanged: `promote.test.ts`, ADR 0030 §2.2 `WriterConfidence`, L2.3) |
+| import (`lib/backfill`) | 9 / 85 | 9 / 85 | none |
+| outcome (`lib/outcomes`) | 14 / 247 | 14 / 247 | none |
+| interview (`lib/interview`) | 12 / 259 | 12 / 259 | none |
+| the boundary (`lib/memory`) | 12 / 149 | 17 / 284 | +5 files, +135 tests: the five new files `writers.test.ts` (18, L2.1), `substrate-scans.test.ts` (50, L2.1 to L2.11), `dismissal.test.ts` (12, L2.6), `query-hints.test.ts` (19, L2.7) and `bundle.test.ts` (26, L2.8) = 125 (the 50 already include this step's two scan guards); `scoring.test.ts` 31 to 41, +10 (L2.7, the inclusive `confidenceFloor`, ADR 0030 §3) |
+| the DB wrappers (`lib/db/memory-`) | 6 / 111 | 6 / 126 | +15 tests: `memory-audience.test.ts` (the dismissal writer, the dedicated reader and the default exclusion, L2.6, ADR 0030 §6.8) and `memory-evidence.test.ts` (`hasActiveEvidence`, L2.7); `memory-performance.test.ts` amended in place |
+| **Unit set (V.1a)** | **61 / 971** | **66 / 1121** | every count equal or higher |
+| **DB set (V.1a, Tier 1)** | **53 / 680** | **53 / 680** | identical, 0 skipped (the writers' Tier-1 suites were amended in place, never grown or shrunk: `interview-ratify` for A-6, `interview-member-write-closed` and `performance-memory-outcome-schema` for A-5) |
+
+(Arithmetic: 125 + 10 = 135, and the `lib/memory` row's 149 + 135 = 284; the per-file HEAD counts sum to 284. The earlier V.14 figure of 1119 was taken before this step added its two scan guards; 1119 + 2 = 1121.)
+
+**The protected paths.** `git diff 5a4d6583..HEAD --stat` over `lib/backfill/constants.ts`, `lib/interview/constants.ts`, `lib/learning/promote.ts` and `lib/outcomes/**`: **one line, in `lib/learning/promote.ts` (2 insertions, 1 deletion)**: `confidence: distilledConfidence(confidence)` and its import, from the L2.3 `WriterConfidence` brand (ADR 0030 §2.2). Every promotion constant (`LEARN_PROMOTION_MIN_OBSERVATIONS`, `LEARN_PROMOTION_MIN_CONFIDENCE`, `LEARN_PROMOTION_MIN_DISTINCT_CAMPAIGNS`, `OUTCOME_MIN_N`, `OUTCOME_MIN_DISTINCT_CAMPAIGNS`, `LEARN_CONFIDENCE_K`, `LEARN_CONFIDENCE_CEILING`) is byte-identical. **No migration of the range redefines `promote_performance_pattern` or `promote_outcome_pattern`** (the only occurrence is a comment saying they are untouched, `20260929110000`).
+
+**The promotion-rule scan is closed and reddened** (`SUBSTRATE-EXISTING-WRITERS-UNCHANGED`, Tier 3, `lib/memory/substrate-scans.test.ts`): it pins the five promotion constants and the two confidence constants to literals and scans the range's migrations for a redefinition. Redden, planted and restored: `OUTCOME_MIN_N` 10 to 11 turned `LEARN_PROMOTION_* and OUTCOME_MIN_* equal the pinned literals` red (`"OUTCOME_MIN_N": 10` expected, 11 received); restored, green.
+
+**Every Tier-3 scan, re-run at HEAD** (`npx vitest run lib/memory/substrate-scans.test.ts --reporter=verbose`): **50 tests, 50 passed, 0 skipped.** By group: constraint 5 (`SUBSTRATE-WRITES-VIA-LIB-MEMORY`) 13; 6 (`MEMBER-WRITE-CLOSED`) 3; 7 (`EXISTING-WRITERS-UNCHANGED`) 6; 11 (`QUERY-MODEL-FIELDS-BOUNDED`) 5; 15 and 16 (`CROSS-TYPE-GUARDED`, `OUTCOME-SEPARATE`) 5; 18 and 23 (`DISMISS-DETERMINISTIC`, `NO-MODEL-ON-WRITE`) 3; 22 (`ONE-DECISION-WRITER`) 1; 25 (`CASCADE-COMPLETE`) 2; 28 (`DISMISSAL-SCOPED-CONSUMER`) 3; the L-1 dependency tripwire (no pgvector, `vector(` or embedding) 4; the `sanitizeDataField` count tripwire (5) 2; and the two guards added by this step (below). Each production scan asserts a numeric floor on what it scanned (more than 400 files), so none can pass over an empty root.
+**No PENDING is left, and none can return silently.** Through L2.10 some scans were `it.skipIf(...)` until the step that created their root; a deleted `bundle.ts` or `dismissal.ts` would have turned that scan into a skip, which vitest does not fail. All nine guards (`rangeMigrations.length === 0` and `!exists(...)`) are now plain `it`, so a missing file fails the read. Two guards were added: the roots the scans read exist (bundle, dismissal writer, registry, triage tools, the promotion constants), and the session's migration range is exactly `20260929110000`, `120000`, `130000`, `140000`. **The scan also caught this step's own measurement script** importing `lib/memory/bundle` directly (constraint 15's "nothing outside `lib/memory/` imports the bundle module"); the script now imports the public barrel.
+
+**Measurement (ADR 0030 §11.5). MEASURED on a seeded fixture, never COVERED, and never a test.** `scripts/measure-substrate.ts` (`npx tsx`, the local stack only, refuses a non-loopback `DATABASE_URL`; it seeds its own businesses and deletes them; no CI job runs it). Output recorded 2026-09-30:
+1. **Registered writers: 6 keys, 5 machine writers.** `MEMORY_WRITERS` holds `manual` (the human path: no RPC, no wrapper) plus `distilled`, `import`, `outcome`, `interview`, `dismissal`. The ADR's "5" is the machine writers.
+2. **The bundle versus the three per-type reads it replaced** (brand, evidence, audience; performance was never read on the brief path). Five seeded corpora, every row ACTIVE at the default confidence:
+
+| corpus (brand/evidence/audience/performance) | task | budget | old reads (b/e/a) | bundle (b/e/a/p) |
+|---|---|---|---|---|
+| balanced 5/5/5/5 | brief | 15 | 5/5/5 = 15 | 5/5/5/0 = 15 |
+| balanced 5/5/5/5 | post | 14 | 5/5/5 = 15 | 1/5/5/3 = 14 |
+| audience-heavy 1/1/30/0 | brief and post | 15 and 14 | 1/1/5 = 7 | 1/1/5/0 = 7 (both) |
+| brand-heavy 30/0/0/0 | brief and post | 15 and 14 | 5/0/0 = 5 | 5/0/0/0 = 5 (both) |
+| sparse 0/0/2/0 | brief and post | 15 and 14 | 0/0/2 = 2 | 0/0/2/0 = 2 (both) |
+| evidence-heavy 2/30/2/3 | brief | 15 | 2/5/2 = 9 | 2/5/2/0 = 9 |
+| evidence-heavy 2/30/2/3 | post | 14 | 2/5/2 = 9 | 2/5/2/3 = 12 |
+
+The brief path returns exactly what the three reads returned on every corpus (the budget of 15 equals their combined caps, and performance is 0 there by §5.2). The post path is where the budget acts: it adds up to 3 performance rows and holds the total at 14, so a fully stocked business gives up 4 brand rows (5 to 1, its floor) to fit them.
+3. **Rows per writer on THIS fixture** (the `test:db` corpora are destroyed by their own suites, which is why V.2 could not be produced either): manual 121, dismissal 4, and 0 for distilled, import, outcome and interview, whose pipelines (a backfill run, an interview round, processed signals, collected metrics) are not seeded here and are proven by their own suites.
+4. **Dismissal rows per seeded business:** four watched sources with 3/3/2/1 `not_relevant` dismissals gave 4 dismissal rows through the real recompute RPC, 2 ACTIVE (n = 3 and 3) and 2 not active (n = 2 and 1, below the floor).
+5. **The budget's donation rate** on the same corpora, by an explicit definition (equal share = total / types with a non-zero ceiling; donated = the sum of what a type delivers above its equal share): 0.00 on the brief path in every corpus. On the post path: 0.21 on the balanced corpus, 0.11 on each of audience-heavy, brand-heavy and evidence-heavy, and 0.00 on sparse. It describes the fixture; it is not a quality claim.
+
+**What this cannot show.** That retrieval is better, that posts are better, and that `not_relevant`-derived rows improve triage precision are **not provable without real tenants** (ADR §11.5). `S34-E2E-UNVERIFIED` is still open: the generation path that reads memory has never run against a real model, and no production OAuth app is registered, so **no real tenant has memory from any writer**. A brief that "used no memory" on a real run must not be attributed to this session until that smoke test has run.
+
+### V.16 L2.11 — the documents, and the constraint → CI map
+
+**ADR 0030 §13.2's documents, each checked against the commit that should have carried it** (`git log 5a4d6583..HEAD -- <file>`, then the section read):
+
+| Document | Section | Landed in | Verdict |
+|---|---|---|---|
+| ADR 0016 | Amendment F.1 (`performance_memory` member path closed) | `c07a2c5e` (L2.2) | in the commit of the change |
+| ADR 0016 | Amendment F.2 (`'dismissal'`, `decision_key`, eight ceilings) | `a2ca2421` (L2.3) | in the commit of the change |
+| ADR 0016 | **Amendment F.3** (the writer registry and W1–W9) | **this commit (L2.11)** | ADR 0030 §13.2 assigns it to close-out; it describes the registry that landed in L2.1 and the drift test of L2.5, so it did not ship with them: **added now, saying so** |
+| ADR 0024 | §5.1 (`objective`, `audience`, `role` removed; `confidenceFloor` added) | `ddaf0983` (L2.7) | in the commit of the change |
+| ADR 0029 | §4.5 (Replace admits `import`) | `a7e91e98` (L2.4) | in the commit of the change |
+| ADR 0029 | §2.4 note (`INTERVIEW-PERFORMANCE-POLICY-UNCHANGED` superseded for its performance arm) | `c07a2c5e` (L2.2) | in the commit of the change |
+| ADR 0029 | **§1.3 pointer to ADR 0030 §1.3** | **this commit (L2.11)** | **absent from both of the commits above** (`grep` for "0030" in ADR 0029 found only the two notes): **added now as an appended note, saying so** |
+| ADR 0026 | §5.5 note (member surface closed) | `c07a2c5e` (L2.2) | in the commit of the change |
+| ADR 0021 | §19 Note D (the §5.4 / §7.4 note) | `eab33b5e` (L2.9) | in the commit of the change |
+| ADR 0010 Amendment 2 | §D2.5 | **no change, on purpose** | **No new row.** This session creates no table: it adds a column (`audience_memory.decision_key`), constraints, triggers and functions, and every table it touches already has its §D2.5 row and cascades from `businesses`. `SUBSTRATE-CASCADE-COMPLETE`'s scan half asserts, over the session's four migrations, that every `CREATE TABLE` has a §D2.5 row, and it passes because the set is empty (the Session 28-D D7 precedent) |
+| `docs/backlog.md` | §3.3 | this commit (L2.11) | every ADR §13.1 deferral with its un-defer trigger, the five deferred decision writers first, plus this session's own debt |
+
+**The constraint → CI map.** `app-tests` runs `npm run test:app` (`vitest run app/ lib/ components/ scripts/eval/`, with the JSON skip-guard `assert-no-empty-suite.mjs`) and `db-tests` runs `npm run test:db` (`vitest run supabase/__tests__ --no-file-parallelism --retry=2`, with its own skip-guard). Every file below sits under one of those roots, so a job **executes** it. A constraint is COVERED only when that job has run it **green at the head it is dated to**; that record is V.17 (appended after the CI run), and until then every row is `AUTHORED-NOT-EXECUTED-IN-CI` (executed locally, green: V.13, V.14, V.15).
+
+| # | Constraint | Tier | Test files | CI job |
+|---|---|---|---|---|
+| 1 | `SUBSTRATE-WRITER-REGISTERED` | 1 | `supabase/__tests__/substrate-writer-registry.test.ts` | db-tests |
+| 2 | `SUBSTRATE-WRITER-CONTRACT` | 1 | `substrate-writer-registry.test.ts` (W1 per RPC), `substrate-dismissal-writer.test.ts` (W2–W9 for the dismissal RPC), and the existing interview, import, distilled and outcome suites for theirs | db-tests |
+| 3 | `SUBSTRATE-PROVENANCE-DISTINCT` | 1 | `supabase/__tests__/substrate-schema.test.ts` | db-tests |
+| 4 | `SUBSTRATE-GOVERNANCE-NOT-SUPPLIED` | 1 + 2 | T1 `substrate-dismissal-writer.test.ts` (governance columns fixed in SQL; signature exactly `(uuid)`); T2 `lib/db/memory-audience.test.ts`, `lib/memory/dismissal.test.ts` (smuggled-key refusal) | db-tests + app-tests |
+| 5 | `SUBSTRATE-WRITES-VIA-LIB-MEMORY` | 3 | `lib/memory/substrate-scans.test.ts` | app-tests |
+| 6 | `SUBSTRATE-MEMBER-WRITE-CLOSED` | 1 + 3 | T1 `substrate-member-write-closed.test.ts`, `interview-member-write-closed.test.ts`, `performance-memory-outcome-schema.test.ts`; T3 `substrate-scans.test.ts`, `lib/interview/__tests__/source-scans.test.ts` | db-tests + app-tests |
+| 7 | `SUBSTRATE-EXISTING-WRITERS-UNCHANGED` | 1 + 3 | T1 the existing writers' DB suites, unchanged (53 files / 680 tests, V.15); T3 `substrate-scans.test.ts` (promotion-rule pins). **No Tier-1 file names this id**: the Tier-1 half is "the existing suites stay green", which CI proves only by the whole `db-tests` run | db-tests + app-tests |
+| 8 | `SUBSTRATE-CONFIDENCE-CALIBRATED` | 1 | `substrate-schema.test.ts` (and `lib/memory/writers.test.ts`, the TypeScript first line) | db-tests (+ app-tests) |
+| 9 | `SUBSTRATE-CONTRADICTION-CROSS-WRITER` | 1 + 2 | T1 `substrate-ratify-import.test.ts`, `interview-ratify.test.ts`; T2 `app/[locale]/(dashboard)/interview/InterviewPanel.test.tsx` | db-tests + app-tests |
+| 10 | `SUBSTRATE-QUERY-FIELD-CONSUMED` | 2 | `lib/memory/query-hints.test.ts`, `lib/memory/scoring.test.ts` | app-tests |
+| 11 | `SUBSTRATE-QUERY-MODEL-FIELDS-BOUNDED` | 2 + 3 | `query-hints.test.ts`, `lib/campaigns/planner/__tests__/tools.test.ts`, `lib/signals/triage/tools.test.ts`; T3 `substrate-scans.test.ts` | app-tests |
+| 12 | `SUBSTRATE-CALLERS-ENUMERATED` | 2 | one test per ADR §3.4 row: `lib/campaigns/brief.test.ts` (exact `{ task: 'brief' }`), `generate.test.ts`, `generate.context-equivalence.test.ts`, `lib/ai/context.test.ts`, both tool tests (V.11, V.12) | app-tests |
+| 13 | `SUBSTRATE-EXISTENCE-READ` | 2 | `lib/db/memory-evidence.test.ts` (+ the Tier-1 arm in `substrate-two-business.test.ts`, supplementary) | app-tests (+ db-tests) |
+| 14 | `SUBSTRATE-CROSS-TYPE-BUDGET` | 2 | `lib/memory/bundle.test.ts` (+ the Tier-1 bundle arm, supplementary) | app-tests (+ db-tests) |
+| 15 | `SUBSTRATE-CROSS-TYPE-GUARDED` | 2 + 3 | `bundle.test.ts`; T3 `substrate-scans.test.ts` | app-tests |
+| 16 | `SUBSTRATE-OUTCOME-SEPARATE` | 2 + 3 | `bundle.test.ts`; T3 `substrate-scans.test.ts` (+ the Tier-1 seeded arm, supplementary) | app-tests (+ db-tests) |
+| 17 | `SUBSTRATE-DISMISS-MAPPING` | 2 | `lib/memory/dismissal.test.ts`, `app/[locale]/(dashboard)/opportunities/actions.test.ts` | app-tests |
+| 18 | `SUBSTRATE-DISMISS-DETERMINISTIC` | 3 | `substrate-scans.test.ts` | app-tests |
+| 19 | `SUBSTRATE-DISMISS-IDEMPOTENT` | 1 | `substrate-dismissal-writer.test.ts` | db-tests |
+| 20 | `SUBSTRATE-DISMISS-TENANT-BOUND` | 1 | `substrate-dismissal-writer.test.ts`, `substrate-two-business.test.ts` | db-tests |
+| 21 | `SUBSTRATE-DISMISS-IDENTIFIER-CHECKED` | 1 | `substrate-dismissal-writer.test.ts` | db-tests |
+| 22 | `SUBSTRATE-ONE-DECISION-WRITER` | 3 | `substrate-scans.test.ts` | app-tests |
+| 23 | `SUBSTRATE-NO-MODEL-ON-WRITE` | 3 | `substrate-scans.test.ts` | app-tests |
+| 24 | `SUBSTRATE-RLS-ISOLATED` | 1 | `substrate-two-business.test.ts` (all five §7.3 rows, V.13) | db-tests |
+| 25 | `SUBSTRATE-CASCADE-COMPLETE` | 1 + 3 | T1 `substrate-dismissal-writer.test.ts` (the `purge_business` cascade); T3 `substrate-scans.test.ts` | db-tests + app-tests |
+| 26 | `SUBSTRATE-UX-DISCLOSED` | 2 | `OpportunityFeed.test.tsx`, `InterviewPanel.test.tsx`, `approvals/ClaimFlags.test.tsx`, `approvals/page.test.tsx`, `onboarding/step-4/BackfillPanel.test.tsx`, `components/memory/ProvenanceLabel.test.tsx` | app-tests |
+| 27 | `SUBSTRATE-I18N-COMPLETE` | 2 | `lib/i18n/memory-parity.test.ts` | app-tests |
+| 28 | `SUBSTRATE-DISMISSAL-SCOPED-CONSUMER` | 1 + 2 + 3 | T1 `substrate-dismissal-writer.test.ts` (+ `substrate-two-business.test.ts`); T2 `dismissal.test.ts`, `lib/signals/triage/tools.dismissal.test.ts`; T3 `substrate-scans.test.ts` | db-tests + app-tests |
+
+**Tier tallies, recounted from ADR §12's table only (cerebrum 34-D): 14 / 13 / 11**, exactly as expected: 14 rows have a Tier-1 component (#1, 2, 3, 4, 6, 7, 8, 9, 19, 20, 21, 24, 25, 28), 13 a Tier-2 component (#4, 9, 10, 11, 12, 13, 14, 15, 16, 17, 26, 27, 28) and 11 a Tier-3 component (#5, 6, 7, 11, 15, 16, 18, 22, 23, 25, 28). Rows with more than one tier appear in each.
+
+**No Tier-E row is declared** (ADR §11.4). `SIGNAL3-TRIAGE-QUALITY` stays ADR 0021's, MEASURED and never COVERED; its one replay after the change is V.13 (identical to V.1c) and it is run in CI by `eval-triage.yml`, not by either job above.
+
+**Honest gaps in this map.** Constraint 7's Tier-1 half and constraint 2's per-writer half rest on suites that do not name the ids; they are proven only by the whole `db-tests` run staying green. The Tier-2 UX contract was verified by DOM assertions, not in a browser (V.14). Nothing here is COVERED until V.17 records the run.
