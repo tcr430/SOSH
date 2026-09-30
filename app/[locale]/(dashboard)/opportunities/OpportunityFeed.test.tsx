@@ -608,3 +608,163 @@ describe('OpportunityFeed — status-band contrast (MINOR-6, WCAG AA, both theme
     cleanup()
   })
 })
+
+// ── ADR 0030 §9.1 (Session 36 L2.10) — SUBSTRATE-UX-DISCLOSED, the dismiss-flow half ─────────────────────────
+// One helper line under the not_relevant choice, tied to the select by aria-describedby. No other reason gets copy; no new control, toggle or
+// confirmation; the feed still calls dismissCardAction(cardId, reason) and nothing else.
+
+describe('OpportunityFeed — ADR 0030 §9.1: the not_relevant hint', () => {
+  const HINT_KEY = 'dismissReason.teachesHint'
+
+  function openPicker(container: HTMLElement) {
+    act(() => { buttonWithText(container, 'actions.dismiss')?.click() })
+    return container.querySelector('select') as HTMLSelectElement
+  }
+
+  function choose(select: HTMLSelectElement, value: string) {
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!
+      setter.call(select, value)
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+  }
+
+  const hintsIn = (c: HTMLElement) => Array.from(c.querySelectorAll('p, span')).filter((e) => e.textContent === HINT_KEY)
+
+  it('renders NO hint and no aria-describedby while no reason is chosen', () => {
+    const { container, cleanup } = renderFeed(baseProps({ cards: [makeCard()] }))
+    const select = openPicker(container)
+
+    expect(select.value).toBe('')
+    expect(hintsIn(container)).toHaveLength(0)
+    expect(select.hasAttribute('aria-describedby')).toBe(false)
+    cleanup()
+  })
+
+  it('renders the hint ONLY under not_relevant, and the select is tied to it by aria-describedby', () => {
+    const { container, cleanup } = renderFeed(baseProps({ cards: [makeCard()] }))
+    const select = openPicker(container)
+
+    choose(select, 'not_relevant')
+
+    const hints = hintsIn(container)
+    expect(hints).toHaveLength(1)
+    const describedBy = select.getAttribute('aria-describedby')
+    expect(describedBy).toBeTruthy()
+    expect(container.querySelector(`#${CSS.escape(describedBy!)}`)).toBe(hints[0])
+    cleanup()
+  })
+
+  it.each(['already_covered', 'too_sensitive', 'wrong_timing', 'weak_evidence'] as const)('renders NO hint under %s (no other reason gets copy)', (reason) => {
+    const { container, cleanup } = renderFeed(baseProps({ cards: [makeCard()] }))
+    const select = openPicker(container)
+
+    choose(select, reason)
+
+    expect(select.value).toBe(reason)
+    expect(hintsIn(container)).toHaveLength(0)
+    expect(select.hasAttribute('aria-describedby')).toBe(false)
+    cleanup()
+  })
+
+  it('the hint follows the choice: not_relevant then another reason, then none, removes it again (the opt-out is the existing choice)', () => {
+    const { container, cleanup } = renderFeed(baseProps({ cards: [makeCard()] }))
+    const select = openPicker(container)
+
+    choose(select, 'not_relevant')
+    expect(hintsIn(container)).toHaveLength(1)
+    choose(select, 'wrong_timing')
+    expect(hintsIn(container)).toHaveLength(0)
+    expect(select.hasAttribute('aria-describedby')).toBe(false)
+    choose(select, 'not_relevant')
+    choose(select, '')
+    expect(hintsIn(container)).toHaveLength(0)
+    cleanup()
+  })
+
+  it('the hint sits directly under the select (after it in document order, in the same block) and is plain, non-interactive muted text', () => {
+    const { container, cleanup } = renderFeed(baseProps({ cards: [makeCard()] }))
+    const select = openPicker(container)
+    choose(select, 'not_relevant')
+
+    const hint = hintsIn(container)[0]
+    expect(select.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(hint.querySelector('button, input, select, a, [tabindex]')).toBeNull()
+    expect(hint.className).toContain('text-muted-foreground')
+    cleanup()
+  })
+
+  it('the hint is announced when the choice is MADE: it lives in a persistent role="status" wrapper that is empty under every other choice', () => {
+    const { container, cleanup } = renderFeed(baseProps({ cards: [makeCard()] }))
+    const select = openPicker(container)
+    const wrapper = () => container.querySelector('[role="status"]')!
+
+    expect(wrapper().textContent).toBe('')
+    choose(select, 'not_relevant')
+    expect(wrapper().textContent).toBe(HINT_KEY)
+    expect(wrapper().contains(container.querySelector(`#${CSS.escape(select.getAttribute('aria-describedby')!)}`))).toBe(true)
+    choose(select, 'weak_evidence')
+    expect(wrapper().textContent).toBe('')
+    cleanup()
+  })
+
+  it('the control row wraps (200% zoom / narrow widths do not force horizontal scroll)', () => {
+    const { container, cleanup } = renderFeed(baseProps({ cards: [makeCard()] }))
+    const select = openPicker(container)
+    expect(select.parentElement!.className).toContain('flex-wrap')
+    cleanup()
+  })
+
+  it('adds NO control: the picker still holds exactly one select and its own confirm button, with the hint showing', () => {
+    const { container, cleanup } = renderFeed(baseProps({ cards: [makeCard()] }))
+    const select = openPicker(container)
+    const before = { selects: container.querySelectorAll('select').length, buttons: container.querySelectorAll('button').length, inputs: container.querySelectorAll('input').length }
+
+    choose(select, 'not_relevant')
+
+    expect({ selects: container.querySelectorAll('select').length, buttons: container.querySelectorAll('button').length, inputs: container.querySelectorAll('input').length }).toEqual(before)
+    cleanup()
+  })
+
+  it('confirming still calls dismissCardAction(cardId, "not_relevant") — the action contract is unchanged', async () => {
+    const card = makeCard()
+    const { container, cleanup } = renderFeed(baseProps({ cards: [card] }))
+    const select = openPicker(container)
+    choose(select, 'not_relevant')
+
+    await act(async () => { buttonWithText(container, 'actions.dismiss')?.click() })
+
+    expect(dismissCardAction).toHaveBeenCalledTimes(1)
+    expect(dismissCardAction).toHaveBeenCalledWith(card.id, 'not_relevant')
+    cleanup()
+  })
+
+  it('states are unchanged: a lost race (already_triaged) still announces its own message', async () => {
+    dismissCardAction.mockResolvedValueOnce({ outcome: 'already_triaged', currentStatus: 'approved' })
+    const { container, cleanup } = renderFeed(baseProps({ cards: [makeCard()] }))
+    choose(openPicker(container), 'not_relevant')
+
+    await act(async () => { buttonWithText(container, 'actions.dismiss')?.click() })
+
+    expect(container.querySelector('[aria-live="polite"]')?.textContent).toBe('actions.announceAlreadyTriaged')
+    cleanup()
+  })
+
+  it('two cards keep independent state and unique ids: only the card whose select is not_relevant shows the hint', () => {
+    const a = makeCard({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1' })
+    const b = makeCard({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2' })
+    const { container, cleanup } = renderFeed(baseProps({ cards: [a, b] }))
+    for (const btn of Array.from(container.querySelectorAll('button')).filter((x) => x.textContent === 'actions.dismiss')) act(() => { btn.click() })
+    const selects = Array.from(container.querySelectorAll('select'))
+    expect(selects).toHaveLength(2)
+
+    choose(selects[0], 'not_relevant')
+
+    expect(hintsIn(container)).toHaveLength(1)
+    expect(selects[0].getAttribute('aria-describedby')).toBeTruthy()
+    expect(selects[1].hasAttribute('aria-describedby')).toBe(false)
+    const ids = Array.from(container.querySelectorAll('[id]')).map((e) => e.id)
+    expect(new Set(ids).size).toBe(ids.length)
+    cleanup()
+  })
+})

@@ -17,6 +17,7 @@ import { getMemberForUser } from '@/lib/db/business-members'
 import { hasCapability, resolveMemberContext, CAPABILITIES } from '@/lib/members/capabilities'
 import { transitionCardStatus } from '@/lib/db/insight-cards'
 import { seedCampaignFromCard } from '@/lib/signals/seed'
+import { recomputeDismissalSignal } from '@/lib/memory'
 import type { InsightCardDismissReason, InsightCardStatus } from '@/lib/db/types'
 
 export type CardActionErrorCode = 'invalid_input' | 'generic' | 'forbidden'
@@ -135,6 +136,14 @@ export async function approveCardAction(cardId: string): Promise<CardActionState
       } catch (seedErr: unknown) {
         console.error('opportunities/actions: seedCampaignFromCard failed after approval', cardId, seedErr)
       }
+      // ADR 0030 §6.5 (L2.9) — an approval moves the gate's counter-evidence term, so it recomputes an EXISTING dismissal row for the source
+      // (it never creates one); without this an approval could never demote a row. Its OWN try/catch, AFTER and independent of the seeding one above: a seeding throw must not skip it, and a recompute failure must
+      // not turn a real approval into an error toast.
+      try {
+        await recomputeDismissalSignal(cardId)
+      } catch (recomputeErr: unknown) {
+        console.error('opportunities/actions: recomputeDismissalSignal failed', cardId, recomputeErr)
+      }
       revalidateOpportunities()
     }
     return result
@@ -163,7 +172,18 @@ export async function dismissCardAction(
       'pending',
       'saved',
     )
-    if (result.success) revalidateOpportunities()
+    if (result.success) {
+      // ADR 0030 §6.5 (L2.9) — only a not_relevant dismissal teaches memory; the other four reasons and NULL are about timing, coverage or
+      // sensitivity, not about the source. Own try/catch: a recompute failure keeps the dismissal's success result.
+      if (parsed.data.reason === 'not_relevant') {
+        try {
+          await recomputeDismissalSignal(cardId)
+        } catch (recomputeErr: unknown) {
+          console.error('opportunities/actions: recomputeDismissalSignal failed', cardId, recomputeErr)
+        }
+      }
+      revalidateOpportunities()
+    }
     return result
   } catch {
     return { error: 'generic' }
@@ -189,7 +209,15 @@ export async function saveCardAction(cardId: string): Promise<CardActionState> {
       { status: 'saved', expires_at: null },
       'pending',
     )
-    if (result.success) revalidateOpportunities()
+    if (result.success) {
+      // ADR 0030 §6.5 (L2.9) — a save moves the same gate term as an approval: it recomputes an EXISTING row only (see approveCardAction).
+      try {
+        await recomputeDismissalSignal(cardId)
+      } catch (recomputeErr: unknown) {
+        console.error('opportunities/actions: recomputeDismissalSignal failed', cardId, recomputeErr)
+      }
+      revalidateOpportunities()
+    }
     return result
   } catch {
     return { error: 'generic' }

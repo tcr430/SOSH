@@ -290,14 +290,8 @@ describe('lib/campaigns/generate.ts caller — buildCustomerContext is called by
     await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
 
     // ADR 0024 §5.1/§5.4 (Session 31, H2.11) — the ONLY caller that passes a
-    // queryContext: {objective, audience, campaignId}. audience comes from
-    // the fixture's mockBrandVoice.target_audience ('Engineering leads'),
-    // objective from mockCampaign.objective, campaignId from CAMPAIGN_ID.
-    expect(spy).toHaveBeenCalledWith(BUSINESS_ID, VARIATION_ID, {
-      objective: 'Drive awareness',
-      audience: 'Engineering leads',
-      campaignId: CAMPAIGN_ID,
-    })
+    // queryContext. AMENDED (Session 36 L2.7, ADR 0030 §3.4, A-7): it is EXACTLY { campaignId }; objective and audience left the query context.
+    expect(spy).toHaveBeenCalledWith(BUSINESS_ID, VARIATION_ID, { campaignId: CAMPAIGN_ID })
     expect(spy).toHaveBeenCalledTimes(1)
   })
 

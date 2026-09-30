@@ -475,8 +475,8 @@ describe('AGENCY-NO-EGRESS-IN-TOOLS (ADR 0027 §2.3, constraint 6)', () => {
 })
 
 // ═══ AGENCY-QUERY-CONTEXT-NOT-A-PREDICATE (7) ════════════════════════════════
-// MemoryQueryContext's objective/platform/audience are model-supplied free strings feeding an in-process JS
-// scoring comparison. They must NEVER reach a PostgREST predicate: the DB read is a fixed business-scoped
+// MemoryQueryContext's model-supplied field (`platform`; `objective` and `audience` were REMOVED by ADR 0030 §3 / A-7, Session 36 L2.7) is a free string feeding an
+// in-process JS scoring comparison. It must NEVER reach a PostgREST predicate: the DB read is a fixed business-scoped
 // candidate scan and scoring happens after (lib/memory/evidence.ts:18-19). Pushing the filter into the query
 // would turn a scoring hint into an injectable predicate (ADR 0027 §2.4).
 //   half 1 — the lib/db candidate readers do not even NAME the query context;

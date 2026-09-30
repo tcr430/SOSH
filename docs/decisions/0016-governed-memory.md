@@ -754,3 +754,80 @@ convention (Amendments A-D): nothing above this heading is edited.
 
 **Constraints:** `INTERVIEW-PROVENANCE-DISTINCT`, `INTERVIEW-ANSWER-TRACEABLE`, `INTERVIEW-PROVENANCE-IMMUTABLE`,
 `INTERVIEW-MEMBER-WRITE-CLOSED`, `INTERVIEW-PERFORMANCE-POLICY-UNCHANGED` (ADR 0029 §11).
+
+
+## Amendment F — the substrate: `performance_memory`'s member write path closed (2026-09-29, Session 36, L2.2 · ADR 0030)
+
+> Appended by the Session 36 Builder. Nothing above is edited. Later Session 36 steps append F.2 onward (the `'dismissal'`
+> source, the per-source confidence ceilings, the `decision_key` provenance marker); this section carries F.1 only.
+
+### F.1 `performance_memory` joins the other three memory tables: no member write path (founder ruling A-5)
+
+- **Before.** Amendment E left `performance_memory` alone on purpose: its member INSERT was narrowed to `source = 'manual'`
+  (Amendments C/D, ADR 0026 §5.5), its write-protection trigger and delete guard stayed, and the blanket
+  `GRANT … ON ALL TABLES … TO authenticated` (`20260707190000:28,32`) was never revoked on it. ADR 0030 §1.1 fact 6 records the
+  consequence, confirmed independently by `[sec-1]` (HIGH) and `[db-8]` (MAJOR): a member could INSERT an `active`,
+  `confidence = 1.0`, `public_use_permission = true` row over PostgREST and it entered every generation prompt
+  (`listPerformanceMemoryCandidates` excludes only `'outcome'`). Nothing in the product writes `source = 'manual'`.
+  Reproduced at L2.2 before the migration: a member's INSERT returned the row with `status: active, confidence: 1,
+  public_use_permission: true`.
+- **After** (`20260929110000_performance_memory_member_writes_closed.sql`, copied from `20260925100000:39-56`): the three
+  member write policies (`performance_memory_insert_own`, `_update_own`, `_delete_own`) are dropped;
+  `INSERT, UPDATE, DELETE, TRUNCATE` are revoked from `authenticated` and `anon`; `performance_memory_select_own` is kept.
+  A direct write now fails at the GRANT layer with `42501` (`permission denied for table`), before RLS is consulted.
+  Reproduced after the migration: the same INSERT returns `42501`.
+- **Not edited.** `enforce_performance_memory_write_protection` (`20260919130000:217-255`) and the outcome-row delete guard
+  (`20260919160000`) are kept as defence in depth. Clients can no longer reach either.
+- **Every writer is unaffected.** Each real writer is a `service_role` `SECURITY DEFINER` RPC or the service-role client
+  (`upsert_distilled_performance_pattern`, `import_performance_memory`, `upsert_outcome_performance_pattern`,
+  `promote_*`, `demote_*`). The full Tier-1 suite (108 files, 1143 tests) and the L2.0 baseline set (DB 53 files / 680
+  tests) are green at the L2.2 commit.
+- **Effect on `'manual'`.** It stays in `performance_memory_source_check` for history and is now a **retired, writerless**
+  source (registered so in `lib/memory/writers.ts`).
+
+**Constraint:** `SUBSTRATE-MEMBER-WRITE-CLOSED` (ADR 0030 §12 #6): Tier 1 (`supabase/__tests__/substrate-member-write-closed.test.ts`)
+and Tier 3 (the policy/grant scan in `lib/memory/substrate-scans.test.ts`).
+
+### F.2 `audience_memory` gains a fifth `source`, `'dismissal'`, and a `decision_key` provenance marker; eight confidence ceilings (2026-09-29, Session 36, L2.3 · founder rulings A-3 and A-4)
+
+`20260929120000_memory_substrate_schema.sql`, one migration (the ADR requires the ceilings "in the same migration as the source swap").
+
+- **The source swap, by name.** `audience_memory_source_check` is dropped, re-added `NOT VALID` with
+  `('manual', 'distilled', 'import', 'interview', 'dismissal')`, and `VALIDATE`d. No definition lookup (Amendment E's migration re-added
+  all four CHECKs explicitly named so this would be cheap). The other three tables' source CHECKs are untouched, so
+  `brand_memory`, `evidence_memory` and `performance_memory` still refuse `'dismissal'` with `23514`.
+- **`decision_key text NULL`** on `audience_memory`, with `audience_memory_decision_key_marker_check`
+  `((source = 'dismissal') = (decision_key IS NOT NULL))`, `audience_memory_decision_key_namespace_check`
+  `(source <> 'dismissal' OR decision_key LIKE 'dismissal:%')`, the partial `UNIQUE` `audience_memory_dismissal_key_uq`
+  `(business_id, decision_key) WHERE source = 'dismissal' AND deleted_at IS NULL`, and a **sibling** `BEFORE UPDATE` trigger
+  `enforce_memory_dismissal_immutable` (function of the same name, `WHEN (OLD.source = 'dismissal' OR NEW.source = 'dismissal')`, so it cannot
+  touch any other source's UPDATE path). It rejects a change to `source` or `decision_key` and permits `statement`, `confidence`,
+  `observation_count`, `status`, `last_confirmed_at` and `expires_at`. `enforce_memory_import_immutable` and
+  `enforce_memory_interview_immutable` are **not edited**. **No foreign key.**
+- **Eight ceiling CHECKs**, each named, each `NOT VALID` then `VALIDATE`, predicate `source <> 'X' OR confidence <= N`:
+  `<t>_import_confidence_ceiling` ≤ **0.60** (evidence, audience, performance) · `<t>_interview_confidence_ceiling` ≤ **0.60** (brand,
+  evidence, audience) · `audience_memory_dismissal_confidence_ceiling` ≤ **0.50** · `performance_memory_distilled_confidence_ceiling` ≤ **0.95**.
+  None begins `CHECK ((source = ANY (ARRAY[`.
+- **Why `outcome` and `manual` have none.** `outcome`: `acknowledge_campaign_retrospective` computes `round((wilson bound) × n/(n+10), 2)`
+  with no clamp (`20260919140000:366-367`), which can exceed 0.95 at large n, so a CHECK would abort a legitimate recompute; the existing
+  `0..1` CHECK is its bound. `manual`: the member path is closed (F.1), so nothing can write it.
+- **Every ceiling equals the writer's shipped maximum** (`BACKFILL_CONFIDENCE_CEILING` 0.60, interview brand 0.6, `LEARN_CONFIDENCE_CEILING` 0.95),
+  so `VALIDATE` cannot fail on existing rows (L-2). No shipped constant changed. The pre-VALIDATE audit is recorded in ADR 0030 V.2 and V.7.
+- **`confidence` is `numeric(3,2)`**: 0.605 is stored as 0.61, so it is over the 0.60 import ceiling and is refused.
+- **`WriterConfidence`** (`lib/memory/writers.ts`): the import and distilled wrappers take a branded `WriterConfidence<'import' | 'distilled'>`
+  that only `importConfidence()` (band (0, 0.60]) and `distilledConfidence()` (band [0, 0.95]) can mint. A first line only; the CHECKs above enforce.
+
+**Constraints:** `SUBSTRATE-PROVENANCE-DISTINCT`, `SUBSTRATE-CONFIDENCE-CALIBRATED` (ADR 0030 §12 #3, #8), Tier 1
+(`supabase/__tests__/substrate-schema.test.ts`) and Tier 2 (`lib/memory/writers.test.ts`).
+
+### F.3 The writer registry and the nine-point contract W1–W9 (2026-09-30, Session 36, L2.11 · ADR 0030 §2.1, §2.2)
+
+Written at close-out because ADR 0030 §13.2 assigns it to the last step; the registry itself landed in `L2.1` (`lib/memory/writers.ts`) and its Tier-1 drift test in `L2.5`. Nothing above is edited.
+
+- **The registry.** `lib/memory/writers.ts` exports `MEMORY_WRITERS`, `as const satisfies Record<WriterId, WriterSpec>`. It has six keys: `manual` (the human path: no RPC, no wrapper, and since F.1 no member write path on any of the four tables) and the five machine writers `distilled`, `import`, `outcome`, `interview`, `dismissal`. Each machine writer names its tables, its RPC names, its TypeScript wrappers, its `soleCallerModule`, its gate (`min_n` or `human_ratification`), its per-table confidence ceiling, what it may retire and its scopes. `source` itself stays a per-table named CHECK (F.2); the registry is kept honest by a Tier-1 drift test (`supabase/__tests__/substrate-writer-registry.test.ts`) that compares it with the live source CHECKs (exactly one per table, validated, same value set) and, for every registered RPC, its live `SECURITY DEFINER`, pinned `search_path` and `service_role`-only EXECUTE (W1). W2 to W9 are proven per writer by that writer's own Tier-1 tests (`substrate-dismissal-writer.test.ts` for the dismissal RPC; the existing interview, import, distilled and outcome suites for theirs).
+- **W1–W9, one per registered RPC.** W1 `SECURITY DEFINER`, pinned `search_path`, EXECUTE for `service_role` only. W2 `business_id` derived from a parent row the RPC reads (`p_business_id` only where no parent exists). W3 `source`, `sensitivity`, `public_use_permission` and `status` on insert fixed in SQL. W4 confidence computed in SQL, or caller-supplied and bounded by the per-source ceiling CHECK; scope fixed in SQL or from the registry's closed set. W5 a provenance marker with a biconditional CHECK plus a sibling immutability trigger on `source` and the marker; existing triggers are never edited. W6 `p_user_id` iff the write is a human decision whose authority the RPC checks. W7 idempotent (`ON CONFLICT` on a writer-specific partial UNIQUE index, or recompute in place). W8 one TypeScript wrapper per RPC in `lib/db/memory-*.ts`, service-role by lazy import, imported only by the registry's `soleCallerModule`; a new writer's wrapper input carries no governance field at all. W9 a recompute-in-place writer takes `pg_advisory_xact_lock` before counting.
+- **Enforcement.** `SUBSTRATE-WRITER-REGISTERED` and `SUBSTRATE-WRITER-CONTRACT` (Tier 1) and `SUBSTRATE-WRITES-VIA-LIB-MEMORY` (Tier 3, four arms: an exported `lib/db/memory-*` function that calls an RPC is a registered wrapper; each wrapper is imported only by its `soleCallerModule`; no `.from('<memory table>')` outside `lib/db/memory-*.ts`; ADR 0027's `EVIDENCE_INSERT_FUNCTIONS` equals the registry's evidence RPCs). No existing writer changed behaviour (ADR 0030 V.15).
+
+### F.4 The three distilled-writer RPCs join W1 on a fresh database (2026-09-30, Session 36, L2.11 · ADR 0030 §2.2, §2.3)
+
+`upsert_distilled_performance_pattern`, `promote_performance_pattern` and `demote_performance_pattern` (`20260726030000`, `20260728220000`) were revoked `FROM public` only. On a fresh Supabase database the platform's default privileges also grant EXECUTE on new functions to `anon` and `authenticated`, so W1 ("EXECUTE for `service_role` only") did not hold there; it held only on the long-lived development database, which is why L2.0 premise 2 and the local drift test passed. The `db-tests` job, which builds a fresh database, failed exactly these three W1 assertions on the first run of PR #16. `20260930100000_distilled_writer_rpcs_revoke_client_roles.sql` revokes from `PUBLIC, anon, authenticated` and grants `service_role` only (idempotent; no body, signature or caller change; the callers are service-role). ADR 0030 §2.3's row for "any RPC failing W1" anticipated exactly this narrowing. Full record: ADR 0030 V.17.

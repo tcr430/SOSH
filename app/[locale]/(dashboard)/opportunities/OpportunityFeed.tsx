@@ -416,34 +416,48 @@ function OpportunityCard({
       )}
 
       {showDismissReason && (
-        <div className="flex items-center gap-2">
-          <label htmlFor={`dismiss-reason-${card.id}`} className="text-xs text-muted-foreground">
-            {t('actions.dismissReasonPrompt')}
-          </label>
-          <select
-            id={`dismiss-reason-${card.id}`}
-            value={reason}
-            onChange={e => setReason(e.target.value as InsightCardDismissReason)}
-            className="rounded-md border px-2 py-1 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring/50"
-          >
-            <option value="">{t('actions.dismissReasonPrompt')}</option>
-            {DISMISS_REASONS.map(r => (
-              <option key={r} value={r}>
-                {t(`dismissReason.${r}`)}
-              </option>
-            ))}
-          </select>
-          <Button
-            size="sm"
-            variant="destructive"
-            disabled={isPending}
-            onClick={() => {
-              onDismiss(reason || undefined)
-              setShowDismissReason(false)
-            }}
-          >
-            {t('actions.dismiss')}
-          </Button>
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <label htmlFor={`dismiss-reason-${card.id}`} className="text-xs text-muted-foreground">
+              {t('actions.dismissReasonPrompt')}
+            </label>
+            <select
+              id={`dismiss-reason-${card.id}`}
+              value={reason}
+              onChange={e => setReason(e.target.value as InsightCardDismissReason)}
+              aria-describedby={reason === 'not_relevant' ? `dismiss-reason-hint-${card.id}` : undefined}
+              className="rounded-md border px-2 py-1 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring/50"
+            >
+              <option value="">{t('actions.dismissReasonPrompt')}</option>
+              {DISMISS_REASONS.map(r => (
+                <option key={r} value={r}>
+                  {t(`dismissReason.${r}`)}
+                </option>
+              ))}
+            </select>
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={isPending}
+              onClick={() => {
+                onDismiss(reason || undefined)
+                setShowDismissReason(false)
+              }}
+            >
+              {t('actions.dismiss')}
+            </Button>
+          </div>
+          {/* ADR 0030 §9.1 — the ONE reason that teaches memory says so, under the choice and tied to the select by aria-describedby. No other
+              reason gets copy; choosing none or another reason is the opt-out, so there is no toggle or confirmation. aria-describedby is read
+              when the select takes focus, not when its value changes, so the hint also sits in a persistent polite status wrapper: it is
+              announced at the moment the choice is made. The wrapper is empty (and describes nothing) under every other choice. */}
+          <div role="status">
+            {reason === 'not_relevant' && (
+              <p id={`dismiss-reason-hint-${card.id}`} className="text-xs text-muted-foreground">
+                {t('dismissReason.teachesHint')}
+              </p>
+            )}
+          </div>
         </div>
       )}
     </li>

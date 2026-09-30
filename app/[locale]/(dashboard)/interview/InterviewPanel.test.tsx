@@ -45,7 +45,7 @@ vi.mock('./actions', () => ({
 import { InterviewPanel } from './InterviewPanel'
 import type { InterviewPageState } from '@/lib/interview/page-state'
 import type { InterviewCandidatesByType } from '@/lib/memory/interview'
-import type { FounderInterviewAnswerRow, FounderInterviewRoundRow, BrandMemoryRow, AudienceMemoryRow, EvidenceMemoryRow } from '@/lib/db/types'
+import type { FounderInterviewAnswerRow, FounderInterviewRoundRow, BrandMemoryRow, AudienceMemoryRow, EvidenceMemoryRow, MemorySource } from '@/lib/db/types'
 
 function round(over: Partial<FounderInterviewRoundRow> = {}): FounderInterviewRoundRow {
   return {
@@ -602,7 +602,9 @@ describe('the ratify view surfaces the hedge flag, the conflict marker and Repla
   const T_INTERVIEW = 'tg-interview'
   const T_MANUAL = 'tg-manual'
   const T_RETIRED = 'tg-retired'
-  type Targets = { id: string; text: string; status: 'active' | 'retired' | 'candidate'; source: 'interview' | 'manual' }
+  type Targets = { id: string; text: string; status: 'active' | 'retired' | 'candidate'; source: MemorySource }
+  // 'dismissal' is a real audience_memory source since migration 20260929120000 (ADR 0030 §6.6); the MemorySource union carries it (D10).
+  const DISMISSAL_SOURCE: MemorySource = 'dismissal'
   const target = (id: string, over: Partial<Targets> = {}): Targets => ({ id, text: `Existing record ${id}`, status: 'active', source: 'interview', ...over })
 
   function ratifyPanel(candidates: Partial<InterviewCandidatesByType>, roundOver: Partial<FounderInterviewRoundRow> = {}) {
@@ -674,6 +676,32 @@ describe('the ratify view surfaces the hedge flag, the conflict marker and Repla
     expect(c.querySelector('[data-candidate-id="bm-c"]')!.querySelector('button[aria-label^="ui.ratify.replace_for"]')).toBeNull()
   })
 
+  // ADR 0030 §4.2 (Session 36 L2.4, A-6, SUBSTRATE-CONTRADICTION-CROSS-WRITER): Replace is offered for an ACTIVE conflict whose
+  // source is 'interview' OR 'import', and for nothing else. ratify_interview_round re-verifies both in SQL; this is the UI
+  // half, so a Replace the RPC would refuse is never offered.
+  it("Replace is offered for an ACTIVE import target and an ACTIVE interview target, and NOT for manual, distilled, dismissal, nor any non-active target (import included)", () => {
+    const cases: Array<[string, Partial<Targets>, boolean]> = [
+      ['import-active', { source: 'import' }, true],
+      ['interview-active', { source: 'interview' }, true],
+      ['manual-active', { source: 'manual' }, false],
+      ['distilled-active', { source: 'distilled' }, false],
+      ['dismissal-active', { source: DISMISSAL_SOURCE }, false],
+      ['import-retired', { source: 'import', status: 'retired' }, false],
+      ['import-candidate', { source: 'import', status: 'candidate' }, false],
+      ['interview-retired', { source: 'interview', status: 'retired' }, false],
+    ]
+    const c = ratifyPanel({
+      brand: cases.map(([key]) => brandCandidate({ id: `bm-${key}`, interview_conflict_ids: [`tg-${key}`] })),
+      conflictTargets: { brand: cases.map(([key, over]) => target(`tg-${key}`, over)), audience: [], evidence: [] },
+    })
+    // the marker shows for every case; only Replace differs
+    expect(c.querySelectorAll('[data-marker="conflict"]')).toHaveLength(cases.length)
+    for (const [key, , offered] of cases) {
+      const btn = c.querySelector(`[data-candidate-id="bm-${key}"]`)!.querySelector('button[aria-label^="ui.ratify.replace_for"]')
+      expect(btn !== null, `${key}: Replace offered`).toBe(offered)
+    }
+  })
+
   it("Replace's accessible name carries BOTH records (the new one and the one it replaces)", () => {
     const c = ratifyPanel({
       brand: [brandCandidate({ id: 'bm-a', statement: 'A distinctive new claim', interview_conflict_ids: [T_INTERVIEW] })],
@@ -682,6 +710,92 @@ describe('the ratify view surfaces the hedge flag, the conflict marker and Repla
     const label = buttonsNamed(c, 'ui.ratify.replace_for')[0].getAttribute('aria-label')!
     expect(label).toContain('A distinctive new claim')
     expect(label).toContain('Existing record tg-interview')
+  })
+
+  // ADR 0030 §9.2 / §9.3 (Session 36 L2.10) — SUBSTRATE-UX-DISCLOSED. Every conflicting row shows a provenance label read from the row's OWN
+  // source; a row that cannot be replaced shows a visually hidden explanation. 'outcome' is not a MemorySource of a conflict table (it belongs
+  // to performance_memory, which is not a conflict table), so it is cast here on purpose to prove it could never be offered Replace either.
+  const OUTCOME_SOURCE = 'outcome' as unknown as MemorySource
+  const REPLACE = 'button[aria-label^="ui.ratify.replace_for"]'
+  const HINT_KEY = 'ui.ratify.cannotReplace'
+
+  it("each conflict shows the label of the row's OWN source at the marker, in plain muted text (never a badge)", () => {
+    const cases: Array<[string, MemorySource]> = [
+      ['a', 'interview'], ['b', 'import'], ['c', 'manual'], ['d', 'distilled'], ['e', DISMISSAL_SOURCE], ['f', OUTCOME_SOURCE],
+    ]
+    const c = ratifyPanel({
+      brand: cases.map(([k]) => brandCandidate({ id: `bm-${k}`, interview_conflict_ids: [`tg-${k}`] })),
+      conflictTargets: { brand: cases.map(([k, source]) => target(`tg-${k}`, { source })), audience: [], evidence: [] },
+    })
+    for (const [k, source] of cases) {
+      const marker = c.querySelector(`[data-candidate-id="bm-${k}"] [data-marker="conflict"]`)!
+      const label = marker.querySelector('[data-provenance]')!
+      expect(label.textContent, source).toBe(`provenance.${source}`)
+      expect(label.getAttribute('data-provenance')).toBe(source)
+      expect(label.className).toContain('text-muted-foreground')
+      expect(label.className).not.toMatch(/\bbg-|\bborder|\bring-|\brounded/)
+    }
+  })
+
+  it('the label follows the row: two conflicts of DIFFERENT sources on one record show two different labels', () => {
+    const c = ratifyPanel({
+      brand: [brandCandidate({ id: 'bm-x', interview_conflict_ids: ['tg-i', 'tg-m'] })],
+      conflictTargets: { brand: [target('tg-i', { source: 'import' }), target('tg-m', { source: 'manual' })], audience: [], evidence: [] },
+    })
+    const labels = Array.from(c.querySelectorAll('[data-marker="conflict"] [data-provenance]')).map((e) => e.textContent)
+    expect(labels).toEqual(['provenance.import', 'provenance.manual'])
+  })
+
+  it('Replace renders for an active interview or import conflict and NOT for manual, distilled, outcome or dismissal — each of those shows the visually hidden hint instead', () => {
+    const cases: Array<[string, MemorySource, boolean]> = [
+      ['interview', 'interview', true], ['import', 'import', true],
+      ['manual', 'manual', false], ['distilled', 'distilled', false], ['outcome', OUTCOME_SOURCE, false], ['dismissal', DISMISSAL_SOURCE, false],
+    ]
+    const c = ratifyPanel({
+      brand: cases.map(([k]) => brandCandidate({ id: `bm-${k}`, interview_conflict_ids: [`tg-${k}`] })),
+      conflictTargets: { brand: cases.map(([k, source]) => target(`tg-${k}`, { source })), audience: [], evidence: [] },
+    })
+    for (const [k, , offered] of cases) {
+      const block = c.querySelector(`[data-candidate-id="bm-${k}"] [data-marker="conflict"]`)!
+      expect(block.querySelector(REPLACE) !== null, `${k}: Replace`).toBe(offered)
+      const hints = Array.from(block.querySelectorAll('.sr-only')).filter((e) => e.textContent === HINT_KEY)
+      expect(hints.length, `${k}: hidden hint`).toBe(offered ? 0 : 1)
+    }
+  })
+
+  it('the hidden hint is VISUALLY hidden only (sr-only, present in the DOM and the accessibility tree), and is not a control', () => {
+    const c = ratifyPanel({
+      brand: [brandCandidate({ id: 'bm-m', interview_conflict_ids: ['tg-m'] })],
+      conflictTargets: { brand: [target('tg-m', { source: 'manual' })], audience: [], evidence: [] },
+    })
+    const hint = Array.from(c.querySelectorAll('[data-marker="conflict"] *')).find((e) => e.textContent === HINT_KEY)!
+    expect(hint.className).toContain('sr-only')
+    expect(hint.hasAttribute('aria-hidden')).toBe(false)
+    expect(hint.hasAttribute('hidden')).toBe(false)
+    expect(hint.querySelector('button, input, select, a')).toBeNull()
+  })
+
+  it('a NON-ACTIVE interview or import target shows its label, no Replace, and NOT the hint (whose copy — "wasn\'t added by an interview or an import" — would be false for it)', () => {
+    const c = ratifyPanel({
+      brand: [
+        brandCandidate({ id: 'bm-r', interview_conflict_ids: ['tg-r'] }),
+        brandCandidate({ id: 'bm-c', interview_conflict_ids: ['tg-c'] }),
+      ],
+      conflictTargets: { brand: [target('tg-r', { source: 'import', status: 'retired' }), target('tg-c', { source: 'interview', status: 'candidate' })], audience: [], evidence: [] },
+    })
+    expect(c.querySelectorAll(REPLACE)).toHaveLength(0)
+    expect(c.querySelectorAll('[data-marker="conflict"] [data-provenance]')).toHaveLength(2)
+    expect(Array.from(c.querySelectorAll('.sr-only')).filter((e) => e.textContent === HINT_KEY)).toHaveLength(0)
+  })
+
+  it('adds no accept-all, no edit and no retire control for a memory row: the conflict block holds at most the one existing Replace button', () => {
+    const c = ratifyPanel({
+      brand: [brandCandidate({ id: 'bm-a', interview_conflict_ids: ['tg-a', 'tg-b'] })],
+      conflictTargets: { brand: [target('tg-a', { source: 'import' }), target('tg-b', { source: 'manual' })], audience: [], evidence: [] },
+    })
+    const buttons = Array.from(c.querySelectorAll('[data-marker="conflict"] button'))
+    expect(buttons).toHaveLength(1)
+    expect(buttons[0].getAttribute('aria-label')).toMatch(/^ui\.ratify\.replace_for/)
   })
 
   it('there is still NO accept-all and NO checkbox with the new controls present', () => {

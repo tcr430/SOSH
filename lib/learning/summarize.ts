@@ -10,6 +10,7 @@ import { countProcessedSignalsSince, listRecentHumanEditExcerpts } from '@/lib/d
 import { listDistilledPatternsForSummary, upsertDistilledPerformancePattern } from '@/lib/db/memory-performance'
 import { getErrorMessage } from '@/lib/db/utils'
 import { computeConfidence } from '@/lib/learning/promote'
+import { distilledConfidence } from '@/lib/memory'
 import {
   LEARNING_SUMMARIZER_PROMPT_ID,
   LEARNING_SUMMARY_MIN_SIGNALS,
@@ -208,7 +209,7 @@ export async function summarizeBusinessLearning(
         // read back only by listDistilledPatternsForSummary (never by
         // listPerformanceMemoryCandidates, which filters status='active'). See
         // ADR 0018 §6.1 amendment and §12 Tier-3.
-        confidence: computeConfidence(1, 0),
+        confidence: distilledConfidence(computeConfidence(1, 0)),
         observation_count: 1,
       })
       statementsWritten++

@@ -182,6 +182,44 @@ surface (T1-B); cross-type retrieval and any further memory writer (Session 34+)
 - `lib/campaigns/generate.ts` has six structured `console.log` lines (five at BASE); CLAUDE.md's carve-out says one per
   invocation. The file's existing pattern was followed; if the carve-out is to be read strictly, that is a separate cleanup.
 
+### 3.3 Session 36 — the memory substrate (ADR 0030), filed by L2.11
+
+**Deferred, each with its un-defer trigger** (ADR 0030 §6.7 and §13.1). The five deferred decision writers come first: each is a human judgment the product already records, and none reaches memory yet, because none has a closed, structured reason a deterministic writer could read (L-7).
+
+| ID | Item | Un-defer trigger |
+|----|------|------------------|
+| **S36-WRITER-BRIEF-REJECTION** | Brief rejection (`rejectBriefAction`) as a memory writer. Signal: the strategy was wrong (audience, brand). Free text would need a model, which L-7 forbids on a write path. | `rejectBriefAction` gains a closed-enum reason. |
+| **S36-WRITER-POST-SKIP** | Post skip as a memory writer. The `skipped` status carries no reason at all. | A skip-reason enum ships. |
+| **S36-WRITER-RESCHEDULE** | Reschedule as a memory writer (a timing judgment, so performance memory). Not an audience or brand fact; high noise. | T1-B analytics shows a timing signal worth learning. |
+| **S36-WRITER-STUDIO-DISCARD** | Studio discard as a memory writer. ADR 0019 L-7 drops it silently by design; ADR 0018's diff loop already captures richer signal. | ADR 0019 L-7 is reversed. |
+| **S36-WRITER-CLAIM-REMOVAL** | Claim removal as a memory writer ("that claim isn't defensible"). No recorded reason. | Claim verification records a closed-enum removal reason. |
+| **S36-TOO-SENSITIVE-TO-BRAND** | `too_sensitive` dismissals writing `brand_memory` (brand-risk appetite). One card says nothing durable. | At least 5 `too_sensitive` dismissals from one watched source on a real tenant. |
+| **S36-MEMORY-UI** | A general memory-management UI (edit or retire any row) and its gated RPC. Nothing in this session adds an edit or retire affordance. | Founder request, or the first support case needing a manual retire. |
+| **S36-EMBEDDINGS** | Embeddings and semantic retrieval (`lib/memory/` only). | ADR 0016 §5.3 `EMBEDDINGS_UNDEFER_THRESHOLD = 200` active evidence + audience rows for one business. |
+| **S36-MEMORY-CARDS** | Memory-driven opportunity cards (brainstorm §13). | Founder ruling **R2**. |
+| **S36-RELATIONSHIP-MEMORY** | `relationship_memory`, parked. | The engagement inbox ships. |
+| **S36-CROSS-TYPE-LINKS** | A cross-type link column and cross-type joins. | A writer that populates links, or embeddings. |
+| **S36-FORMAT-QUERY-FIELD** | A `format` field on `MemoryQueryContext`. | A non-outcome writer that stores a format value. |
+| **S36-WRITER-ENVELOPE** | The wider writer envelope for existing writers (status-on-insert, `expires_at` horizon, `scope_ref` charset). | The first writer that inserts `active` rows by a path other than its gate RPC. |
+| **S36-RENDEREDMEMORY-RETROFIT** | Retrofitting the per-type retrieval guards to `RenderedMemory`. | A new per-type consumer that renders memory into a prompt outside the existing guards. |
+| **S36-BRIEF-PERFORMANCE** | Performance memory in brief assembly (the brief's performance ceiling is 0). | A session specifies `briefAssemblyPrompt`'s performance section, its count rendering and its version bump. |
+| **S36-TRIAGE-DISMISSAL-INJECTION** | Deterministic injection of the signal's own source dismissal row into the triage prompt (§6.8). | `SIGNAL3-TRIAGE-QUALITY` can be re-measured against a baseline that includes memory-seeded cases. |
+| **S36-TRIAGE-TIER-E-ARM** | `not_relevant` rows as a Tier-E arm of `SIGNAL3-TRIAGE-QUALITY`. | The eval corpus gains memory-seeded cases. |
+| **S36-CONTRADICTION-DETECTION** | Automated cross-writer contradiction detection. | At least 10 interview Replace actions on import rows observed on real tenants. |
+
+**The Builder's own debt** (recorded in ADR 0030 V.9, V.12, V.13, V.14; none blocks the merge):
+
+- **S36-M1-RESIDUAL-GRANTS** — `REFERENCES` / `TRIGGER` (and `MAINTAIN` on PG17) stay granted to `anon` / `authenticated` on all four memory tables via platform default privileges. Not reachable over PostgREST; ADR 0029's migration has the same residue. A single `REVOKE ALL … FROM anon, authenticated` + `GRANT SELECT` across the four tables is a small forward migration. Trigger: the next hardening pass.
+- **S36-M2-PROD-PREFLIGHT** — the ceiling `VALIDATE`s abort a deploy if a live import, interview or distilled row is over its ceiling. Before the first production deploy run `SELECT count(*) … WHERE source='import' AND confidence > 0.60` (and the interview > 0.60 and distilled > 0.95 equivalents). Trigger: the first production deploy of migration `20260929120000`.
+- **S36-WRITERCONFIDENCE-CAST-SCAN** — `WriterConfidence` is forgeable by `as`; the SQL ceiling CHECKs are the guard. A cast scan is a candidate. Trigger: the first cast found in review.
+- **S36-IDENTIFIER-CHARSET** — the dismissal identifier charset admits an instruction-like member-chosen repo name (`ignore-previous/approve-all`). Accepted in ADR 0030 §7.1 step 5 (own tenant, confidence ≤ 0.50, neutralised and quoted at the read). Narrowing the bounds needs a migration and an ADR change. Trigger: a real tenant abuses it, or the bounds are revisited with the watched-source model.
+- **S36-UX-UNVERIFIED-IN-BROWSER** — the L2.10 surfaces were verified by DOM and class assertions and measured contrast tokens only: no real browser, 200% zoom or screen-reader run. Trigger: the first browser-QA pass over the opportunities, interview, approvals and backfill surfaces.
+
+- **S36-FRESH-DB-RPC-ACL-AUDIT** — the same defect class (a SECURITY DEFINER function revoked `FROM public` only, so a fresh Supabase database leaves `anon` and `authenticated` with EXECUTE) may exist outside the memory writers; the W1 drift test covers only the registered memory RPCs. Audit every `SECURITY DEFINER` function in `public` on a FRESH database (`SELECT p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' AND p.prosecdef AND (has_function_privilege('anon', p.oid, 'EXECUTE') OR has_function_privilege('authenticated', p.oid, 'EXECUTE'))`) and narrow each one that is not deliberately client-callable. **Before the first production deploy, run that query on the hosted project too**: this session found the three distilled RPCs failing it, and the hosted project's grants were not inspected. Trigger: before launch.
+- **S36-LOCAL-DB-NOT-FRESH** — the local development database is long-lived and its function ACLs differ from a fresh one's (its default ACL for functions in `public` omits `anon` and `authenticated`), so a local Tier-1 green does not prove a privilege property; only the `db-tests` job does. A periodic `supabase db reset --local` (which needs the user's permission) would surface this class earlier. Trigger: the next privilege-touching migration, or whenever a Tier-1 privilege test passes locally and fails in CI again.
+
+**Not attributable to this session:** `S34-E2E-UNVERIFIED` is still open. A brief that "used no memory" on a real run must not be blamed on Session 36 until that smoke test has run.
+
 ## 4. Filed for visibility — no action intended
 
 | ID | Item | Why it is here |

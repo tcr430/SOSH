@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
 import { createMockClient, createSequentialMockClient } from '@/lib/db/__test-utils__/mock-client'
-import { buildPlannerTools, queryContextInputSchema, emptyInputSchema } from '../tools'
+import { buildPlannerTools, emptyInputSchema } from '../tools'
+import { memoryQueryHintsSchema, MEMORY_QUERY_HINTS_JSON_SCHEMA } from '@/lib/memory'
 import { PLANNER_TOOL_NAMES } from '../constants'
 
 const NOW_ISO = new Date().toISOString()
@@ -71,8 +72,11 @@ describe('buildPlannerTools — AGENCY-TOOLS-TENANT-BOUND (ADR 0027 §2.4, const
     }
   })
 
-  it('(b) the query-context tools carry EXACTLY the zod schema shape keys, no more, no fewer', () => {
-    const expectedKeys = Object.keys(queryContextInputSchema.shape).sort()
+  it('(b) the query-context tools carry EXACTLY the zod schema shape keys, no more, no fewer — and that is the literal ["platform"]', () => {
+    // AMENDED (Session 36 L2.7, ADR 0030 §3.2, A-7): the schema is no longer declared in this module. It is memoryQueryHintsSchema from lib/memory,
+    // the one owner; the expected key set is derived FROM it AND pinned to the literal, so neither can drift.
+    const expectedKeys = Object.keys(memoryQueryHintsSchema.shape).sort()
+    expect(expectedKeys).toEqual(['platform'])
     for (const name of ['list_evidence', 'list_brand_claims', 'list_audience_notes'] as const) {
       const tool = tools.find((t) => t.name === name)!
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -80,6 +84,24 @@ describe('buildPlannerTools — AGENCY-TOOLS-TENANT-BOUND (ADR 0027 §2.4, const
       expect(Object.keys(properties).sort(), name).toEqual(expectedKeys)
     }
   })
+
+  it("(b) SUBSTRATE-QUERY-MODEL-FIELDS-BOUNDED: each query-context tool's inputSchema IS (by identity) MEMORY_QUERY_HINTS_JSON_SCHEMA", () => {
+    for (const name of ['list_evidence', 'list_brand_claims', 'list_audience_notes'] as const) {
+      expect(tools.find((t) => t.name === name)!.inputSchema, name).toBe(MEMORY_QUERY_HINTS_JSON_SCHEMA)
+    }
+  })
+
+  it.each(['list_evidence', 'list_brand_claims', 'list_audience_notes'])(
+    '%s: a stale call still carrying `objective` or `audience` fails the strict parse with unrecognized_keys (the dispatcher turns this into a retryable is_error tool result, [sec-8])',
+    async (name) => {
+      const tool = tools.find((t) => t.name === name)!
+      for (const stale of [{ objective: 'x' }, { audience: 'CTOs' }, { platform: 'linkedin', objective: 'x' }]) {
+        const err = await tool.execute(stale).then(() => null, (e: unknown) => e)
+        expect(err, `${name} accepted ${JSON.stringify(stale)}`).toBeInstanceOf(z.ZodError)
+        expect((err as z.ZodError).issues[0].code).toBe('unrecognized_keys')
+      }
+    },
+  )
 
   it('(b) the empty-schema tools carry EXACTLY the zod empty shape — zero keys', () => {
     const expectedKeys = Object.keys(emptyInputSchema.shape)

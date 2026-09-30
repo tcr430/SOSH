@@ -7,6 +7,7 @@ import { useTranslations } from 'next-intl'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { resolveClaimAction, type ResolveClaimState } from './claim-actions'
+import { useProvenanceLabel } from '@/components/memory/ProvenanceLabel'
 import type { PersistedClaimCheck } from '@/lib/db/types'
 
 // ADR 0027 §4.6/§4.8/§8 (Session 34 K2.10) — claim flags at the EXISTING post approval gate (the approvals inbox).
@@ -28,7 +29,8 @@ import type { PersistedClaimCheck } from '@/lib/db/types'
 // The states (§8.2) are separately legible: not checked · no claims · no evidence corpus (claims not checked) ·
 // all cited · n flagged. Absence of a verdict is "not checked", never "clean".
 
-export type EvidenceOption = { id: string; snippet: string }
+// `source` is the evidence row's OWN source column (ADR 0030 §9.2), passed through by the page; it is shown as the option's provenance label.
+export type EvidenceOption = { id: string; snippet: string; source: string }
 
 type CheckedClaim = Extract<PersistedClaimCheck, { status: 'checked' }>['claims'][number]
 
@@ -92,6 +94,7 @@ interface ClaimFlagsProps {
 
 export function ClaimFlags({ postId, content, check, evidenceOptions, editHref }: ClaimFlagsProps) {
   const t = useTranslations('agency.claims')
+  const provenance = useProvenanceLabel()
   const router = useRouter()
   const [state, formAction, pending] = useActionState(resolveClaimAction, { status: 'idle' } as ResolveClaimState)
 
@@ -170,9 +173,14 @@ export function ClaimFlags({ postId, content, check, evidenceOptions, editHref }
                         <span className="font-medium">{t('cite.label')}</span>
                         <select name="evidenceMemoryId" required defaultValue="" className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
                           <option value="" disabled />
-                          {evidenceOptions.map((o) => (
-                            <option key={o.id} value={o.id}>{o.snippet}</option>
-                          ))}
+                          {/* ADR 0030 §9.2: an <option> holds text only, so the label of the row's own source LEADS the snippet ("From your
+                              posts: ..."). It leads because a snippet can run to 120 characters in a closed select, which truncates at the end,
+                              so a trailing label would be the part that is lost. A value outside the six sources adds nothing (never a guessed
+                              label). The value is still the id. */}
+                          {evidenceOptions.map((o) => {
+                            const label = provenance(o.source)
+                            return <option key={o.id} value={o.id}>{label ? `${label}: ${o.snippet}` : o.snippet}</option>
+                          })}
                         </select>
                       </label>
                       <button type="submit" name="resolution" value="cited" disabled={pending} className={cn(buttonVariants({ size: 'sm', variant: 'outline' }), focusRing, 'disabled:opacity-50')}>

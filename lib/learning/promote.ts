@@ -11,6 +11,7 @@ import {
   promotePerformancePattern,
   demotePerformancePattern,
 } from '@/lib/db/memory-performance'
+import { distilledConfidence } from '@/lib/memory'
 
 export const LEARN_PROMOTION_MIN_OBSERVATIONS = 5
 export const LEARN_PROMOTION_MIN_CONFIDENCE = 0.7
@@ -124,7 +125,7 @@ export async function recomputeAndUpsertPattern(
     platform: input.platform,
     scope: input.scope,
     scope_ref: input.scopeRef,
-    confidence,
+    confidence: distilledConfidence(confidence),
     observation_count: observations,
   })
 

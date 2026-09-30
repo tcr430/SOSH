@@ -1,7 +1,7 @@
 import * as Sentry from '@sentry/nextjs'
 import { formatISO } from 'date-fns'
 import { buildCustomerContext, withPostQueryContext } from '@/lib/ai/context'
-import { retrieveEvidenceMemory, type MemoryQueryContext } from '@/lib/memory'
+import { hasActiveEvidence, type MemoryQueryContext } from '@/lib/memory'
 import { runPrompt } from '@/lib/ai/runner'
 import { rubricPrompt, BRIEF_QUALITY_THRESHOLD } from '@/lib/ai/prompts/rubric'
 import type { RubricOutput } from '@/lib/ai/prompts/rubric'
@@ -12,7 +12,6 @@ import { MODELS } from '@/lib/ai/models'
 import { AiError } from '@/lib/ai/errors'
 import { config } from '@/lib/config'
 import { getBusinessById } from '@/lib/db/businesses'
-import { getBrandVoice } from '@/lib/db/brand-voices'
 import { reserveGenerationPost, releaseGenerationPost } from '@/lib/db/generation-budget'
 import { getCampaignById, activateCampaign } from '@/lib/db/campaigns'
 import { getBriefByCampaign, markBriefGenerated } from '@/lib/db/campaign-briefs'
@@ -199,20 +198,11 @@ export async function generatePostsForCampaign(
     }
 
     // STEP 4 — Build customer context (§4.3: pass variation so descriptor reflects campaign's voice)
-    // ADR 0024 §5.1/§5.4 (Session 31, H2.11) — the campaign-level
-    // MemoryQueryContext: {objective, audience, campaignId}. `audience`
-    // needs one extra, cheap single-row read here — ctx (and its
-    // brandVoice.target_audience) doesn't exist until buildCustomerContext
-    // RETURNS, so it cannot supply its own queryContext's audience field.
-    // getBrandVoice is the SAME base read retrieveVoice performs internally
-    // (voice variations only override voice_axes, never target_audience),
-    // so this is not a second, drifting copy of voice resolution.
-    const brandVoiceForAudience = await getBrandVoice(client, businessId)
-    const queryContext: MemoryQueryContext = {
-      objective: campaign.objective,
-      audience: brandVoiceForAudience?.target_audience ?? undefined,
-      campaignId,
-    }
+    // ADR 0030 §3.4 (Session 36 L2.7, A-7) — the campaign-level MemoryQueryContext is { campaignId } ONLY. ADR 0024 §5.1/§5.4 had it as
+    // {objective, audience, campaignId}, but no scoring term ever read `objective` or `audience`. `audience` was the ONLY reason for the extra
+    // getBrandVoice read that used to sit here (ctx does not exist until buildCustomerContext returns), so that read is DELETED with the field
+    // ([type-1b]) — one fewer round-trip per campaign generation, and no behaviour lost.
+    const queryContext: MemoryQueryContext = { campaignId }
     const ctx = await buildCustomerContext(businessId, campaign.voice_variation_id, queryContext)
 
     // STEP 4b — Business plan (ADR 0024 §7.4/§7.5a, H2.9). CustomerContext
@@ -317,13 +307,11 @@ export async function generatePostsForCampaign(
         // re-read (they cannot vary within one campaign) — only the
         // performance slot is replaced, one extra lib/memory DB read.
         //
-        // Session 31-D, D4 (MAJOR-4): spreads STEP 4's campaign-level
-        // queryContext ({objective, audience, campaignId}) in ALONGSIDE
-        // platform/role, rather than passing platform/role alone. Before
-        // this fix, campaignId never reached retrievePerformancePatterns on
-        // this path — computed once at STEP 4, then thrown away every time
-        // withPostQueryContext replaced it with a platform/role-only query.
-        const postCtx = await withPostQueryContext(ctx, { ...queryContext, platform: entry.platform, role: entry.role })
+        // Session 31-D, D4 (MAJOR-4): spreads STEP 4's campaign-level queryContext ({ campaignId }) in ALONGSIDE the per-post platform, rather than
+        // passing platform alone. Before that fix, campaignId never reached retrievePerformancePatterns on this path.
+        // ADR 0030 §3.4 (Session 36 L2.7, A-7): `role` is NO LONGER passed — no scoring term read it. It stays in the post PROMPT context
+        // (entry.role reaches the generation prompt below), not in the memory query context.
+        const postCtx = await withPostQueryContext(ctx, { ...queryContext, platform: entry.platform })
 
         // STEP 7a-pre — Pro daily post cap (ADR §7.4/§7.5/§7.5a, A-1,
         // QUAL-PRO-DAILY-POST-CAP). ONE reservation of ONE unit, BEFORE the
@@ -577,7 +565,8 @@ export async function generatePostsForCampaign(
     let hasEvidenceCorpus: boolean | null = true
     if (boundEvidence.sentIds.size === 0 && generated.some((g) => (g.output.claims?.length ?? 0) > 0)) {
       try {
-        hasEvidenceCorpus = (await retrieveEvidenceMemory(client, businessId, {})).length > 0
+        // ADR 0030 §3.4 (L2.7, SUBSTRATE-EXISTENCE-READ): an EXISTENCE check, not a ranked, capped, windowed retrieval used as a boolean.
+        hasEvidenceCorpus = await hasActiveEvidence(client, businessId)
       } catch {
         hasEvidenceCorpus = null
       }

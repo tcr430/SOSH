@@ -46,7 +46,8 @@
     "already_covered": "Ya cubierto",
     "too_sensitive": "Demasiado sensible",
     "wrong_timing": "Momento equivocado",
-    "weak_evidence": "Evidencia débil"
+    "weak_evidence": "Evidencia débil",
+    "teachesHint": "Jemip recordará que a tu audiencia no le interesan las novedades de esta fuente."
   },
   "status": {
     "pending": "Pendiente",

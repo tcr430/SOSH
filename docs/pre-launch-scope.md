@@ -483,3 +483,46 @@ things hold it: Tier 1 is closed by P-1, and P-5 means we launch on the augmenta
 product can defend at Tier 1 without waiting for Tier 2.
 
 _End §12. Nothing above this heading was rewritten, beyond the four inline-marked factual corrections._
+
+---
+
+## 13. T1-D shipped (2026-09-29) — what's next, appended, not a ruling
+
+**Session 35 (ADR 0029, Track M) shipped T1-D** — Architect, Builder, M3 Reviewer (21 findings) and the
+Session 35-D correction pass (D0–D11, all 21 closed, plus one post-close security fix) are all merged to
+`master` (`5a4d6583`). §4's T1-D checkbox is checked. **Not yet true:** no production OAuth app is
+registered with LinkedIn or X, so no real founder has connected an account or completed an interview round
+end-to-end (`docs/product-status.md`).
+
+**The Session 35 build guide's own "Next" note (§4.3 close-out) named two options, neither ruled on here —
+this section only carries the note forward so it isn't lost, per the founder's request:**
+
+1. **Track L — memory as a platform substrate** (`docs/brainstorm/ai-quality-track-ideas-and-build-path.md`
+   §10: many writers, widening `MemoryQueryContext` beyond its three optional fields, cross-type retrieval,
+   contradiction detection and confidence arithmetic across an arbitrary number of writers). The guide's
+   argument for doing it now: memory has had **one** writer (`lib/learning/orchestrator.ts`) throughout the
+   product's life; T1-D gave it a **second**, customer-authored one (the interview), with its own gated
+   write path (per-item human ratification). Track L would generalise a pattern that now exists twice,
+   instead of designing the general case blind.
+2. **T1-B — analytics and the monthly report** (§4 above). Flagged in the guide as cheap now that Session 33
+   (the outcome loop) has landed, and it is half of the **C-2** pricing gate (§9, §12.9 P-6) — the one
+   pre-launch item this document calls a hard gate: the pricing wording and the shipped product must match
+   before launch, and Plus/Pro both promise "basic/advanced analytics."
+
+**Not ruled here.** This is a carry-forward note, not a P-7 adjudication — no Tier reassignment, no new
+constitution amendment. The founder's own words at the time this was asked back: *"Add that to pre launch
+scope appended"* — recorded, not decided.
+
+_End §13._
+
+---
+
+## 14. P-7 — Track L sequenced ahead of T1-B (ruled 2026-09-29), appended
+
+Appended rather than inserted into §12.9, so that §12 stays as ruled. This is the P-7 row §13 declined to be.
+
+| # | Decision | Ruling |
+|---|---|---|
+| **P-7** | Sequence Track L (memory as a platform substrate, ADR 0030) as Session 36, ahead of T1-B (analytics and the monthly report) | **Track L first (founder, 2026-09-29).** Track L is **not** a Tier-1 item, and Tier 1 stays closed (P-1): nothing is displaced, no Tier reassignment. **Cost recorded:** it spends a session T1-B could have used, and **T1-B remains half of the C-2 pricing gate** (§9, §12.9 P-6), the one hard launch gate. T1-B is still open and unscheduled |
+
+_End §14._

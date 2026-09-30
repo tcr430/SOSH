@@ -4,6 +4,7 @@ import type { PerformanceMemoryRow, PerformanceMemoryInsert, PerformanceMemoryIm
 import { getErrorMessage } from './utils'
 import { MEMORY_CANDIDATE_LIMIT } from './memory-constants'
 import { neutralizeWithSentinels } from '@/lib/ai/wrap-evidence'
+import type { WithWriterConfidence } from '@/lib/memory'
 
 // ADR 0018 Amd A.2 / ADR 0022 §5.2, §11.2 MEM-PATTERN-PROMOTER-BOUNDED
 // (Session 29-D, MAJOR-2) — a Zod bound at THIS promoter boundary, IN FRONT
@@ -127,7 +128,10 @@ export async function listDistilledPatternsForSummary(
 // plane-15 marker-sentinel strip this boundary needs (ADR §5.1).
 export async function upsertDistilledPerformancePattern(
   client: SupabaseClient,
-  insert: PerformanceMemoryInsert,
+  // ADR 0030 §2.2 [type-4] — `confidence` is a WriterConfidence<'distilled'>: only distilledConfidence() (lib/memory/writers.ts)
+  // can mint one, and it throws outside [0, 0.95]. A first line only; the SQL ceiling CHECK is the enforcement. The value
+  // forwarded to the RPC is unchanged.
+  insert: WithWriterConfidence<PerformanceMemoryInsert, 'distilled'>,
 ): Promise<PerformanceMemoryRow> {
   const pattern = PATTERN_PROMOTER_BOUND_SCHEMA.parse(neutralizeWithSentinels(insert.pattern))
   const { data, error } = await client.rpc('upsert_distilled_performance_pattern', {
@@ -262,7 +266,10 @@ export async function demotePerformancePattern(
 // input, since I2.11's model-derived topic/hook/proof_type patterns also
 // route through here. Governance columns are fixed inside the RPC — this
 // type has no field for them.
-export async function importPerformanceMemory(insert: PerformanceMemoryImportInsert): Promise<PerformanceMemoryRow[]> {
+export async function importPerformanceMemory(
+  // ADR 0030 §2.2 [type-4] — `confidence` is a WriterConfidence<'import'> (importConfidence(), band (0, 0.60]); value unchanged.
+  insert: WithWriterConfidence<PerformanceMemoryImportInsert, 'import'>,
+): Promise<PerformanceMemoryRow[]> {
   const { createServiceRoleClient } = await import('@/lib/supabase/service')
   const client = createServiceRoleClient()
   const { data, error } = await client.rpc('import_performance_memory', {

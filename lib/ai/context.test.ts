@@ -662,7 +662,7 @@ describe('withPostQueryContext', () => {
     vi.mocked(listPostsByIds).mockResolvedValue([{ ...mockPost, id: 'post-2', content: 'PER-POST content' }])
 
     const { withPostQueryContext } = await import('./context')
-    const refined = await withPostQueryContext(ctx, { platform: 'linkedin', role: 'anchor_thesis' })
+    const refined = await withPostQueryContext(ctx, { platform: 'linkedin' })
 
     // Performance IS refreshed with the new per-post query.
     expect(refined.recentPostPerformance).toEqual([
@@ -685,7 +685,7 @@ describe('withPostQueryContext', () => {
     vi.clearAllMocks() // isolate calls made by withPostQueryContext itself
 
     const { withPostQueryContext } = await import('./context')
-    await withPostQueryContext(ctx, { platform: 'linkedin', role: 'anchor_thesis' })
+    await withPostQueryContext(ctx, { platform: 'linkedin' })
 
     expect(getBrandVoice).not.toHaveBeenCalled()
     expect(getBusinessById).not.toHaveBeenCalled()
@@ -716,8 +716,8 @@ describe('withPostQueryContext', () => {
     const ctx = await buildCustomerContext('biz-1')
 
     const { withPostQueryContext } = await import('./context')
-    const withoutCampaignId = await withPostQueryContext(ctx, { platform: 'linkedin', role: 'anchor_thesis' })
-    const withCampaignId = await withPostQueryContext(ctx, { campaignId: 'camp-THIS', platform: 'linkedin', role: 'anchor_thesis' })
+    const withoutCampaignId = await withPostQueryContext(ctx, { platform: 'linkedin' })
+    const withCampaignId = await withPostQueryContext(ctx, { campaignId: 'camp-THIS', platform: 'linkedin' })
 
     // Same underlying rows, same ctx — only the spread-in campaignId
     // differs. Without it, raw confidence decides (0.9 wins). With it, the
@@ -758,12 +758,12 @@ describe('observedOutcomes (ADR 0026 J2.9)', () => {
     const ctx = await buildCustomerContext('biz-1')
     const { withPostQueryContext } = await import('./context')
 
-    const forX = await withPostQueryContext(ctx, { platform: 'twitter', role: 'anchor_thesis' })
+    const forX = await withPostQueryContext(ctx, { platform: 'twitter' })
     expect(forX.observedOutcomes).toHaveLength(1)
     expect(vi.mocked(listOutcomePatternsForGeneration)).toHaveBeenLastCalledWith('biz-1', expect.objectContaining({ platform: 'twitter' }))
 
     vi.mocked(listOutcomePatternsForGeneration).mockResolvedValue([])
-    const forLi = await withPostQueryContext(ctx, { platform: 'linkedin', role: 'anchor_thesis' })
+    const forLi = await withPostQueryContext(ctx, { platform: 'linkedin' })
     expect('observedOutcomes' in forLi).toBe(false)
   })
 })

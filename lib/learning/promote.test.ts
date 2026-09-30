@@ -139,7 +139,13 @@ describe('recomputeAndUpsertPattern', () => {
   })
 
   it('recomputes observation_count via COUNT, never increments — passes the recomputed count straight to the upsert', async () => {
-    vi.mocked(countProcessedSignalsForPattern).mockResolvedValueOnce(5) // observations
+    // AMENDED (Session 36 L2.3, ADR 0030 §2.2): the contradictions call used to fall through to the mock's default
+    // (undefined), so computeConfidence(5, undefined) was NaN and that NaN flowed silently into the mocked upsert. The
+    // distilledConfidence() brand now refuses a NaN, which exposed the under-specified mock. In production the count is
+    // always a number; this pins it (0 contradictions), and the asserted observation_count is unchanged.
+    vi.mocked(countProcessedSignalsForPattern)
+      .mockResolvedValueOnce(5) // observations
+      .mockResolvedValueOnce(0) // contradictions
     await recomputeAndUpsertPattern(mockClient, {
       businessId: 'biz-1',
       dimension: 'format',

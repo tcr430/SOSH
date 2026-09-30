@@ -18,3 +18,7 @@ export const BRAND_CAP = 5
 export const EVIDENCE_CAP = 5
 export const AUDIENCE_CAP = 5
 export const PERFORMANCE_CAP = 3
+
+// ADR 0030 §6.8 (Session 36 L2.6) — how many dismissal notes triage's list_audience_notes tool may be shown. Dismissal rows are excluded from
+// every other audience read, so this is the whole of their budget; it is small on purpose (at most one row per watched source exists).
+export const SOURCE_DISMISSAL_CAP = 3

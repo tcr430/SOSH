@@ -665,13 +665,32 @@ describe('INTERVIEW-PERFORMANCE-POLICY-UNCHANGED (ADR 0029 §2.4, constraint 14)
     expect(findPerformancePolicyRefs('SELECT count(*) FROM public.performance_memory;')).toEqual([])
   })
 
-  it('no migration after the Session 35 boundary names a performance_memory policy, grant or trigger', () => {
+  // AMENDED (Session 36 L2.2, ADR 0030 §2.4 and founder ruling A-5), in place and never deleted. ADR 0029 froze
+  // performance_memory's member policies on purpose; ADR 0030 SUPERSEDES that for this table (SUBSTRATE-MEMBER-WRITE-CLOSED,
+  // ADR 0030 §12). The supersession is ONE named migration, allowed EXACTLY: any OTHER migration after the boundary that
+  // names a performance_memory policy, grant or trigger still fails this scan, and the allowed file must contain exactly
+  // the three DROP POLICYs and the one REVOKE the ADR specifies — nothing more can ride in under the allowance.
+  const ADR_0030_CLOSURE_MIGRATION = '20260929110000_performance_memory_member_writes_closed.sql'
+
+  it('no migration after the Session 35 boundary names a performance_memory policy, grant or trigger — except the one ADR 0030 §2.4 closure, allowed exactly', () => {
     const all = migrations()
     expect(all.length, 'the scan read too few migrations').toBeGreaterThanOrEqual(100)
     expect(all.map((m) => m.name), 'the boundary migration is missing — the "in this range" cut is meaningless').toContain(BOUNDARY_MIGRATION)
     const inRange = all.filter((m) => m.name > BOUNDARY_MIGRATION)
-    const offenders = inRange.flatMap((m) => findPerformancePolicyRefs(m.sql).map((t) => `${m.name} -> ${t}`))
+    const offenders = inRange
+      .filter((m) => m.name !== ADR_0030_CLOSURE_MIGRATION)
+      .flatMap((m) => findPerformancePolicyRefs(m.sql).map((t) => `${m.name} -> ${t}`))
     expect(offenders, `scanned ${inRange.length} in-range migration(s)`).toEqual([])
+
+    // the allowance is real (not vacuous) and exact
+    const closure = inRange.find((m) => m.name === ADR_0030_CLOSURE_MIGRATION)
+    expect(closure, 'the ADR 0030 closure migration is missing — the allowance names a file that does not exist').toBeDefined()
+    expect(findPerformancePolicyRefs(closure?.sql ?? '').map((h) => h.split(' ').slice(0, 3).join(' '))).toEqual([
+      'DROP POLICY performance_memory_insert_own',
+      'DROP POLICY performance_memory_update_own',
+      'DROP POLICY performance_memory_delete_own',
+      'REVOKE INSERT, UPDATE,',
+    ])
   })
 })
 

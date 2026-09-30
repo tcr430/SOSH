@@ -4,6 +4,7 @@ import { INTERVIEW_CANDIDATES_LIMIT_PER_TABLE, INTERVIEW_CONFLICT_TARGETS_LIMIT,
 import { getErrorMessage } from './utils'
 import { MEMORY_CANDIDATE_LIMIT } from './memory-constants'
 import { neutralizeWithSentinels } from '@/lib/ai/wrap-evidence'
+import type { WithWriterConfidence } from '@/lib/memory'
 
 // ADR 0016 §5.1 (Q4) — candidate query only. No scoring, no capping; that is
 // lib/memory/evidence.ts's job (B2). business_id is filtered explicitly
@@ -25,6 +26,28 @@ export async function listEvidenceMemoryCandidates(
     .limit(limit)
   if (error) throw new Error(getErrorMessage(error))
   return (data as EvidenceMemoryRow[]) ?? []
+}
+
+// ADR 0030 §3.4 (Session 36 L2.7, SUBSTRATE-EXISTENCE-READ) — "does this business have ANY usable evidence?", as a dedicated read. lib/campaigns/generate.ts
+// used `retrieveEvidenceMemory(client, businessId, {}).length > 0`: a ranked, capped, 50-row-windowed read used as a boolean. This is one indexed
+// probe (evidence_memory_retrieval_idx) and returns as soon as ONE row qualifies. It takes the CALLER's client on purpose — the generation path
+// passes service-role and must not acquire it lazily here — and filters business_id explicitly, because that path bypasses RLS (ADR 0016 §4).
+//
+// RECORDED AS AN INTENTIONAL WIDENING: it drops the window and the rank artifacts of `.length > 0`, and it applies the expiry predicate in SQL
+// (the shared candidate read leaves expiry to rankAndCap's JS filter). Both agree on every corpus that holds an unexpired active row.
+export async function hasActiveEvidence(client: SupabaseClient, businessId: string): Promise<boolean> {
+  const { data, error } = await client
+    .from('evidence_memory')
+    .select('id')
+    .eq('business_id', businessId)
+    .eq('status', 'active')
+    .is('deleted_at', null)
+    .or('expires_at.is.null,expires_at.gt.now()')
+    .order('confidence', { ascending: false })
+    .order('recency_at', { ascending: false }) // matches evidence_memory_retrieval_idx
+    .limit(1)
+  if (error) throw new Error(getErrorMessage(error))
+  return (data?.length ?? 0) > 0
 }
 
 // ADR 0017 §9 [db-NIT-2] — the citation-by-id re-fetch that closes the
@@ -72,7 +95,10 @@ export async function getEvidenceMemoryByIds(
 // the MEM-PATTERN-SENTINEL-GUARDED precedent exactly. Governance columns
 // (source, status, sensitivity, public_use_permission) are fixed inside the
 // RPC — this type has no field for them, so they cannot be passed wrong.
-export async function importEvidenceMemory(insert: EvidenceMemoryImportInsert): Promise<EvidenceMemoryRow[]> {
+export async function importEvidenceMemory(
+  // ADR 0030 §2.2 [type-4] — `confidence` is a WriterConfidence<'import'> (importConfidence(), band (0, 0.60]); value unchanged.
+  insert: WithWriterConfidence<EvidenceMemoryImportInsert, 'import'>,
+): Promise<EvidenceMemoryRow[]> {
   const { createServiceRoleClient } = await import('@/lib/supabase/service')
   const client = createServiceRoleClient()
   const { data, error } = await client.rpc('import_evidence_memory', {

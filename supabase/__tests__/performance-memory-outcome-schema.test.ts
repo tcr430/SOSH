@@ -370,12 +370,18 @@ describe('performance_memory — outcome schema and write protection (ADR 0026 �
       }
     })
 
-    it("INSERT with source='manual' still works (the one authenticated write path that remains)", async () => {
-      expect(await authInsert(manualRow())).toBeUndefined()
+    // AMENDED (Session 36 L2.2, ADR 0030 §2.4 / A-5, SUBSTRATE-MEMBER-WRITE-CLOSED): this case used to assert that a
+    // manual INSERT WORKED — "the one authenticated write path that remains". That path is now closed at the GRANT layer,
+    // so it asserts the refusal. Amended, not deleted: the title still names what the case is about.
+    it("INSERT with source='manual' is now REFUSED with 42501 — the last authenticated write path is closed (ADR 0030 §2.4, A-5)", async () => {
+      expect(await authInsert(manualRow())).toBe(RLS_OR_PRIVILEGE)
     })
 
-    it("INSERT cannot smuggle stats onto a manual row (source='manual' + outcome_n)", async () => {
-      expect(await authInsert(manualRow({ outcome_n: 50 }))).toBe(CHECK_VIOLATION)
+    // AMENDED (L2.2, A-5): the CHECK violation this case used to reach is now unreachable for a member, because the
+    // missing INSERT grant is refused BEFORE constraints run. The CHECK itself is unchanged and is proven for the
+    // service role by the CHECK cases earlier in this file.
+    it("INSERT cannot smuggle stats onto a manual row (source='manual' + outcome_n) — refused at the grant, 42501 (A-5)", async () => {
+      expect(await authInsert(manualRow({ outcome_n: 50 }))).toBe(RLS_OR_PRIVILEGE)
     })
 
     it("UPDATE of an outcome row's outcome_n, pattern or source is rejected; the row is unchanged", async () => {
@@ -397,15 +403,20 @@ describe('performance_memory — outcome schema and write protection (ADR 0026 �
       expect(data).toEqual({ pattern: 'original outcome text', outcome_n: 11, source: 'outcome', status: 'candidate' })
     })
 
-    it('RETIRING an outcome row is allowed, and so is soft-deleting it; un-retiring is not', async () => {
+    // AMENDED (L2.2, ADR 0030 §2.4 / A-5): a member could retire or soft-delete an outcome row here. Members now hold no
+    // UPDATE grant at all, so the retire, the soft-delete and the un-retire are ALL refused with 42501 and the rows are
+    // untouched. (Retirement still happens: through the service-role RPCs, proven by the outcome-demotion suite.)
+    it('RETIRING an outcome row, soft-deleting it and un-retiring it are ALL refused with 42501 now (A-5)', async () => {
       const retireId = await mustInsert(outcomeRow())
-      expect(await authUpdate(retireId, { status: 'retired' })).toBeNull()
+      expect((await authUpdate(retireId, { status: 'retired' }))?.code).toBe(RLS_OR_PRIVILEGE)
       const { data } = await admin.from('performance_memory').select('status').eq('id', retireId).single()
-      expect(data.status).toBe('retired')
-      expect(await authUpdate(retireId, { status: 'active' })).not.toBeNull()
+      expect(data.status).toBe('candidate')
+      expect((await authUpdate(retireId, { status: 'active' }))?.code).toBe(RLS_OR_PRIVILEGE)
 
       const deleteId = await mustInsert(outcomeRow())
-      expect(await authUpdate(deleteId, { deleted_at: new Date().toISOString() })).toBeNull()
+      expect((await authUpdate(deleteId, { deleted_at: new Date().toISOString() }))?.code).toBe(RLS_OR_PRIVILEGE)
+      const { data: still } = await admin.from('performance_memory').select('deleted_at').eq('id', deleteId).single()
+      expect(still.deleted_at).toBeNull()
     })
 
     it('RETIRING while ALSO changing a stats column is rejected (the stats branch is independently load-bearing)', async () => {
@@ -444,13 +455,15 @@ describe('performance_memory — outcome schema and write protection (ADR 0026 �
       expect(data).toEqual({ status: 'candidate', platform: 'linkedin', scope: 'brand', scope_ref: null })
     })
 
-    it('retire ALONE still succeeds (the legitimate path), and un-retiring is still rejected by branch A', async () => {
+    // AMENDED (L2.2, ADR 0030 §2.4 / A-5): "retire ALONE still succeeds" no longer holds for a member. All three
+    // statements are refused with 42501, and the row never leaves 'candidate'.
+    it('retire ALONE, un-retiring and un-deleting are all refused with 42501 now — a member holds no UPDATE grant (A-5)', async () => {
       const id = await mustInsert(outcomeRow())
-      expect(await authUpdate(id, { status: 'retired' })).toBeNull()
+      expect((await authUpdate(id, { status: 'retired' }))?.code).toBe(RLS_OR_PRIVILEGE)
       const { data } = await admin.from('performance_memory').select('status, pattern').eq('id', id).single()
-      expect(data.status).toBe('retired')
-      expect(await authUpdate(id, { status: 'active' })).not.toBeNull()
-      expect(await authUpdate(id, { deleted_at: null, status: 'candidate' })).not.toBeNull()
+      expect(data.status).toBe('candidate')
+      expect((await authUpdate(id, { status: 'active' }))?.code).toBe(RLS_OR_PRIVILEGE)
+      expect((await authUpdate(id, { deleted_at: null, status: 'candidate' }))?.code).toBe(RLS_OR_PRIVILEGE)
     })
 
     it('the service role is NOT frozen out: a recompute-style pattern rewrite still succeeds (the RPCs are DEFINER, current_user is not a client role)', async () => {
@@ -461,19 +474,27 @@ describe('performance_memory — outcome schema and write protection (ADR 0026 �
       expect(data.pattern).toBe('v2 text')
     })
 
-    it('a DISTILLED row: content edits and promotion are rejected, retirement is allowed', async () => {
+    // AMENDED (L2.2, ADR 0030 §2.4 / A-5): content edits and promotion were already rejected; RETIREMENT used to be the
+    // one thing a member could do to a distilled row. It is refused too now, and the row is unchanged.
+    it('a DISTILLED row: content edits, promotion AND retirement are all refused with 42501 now (A-5)', async () => {
       const id = await mustInsert(distilledRow())
-      expect(await authUpdate(id, { pattern: 'edited' })).not.toBeNull()
-      expect(await authUpdate(id, { status: 'active' })).not.toBeNull()
-      expect(await authUpdate(id, { status: 'retired' })).toBeNull()
+      expect((await authUpdate(id, { pattern: 'edited' }))?.code).toBe(RLS_OR_PRIVILEGE)
+      expect((await authUpdate(id, { status: 'active' }))?.code).toBe(RLS_OR_PRIVILEGE)
+      expect((await authUpdate(id, { status: 'retired' }))?.code).toBe(RLS_OR_PRIVILEGE)
+      const { data } = await admin.from('performance_memory').select('pattern, status').eq('id', id).single()
+      expect(data).toEqual({ pattern: 'Distilled pattern', status: 'candidate' })
     })
 
-    it('a MANUAL row stays fully editable, but can never become another source', async () => {
+    // AMENDED (L2.2, ADR 0030 §2.4 / A-5): "a MANUAL row stays fully editable" was the Session 33 carve-out the fourth
+    // memory table kept. There is no editable member path any more: the edit, the promotion to active and the source
+    // change are all refused with 42501, and the (admin-seeded) manual row is unchanged.
+    it('a MANUAL row is no longer editable by a member, and can never become another source (A-5)', async () => {
       const id = await mustInsert(manualRow({ pattern: 'my note' }))
-      expect(await authUpdate(id, { pattern: 'my edited note', status: 'active' })).toBeNull()
+      expect((await authUpdate(id, { pattern: 'my edited note', status: 'active' }))?.code).toBe(RLS_OR_PRIVILEGE)
       const { data } = await admin.from('performance_memory').select('pattern, status').eq('id', id).single()
-      expect(data).toEqual({ pattern: 'my edited note', status: 'active' })
-      expect(await authUpdate(id, { source: 'outcome' })).not.toBeNull()
+      expect(data.pattern).toBe('my note')
+      expect(data.status).not.toBe('active')
+      expect((await authUpdate(id, { source: 'outcome' }))?.code).toBe(RLS_OR_PRIVILEGE)
     })
 
     it("cross-tenant: a member cannot touch another business's outcome row (RLS), let alone forge it", async () => {
@@ -524,12 +545,15 @@ describe('performance_memory — outcome schema and write protection (ADR 0026 �
       expect(names).toContain('trg_performance_memory_outcome_write_protect')
     })
 
-    it("the INSERT policy's WITH CHECK carries the source predicate", async () => {
-      const { rows } = await pg.query<{ with_check: string | null }>(
-        `SELECT with_check FROM pg_policies WHERE tablename = 'performance_memory' AND policyname = 'performance_memory_insert_own'`,
+    // AMENDED (L2.2, ADR 0030 §2.4 / A-5): the INSERT policy whose WITH CHECK carried the source predicate no longer
+    // exists — the migration dropped it together with the grant. What must stay true is that NO write policy is left to
+    // misread; substrate-member-write-closed.test.ts proves the full policy/grant state, this asserts the specific
+    // policy this case used to read is gone.
+    it("the source-predicate INSERT policy is DROPPED — no performance_memory_insert_own remains (A-5)", async () => {
+      const { rows } = await pg.query<{ policyname: string }>(
+        `SELECT policyname FROM pg_policies WHERE tablename = 'performance_memory' AND policyname = 'performance_memory_insert_own'`,
       )
-      expect(rows[0].with_check).toMatch(/source = 'manual'/)
-      expect(rows[0].with_check).toMatch(/get_user_business_ids/)
+      expect(rows).toEqual([])
     })
   })
 })

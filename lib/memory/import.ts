@@ -12,6 +12,7 @@ import type {
 import { importEvidenceMemory } from '@/lib/db/memory-evidence'
 import { importAudienceMemory } from '@/lib/db/memory-audience'
 import { importPerformanceMemory } from '@/lib/db/memory-performance'
+import { importConfidence } from './writers'
 
 // ADR 0025 §9.4 (Session 32 I2.7) — MEM-NO-DIRECT-TABLE-ACCESS's import-path
 // counterpart: the ONLY caller of importEvidenceMemory/importAudienceMemory/
@@ -78,7 +79,7 @@ export async function importEvidenceItem(input: ImportEvidenceItemInput): Promis
     source_url: input.sourceUrl,
     scope: IMPORT_SCOPE,
     scope_ref: input.platform,
-    confidence: input.confidence,
+    confidence: importConfidence(input.confidence),
     last_confirmed_at: formatISO(publishedAt),
     expires_at: expiresAt,
   })
@@ -112,7 +113,7 @@ export async function importAudienceItem(input: ImportAudienceItemInput): Promis
     statement: input.statement,
     scope: IMPORT_SCOPE,
     scope_ref: input.platform,
-    confidence: input.confidence,
+    confidence: importConfidence(input.confidence),
     last_confirmed_at: formatISO(publishedAt),
     expires_at: null,
   })
@@ -150,7 +151,7 @@ export async function importPerformanceItem(input: ImportPerformanceItemInput): 
     platform: input.platform,
     scope: IMPORT_SCOPE,
     scope_ref: input.platform,
-    confidence: input.confidence,
+    confidence: importConfidence(input.confidence),
     observation_count: input.observationCount,
     last_confirmed_at: formatISO(newest),
     expires_at: expiresAt,

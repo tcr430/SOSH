@@ -1434,3 +1434,58 @@ proving the whole migration chain including this new file applies clean): **107 
 D11's 1127 — the new type-mismatch test).
 
 **SHA:** the commit immediately following D11, before this branch merges.
+
+
+---
+
+## Note (2026-09-29, Session 36 L2.2 · ADR 0030 §2.4) — `INTERVIEW-PERFORMANCE-POLICY-UNCHANGED` is superseded for its `performance_memory` arm
+
+> Appended, dated and attributed to the Session 36 Builder. Nothing above is edited.
+
+`INTERVIEW-PERFORMANCE-POLICY-UNCHANGED` (§11 #14) recorded that Session 35 left `performance_memory`'s policies and member
+grants untouched. ADR 0030 §2.4 (founder ruling A-5) closes that path, so the constraint is **superseded for its
+`performance_memory` arm by `SUBSTRATE-MEMBER-WRITE-CLOSED`** (ADR 0030 §12 #6). The id stays in this table. Both halves were
+**amended in place, never deleted**:
+
+- **Tier 1** (`supabase/__tests__/interview-member-write-closed.test.ts`): the case now asserts that only
+  `performance_memory_select_own` remains and that `authenticated` holds no INSERT/UPDATE/DELETE.
+- **Tier 3** (`lib/interview/__tests__/source-scans.test.ts`): the scan that forbade any post-boundary migration from naming a
+  `performance_memory` policy, grant or trigger now allows exactly one named file
+  (`20260929110000_performance_memory_member_writes_closed.sql`), asserted to contain exactly three `DROP POLICY` and one
+  `REVOKE`. Any other migration naming the table still fails it.
+
+`INTERVIEW-MEMBER-WRITE-CLOSED` (brand, evidence, audience) is unchanged and still proven.
+
+
+---
+
+## Amendment (2026-09-29, Session 36 L2.4 · ADR 0030 §4.2, founder ruling A-6) — §4.5: Replace admits `import`-sourced targets
+
+> Appended, dated and attributed to the Session 36 Builder. Nothing above is edited.
+
+§4.5 allowed an approver or admin, while ratifying an interview candidate, to **Replace** a conflicting row only if that row was an
+`interview` row. ADR 0030 §4.2 widens that to **`interview` or `import`**, by an explicit allow-list (never "everything except"),
+because interview extraction already receives active rows of every source and `write_interview_candidates` already persists an import
+row's id as a conflict, so the human could see a conflict they could not resolve.
+
+- **What changed** (`20260929130000_ratify_replace_admits_import.sql`): `ratify_interview_round` restated whole with `CREATE OR REPLACE`,
+  copied from `20260929100000` by `sed`, exactly **three** lines differ: the replace-target probe, the retire UPDATE's guard, and the error
+  text (`source = 'interview'` → `source IN ('interview', 'import')`; the existing error phrase is kept as a prefix, because
+  `interview-ratify.test.ts` pins it). Its ACLs are unchanged (`service_role` only).
+- **Every other bound is unchanged:** `v_rep_type` limited to brand/audience/evidence; the target must be one of the accepting candidate's
+  own persisted `interview_conflict_ids`, of the same type, the same business, `active`, and used at most once.
+- **Never an earned or manual row:** distilled, outcome and dismissal targets (and manual) are refused (`22023`).
+- **Provenance survives:** a retired import row keeps `source = 'import'`, its `import_run_id` and its `import_source_post_ids`
+  (`enforce_memory_import_immutable` guards only those three columns, so a status change passes). A later backfill can re-import the same
+  claim as a new candidate, which re-enters ratification normally. `remove_import_source_post` tolerates a retired import row.
+- **Authority is not widened:** the same approver or admin can already retire an import candidate through `ratify_backfill_run`.
+- **`INTERVIEW-CONFLICT-TENANT-BOUNDED` and the §4.5 replace rule are widened, not weakened;** re-proven by
+  `supabase/__tests__/substrate-ratify-import.test.ts` (`SUBSTRATE-CONTRADICTION-CROSS-WRITER`).
+- **One existing Tier-1 case reversed, amended in place:** `interview-ratify.test.ts` "a replace target with source 'import' is rejected"
+  now asserts the import row is retired and keeps its provenance. The `manual` and `distilled` cases are unchanged.
+- **UI:** `InterviewPanel.tsx` offers Replace when the target is `active` and its source is `interview` or `import`. No label or copy change
+  (those are L2.10).
+
+## Note (2026-09-30, Session 36 L2.11 · ADR 0030 §1.3) — the five provisional choices of §1.3 now have platform answers
+
+This pointer was owed by ADR 0030 §13.2 and was not in the commits that changed §4.5 (`a7e91e98`) or §2.4 (`c07a2c5e`); it is added at close-out. **Additive; nothing above is edited.** §1.3 listed five choices as "provisional and scoped to this writer". ADR 0030 §1.3 answers each: (1) contradiction handling is **generalised** (retire authority depends on the source's class; a human ratifier may retire `interview` or `import` rows, never earned ones; no automated detection), see §4.5's Amendment above; (2) closing the memory tables to member writes is **kept as the platform answer and extended** to `performance_memory`; (3) thinness targets are **kept, writer-scoped**; (4) `scope = 'brand'` for every interview record is **kept**, as the platform rule that a writer sets scope only from what it structurally knows; (5) confidence placement is **generalised** into ADR 0030 §4.1's verification bands and per-source ceiling CHECKs, with values unchanged.

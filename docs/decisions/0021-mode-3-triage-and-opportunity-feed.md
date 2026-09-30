@@ -1819,3 +1819,35 @@ is `lib/signals/triage/source-scans.test.ts:35-48`. **Corrected in K2.4** (`b741
 reading the file (the comment now names `source-scans.test.ts:35-48`). The same commit added a cross-reference comment
 recording that `lib/campaigns/planner/tools.ts` re-implements this module's first four tools rather than importing
 them, to keep `lib/campaigns` from importing `lib/signals/triage`.
+
+---
+
+## §19 — Note D (Session 36 / ADR 0030, L2.9, 2026-09-30) — APPENDED, NOT REWRITTEN
+
+**Source:** ADR 0030 §6.5, §6.8 and §7.1. **Additive.** Nothing above §19 was modified; §5.4 and §7.4 are left exactly as written and this note reads against them.
+
+### D-1 — §5.4: a `not_relevant` dismissal now has a memory effect
+
+§5.4's closed five-value `dismiss_reason` enum, its optional-ness and `dismissSchema` are unchanged. What changed is what happens after a successful
+transition. `dismissCardAction` now calls `recomputeDismissalSignal(cardId)` **only when `reason === 'not_relevant'`**; the other four reasons and NULL
+teach memory nothing. `approveCardAction` and `saveCardAction` call it after every success, and it recomputes an existing dismissal row for that watched
+source only (it never creates one), so an approval or a save can demote a row. Each call sits in its own try/catch: a recompute failure logs one
+`console.error` and the action still returns its success result. Nothing is called on `already_triaged` or on a transition failure.
+
+### D-2 — §2.2 / §2.3: `list_audience_notes` returns dismissal rows
+
+The tool inventory is still the closed four; `list_audience_notes` still takes the same input schema. It now also returns
+`retrieveSourceDismissals` rows in the same `{ id, statement }` shape, each statement through `wrapToolResultForPrompt`, with `businessId` closure-bound as
+before. Its description gains one clause ("It also lists sources this business has repeatedly dismissed."). Dismissal rows are excluded from every other
+audience read; this tool is their one consumer (scan-enforced by `SUBSTRATE-DISMISSAL-SCOPED-CONSUMER`).
+
+### D-3 — §7.4: the worst case gains ADR 0030 §7.1's continuation
+
+§7.4's worst achievable outcome ("a `not_relevant` label") is unchanged as far as the card goes. Its continuation, per ADR 0030 §7.1: a member of the tenant
+can now cause triage to under-weight one of their **own** watched sources, at confidence ≤ 0.50. No cross-tenant effect, no governance field reachable, and
+nothing is published without approval. The dismissal statement is built in SQL from a closed template and a regex-checked identifier and reads no text from a
+card, signal or feed label; it is neutralised and quoted again at the read.
+
+### D-4 — `SIGNAL3-TRIAGE-QUALITY` (Tier E, still MEASURED, never COVERED)
+
+Replayed once after this change (`npm run test:eval`, cassette): identical to the run recorded before it (ADR 0030 V.1c). See ADR 0030 V.13.

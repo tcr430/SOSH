@@ -46,7 +46,8 @@ export const FROZEN_TABLE: Record<string, FrozenRow> = {
     useToolOutput: undefined,
   },
   'brief-assembly': {
-    version: 3,
+    // version 4: ADR 0030 §5.4 (Session 36 L2.8) — text/input change only (bundle-rendered memory); every sampling property is unchanged.
+    version: 4,
     modelKey: 'SONNET_4_6',
     temperature: undefined,
     thinking: 4000,
