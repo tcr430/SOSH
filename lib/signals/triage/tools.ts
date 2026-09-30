@@ -4,6 +4,7 @@ import type { TriageTool } from '@/lib/ai/tool-runner'
 import {
   retrieveEvidenceMemory,
   retrieveAudienceMemory,
+  retrieveSourceDismissals,
   retrieveBrandMemory,
   memoryQueryHintsSchema,
   MEMORY_QUERY_HINTS_JSON_SCHEMA,
@@ -98,12 +99,16 @@ export function buildTriageTools(client: SupabaseClient, businessId: string, cit
 
   const listAudienceNotes: TriageTool = {
     name: 'list_audience_notes',
-    description: 'List audience memory (who cares about this release, and why) for this business.',
+    description:
+      'List audience memory (who cares about this release, and why) for this business. It also lists sources this business has repeatedly dismissed.',
     inputSchema: QUERY_CONTEXT_JSON_SCHEMA,
     execute: async (input) => {
       const queryContext = parseQueryContext(input)
       const rows = await retrieveAudienceMemory(client, businessId, queryContext)
-      return rows.map((row) => ({ id: toToolResultId(row.id), statement: wrapToolResultForPrompt(row.statement) }))
+      // ADR 0030 §6.8 (L2.9) — triage is the ONE consumer of dismissal rows (they are excluded from every other audience read). Same closure-bound
+      // client and businessId as the read above; the model supplies neither. Every statement is wrapped exactly like an audience one.
+      const dismissals = await retrieveSourceDismissals(client, businessId)
+      return [...rows, ...dismissals].map((row) => ({ id: toToolResultId(row.id), statement: wrapToolResultForPrompt(row.statement) }))
     },
   }
 

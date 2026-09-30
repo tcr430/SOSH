@@ -106,6 +106,37 @@ describe('two businesses, one user (ADR 0030 §7.3)', () => {
     expect(aRows[0].business_id).toBe(A.id)
     expect((await dismissalRows(pg, B.id)).every((r) => r.business_id === B.id)).toBe(true)
   })
+
+  // ADR 0030 §6.8 / §7.3 row 5 (L2.9) — the triage READ of dismissal rows. B holds >= 1 ACTIVE dismissal row (positive control), so "A's read holds none
+  // of B's" is not vacuous. Run under BOTH clients the read can be handed: the service-role one (no RLS at all) and the member's own (RLS admits BOTH
+  // businesses to this user, because get_user_business_ids() is an array), so `.eq('business_id')` is the only boundary in either.
+  it("A's triage list_audience_notes returns 0 of B's dismissal rows while B holds >= 1 ACTIVE one (service-role AND member client)", async () => {
+    const before = await seedBActiveRow()
+    expect(before.business_id).toBe(B.id)
+    const repoA = await seedRepo(admin, A, { owner: 'acorp', name: `triage-${Math.random().toString(36).slice(2, 8)}` })
+    const cardsA = await Promise.all([1, 2, 3].map(() => seedCard(admin, A, repoA, { status: 'dismissed', reason: 'not_relevant' })))
+    await recompute(admin, cardsA[0])
+    const aActive = (await dismissalRows(pg, A.id)).filter((r) => r.status === 'active')
+    expect(aActive.length, "A's own dismissal positive control did not materialise").toBeGreaterThanOrEqual(1)
+
+    const { buildTriageTools } = await import('@/lib/signals/triage/tools')
+    const { SOURCE_DISMISSAL_CAP } = await import('@/lib/memory/constants')
+    const read = async (client: SupabaseClient, biz: Biz) => {
+      const tool = buildTriageTools(client, biz.id).find((t) => t.name === 'list_audience_notes')!
+      return (await tool.execute({})) as unknown as Array<{ id: string; statement: string }>
+    }
+
+    for (const [label, client] of [['service-role', admin as SupabaseClient], ['member', member]] as const) {
+      const forB = await read(client, B)
+      expect(forB.some((r) => r.statement.includes('bcorp/')), `${label}: B's own read must see its dismissal row`).toBe(true)
+      expect(forB.some((r) => r.statement.includes('acorp/')), `${label}: B's read holds a row of A`).toBe(false)
+
+      const forA = await read(client, A)
+      expect(forA.length, `${label}: A's read is exactly A's active dismissal rows (capped)`).toBe(Math.min(aActive.length, SOURCE_DISMISSAL_CAP))
+      expect(forA.every((r) => r.statement.includes('acorp/')), `${label}: A's read holds a row that is not A's`).toBe(true)
+      expect(forA.some((r) => r.statement.includes('bcorp/')), `${label}: A's read holds a row of B`).toBe(false)
+    }
+  })
 })
 
 // ADR 0030 §3.4 / §7.3 (Session 36 L2.7) — SUBSTRATE-EXISTENCE-READ (13) Tier 2 + the authored two-businesses arm of SUBSTRATE-RLS-ISOLATED (24).

@@ -605,8 +605,9 @@ describe('SUBSTRATE-ONE-DECISION-WRITER (ADR 0030 §6, constraint 22) — regist
   })
 })
 
-// ─── SUBSTRATE-DISMISSAL-SCOPED-CONSUMER (28), scan half · closes L2.9 ────────────────────────────────────────
-// PENDING: the dismissal reader does not exist until L2.6/L2.9.
+// ─── SUBSTRATE-DISMISSAL-SCOPED-CONSUMER (28), scan half · closed in L2.9 ─────────────────────────────────────
+// The reader (L2.6) and its one consumer, triage's list_audience_notes (L2.9), both exist, so this scan is no longer PENDING: it is an
+// exact allow-list (definition, re-export, the one consumer) AND a positive assertion that the consumer really reads it.
 export function findNameReach(source: string, name: string): boolean {
   return new RegExp(`\\b${name}\\b`).test(stripCode(source))
 }
@@ -621,7 +622,8 @@ describe('SUBSTRATE-DISMISSAL-SCOPED-CONSUMER (ADR 0030 §6.8, constraint 28) �
 
   const pending = !exists(DISMISSAL)
   it.skipIf(pending)('retrieveSourceDismissals is reached only by triage tools; listSourceDismissalCandidates only by dismissal.ts; bundle.ts by neither', () => {
-    const allowedRetrieve = (rel: string) => rel === 'lib/signals/triage/tools.ts' || (rel.startsWith('lib/memory/') && rel !== BUNDLE)
+    // EXACT, not a directory prefix: the definition, its re-export, and the one consumer. A second reader under lib/memory/ is a violation.
+    const allowedRetrieve = (rel: string) => rel === 'lib/signals/triage/tools.ts' || rel === DISMISSAL || rel === 'lib/memory/index.ts'
     const allowedList = (rel: string) => rel === DISMISSAL || rel === 'lib/db/memory-audience.ts'
     const { files, offenders } = scanRoot(PROD_ROOTS, isProdTs, (src, rel) => {
       const hits: string[] = []
@@ -631,6 +633,14 @@ describe('SUBSTRATE-DISMISSAL-SCOPED-CONSUMER (ADR 0030 §6.8, constraint 28) �
     })
     expect(files.length).toBeGreaterThan(400)
     expect(offenders).toEqual([])
+  })
+
+  // The other half of "scoped consumer": the ONE consumer must actually read the rows, or the writer's output reaches nobody (a FALSE-GREEN).
+  it('triage list_audience_notes is the consumer: lib/signals/triage/tools.ts reaches retrieveSourceDismissals', () => {
+    expect(findNameReach(read('lib/signals/triage/tools.ts'), 'retrieveSourceDismissals')).toBe(true)
+    // ...and the planner's memory tools and the bundle do not (the Tier-2 redden targets)
+    expect(findNameReach(read('lib/campaigns/planner/tools.ts'), 'retrieveSourceDismissals')).toBe(false)
+    expect(findNameReach(read(BUNDLE), 'retrieveSourceDismissals')).toBe(false)
   })
 })
 
