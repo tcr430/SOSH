@@ -116,8 +116,8 @@ describe('the roots the scans below read exist (no scan below can skip or pass b
 })
 
 describe('the Session 36 migration range (no range scan below is vacuous)', () => {
-  it('holds the four migrations of this session (L2.2, L2.3, L2.4, L2.5)', () => {
-    expect(rangeMigrations.map((p) => path.basename(p).slice(0, 14)).sort()).toEqual(['20260929110000', '20260929120000', '20260929130000', '20260929140000'])
+  it('holds the five migrations of this session (L2.2, L2.3, L2.4, L2.5, and the L2.11 distilled-RPC privilege narrowing)', () => {
+    expect(rangeMigrations.map((p) => path.basename(p).slice(0, 14)).sort()).toEqual(['20260929110000', '20260929120000', '20260929130000', '20260929140000', '20260930100000'])
   })
 })
 
