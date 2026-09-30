@@ -603,9 +603,8 @@ describe('the ratify view surfaces the hedge flag, the conflict marker and Repla
   const T_MANUAL = 'tg-manual'
   const T_RETIRED = 'tg-retired'
   type Targets = { id: string; text: string; status: 'active' | 'retired' | 'candidate'; source: MemorySource }
-  // 'dismissal' is a real audience_memory source since migration 20260929120000 (ADR 0030 §6.6), but the MemorySource TS union
-  // gains it with the dismissal reader in L2.6. Until then this fixture value is cast, on purpose and only here.
-  const DISMISSAL_SOURCE = 'dismissal' as unknown as MemorySource
+  // 'dismissal' is a real audience_memory source since migration 20260929120000 (ADR 0030 §6.6); the MemorySource union carries it (D10).
+  const DISMISSAL_SOURCE: MemorySource = 'dismissal'
   const target = (id: string, over: Partial<Targets> = {}): Targets => ({ id, text: `Existing record ${id}`, status: 'active', source: 'interview', ...over })
 
   function ratifyPanel(candidates: Partial<InterviewCandidatesByType>, roundOver: Partial<FounderInterviewRoundRow> = {}) {

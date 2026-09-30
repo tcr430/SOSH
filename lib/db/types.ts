@@ -1185,7 +1185,7 @@ export type BusinessMemberUpdate = Partial<
 //     audience_memory, performance_memory
 // ---------------------------------------------------------------------------
 
-export type MemorySource = 'manual' | 'distilled' | 'import' | 'interview'
+export type MemorySource = 'manual' | 'distilled' | 'import' | 'interview' | 'dismissal'
 
 // ADR 0029 §2.2/§2.3 (Session 35 M2.9) — the interview provenance columns added to brand_memory,
 // audience_memory and evidence_memory ONLY (20260925110000_founder_interview_schema.sql). NULL on every
