@@ -12,6 +12,7 @@ import {
   importAudienceMemory,
   recomputeDismissalAudienceSignal,
   listSourceDismissalCandidates,
+  DISMISSAL_OUTCOMES,
 } from './memory-audience'
 import type { AudienceMemoryRow, AudienceMemoryImportInsert } from './types'
 import { INTERVIEW_CANDIDATES_LIMIT_PER_TABLE } from '@/lib/interview/constants'
@@ -303,6 +304,27 @@ describe('recomputeDismissalAudienceSignal (ADR 0030 §6.5)', () => {
       expect(mockCreateServiceRoleClient).not.toHaveBeenCalled()
     },
   )
+
+  // Session 36-D D5 (MINOR-6): the RPC result is parsed against the closed outcome set; unknown text throws into the caller's existing catch.
+  it.each(DISMISSAL_OUTCOMES)('returns the typed outcome %s unchanged', async (outcome) => {
+    const { client } = createMockClient(outcome, null)
+    mockCreateServiceRoleClient.mockReturnValue(client)
+    await expect(recomputeDismissalAudienceSignal(CARD)).resolves.toBe(outcome)
+  })
+
+  it.each([
+    ['recomputed'],
+    ['noop_unknown_source'], // the retired outcome: the function no longer returns it
+    ['UPSERTED'],
+    [''],
+    [null],
+    [42],
+    [{ outcome: 'upserted' }],
+  ])('rejects an unrecognised RPC result (%j) with a thrown error, never a cast string', async (data) => {
+    const { client } = createMockClient(data, null)
+    mockCreateServiceRoleClient.mockReturnValue(client)
+    await expect(recomputeDismissalAudienceSignal(CARD)).rejects.toThrow(/unrecognised outcome/)
+  })
 
   it('throws when the RPC returns an error (the caller decides it is non-fatal; the wrapper never swallows)', async () => {
     const { client } = createMockClient(null, { message: 'the card and its signal do not belong to one business' })

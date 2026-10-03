@@ -37,7 +37,8 @@ export { readInterviewSlotRows } from './interview-coverage'
 export { readInterviewConflictContext, type InterviewConflictRecord } from './interview-conflicts'
 // ADR 0030 §6 (Session 36 L2.6) — the dismissal writer's entry point and its ONE reader. retrieveSourceDismissals is for triage's
 // list_audience_notes tool ONLY (scan-enforced); dismissal rows are excluded from every other audience read.
-export { recomputeDismissalSignal, retrieveSourceDismissals } from './dismissal'
+export { recomputeDismissalSignal, retrieveSourceDismissals, DISMISSAL_OUTCOME_CLASS } from './dismissal'
+export type { DismissalOutcome } from './dismissal'
 
 export {
   MEMORY_WRITERS,

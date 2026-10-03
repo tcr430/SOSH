@@ -25,9 +25,11 @@ vi.mock('next/cache', () => ({
 }))
 
 // ADR 0030 §6.5 (L2.9) — the dismissal writer's one TS entry point. Mocked here: the writer itself is proven in lib/memory/dismissal.test.ts and Tier 1.
-vi.mock('@/lib/memory', () => ({
-  recomputeDismissalSignal: vi.fn(),
-}))
+// DISMISSAL_OUTCOME_CLASS is the REAL map (Session 36-D D5): the actions classify an outcome with it, so a stub would hide a wrong class.
+vi.mock('@/lib/memory', async () => {
+  const { DISMISSAL_OUTCOME_CLASS } = await import('@/lib/memory/dismissal')
+  return { recomputeDismissalSignal: vi.fn(), DISMISSAL_OUTCOME_CLASS }
+})
 
 import { approveCardAction, dismissCardAction, saveCardAction } from './actions'
 import { recomputeDismissalSignal } from '@/lib/memory'
@@ -236,7 +238,7 @@ describe('opportunities/actions.ts — recomputeDismissalSignal triggers (ADR 00
 
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(recomputeDismissalSignal).mockResolvedValue('recomputed')
+    vi.mocked(recomputeDismissalSignal).mockResolvedValue('upserted')
     vi.mocked(seedCampaignFromCard).mockResolvedValue({ campaignId: 'campaign-1', briefId: 'brief-1' })
   })
 
@@ -267,7 +269,7 @@ describe('opportunities/actions.ts — recomputeDismissalSignal triggers (ADR 00
     })
     vi.mocked(recomputeDismissalSignal).mockImplementation(async () => {
       order.push('recompute')
-      return 'recomputed'
+      return 'upserted'
     })
 
     await dismissCardAction(VALID_CARD_ID, 'not_relevant')
@@ -388,6 +390,49 @@ describe('opportunities/actions.ts — recomputeDismissalSignal triggers (ADR 00
       RECOMPUTE_FAILED,
     ])
     spy.mockRestore()
+  })
+
+  // Session 36-D D5 (MINOR-6): an ANOMALOUS outcome is logged exactly once per caller, with the action name, the card id and the outcome; a DECIDED one never.
+  const ANOMALOUS_LINE = 'opportunities/actions: recomputeDismissalSignal anomalous outcome'
+  const CALLERS = [
+    ['approveCardAction', () => approveCardAction(VALID_CARD_ID), 'approved'],
+    ['dismissCardAction', () => dismissCardAction(VALID_CARD_ID, 'not_relevant'), 'dismissed'],
+    ['saveCardAction', () => saveCardAction(VALID_CARD_ID), 'saved'],
+  ] as const
+
+  describe.each(CALLERS)('%s', (action, run, currentStatus) => {
+    it.each(['anomaly_watched_source_foreign', 'retired_anomaly_watched_source_foreign', 'anomaly_watched_id_null', 'noop_card_not_found'] as const)(
+      'an anomalous outcome (%s) logs EXACTLY ONE console.error line and the success result is unchanged',
+      async (outcome) => {
+        mockAuthedAuthor()
+        vi.mocked(transitionCardStatus).mockResolvedValue({ outcome: 'ok', currentStatus })
+        vi.mocked(recomputeDismissalSignal).mockResolvedValue(outcome)
+        const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+        const result = await run()
+
+        expect(result).toEqual({ success: true, outcome: 'ok', currentStatus })
+        expect(spy).toHaveBeenCalledTimes(1)
+        expect(spy).toHaveBeenCalledWith(ANOMALOUS_LINE, action, VALID_CARD_ID, outcome)
+        spy.mockRestore()
+      },
+    )
+
+    it.each(['upserted', 'updated', 'retired', 'noop_no_row', 'noop_card_state', 'invalid_identifier', 'watched_source_gone', 'noop_unknown_kind'] as const)(
+      'a decided outcome (%s) logs NOTHING',
+      async (outcome) => {
+        mockAuthedAuthor()
+        vi.mocked(transitionCardStatus).mockResolvedValue({ outcome: 'ok', currentStatus })
+        vi.mocked(recomputeDismissalSignal).mockResolvedValue(outcome)
+        const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+        const result = await run()
+
+        expect(result).toEqual({ success: true, outcome: 'ok', currentStatus })
+        expect(spy).not.toHaveBeenCalled()
+        spy.mockRestore()
+      },
+    )
   })
 
   it('an invalid or forbidden call never reaches the recompute', async () => {

@@ -23,10 +23,10 @@ vi.mock('@/lib/db/memory-audience', async (importOriginal) => {
 })
 
 import { createServiceRoleClient } from '@/lib/supabase/service'
-import { listAudienceMemoryCandidates, listSourceDismissalCandidates, recomputeDismissalAudienceSignal } from '@/lib/db/memory-audience'
+import { listAudienceMemoryCandidates, listSourceDismissalCandidates, recomputeDismissalAudienceSignal, DISMISSAL_OUTCOMES } from '@/lib/db/memory-audience'
 import { retrieveRelevant as retrieveAudienceMemory } from './audience'
 import { readInterviewConflictContext } from './interview-conflicts'
-import { recomputeDismissalSignal, retrieveSourceDismissals } from './dismissal'
+import { recomputeDismissalSignal, retrieveSourceDismissals, DISMISSAL_OUTCOME_CLASS } from './dismissal'
 import { SOURCE_DISMISSAL_CAP } from './constants'
 import * as barrel from './index'
 
@@ -134,10 +134,32 @@ describe('recomputeDismissalSignal (ADR 0030 §6.5)', () => {
   })
 })
 
+// Session 36-D D5 (MINOR-6): every outcome is classified; the literal sets below are the ADR's table (copied into ADR 0030 §6.5 at D9).
+describe('DISMISSAL_OUTCOME_CLASS (ADR 0030 §6.5, MINOR-6)', () => {
+  it('has exactly one class per outcome the wrapper can return', () => {
+    expect(Object.keys(DISMISSAL_OUTCOME_CLASS).sort()).toEqual([...DISMISSAL_OUTCOMES].sort())
+  })
+
+  it('marks exactly these four ANOMALOUS and every other outcome DECIDED (literal, not derived)', () => {
+    const anomalous = Object.entries(DISMISSAL_OUTCOME_CLASS).filter(([, c]) => c === 'anomalous').map(([k]) => k).sort()
+    expect(anomalous).toEqual(['anomaly_watched_id_null', 'anomaly_watched_source_foreign', 'noop_card_not_found', 'retired_anomaly_watched_source_foreign'])
+    const decided = Object.entries(DISMISSAL_OUTCOME_CLASS).filter(([, c]) => c === 'decided').map(([k]) => k).sort()
+    expect(decided).toEqual([
+      'deleted', 'invalid_identifier', 'noop_card_state', 'noop_no_row', 'noop_nothing_counted', 'noop_unknown_kind',
+      'retired', 'retired_invalid_identifier', 'retired_watched_source_gone', 'updated', 'upserted', 'watched_source_gone',
+    ])
+  })
+
+  it('every outcome whose name contains anomaly_ is anomalous (the naming rule the class follows)', () => {
+    for (const [outcome, cls] of Object.entries(DISMISSAL_OUTCOME_CLASS)) if (outcome.includes('anomaly_')) expect(cls, outcome).toBe('anomalous')
+  })
+})
+
 describe('the public surface (lib/memory/index.ts)', () => {
   it('exports both entry points, and nothing that reads or writes a dismissal row by another route', () => {
     expect(typeof barrel.recomputeDismissalSignal).toBe('function')
     expect(typeof barrel.retrieveSourceDismissals).toBe('function')
+    expect(barrel.DISMISSAL_OUTCOME_CLASS).toBe(DISMISSAL_OUTCOME_CLASS)
     expect(Object.keys(barrel)).not.toContain('listSourceDismissalCandidates')
     expect(Object.keys(barrel)).not.toContain('recomputeDismissalAudienceSignal')
   })

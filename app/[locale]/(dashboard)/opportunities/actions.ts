@@ -17,8 +17,16 @@ import { getMemberForUser } from '@/lib/db/business-members'
 import { hasCapability, resolveMemberContext, CAPABILITIES } from '@/lib/members/capabilities'
 import { transitionCardStatus } from '@/lib/db/insight-cards'
 import { seedCampaignFromCard } from '@/lib/signals/seed'
-import { recomputeDismissalSignal } from '@/lib/memory'
+import { recomputeDismissalSignal, DISMISSAL_OUTCOME_CLASS, type DismissalOutcome } from '@/lib/memory'
 import type { InsightCardDismissReason, InsightCardStatus } from '@/lib/db/types'
+
+// ADR 0030 §6.5 (Session 36-D D5, MINOR-6): an ANOMALOUS recompute outcome (a broken card -> source chain, per DISMISSAL_OUTCOME_CLASS) is logged ONCE, in the
+// same console.error style as the recompute catch below. It never throws and never changes the result: the card's transition has already committed.
+function reportDismissalOutcome(action: string, cardId: string, outcome: DismissalOutcome): void {
+  if (DISMISSAL_OUTCOME_CLASS[outcome] === 'anomalous') {
+    console.error('opportunities/actions: recomputeDismissalSignal anomalous outcome', action, cardId, outcome)
+  }
+}
 
 export type CardActionErrorCode = 'invalid_input' | 'generic' | 'forbidden'
 
@@ -140,7 +148,7 @@ export async function approveCardAction(cardId: string): Promise<CardActionState
       // (it never creates one); without this an approval could never demote a row. Its OWN try/catch, AFTER and independent of the seeding one above: a seeding throw must not skip it, and a recompute failure must
       // not turn a real approval into an error toast.
       try {
-        await recomputeDismissalSignal(cardId)
+        reportDismissalOutcome('approveCardAction', cardId, await recomputeDismissalSignal(cardId))
       } catch (recomputeErr: unknown) {
         console.error('opportunities/actions: recomputeDismissalSignal failed', cardId, recomputeErr)
       }
@@ -177,7 +185,7 @@ export async function dismissCardAction(
       // sensitivity, not about the source. Own try/catch: a recompute failure keeps the dismissal's success result.
       if (parsed.data.reason === 'not_relevant') {
         try {
-          await recomputeDismissalSignal(cardId)
+          reportDismissalOutcome('dismissCardAction', cardId, await recomputeDismissalSignal(cardId))
         } catch (recomputeErr: unknown) {
           console.error('opportunities/actions: recomputeDismissalSignal failed', cardId, recomputeErr)
         }
@@ -212,7 +220,7 @@ export async function saveCardAction(cardId: string): Promise<CardActionState> {
     if (result.success) {
       // ADR 0030 §6.5 (L2.9) — a save moves the same gate term as an approval: it recomputes an EXISTING row only (see approveCardAction).
       try {
-        await recomputeDismissalSignal(cardId)
+        reportDismissalOutcome('saveCardAction', cardId, await recomputeDismissalSignal(cardId))
       } catch (recomputeErr: unknown) {
         console.error('opportunities/actions: recomputeDismissalSignal failed', cardId, recomputeErr)
       }

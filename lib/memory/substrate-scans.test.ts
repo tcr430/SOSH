@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest'
 import fs from 'node:fs'
 import path from 'node:path'
 import { MEMORY_WRITERS, RPC_INSERT_TABLES, WRITER_IDS } from './writers'
+import { DISMISSAL_OUTCOME_CLASS } from './dismissal'
+import { DISMISSAL_OUTCOMES } from '@/lib/db/memory-audience'
 
 // ADR 0030 §2.5 / §11.3 (Session 36 L2.1) — the Tier-3 "properties of ABSENCE" for the memory substrate, written
 // BEFORE the code they fence (the ADR 0023 G1b.2 precedent), so the session cannot introduce the violation it
@@ -828,6 +830,63 @@ describe('SUBSTRATE-CASCADE-COMPLETE (ADR 0030 §10, constraint 25) — scan hal
     const created = rangeMigrations.flatMap((f) => findCreatedTables(fs.readFileSync(f, 'utf8')))
     expect(rangeMigrations.length, 'scanned no migrations').toBeGreaterThan(0)
     expect(findTablesMissingFromCascade(created, adr0010)).toEqual([])
+  })
+})
+
+// ─── SUBSTRATE-DISMISSAL-OUTCOMES-CLASSIFIED (Session 36-D D5, MINOR-6) — Tier-3 scan tying the class map to the function ─────────────────────────
+// The writer's RETURN '...' literals are its whole outcome vocabulary. The wrapper parses the RPC result against DISMISSAL_OUTCOMES and the actions classify
+// it with DISMISSAL_OUTCOME_CLASS, so a literal added to the SQL without a map entry would throw at runtime (the wrapper) or be unclassified (the actions).
+// This scan reads the LATEST migration that defines the function, so a later forward migration that replaces it is read instead of the first one.
+export function findReturnLiterals(sql: string): string[] {
+  const clean = stripSqlComments(sql)
+  const start = clean.search(/create\s+or\s+replace\s+function\s+public\.recompute_dismissal_audience_signal\b/i)
+  if (start < 0) return []
+  const open = clean.indexOf('$$', start)
+  const close = clean.indexOf('$$;', open + 2)
+  if (open < 0 || close < 0) return []
+  return [...new Set([...clean.slice(open, close).matchAll(/\breturn\s+'([a-z_]+)'\s*;/gi)].map((m) => m[1]))]
+}
+
+export function findOutcomeMapDrift(literals: string[], keys: string[]): { unclassified: string[]; stale: string[] } {
+  return { unclassified: literals.filter((l) => !keys.includes(l)), stale: keys.filter((k) => !literals.includes(k)) }
+}
+
+describe("SUBSTRATE-DISMISSAL-OUTCOMES-CLASSIFIED (ADR 0030 §6.5, Session 36-D D5) — the class map equals the function's RETURN literals", () => {
+  it('reads the RETURN literals of the function body only: not a comment, not a variable, not another function (planted)', () => {
+    const sql = [
+      "CREATE FUNCTION public.other() RETURNS text AS $$ BEGIN RETURN 'not_this'; END; $$;",
+      'CREATE OR REPLACE FUNCTION public.recompute_dismissal_audience_signal(p_card_id uuid) RETURNS text AS $$',
+      'BEGIN',
+      "  -- RETURN 'in_a_comment';",
+      "  RETURN 'first';",
+      "  IF x THEN RETURN 'second'; END IF;",
+      '  RETURN v_outcome;',
+      "  RETURN 'first';",
+      'END;',
+      '$$;',
+      "CREATE FUNCTION public.after() RETURNS text AS $$ BEGIN RETURN 'nor_this'; END; $$;",
+    ].join('\n')
+    expect(findReturnLiterals(sql)).toEqual(['first', 'second'])
+    expect(findReturnLiterals('SELECT 1;')).toEqual([])
+  })
+
+  it('reports a literal missing from the map as unclassified, and a map key with no literal as stale (planted positive)', () => {
+    expect(findOutcomeMapDrift(['a', 'b', 'c'], ['a', 'b'])).toEqual({ unclassified: ['c'], stale: [] })
+    expect(findOutcomeMapDrift(['a'], ['a', 'z'])).toEqual({ unclassified: [], stale: ['z'] })
+    expect(findOutcomeMapDrift(['a', 'b'], ['b', 'a'])).toEqual({ unclassified: [], stale: [] })
+  })
+
+  it('the keys of DISMISSAL_OUTCOME_CLASS (and DISMISSAL_OUTCOMES) equal the RETURN literals of the LATEST migration that defines the function', () => {
+    const migrations = collect(path.join(ROOT, 'supabase', 'migrations'), isSql)
+    const defining = migrations
+      .filter((f) => /create\s+or\s+replace\s+function\s+public\.recompute_dismissal_audience_signal\b/i.test(fs.readFileSync(f, 'utf8')))
+      .sort()
+    expect(defining.length, 'no migration defines recompute_dismissal_audience_signal').toBeGreaterThan(0)
+    const latest = defining[defining.length - 1]
+    const literals = findReturnLiterals(fs.readFileSync(latest, 'utf8'))
+    expect(literals.length, `${toRel(latest)} yielded too few RETURN literals: the scan would pass by reading nothing`).toBeGreaterThanOrEqual(14)
+    expect(findOutcomeMapDrift(literals, Object.keys(DISMISSAL_OUTCOME_CLASS))).toEqual({ unclassified: [], stale: [] })
+    expect(findOutcomeMapDrift(literals, [...DISMISSAL_OUTCOMES])).toEqual({ unclassified: [], stale: [] })
   })
 })
 
