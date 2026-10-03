@@ -540,3 +540,63 @@ as leads and confirmed each one cited here by mutation or by reading the code. N
 ---
 
 Session 36 review complete - 12 findings (0 BLOCKER, 2 MAJOR, 7 MINOR, 3 NIT) over range e9de7b25..0605a97d; 28/28 SUBSTRATE-* constraints verified executed green in CI (Tier-1 rows 14/14, Tier-2 rows 13/13, Tier-3 rows 11/11 re-verified by me); L-2 baseline held; Tier E: none declared, correctly.
+
+---
+
+## CORRECTION PASS (Session 36-D)
+
+**Author:** Session 36-D correction pass · **Date:** 2026-10-03 · **Range fixed:** `0605a97d..D10` (the D10 SHA is recorded in the closing block; a commit cannot name its own hash)
+**Reviewed head:** `0605a97d`, the head the Reviewer read. Only this pass's §4 and the report itself landed after it, at D0 (`1e258d85`).
+**Founder adjudications consumed:** "include all items identified in the reviewer" (founder, 2026-10-03); A-8 = PENDING at D1 (recorded as it then stands at D8); A-9 = PENDING at D1 (must be filled before D6 begins). A-0…A-7 stand. Narrowing the 8 pre-existing SECURITY DEFINER functions was available and not taken (build-guide §4, MAJOR-2 ledger row).
+**Everything above this line is the Reviewer's. Everything below it is this pass's.**
+
+### D1 — MAJOR-1 (and MINOR-5, constraint #12)
+
+**Finding:** MAJOR-1.
+**Fix:** test-only. Every ADR 0030 §3.4 caller row now asserts its exact arguments. `lib/campaigns/generate.test.ts` mocks `createServiceRoleClient` to return one stable `SERVICE_CLIENT` instance (it returned a fresh `{}` per call, so identity was unobservable) and asserts `hasActiveEvidence` received that instance and `BUSINESS_ID`, over a fixture that names a second business (`biz-2`). The planner and triage tool tests wrap each `retrieve*` in a pass-through `vi.fn` (the real retrievers still run) and assert `(client, businessId, { platform: 'linkedin' })`. `studio/actions.test.ts` asserts both governed reads. No production file changed and no retriever's ranking changed.
+
+**Caller table** (`git grep` over `app/ lib/ scripts/`, tests excluded; `lib/memory/` internals excluded):
+
+| Production caller | Callee | Test asserting its argument |
+|---|---|---|
+| `lib/campaigns/generate.ts:569` | `hasActiveEvidence(client, businessId)` | `lib/campaigns/generate.test.ts:1269` (client by identity, business id, second business named) |
+| `lib/campaigns/planner/tools.ts:68` | `retrieveEvidenceMemory` | `lib/campaigns/planner/__tests__/tools.test.ts:169` (`list_evidence` row) |
+| `lib/campaigns/planner/tools.ts:82` | `retrieveBrandMemory` | same describe (`list_brand_claims` row) |
+| `lib/campaigns/planner/tools.ts:93` | `retrieveAudienceMemory` | same describe (`list_audience_notes` row) |
+| `lib/signals/triage/tools.ts:82` | `retrieveEvidenceMemory` | `lib/signals/triage/tools.test.ts:42` (`list_evidence` row) |
+| `lib/signals/triage/tools.ts:107` | `retrieveAudienceMemory` | `tools.test.ts:42` (`list_audience_notes` row) and `lib/signals/triage/tools.dismissal.test.ts:38` |
+| `lib/signals/triage/tools.ts:121` | `retrieveBrandMemory` | `tools.test.ts:42` (`list_brand_claims` row) |
+| `app/[locale]/(dashboard)/studio/actions.ts:137` | `retrieveEvidenceMemory(client, business.id, { platform })` | `app/[locale]/(dashboard)/studio/actions.test.ts:122` |
+| `app/[locale]/(dashboard)/studio/actions.ts:136` | `retrieveStudioPerformancePatterns(client, business.id, { platform })` | `studio/actions.test.ts:122` (same test) |
+| `lib/ai/context.ts:92`, `:192` | `retrievePerformancePatterns` | pre-existing `lib/ai/context.test.ts` (QueryContext reaches the retriever, per V.11). Not changed by this step. |
+| `app/[locale]/(dashboard)/approvals/claim-actions.ts:86`, `approvals/page.tsx:93` | `retrieveEvidenceMemory(client, business.id, {})` | pre-existing `claim-actions.test.ts` / `page.test.tsx`. Outside ADR §3.4's list; not changed by this step. |
+| `scripts/measure-substrate.ts:60-62` | `retrieveBrandMemory` / `retrieveEvidenceMemory` / `retrieveAudienceMemory` (`{}`) | no test: operator script, recorded in the ADR at D9 (NIT-3) |
+
+**Proof:** the test lines in the table above.
+**Reddening** (the Reviewer's own mutations, each applied alone to the production file, the suites re-run, the file restored, `git diff --stat` on it confirmed empty afterwards). Command set: `lib/campaigns/generate.test.ts lib/campaigns/planner lib/signals/triage app/[locale]/(dashboard)/studio/actions.test.ts`, CI env block.
+
+| Mutation | RED test and failing line |
+|---|---|
+| M1 `generate.ts:569` `hasActiveEvidence(client, 'biz-2')` | `generate.test.ts:1269` · `AssertionError: expected 'biz-2' to be 'biz-1'` |
+| M2 `generate.ts:569` `hasActiveEvidence({} as never, businessId)` | `generate.test.ts:1269` · `AssertionError: expected {} to be { __role: 'service-role' }` |
+| M3a `planner/tools.ts:68` `{}` for the hints | `tools.test.ts` `list_evidence hands its retriever…` · `expected {} to deeply equal { platform: 'linkedin' }` |
+| M3b `planner/tools.ts:82` `{}` | `list_brand_claims hands its retriever…` · same assertion |
+| M3c `planner/tools.ts:93` `{}` | `list_audience_notes hands its retriever…` · same assertion |
+| M4a `triage/tools.ts:82` `{}` | `triage/tools.test.ts` `list_evidence hands its retriever…` · same assertion |
+| M4b `triage/tools.ts:107` `{}` | `triage/tools.test.ts` `list_audience_notes…` AND `tools.dismissal.test.ts:38` · same assertion (2 failed) |
+| M4c `triage/tools.ts:121` `{}` | `triage/tools.test.ts` `list_brand_claims…` · same assertion |
+| M5 `studio/actions.ts:137` `{ platform }` → `{}` | `studio/actions.test.ts:122` · `expected "vi.fn()" to be called with arguments: [ { auth … }, 'biz-1', …(1) ]` |
+
+Before the new tests, each of the same mutations failed 0 of 75 (generate) and 0 of 39 (the three tool files), as the Reviewer recorded.
+
+**Loop:** `npx tsc --noEmit --skipLibCheck` clean; `npm run lint` 0 errors (112 warnings, none in the five touched files); `npm run test:app` with the `app-tests.yml` env block: 382 files / 5803 tests passed.
+**Commit:** D1 (its SHA is recorded in D2's block, for the reason above).
+**What I did NOT touch:** no production file; no retriever's ranking; no existing assertion in the five test files changed. The only edited pre-existing lines are imports (`vi`, the `@/lib/memory` retriever names) and the `generate.test.ts` service-role mock, which now returns one stable object where it returned a fresh `{}`.
+
+### D1 — MINOR-5, partial row (constraint #12 SUBSTRATE-CALLERS-ENUMERATED)
+
+**Finding:** MINOR-5 (one transcript per constraint: #12 here, #14 at D4, #17 and #24 at D7).
+**Fix:** the table above IS #12's redden transcript, recorded here because `6c90c038`'s commit body is empty. `6c90c038`, `eab33b5e` and `b0286e02` were not amended and no history was rewritten.
+**Proof:** the nine mutation rows above.
+**Reddening:** as above; clean tree confirmed after each.
+**Commit:** D1.

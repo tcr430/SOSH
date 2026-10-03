@@ -35,6 +35,17 @@ describe('list_audience_notes returns dismissal rows beside audience rows (ADR 0
     expect(result[1].statement).toContain('repeatedly dismissed')
   })
 
+  it('reads the audience rows with the tool client, the closure business id and the PARSED hints (ADR 0030 §3.4, MAJOR-1)', async () => {
+    const { client, tool: t } = tool()
+    await t.execute({ platform: 'linkedin' })
+
+    expect(retrieveAudienceMemory).toHaveBeenCalledTimes(1)
+    const [calledClient, calledBusinessId, calledHints] = vi.mocked(retrieveAudienceMemory).mock.calls[0]
+    expect(calledClient).toBe(client)
+    expect(calledBusinessId).toBe('biz-1')
+    expect(calledHints).toEqual({ platform: 'linkedin' })
+  })
+
   it('reads the dismissal rows with the CLOSURE-BOUND business id and the same client — never a model input', async () => {
     const { client, tool: t } = tool()
     await t.execute({ platform: 'linkedin' })

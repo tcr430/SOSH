@@ -1,8 +1,19 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { z } from 'zod'
+
+// Pass-through spies: the REAL retrievers still run (so the mock client's rows still flow); the spies only record the arguments each tool hands them.
+vi.mock('@/lib/memory', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/memory')>()
+  return {
+    ...actual,
+    retrieveEvidenceMemory: vi.fn(actual.retrieveEvidenceMemory),
+    retrieveBrandMemory: vi.fn(actual.retrieveBrandMemory),
+    retrieveAudienceMemory: vi.fn(actual.retrieveAudienceMemory),
+  }
+})
 import { createMockClient, createSequentialMockClient } from '@/lib/db/__test-utils__/mock-client'
 import { buildPlannerTools, emptyInputSchema } from '../tools'
-import { memoryQueryHintsSchema, MEMORY_QUERY_HINTS_JSON_SCHEMA } from '@/lib/memory'
+import { memoryQueryHintsSchema, MEMORY_QUERY_HINTS_JSON_SCHEMA, retrieveEvidenceMemory, retrieveBrandMemory, retrieveAudienceMemory } from '@/lib/memory'
 import { PLANNER_TOOL_NAMES } from '../constants'
 
 const NOW_ISO = new Date().toISOString()
@@ -153,6 +164,25 @@ function deepWalkAssertGuarded(value: unknown, keyName: string | null, path: str
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) deepWalkAssertGuarded(v, k, `${path}.${k}`)
   }
 }
+
+// ADR 0030 §3.4 / §11.2 #6 (MAJOR-1) — one test per call site: each retrieve* is handed (client, businessId, <the parsed hints>) exactly.
+describe('buildPlannerTools — SUBSTRATE-CALLERS-ENUMERATED: exact retrieve* arguments (ADR 0030 §3.4, MAJOR-1)', () => {
+  it.each([
+    ['list_evidence', retrieveEvidenceMemory],
+    ['list_brand_claims', retrieveBrandMemory],
+    ['list_audience_notes', retrieveAudienceMemory],
+  ] as const)('%s hands its retriever the tool client, the closure business id and the PARSED hints', async (name, retriever) => {
+    vi.mocked(retriever).mockClear()
+    const { client } = createMockClient([], null)
+    const tools = buildPlannerTools(client, 'biz-1', 'camp-1')
+    await tools.find((t) => t.name === name)!.execute({ platform: 'linkedin' })
+    expect(retriever).toHaveBeenCalledTimes(1)
+    const [calledClient, calledBusinessId, calledHints] = vi.mocked(retriever).mock.calls[0]
+    expect(calledClient).toBe(client)
+    expect(calledBusinessId).toBe('biz-1')
+    expect(calledHints).toEqual({ platform: 'linkedin' })
+  })
+})
 
 describe('buildPlannerTools — AGENCY-TOOL-RESULTS-GUARDED deep-walk (ADR 0027 §6.3, constraint 37)', () => {
   it('list_evidence: every string in the result is guarded (ids by name, evidence by content)', async () => {

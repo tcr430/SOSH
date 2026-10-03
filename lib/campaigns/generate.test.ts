@@ -2,8 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // ── Module mocks ────────────────────────────────────────────────────────────
 
+// One stable service-role client instance, so a test can assert the generation path hands THIS object (not any client) onward.
+const { SERVICE_CLIENT } = vi.hoisted(() => ({ SERVICE_CLIENT: { __role: 'service-role' } }))
 vi.mock('@/lib/supabase/service', () => ({
-  createServiceRoleClient: vi.fn(() => ({})),
+  createServiceRoleClient: vi.fn(() => SERVICE_CLIENT),
 }))
 
 vi.mock('@/lib/db/post-generation-sessions', () => ({
@@ -1262,6 +1264,19 @@ describe('generatePostsForCampaign — claim verification (ADR 0027 §4)', () =>
     withClaims([{ text: CLAIM }, { text: 'It is the fastest tool.' }])
     await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
     for (const post of insertedPosts()) expect(checkOf(post)).toEqual({ status: 'no_corpus', contentFingerprint: contentFingerprint(post.content as string) })
+  })
+
+  it('REDDEN (ADR 0030 3.4, MAJOR-1): hasActiveEvidence is called with the SERVICE-ROLE client the path built and THIS business id, never another tenant\'s', async () => {
+    // Two businesses exist in the fixture; the explicit business_id filter is the only tenant boundary on the service-role path.
+    const OTHER_BUSINESS_ID = 'biz-2'
+    sent([])
+    withClaims([{ text: CLAIM }])
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+    expect(hasActiveEvidence).toHaveBeenCalledTimes(1)
+    const [client, businessId] = vi.mocked(hasActiveEvidence).mock.calls[0]
+    expect(client).toBe(SERVICE_CLIENT)
+    expect(businessId).toBe(BUSINESS_ID)
+    expect(businessId).not.toBe(OTHER_BUSINESS_ID)
   })
 
   it('evidence EXISTS but none was pinned: the claims really are uncited, so they ARE flagged (not no_corpus)', async () => {
