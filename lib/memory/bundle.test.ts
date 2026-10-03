@@ -19,7 +19,7 @@ import { listAudienceMemoryCandidates } from '@/lib/db/memory-audience'
 import { listPerformanceMemoryCandidates } from '@/lib/db/memory-performance'
 import { bindEvidenceForPrompt, MEMORY_ROW_MAX_CHARS } from '@/lib/ai/wrap-evidence'
 import { MEMORY_TASK_BUDGET, retrieveMemoryBundle, renderMemoryBundleForPrompt, type MemoryBundle } from './bundle'
-import type { MemoryTask } from './scoring'
+import { scoreRecord, type MemoryTask } from './scoring'
 
 const NOW = new Date('2026-09-30T00:00:00Z')
 const RECENT = '2026-09-29T00:00:00Z'
@@ -210,6 +210,73 @@ describe('retrieveMemoryBundle — the budget division (SUBSTRATE-CROSS-TYPE-BUD
     const b = await retrieveMemoryBundle(client, 'biz-1', { task: 'brief', hints: { platform: 'linkedin' } }, NOW)
     const r = await renderMemoryBundleForPrompt(b)
     expect(r.brand.indexOf('brand li')).toBeLessThan(r.brand.indexOf('brand x'))
+  })
+})
+
+// ─── MINOR-4 (Session 36-D D4): hint forwarding and the full total order, proved with fixtures the id order cannot satisfy ──────────────────────
+// ADR 0030 §5.2 requires literal expected outputs for ties under a TOTAL order: score DESC, confidence DESC, recency DESC, id ASC. Each test below
+// isolates ONE key and sets the id order AGAINST it, so deleting that key (or a later one) changes the literal ids. The score ties are exact in
+// floating point (checked by the precondition in each test), never approximate.
+const brandOrder = (r: { brand: string }) => r.brand.split('\n').filter((l) => l.startsWith('- ')).map((l) => /brand (\S+)$/.exec(l)![1])
+
+describe('retrieveMemoryBundle — hint forwarding (MINOR-4)', () => {
+  // ids ascend a-twitter < b-linkedin, so WITHOUT the hint both score the same (neither platform matches) and id ASC puts a-twitter first. WITH the hint,
+  // the linkedin row's scope match (1 vs 0) puts it first. Only the hint can produce the second order.
+  const rows = () => [
+    brandRow('a-twitter', 0.7, { scope: 'platform', scope_ref: 'twitter' }),
+    brandRow('b-linkedin', 0.7, { scope: 'platform', scope_ref: 'linkedin' }),
+  ]
+
+  it('with { platform: "linkedin" } the matching row is FIRST: [b-linkedin, a-twitter]', async () => {
+    supply({ brand: rows() })
+    const r = await renderMemoryBundleForPrompt(await retrieveMemoryBundle(client, 'biz-1', { task: 'brief', hints: { platform: 'linkedin' } }, NOW))
+    expect(brandOrder(r)).toEqual(['b-linkedin', 'a-twitter'])
+  })
+
+  it('without the hint the SAME rows come back in the opposite literal order: [a-twitter, b-linkedin]', async () => {
+    supply({ brand: rows() })
+    const r = await renderMemoryBundleForPrompt(await get('brief'))
+    expect(brandOrder(r)).toEqual(['a-twitter', 'b-linkedin'])
+  })
+})
+
+describe('retrieveMemoryBundle — the total tie order, one test per key (MINOR-4)', () => {
+  // Same score, DIFFERENT confidence, and the id order and the recency order both disagree with confidence:
+  //   a-lowconf   conf 0.3  recency 0 days    scope 0   (platform row, scope_ref twitter, no hint)
+  //   b-highconf  conf 0.4  recency 30 days   scope 0.5 (platform row, no scope_ref)
+  // The two scores are the SAME float (asserted below). Deleting the confidence key leaves recency, which puts the MORE RECENT a-lowconf first
+  // (and so does id); swapping the confidence and recency keys does too.
+  it('equal score, different confidence: the HIGHER confidence is first, against the id order and the recency order', async () => {
+    const lowConf = brandRow('a-lowconf', 0.3, { scope: 'platform', scope_ref: 'twitter', recency_at: '2026-09-30T00:00:00Z' })
+    const highConf = brandRow('b-highconf', 0.4, { scope: 'platform', scope_ref: null, recency_at: '2026-08-31T00:00:00Z' })
+    expect(scoreRecord(lowConf as never, {}, NOW), 'fixture precondition: the scores must be EXACTLY equal').toBe(scoreRecord(highConf as never, {}, NOW))
+    supply({ brand: [lowConf, highConf] })
+    expect(brandOrder(await renderMemoryBundleForPrompt(await get('brief')))).toEqual(['b-highconf', 'a-lowconf'])
+    supply({ brand: [highConf, lowConf] })
+    expect(brandOrder(await renderMemoryBundleForPrompt(await get('brief')))).toEqual(['b-highconf', 'a-lowconf'])
+  })
+
+  // Same score AND same confidence, DIFFERENT recency, both inside the SAME whole-day decay bucket (recencyDecay uses differenceInDays, so 12:00 and
+  // 18:00 on 09-28 are both 1 day old at NOW = 09-30T00:00): the scores are identical by construction, and only the recency key can order them.
+  // The id order is against it: a-older < b-newer.
+  it('equal score and confidence, different recency: the MORE RECENT is first, against the id order', async () => {
+    const older = brandRow('a-older', 0.6, { recency_at: '2026-09-28T12:00:00Z' })
+    const newer = brandRow('b-newer', 0.6, { recency_at: '2026-09-28T18:00:00Z' })
+    expect(scoreRecord(older as never, {}, NOW), 'fixture precondition: the scores must be EXACTLY equal').toBe(scoreRecord(newer as never, {}, NOW))
+    supply({ brand: [older, newer] })
+    expect(brandOrder(await renderMemoryBundleForPrompt(await get('brief')))).toEqual(['b-newer', 'a-older'])
+    supply({ brand: [newer, older] })
+    expect(brandOrder(await renderMemoryBundleForPrompt(await get('brief')))).toEqual(['b-newer', 'a-older'])
+  })
+
+  it('equal score, confidence and recency: id ASC, whatever the input order', async () => {
+    const a = brandRow('a-first', 0.6)
+    const b = brandRow('b-second', 0.6)
+    const c = brandRow('c-third', 0.6)
+    for (const input of [[a, b, c], [c, b, a], [b, c, a]]) {
+      supply({ brand: input })
+      expect(brandOrder(await renderMemoryBundleForPrompt(await get('brief')))).toEqual(['a-first', 'b-second', 'c-third'])
+    }
   })
 })
 
