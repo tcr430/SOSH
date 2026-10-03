@@ -115,9 +115,16 @@ describe('the roots the scans below read exist (no scan below can skip or pass b
   })
 })
 
+// MINOR-3 (Session 36-D D2): this is a FLOOR, not an equality. It exists for vacuity: every range scan below (member-write, cascade, ...) reads
+// `rangeMigrations`, and a scan over an empty or shrunken range passes by scanning nothing. It is deliberately NOT `toEqual([...five])`: RANGE_AFTER is
+// open-ended on purpose, so the first migration of any later session would otherwise redden this file and demand an edit that proves nothing.
+const SESSION_36_MIGRATIONS = ['20260929110000', '20260929120000', '20260929130000', '20260929140000', '20260930100000']
+
 describe('the Session 36 migration range (no range scan below is vacuous)', () => {
-  it('holds the five migrations of this session (L2.2, L2.3, L2.4, L2.5, and the L2.11 distilled-RPC privilege narrowing)', () => {
-    expect(rangeMigrations.map((p) => path.basename(p).slice(0, 14)).sort()).toEqual(['20260929110000', '20260929120000', '20260929130000', '20260929140000', '20260930100000'])
+  it('is non-empty and CONTAINS the five migrations of this session (L2.2, L2.3, L2.4, L2.5, and the L2.11 distilled-RPC privilege narrowing)', () => {
+    const stamps = rangeMigrations.map((p) => path.basename(p).slice(0, 14))
+    expect(stamps.length, 'the range is empty: every range scan would pass by scanning nothing').toBeGreaterThan(0)
+    for (const stamp of SESSION_36_MIGRATIONS) expect(stamps, `Session 36 migration ${stamp} is missing from the range`).toContain(stamp)
   })
 })
 
@@ -361,10 +368,17 @@ describe('SUBSTRATE-WRITES-VIA-LIB-MEMORY (ADR 0030 §2.5, constraint 5) — ove
 // conservative choice: nothing in this range should be altering a memory policy). A GRANT to a role held in a
 // variable, or via `GRANT <role> TO authenticated`, is invisible.
 
+// Widened in Session 36-D D2 (MINOR-2): policy names may be quoted (with spaces and doubled quotes, as in 20260614021500), the table may be
+// quoted, a GRANT may carry a column list (`GRANT INSERT (a, b) ON t TO authenticated`), and `public` is a member grantee. Everything is
+// case-insensitive and whitespace-insensitive, and a statement may span lines.
+const POLICY_NAME = String.raw`(?:"(?:[^"]|"")+"|\w+)`
+const SCHEMA_PREFIX = String.raw`(?:"?public"?\s*\.\s*)?`
+
 export function findMemberWriteViolations(sql: string): string[] {
   const clean = stripSqlComments(sql)
   const hits: string[] = []
-  for (const m of clean.matchAll(/\b(create|alter)\s+policy\s+("?[\w]+"?)\s+on\s+(?:public\.)?(\w*_memory)\b([^;]*);/gi)) {
+  const policyRe = new RegExp(String.raw`\b(create|alter)\s+policy\s+(${POLICY_NAME})\s+on\s+${SCHEMA_PREFIX}"?(\w*_memory)"?(?![\w"])([^;]*);`, 'gi')
+  for (const m of clean.matchAll(policyRe)) {
     const verb = m[1].toLowerCase()
     const body = m[4]
     const forMatch = /\bfor\s+(select|insert|update|delete|all)\b/i.exec(body)
@@ -372,12 +386,14 @@ export function findMemberWriteViolations(sql: string): string[] {
     else if (!forMatch) hits.push(`CREATE POLICY ${m[2]} on ${m[3]} has no FOR clause (= ALL)`)
     else if (forMatch[1].toLowerCase() !== 'select') hits.push(`CREATE POLICY ${m[2]} on ${m[3]} FOR ${forMatch[1].toUpperCase()}`)
   }
-  for (const m of clean.matchAll(/\bgrant\s+([\w\s,]+?)\s+on\s+(all\s+tables\s+in\s+schema\s+\w+|(?:table\s+)?(?:public\.)?\w+)\s+to\s+([^;]+);/gi)) {
-    const privileges = m[1].toLowerCase()
+  // The privilege list may carry column lists, so it is matched up to ' on ' and the parenthesised lists are dropped before the privilege words are read.
+  const grantRe = new RegExp(String.raw`\bgrant\s+([^;]+?)\s+on\s+(all\s+tables\s+in\s+schema\s+"?\w+"?|(?:table\s+)?${SCHEMA_PREFIX}"?\w+"?)\s+to\s+([^;]+);`, 'gi')
+  for (const m of clean.matchAll(grantRe)) {
+    const privileges = m[1].toLowerCase().replace(/\([^)]*\)/g, ' ')
     const target = m[2].toLowerCase()
     const grantees = m[3].toLowerCase()
     const writes = /\b(insert|update|delete|all)\b/.test(privileges)
-    const toMember = /\b(authenticated|anon)\b/.test(grantees)
+    const toMember = /\b(authenticated|anon|public)\b/.test(grantees)
     const onMemory = /_memory\b/.test(target) || /^all\s+tables\s+in\s+schema/.test(target)
     if (writes && toMember && onMemory) hits.push(`GRANT ${m[1].trim()} on ${m[2].trim()} to ${m[3].trim()}`)
   }
@@ -396,6 +412,28 @@ describe('SUBSTRATE-MEMBER-WRITE-CLOSED (ADR 0030 §2.4, constraint 6) — polic
     expect(findMemberWriteViolations('GRANT ALL ON TABLE public.brand_memory TO anon;')).toHaveLength(1)
     expect(findMemberWriteViolations('GRANT SELECT, UPDATE ON audience_memory TO authenticated, service_role;')).toHaveLength(1)
     expect(findMemberWriteViolations('GRANT ALL ON ALL TABLES IN SCHEMA public TO authenticated;')).toHaveLength(1)
+  })
+
+  // Session 36-D D2 (MINOR-2): the shapes the Reviewer planted that the original detector missed, plus the neighbours it must keep ignoring.
+  it('flags a QUOTED policy name, a column-list GRANT, a grant to public, and multi-line / mixed-case statements (planted, MINOR-2)', () => {
+    expect(findMemberWriteViolations('CREATE POLICY "members can insert audience" ON public.audience_memory FOR INSERT TO authenticated\n  WITH CHECK (true);')).toHaveLength(1)
+    expect(findMemberWriteViolations('GRANT INSERT (statement, business_id) ON public.audience_memory TO authenticated;')).toHaveLength(1)
+    expect(findMemberWriteViolations('create policy "say ""hi"" ; later" on "public"."brand_memory"\n  for\n  update using (true);')).toHaveLength(1)
+    expect(findMemberWriteViolations('Grant\n  UPDATE (statement),\n  DELETE\non TABLE "public"."evidence_memory"\nto PUBLIC;')).toHaveLength(1)
+    expect(findMemberWriteViolations('GRANT UPDATE (confidence) ON performance_memory TO anon;')).toHaveLength(1)
+    expect(findMemberWriteViolations('GRANT DELETE ON public.brand_memory TO public;')).toHaveLength(1)
+    expect(findMemberWriteViolations('CREATE POLICY "no for clause" ON public.audience_memory USING (true);')).toHaveLength(1)
+    expect(findMemberWriteViolations('ALTER POLICY "quoted name" ON public.audience_memory USING (true);')).toHaveLength(1)
+  })
+
+  it('still allows a quoted-name FOR SELECT policy, a column-list GRANT SELECT, a column named like a write privilege, and quoted policies on other tables (planted negatives)', () => {
+    expect(findMemberWriteViolations('CREATE POLICY "members can read audience" ON public.audience_memory FOR SELECT TO authenticated USING (true);')).toEqual([])
+    expect(findMemberWriteViolations('GRANT SELECT (statement, business_id) ON public.audience_memory TO authenticated;')).toEqual([])
+    expect(findMemberWriteViolations('GRANT SELECT (insert, update, delete) ON public.audience_memory TO authenticated;')).toEqual([])
+    expect(findMemberWriteViolations('GRANT INSERT (statement) ON public.audience_memory TO service_role;')).toEqual([])
+    expect(findMemberWriteViolations('CREATE POLICY "members can insert posts" ON public.posts FOR INSERT TO authenticated WITH CHECK (true);')).toEqual([])
+    expect(findMemberWriteViolations('GRANT INSERT (content) ON public.posts TO authenticated;')).toEqual([])
+    expect(findMemberWriteViolations('GRANT INSERT ON public.not_memory_table TO authenticated;')).toEqual([])
   })
 
   it('allows FOR SELECT, REVOKEs, a SELECT grant, a service_role grant, other tables and comments (planted negatives)', () => {

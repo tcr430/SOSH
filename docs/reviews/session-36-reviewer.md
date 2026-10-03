@@ -600,3 +600,36 @@ Before the new tests, each of the same mutations failed 0 of 75 (generate) and 0
 **Proof:** the nine mutation rows above.
 **Reddening:** as above; clean tree confirmed after each.
 **Commit:** D1.
+
+### D2 — MINOR-2 and MINOR-3
+
+**D1's SHA, recorded here as promised:** `7e53e680` (MAJOR-1, and MINOR-5's row for #12). The D1 rows' **Commit** field resolves to it.
+
+**Finding:** MINOR-2.
+**Fix:** test-only. `findMemberWriteViolations` in `lib/memory/substrate-scans.test.ts` now matches (a) quoted policy names, with spaces and doubled quotes, as well as unquoted ones; (b) a quoted or schema-qualified table; (c) column-list grants (`GRANT INSERT (a, b) ON … TO …`, parenthesised lists are dropped before the privilege words are read, so a column named `insert` under a `GRANT SELECT` is not a write); (d) `public` as a member grantee beside `authenticated` and `anon`; (e) any case, any whitespace, multi-line statements. It added no new `it` name to the member-write describe except the two planted ones below.
+**Proof:** planted positives for both of the Reviewer's shapes plus quoted-name `ALTER POLICY`, quoted-name policy without a FOR clause, a doubled-quote name containing `;`, a mixed-case multi-line `UPDATE (…), DELETE` to `PUBLIC`, and the `anon` / `public` grantees: `lib/memory/substrate-scans.test.ts` `flags a QUOTED policy name, a column-list GRANT, …` (D2 adds it directly above the existing negatives). Planted negatives: quoted-name `FOR SELECT`, `GRANT SELECT (cols)`, `GRANT SELECT (insert, update, delete)`, a column-list write grant to `service_role`, quoted-name and column-list writes on `posts`, and a table named `not_memory_table`: `…still allows a quoted-name FOR SELECT policy, …`.
+**Reddening** (the Reviewer's two migrations planted ALONE as a new file in `supabase/migrations/`, the test file re-run, the file removed, directory back to its 124 files):
+
+| Planted migration | Result |
+|---|---|
+| `20261001000001_zz_plant_policy.sql`: `CREATE POLICY "members can insert audience" ON public.audience_memory FOR INSERT TO authenticated WITH CHECK (true);` | `× no migration of this range opens a member write path on a *_memory table` · `AssertionError: expected [ Array(1) ] to deeply equal []` · 1 failed / 51 passed. **That test, and no other**, where the Reviewer saw only the range guard fail. |
+| `20261001000002_zz_plant_grant.sql`: `GRANT INSERT (statement, business_id) ON public.audience_memory TO authenticated;` | the same test, the same assertion · 1 failed / 51 passed. |
+
+**Section 4 risk (b), run before planting, and a deviation from the step's wording that I am reporting rather than hiding.** The step said to confirm the widened detector "reports no existing file" over EVERY migration. It cannot, and the original detector could not either: both report the same **15** hits over the 124 migrations, all dated before the range (`20260707190000` `GRANT … ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role`; `20260719010000_governed_memory.sql` the twelve `*_own` INSERT/UPDATE/DELETE policies; `20260919130000` an `ALTER POLICY`; `20260919160000` a `DELETE` policy). Those are the member write paths that `20260929110000_performance_memory_member_writes_closed.sql` exists to close, and the scan is deliberately range-limited for that reason. The property that matters, and that I measured, is that **the widening added zero hits to real history**: an old-versus-widened comparison over all 124 migrations gave `old: 15, new: 15, onlyNew: [], onlyOld: []`, so none of the repo's existing quoted-name policies (`20260614021500` and siblings) is misclassified. The comparison ran as a throwaway test file, deleted before the commit. No assertion was weakened to reach this: the range test and the migrations it scans are unchanged.
+
+**Finding:** MINOR-3.
+**Fix:** test-only. The range guard is now a floor. `RANGE_AFTER` stays open-ended. A comment above it says the floor exists for vacuity and is not an equality so later sessions' migrations do not redden the file.
+**Old assertion, quoted as the step requires:** `expect(rangeMigrations.map((p) => path.basename(p).slice(0, 14)).sort()).toEqual(['20260929110000', '20260929120000', '20260929130000', '20260929140000', '20260930100000'])` under the title `holds the five migrations of this session (…)`. **New:** `expect(stamps.length, …).toBeGreaterThan(0)` and, for each of the five stamps in `SESSION_36_MIGRATIONS`, `expect(stamps, …).toContain(stamp)`, under `is non-empty and CONTAINS the five migrations of this session (…)`. This is the one assertion change MINOR-3 itself prescribes.
+**Proof:** `lib/memory/substrate-scans.test.ts`, the `the Session 36 migration range (no range scan below is vacuous)` describe.
+**Reddening:**
+
+| Mutation | Result |
+|---|---|
+| a comment-only migration `20261001000003_zz_harmless.sql` dated after `20260930100000` | 52 / 52 passed, **GREEN** (before D2 this reddened the old equality) |
+| `20260929130000_ratify_replace_admits_import.sql` moved out of `supabase/migrations/` | `× is non-empty and CONTAINS the five migrations of this session` · `AssertionError: Session 36 migration 20260929130000 is missing from the range` · 1 failed / 51 passed; file restored |
+
+`git status` clean of migrations after each; the directory is back to 124 files.
+
+**Loop:** `npx tsc --noEmit --skipLibCheck` clean; `npm run lint` 0 errors (112 warnings, the same count as D1); `npm run test:app` with the `app-tests.yml` env block 382 files / 5805 tests passed; `npm run test:db` against the LOCAL stack (`http://127.0.0.1:54321`, `127.0.0.1:54322`, asserted before running, never the remote) 113 files / 1292 tests passed.
+**Commit:** D2 (its SHA is recorded in D3's block).
+**What I did NOT touch:** no existing migration; no other scan in the file; the range test and `RANGE_AFTER` are unchanged apart from the floor's comment and constant.
