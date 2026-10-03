@@ -642,16 +642,90 @@ describe('SUBSTRATE-DISMISS-DETERMINISTIC / SUBSTRATE-NO-MODEL-ON-WRITE (ADR 003
 // The registry has exactly ONE decision-derived source: 'dismissal'. It was 0 at L2.1, when the count was authored; the dismissal writer's
 // SQL half is registered in L2.5 (its TS half is L2.6), so the expected count is raised to 1 here — one step earlier than the L2.1 note said,
 // because the registry entry is what this scan counts.
-// The decision-derived sources ADR 0030 §6.7 names: the one shipped ('dismissal') and every DEFERRED decision surface (brief rejection, post skip,
-// reschedule, Studio discard, claim removal). A registry entry with any of these ids other than the one shipped is a second decision writer (L-6).
-const DECISION_SOURCES = ['dismissal', 'brief_rejection', 'post_skip', 'reschedule', 'studio_discard', 'claim_removal'] as const
-const EXPECTED_DECISION_WRITERS = 1
+//
+// Session 36-D D3 (MINOR-1): the decision-derived source set is DERIVED, not hand-listed. A writer is decision-derived when its input is a human's
+// accept/reject decision on a product artefact (ADR 0030 §6.7). The one shipped is 'dismissal' -> audience_memory; every DEFERRED surface is a row of
+// ADR 0030 §6.7's table, read at test time, so a row added there (as `too_sensitive` was, and the hand list missed) is covered with no edit here.
+export type DeferredSurface = { id: string; table: string | null }
+const SHIPPED_DECISION_WRITER = { id: 'dismissal', table: 'audience_memory' } as const
 
-describe('SUBSTRATE-ONE-DECISION-WRITER (ADR 0030 §6, constraint 22) — registry count', () => {
-  it('the registry has exactly the expected number of decision-derived sources (exactly 1: dismissal)', () => {
-    const count = WRITER_IDS.filter((id) => (DECISION_SOURCES as readonly string[]).includes(id)).length
-    expect(count).toBe(EXPECTED_DECISION_WRITERS)
-    expect(EXPECTED_DECISION_WRITERS).toBeLessThanOrEqual(1)
+// Reads the rows of the table under the `### 6.7` heading. The first cell is a surface label ("Brief rejection (`rejectBriefAction`)", "Post skip",
+// "`too_sensitive` → `brand_memory`"); the id is its text before any "(" or "→", lower-cased, backticks dropped, runs of non-alphanumerics -> '_'.
+// The text after a "→" is the target table. The header and divider rows are skipped.
+export function parseDeferredDecisionSurfaces(adr: string): DeferredSurface[] {
+  const lines = adr.replace(/\r\n/g, '\n').split('\n')
+  const start = lines.findIndex((l) => /^###\s+6\.7\b/.test(l))
+  if (start < 0) return []
+  const out: DeferredSurface[] = []
+  for (const line of lines.slice(start + 1)) {
+    if (/^#{1,6}\s/.test(line)) break
+    if (!line.trim().startsWith('|')) continue
+    const first = line.trim().replace(/^\|/, '').split('|')[0].trim()
+    if (first === '' || /^[-:\s]+$/.test(first) || /^surface$/i.test(first)) continue
+    const [label, target] = first.split('→')
+    const id = label.replace(/\(.*$/, '').replace(/`/g, '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+    const table = target ? target.replace(/`/g, '').trim() : null
+    if (id) out.push({ id, table })
+  }
+  return out
+}
+
+// Every registry entry that is a SECOND decision writer: its id is a deferred surface's, or it is the shipped writer writing a different table.
+export function findSecondDecisionWriters(writers: Record<string, { tables: readonly string[] }>, deferred: DeferredSurface[]): string[] {
+  const hits: string[] = []
+  for (const [id, spec] of Object.entries(writers)) {
+    const row = deferred.find((d) => d.id === id)
+    if (row) hits.push(`${id}: a DEFERRED ADR 0030 §6.7 surface${row.table ? ` (-> ${row.table})` : ''} has a registry entry`)
+    else if (id === SHIPPED_DECISION_WRITER.id && (spec.tables.length !== 1 || spec.tables[0] !== SHIPPED_DECISION_WRITER.table)) {
+      hits.push(`${id}: the shipped decision writer must write ${SHIPPED_DECISION_WRITER.table} and nothing else`)
+    }
+  }
+  return hits
+}
+
+describe('SUBSTRATE-ONE-DECISION-WRITER (ADR 0030 §6, constraint 22) — derived source set', () => {
+  const PLANTED_ADR = [
+    '### 6.6 something else', '| a | b |', '',
+    '### 6.7 The deferred decision surfaces', '',
+    '| Surface | Signal | Why |', '|---|---|---|',
+    '| Brief rejection (`rejectBriefAction`) | x | y |',
+    '| Post skip | x | y |',
+    '| `too_sensitive` → `brand_memory` | x | y |',
+    '', '### 6.8 next', '| Not a surface | x | y |',
+  ].join('\n')
+
+  it('parses the deferred surfaces: label -> id, "→ table" -> table, header, divider and other sections skipped (planted)', () => {
+    expect(parseDeferredDecisionSurfaces(PLANTED_ADR)).toEqual([
+      { id: 'brief_rejection', table: null },
+      { id: 'post_skip', table: null },
+      { id: 'too_sensitive', table: 'brand_memory' },
+    ])
+    expect(parseDeferredDecisionSurfaces('no such heading')).toEqual([])
+  })
+
+  it('reports a registry entry for a deferred surface, and a shipped writer that writes the wrong table (planted)', () => {
+    const deferred = parseDeferredDecisionSurfaces(PLANTED_ADR)
+    expect(findSecondDecisionWriters({ dismissal: { tables: ['audience_memory'] }, distilled: { tables: ['performance_memory'] } }, deferred)).toEqual([])
+    expect(findSecondDecisionWriters({ dismissal: { tables: ['audience_memory'] }, too_sensitive: { tables: ['brand_memory'] } }, deferred)).toHaveLength(1)
+    expect(findSecondDecisionWriters({ post_skip: { tables: ['performance_memory'] } }, deferred)).toHaveLength(1)
+    expect(findSecondDecisionWriters({ dismissal: { tables: ['audience_memory', 'brand_memory'] } }, deferred)).toHaveLength(1)
+  })
+
+  it("the ADR's §6.7 table is read for real: at least 6 deferred rows, containing too_sensitive (the row the hand list missed)", () => {
+    const deferred = parseDeferredDecisionSurfaces(read('docs/decisions/0030-memory-platform-substrate.md'))
+    expect(deferred.length, 'ADR 0030 §6.7 parsed to fewer than 6 rows: the scan would pass by reading nothing').toBeGreaterThanOrEqual(6)
+    const ids = deferred.map((d) => d.id)
+    expect(ids).toContain('too_sensitive')
+    expect([...ids, SHIPPED_DECISION_WRITER.id]).toContain('dismissal')
+    expect(deferred.find((d) => d.id === 'too_sensitive')?.table).toBe('brand_memory')
+  })
+
+  it('the registry has exactly ONE decision-derived entry, it is the shipped dismissal -> audience_memory, and no deferred surface has an entry', () => {
+    const deferred = parseDeferredDecisionSurfaces(read('docs/decisions/0030-memory-platform-substrate.md'))
+    const derivedIds = new Set<string>([SHIPPED_DECISION_WRITER.id, ...deferred.map((d) => d.id)])
+    const decisionWriters = WRITER_IDS.filter((id) => derivedIds.has(id))
+    expect(decisionWriters).toEqual([SHIPPED_DECISION_WRITER.id])
+    expect(findSecondDecisionWriters(MEMORY_WRITERS, deferred)).toEqual([])
   })
 })
 
@@ -698,6 +772,31 @@ export function findCreatedTables(sql: string): string[] {
   return [...stripSqlComments(sql).matchAll(/\bcreate\s+table\s+(?:if\s+not\s+exists\s+)?(?:public\.)?(\w+)/gi)].map((m) => m[1])
 }
 
+// Session 36-D D3 (NIT-1): the table names ADR 0010 Amendment 2 §D2.5's cascade TABLE lists — the first cell of each table row between the
+// `#### D2.5` heading and the next heading of equal or higher level. A name in the prose of any other section does not count. The house form is
+// a plain or **bold** first cell (read from the file: `| brand_voices |`, `| **businesses** |`); backticks are tolerated.
+export function parseCascadeTableNames(adr: string): string[] {
+  const lines = adr.replace(/\r\n/g, '\n').split('\n')
+  const start = lines.findIndex((l) => /^#{1,4}\s+D2\.5\b/.test(l))
+  if (start < 0) return []
+  const level = /^(#+)/.exec(lines[start])![1].length
+  const names: string[] = []
+  for (const line of lines.slice(start + 1)) {
+    const heading = /^(#+)\s/.exec(line)
+    if (heading && heading[1].length <= level) break
+    if (!line.trim().startsWith('|')) continue
+    const first = line.trim().replace(/^\|/, '').split('|')[0].replace(/[*`]/g, '').trim()
+    if (first === '' || /^[-:\s]+$/.test(first) || /^table$/i.test(first)) continue
+    names.push(first)
+  }
+  return names
+}
+
+export function findTablesMissingFromCascade(created: string[], adr: string): string[] {
+  const listed = new Set(parseCascadeTableNames(adr))
+  return created.filter((t) => !listed.has(t))
+}
+
 describe('SUBSTRATE-CASCADE-COMPLETE (ADR 0030 §10, constraint 25) — scan half', () => {
   it('finds CREATE TABLE in every spelling and ignores comments (planted)', () => {
     expect(findCreatedTables('CREATE TABLE public.foo (a int);')).toEqual(['foo'])
@@ -706,11 +805,29 @@ describe('SUBSTRATE-CASCADE-COMPLETE (ADR 0030 §10, constraint 25) — scan hal
     expect(findCreatedTables('ALTER TABLE public.foo ADD COLUMN x int;')).toEqual([])
   })
 
+  // The detector is non-vacuous even when the range creates no table (it creates none today): a synthetic ADR whose prose names a table that D2.5's table does not.
+  it('matches only §D2.5 table rows: a name in prose, or in another section, is reported; a name in D2.5 is not (planted pair)', () => {
+    const adr = [
+      '#### D2.4 — earlier', '| zz_dismissal_log | a |', '',
+      '#### D2.5 — Cascade table', '', '| Table | Business-scoped? |', '|---|---|', '| **businesses** | root |', '| brand_voices | yes |', '| `quoted_table` | yes |',
+      '', 'Prose after the table mentions `zz_dismissal_log` and zz_other.', '', '#### D2.6 — Retention', '| zz_later_section | a |',
+    ].join('\n')
+    expect(parseCascadeTableNames(adr)).toEqual(['businesses', 'brand_voices', 'quoted_table'])
+    expect(findTablesMissingFromCascade(['zz_dismissal_log', 'zz_other', 'zz_later_section'], adr)).toEqual(['zz_dismissal_log', 'zz_other', 'zz_later_section'])
+    expect(findTablesMissingFromCascade(['brand_voices', 'businesses', 'quoted_table'], adr)).toEqual([])
+  })
+
+  it('the real ADR 0010 §D2.5 parses to a non-trivial table list (the scan cannot pass by reading nothing)', () => {
+    const names = parseCascadeTableNames(read('docs/decisions/0010-legal-surface.md'))
+    expect(names.length, 'ADR 0010 §D2.5 parsed to fewer than 15 table rows').toBeGreaterThanOrEqual(15)
+    expect(names).toEqual(expect.arrayContaining(['businesses', 'social_accounts', 'founder_interview_answers']))
+  })
+
   it('every table this range creates has a row in ADR 0010 Amendment 2 §D2.5', () => {
     const adr0010 = read('docs/decisions/0010-legal-surface.md')
     const created = rangeMigrations.flatMap((f) => findCreatedTables(fs.readFileSync(f, 'utf8')))
     expect(rangeMigrations.length, 'scanned no migrations').toBeGreaterThan(0)
-    expect(created.filter((t) => !adr0010.includes(`\`${t}\``))).toEqual([])
+    expect(findTablesMissingFromCascade(created, adr0010)).toEqual([])
   })
 })
 

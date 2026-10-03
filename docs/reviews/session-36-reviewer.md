@@ -633,3 +633,33 @@ Before the new tests, each of the same mutations failed 0 of 75 (generate) and 0
 **Loop:** `npx tsc --noEmit --skipLibCheck` clean; `npm run lint` 0 errors (112 warnings, the same count as D1); `npm run test:app` with the `app-tests.yml` env block 382 files / 5805 tests passed; `npm run test:db` against the LOCAL stack (`http://127.0.0.1:54321`, `127.0.0.1:54322`, asserted before running, never the remote) 113 files / 1292 tests passed.
 **Commit:** D2 (its SHA is recorded in D3's block).
 **What I did NOT touch:** no existing migration; no other scan in the file; the range test and `RANGE_AFTER` are unchanged apart from the floor's comment and constant.
+
+### D3 — MINOR-1 and NIT-1
+
+**D2's SHA, recorded here as promised:** `24840fb0` (MINOR-2 and MINOR-3). The D2 rows' **Commit** field resolves to it.
+
+**Finding:** MINOR-1.
+**Fix:** test-only, in `lib/memory/substrate-scans.test.ts`. The hand list `DECISION_SOURCES` and the constant `EXPECTED_DECISION_WRITERS` are gone. `parseDeferredDecisionSurfaces` reads ADR 0030 §6.7's table at test time (first cell -> id by dropping any `(…)` and anything from `→`, lower-casing and `_`-joining; the text after `→` is the target table). The definition is stated in the comment above it: *a writer is decision-derived when its input is a human's accept/reject decision on a product artefact (ADR 0030 §6.7)*. `findSecondDecisionWriters` reports any registry entry whose id is a deferred row, and a shipped `dismissal` that writes anything but `audience_memory`. The old tautology `expect(EXPECTED_DECISION_WRITERS).toBeLessThanOrEqual(1)` (a constant against a literal) is replaced by an assertion over `MEMORY_WRITERS` itself: the decision-derived entries are exactly `['dismissal']`, and no deferred surface has an entry.
+**Old assertions, quoted as the step requires:** `const count = WRITER_IDS.filter((id) => (DECISION_SOURCES as readonly string[]).includes(id)).length; expect(count).toBe(EXPECTED_DECISION_WRITERS); expect(EXPECTED_DECISION_WRITERS).toBeLessThanOrEqual(1)`. The first two lines' intent is kept (a count over the real registry, now `toEqual(['dismissal'])`); the third is the tautology the finding names.
+**Proof:** `lib/memory/substrate-scans.test.ts`, describe `SUBSTRATE-ONE-DECISION-WRITER … derived source set` (4 tests): the planted parse; the planted report/no-report pair; the vacuity floor on the REAL ADR (`>= 6` parsed rows, containing `too_sensitive` with table `brand_memory`, and `dismissal` in the derived set); and the registry assertion.
+**Reddening** (each applied alone, the file re-run, restored from a backup copy, `git diff --stat` on it confirmed empty):
+
+| Mutation | Result |
+|---|---|
+| plant a `too_sensitive` entry (`tables: ['brand_memory']`, `gate: 'min_n'`) at the head of `MEMORY_WRITERS` in `lib/memory/writers.ts` | `× the registry has exactly ONE decision-derived entry, …` · `AssertionError: expected [ 'too_sensitive', 'dismissal' ] to deeply equal [ 'dismissal' ]` · 1 failed / 56 passed. **GREEN at `0605a97d`** (the Reviewer's 0 / 50). |
+| plant a `post_skip` entry the same way | the same test · `expected [ 'post_skip', 'dismissal' ] to deeply equal [ 'dismissal' ]` · still RED, as before |
+| delete the `too_sensitive` row from ADR 0030 §6.7 (a scratch edit of the ADR input, restored) | `× the ADR's §6.7 table is read for real: at least 6 deferred rows, …` · `AssertionError: ADR 0030 §6.7 parsed to fewer than 6 rows: the scan would pass by reading nothing: expected 5 to be greater than or equal to 6` |
+
+**Finding:** NIT-1.
+**Fix:** test-only. `parseCascadeTableNames` slices ADR 0010 from the `#### D2.5` heading to the next heading of equal or higher level and returns the first cell of each TABLE row only (the house form, read from the file before writing the matcher: a plain first cell `| brand_voices |` or a bold one `| **businesses** |`; backticks tolerated). `findTablesMissingFromCascade` replaces the old `includes` over the whole document, which accepted a table named anywhere in it.
+**Old assertion, quoted:** `expect(created.filter((t) => !adr0010.includes("`" + t + "`"))).toEqual([])` (a backticked table name accepted ANYWHERE in ADR 0010). **New:** `expect(findTablesMissingFromCascade(created, adr0010)).toEqual([])`. This is the one assertion change NIT-1 itself prescribes.
+**Proof:** describe `SUBSTRATE-CASCADE-COMPLETE … scan half`: the planted pair (a synthetic ADR whose prose and whose D2.6 section name a table that D2.5's table does not; the detector reports all three such names and none of the three D2.5 rows), which makes the detector non-vacuous even though the range creates no table today; and a floor on the REAL ADR (`>= 15` parsed rows, containing `businesses`, `social_accounts`, `founder_interview_answers`).
+**Reddening:**
+
+| Mutation | Result |
+|---|---|
+| plant `supabase/migrations/20261001000004_zz_dismissal_log.sql` (`CREATE TABLE public.zz_dismissal_log (id int);`) AND add a prose sentence naming `zz_dismissal_log` in backticks to ADR 0010 outside the table | `× every table this range creates has a row in ADR 0010 Amendment 2 §D2.5` · `AssertionError: expected [ 'zz_dismissal_log' ] to deeply equal []` · 1 failed / 56 passed. **GREEN under the old `includes`.** The planted migration was removed and ADR 0010 restored; the directory is back to its 124 files. |
+
+**Loop:** `npx tsc --noEmit --skipLibCheck` clean; `npm run lint` 0 errors (112 warnings, unchanged; none in the touched file); `npm run test:app` with the `app-tests.yml` env block 382 files / 5810 tests passed; `npm run test:db` against the LOCAL stack (`http://127.0.0.1:54321`, asserted before running, never the remote) 113 files / 1292 tests passed.
+**Commit:** D3 (its SHA is recorded in D4's block).
+**What I did NOT touch:** no registry entry added (every plant above was reverted); `too_sensitive` is still deferred (L-1; backlog `S36-TOO-SENSITIVE-TO-BRAND`); no ADR text edited (ADR 0030's mention of `DECISION_SOURCES` at its Session 36 amendment is D9's, and is recorded as such); no other scan in the file.
