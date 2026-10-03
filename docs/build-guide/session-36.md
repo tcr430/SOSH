@@ -2242,6 +2242,799 @@ resolution log.
 > push), with the skip-guard line quoted from the log; every `SUBSTRATE-*` constraint re-dated to the
 > corrected head, per tier; and the `db-tests` tally recorded with its event type.
 
+**✅ AUTHORED 2026-10-03 — the placeholder above is retained as the specification this section was written
+against; everything below is the section itself.**
+
+**Filled in from `docs/reviews/session-36-reviewer.md`** (Reviewer range **`e9de7b25..0605a97d`**: 13 commits,
+`L2.1` `11020eeb` … `L2.11` close-out `0605a97d`, on branch `session-36-adr-0030`, **PR #16, open against
+`master`**). **Eleven steps: D0–D10.** Correction passes are normal, not failures (constitution). **There is
+no independent re-review pass this session** (mirroring 23-D…35-D). This pass fixes the Reviewer's findings
+and records its own resolutions in the Reviewer's file. The founder adjudicates close-out.
+
+**Reviewer's tally: 0 BLOCKER, 2 MAJOR, 7 MINOR, 3 NIT, for 12 findings. Every one appears exactly once in the
+disposition table below, including every MINOR and NIT.** Three are wholly or partly **ADR findings**
+(MINOR-6, MINOR-7, NIT-3). Each closes with an appended ADR 0030 entry as well as code where the table says so.
+
+> **Every finding is fixed in this pass. None is deferred.** The founder instruction for this pass is
+> *"include all items identified in the reviewer"* (2026-10-03). The one part of a finding this pass cannot
+> close by itself is **MAJOR-2's hosted half**: reading and migrating the production database is the
+> founder's act, not an agent's (A-8). If A-8 is not carried out before D10, that half closes as
+> **LAUNCH-GATED**: a `docs/launch-checklist.md` row that blocks launch by definition. It is not a backlog
+> line, and it is not deferred. The repo half closes as a FIX either way.
+
+**This pass starts from a pushed, GREEN range.** At `0605a97d`, `app-tests` (run 36698216032, skip-guard
+`379 … (5794/5794)`), `db-tests` (run 36698215922, skip-guard `113 … (1292/1292)`) and eval (run 36698216211)
+are all green. The Reviewer re-ran all 28 `SUBSTRATE-*` constraints as executed green. **The defects are of a
+different kind from 35-D's. Nothing failed to run; three things pass without proving what they claim:**
+- **A test that holds no matter what the argument is.** MAJOR-1: three ADR §3.4 caller rows (`hasActiveEvidence`
+  on the service-role generation path, and the planner and triage tools' `retrieve*` calls) survive having
+  their argument mutated. One of them is the only tenant boundary on that path. MINOR-4 is the same defect
+  inside `bundle.test.ts`: hint forwarding and two of four tie-breaks.
+- **A scan with a blind spot in its own vocabulary.** MINOR-1 (`too_sensitive` slips past the decision-writer
+  scan), MINOR-2 (quoted policy names, column grants), NIT-1 (a match anywhere in ADR 0010, not in §D2.5).
+  MINOR-3 is the guard that currently masks MINOR-2, and it has to be edited by every future session.
+- **A fix that stops at the repo boundary.** MAJOR-2: `20260930100000` narrows the three distilled RPCs, but the
+  hosted project was never queried, and the wider fresh-database audit is a backlog line rather than a launch
+  gate.
+
+---
+
+### Founder adjudications — **two required (A-8, A-9)**
+
+A-0…A-7 (§0.2) stand untouched and are **not** reopened. Two findings need a decision this guide may not take.
+One is an act on production data. The other changes the user-facing copy ADR 0030 §9.1 fixed. This guide
+records a recommendation for each. **D6 does not begin until A-9 is filled in. D8 records A-8 as it stands
+when D8 runs.**
+
+| # | Question | L3's finding | Recommendation (this guide) | Decision |
+|---|---|---|---|---|
+| **A-8** | MAJOR-2 (a): who runs the `S36-FRESH-DB-RPC-ACL-AUDIT` query against the **hosted** project and applies `20260930100000` there, and when? | V.17: *"exposure should be assumed"*. Nobody has read the hosted grants. Anywhere the grants exist, any signed-in user can write `performance_memory` for any business. | **(a) The founder runs both, during this pass.** That means the read-only query (verbatim from `docs/backlog.md` §3.3), then `supabase db push` (or a confirmation that the deploy pipeline already applied `20260930100000`), then the query again. The founder pastes the dated before and after output into the session. D8 records it verbatim. Loser (b): give the correction agent production credentials. Never: `.env.local` targets the remote project, and the primer forbids using it. Loser (c): leave it to the launch checklist alone. This is the **fallback, not the plan**. Under (c) the hosted half closes as LAUNCH-GATED (see the box above). | **PENDING** |
+| **A-9** | MINOR-7: the §9.1 hint *"Jemip will remember your audience isn't interested in updates from this source."* promises an effect most single dismissals do not have. | The first and second `not_relevant` dismissals write a `candidate` row that no reader returns. Active needs n ≥ 3 and n/m ≥ 0.75, and even an active row reaches triage only if the model calls `list_audience_notes` (§6.8). | **(a) Conditional copy** that states the counted nature of the effect without a number or a new control. Proposed EN: *"If you keep marking updates from this source as not relevant, Jemip will learn your audience isn't interested in them."* PT and ES are translated naturally, not literally, in D6, and shown to the founder in the D6 commit body. Loser (b): keep the copy and record in ADR 0030 why it is acceptable. It is a user-facing claim of an effect that usually does not occur, and the product's position is that human-in-the-loop is a feature, so the human must be told the truth about the loop. Loser (c): show the running count (*"2 of 3"*). That is a new affordance that needs a design decision, it reveals the gate's internals, and §9 forbids a new control. | **PENDING** |
+
+**If A-9 is (b):** D6 omits the copy change. D9 records the ruling in ADR 0030, and MINOR-7 closes as **RULED**.
+**If A-8 is (c), or (a) has not happened by D10:** the hosted half is LAUNCH-GATED by D8's row, and the
+appendix says so in those words.
+
+**Engineering decisions this pass takes without a ruling, with the reason:**
+
+| Finding | Remedy chosen | Loser (rationale) |
+|---|---|---|
+| **MAJOR-1** | **Assert the exact argument at each caller, in that caller's own test file.** `generate.test.ts` asserts `hasActiveEvidence` was called with **the same client object** the generation path built (identity, `toBe`) and the business id under test, with a second business in the fixture so that a swapped id is observable. The planner and triage tool tests keep the **real** retrievers running (`vi.mock` with `importOriginal`, wrapping each `retrieve*` in a pass-through spy) and assert each call's third argument `toEqual` the **parsed** hints (`{ platform: 'linkedin' }`), the business id and the client. Studio (`studio/actions.ts:137`) gets the same assertion, because V.11 names it as proved. | Asserting on the mock client's `.eq('platform', …)` calls: that couples the test to the query shape, and it passes even if the retriever ignores its argument and hard-codes the platform. Replacing the real retrievers with plain mocks: that drops the ranking path the tool tests cover today. |
+| **MAJOR-2** | **Two documents, no code:** (1) a `docs/launch-checklist.md` §2 row: the fresh-database audit query, run on a **fresh** database (`supabase db reset`) **and** on the hosted project, expected to return **only an enumerated allow-list** of deliberately client-callable functions (for example `get_user_business_ids`, which every RLS policy calls as `authenticated`); (2) `S36-FRESH-DB-RPC-ACL-AUDIT` in `docs/backlog.md` gains an appended pointer to that row. The 8 functions the Reviewer found (6 executable by `anon`) are **listed in the row by name**, each as "narrow, or justify onto the allow-list". | Narrowing all 8 in this pass: they predate this range and sit outside L-1's scope. Each needs its own caller analysis (some are triggers, and at least one is the RLS helper itself), and a blanket REVOKE breaks RLS. The checklist row makes the audit a **launch gate**, which is what the finding asks for. |
+| **MINOR-1** | **Derive the decision-derived sources from ADR 0030 §6.7's table.** The scan parses that table and asserts a vacuity floor (≥ 6 rows, containing `dismissal` and `too_sensitive`). It forbids any registry id or registered table/source pair matching a deferred row, permits exactly the one shipped (`dismissal`), and replaces `:616`'s tautology with an assertion over `MEMORY_WRITERS` itself. The definition is stated in-file: *a writer is decision-derived when its input is a human's accept/reject decision on a product artefact*. | Adding `too_sensitive` to the hand list: the Reviewer rejects that explicitly, because the next deferred writer slips past again. A `kind` field on the registry: that changes a production type to serve a test, and the field is self-declared by the writer it is meant to police. |
+| **MINOR-3** | **The range guard becomes a floor:** the range must **contain** the five Session 36 migrations (it may contain more). The vacuity purpose (*the scans read something*) is kept, and the edit-every-session tax is removed. | Bumping the list each session: that is the reflexive edit the Reviewer predicts, and it is the noise that trains people to ignore the guard. |
+| **MINOR-6** | **Split the outcomes in SQL and classify them in TS, with no change to which rows are written.** A forward migration replaces `recompute_dismissal_audience_signal` so that the conflated cases return distinct text: a missing or soft-deleted watched source, a watched source owned by **another** business (an existence-only read, `id`/`business_id`/`deleted_at`, no text column), a NULL watched id on an `rss`/`github` signal, and a genuinely unknown kind. Each keeps today's `retired_…` / non-retired split, so the **state change is byte-identical** and only the returned text differs. Anomalous outcomes carry the prefix `anomaly_`. In TS, the wrapper parses the text against a `z.enum` of every outcome (unknown text throws into the existing catch). A `DISMISSAL_OUTCOME_CLASS` map marks each outcome **decided** or **anomalous**, and all three actions log anomalous outcomes through the channel they already use (one `console.error` with the card id and the outcome). A Tier-3 scan asserts that the map's keys equal the set of `RETURN '…'` literals in the latest migration defining the function. | Throwing on an anomaly: the card transition has already committed, so a throw turns a successful dismiss into a user-facing error. A log table: that is a new business-scoped table, so a new RLS set, a §D2.5 row and a purge path, all for an operator signal. Leaving the SQL alone and classifying in TS: the conflated texts cannot be split after the fact, which is the finding. |
+| **NIT-1** | **Scope the match to §D2.5's rows.** Slice ADR 0010 from the §D2.5 heading to the next heading, and match a table name only as a table-row cell. Add an in-file planted pair (a synthetic `CREATE TABLE` whose name appears elsewhere in ADR 0010 but not in §D2.5 → RED), so the detector is never vacuous even when the range creates no table. | Leaving it: a table named in ADR 0010's prose but missing from the cascade table passes, which is the silent GDPR-erasure leak the CLAUDE.md erasure-cascade rule exists for. |
+| **MINOR-5** | **Recorded transcripts, no rewritten history.** #12 and #14 get their transcripts from D1 and D4, whose tests are new. #17 (DISMISS-MAPPING) and #24 (RLS-ISOLATED) are **re-reddened by this pass** at D7 against the head, and the transcripts are pasted into the appendix. | Amending `6c90c038` / `eab33b5e`: they are pushed and under an open PR, and history is not rewritten. |
+
+---
+
+### What the Reviewer found — disposition of all 12 findings (`session-36-reviewer.md` is authoritative)
+
+| ID | Tier | One line | Disposition | Step |
+|---|---|---|---|---|
+| **MAJOR-1** | MAJOR (tenant boundary) | Three ADR §3.4 caller rows (`hasActiveEvidence`, planner tools, triage tools) survive argument mutation; #12 is AUTHORED-NOT-EXECUTED for them (plus Studio) | FIX (test-only) | **D1** |
+| **MINOR-2** | MINOR (write access) | The member-write scan misses a quoted policy name and a column-level `GRANT INSERT (…)` | FIX (detector widened) | **D2** |
+| **MINOR-3** | MINOR | The range guard pins exactly five migrations; every future session must edit it | FIX (floor, not equality) | **D2** |
+| **MINOR-1** | MINOR (governance) | `SUBSTRATE-ONE-DECISION-WRITER` misses `too_sensitive`; `:616` is a tautology | FIX (derived from ADR §6.7) | **D3** |
+| **NIT-1** | NIT (GDPR) | `SUBSTRATE-CASCADE-COMPLETE` is vacuous over this range and matches anywhere in ADR 0010 | FIX (scoped to §D2.5 + planted pair) | **D3** |
+| **MINOR-4** | MINOR | `bundle.test.ts`: hint forwarding and the confidence/recency tie-breaks survive mutation | FIX (test-only) | **D4** |
+| **MINOR-6** | MINOR + **ADR** §6.5 | The recompute's outcome text is discarded; missing, foreign and malformed sources are conflated and silent | FIX (the one migration + TS classifier + scan) + ADR record | **D5 + D9** |
+| **MINOR-7** | MINOR (**ADR** §9.1) | The hint copy promises an effect most single dismissals do not have | FIX under **A-9(a)**, or RULED under A-9(b) | **D6 + D9** |
+| **NIT-2** | NIT | Two stale mock factories (`supersede-callers`, `context-equivalence`) | FIX | **D7** |
+| **MINOR-5** | MINOR (process) | No redden transcript in L2.8 / L2.9 commit bodies for #12, #14, #17, #24 | FIX (transcripts recorded: #12 at D1, #14 at D4, #17 and #24 re-reddened at D7) | **D1 + D4 + D7** |
+| **MAJOR-2** | MAJOR (security) | W1 fixed in the repo; the hosted project is unverified, and the fresh-DB audit is not a launch gate | FIX (launch-checklist row + backlog pointer) + hosted half per **A-8** (recorded, or LAUNCH-GATED) | **D8** (+ D10 `.wolf` Do-Not-Repeat for (d)) |
+| **NIT-3** | NIT (**ADR**) | ADR 0029 §1.3 pointer landed late; ADR §6.8 / V.10 name Studio as a reader it is not; `scripts/measure-substrate.ts` is an unlisted caller | FIX (appended ADR 0030 notes) | **D9** |
+
+**Count check, re-run at D10:** 12 rows, 12 distinct IDs, and every ID from the Reviewer's report exactly
+once (MAJOR-1…2; MINOR-1…7; NIT-1…3). **Zero DEFERRED. At most one RULED (MINOR-7, under A-9(b)). At most one
+LAUNCH-GATED half (MAJOR-2's hosted half, under A-8(c) or if A-8(a) has not happened).** If the check fails, the
+pass is not closed.
+
+---
+
+### Ordering rationale
+
+1. **D0 first.** `docs/reviews/session-36-reviewer.md` is **untracked**. It must enter git exactly as written,
+   so that the appendix diff proves itself additive. This §4 is the pass's work order and lands in the same
+   commit.
+2. **Write access, tenancy and governance first, regardless of severity label** (the 35-D binding rule).
+   **D1 (MAJOR-1)** is the tenant boundary on the service-role generation path. **D2 (MINOR-2, MINOR-3)** is
+   the member-write closure, ADR §2.4's one closed regression. MINOR-2 goes **before** MINOR-3 in the same
+   step, because the range guard is today the only thing that fires on MINOR-2's shapes. Relaxing it first
+   would open a window where nothing does. **D3 (MINOR-1, NIT-1)** is the decision-writer rule and the
+   erasure cascade. All three steps are test-only.
+3. **D4 (MINOR-4)** is test-only and touches the bundle, which no later step changes.
+4. **D5 is the only migration, and it runs alone** (the 31-D…35-D precedent). It comes after every scan has
+   been widened (D2, D3), so the widened detectors run over it. A second migration mid-pass would invalidate
+   every earlier `test:db` run.
+5. **D6 (MINOR-7)** is copy only, and gated on A-9. It follows D5 so that the dismiss path's code is settled
+   before its copy changes.
+6. **D7 (NIT-2 and MINOR-5's re-reddens)** is test hygiene. It comes after D5 because
+   `generate.context-equivalence.test.ts`'s factory and the #17 plants cover code D5 could have touched.
+7. **D8 (MAJOR-2)** is documents plus the founder's hosted act. It needs no code, so it does not hold up the
+   code steps. It sits late so that A-8 has the longest possible window to happen.
+8. **D9 is documentation truth, after every code step**, because every amendment cites the test that now
+   proves it.
+9. **D10 pushes last** to PR #16, re-dates every constraint claim and closes Track L.
+
+---
+
+### Where resolutions go (CLAUDE.md — `REVIEWER-REPORT APPEND-ONLY`, revised Session 23-D)
+
+Resolutions go **into `docs/reviews/session-36-reviewer.md`**, under one appended, attributed
+`## CORRECTION PASS (Session 36-D)` section at the end, below the Reviewer's closing line (*"Session 36 review
+complete - 12 findings …"*). There is no separate corrections file.
+
+**The Reviewer's text is immutable:**
+- Not one character is edited.
+- No verdict is flipped (the §10 table's ✘ marks stay), and no `RESOLVED` is stamped.
+- This covers "What I ran", the §6 walkthrough table, the §10 constraint table and every finding.
+
+**The appendix itself:**
+- It references findings **by ID** and records *finding → fix → proving test → reddening → SHA*.
+- A disputed finding is argued in the appendix, never erased. (If the pass disagrees with one, say so there.
+  It is not grounds to skip the finding.)
+- A **RULED** row quotes the A-9 decision. A **LAUNCH-GATED** half names the `launch-checklist.md` row.
+
+**Never weaken a test to reach green.** Two kinds of assertion change are permitted, and each is recorded:
+- **D5:** an existing Tier-1 assertion that a deleted or foreign watched source returns `invalid_identifier`
+  changes to the new distinct outcome. That change **is** MINOR-6's fix. The old assertion is quoted in the
+  appendix.
+- **D6:** under A-9(a), the UX-DISCLOSED copy assertion changes to the ruled text. The ruling is quoted.
+
+Nothing else flips. **Never edit a committed migration**: D5 is a forward migration. ADR 0030 §0–§15 and its
+V.1–V.17 appendix are **not** edited; amendments are one appended section (D9). The permitted in-place
+document edits are:
+- **`docs/launch-checklist.md` §2**: one new row (D8).
+- **`docs/backlog.md` `S36-FRESH-DB-RPC-ACL-AUDIT`**: an appended pointer, with the entry's text otherwise
+  unchanged (D8).
+- **`docs/current-phase.md`'s constraint→CI map**: re-dated at D10, with its prior text quoted in the appendix.
+
+**Do not fold D0 and the first resolution row into one commit.**
+
+**ECC budget: ≤ 1 subagent per step, and only where this guide names one.**
+- **D5** → `database-reviewer`. The step is a forward migration replacing a SECURITY DEFINER body that one
+  registered writer owns, and adding an existence-only read across tenants. Ask specifically:
+  - Does the new read touch any text column?
+  - Is the state change byte-identical?
+  - Does the migration restate `REVOKE ALL … FROM PUBLIC, anon, authenticated` plus the `service_role`
+    grant, the `20260930100000` pattern?
+- **All other steps carry none.** Do not re-run the L2.5 / L2.8 / L2.9 reviewers. The proving test is the
+  confirmation. **`taste-skill` and `impeccable` are NOT invoked.** D6 changes copy inside the existing
+  `role="status"` region and adds no element. If the new copy needs a layout change, **STOP**.
+
+**The highest-risk classes:**
+- **(a) D1.** The `hasActiveEvidence` assertion must use the **client object identity**, not
+  `expect.anything()`. A test that accepts any client does not catch a swapped service-role or member client,
+  and a test with only one business in its fixture does not catch a swapped id.
+- **(b) D2.** Widening the member-write detector must not make it fire on the repo's existing quoted-name
+  policies that are **not** member writes (`20260614021500` and its siblings). Run the widened scan over every
+  migration, not only the range, and confirm it stays green before planting.
+- **(c) D5.** The cross-tenant existence read is the first read in this function that is not filtered by the
+  card's `business_id`. It must return **only** whether the row exists and under which business. It must
+  never select `name`, `owner`, `url` or `label`, and its result must never reach the statement. The
+  walkthrough's member-rename row (Reviewer §6) is re-run after D5 and must still end at the SQL regex.
+- **(d) D5.** The fresh-database lesson from MAJOR-2 (d). The function's privileges are verified after
+  **`supabase db reset`** (a fresh catalog), never only on the long-lived local DB.
+
+Each step ends by re-running the full existing suite for its files and confirming that no previously green
+assertion changed, other than the two recorded above.
+
+---
+
+### §4.0 — Correction primer  (paste first · wait for acknowledgement)
+
+```
+You are the Session 36-D correction pass (Track L, ADR 0030, the memory platform substrate). You fix the
+findings in docs/reviews/session-36-reviewer.md - you do not re-review, and you do not re-litigate the
+Reviewer's verdicts. Acknowledge these twelve rules, then stop and wait for D0.
+
+1. THE REVIEWER'S TEXT IS IMMUTABLE. Resolutions go in ONE appended, attributed
+   "## CORRECTION PASS (Session 36-D)" section at the END of docs/reviews/session-36-reviewer.md, below the
+   Reviewer's closing line, opening with author, date and the commit range fixed. Not one character above
+   it changes. A disputed finding is argued in the appendix, never erased.
+2. ONE STEP, ONE COMMIT, THEN STOP. Each step's commit message is given; use it.
+3. EVERY FIX IS PROVED BY MUTATION. For a test-only fix, apply the Reviewer's OWN mutation (quoted in each
+   step), watch the new test go RED, restore, and confirm `git diff --stat` is empty. Record the exact
+   mutation and the failing line in the appendix.
+4. NEVER WEAKEN A TEST TO REACH GREEN. The only permitted assertion changes are D5's (a deleted or foreign
+   watched source no longer returns invalid_identifier - that IS MINOR-6's fix) and D6's (the hint copy,
+   only under founder ruling A-9(a)). Quote each old assertion in the appendix. Amend ADR 0030 only as an
+   APPENDED section (D9). Never edit a committed migration; D5 is a forward migration.
+5. ALL 12 FINDINGS APPEAR IN THE APPENDIX, AND NONE IS DEFERRED (founder instruction, 2026-10-03: "include all
+   items identified in the reviewer"). MINOR-7 may close as RULED only under A-9(b). MAJOR-2's hosted half may
+   close as LAUNCH-GATED only as section 4 describes. A finding you cannot close, you REPORT and STOP - you do
+   not defer it on your own authority.
+6. A-0..A-7 ARE RULED AND NOT REOPENED. A-9 must be filled in section 4 of docs/build-guide/session-36.md
+   BEFORE D6 begins; if it is still PENDING when you reach D6, STOP. Never invent a ruling. A-8 is recorded
+   at D8 exactly as it then stands.
+7. YOU NEVER TOUCH THE HOSTED PROJECT. The repo's .env.local targets the REMOTE database - never run
+   test:db, a migration, psql or the Supabase MCP against it. The hosted query and push are the founder's
+   (A-8); you record what the founder pastes, verbatim and dated.
+8. WRITE ACCESS, TENANCY AND GOVERNANCE FIRST, AND ONE MIGRATION, AT D5 ONLY. If another step appears to
+   need SQL, STOP.
+9. EVERY STEP'S LOOP: npx tsc --noEmit --skipLibCheck; npm run lint; npm run test:app with app-tests.yml's
+   env block; and for D2, D3, D5 and D7, npm run test:db against a running LOCAL Supabase stack (env from
+   `supabase status -o env`, 127.0.0.1:54321/54322). For D5, run test:db after `supabase db reset`, so
+   privileges are checked on a FRESH catalog (MAJOR-2 (d)). If the local stack cannot start, STOP - a Tier-1
+   change is never committed unexecuted.
+10. SHARED-FUNCTION CALLERS. Before changing or testing any shared function, `git grep` its production
+    callers and name, per caller, the test that exercises it. In particular: hasActiveEvidence (generate.ts),
+    retrieveBrandMemory / retrieveEvidenceMemory / retrieveAudienceMemory / retrievePerformancePatterns
+    (planner tools, triage tools, Studio, scripts/measure-substrate.ts), retrieveMemoryBundle (brief,
+    measure-substrate), recomputeDismissalAudienceSignal -> recomputeDismissalSignal (the three
+    opportunities actions).
+11. DO NOT PUSH BEFORE D10. PR #16 is open against master and green at 0605a97d; D10 makes the corrected
+    head green.
+12. SCOPE IS THE FINDINGS. L-1 binds: no memory-management UI, no embeddings, no relationship_memory, no
+    second decision writer (too_sensitive stays deferred - D3 forbids it, it does not build it), no model on
+    a write path, no trigger on insight_cards / watched_repos / watched_feeds, no new table, budget purpose,
+    EmailKind, capability, index or dependency, and no narrowing of the 8 pre-existing SECURITY DEFINER
+    functions (MAJOR-2 makes them a launch-checklist row; it does not change them). taste-skill and
+    impeccable are NOT invoked. ECC subagents: database-reviewer once at D5, none anywhere else.
+```
+
+---
+
+### §4.1 — Correction steps
+
+#### D0 — land the governing documents in git  ·  FIRST, by design  ·  no code
+
+```
+CORRECTION - Session 36-D · D0. No .ts/.tsx/.sql. No specialist.
+
+THE STATE: docs/reviews/session-36-reviewer.md is UNTRACKED. docs/build-guide/session-36.md is tracked but
+its committed version predates this section 4, which is this pass's work order.
+
+DO - commit exactly these two paths, AS THEY STAND:
+- docs/reviews/session-36-reviewer.md  (EXACTLY as the Reviewer left it)
+- docs/build-guide/session-36.md       (with section 4 authored - say so in the commit message)
+Do NOT append the CORRECTION PASS section. Do NOT stage any code file; report any present and leave it.
+supabase/.temp/cli-latest is local noise, and CLAUDE.md's working-tree change is not this pass's - stage
+neither.
+
+VERIFY: `git show <D0-sha>:docs/reviews/session-36-reviewer.md` byte-identical to the working tree and
+containing no "CORRECTION PASS"; `git show <D0-sha>:docs/build-guide/session-36.md | grep -c "### §4.1"`
+non-zero; no code file in the commit.
+On commit: "D0 - Session 36-D audit trail: the Reviewer's report enters git exactly as written (range
+e9de7b25..0605a97d, 12 findings) before any resolution row, so the appendix is provably additive;
+session-36.md lands with section 4 authored, since section 4 is this pass's work order." Then stop.
+```
+
+#### D1 — MAJOR-1 (+ MINOR-5 for #12): every ADR §3.4 caller row proved by its exact argument
+
+```
+CORRECTION - Session 36-D · D1. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+Test-only step: no production behaviour change, no migration.
+
+THE DEFECT (MAJOR-1): ADR 0030 section 11.2 #6 requires "one test per call site in section 3.4 ... each
+asserting the exact argument object". The Reviewer mutated three rows and NO test failed:
+- lib/campaigns/generate.ts:569 hasActiveEvidence(client, businessId) - a different business id passed:
+  generate.test.ts + generate.context-equivalence.test.ts 0 failed / 75. generate.test.ts:311,1261,1269 set
+  its resolved value and never assert its arguments. This is the SERVICE-ROLE generation path: the explicit
+  business_id filter is the only tenant boundary.
+- lib/campaigns/planner/tools.ts:68,82,93 retrieve*(client, businessId, queryContext) - `{}` passed in
+  place of the parsed hints: 0 failed.
+- lib/signals/triage/tools.ts:82,107,121 - the same: 0 failed (the three tool test files: 0 / 39).
+  tools.dismissal.test.ts mocks retrieveAudienceMemory without asserting its call.
+- Studio (studio/actions.ts:137, `{ platform }`) has the same hole; it predates this range, but V.11 names
+  it as proved.
+
+FIRST: `git grep -n "hasActiveEvidence\|retrieveBrandMemory\|retrieveEvidenceMemory\|retrieveAudienceMemory\|retrievePerformancePatterns"`
+over app/ lib/ scripts/ (excluding tests). Write the caller table (caller -> test file that will assert its
+argument) and put it in the appendix row. scripts/measure-substrate.ts is operator-only: list it, mark it
+"no test - operator script, recorded in ADR at D9 (NIT-3)".
+
+BUILD (section 4 ledger, MAJOR-1):
+1. generate.test.ts: assert hasActiveEvidence toHaveBeenCalledWith(<the exact client object the path built>
+   - identity via the mock's returned instance, NOT expect.anything() - , <the business id under test>).
+   The fixture must hold TWO businesses so a swapped id is observable.
+2. Planner and triage tool tests: keep the REAL retrievers running (vi.mock('@/lib/memory', async
+   (importOriginal) => ...) wrapping each retrieve* in a pass-through vi.fn). For each tool, send a tool call
+   whose input carries `platform`, and assert each retrieve* call's arguments are (client, businessId,
+   <the parsed hints, toEqual { platform: '...' }>). tools.dismissal.test.ts additionally asserts its
+   retrieveAudienceMemory mock's call.
+3. Studio: the same exact-argument assertion on its retrieve* call(s) in its existing action test file.
+Do not change any production file. Do not invent a second mocking idiom: reuse the file's existing
+vi.mock('@/lib/memory') factory and extend it.
+
+VERIFY:
+- REDDEN with the Reviewer's own mutations, each alone, restoring after each: (1) generate.ts:569 pass a
+  different business id -> RED; (2) the same with a different client -> RED; (3) planner tools.ts:68 (then
+  :82, :93) pass `{}` -> RED; (4) triage tools.ts:82 (then :107, :121) pass `{}` -> RED; (5) studio
+  actions.ts:137 pass `{}` -> RED. `git diff --stat` empty after each. Paste each failing assertion line.
+- Full loop: tsc; lint; test:app (CI env).
+Append the appendix opening block (section 4.2) and the MAJOR-1 row with its caller table. Append the
+MINOR-5 partial row for constraint #12 (SUBSTRATE-CALLERS-ENUMERATED): the transcripts above ARE #12's
+redden transcript, recorded here because 6c90c038's body is empty; no history rewritten.
+On commit: "D1 - MAJOR-1 closed (and #12's redden transcript for MINOR-5): every ADR 0030 section 3.4 caller
+row asserts its exact argument - hasActiveEvidence by client identity and business id over a two-business
+fixture; planner, triage and Studio retrieve* calls by the parsed hints, with the real retrievers still
+running. Each of the Reviewer's mutations now reddens. No production change." Then stop.
+```
+
+#### D2 — MINOR-2 + MINOR-3: the member-write scan sees every shape, and its range guard stops demanding edits
+
+```
+CORRECTION - Session 36-D · D2. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+Test-only step. MINOR-2 BEFORE MINOR-3, in that order, inside this step (section 4 ordering rationale).
+
+THE DEFECTS:
+- MINOR-2: lib/memory/substrate-scans.test.ts's member-write detector (:367-382) misses
+    CREATE POLICY "members can insert audience" ON public.audience_memory FOR INSERT TO authenticated
+      WITH CHECK (true);
+    GRANT INSERT (statement, business_id) ON public.audience_memory TO authenticated;
+  Each, planted alone, failed ONLY the range guard (:120), not "no migration of this range opens a member
+  write path on a *_memory table". The repo already uses quoted policy names (20260614021500).
+- MINOR-3: :105 RANGE_AFTER = '20260929100000' is correctly open-ended, but :120 asserts the range is
+  EXACTLY the five Session 36 files, so the first migration of any later session reddens the file.
+
+BUILD:
+1. MINOR-2: widen the detector to (a) quoted policy identifiers, with spaces and escaped quotes, and
+   unquoted ones; (b) column-list grants `GRANT <priv> (<cols>) ON ... TO authenticated|anon|public`, for
+   INSERT, UPDATE and DELETE; (c) case and whitespace insensitivity, and multi-line statements. Add in-file
+   planted positives for both of the Reviewer's shapes, plus negatives: a quoted-name FOR SELECT policy, and
+   a column-list GRANT SELECT. BEFORE planting, run the widened detector over EVERY migration in
+   supabase/migrations (not only the range) and confirm it reports no existing file - section 4 risk (b).
+2. MINOR-3: replace :120's equality with a floor: the range CONTAINS the five Session 36 migrations (list
+   them) and is non-empty. Keep RANGE_AFTER open-ended. Add an in-file comment stating why the floor exists
+   (vacuity) and why it is not an equality (MINOR-3).
+
+VERIFY:
+- REDDEN: plant each of the Reviewer's two migrations ALONE in supabase/migrations/ -> the MEMBER-WRITE test
+  itself goes RED (name the test in the transcript), not only the range guard; remove. Plant a harmless
+  later migration (e.g. a comment-only file dated after 20260930100000) -> the file stays GREEN (MINOR-3);
+  remove. Delete one of the five from a scratch copy of the list's input -> the floor goes RED; restore.
+  `git diff --stat` empty after each.
+- Full loop: tsc; lint; test:app (CI env); test:db (unchanged; still green).
+Append the MINOR-2 and MINOR-3 rows.
+On commit: "D2 - MINOR-2 MINOR-3 closed: the member-write scan detects quoted policy names and column-list
+grants (planted pairs, and run clean over every migration); the range guard is a floor, not an equality, so
+later sessions' migrations no longer redden it, and the member-write test itself now fires on both shapes."
+Then stop.
+```
+
+#### D3 — MINOR-1 + NIT-1: the decision-writer scan derives its sources; the cascade scan reads §D2.5
+
+```
+CORRECTION - Session 36-D · D3. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+Test-only step.
+
+THE DEFECTS:
+- MINOR-1: lib/memory/substrate-scans.test.ts:609 counts registry ids against a hand list DECISION_SOURCES
+  = ['dismissal', 'brief_rejection', 'post_skip', 'reschedule', 'studio_discard', 'claim_removal'].
+  ADR 0030 section 6.7 also defers too_sensitive -> brand_memory (backlog S36-TOO-SENSITIVE-TO-BRAND). A
+  planted registry entry too_sensitive (table brand_memory, gate min_n) left the scan GREEN (0 / 50).
+  :616 expect(EXPECTED_DECISION_WRITERS).toBeLessThanOrEqual(1) asserts a constant against a literal.
+- NIT-1: :671-675 (SUBSTRATE-CASCADE-COMPLETE) passes over an empty `created` list, and its check
+  adr0010.includes(table) accepts a table named ANYWHERE in docs/decisions/0010-legal-surface.md.
+
+BUILD (section 4 ledger):
+1. MINOR-1: derive the decision-derived source set by PARSING ADR 0030 section 6.7's table (read the file
+   at test time). Assert a vacuity floor: >= 6 parsed rows, containing 'dismissal' and 'too_sensitive'.
+   State the definition in a comment: "a writer is decision-derived when its input is a human's
+   accept/reject decision on a product artefact" (ADR 0030 section 6.7). Forbid any MEMORY_WRITERS entry
+   whose id, or whose (table, source) pair, matches a DEFERRED row, and permit exactly the shipped one
+   (dismissal -> audience_memory). Replace :616's tautology with an assertion over MEMORY_WRITERS itself
+   (the count of decision-derived entries is exactly 1).
+2. NIT-1: slice ADR 0010 from the section D2.5 heading to the next heading of equal or higher level; match
+   a table only as a table-row cell (`| \`<table>\``, or the house form actually used there - read it
+   first). Add an in-file planted pair: a synthetic CREATE TABLE whose name occurs in ADR 0010's prose but
+   not in D2.5 -> the detector reports it; a name present in D2.5 -> it does not. This makes the detector
+   non-vacuous even when the range creates no table.
+
+VERIFY:
+- REDDEN: plant the Reviewer's too_sensitive registry entry -> RED (this was GREEN at 0605a97d); plant
+  post_skip -> RED (still); delete too_sensitive's row from a scratch copy of the ADR input -> the floor
+  goes RED. Plant a migration creating zz_dismissal_log AND add that name to ADR 0010's prose only -> RED
+  (was GREEN under the old `includes`). Restore; `git diff --stat` empty after each.
+- Full loop: tsc; lint; test:app (CI env); test:db (unchanged; still green).
+Append the MINOR-1 and NIT-1 rows. "What I did NOT touch": no registry entry added; too_sensitive is still
+deferred (L-1).
+On commit: "D3 - MINOR-1 NIT-1 closed: SUBSTRATE-ONE-DECISION-WRITER derives decision-derived sources from
+ADR 0030 section 6.7 (too_sensitive now reddens; the :616 tautology replaced by an assertion over
+MEMORY_WRITERS); SUBSTRATE-CASCADE-COMPLETE matches only section D2.5's rows, with a planted pair so it is
+never vacuous." Then stop.
+```
+
+#### D4 — MINOR-4 (+ MINOR-5 for #14): hint forwarding and the full tie order proved
+
+```
+CORRECTION - Session 36-D · D4. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+Test-only step.
+
+THE DEFECT (MINOR-4): in lib/memory/bundle.test.ts,
+- removing `...request.hints` from the bundle's context (bundle.ts:133) left it 0 failed / 26 - the hint test
+  at :208 is vacuous, because with its ids the `id ASC` tiebreak alone yields the asserted order;
+- deleting the confidence AND recency tiebreaks from `compare` (bundle.ts:106-113) also left it 0 failed -
+  the "ties" test (:154) builds every fixture with identical confidence and recency.
+ADR 0030 section 5.2 requires literal expected outputs for ties under a TOTAL order.
+
+BUILD:
+1. Hints: a fixture where the hint CHANGES the outcome: the id order says A before B, and the scope match the
+   hint produces says B before A. Assert the literal order with the hint, and the opposite literal order
+   without it.
+2. Tie order: one test per key, each isolating that key and nothing after it:
+   - equal score, different confidence -> the higher confidence first, against the id order;
+   - equal score and confidence, different recency -> the more recent first, against the id order;
+   - equal score, confidence and recency -> id ASC (the existing case, kept).
+   Assert literal ids, never a sort re-derived in the test.
+
+VERIFY:
+- REDDEN with the Reviewer's own mutations, each alone: remove `...request.hints` at bundle.ts:133 -> RED;
+  delete the confidence tiebreak -> RED; delete the recency tiebreak -> RED; swap their order -> RED.
+  Restore; `git diff --stat` empty after each. Paste each failing line.
+- Full loop: tsc; lint; test:app (CI env).
+Append the MINOR-4 row, and the MINOR-5 partial row for constraint #14 (SUBSTRATE-CROSS-TYPE-BUDGET): these
+transcripts are #14's, recorded here because 6c90c038's body is empty.
+On commit: "D4 - MINOR-4 closed (and #14's redden transcript for MINOR-5): bundle.test.ts proves hint
+forwarding with a fixture the hint reverses, and pins every key of the total tie order (score, confidence,
+recency, id) against the id order; each of the Reviewer's mutations now reddens. No production change."
+Then stop.
+```
+
+#### D5 — MINOR-6: the recompute's outcomes are distinct, classified and visible  ·  THE ONE MIGRATION  ·  `database-reviewer` before commit
+
+```
+CORRECTION - Session 36-D · D5. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop.
+Specialist: database-reviewer, ONCE, before commit (the only subagent in this pass).
+
+THE DEFECT (MINOR-6, Builder + ADR): recompute_dismissal_audience_signal (20260929140000:73-287) returns
+distinct outcome text - RETURN literals at :113 noop_card_not_found, :117 noop_card_state, :142
+noop_unknown_source, :153/:199 noop_no_row, :181 retired_invalid_identifier, :183 invalid_identifier, :237
+deleted, :241 retired, :244 noop_nothing_counted, :270 upserted, :281 updated - but the wrapper returns
+`data as string` (lib/db/memory-audience.ts), recomputeDismissalSignal forwards it, and all three actions
+(app/[locale]/(dashboard)/opportunities/actions.ts:143,180,215) drop it. Because a SELECT INTO that finds
+nothing leaves v_ident NULL, `invalid_identifier` also covers a DELETED watched source and one belonging to
+ANOTHER business; `noop_unknown_source` covers both a NULL watched id on rss/github and a genuinely unknown
+kind. None is logged. ADR 0030 section 6.5 specifies only the thrown-error path.
+
+FIRST: re-grep the RETURN literals at the head (the list above is the Reviewer's reading at 0605a97d), and
+read how watched_repos / watched_feeds are removed (soft delete via deleted_at, or hard delete) - the new
+outcomes depend on it. Write the caller table for recomputeDismissalAudienceSignal ->
+recomputeDismissalSignal -> the three actions, with the test exercising each.
+
+BUILD (section 4 ledger, MINOR-6):
+1. A FORWARD migration, timestamped after 20260930100000, CREATE OR REPLACE of the function with the SAME
+   signature (p_card_id uuid) and these changes ONLY:
+   - after the business-scoped watched-source read finds nothing, ONE existence-only read (id, business_id,
+     deleted_at - NO text column) distinguishes: missing or deleted under this business ->
+     `<retired_>watched_source_gone`; present under ANOTHER business -> `<retired_>anomaly_watched_source_foreign`;
+   - a NULL watched id on an rss/github signal -> `anomaly_watched_id_null`; a kind outside rss/github ->
+     `noop_unknown_kind`;
+   - a regex failure keeps `invalid_identifier` / `retired_invalid_identifier`;
+   - every case keeps TODAY'S retired / non-retired split. Which rows are written, retired or deleted is
+     BYTE-IDENTICAL; only the returned text changes. Every anomalous outcome starts with `anomaly_`.
+   - Restate `REVOKE ALL ON FUNCTION ... FROM PUBLIC, anon, authenticated` and the service_role GRANT, the
+     20260930100000 pattern, so the function is correct on a FRESH database.
+2. lib/db/memory-audience.ts: parse the RPC result with a z.enum of EVERY outcome. Unknown text throws into
+   the callers' existing catch. Return the typed outcome.
+3. lib/memory: export DISMISSAL_OUTCOME_CLASS: Record<outcome, 'decided' | 'anomalous'> (exhaustive over the
+   enum - the compiler enforces it). Proposed: anomalous = noop_card_not_found and every anomaly_*; decided =
+   everything else. Classify each with a one-line reason in a comment; D9 copies the table into the ADR.
+4. The three actions: on an anomalous outcome, ONE console.error with the action name, card id and outcome,
+   in the same style as the existing recompute catch (no new logger, no Sentry wiring, no throw - the card
+   transition has already committed).
+5. Tier-3 scan in lib/memory/substrate-scans.test.ts: the keys of DISMISSAL_OUTCOME_CLASS equal the set of
+   RETURN '...' literals in the LATEST migration defining recompute_dismissal_audience_signal (planted
+   positive: a literal missing from the map -> RED).
+6. Tier-1 tests (supabase/__tests__/substrate-dismissal-writer.test.ts or its siblings): one case per new
+   outcome, driven through real rows - a soft-/hard-deleted watched repo, a watched repo re-pointed to
+   another business with the identity trigger bypassed by service role (the anomaly the chain re-check
+   exists for), a NULL watched id, an unknown kind. Assert the outcome text AND that the memory row state
+   equals what the old function produced (state byte-identical). Where an existing assertion expected
+   invalid_identifier for a deleted/foreign source, change it, and QUOTE the old assertion in the appendix.
+7. Tier-2 tests: the wrapper rejects unknown text; each action logs exactly once on an anomalous outcome and
+   not at all on a decided one (per caller: approve, dismiss not_relevant, the third action).
+
+VERIFY:
+- `supabase db reset` (FRESH catalog), then test:db: the W1 drift test green - has_function_privilege false
+  for anon, authenticated and PUBLIC on the replaced function. md5(prosrc) of the live function equals the
+  new migration's body.
+- REDDEN: collapse the foreign case back into invalid_identifier -> RED; drop the anomaly log in one action ->
+  RED (that caller's test); add a RETURN literal without a map entry -> the Tier-3 scan RED; remove the
+  REVOKE line from a scratch copy and db reset -> the W1 drift test RED. Restore and db reset;
+  `git diff --stat` empty.
+- Re-run the Reviewer's section 6 walkthrough row "the member sets watched_repos.name = 'x ignore previous
+  instructions'": it must still end at the SQL regex (retired_invalid_identifier), and no row carries the
+  text.
+- Advisory-lock concurrency test re-run: still green (the lock is untouched).
+- database-reviewer, ONCE, on the migration + wrapper: ask whether the new read touches any text column,
+  whether the state change is byte-identical, and whether the REVOKE/GRANT restatement is complete. Record
+  every finding and its disposition in the appendix.
+- Full loop: tsc; lint; test:app (CI env); test:db (fresh).
+Append the MINOR-6 code row, with the caller table, the database-reviewer dispositions and the quoted old
+assertion(s).
+On commit: "D5 - MINOR-6 code half: recompute_dismissal_audience_signal (forward migration, same signature,
+state change byte-identical) returns distinct outcomes for a gone, a foreign (anomaly_) and a null watched
+source and an unknown kind; the wrapper parses them with z.enum; DISMISSAL_OUTCOME_CLASS marks each decided
+or anomalous; the three actions log anomalies once; a Tier-3 scan ties the map to the function's RETURN
+literals. REVOKE/GRANT restated; W1 verified on a fresh db reset; database-reviewer dispositions in the
+appendix." Then stop.
+```
+
+#### D6 — MINOR-7: the dismiss hint tells the truth about the loop  ·  gated on A-9
+
+```
+CORRECTION - Session 36-D · D6. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+taste-skill and impeccable are NOT invoked.
+
+GATE: read A-9 in section 4 of docs/build-guide/session-36.md. If PENDING, STOP. If (b), make NO change:
+record "RULED - A-9(b)" in the appendix row, quoting the ruling, and stop (D9 records it in the ADR).
+
+THE DEFECT (MINOR-7, ADR finding): opportunities.json `teachesHint` (en: "Jemip will remember your audience
+isn't interested in updates from this source.") is shown on every not_relevant choice. But the first and
+second dismissals write a `candidate` row no reader returns (listSourceDismissalCandidates reads
+status = 'active' only), active needs n >= 3 and n/m >= 0.75, and even an active row reaches triage only if
+the model calls list_audience_notes (ADR 0030 section 6.8). The Builder transcribed the ADR verbatim - not a
+Builder finding.
+
+BUILD (under A-9(a)):
+1. i18n/en/opportunities.json teachesHint = the EXACT text ruled in A-9 (the guide proposes: "If you keep
+   marking updates from this source as not relevant, Jemip will learn your audience isn't interested in
+   them."). If the founder's ruling text differs, the ruling wins.
+2. i18n/pt and i18n/es: a natural translation of the same meaning (conditional, repeated, "will learn") -
+   not literal. Put all three strings in the commit body for the founder to read.
+3. Update the SUBSTRATE-UX-DISCLOSED copy assertion to the new EN text. Quote the old assertion in the
+   appendix. The structural assertions (renders only for not_relevant, inside the persistent role="status"
+   region, aria-describedby only under that reason, no other reason has copy) stay byte-unchanged.
+4. No element, class, control or layout change. If the new copy wraps badly in the dismiss row, STOP and
+   report - do not redesign.
+
+VERIFY:
+- REDDEN: restore the old EN string -> the copy assertion RED; render the hint under another reason -> the
+  structural assertion RED (unchanged test). Restore; `git diff --stat` empty.
+- SUBSTRATE-I18N-COMPLETE green (key parity across en/pt/es).
+- Full loop: tsc; lint; test:app (CI env).
+Append the MINOR-7 code row (or the RULED row).
+On commit: "D6 - MINOR-7 code half: the not_relevant hint states the counted, conditional effect per
+founder ruling A-9(a), in en/pt/es; the UX-DISCLOSED structure is unchanged and only the copy assertion
+moved, with the old text quoted in the appendix." Then stop.
+```
+
+#### D7 — NIT-2 + MINOR-5 (#17, #24): stale mock factories, and the two transcripts nobody recorded
+
+```
+CORRECTION - Session 36-D · D7. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+Test-only step.
+
+THE DEFECTS:
+- NIT-2: (a) app/[locale]/(dashboard)/campaigns/[id]/brief/actions.supersede-callers.test.ts:26-31 still
+  mocks retrieveEvidenceMemory, retrieveAudienceMemory and retrieveBrandMemory, which brief.ts no longer
+  imports, and lacks retrieveMemoryBundle / renderMemoryBundleForPrompt (contradicting V.10 D13).
+  (b) generate.context-equivalence.test.ts:82 mocks @/lib/db/memory-evidence without hasActiveEvidence; its
+  absence is swallowed by generate.ts:570's advisory catch.
+- MINOR-5 (remainder): constraints #17 SUBSTRATE-DISMISS-MAPPING and #24 SUBSTRATE-RLS-ISOLATED were closed
+  at L2.9 (eab33b5e, empty body); their redden evidence is prose in ADR V.13 only, and the Reviewer did not
+  re-redden them.
+
+BUILD:
+1. NIT-2: make both factories carry EXACTLY what their subject's import graph reaches (read the subject's
+   imports at the head - after D5, memory-audience exports changed). Remove the dead three from (a); add
+   retrieveMemoryBundle / renderMemoryBundleForPrompt. Add hasActiveEvidence to (b), returning a value the
+   test then asserts is consumed (so its absence can no longer be swallowed).
+2. MINOR-5: re-redden #17 and #24 against the head, WITHOUT changing either test:
+   - #17: re-apply V.13's dismiss-mapping plants one at a time (e.g. recompute on a reason other than
+     not_relevant; recompute before result.success) -> RED each; restore.
+   - #24: in the two-business suite, drop the business_id filter from one reader in a scratch edit -> RED;
+     restore.
+   Paste each transcript (command, failing test name, failing line) into the appendix.
+
+VERIFY:
+- REDDEN for NIT-2(b): delete hasActiveEvidence from the factory -> the test now RED (it was swallowed
+  before). Restore; `git diff --stat` empty after every plant.
+- Full loop: tsc; lint; test:app (CI env); test:db (for #24).
+Append the NIT-2 row and the MINOR-5 closing row (#12 at D1, #14 at D4, #17 and #24 here; 6c90c038,
+eab33b5e and b0286e02's bodies stay empty - history is not rewritten).
+On commit: "D7 - NIT-2 closed, MINOR-5 closed: the supersede-callers and context-equivalence factories carry
+exactly what their subjects import (hasActiveEvidence's absence now reddens); #17 and #24 re-reddened at the
+head with transcripts in the appendix, completing #12/#14/#17/#24." Then stop.
+```
+
+#### D8 — MAJOR-2: the fresh-database audit becomes a launch gate; the hosted project per A-8  ·  no code
+
+```
+CORRECTION - Session 36-D · D8. No .ts/.tsx/.sql. No specialist. YOU DO NOT TOUCH THE HOSTED PROJECT.
+
+THE DEFECT (MAJOR-2): before this range, upsert_distilled_performance_pattern, promote_performance_pattern
+and demote_performance_pattern were revoked FROM public only; on a fresh Supabase database anon and
+authenticated kept EXECUTE on three SECURITY DEFINER functions taking a caller-supplied p_business_id.
+20260930100000 fixes the repo. But (a) the hosted project was never queried (V.17: "exposure should be
+assumed"); (b) the follow-up lives only as S36-FRESH-DB-RPC-ACL-AUDIT in docs/backlog.md section 3.3, and
+nothing in docs/launch-checklist.md names it; (c) the Reviewer's query on the local DB found 8 SECURITY
+DEFINER functions in public executable by authenticated, 6 of them by anon (e.g. increment_posts_generated,
+increment_brand_voice_attempts) - pre-existing, outside the range; (d) L2.0 checked W1 on the long-lived
+local DB (pg_default_acl {postgres=X}), so the narrowing landed only after CI went red.
+
+DO:
+1. docs/launch-checklist.md section 2 (Database): ONE new `- [ ]` row, in the section's existing style,
+   titled "SECURITY DEFINER functions not client-executable (ADR 0030 V.17, Session 36-D MAJOR-2)". It carries:
+   - the audit query verbatim from docs/backlog.md S36-FRESH-DB-RPC-ACL-AUDIT;
+   - WHERE it must run: a FRESH local database (`supabase db reset`) AND the hosted project;
+   - the expected result: only an enumerated ALLOW-LIST of deliberately client-callable functions, each
+     with a one-line reason (start the list with get_user_business_ids - every RLS policy calls it as
+     authenticated - and verify each entry against its callers before listing it);
+   - the Reviewer's 8 functions BY NAME (run the query on a fresh `supabase db reset` to get the list at
+     the head), each marked "narrow, or justify onto the allow-list";
+   - "20260930100000 applied on the hosted project" as an explicit sub-check.
+2. docs/backlog.md S36-FRESH-DB-RPC-ACL-AUDIT: APPEND one sentence pointing to the new launch-checklist row
+   ("Now a launch gate: launch-checklist.md section 2, Session 36-D D8."). Do not otherwise edit the entry.
+3. A-8: read it in section 4 of docs/build-guide/session-36.md.
+   - If the founder has pasted the hosted before/after output and confirmed the push, record it VERBATIM,
+     dated, in the appendix, and tick the hosted sub-check in the new row with that date.
+   - Otherwise record "hosted half LAUNCH-GATED (A-8 <PENDING|c>)", naming the row. Do NOT ask for
+     credentials, and do NOT run anything against the remote.
+4. (d) is a process finding: D10 writes the Do-Not-Repeat. Note it in the appendix row.
+
+VERIFY: `git diff` shows exactly one added checklist row in section 2 and one appended sentence in
+backlog.md; the 8 names in the row match a fresh-db query run by you, quoted in the appendix with its date.
+Append the MAJOR-2 row: repo half (20260930100000, already landed at 1d10e8df, W1 re-verified fresh at D5) ->
+the launch gate (this commit) -> hosted half (recorded, or LAUNCH-GATED).
+On commit: "D8 - MAJOR-2: the fresh-database SECURITY DEFINER audit is a launch-checklist section 2 row
+(fresh db AND hosted, an enumerated allow-list, the 8 pre-existing functions named, 20260930100000 applied
+on hosted as a sub-check); S36-FRESH-DB-RPC-ACL-AUDIT points to it; hosted half <recorded per A-8 on
+<date> | LAUNCH-GATED>. No code; the hosted project was not touched by this pass." Then stop.
+```
+
+#### D9 — documentation truth: NIT-3, and the ADR halves of MINOR-6 and MINOR-7  ·  no code
+
+```
+CORRECTION - Session 36-D · D9. No .ts/.tsx/.sql. No specialist. Every statement cites the test (file:line)
+that now proves it, at D1..D8's SHAs.
+
+DO:
+1. ADR 0030 gains ONE appended section, "## Correction pass amendments (Session 36-D)", numbered C.1...,
+   AFTER the Builder's V.1-V.17 appendix. Never edit sections 0-15 or V.1-V.17. It records:
+   - MINOR-6: section 6.5 gains the outcome taxonomy - the full DISMISSAL_OUTCOME_CLASS table (outcome,
+     decided|anomalous, reason), what an anomalous outcome produces (one console.error per action) and why
+     it never throws; the Tier-3 scan that ties the map to the RETURN literals. Cite D5's tests and SHA.
+   - MINOR-7: section 9.1's hint copy - A-9's ruling, quoted; under (a) the new EN text and the
+     counted/conditional reason; under (b) why the stronger wording is accepted. Cite D6.
+   - MAJOR-1: V.11 and V.16 presented #12 as proved row by row; from D1's SHA it is, and the caller table is
+     restated here (the V sections are not edited).
+   - MAJOR-2: the W1 fresh-database lesson, and the launch-checklist row (D8).
+   - MINOR-1 / MINOR-2 / MINOR-3 / NIT-1: the four scans' widened detectors, one line each, with D2/D3's
+     SHAs.
+   - NIT-3: (i) the ADR 0029 section 1.3 pointer landed at L2.11 (6d109db9), not with A-6 at L2.4 - recorded
+     as a section 13.2 timing lapse, self-disclosed by the Builder; (ii) section 6.8 and V.10 list Studio as
+     a reader of retrieveAudienceMemory - at the range studio/actions.ts reads evidence and performance
+     only, and the callers are the planner and triage tools (plus the operator script); (iii)
+     scripts/measure-substrate.ts is an operator-only caller of retrieveMemoryBundle and the three
+     retrieve* functions, added to section 3.4's caller set by this note, with "no test - operator script"
+     stated as a recorded decision (Tier 3, diff-verified).
+   - The constraint count: 28 SUBSTRATE-* (state whether D5's scan is a new constraint or an arm of #4 /
+     #28 - prefer an arm of SUBSTRATE-WRITER-CONTRACT unless the ADR's section 12 shape forbids it), with the
+     tier tallies re-derived.
+2. Do NOT fill any "executed green in CI" cell for the corrected range - that is D10's, from the logs.
+
+VERIFY: `git diff <D8-sha>..HEAD -- docs/decisions/0030-memory-platform-substrate.md` shows ADDITIONS ONLY,
+below V.17. Check three citations at random with `git show`.
+Append the NIT-3 row and the ADR halves of MINOR-6 and MINOR-7.
+On commit: "D9 - documentation truth: ADR 0030 gains its Session 36-D amendments (section 6.5 outcome
+taxonomy, section 9.1 copy per A-9, section 3.4 operator caller, section 6.8 / V.10 Studio correction, the
+section 13.2 timing lapse, the widened scans; <n> constraints). NIT-3 closed." Then stop.
+```
+
+---
+
+### §4.2 — Resolution log (the appendix's required shape)
+
+The appendix in `docs/reviews/session-36-reviewer.md` is written **incrementally, one block per step**. D1
+opens it, D2…D9 append, and D10 closes it. It is never assembled from memory at the end.
+
+**Opening block (written at D1):**
+
+```
+## CORRECTION PASS (Session 36-D)
+
+**Author:** Session 36-D correction pass · **Date:** <YYYY-MM-DD> · **Range fixed:** `0605a97d..<D10-sha>`
+**Reviewed head:** `0605a97d`, the head the Reviewer read. Only this pass's §4 and the report itself landed
+after it, at D0 (`<D0-sha>`).
+**Founder adjudications consumed:** "include all items identified in the reviewer" (founder, 2026-10-03);
+A-8 = <a|c|PENDING at D8>; A-9 = <a|b>. A-0…A-7 stand. Narrowing the 8 pre-existing SECURITY DEFINER
+functions was available and not taken (build-guide §4, MAJOR-2 ledger row).
+**Everything above this line is the Reviewer's. Everything below it is this pass's.**
+```
+
+**Per-finding row shape.** All five fields are required; a row missing one is not complete:
+
+| Field | What it must say |
+|---|---|
+| **Finding** | The ID, and nothing restated from the Reviewer's text |
+| **Fix** | What changed, in one sentence, naming the file. Or `RULED` / `LAUNCH-GATED` with its reference |
+| **Proof** | The test file **and line**, never "covered by the suite". For LAUNCH-GATED: the checklist row |
+| **Reddening** | The exact mutation, and the clean tree confirmed afterwards (n/a only for RULED / LAUNCH-GATED / docs-only) |
+| **Commit** | The step's SHA(s) |
+
+**Rows that are not ordinary fixes:**
+- **MAJOR-1** carries the full §3.4 caller table (caller → test file:line), including Studio and the
+  operator script.
+- **MAJOR-2** carries three parts: the repo half (`1d10e8df`, re-verified fresh at D5), the launch gate (D8),
+  and the hosted half (the founder's pasted output, verbatim and dated, or `LAUNCH-GATED`). It also carries
+  the fresh-db list of the 8 functions, dated.
+- **MINOR-5** is built across D1, D4 and D7, one transcript per constraint (#12, #14, #17, #24). It states
+  that `6c90c038`, `eab33b5e` and `b0286e02` were not amended.
+- **MINOR-6** carries two SHAs (D5 code, D9 ADR), the recompute caller table, the database-reviewer
+  dispositions and the quoted old `invalid_identifier` assertion(s).
+- **MINOR-7** quotes A-9. Under (a) it carries two SHAs (D6, D9) and the old copy assertion. Under (b) it is
+  **RULED** and names D9's SHA.
+- **NIT-3** is docs-only and names D9's SHA.
+
+**Every step appends a "what I did NOT touch" line** where it had a tempting adjacent target:
+- D1: no production file; no retriever's ranking changed.
+- D2: no existing migration; no other scan in the file.
+- D3: no registry entry; `too_sensitive` still deferred.
+- D4: `bundle.ts` byte-unchanged.
+- D5: the state change byte-identical; the advisory lock, the six-step order and the regexes unchanged; no
+  throw added.
+- D6: no element, class or control; `dismissSchema` untouched.
+- D7: no production file; #17 and #24's tests byte-unchanged.
+- D8: no function narrowed; no remote command run.
+- D9: no ADR 0030 §0–15 or V.1–V.17 edit; no `executed green in CI` cell filled.
+
+---
+
+### §4.3 — Close-out
+
+#### D10 — push the corrected range to PR #16, re-date every constraint claim, close Track L
+
+```
+CORRECTION - Session 36-D · D10. No specialist. At 0605a97d every workflow was green, so this step's job is
+not to turn anything green for the first time. It is to prove that D1..D9 - new tests, one migration, widened
+scans, copy and ADR text - are executed green in CI at the corrected head, and that no count dropped.
+
+DO:
+1. Push D0..D9 to origin/session-36-adr-0030 (PR #16, open against master); run every required workflow to
+   green at the corrected head:
+   - app-tests (tsc + eslint + vitest) - REQUIRED.
+   - db-tests INCLUDING THE SKIP-GUARD. If red, OPEN THE RUN and distinguish a DB-behaviour regression from a
+     stack failure (grep the log for SIGSEGV, signal 11, OOMKilled=true, Restarting=true, out of memory),
+     quoting the deciding line.
+   - eval (test:eval): SIGNAL3-TRIAGE-QUALITY must replay identically to V.1c / V.13 (github P 1.000, R 1.000,
+     dismissMatch 1.000; market_responsive R 0.000, dismissMatch 0.563) - no AI path changed.
+   - any other workflow the PR triggers.
+2. Record FROM THE LOGS: each workflow's run URL and counts; BOTH skip-guard lines QUOTED VERBATIM, as the
+   Reviewer did (at 0605a97d: app `379 file(s) ... (5794/5794)`; db `113 file(s) ... (1292/1292)`). The new
+   counts must be HIGHER, since this pass only adds tests (two assertions changed, as section 4 records, none
+   removed); if either is lower, STOP and explain. Then, in ADR 0030's Session 36-D section, re-date all
+   SUBSTRATE-* constraints as "executed green in CI at <corrected head>", per tier, and state for #12, #14 and
+   #22 that they are now PROVED, not only executed (MAJOR-1, MINOR-4, MINOR-1). Tier 1 stays uncovered
+   unless db-tests ITSELF is green. Tier 3 cites the scans re-run at this head. Tier E: none.
+3. docs/current-phase.md: QUOTE the current constraint->CI map line in the appendix, then replace it with
+   the corrected head's real per-tier counts. db-tests PROMOTION TALLY: pull_request runs never move it; only
+   consecutive green master PUSH runs do. Record the tally with each run's event type. Measurement stays
+   honest: retrieval-into-briefs and triage precision NOT MEASURED; S34-E2E-UNVERIFIED still open; no
+   quality gain claimed.
+4. Section 5 of docs/build-guide/session-36.md: tick each row with evidence, stating per item whether it
+   applied (in particular: ADR 0010 section D2.5 - no new table in this pass either, D5 included; the
+   launch-checklist gains exactly ONE row, D8's; backlog.md receives one appended pointer and no new finding
+   row, because nothing was deferred).
+5. THE APPENDIX CLOSING BLOCK: all 12 findings by ID -> disposition -> proving test -> SHA(s); re-run the
+   count check (12 rows, 12 distinct IDs; MAJOR-1..2, MINOR-1..7, NIT-1..3) - if it fails, the pass is not
+   closed. Name any RULED (MINOR-7 under A-9(b)) and any LAUNCH-GATED half (MAJOR-2 hosted). State which
+   Reviewer statements have since CHANGED - WITHOUT editing them: the section 10 table's ✘ on #12 and #22 and
+   the partials on #13 and #14; "What I ran"'s counts; the section 6 walkthrough's invalid_identifier
+   semantics for a deleted or foreign source (D5).
+6. .wolf/anatomy.md (the new migration and changed test files), .wolf/memory.md, .wolf/cerebrum.md
+   (Do-Not-Repeat: "privilege checks (has_function_privilege, W1) run on a FRESH database - supabase db
+   reset - never only on the long-lived local DB, whose pg_default_acl hides fresh-db grants (Session 36
+   MAJOR-2 (d))"; "a caller test that mocks the callee's return value without asserting its arguments
+   proves nothing about the argument (Session 36 MAJOR-1)"; "a tie-break test whose fixtures tie on every
+   key but the last proves only the last key (MINOR-4)"). Log MAJOR-1, MAJOR-2 and MINOR-6 to
+   .wolf/buglog.json at minimum.
+
+VERIFY: `git diff <D0-sha>..<D10-sha> -- docs/reviews/session-36-reviewer.md` shows additions BELOW the
+Reviewer's closing line and NOTHING ELSE. Required workflows green at the corrected head, or their red
+explained from the log with evidence in the appendix.
+On commit: "D10 - Session 36-D closed: D0..D9 pushed to PR #16; app-tests green at <sha> (<URL>, skip-guard
+<n> files / <n> tests quoted from the log); db-tests <state> (<URL>, skip-guard <n> files / <n> tests); eval
+replayed identically; all <n> SUBSTRATE-* constraints re-dated to the corrected head per tier, #12/#14/#22
+now proved; db-tests tally recorded per run with event type. The 36-D appendix records all 12 findings -
+none deferred; MINOR-7 per A-9; MAJOR-2's hosted half <recorded | LAUNCH-GATED> - and the diff proves
+nothing above the appendix changed. Track L closed." Then stop.
+```
+
 ---
 
 ## §5 — Docs to update at close-out (Track L done)
