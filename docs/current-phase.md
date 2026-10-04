@@ -1631,6 +1631,15 @@ below (tally unchanged at 0/3: a `pull_request`-event run, not a `master` run). 
 
 ## What's next
 
+### Sessions 37–40 — the remaining Tier-1 items (2026-10-04)
+
+Placeholder build guides, intent only: **37** T1-B analytics + monthly report (`docs/build-guide/session-37.md`),
+**38** T1-E founder profiles (`session-38.md`), **39** T1-C template carousels (`session-39.md`), **40** T1-A
+engagement inbox (`session-40.md`). **Deliberately waiting behind them** (`docs/pre-launch-scope.md` §15): T2-B
+content mining, T2-D image generation, memory-driven cards (`ideas.md` §2.2), voice exemplars (`ideas.md` §2.5),
+and the Track L leftovers (`backlog.md` §3.3). Founder-side, in parallel: production OAuth app registration (after
+Session 38 fixes the scopes), counsel on commenter data for T1-A, and the `db-tests` branch-protection change.
+
 Session 19D correction pass is applied. Voice model core is merge-ready. One open decision required before closing Session 19:
 
 ### Open decision — Session 19D-5 (§7 BP9 read path)
