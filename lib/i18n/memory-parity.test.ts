@@ -69,7 +69,7 @@ describe('memory namespace i18n (ADR 0030 §9.2)', () => {
 describe('the two added keys (ADR 0030 §9.1, §9.3)', () => {
   it('opportunities.dismissReason.teachesHint exists in en, pt AND es, and en is the §9.1 sentence', () => {
     for (const locale of LOCALES) expect(OPP[locale]['dismissReason.teachesHint']?.trim().length, locale).toBeGreaterThan(10)
-    expect(OPP.en['dismissReason.teachesHint']).toBe("Jemip will remember your audience isn't interested in updates from this source.")
+    expect(OPP.en['dismissReason.teachesHint']).toBe("If you keep marking updates from this source as not relevant, Jemip will learn your audience isn't interested in them.")
   })
 
   it('opportunities keeps the SAME key set in pt and es as en (the added key did not desynchronise the namespace)', () => {

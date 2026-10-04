@@ -755,3 +755,33 @@ After the last mutation the migration file was restored (md5 `4ddcdf8e9740` befo
 **Loop** (all on the LOCAL stack, `http://127.0.0.1:54321`, asserted before every run, never the remote; the database was `supabase db reset` to a FRESH catalog immediately before): `npx tsc --noEmit --skipLibCheck` clean; `npm run lint` 0 errors (112 warnings, unchanged; none in a touched file); `npm run test:app` with the `app-tests.yml` env block **382 files / 5880 tests passed**; `npm run test:db` **113 files / 1306 tests passed**. The `has_function_privilege` assertions (false for `anon`, `authenticated`, `public`; true for `service_role`) and the `md5(prosrc)` equality both ran green on that fresh catalog.
 **Commit:** D5 (its SHA is recorded in D6's block).
 **What I did NOT touch:** the state change (byte-identical, by `diff`, by the reviewer and by the state-for-state test); the advisory lock, the six-step order and both regexes; no throw added to the function; no new table, trigger, budget purpose, `EmailKind`, capability, index or dependency; no narrowing of any of the 8 pre-existing SECURITY DEFINER functions; no ADR text (the class table is copied into ADR 0030 §6.5 at D9).
+
+### D6 — MINOR-7 (code half)
+
+**D5's SHA, recorded here as promised:** `70a1ccb6` (MINOR-6, code half). The D5 rows' **Commit** field resolves to it.
+
+**The ruling quoted (A-9):** the founder answered "Go with (a)" in the Session 36-D conversation on 2026-10-04, after I stopped at D6's gate with A-9 still PENDING and set out (a) conditional copy, (b) keep the copy, (c) show the running count. (a) is therefore the ruling, with the guide's proposed EN text standing unchanged. I recorded it in section 4's A-9 cell of `docs/build-guide/session-36.md` as part of this commit (that cell is the one cell of the guide this pass edits; the guide is the pass's work order and the Reviewer's text above is untouched).
+
+**Finding:** MINOR-7.
+**Fix:** copy only, in three files, `opportunities.json` -> `dismissReason.teachesHint`. No element, class, control or layout change: the hint stays the same `<p className="text-xs text-muted-foreground">` inside the persistent `role="status"` wrapper, with no `nowrap`, truncation or fixed width, so the longer text wraps onto a further line in a block paragraph. (I read the markup at `OpportunityFeed.tsx:448-460`; I did not render it in a browser, so that is a markup check, not a visual one. The step's STOP condition, "the new copy wraps badly", is not triggered by anything in the markup.)
+
+| Locale | Old | New |
+|---|---|---|
+| `en` | `Jemip will remember your audience isn't interested in updates from this source.` | `If you keep marking updates from this source as not relevant, Jemip will learn your audience isn't interested in them.` |
+| `pt` | `O Jemip vai lembrar-se de que o seu público não tem interesse em novidades desta fonte.` | `Se continuar a marcar as novidades desta fonte como não relevantes, o Jemip vai aprender que o seu público não tem interesse nelas.` |
+| `es` | `Jemip recordará que a tu audiencia no le interesan las novedades de esta fuente.` | `Si sigues marcando como no relevantes las novedades de esta fuente, Jemip aprenderá que a tu audiencia no le interesan.` |
+
+PT and ES are translated naturally, not literally, keeping the three elements of the ruled meaning (conditional, repeated, "will learn") and each locale's existing register (`pt` formal "o seu público", `es` informal "tu audiencia"). All three strings are in the commit body for the founder to read.
+
+**The old assertion, quoted (rule 4):** `lib/i18n/memory-parity.test.ts:72`, `expect(OPP.en['dismissReason.teachesHint']).toBe("Jemip will remember your audience isn't interested in updates from this source.")` -> the same `toBe` with the new EN text. This is the only assertion on the actual copy: `OpportunityFeed.test.tsx` mocks `t` to return the key (`HINT_KEY = 'dismissReason.teachesHint'`), so none of its assertions could carry the text. The structural assertions there (renders only under `not_relevant`, tied to the select by `aria-describedby` only under that reason, inside the persistent `role="status"` wrapper that is empty under every other choice, no other reason has copy, plain non-interactive muted text) are **byte-unchanged**; `git diff --stat` on `OpportunityFeed.test.tsx` and `OpportunityFeed.tsx` is empty.
+**Proof:** `lib/i18n/memory-parity.test.ts:70-73` (the key exists in en, pt AND es, and `en` is the ruled sentence); `SUBSTRATE-I18N-COMPLETE` (key parity across en/pt/es) green.
+**Reddening** (each alone, restored, clean state confirmed):
+
+| Mutation | RED |
+|---|---|
+| restore the old EN string in `i18n/en/opportunities.json` | `× opportunities.dismissReason.teachesHint exists in en, pt AND es, and en is the §9.1 sentence` · `AssertionError: expected 'Jemip will remember your audience isn…' to be 'If you keep marking updates from this…'` · 1 failed / 56 passed |
+| render the hint under EVERY reason (`reason === 'not_relevant' &&` -> `reason !== '' &&` in `OpportunityFeed.tsx`) | the unchanged structural tests: `renders NO hint under already_covered / too_sensitive / weak_evidence / wrong_timing`, `the hint follows the choice: …`, and `the hint is announced when the choice is MADE: it lives in a persistent role="status" wrapper that is empty under every other choice` · 6 failed / 51 passed. `OpportunityFeed.tsx` restored, diff-stat empty. |
+
+**Loop:** `npx tsc --noEmit --skipLibCheck` clean; `npm run lint` 0 errors (112 warnings, unchanged); `npm run test:app` with the `app-tests.yml` env block **382 files / 5880 tests passed**.
+**Commit:** D6 (its SHA is recorded in D7's block). D9 records the ruling in ADR 0030 §9.1 and copies the old and new text.
+**What I did NOT touch:** no element, class, control or layout; `dismissSchema` and the dismiss action are untouched; the feed component and its structural tests are byte-unchanged; no new i18n key (the existing key's string changed in all three locales at once).
