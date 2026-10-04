@@ -1303,3 +1303,42 @@ Verdict: (b) is achievable with the synchronous-component design, an `await impo
 - **Fixture:** two businesses sharing one user (A Europe/Lisbon, B America/Sao_Paulo); every row carries an explicit status; B holds an active row of every kind; `EXPECTED` is hand-computed literals (March: median 0.031, range 0 to 0.064, n 7 of 10, wins 4 of 6, exclusions 1/1/1/0; February n 5; January n 4). LinkedIn rows carry count-basis outcomes on purpose. `campaign_retrospectives` rows are deferred to O2.7, their first consumer.
 - **Redden transcript (real-tree arms, planted in the real roots, then reverted):** with one violation planted per scan (`lib/analytics/_plant_*`, `components/analytics/`, `lib/reports/`, `app/_plant_northstar.ts`, `lib/email/_plant_northstar.ts`, a `package.json` dependency), 11 tests went red: the tripwire and all 10 real-tree arms. The offenders named included `app/_plant_northstar.ts` and `lib/email/_plant_northstar.ts` (both northstar plants), `dependencies: left-pad`, `lib/analytics/_plant_social.ts: imports @/lib/social (getRegistry)`, `lib/analytics/_plant_memory.ts: uses the memory writer recordInterviewCandidates`, `lib/analytics/_plant_model.tsx: imports @anthropic-ai/sdk`, `lib/analytics/_plant_loglift.ts: names log_lift`, and `components/analytics/_plant_service.tsx: imports @/lib/supabase/service`. After the revert the file was green.
 - **Verification:** `npm run typecheck` clean; `npm run lint` 0 errors (113 pre-existing warnings); `npm run test:app` with the CI dummy env: 385 files, 5,926 passed, 1 todo. `test:db` not run (no DB behaviour touched).
+
+### V.5 — O2.2: the schema, the Tier-1 tests, and the database review
+
+(The build guide says to record the review as "V.4"; V.4 is O2.1's, so this continues the numbering.)
+
+**Shipped:** `supabase/migrations/20261004120000_analytics_reports.sql`; four Tier-1 files (`analytics-reports-seed|rls|constraints|purge.test.ts`, 40 tests); `lib/analytics/__fixtures__/seed-live.ts`; the §D2.5 row and a dated note in ADR 0010 Amendment 2; `lib/db/__tests__/d2.5-analytics-reports-row.test.ts` (Tier 2, the row-presence half of #28 plus a scan that the migration creates no function); `ReportEmailSetting` and an optional `BusinessRow.report_email` in `lib/db/types.ts`.
+
+**Closed (Tier 1):** #21 `REPORT-SNAPSHOT-IMMUTABLE`, #28 `REPORT-CASCADE-COMPLETE`, #41 `REPORT-EMAIL-KIND-WIDENED`. **Tier-1 halves authored:** #17 (the two-business arm), #22 (UNIQUE and ON CONFLICT), #27 (the worker-isolation seed: the fixture loads into live Postgres and the tagging-trigger-derived `post_dimensions` equal the fixture's), #42 (`report_email`, owner-only per O-3).
+
+**Decisions recorded (not architectural choices):**
+
+1. **The TypeScript `EmailKind` unions are NOT widened in O2.2** (founder, 2026-10-04, answering a Builder question). `TEMPLATES` is `Record<EmailKind, KindEntry>`, so widening the unions here breaks typecheck until the `monthly-report` template exists (O2.8). O2.2 widens only the DB CHECK (proved by Tier 1); `lib/email/types.ts` and `lib/db/types.ts` gain `'monthly-report'` in O2.8, in the commit that adds the template. This deviates from the O2.2 step text; nothing enqueues the kind before O2.8.
+2. **No `report_email` trigger and no new SQL function**, per V.1 premise 3 and ruling O-3. Tier 1 proves an admin member and a viewer each update zero rows and the value is unchanged.
+3. **The fixture changed to match the tagging trigger:** `post_dimensions.origin_mode` is the CAMPAIGN's origin, so each fixture campaign now carries an `origin` and an AI post's origin follows its campaign (a third campaign, "A manual", was added). The seed test asserts the trigger-derived dimensions equal the fixture's, so the Tier-1 and Tier-2 suites cannot read different numbers.
+4. `report_email` is optional on the `BusinessRow` type for the reason `interview_snoozed_until` is: unrelated fixtures build a full row.
+
+**Redden transcript (each applied to the local database, the four files run, then restored; baseline back to 40 passed):**
+
+| Mutation | Tests that went red |
+|---|---|
+| drop the write-once trigger | UPDATE raises for the service role; UPDATE raises for the table owner; the trigger catalogue (3) |
+| `GRANT UPDATE` to `authenticated` | the 42501 write test; the privilege matrix (2) |
+| remove `team-invite` from the kind CHECK | the six-prior-kinds test; the exactly-seven-kinds test (2) |
+| open the SELECT policy (`USING (true)`) | positive control, cross-tenant reads, B-only user, the policy-shape test (4) |
+| add a BEFORE DELETE guard | `purge_business must SUCCEED` and the plain-DELETE cascade test (checked in isolation; in the combined run the guard also broke cleanup) |
+| drop the posts index / loosen its predicate (drop `deleted_at IS NULL`) | the index-definition test and the plan test (2 each) |
+| drop the `period_month` CHECK; drop UNIQUE; drop the `report_email` CHECK | 1; 2; 1 |
+
+**Database review (ECC budget 2 of 4; `ecc:database-reviewer`, read-only, files and `git diff` only).** Verdict: no BLOCKER or MAJOR. Against §5.1, §5.4, §9.1 and §11 no policy, grant, CHECK, index, cascade or trigger is wrong or missing; the posts index matches the queries' predicates literally; the migration creates no function, so the DEFINER audit gate does not move; every §12.1 item 1-8 and 10 has a real Tier-1 assertion (item 9 is O2.7's).
+
+| # | Severity | Finding | Disposition |
+|---|---|---|---|
+| 1 | MINOR | The "query uses the new index" assertion is planner- and statistics-dependent; the negative half is deterministic. | **Adopted, and corrected by experiment.** The reviewer proposed `ANALYZE`; the Builder tried it and it made the test fail consistently (with real statistics on a tiny table the planner prefers `posts_business_id_status_idx` plus a sort). The test now drops the three competing `business_id` indexes inside a transaction it rolls back, so the new index is used if and only if the query's predicates imply its WHERE clause. Stable over three runs; red when the predicate is loosened. |
+| 2 | NIT | The index omits `id`, so the `ORDER BY published_at DESC, id DESC` keyset page does an incremental sort on ties. | **Declined.** The ADR specifies `(business_id, published_at DESC)`; 500 rows per page makes it harmless. Revisit only if the plan shows a sort cost. |
+| 3 | NIT | The REVOKEs leave `REFERENCES` and `TRIGGER` on `authenticated`. | **Declined.** Identical to the `20260919110000:152-154` precedent; not reachable through PostgREST. |
+| 4 | NIT | The reused trigger's message names ADR 0026. | **Acknowledged.** Unavoidable under the reuse ruling; tests assert `analytics_reports rows are immutable`. |
+| 5 | NIT | The Tier-1 DEFINER-count assertion duplicates the standing allow-list test. | **Kept.** The step asks for the V.2 count; a legitimate fourth allow-listed function would redden both on purpose. |
+
+**Verification (in the required order):** `npm run typecheck` clean; `npm run lint` 0 errors (113 pre-existing warnings); `npm run test:app` (CI dummy env) 386 files, 5,934 passed, 1 todo; `npm run test:db` on a FRESH `supabase db reset` (129 migrations applied through the real pipeline): 120 files, 1,358 passed, 0 failed, no empty or skipped file.

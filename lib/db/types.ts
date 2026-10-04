@@ -54,6 +54,8 @@ export type UntrustedText = string & { readonly [untrustedTextBrand]: true }
 
 export type Plan = 'trial' | 'plus' | 'pro' | 'agency'
 export type Language = 'en' | 'pt' | 'es'
+// ADR 0031 §5.4 (A-6): who receives the monthly report EMAIL. 'off' never affects generation or the in-app report.
+export type ReportEmailSetting = 'admins' | 'all_members' | 'off'
 export type Platform = 'linkedin' | 'twitter' | 'instagram' | 'facebook' | 'threads'
 export type CampaignFrequency = 'daily' | '3x_week' | 'weekly' | 'custom'
 export type CampaignStatus = 'draft' | 'awaiting_brief' | 'active' | 'paused' | 'completed'
@@ -112,6 +114,10 @@ export type BusinessRow = {
   // OPTIONAL on the type on purpose: thirteen unrelated test fixtures build a full BusinessRow, and every reader treats an
   // absent value exactly like NULL (not snoozed). A select('*') row always carries it.
   interview_snoozed_until?: string | null
+  // ADR 0031 §5.4 (A-6, founder ruling O-3): written ONLY by the owner, through RLS (the businesses UPDATE policy is
+  // owner-only). OPTIONAL on the type for the same reason as interview_snoozed_until: unrelated fixtures build a full
+  // BusinessRow, and every reader treats an absent value as the column default, 'admins'. A select('*') row always has it.
+  report_email?: ReportEmailSetting
   created_at: string
   updated_at: string
 }

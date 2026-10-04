@@ -74,11 +74,15 @@ export const FIXTURE_ACCOUNTS: readonly AccountSeed[] = [
 // ─── Campaigns ────────────────────────────────────────────────────────────────
 export const A_CAMPAIGN_ACTIVE_ID = uid('campaign', 1)
 export const A_CAMPAIGN_COMPLETED_ID = uid('campaign', 2)
+export const A_CAMPAIGN_MANUAL_ID = uid('campaign', 4)
 export const B_CAMPAIGN_ACTIVE_ID = uid('campaign', 3)
+// `origin` is what the tagging trigger copies into post_dimensions.origin_mode: it is a property of the CAMPAIGN, so an
+// AI post's origin follows its campaign (a live seed reproduces these rows exactly).
 export const FIXTURE_CAMPAIGNS = [
-  { id: A_CAMPAIGN_ACTIVE_ID, business_id: BUSINESS_A_ID, name: 'A active', status: 'active' },
-  { id: A_CAMPAIGN_COMPLETED_ID, business_id: BUSINESS_A_ID, name: 'A completed', status: 'completed' },
-  { id: B_CAMPAIGN_ACTIVE_ID, business_id: BUSINESS_B_ID, name: 'B active', status: 'active' },
+  { id: A_CAMPAIGN_ACTIVE_ID, business_id: BUSINESS_A_ID, name: 'A active', status: 'active', origin: 'objective_generated' },
+  { id: A_CAMPAIGN_COMPLETED_ID, business_id: BUSINESS_A_ID, name: 'A completed', status: 'completed', origin: 'signal_generated' },
+  { id: A_CAMPAIGN_MANUAL_ID, business_id: BUSINESS_A_ID, name: 'A manual', status: 'active', origin: 'manual' },
+  { id: B_CAMPAIGN_ACTIVE_ID, business_id: BUSINESS_B_ID, name: 'B active', status: 'active', origin: 'objective_generated' },
 ] as const
 
 // ─── Members (recipients: ADR 0031 §5.4) ──────────────────────────────────────
@@ -124,7 +128,6 @@ interface PostSpec {
   ai?: {
     role: PostRole
     format: 'single' | 'thread' | 'carousel'
-    origin: 'manual' | 'objective_generated' | 'signal_generated' | 'studio_promoted'
     hook: 'question' | 'statistic' | 'contrarian' | 'story' | 'announcement' | 'how_to' | null
     hookSurvived: boolean
   }
@@ -144,27 +147,27 @@ const P: PostSpec[] = [
   { key: 'a_x01', business: BUSINESS_A_ID, campaign: A_CAMPAIGN_ACTIVE_ID, platform: 'twitter', at: '2026-03-03T09:00:00Z', account: A_X_ACCOUNT_ID, status: 'published',
     metrics: m(0, 0, 0, 1000),
     outcome: { value: 0, basis: 'rate', baseline: 0.03, baselineN: 9, baselineSource: 'own', logLift: -3, beat: false, lengthBand: 'short', cta: false, measuredAt: '2026-03-11T04:00:00Z' } },
-  { key: 'a_x02', business: BUSINESS_A_ID, campaign: A_CAMPAIGN_ACTIVE_ID, platform: 'twitter', at: '2026-03-05T09:00:00Z', account: A_X_ACCOUNT_ID, status: 'published',
+  { key: 'a_x02', business: BUSINESS_A_ID, campaign: A_CAMPAIGN_MANUAL_ID, platform: 'twitter', at: '2026-03-05T09:00:00Z', account: A_X_ACCOUNT_ID, status: 'published',
     metrics: m(12, 4, 2, 1000),
     outcome: { value: 0.018, basis: 'rate', baseline: 0.03, baselineN: 9, baselineSource: 'own', logLift: -0.510826, beat: false, lengthBand: 'short', cta: false, measuredAt: '2026-03-13T04:00:00Z' },
-    ai: { role: 'founder_perspective', format: 'single', origin: 'manual', hook: null, hookSurvived: false } },
+    ai: { role: 'founder_perspective', format: 'single', hook: null, hookSurvived: false } },
   { key: 'a_x03', business: BUSINESS_A_ID, campaign: A_CAMPAIGN_ACTIVE_ID, platform: 'twitter', at: '2026-03-09T09:00:00Z', account: A_X_ACCOUNT_ID, status: 'published',
     metrics: m(17, 5, 3, 1000),
     outcome: { value: 0.025, basis: 'rate', baseline: 0.02, baselineN: null, baselineSource: 'import_seed', logLift: 0.223144, beat: true, lengthBand: 'medium', cta: true, measuredAt: '2026-03-17T04:00:00Z' },
-    ai: { role: 'anchor_thesis', format: 'single', origin: 'objective_generated', hook: 'question', hookSurvived: true } },
+    ai: { role: 'anchor_thesis', format: 'single', hook: 'question', hookSurvived: true } },
   { key: 'a_x04', business: BUSINESS_A_ID, campaign: A_CAMPAIGN_ACTIVE_ID, platform: 'twitter', at: '2026-03-12T09:00:00Z', account: A_X_ACCOUNT_ID, status: 'published',
     metrics: m(20, 7, 4, 1000),
     outcome: { value: 0.031, basis: 'rate', baseline: 0.03, baselineN: 9, baselineSource: 'own', logLift: 0.03279, beat: true, lengthBand: 'medium', cta: true, measuredAt: '2026-03-20T04:00:00Z' },
-    ai: { role: 'anchor_thesis', format: 'thread', origin: 'objective_generated', hook: 'statistic', hookSurvived: true } },
-  { key: 'a_x05', business: BUSINESS_A_ID, campaign: A_CAMPAIGN_ACTIVE_ID, platform: 'twitter', at: '2026-03-16T09:00:00Z', account: A_X_ACCOUNT_ID, status: 'published',
+    ai: { role: 'anchor_thesis', format: 'thread', hook: 'statistic', hookSurvived: true } },
+  { key: 'a_x05', business: BUSINESS_A_ID, campaign: A_CAMPAIGN_COMPLETED_ID, platform: 'twitter', at: '2026-03-16T09:00:00Z', account: A_X_ACCOUNT_ID, status: 'published',
     metrics: m(26, 9, 5, 1000),
     outcome: { value: 0.04, basis: 'rate', baseline: 0.03, baselineN: 9, baselineSource: 'own', logLift: 0.287682, beat: true, lengthBand: 'medium', cta: false, measuredAt: '2026-03-24T04:00:00Z' },
-    ai: { role: 'customer_proof', format: 'single', origin: 'signal_generated', hook: 'question', hookSurvived: false } },
+    ai: { role: 'customer_proof', format: 'single', hook: 'question', hookSurvived: false } },
   // social_account_id NULL: the "Account not recorded or since removed" bucket (ADR 0031 §4.4).
   { key: 'a_x06', business: BUSINESS_A_ID, campaign: A_CAMPAIGN_ACTIVE_ID, platform: 'twitter', at: '2026-03-20T09:00:00Z', account: null, status: 'published',
     metrics: m(30, 11, 6, 1000),
     outcome: { value: 0.047, basis: 'rate', baseline: 0.03, baselineN: 9, baselineSource: 'own', logLift: 0.448805, beat: true, lengthBand: 'long', cta: true, measuredAt: '2026-03-28T04:00:00Z' },
-    ai: { role: 'customer_proof', format: 'single', origin: 'objective_generated', hook: 'story', hookSurvived: true } },
+    ai: { role: 'customer_proof', format: 'single', hook: 'story', hookSurvived: true } },
   // beat_baseline NULL: no baseline yet (nothing earlier to compare this post against).
   { key: 'a_x07', business: BUSINESS_A_ID, campaign: A_CAMPAIGN_ACTIVE_ID, platform: 'twitter', at: '2026-03-24T09:00:00Z', account: A_X_ACCOUNT_ID, status: 'published',
     metrics: m(41, 15, 8, 1000),
@@ -222,13 +225,18 @@ const P: PostSpec[] = [
     outcome: { value: 0.033, basis: 'rate', baseline: null, baselineN: null, baselineSource: null, logLift: null, beat: null, lengthBand: 'medium', cta: true, measuredAt: '2026-04-09T04:00:00Z' } },
   { key: 'b_x02', business: BUSINESS_B_ID, campaign: B_CAMPAIGN_ACTIVE_ID, platform: 'twitter', at: '2026-03-10T09:00:00Z', account: B_X_ACCOUNT_ID, status: 'published', metrics: m(33, 12, 5, 1000),
     outcome: { value: 0.05, basis: 'rate', baseline: 0.04, baselineN: 8, baselineSource: 'own', logLift: 0.223144, beat: true, lengthBand: 'medium', cta: true, measuredAt: '2026-03-18T04:00:00Z' },
-    ai: { role: 'anchor_thesis', format: 'single', origin: 'objective_generated', hook: 'question', hookSurvived: true } },
+    ai: { role: 'anchor_thesis', format: 'single', hook: 'question', hookSurvived: true } },
   { key: 'b_l01', business: BUSINESS_B_ID, campaign: B_CAMPAIGN_ACTIVE_ID, platform: 'linkedin', at: '2026-03-12T09:00:00Z', account: B_LI_ACCOUNT_ID, status: 'published', metrics: m(8, 2, 1, null),
     outcome: { value: 11, basis: 'count', baseline: null, baselineN: null, baselineSource: null, logLift: null, beat: null, lengthBand: 'medium', cta: true, measuredAt: '2026-03-20T04:00:00Z' } },
 ]
 
 const postId = (key: string): string => uid('post', P.findIndex((p) => p.key === key) + 1)
 const originalId = (key: string): string => uid('original', P.findIndex((p) => p.key === key) + 1)
+const originOfCampaign = (campaignId: string): DimensionSeed['origin_mode'] => {
+  const campaign = FIXTURE_CAMPAIGNS.find((c) => c.id === campaignId)
+  if (!campaign) throw new Error(`portfolio fixture: unknown campaign ${campaignId}`)
+  return campaign.origin
+}
 
 type PostSeed = Pick<
   PostRow,
@@ -317,7 +325,7 @@ export const FIXTURE_POST_DIMENSIONS: readonly DimensionSeed[] = P.flatMap((p) =
           platform: p.platform,
           role: p.ai.role,
           format: p.ai.format,
-          origin_mode: p.ai.origin,
+          origin_mode: originOfCampaign(p.campaign),
           hook_type: p.ai.hook,
         },
       ]
