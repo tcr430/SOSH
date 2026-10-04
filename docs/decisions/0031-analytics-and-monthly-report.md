@@ -1342,3 +1342,38 @@ Verdict: (b) is achievable with the synchronous-component design, an `await impo
 | 5 | NIT | The Tier-1 DEFINER-count assertion duplicates the standing allow-list test. | **Kept.** The step asks for the V.2 count; a legitimate fourth allow-listed function would redden both on purpose. |
 
 **Verification (in the required order):** `npm run typecheck` clean; `npm run lint` 0 errors (113 pre-existing warnings); `npm run test:app` (CI dummy env) 386 files, 5,934 passed, 1 todo; `npm run test:db` on a FRESH `supabase db reset` (129 migrations applied through the real pipeline): 120 files, 1,358 passed, 0 failed, no empty or skipped file.
+
+### V.6 — O2.3: the pure aggregation
+
+**Shipped (no I/O, no clock, no client; every function is pure):** `lib/analytics/` `constants.ts`, `period.ts`, `rates.ts`, `floors.ts`, `wins.ts`, `exclusions.ts`, `breakdowns.ts`, `view-model.ts`, plus `types.ts` (the input shapes; not in the step's file list, added so the shapes have one home). Seven test files under `lib/analytics/__tests__/` (131 tests) and one test-side adapter, `lib/analytics/__fixtures__/adapters.ts`, that maps the portfolio fixture's rows into the input shape and does no arithmetic. `lib/analytics` left `EXPECTED_PENDING` in `source-scans.test.ts` in the same commit, so every O2.1 scan now walks it.
+
+**Closed (Tier 2):** #2 `ANALYTICS-NULL-NEVER-ZERO`, #3 `ANALYTICS-BASIS-NEVER-MIXED`, #7 `ANALYTICS-DISPLAY-FLOOR`, #10 `ANALYTICS-NO-DELTA`, #11 `ANALYTICS-EXCLUSIONS-SHOWN`, #13 `ANALYTICS-NO-LOG-LIFT` (the O2.1 scan half now has real files to walk, plus the type test and a deep-key test), #37 `ANALYTICS-EXCLUSION-REASON-FROM-NORMALISER` (a spy that keeps the real `eligibleValue` running and asserts its exact arguments, plus a source check that `exclusions.ts` holds no copy of its rules).
+
+**Every expected number is a literal hand-computed from the O2.1 fixture** (March, business A, X: median 0.031, range 0 to 0.064, 7 measured of 10 published, exclusions 1/1/1/0, wins 4 of 6, role/format/origin/length/CTA win counts, coverage 5 of 7; February n = 5; January n = 4 renders thin; the Lisbon and Sao Paulo boundary posts file into April and March). The Wilson literals were computed independently (5 of 10: 0.2366 to 0.7634; 8 of 10: 0.4902 to 0.9433; 9 of 12: 0.4677 to 0.9111).
+
+**Decisions recorded (Builder choices inside the ADR, none architectural):**
+
+1. **The IQR is the linear-interpolation (R-7) interquartile range.** The ADR says "IQR from n = 10" without naming a method; 1 to 10 gives 3.25 to 7.75. Pinned by literals so a change of method is a visible test change.
+2. **"Day 9" is `published_at` plus 9 x 86,400,000 ms**, so the boundary does not move with the machine's timezone (`subDays` is a local-calendar operation). The edge is tested to the millisecond.
+3. **`unsupported_platform` from `eligibleValue` is counted as "no data returned".** The ADR's closed union has four reasons and no fifth; a post is never dropped from the count.
+4. **`post_outcomes.length_band` and `cta_present` are nullable in the table** (typecheck found it; the first draft typed them as never null). A NULL is unclassified: it is in the coverage `n`, in no bucket, and never "false".
+5. **Bars need two or more values and 10 on every one of them.** One thin value makes the whole dimension counts only and provisional; the Wilson interval appears only in the bars case. A value with no baselined post (`of` = 0) is not shown as "0 of 0".
+6. **`winsOf` and `winShareBreakdown` throw on a set that spans platforms or bases** (house style: a malformed input fails loudly). `wins.ts` exports exactly two functions and `breakdowns.ts` exactly one; both lists are asserted, so a pooling or per-period function cannot be added silently.
+7. **`platformMonthView` is the one composition the surface and the report both read.** For a count basis (LinkedIn) it returns `typical: null` and `basis: 'count'`: a count is never described as a rate. The "unavailable by capability" state is NOT decided here; the callers read `metricsReadAvailableFor` (O2.4 and O2.10).
+8. **View models carry template keys and params, never sentences.** The key names are fixed in `view-model.ts` (`analytics.typical`, `analytics.wins`, `analytics.state.thin`, `analytics.monthPair`, `analytics.monthPair.suppressed`, `analytics.exclusions`, `analytics.exclusions.{noDataReturned,fieldMissing,zeroImpressions,notFinal}`, `analytics.disclosure.{usual,usualUpdates,importSeed}`, `analytics.population.{aiOnly,allMeasured}`, `analytics.coverage`, `analytics.breakdown.row`, `analytics.interval`). **They are not in the locale files yet: O2.10 creates exactly these in en, pt and es** (hand-off; the key-parity test lands there).
+
+**Redden transcript (each mutation applied, `lib/analytics` run, then restored byte-identical to a backup; baseline back to 170 passed):**
+
+| Mutation | Tests that went red |
+|---|---|
+| a NULL `beat_baseline` coerced to a loss (the skip removed) | 4: the 4-of-6 literal, NULL-is-not-a-loss, the 6-against-7 test, the per-platform result |
+| `formatRate(NULL)` returns `"0.0%"` | 1: NULL is no number |
+| aggregate across platform and basis (one key) | 5: two results, no pooled group, same platform two bases, ordering, business B |
+| mean instead of median | 8: the March, February, boundary and extreme-rate literals, the platform result, the typical and pair view models, the end-to-end view |
+| a `delta` field on the month pair | 2 at runtime (the deep-key scan, the exact-keys test) and a `tsc` error (`delta` does not exist in `MonthPairView`) |
+| `logLift` added to a view model and to the input type | 3 at runtime (the O2.1 scan #13 REAL TREE, the deep-key test, the type test) and two `tsc` errors (unused `@ts-expect-error`, unknown property) |
+| a copy of `eligibleValue`'s logic instead of the call | 2: the call-arguments spy and the no-copy source check |
+
+(The first attempt at the basis-pooling and NULL-coercion mutations did not apply or did not go red in the combined loop, so both were re-run alone with the mutated line printed first; the table is from the confirmed runs.)
+
+**Verification (in the required order):** `npx tsc --noEmit --skipLibCheck` clean; `npx eslint .` 0 errors (113 pre-existing warnings, none from `lib/analytics`); `npm run test:app` with the CI dummy env: 393 files, 6,065 passed, 1 todo (O2.2 was 386 and 5,934). `test:db` not run: no migration or DB behaviour touched. No ECC budget is allotted to O2.3.
