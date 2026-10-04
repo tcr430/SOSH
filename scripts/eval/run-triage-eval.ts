@@ -46,8 +46,11 @@ import { classifyDismissReason, type DismissReason } from '../../lib/signals/tri
 // `source` discriminator to every example (github | market_responsive) so
 // per-source metrics are possible at all; inferring source from
 // signal.html_url shape would be fragile and undeclared (§10.5).
-const CORPUS_PATH = resolve(process.cwd(), 'lib/signals/__fixtures__/eval/corpus.v2.json')
-const ARTEFACT_PATH = resolve(process.cwd(), 'lib/signals/__fixtures__/eval/latest-run.json')
+// Overridable so scripts/eval/run-triage-eval.test.ts can mutate a TEMP copy
+// instead of the checked-in corpus: vitest runs files in parallel workers, and
+// rewriting the shared file in place raced corpus-v2-schema.test.ts's read.
+const CORPUS_PATH = resolve(process.cwd(), process.env.TRIAGE_EVAL_CORPUS_PATH ?? 'lib/signals/__fixtures__/eval/corpus.v2.json')
+const ARTEFACT_PATH = resolve(process.cwd(), process.env.TRIAGE_EVAL_ARTEFACT_PATH ?? 'lib/signals/__fixtures__/eval/latest-run.json')
 
 // Kept in sync with the E5.8 spec's floors — assert-eval-executed.mjs reads
 // the artefact this script writes, not these constants directly, so the
