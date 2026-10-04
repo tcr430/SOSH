@@ -890,3 +890,49 @@ That is the Reviewer's 8 (6 executable by `anon`), so the names in the checklist
 
 **Loop:** no code file changed, so no `tsc`, lint or test run is claimed for D9; the last full run is D7's (`test:app` 5881, `test:db` 1306), and D8 and D9 touch only documents.
 **What I did NOT touch:** no ADR 0030 §0–§15 or V.1–V.17 edit; no "executed green in CI" cell filled; no code, SQL or test (the stale comment at `lib/db/memory-audience.ts:29` is recorded, not edited); no edit to the Reviewer's text above this appendix.
+
+### D10 — closing block: the push, the CI record, and all 12 findings
+
+**D9's SHA, recorded here as promised:** `84b529ae` (NIT-3, and the ADR halves of MINOR-6 and MINOR-7). The D9 rows' **Commit** field resolves to it.
+
+**The push.** D0–D9 were pushed to `session-36-adr-0030` on 2026-10-04 as a plain fast-forward, `0605a97d..84b529ae` (local was 10 ahead and 0 behind; no force), and run on PR #16 (open against `master`, **not merged**). The uncommitted `CLAUDE.md` and `supabase/.temp/cli-latest` were not part of it. **All three required workflows are green at the corrected head `84b529ae`, all `pull_request` events, read from the logs:**
+
+| Workflow | Run | Skip-guard / replay line, verbatim |
+|---|---|---|
+| `app-tests` | [37165667017](https://github.com/tcr430/SOSH/actions/runs/37165667017) | `skip-guard: 379 file(s) under [app, lib, components] all visible, zero failures — green. (5881/5881 tests passed)` |
+| `db-tests` (with its skip-guard) | [37165667026](https://github.com/tcr430/SOSH/actions/runs/37165667026) | `skip-guard: 113 file(s) under [supabase/__tests__] all visible, zero failures — green. (1306/1306 tests passed)` (0 `SIGSEGV` / `signal 11` / `OOMKilled=true` / `Restarting=true` / `out of memory` lines) |
+| `eval-reported` / `eval-threshold` | [37165667000](https://github.com/tcr430/SOSH/actions/runs/37165667000) | `SIGNAL3-TRIAGE-QUALITY measured (never covered): corpusVersion=2 github: precision=1.000 (24/24) recall=1.000 (24/24) dismissMatch=1.000 (16/16) pending=0 \| market_responsive: precision=null (0/0) recall=0.000 (0/24) dismissMatch=0.563 (9/16) pending=0` |
+
+At `0605a97d` the guards read `379 … (5794/5794)` and `113 … (1292/1292)`: **no count dropped** (+87 and +14 tests; the file counts are unchanged because this pass added tests to existing files and no test file). The eval replay is identical to the baseline; no AI path changed. ADR 0030 C.9 re-dates all 28 `SUBSTRATE-*` constraints "executed green in CI at `84b529ae`" per tier (Tier 1 is COVERED because `db-tests` itself is green), and states #12, #14 and #22 are now PROVED. **The `db-tests` promotion tally is unchanged**: the three runs are `pull_request` events and only consecutive green `master` push runs move it. **The current-phase line quoted, then replaced.** `docs/current-phase.md` carried, before this step: *"What is COVERED, and dated: the 28 `SUBSTRATE-*` constraints (14 with a Tier-1, 13 with a Tier-2, 11 with a Tier-3 component, recounted from ADR 0030 §12) have their test files in the two green jobs above, at `1d10e8df` (the map is V.16; any later commit on this branch is documentation only)."* It now says "executed green in CI at `84b529ae`" with 14 / 13 / **12** and the run URLs above.
+
+**All 12 findings, by ID.** None is deferred.
+
+| ID | Disposition | Proving test (`file:line` at the head) | Commit(s) |
+|---|---|---|---|
+| MAJOR-1 | FIXED | `lib/campaigns/generate.test.ts:1269`; `lib/campaigns/planner/__tests__/tools.test.ts:169`; `lib/signals/triage/tools.test.ts:42` and `tools.dismissal.test.ts:38`; `app/[locale]/(dashboard)/studio/actions.test.ts:122` | `7e53e680` |
+| MAJOR-2 | FIXED in the repo (landed before the pass, re-verified fresh); the launch gate is a checklist row; **the hosted half is LAUNCH-GATED (A-8 PENDING)** | W1 `has_function_privilege` assertions in `supabase/__tests__/substrate-dismissal-writer.test.ts` and `substrate-writer-registry.test.ts`, run after `supabase db reset`; the row `docs/launch-checklist.md` §2 "SECURITY DEFINER functions not client-executable" | `1d10e8df`, `70a1ccb6`, `c34caf49` |
+| MINOR-1 | FIXED | `lib/memory/substrate-scans.test.ts:688`, `:725` | `b61cdf57` |
+| MINOR-2 | FIXED | `lib/memory/substrate-scans.test.ts:420`, `:431`, `:453` | `24840fb0` |
+| MINOR-3 | FIXED | `lib/memory/substrate-scans.test.ts:123` (the floor) | `24840fb0` |
+| MINOR-4 | FIXED | `lib/memory/bundle.test.ts:222`, `:243` | `6d6b8b3e` |
+| MINOR-5 | FIXED (transcripts: #12 at D1, #14 at D4, #17 and #24 at D7; `6c90c038`, `eab33b5e`, `b0286e02` not amended) | the redden tables in the D1, D4 and D7 rows, against `actions.test.ts` (#17) and `substrate-two-business.test.ts` (#24) | `7e53e680`, `6d6b8b3e`, `f4838abe` |
+| MINOR-6 | FIXED (code and ADR halves) | `supabase/__tests__/substrate-dismissal-writer.test.ts:645`, `:800`; `lib/db/memory-audience.test.ts:309`, `:323`; `lib/memory/dismissal.test.ts:138`; `opportunities/actions.test.ts:403`; `lib/memory/substrate-scans.test.ts:854`, `:879` | `70a1ccb6` (code), `84b529ae` (ADR) |
+| MINOR-7 | FIXED under **A-9(a)** (the founder's "Go with (a)", 2026-10-04); not RULED | `lib/i18n/memory-parity.test.ts:70` | `61fd060b` (code), `84b529ae` (ADR) |
+| NIT-1 | FIXED | `lib/memory/substrate-scans.test.ts:811`, `:828` | `b61cdf57` |
+| NIT-2 | FIXED ((b) reddens; (a) is hygiene and cannot redden, said so) | `lib/campaigns/generate.context-equivalence.test.ts:363` | `f4838abe` |
+| NIT-3 | FIXED (docs only, no runtime test by decision, Tier 3) | the ADR's C.3, C.4, C.5 citations | `84b529ae` |
+
+**Count check, run by script on this table:** 12 rows, 12 distinct IDs, equal to the expected set MAJOR-1..2, MINOR-1..7, NIT-1..3 (the check is re-run on the appended file before the commit and its output is in the commit message). **RULED:** none (MINOR-7 closed as FIXED under A-9(a); under (b) it would have been RULED). **LAUNCH-GATED:** MAJOR-2's hosted half only (A-8 PENDING; nothing was run against the hosted project).
+
+**Reviewer statements that have since CHANGED, without editing them.** The Reviewer's text above stands as written at `0605a97d`; a reader should know these no longer hold at `84b529ae`:
+- **§10's table, the ✘ on #12 and #22 and the partials on #13 and #14**, and its tally sentence "#12 is not [proved] (MAJOR-1), and #14 and #22 are partial (MINOR-4, MINOR-1)": #12 is proved from D1 (`7e53e680`), #22 from D3 (`b61cdf57`), #14 from D4 (`6d6b8b3e`), and #13's caller argument is one of #12's rows. Its "All 28 are executed green in CI at `0605a97d`" is re-dated to `84b529ae` in ADR 0030 C.9.
+- **"What I ran"'s counts:** `379 … (5794/5794)` is now `379 … (5881/5881)`; `113 … (1292/1292)` is now `113 … (1306/1306)`; "Tier-3 scans 50/50" is now 60 cases in `lib/memory/substrate-scans.test.ts` (measured locally at D5), re-run in CI at the head. The V.1a unit and DB baseline sets (66 / 1121, 53 / 680) were not re-measured by this pass.
+- **MINOR-6's reading** that `invalid_identifier` also covers a deleted watched source and one belonging to another business was true at `0605a97d` and is not after D5: a gone source is `watched_source_gone` and a foreign one `anomaly_watched_source_foreign` (and the deleted case is unreachable in normal operation, ADR 0030 C.1). **§6's walkthrough row stands**: the member rename to `'x ignore previous instructions'` still ends at the SQL regex with `retired_invalid_identifier` and no row carries the text (re-run at D5).
+- **NIT-2's** "All nine [factories] at the head carry every export their subject imports … one stale factory": the stale factory is corrected (D7).
+
+**What this pass leaves open, stated plainly.** **A-8 is PENDING**: the hosted query and push are the founder's, and the hosted half stays LAUNCH-GATED by the checklist row. **Two `session-36.md` §5 close-out rows were not done by anyone and are not ticked**: `docs/product-status.md` (what a customer can now observe) and the brainstorm doc's §10 and §14 (marked shipped, with the stale "1 writer" / "three fields" claims corrected in a dated note). They are not among the 12 findings, and I did not widen scope to write them. `S34-E2E-UNVERIFIED` and `S36-UX-UNVERIFIED-IN-BROWSER` stay open. **No quality gain is claimed**: retrieval-into-briefs quality and triage precision are NOT MEASURED. PR #16 is **not merged**.
+
+**Commit:** D10 (this commit lands after the pushed head `84b529ae`; it changes documents only, and the CI result at its own head is not recorded here).
+**What I did NOT touch:** no code, SQL or test; no edit above the `## CORRECTION PASS` line; no hosted command; no merge; the two unticked §5 rows.
+
+*End of the Session 36-D correction pass: 12 findings, 0 deferred, 1 hosted half LAUNCH-GATED.*

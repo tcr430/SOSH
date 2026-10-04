@@ -3039,30 +3039,49 @@ nothing above the appendix changed. Track L closed." Then stop.
 
 ## §5 — Docs to update at close-out (Track L done)
 
-- [ ] `docs/decisions/0030-memory-platform-substrate.md`: Accepted, with the final constraint table and
+- [x] `docs/decisions/0030-memory-platform-substrate.md`: Accepted, with the final constraint table and
       post-correction counts verified as executed green in CI at the head they are dated to.
-- [ ] `docs/decisions/0016-governed-memory.md`: an amendment (F) recording the write contract and any
+- [x] `docs/decisions/0016-governed-memory.md`: an amendment (F) recording the write contract and any
       change to writer identity or `source` CHECKs.
-- [ ] Each ADR that ADR 0030 §13.2 amends, landed in the commit of the change it describes: **0024** §5.1
+- [x] Each ADR that ADR 0030 §13.2 amends, landed in the commit of the change it describes: **0024** §5.1
       (`L2.7`), **0029** §4.5 (`L2.4`), **0026** §5.5 note (`L2.2`), **0021** §5.4/§7.4 note (`L2.9`). 0018 and
       0025 are recorded as unchanged in ADR 0030 §2.3.
-- [ ] `docs/decisions/0029-founder-input-engine.md` §1.3: each of the five provisional choices annotated
+- [x] `docs/decisions/0029-founder-input-engine.md` §1.3: each of the five provisional choices annotated
       with a pointer to ADR 0030's answer (append-only, not rewritten).
-- [ ] `docs/decisions/0010-legal-surface.md` Amendment 2 §D2.5: a cascade row for every new table, landed
+- [x] `docs/decisions/0010-legal-surface.md` Amendment 2 §D2.5: a cascade row for every new table, landed
       with its migration, **or an explicit note that no new row was required** (the Session 28-D D7
       precedent).
 - [ ] `docs/brainstorm/ai-quality-track-ideas-and-build-path.md` §10 and §14: marked shipped where it did,
       with the stale "1 writer" / "three fields" claims corrected in a dated note, not rewritten.
-- [ ] `docs/pre-launch-scope.md` §13: the carry-forward note answered, plus the `P-7` row if A-0 ruled one
+- [x] `docs/pre-launch-scope.md` §13: the carry-forward note answered, plus the `P-7` row if A-0 ruled one
       was needed. **T1-B remains open and remains half of C-2.**
-- [ ] `docs/current-phase.md`: the Session 36 entry and the `db-tests` tally with its event type.
+- [x] `docs/current-phase.md`: the Session 36 entry and the `db-tests` tally with its event type.
 - [ ] `docs/product-status.md`: what a customer can now observe (dismissals teach memory; provenance
       labels), and nothing it cannot.
-- [ ] `docs/backlog.md`: every deferred decision writer, each with its un-defer trigger, and anything else
+- [x] `docs/backlog.md`: every deferred decision writer, each with its un-defer trigger, and anything else
       L1 deferred.
-- [ ] `.wolf/anatomy.md`, `.wolf/memory.md`, `.wolf/cerebrum.md`.
-- [ ] `docs/reviews/session-36-reviewer.md`: exists, names its commit range, and carries one appended
+- [x] `.wolf/anatomy.md`, `.wolf/memory.md`, `.wolf/cerebrum.md`.
+- [x] `docs/reviews/session-36-reviewer.md`: exists, names its commit range, and carries one appended
       correction-pass section.
+
+### §5.1 — Close-out evidence (Session 36-D D10, at `84b529ae`)
+
+Each row of the list above, with whether it applied, and the evidence. Ten are ticked. **Two are deliberately left unticked** (rows 6 and 9): they were Track L close-out rows that no commit of the Builder or of this correction pass touched, they are not among the Reviewer's 12 findings, and ticking them would claim work that does not exist.
+
+| # | Row | State | Evidence |
+|---|---|---|---|
+| 1 | ADR 0030 Accepted, final constraint table, post-correction counts | **applied** | `docs/decisions/0030-memory-platform-substrate.md:3` `Status: Accepted`; §12's table is unedited; C.8 re-derives the tallies (Tier 1 = 14, Tier 2 = 13, Tier 3 = 12, 28 constraints) and **C.9 dates them "executed green in CI at `84b529ae`"** from run logs (`app-tests` 37165667017, `db-tests` 37165667026, `eval` 37165667000) |
+| 2 | ADR 0016 Amendment F | **applied, earlier** | `docs/decisions/0016-governed-memory.md:759`; F.1 `c07a2c5e` (L2.2), F.2 `a2ca2421` (L2.3), F.3 `6d109db9` (L2.11), per ADR 0030 V.16. This pass did not change it |
+| 3 | The ADRs §13.2 amends, in the commit of the change | **applied, earlier** | V.16's table: 0024 §5.1 `ddaf0983`, 0029 §4.5 `a7e91e98`, 0029 §2.4 note `c07a2c5e`, 0026 §5.5 `c07a2c5e`, 0021 §19 Note D `eab33b5e`; 0018 and 0025 recorded unchanged (§2.3). The one late amendment is row 4 |
+| 4 | ADR 0029 §1.3 pointer | **applied, late** | landed at `6d109db9` (L2.11), not with A-6; recorded as a self-disclosed §13.2 timing lapse in ADR 0030 C.5 (D9) |
+| 5 | ADR 0010 Amendment 2 §D2.5 | **did not apply: no row required** | this pass creates **no table**, D5 included (the migration replaces a function): `git diff 0605a97d..HEAD -- supabase/migrations` contains 0 `create table`; the range creates none either, which D3's `SUBSTRATE-CASCADE-COMPLETE` scan now proves with a planted pair (`lib/memory/substrate-scans.test.ts:811`). The no-new-row note is in ADR 0030 V.16 (the §D2.5 row of its table); ADR 0010 itself is untouched |
+| 6 | `docs/brainstorm/ai-quality-track-ideas-and-build-path.md` §10 and §14 marked shipped | **NOT DONE, left unticked** | `git grep` finds 0 mentions of ADR 0030 or Track L in the file at the head, and `git log 5a4d6583..HEAD -- <file>` is empty. A Builder close-out row missed at L2.11 and outside the 12 findings; it needs a dated note correcting the stale "1 writer" / "three fields" claims |
+| 7 | `docs/pre-launch-scope.md` §13 and the P-7 row | **applied, earlier** | `e9de7b25`: §14 "P-7 — Track L sequenced ahead of T1-B (ruled 2026-09-29), appended" (`docs/pre-launch-scope.md:520`); §13's carry-forward note stands as written |
+| 8 | `docs/current-phase.md`: the Session 36 entry and the `db-tests` tally with its event type | **applied** | the Session 36 entry (L2.11); this step replaced its "What is COVERED" line with the corrected per-tier counts and added the Session 36-D bullets and the tally with each run's event type (all `pull_request`; tally unchanged) |
+| 9 | `docs/product-status.md`: what a customer can now observe | **NOT DONE, left unticked** | 0 mentions of ADR 0030, Track L, or the dismissal hint at the head; no commit touched it. A customer-facing statement of what dismissals and provenance labels now do, and nothing it cannot, is a separate edit |
+| 10 | `docs/backlog.md`: every deferred writer with its trigger | **applied** | §3.3 carries 25 `S36-*` rows (the five deferred decision writers, `S36-TOO-SENSITIVE-TO-BRAND`, and the rest), from L2.11; D8 appended **one sentence** to `S36-FRESH-DB-RPC-ACL-AUDIT` and **no new finding row** (nothing was deferred in this pass). `docs/launch-checklist.md` gained **exactly one** row (D8) |
+| 11 | `.wolf/anatomy.md`, `memory.md`, `cerebrum.md` | **applied (local; `.wolf` is gitignored)** | `anatomy.md` sections for the new migration and the changed files; `memory.md` one line per step; `cerebrum.md` three dated Do-Not-Repeat entries (fresh-database privilege checks, caller tests that do not assert arguments, tie-break fixtures); `buglog.json` bug-1787 (MAJOR-1), bug-1788 (MAJOR-2), bug-1789 (MINOR-6) |
+| 12 | `docs/reviews/session-36-reviewer.md` | **applied** | exists; opens with its range `e9de7b25..0605a97d`; carries ONE appended `## CORRECTION PASS (Session 36-D)` section, with the Reviewer's text above it unchanged (`git diff 1e258d85..HEAD -- <file>` shows additions only, 0 removed lines) |
 
 **Next:** **T1-B — analytics and the monthly report** (`pre-launch-scope.md` §4). It is the Tier-1 item
 this session was chosen ahead of, and it is half of **C-2**, the one hard launch gate. With Track L closed,
