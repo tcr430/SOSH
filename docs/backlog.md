@@ -189,6 +189,14 @@ surface (T1-B); cross-type retrieval and any further memory writer (Session 34+)
 
 ### 3.3 Session 36 — the memory substrate (ADR 0030), filed by L2.11
 
+> **⏸ Sequencing note (2026-10-04, `docs/pre-launch-scope.md` §15):** none of the rows below is pre-launch,
+> and none should be pulled into Sessions 37–40. That includes the five `S36-WRITER-*` rows and two items
+> with no row of their own: the **post, plan and triage memory bundles** (`MEMORY_TASK_BUDGET` defines
+> them in `lib/memory/bundle.ts`; only the brief is wired), and `S36-MEMORY-CARDS`, whose trigger
+> ("founder ruling R2") is stale. R2 was ruled by `pre-launch-scope.md` §12.7 on 2026-09-03, and the real
+> release is now Tier 1 closed plus real tenant memory (`docs/ideas.md` §2.2). Nothing here can be measured
+> until a production account connects.
+
 **Deferred, each with its un-defer trigger** (ADR 0030 §6.7 and §13.1). The five deferred decision writers come first: each is a human judgment the product already records, and none reaches memory yet, because none has a closed, structured reason a deterministic writer could read (L-7).
 
 | ID | Item | Un-defer trigger |

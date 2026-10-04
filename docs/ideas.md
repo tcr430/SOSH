@@ -81,6 +81,12 @@ four independent capped calls → at most 18 records chosen without reference to
 governance many writers require — provenance, contradiction detection, confidence arithmetic.
 
 ### 2.2 Memory-driven opportunity cards — the fourth signal source · `UNBLOCKED` (2026-09-03)
+> **⏸ Waits behind Sessions 37–40 (2026-10-04, `docs/pre-launch-scope.md` §15).** Unblocked is not
+> scheduled. Its condition 3 (Sessions 32 and 33 landed) is met in code, not in data: no production account
+> is connected, so memory is empty and the source would emit thin, obvious cards. Released when Tier 1 is
+> closed **and** real tenants have populated memory. (`docs/backlog.md` `S36-MEMORY-CARDS` still names
+> founder ruling R2 as its trigger; R2 was ruled by §12.7 on 2026-09-03.)
+
 The `evergreen-strategic` opportunity type from the founding strategy doc — the one category with no
 session behind it. Its **source is memory itself**: unused evidence, unanswered objections, performance
 gaps, coverage gaps, recurrence, staleness, repetition. Most triggers are arithmetic over memory rows.
@@ -115,6 +121,11 @@ gate, and diff infrastructure — all four exist here and nowhere else together.
 first instance of §2.3's proposal object.
 
 ### 2.5 Voice exemplars and similarity retrieval · `UNBLOCKED` (2026-09-03)
+> **⏸ Waits behind Sessions 37–40 (2026-10-04, `docs/pre-launch-scope.md` §15).** Not Tier 1, and it
+> needs a corpus of the customer's own performing posts, which is empty in production until a real account
+> connects. Released when Tier 1 is closed **and** a real backfilled corpus exists (cf. `docs/backlog.md`
+> `S36-EMBEDDINGS`, threshold 200 active evidence + audience rows for one business).
+
 Six of the customer's own best posts, selected by similarity to the task, beat twenty voice rules. Also
 underpins "find my similar past posts", repetition detection, and few-shot from the edit corpus.
 *Was blocked on:* `SIGNAL-NO-EMBEDDINGS` was **re-affirmed**, not retired, in ADR 0023 §4.1 — but that

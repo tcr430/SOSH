@@ -8,6 +8,10 @@
 > **Read §12 before acting on §4, §5, §6 or §11** — it moves T2-A into Tier 1, rules T2-B and T2-C,
 > corrects a three-way contradiction about image generation, and un-blocks two `docs/ideas.md` items.
 >
+> **Read §15 before scheduling any Tier-2 or unblocked-idea work** — it sequences the four remaining
+> Tier-1 items as Sessions 37–40 and lists what deliberately waits behind them (2026-10-04, a sequencing
+> note, not a ruling).
+>
 > **The phase-model change this document records:** what the constitution calls "Phase 2" is **no longer
 > post-launch**. Several Phase-2 capabilities are now considered pre-launch. **Video generation stays
 > post-launch** — the objective is a close-to-functioning product first, and generative video is the most
@@ -526,3 +530,40 @@ Appended rather than inserted into §12.9, so that §12 stays as ruled. This is 
 | **P-7** | Sequence Track L (memory as a platform substrate, ADR 0030) as Session 36, ahead of T1-B (analytics and the monthly report) | **Track L first (founder, 2026-09-29).** Track L is **not** a Tier-1 item, and Tier 1 stays closed (P-1): nothing is displaced, no Tier reassignment. **Cost recorded:** it spends a session T1-B could have used, and **T1-B remains half of the C-2 pricing gate** (§9, §12.9 P-6), the one hard launch gate. T1-B is still open and unscheduled |
 
 _End §14._
+
+---
+
+## 15. Sessions 37–40 and what waits behind them (2026-10-04), appended — a sequencing note, not a ruling
+
+Appended after Session 36 closed. It records a recommended order and **what is deliberately not scheduled**,
+so a future session does not pull a Tier-2 or unblocked item forward. It is **not** a P-8 adjudication: no
+Tier reassignment, no constitution amendment, and nothing above is rewritten.
+
+### 15.1 The order
+
+Four Tier-1 items remain (T1-D shipped in Session 35). Placeholder build guides exist for each:
+
+| Session | Item | Guide | Why in this position |
+|---|---|---|---|
+| **37** | **T1-B** analytics + monthly report | `docs/build-guide/session-37.md` | Half of the C-2 hard gate; the debt P-7 (§14) recorded; cheapest Tier-1 item now Session 33 has landed |
+| **38** | **T1-E** founder / personal profiles | `docs/build-guide/session-38.md` | Fixes the account shape the inbox and carousels build on, and the OAuth scope set before production app registration |
+| **39** | **T1-C** template carousels | `docs/build-guide/session-39.md` | Closes the Production gap; must land before T2-D (§12.5) |
+| **40** | **T1-A** engagement inbox | `docs/build-guide/session-40.md` | Largest and riskiest (platform read feasibility, counsel, `relationship_memory`); likely two sessions. Counsel should start in parallel now |
+
+The open alternative is to swap 37 and 38 if production OAuth registration is valued above the C-2 gate.
+
+### 15.2 What waits — and the condition that releases each
+
+| Item | Where it lives | Status it keeps | Why it waits | Released when |
+|---|---|---|---|---|
+| **T2-B** content mining (changelog beyond GitHub, call transcripts) | §5, §12.3 | Tier 2, approved | Tier 1 is closed (P-1) and launch is scope-driven (P-4); T1-D already reaches the same material more cheaply (§12.3) | Sessions 37–40 closed. Before launch it must still be **shipped or deferred with a named trigger** (§10) |
+| **T2-D** image generation | §5, §12.5 | Tier 2, approved | §12.5 sequences it **behind T1-C** and judges it against what is still missing after carousels | Session 39 (T1-C) closed and its remaining visual gap written down |
+| **Memory-driven opportunity cards** | `docs/ideas.md` §2.2, §12.7 | `UNBLOCKED`, unscheduled | Not Tier 1. §12.7 condition 3 (Sessions 32 and 33 landed) is met **in code** but not **in data**: no production account is connected, so every store is empty and the source would emit the *"thin, obvious observations"* §12.7 warns about | Tier 1 closed **and** real tenants with populated memory |
+| **Voice exemplars / similarity retrieval** | `docs/ideas.md` §2.5, §12.6 | `UNBLOCKED`, unscheduled | Not Tier 1. Needs a corpus of the customer's own performing posts, which is empty in production | Tier 1 closed **and** a real backfilled corpus (cf. `docs/backlog.md` `S36-EMBEDDINGS`) |
+| **Track L leftovers** — the five deferred decision writers and the unwired post / plan / triage memory bundles | `docs/backlog.md` §3.3 | Deferred, each with its own trigger | No one can measure whether they help without real tenants (`ai-quality-track-ideas-and-build-path.md` §14, Session 36 update) | Their recorded triggers; none is a pre-launch item |
+
+**The common thread:** the code for every learning loop through Session 36 exists and is inert in production
+until a real account connects (`docs/current-phase.md`, Session 33). Building more learning on top of an empty
+store adds untestable surface; the four Tier-1 items above are what a first customer actually sees.
+
+_End §15._
