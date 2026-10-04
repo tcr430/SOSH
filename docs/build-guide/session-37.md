@@ -409,6 +409,15 @@ contradict a §0 Locked decision. If it needs to, it **STOPS and flags for found
 
 > **ADR 0031 constraint count: 42** (40 with a CI-executed test, #35's browser half staying manual QA and UNPROVEN until recorded; 2 not applicable while there is no model; revised by the 2026-10-04 ADR review, ADR 0031 §16). **O2 stays blocked until A-3…A-7 are ruled - approved**
 
+> **§0.2 amendment — rulings raised by the O2.0 grounding step (founder, 2026-10-04).** Evidence: ADR 0031 "Builder verification (O2)", V.1 and V.3. Nothing above is rewritten; a revised ruling gets a prime and both versions stay visible.
+
+| # | Question | Decision | Where encoded |
+|---|---|---|---|
+| A-3′ | Packages under L-6′ (A-3 above is unchanged and stays visible) | **REVISED → A-3′ (founder, 2026-10-04).** `@visx/axis` is **dropped**: it calls a hook through `@visx/text` and cannot render in the PDF's static render (spike, V.3). The shared report component draws axes as plain SVG `<text>`. The set is `@visx/scale`, `@visx/shape`, `@visx/group`, `puppeteer-core`, `@sparticuz/chromium`. | ADR 0031 V.1 item 2, V.3; `O2.1` dependency scan; `O2.6` charts |
+| O-1 | `proxy.ts` sends every `/api/*` request to `/{locale}/api/*` (404) | **FIX IN S37, as its own tracked commit before `O2.7`.** It closes no ADR 0031 constraint; it is a prerequisite of `O2.7`/`O2.8` (cron route) and `O2.9` (PDF route). The rule "a step that closes no constraint does not exist" is waived for it by this ruling. | ADR 0031 V.1 item 1 |
+| O-2 | Live-trial definition for the report's eligibility | **A live trial is `plan = 'trial'` AND `trial_started_at` set AND under 14 days old.** An unstarted trial gets no report and no stub. | `O2.7`; ADR 0031 V.1 item 3 |
+| O-3 | Who writes `businesses.report_email` (A-6) | **Owner-only, through RLS, with the authenticated client.** The ADR's "admin" wording is narrowed to "owner" (the `businesses` UPDATE policy is owner-only); no service-role use is added; constraint #42's admin re-check becomes an owner check. | `O2.2`, `O2.8`; ADR 0031 V.1 item 4 |
+
 ---
 
 ## §1 — Architect session (O1)  ·  (paste into Claude Code · Opus)  ·  RUN FIRST, ALONE

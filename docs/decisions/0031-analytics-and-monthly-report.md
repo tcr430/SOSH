@@ -1242,3 +1242,64 @@ go to live businesses only. The other changes are corrections.
 | Volume figure corrected (outcome rows are X only) | §2.7 |
 | Missing constraint IDs added (#36–#42); count 35 → 42 | §13 |
 | ADR 0030's "A-8" audit gate renamed "the DEFINER audit gate" here | §0.1, §11, §12.1 |
+
+---
+
+## Builder verification (O2)
+
+> Appended by the Builder (O2). Nothing above this heading is edited. BASE = `0da603b4a` (master after PR #19 and PR #18), branch `session-37-adr-0031`. Dates are 2026-10-04.
+
+### V.1 — O2.0 premise table, drift and decisions
+
+| # | Premise | Evidence | Still true? |
+|---|---|---|---|
+| 1 | Active-business resolver | `getBusinessForUser(client, userId)` at `lib/db/businesses.ts:22`; the layout (`layout.tsx:33`) and every dashboard page and API route call it. No caller passes `preferredBusinessId`. | Yes. It means "earliest-created owned business, else the first visible one". |
+| 2 | One business-liveness predicate | None exists. `clearBillingOnCancellation` (`businesses.ts:167`) sets `plan='trial'` and nulls `stripe_subscription_id`. The 14-day trial arithmetic is inline in `layout.tsx:61` and `billing/page.tsx:34` only. | **No.** O2.7 writes the predicate once in `lib/db/businesses.ts` (ADR §5.2 anticipated this). |
+| 3 | `businesses` UPDATE policy | `20260430120017:25-27`: `USING (owner_id = auth.uid()) WITH CHECK (owner_id = auth.uid())`, identical in the live database. | Partly. Both clauses exist and only the OWNER can write `businesses`, so a non-admin member cannot write `report_email`. **No restricting trigger is needed**, so there is no exception to "no new SQL function". |
+| 4 | `reject_outcome_table_update` | `20260919110000:158-166`: SECURITY INVOKER, `TG_TABLE_NAME`, EXECUTE held by `postgres` only (REVOKE at `20260919150000:97`). | Yes. Its message still reads "ADR 0026 … OUTCOME-DIMENSIONS-WRITE-ONCE", so tests assert `TG_TABLE_NAME` plus "immutable", not the constraint name. |
+| 5 | The six email kinds | `20260709120000:3-9`, `lib/db/types.ts:79-85` and `lib/email/types.ts:1-7` carry the same six. | Yes. Two duplicate unions must both be widened. |
+| 6 | Shell overflow and `nav.team` | Reproduced. Overflowing element: `DashboardShell.tsx:207`, `<div className="flex flex-1 flex-col">`, which has no `min-w-0`; the header (`:209`) stretches with it. `nav.team` is still missing in en, pt and es. | Yes, but the backlog text ("independent of any page content") is wrong: the overflow depends on the page. Measured `scrollWidth` at 320 px: `/pt/opportunities` 359, `/pt/calendar` 575, `/pt/settings/team` 744; clean (305 = `clientWidth`) on campaigns, billing, create. Acceptance for #35 is `scrollWidth <= clientWidth`. |
+| 7 | Baselines | V.2. | n/a |
+| 8 | QA defects | `QA-LOCALE-HEADER-DROPPED` and `QA-REAL-API-SOSH-FIELD` are fixed by `2f2b33676` (in master via PR #18). `/pt/login` renders "Bem-vindo de volta" in a real browser. | Yes. The pt browser pass in O2.11 can be real. |
+
+**Findings and rulings (founder, 2026-10-04):**
+
+1. **`proxy.ts` redirects every `/api/*` request.** Its matcher has never excluded `/api`, so next-intl 307-redirects `/api/x` to `/{locale}/api/x`, which 404s, authenticated or not (reproduced on both a QA dev server and the spike server; `curl -X POST` to a cron route also gets the 307). The new cron route (O2.7/O2.8) and the PDF route (O2.9) would be unreachable, and the existing cron, billing and social routes are very likely affected. Production was not probed. **Ruling: fix it in Session 37, as its own tracked commit before O2.7.** It closes no ADR 0031 constraint; it is recorded here as a prerequisite, not as scope creep (the build guide's "a step that closes no constraint does not exist" is waived for it by this ruling).
+2. **A-3 loses `@visx/axis`** (V.3). **Ruling: dropped.** The shared report component draws its axes as plain SVG `<text>`. The O2.1 dependency scan allows exactly `@visx/scale`, `@visx/shape`, `@visx/group`, `puppeteer-core` and `@sparticuz/chromium`.
+3. **Live-trial definition (O2.7).** **Ruling:** a live trial is `plan = 'trial'` AND `trial_started_at` set AND under 14 days old. A business whose trial clock never started gets **no report and no stub**. A live paid business is a paid plan with a non-null `stripe_subscription_id`.
+4. **`report_email` writer (O2.8).** **Ruling: owner-only through RLS, using the authenticated client.** The ADR's "admin" wording (§5.4) is narrowed to "owner", because the `businesses` UPDATE policy is owner-only. No service-role use is added. Constraint #42's admin re-check becomes an owner check.
+5. Not a drift: `.env.local` points at the HOSTED Supabase project; every local QA run overrode the Supabase variables from `npx supabase status -o env` (cerebrum).
+
+### V.2 — Baselines (BASE `0da603b4a`)
+
+- **DEFINER audit gate** (SECURITY DEFINER functions executable by `anon` or `authenticated`): **3** on the local database, equal to the allow-list in `supabase/__tests__/security-definer-client-exec-allowlist.test.ts` (`accept_invite(uuid,uuid)`, `get_user_business_ids()`, `user_can(uuid,text)`). D12's "6" predates `20261004100000` and `20261004110000`. The local database is long-lived; a fresh `db reset` is the stronger check and is repeated in O2.2.
+- **Tests, all green** (CI dummy env): `campaign-view.load` 3, `campaign-view` 11, `performance` 18, `generate.context-equivalence` 7, `context-callers.context-equivalence` 6, `actions.context-equivalence` 5, `no-cross-business` 33. Total 83.
+- **A-3 packages** (`npm ls`): absent.
+- `npm run lint`: 0 errors, 113 pre-existing warnings.
+
+### V.3 — The PDF / visx spike (a scratch worktree, deleted; nothing committed)
+
+| Check | Result |
+|---|---|
+| (c) The same component in a Server Component page | Works: 4 bars and axis ticks rendered; a hostile `<script>` in the title stayed inert text. |
+| (b) `react-dom/server` in a Next 16 route handler | A **static** `import … from 'react-dom/server'` (and `react-dom/server.node`) fails to compile under Turbopack (the route graph aliases it to `server.react-server.js`). `await import('react-dom/server')` compiles. |
+| (b) packages | `@tailwindcss/postcss`, `lightningcss`, `@sparticuz/chromium` and `puppeteer-core` need `serverExternalPackages`. |
+| `@visx/axis` server-side | **Fails** under `renderToStaticMarkup` in the route handler: `Cannot read properties of null (reading 'useMemo')`. Cause: `@visx/text`'s `useText` hook (used by `@visx/axis` for tick labels); the route's components run on the react-server React copy while `react-dom/server` sets the dispatcher on the other. `@visx/scale`, `@visx/shape` (Bar, Group) have no hooks and work in both contexts. Plain SVG `<text>` axes also work. |
+| CSS inlinable | Yes. A request-time `@tailwindcss/postcss` compile produced 150,305 bytes in 63-282 ms and was inlined into the HTML. A build-time compile may suit better; that is O2.9's design choice. |
+| Timing and size | Cold 1.2 s (CSS 282 ms, Chrome launch 443 ms, PDF 376 ms), warm 0.8 s; PDFs 45-46 KB. Local Windows Chrome, not Vercel's Linux Chromium. |
+| Sealing | With the CSP removed, interception aborted exactly 1 request (a hostile `<img>`); with JavaScript disabled the hostile `<script>`'s fetch never ran; the server counted 0 pings in every run. With the CSP present, the `<img>` never reached the interceptor. Each layer holds on its own. |
+| Not proven | `@sparticuz/chromium` on Vercel's Linux runtime and its cold start: **UNPROVEN** until a preview deploy. |
+
+Verdict: (b) is achievable with the synchronous-component design, an `await import('react-dom/server')`, `serverExternalPackages`, and no hook-using component in the shared tree (hence no `@visx/axis`). It is not a "stop and report" failure of the design; the `@visx/axis` loss is the founder-visible A-3 change ruled in V.1 item 2.
+
+### V.4 — O2.1: the absence scans and the fixture
+
+`lib/analytics/source-scans.test.ts` (39 tests + 1 todo) and `lib/analytics/__fixtures__/portfolio.ts`.
+
+- **Closed here (Tier 2, scan):** #1 `ANALYTICS-READ-ONLY` (arm a: lib/social import; arm b: writes to the four measurement tables, the write RPC and the four named lib/db writers, plus a completeness test over those lib/db files), #19 `ANALYTICS-NORTHSTAR-FENCED` (whole repository; allowlist pinned to six exact files plus `supabase/migrations/**`), #32 `ANALYTICS-NO-NEW-DEPENDENCY` (literal baseline plus the five A-3 packages), #38 `ANALYTICS-NO-MEMORY-WRITER` (names derived from `MEMORY_WRITERS` and the exports of its sole-caller modules under `lib/memory/`), #39 `REPORT-NO-MODEL`.
+- **Scan halves authored (constraint closes in the named step):** #13 (O2.3), #16 (O2.4), #20 (O2.5; whole-repo, three functions), #23 (O2.8).
+- **Roots:** a tripwire test (`EXPECTED_PENDING`) lists the roots that have no production file yet; the step that creates a root must remove it from the list in the same commit, which is what turns every scan on for it. O2.12 empties the list (an `it.todo` records this).
+- **Decision recorded by the Builder (not an architectural choice):** the recipients function that scan #23 names is **`resolveReportRecipients`** in `lib/db/business-members.ts`. The ADR required one service-role function without naming it; the name is fixed here so the scan and O2.8 cannot disagree.
+- **Fixture:** two businesses sharing one user (A Europe/Lisbon, B America/Sao_Paulo); every row carries an explicit status; B holds an active row of every kind; `EXPECTED` is hand-computed literals (March: median 0.031, range 0 to 0.064, n 7 of 10, wins 4 of 6, exclusions 1/1/1/0; February n 5; January n 4). LinkedIn rows carry count-basis outcomes on purpose. `campaign_retrospectives` rows are deferred to O2.7, their first consumer.
+- **Redden transcript (real-tree arms, planted in the real roots, then reverted):** with one violation planted per scan (`lib/analytics/_plant_*`, `components/analytics/`, `lib/reports/`, `app/_plant_northstar.ts`, `lib/email/_plant_northstar.ts`, a `package.json` dependency), 11 tests went red: the tripwire and all 10 real-tree arms. The offenders named included `app/_plant_northstar.ts` and `lib/email/_plant_northstar.ts` (both northstar plants), `dependencies: left-pad`, `lib/analytics/_plant_social.ts: imports @/lib/social (getRegistry)`, `lib/analytics/_plant_memory.ts: uses the memory writer recordInterviewCandidates`, `lib/analytics/_plant_model.tsx: imports @anthropic-ai/sdk`, `lib/analytics/_plant_loglift.ts: names log_lift`, and `components/analytics/_plant_service.tsx: imports @/lib/supabase/service`. After the revert the file was green.
+- **Verification:** `npm run typecheck` clean; `npm run lint` 0 errors (113 pre-existing warnings); `npm run test:app` with the CI dummy env: 385 files, 5,926 passed, 1 todo. `test:db` not run (no DB behaviour touched).
