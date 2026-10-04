@@ -1408,3 +1408,36 @@ Verdict: (b) is achievable with the synchronous-component design, an `await impo
 (The first Tier-1 run of the first mutation was inconclusive: it ran with an abbreviated dummy environment and the suite failed in setup with every test skipped. It was re-run with the CI dummy values after a green baseline of 16, and the table is from that run.)
 
 **Verification (in the required order):** `npx tsc --noEmit --skipLibCheck` clean; `npx eslint .` 0 errors (113 pre-existing warnings, none from these files); `npm run test:app` with the CI dummy env: 395 files, 6,109 passed, 1 todo (O2.3 was 393 and 6,065); `npm run test:db` against the local stack (migrations of O2.2, not freshly reset because O2.4 adds no migration, no grant and no function): 121 files, 1,374 passed (O2.2 was 120 and 1,358). No ECC budget is allotted to O2.4.
+
+### V.8 — O2.5: the plan gate and the loaders
+
+**Shipped:** `hasAdvancedAnalytics(plan: unknown): boolean` in `lib/stripe/plan.ts` beside `getPlanCapabilities` (which is unchanged); `lib/analytics/load.ts` (`loadPortfolio(client, businessId, month, deps?)` and `loadPosts(client, businessId, filters, deps?)`); `utcIso` exported from `period.ts`. Tests: `lib/analytics/__tests__/load.test.ts` (40) and 17 added to `lib/stripe/plan.test.ts`.
+
+**Closed (Tier 2):** #15 `ANALYTICS-ACCOUNT-SLICEABLE`, #20 `ANALYTICS-CAMPAIGN-VIEW-SINGLE-SOURCE` (the loaders never call `loadCampaignLearningView` or `unavailableMetricsPlatforms`: the O2.1 scan half walks `lib/analytics` and stays green). **Loader arms authored:** #5 (the capability decides the state, by injection) and #14 (the plan gate: a basic business never runs a Pro reader).
+
+**The gate.** `hasAdvancedAnalytics` is true only for an own property of the capability table whose `advancedAnalytics` is true. `null`, `undefined`, `42`, `''`, `'PRO'`, `'enterprise'`, `{}`, `['pro']` and the inherited keys `constructor`, `__proto__` and `toString` are all false (a plain `CAPABILITIES[plan]` would have resolved the inherited ones). The loaders read the plan from the business row (`getBusinessById(client, businessId)`), never from the caller, and `assemble` is the one place a model is built: a basic model is cut down to the allowed tier on the server, and `BasicPortfolio` and `AdvancedPortfolio` form a union on `tier`, so a Pro key on a basic model does not compile (a `@ts-expect-error` test pins it).
+
+**Decisions recorded (Builder choices inside the ADR, none architectural):**
+
+1. **The Pro set is exactly:** the 12-month trend, the breakdowns (and `hook_type`, on the live page), the patterns, the retrospective verdicts across campaigns, and account against account. For a basic business none of these readers is called: `listTrendOutcomes`, `listDimensionsForAnalytics`, `countPublishedPostsInRange`, the patterns retrieval and the 12-month retrospective read. Tested by argument-recording fakes that assert each reader's calls are empty, and by the exact key list of the basic model.
+2. **Patterns come through `@/lib/memory` (`retrieveOutcomePatterns`), injected as a dependency.** The guide names `listOutcomePatterns`, which is a `lib/db` reader the barrel does not export; the barrel's reader is the sanctioned route (MEM-NO-DIRECT-TABLE-ACCESS). It takes the business id and filters on it itself.
+3. **A platform section exists for each platform the month has posts on.** `unavailable` carries only the publishing count and issues no outcome or metrics read; `immature` means every post is "not final yet" and none is measured; `measured` otherwise (a thin typical is the view model's own state). The empty state is the page's (`activity.total` is 0); an `error` state is a `ReadCeilingExceeded` on that platform's outcomes. A platform with posts only in the PREVIOUS month has no section.
+4. **One outcomes read covers the month and the one before** (`published_at` in [previous start, month end)) and is bucketed by `monthOf`, so the month pair costs no second query. Only the current month's unmeasured posts get a metrics read, for the exclusion reasons.
+5. **A snapshot whose dimensions are partly NULL is unclassified** (no `dimensions`), never a made-up bucket.
+6. **The 12-month trend** is 12 head counts plus one outcomes read per measured RATE platform, drawn only for platforms present in the selected month (a business whose only X posts are older than the month has no X series there). A month below the floor is a thin point, never a zero.
+7. **Account against account** is per platform and RATE basis; `comparison` is `bars` only with two or more accounts and 10 on every one, otherwise `counts`. An account row whose label cannot be read falls back to the "not recorded" key (it cannot be told from a removed account).
+8. **`loadPosts` carries a `tier`** (read from the same plan) though post level is basic content: its rows are `unavailable` (capability false), `measuring`, `so_far` (raw counts, `finalOn` = `published_at` + 7 days in UTC), `final` (a rate token or a count, with `above`, `below` or `no_baseline`), or `not_measured` with the closed reason. Filters (platform, account with `none` for the NULL bucket, campaign) are applied after one bounded read.
+9. **The campaign table** is activity plus the verdict and n worded with RetrospectiveCard's keys (`outcome.retrospective.verdict_supported`, `.verdict_not_supported`, `.inconclusive`, `.posts_beat`), each row linking to `/campaigns/[id]`; `inconclusive` states only its n, as the card does.
+
+**Shared-function callers (re-run unmodified, counts against V.2):** `campaign-view.load.test.ts` 3 passed (V.2: 3), `campaign-view.test.ts` 11 passed (V.2: 11). `no-cross-business.test.ts` is now 37 (V.2: 33 plus the four readers O2.4 added). `loadCampaignLearningView`'s callers are unchanged: `campaigns/[id]/page.tsx` only.
+
+**Redden transcript (each mutation applied with the changed line printed, tests run, restored byte-identical to a backup):**
+
+| Mutation | Tests that went red |
+|---|---|
+| `hasAdvancedAnalytics` returns true for an unknown plan | 12 of the 12 unknown-plan gate tests, and the loader's unknown-plan tests |
+| fetch the Pro data (dimensions) for a basic business, then drop it | 6: the basic-keys test and the five unknown-plan loader tests (the recording fakes saw the Pro reader called) |
+| resolve the NULL account to the first known account | 2: the activity test and the NULL-bucket test |
+| a `loadCampaignLearningView` call under `lib/analytics` | the O2.1 scan #20 REAL TREE |
+
+**Verification (in the required order):** `npx tsc --noEmit --skipLibCheck` clean; `npx eslint .` 0 errors (113 pre-existing warnings, none from these files); `npm run test:app` with the CI dummy env: 396 files, 6,166 passed, 1 todo (O2.4 was 395 and 6,109). `test:db` not run: no migration, grant or DB behaviour touched. No ECC budget is allotted to O2.5.

@@ -30,7 +30,7 @@ export function previousPeriod(period: string): string {
   return shiftPeriod(period, -1)
 }
 
-function utcIso(instant: Date): string {
+export function utcIso(instant: Date): string {
   return formatInTimeZone(instant, 'UTC', "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")
 }
 

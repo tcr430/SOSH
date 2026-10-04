@@ -115,3 +115,13 @@ export function pricingFeatureRows(plan: Plan): ReadonlyArray<PricingFeatureRow>
   if (c.engagementInbox) rows.push({ key: 'inbox' })
   return rows
 }
+
+// ADR 0031 §3.1 (ANALYTICS-PLAN-GATE-SERVER) — advanced analytics is a PLAN capability, and the gate takes UNKNOWN
+// and fails closed: it is true only for a known plan key whose `advancedAnalytics` is true. getPlanCapabilities
+// returns undefined for an unknown key (and would resolve an inherited key like 'constructor'), so this does its
+// own own-property check. Server-side only: the portfolio loader, the report worker and the PDF route each read the
+// plan from the business row and call it. The scattered `plan === 'pro'` checks elsewhere are left as they are.
+export function hasAdvancedAnalytics(plan: unknown): boolean {
+  if (typeof plan !== 'string' || !Object.prototype.hasOwnProperty.call(CAPABILITIES, plan)) return false
+  return CAPABILITIES[plan as Plan].advancedAnalytics === true
+}
