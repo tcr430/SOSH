@@ -7,6 +7,9 @@ import esOutcome from '@/i18n/es/outcome.json'
 import enMemory from '@/i18n/en/memory.json'
 import ptMemory from '@/i18n/pt/memory.json'
 import esMemory from '@/i18n/es/memory.json'
+import enAnalytics from '@/i18n/en/analytics.json'
+import ptAnalytics from '@/i18n/pt/analytics.json'
+import esAnalytics from '@/i18n/es/analytics.json'
 
 // TEST-ONLY (ADR 0027 K2.10). A translator over the REAL message files, so a component test asserts against the
 // strings a user in that locale would actually read — not against key names. That is what lets "the vocabulary is
@@ -18,9 +21,9 @@ import esMemory from '@/i18n/es/memory.json'
 export type Locale = 'en' | 'pt' | 'es'
 
 const MESSAGES: Record<Locale, Record<string, unknown>> = {
-  en: { agency: enAgency, outcome: enOutcome, memory: enMemory },
-  pt: { agency: ptAgency, outcome: ptOutcome, memory: ptMemory },
-  es: { agency: esAgency, outcome: esOutcome, memory: esMemory },
+  en: { agency: enAgency, outcome: enOutcome, memory: enMemory, analytics: enAnalytics },
+  pt: { agency: ptAgency, outcome: ptOutcome, memory: ptMemory, analytics: ptAnalytics },
+  es: { agency: esAgency, outcome: esOutcome, memory: esMemory, analytics: esAnalytics },
 }
 
 function lookup(root: unknown, path: string[]): string | undefined {

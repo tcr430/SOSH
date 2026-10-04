@@ -1,0 +1,212 @@
+{
+  "title": "Analytics",
+  "description": "What your published posts did, measured the same way every time.",
+  "picker": {
+    "label": "Month",
+    "submit": "Show"
+  },
+  "postsLink": "See every post",
+  "backLink": "Back to the overview",
+  "section": {
+    "activity": "Publishing activity",
+    "results": "Results",
+    "campaigns": "Campaigns",
+    "trend": "12-month trend",
+    "breakdowns": "Results by post type",
+    "patterns": "Observed patterns",
+    "retrospectives": "Campaign verdicts",
+    "accounts": "Account by account"
+  },
+  "state": {
+    "empty": "Nothing published yet. Results appear here after Jemip publishes your first post.",
+    "immature": "Measuring. Engagement is final 7 days after a post goes out. Final for {count} posts on {date}.",
+    "unavailable": "{platform} doesn't share engagement data with Jemip, so we show your publishing activity there instead.",
+    "thin": "{n} measured posts so far. A typical rate appears from 5.",
+    "loading": "Loading results",
+    "error": "We couldn't load your results.",
+    "reload": "Reload"
+  },
+  "typical": "{n} posts measured. Typical engagement rate: {rate} (range {lo}–{hi}).",
+  "wins": "{wins} of {n} posts beat your usual engagement.",
+  "monthPair": "{month}: {rate} ({n} posts) · {month2}: {rate2} ({n2} posts).",
+  "monthPairSuppressed": "A side-by-side view appears when both months have at least 5 measured posts.",
+  "exclusions": {
+    "summary": "{measured} of {published} posts measured.",
+    "excluded": "{notIncluded} not included: {reasons}.",
+    "noDataReturned": "no data returned ({count})",
+    "fieldMissing": "a field was missing ({count})",
+    "zeroImpressions": "zero impressions ({count})",
+    "notFinal": "not final yet ({count})"
+  },
+  "disclosure": {
+    "usual": "Usual = your median over the previous 90 days on X, or the history you imported.",
+    "usualUpdates": "'Usual' updates as you post, so this is not a measure of overall progress.",
+    "importSeed": "Compared against the history you imported.",
+    "engagementOnly": "This measures engagement, not signups or revenue.",
+    "linkedinCount": "LinkedIn results compare engagement counts, which also rise as your audience grows."
+  },
+  "population": {
+    "aiOnly": "AI-written posts only",
+    "allMeasured": "All measured posts"
+  },
+  "coverage": "Covers {k} of {n} measured posts. Posts written outside Jemip's generator aren't classified.",
+  "breakdown": {
+    "row": "Posts with {value}: {wins} of {n} beat your usual.",
+    "describes": "This describes past posts, not the reason for their results.",
+    "provisional": "Provisional",
+    "hookNote": "As classified by the AI when writing, not independently checked.",
+    "none": "No comparison yet: each value needs 10 measured posts.",
+    "dimension": {
+      "role": "Post role",
+      "format": "Format",
+      "origin_mode": "Origin",
+      "length_band": "Length",
+      "cta_present": "Call to action",
+      "hook_type": "Opening"
+    }
+  },
+  "interval": "likely between {lo} and {hi} of posts",
+  "account": {
+    "unrecorded": "Account not recorded or since removed"
+  },
+  "activity": {
+    "line": "{count} posts published on {platform} ({account}).",
+    "total": "{count} posts published, {prev} the month before.",
+    "campaigns": "{active} active campaigns, {completed} completed."
+  },
+  "platform": {
+    "twitter": "X",
+    "linkedin": "LinkedIn",
+    "instagram": "Instagram",
+    "facebook": "Facebook",
+    "threads": "Threads"
+  },
+  "status": {
+    "draft": "Draft",
+    "awaiting_brief": "Awaiting brief",
+    "active": "Active",
+    "paused": "Paused",
+    "completed": "Completed"
+  },
+  "campaignTable": {
+    "campaign": "Campaign",
+    "status": "Status",
+    "published": "Published",
+    "verdict": "Verdict",
+    "noVerdict": "No verdict this month",
+    "open": "Open campaign"
+  },
+  "gated": {
+    "prefix": "Available on Pro: {line}",
+    "link": "See plans",
+    "line": {
+      "trend": "a 12-month view of your typical engagement and posts published.",
+      "breakdowns": "win share by post role, format, origin, length and call to action.",
+      "patterns": "patterns observed across your campaigns, each with its evidence.",
+      "retrospectives": "campaign verdicts side by side.",
+      "accounts": "your accounts side by side."
+    }
+  },
+  "chart": {
+    "postsPerMonth": {
+      "title": "Posts published per month",
+      "summary": "{total} posts published between {first} and {last}, shown by month.",
+      "col": {
+        "month": "Month",
+        "count": "Posts"
+      }
+    },
+    "trend": {
+      "title": "Typical engagement rate by month",
+      "summary": "Typical engagement rate for {platform} between {first} and {last}; months with fewer than 5 measured posts are left blank.",
+      "col": {
+        "month": "Month",
+        "median": "Typical rate",
+        "range": "Range",
+        "n": "Posts measured"
+      },
+      "gap": "Not enough measured posts"
+    },
+    "winShare": {
+      "summary": "Share of posts that beat your usual, by {dimension}.",
+      "col": {
+        "value": "Value",
+        "result": "Beat your usual",
+        "range": "Range"
+      }
+    }
+  },
+  "posts": {
+    "title": "Every post",
+    "description": "Each published post with where it stands.",
+    "filters": {
+      "platform": "Platform",
+      "account": "Account",
+      "campaign": "Campaign",
+      "all": "All",
+      "none": "Account not recorded or since removed",
+      "apply": "Apply"
+    },
+    "col": {
+      "date": "Date",
+      "platform": "Platform",
+      "account": "Account",
+      "campaign": "Campaign",
+      "state": "State",
+      "result": "Result"
+    },
+    "state": {
+      "measuring": "Measuring",
+      "soFar": "So far, as of {asOf}: {likes} likes, {comments} comments, {shares} shares, {impressions} impressions. Final on {finalOn}.",
+      "soFarMissing": "not available",
+      "final": "Final",
+      "notMeasured": "Not measured: {reason}",
+      "reason": {
+        "no_data_returned": "no data returned",
+        "field_missing": "a field was missing",
+        "zero_impressions": "zero impressions"
+      }
+    },
+    "value": {
+      "rate": "{rate}",
+      "count": "{count} engagements"
+    },
+    "badge": {
+      "above": "Above your usual",
+      "below": "Below your usual",
+      "noBaseline": "No baseline yet"
+    },
+    "details": "Details"
+  },
+  "patternEvidence": "Based on {n} posts across {campaigns} campaigns.",
+  "value": {
+    "format": {
+      "single": "Single post",
+      "thread": "Thread",
+      "carousel": "Carousel"
+    },
+    "origin_mode": {
+      "manual": "Written by hand",
+      "objective_generated": "From an objective",
+      "signal_generated": "From a signal",
+      "studio_promoted": "From the studio"
+    },
+    "length_band": {
+      "short": "Short",
+      "medium": "Medium",
+      "long": "Long"
+    },
+    "cta_present": {
+      "true": "With a call to action",
+      "false": "Without a call to action"
+    },
+    "hook_type": {
+      "question": "Question",
+      "statistic": "Statistic",
+      "contrarian": "Contrarian take",
+      "story": "Story",
+      "announcement": "Announcement",
+      "how_to": "How-to"
+    }
+  }
+}

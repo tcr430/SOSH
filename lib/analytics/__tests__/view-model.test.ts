@@ -121,7 +121,7 @@ describe('exclusionsView: "{measured} of {published} posts measured. {k} not inc
   it('March: 7 of 10 measured, 3 not included, three reasons of 1; "not final yet" (0) is omitted', () => {
     const v = exclusionsView({ published: 10, measured: 7, noDataReturned: 1, fieldMissing: 1, zeroImpressions: 1, notFinal: 0 })
     expect(v).toEqual({
-      key: 'analytics.exclusions',
+      key: 'analytics.exclusions.summary',
       params: { measured: 7, published: 10, notIncluded: 3 },
       reasons: [
         { key: 'analytics.exclusions.noDataReturned', count: 1 },
@@ -247,7 +247,7 @@ describe('breakdownView', () => {
       populationKey: 'analytics.population.aiOnly',
       coverage: { key: 'analytics.coverage', params: { k: 5, n: 7 } },
       presentation: 'counts',
-      rows: [{ value: 'anchor_thesis', key: 'analytics.breakdown.row', params: { wins: 2, n: 2 }, provisional: true, interval: null }],
+      rows: [{ value: 'anchor_thesis', key: 'analytics.breakdown.row', params: { wins: 2, n: 2 }, provisional: true, interval: null, share: 1, bar: null }],
     })
   })
 

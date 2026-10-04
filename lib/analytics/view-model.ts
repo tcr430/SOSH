@@ -53,7 +53,7 @@ export interface MonthSide {
 /** Two months side by side. `pair` when both reach the display floor, `suppressed` otherwise. There is no delta field. */
 export interface MonthPairView {
   state: 'pair' | 'suppressed'
-  key: 'analytics.monthPair' | 'analytics.monthPair.suppressed'
+  key: 'analytics.monthPair' | 'analytics.monthPairSuppressed'
   sides: [MonthSide, MonthSide]
 }
 
@@ -64,7 +64,7 @@ export function monthPairView(
   const allowed = monthPairAllowed(a.values.length, b.values.length)
   return {
     state: allowed ? 'pair' : 'suppressed',
-    key: allowed ? 'analytics.monthPair' : 'analytics.monthPair.suppressed',
+    key: allowed ? 'analytics.monthPair' : 'analytics.monthPairSuppressed',
     sides: [
       { period: a.period, typical: typicalView(a.values) },
       { period: b.period, typical: typicalView(b.values) },
@@ -92,7 +92,7 @@ export function winsView(w: WinsResult): WinsView {
 }
 
 export interface ExclusionsView {
-  key: 'analytics.exclusions'
+  key: 'analytics.exclusions.summary'
   params: { measured: number; published: number; notIncluded: number }
   /** In the ADR's sentence order; a zero count is omitted. */
   reasons: Array<{ key: string; count: number }>
@@ -106,7 +106,7 @@ export function exclusionsView(c: ExclusionCounts): ExclusionsView {
     { key: 'analytics.exclusions.notFinal', count: c.notFinal },
   ].filter((r) => r.count > 0)
   return {
-    key: 'analytics.exclusions',
+    key: 'analytics.exclusions.summary',
     params: { measured: c.measured, published: c.published, notIncluded: c.published - c.measured },
     reasons,
   }
@@ -124,6 +124,10 @@ export interface BreakdownView {
     params: { wins: number; n: number }
     provisional: boolean
     interval: { key: 'analytics.interval'; params: { lo: string; hi: string } } | null
+    /** wins / n, for the bar's length. The text carries the same figures as k of n. */
+    share: number
+    /** The Wilson interval's bounds, for the whisker; null below the compare floor. */
+    bar: { lo: number; hi: number } | null
   }>
 }
 
@@ -141,6 +145,8 @@ export function breakdownView(b: Breakdown): BreakdownView {
       interval: v.interval
         ? { key: 'analytics.interval', params: { lo: formatPercent(v.interval.lo), hi: formatPercent(v.interval.hi) } }
         : null,
+      share: v.wins / v.of,
+      bar: v.interval,
     })),
   }
 }

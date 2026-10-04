@@ -1,0 +1,212 @@
+{
+  "title": "Analítica",
+  "description": "Lo que hicieron tus publicaciones, medido siempre de la misma forma.",
+  "picker": {
+    "label": "Mes",
+    "submit": "Mostrar"
+  },
+  "postsLink": "Ver todas las publicaciones",
+  "backLink": "Volver al resumen",
+  "section": {
+    "activity": "Actividad de publicación",
+    "results": "Resultados",
+    "campaigns": "Campañas",
+    "trend": "Tendencia de 12 meses",
+    "breakdowns": "Resultados por tipo de publicación",
+    "patterns": "Patrones observados",
+    "retrospectives": "Veredictos de las campañas",
+    "accounts": "Cuenta por cuenta"
+  },
+  "state": {
+    "empty": "Aún no hay publicaciones. Los resultados aparecerán aquí cuando Jemip publique tu primera publicación.",
+    "immature": "Midiendo. La interacción es definitiva 7 días después de publicar. Definitiva para {count} publicaciones el {date}.",
+    "unavailable": "{platform} no comparte datos de interacción con Jemip, así que mostramos tu actividad de publicación.",
+    "thin": "{n} publicaciones medidas hasta ahora. La tasa típica aparece a partir de 5.",
+    "loading": "Cargando resultados",
+    "error": "No hemos podido cargar tus resultados.",
+    "reload": "Recargar"
+  },
+  "typical": "{n} publicaciones medidas. Tasa de interacción típica: {rate} (rango {lo}–{hi}).",
+  "wins": "{wins} de {n} publicaciones superaron tu interacción habitual.",
+  "monthPair": "{month}: {rate} ({n} publicaciones) · {month2}: {rate2} ({n2} publicaciones).",
+  "monthPairSuppressed": "La vista lado a lado aparece cuando ambos meses tienen al menos 5 publicaciones medidas.",
+  "exclusions": {
+    "summary": "{measured} de {published} publicaciones medidas.",
+    "excluded": "{notIncluded} no incluidas: {reasons}.",
+    "noDataReturned": "sin datos devueltos ({count})",
+    "fieldMissing": "faltaba un campo ({count})",
+    "zeroImpressions": "cero impresiones ({count})",
+    "notFinal": "aún no definitivas ({count})"
+  },
+  "disclosure": {
+    "usual": "Habitual = tu mediana de los 90 días anteriores en X, o el historial que importaste.",
+    "usualUpdates": "Lo 'habitual' se actualiza a medida que publicas, así que esto no mide el progreso global.",
+    "importSeed": "Comparado con el historial que importaste.",
+    "engagementOnly": "Esto mide la interacción, no registros ni ingresos.",
+    "linkedinCount": "Los resultados de LinkedIn comparan recuentos de interacción, que también aumentan a medida que crece tu audiencia."
+  },
+  "population": {
+    "aiOnly": "Solo publicaciones escritas por la IA",
+    "allMeasured": "Todas las publicaciones medidas"
+  },
+  "coverage": "Abarca {k} de {n} publicaciones medidas. Las publicaciones escritas fuera del generador de Jemip no se clasifican.",
+  "breakdown": {
+    "row": "Publicaciones con {value}: {wins} de {n} superaron lo habitual.",
+    "describes": "Esto describe publicaciones pasadas, no la razón de sus resultados.",
+    "provisional": "Provisional",
+    "hookNote": "Según la clasificación de la IA al escribir, sin comprobación independiente.",
+    "none": "Aún sin comparación: cada valor necesita 10 publicaciones medidas.",
+    "dimension": {
+      "role": "Función de la publicación",
+      "format": "Formato",
+      "origin_mode": "Origen",
+      "length_band": "Extensión",
+      "cta_present": "Llamada a la acción",
+      "hook_type": "Apertura"
+    }
+  },
+  "interval": "probablemente entre {lo} y {hi} de las publicaciones",
+  "account": {
+    "unrecorded": "Cuenta no registrada o eliminada desde entonces"
+  },
+  "activity": {
+    "line": "{count} publicaciones en {platform} ({account}).",
+    "total": "{count} publicaciones, {prev} el mes anterior.",
+    "campaigns": "{active} campañas activas, {completed} completadas."
+  },
+  "platform": {
+    "twitter": "X",
+    "linkedin": "LinkedIn",
+    "instagram": "Instagram",
+    "facebook": "Facebook",
+    "threads": "Threads"
+  },
+  "status": {
+    "draft": "Borrador",
+    "awaiting_brief": "Esperando el briefing",
+    "active": "Activa",
+    "paused": "En pausa",
+    "completed": "Completada"
+  },
+  "campaignTable": {
+    "campaign": "Campaña",
+    "status": "Estado",
+    "published": "Publicadas",
+    "verdict": "Veredicto",
+    "noVerdict": "Sin veredicto este mes",
+    "open": "Abrir campaña"
+  },
+  "gated": {
+    "prefix": "Disponible en Pro: {line}",
+    "link": "Ver planes",
+    "line": {
+      "trend": "una vista de 12 meses de tu interacción típica y de las publicaciones hechas.",
+      "breakdowns": "la cuota de victorias por función, formato, origen, extensión y llamada a la acción.",
+      "patterns": "patrones observados en tus campañas, cada uno con su evidencia.",
+      "retrospectives": "veredictos de las campañas lado a lado.",
+      "accounts": "tus cuentas lado a lado."
+    }
+  },
+  "chart": {
+    "postsPerMonth": {
+      "title": "Publicaciones por mes",
+      "summary": "{total} publicaciones entre {first} y {last}, por mes.",
+      "col": {
+        "month": "Mes",
+        "count": "Publicaciones"
+      }
+    },
+    "trend": {
+      "title": "Tasa de interacción típica por mes",
+      "summary": "Tasa de interacción típica en {platform} entre {first} y {last}; los meses con menos de 5 publicaciones medidas quedan en blanco.",
+      "col": {
+        "month": "Mes",
+        "median": "Tasa típica",
+        "range": "Rango",
+        "n": "Publicaciones medidas"
+      },
+      "gap": "Publicaciones medidas insuficientes"
+    },
+    "winShare": {
+      "summary": "Cuota de publicaciones que superaron lo habitual, por {dimension}.",
+      "col": {
+        "value": "Valor",
+        "result": "Superaron lo habitual",
+        "range": "Rango"
+      }
+    }
+  },
+  "posts": {
+    "title": "Todas las publicaciones",
+    "description": "Cada publicación hecha y en qué punto está.",
+    "filters": {
+      "platform": "Plataforma",
+      "account": "Cuenta",
+      "campaign": "Campaña",
+      "all": "Todas",
+      "none": "Cuenta no registrada o eliminada desde entonces",
+      "apply": "Aplicar"
+    },
+    "col": {
+      "date": "Fecha",
+      "platform": "Plataforma",
+      "account": "Cuenta",
+      "campaign": "Campaña",
+      "state": "Estado",
+      "result": "Resultado"
+    },
+    "state": {
+      "measuring": "Midiendo",
+      "soFar": "Hasta ahora, a {asOf}: {likes} me gusta, {comments} comentarios, {shares} compartidos, {impressions} impresiones. Definitivo el {finalOn}.",
+      "soFarMissing": "no disponible",
+      "final": "Definitivo",
+      "notMeasured": "No medida: {reason}",
+      "reason": {
+        "no_data_returned": "sin datos devueltos",
+        "field_missing": "faltaba un campo",
+        "zero_impressions": "cero impresiones"
+      }
+    },
+    "value": {
+      "rate": "{rate}",
+      "count": "{count} interacciones"
+    },
+    "badge": {
+      "above": "Por encima de lo habitual",
+      "below": "Por debajo de lo habitual",
+      "noBaseline": "Aún sin base de comparación"
+    },
+    "details": "Detalles"
+  },
+  "patternEvidence": "Basado en {n} publicaciones en {campaigns} campañas.",
+  "value": {
+    "format": {
+      "single": "Publicación única",
+      "thread": "Hilo",
+      "carousel": "Carrusel"
+    },
+    "origin_mode": {
+      "manual": "Escrita a mano",
+      "objective_generated": "A partir de un objetivo",
+      "signal_generated": "A partir de una señal",
+      "studio_promoted": "Desde el estudio"
+    },
+    "length_band": {
+      "short": "Corta",
+      "medium": "Media",
+      "long": "Larga"
+    },
+    "cta_present": {
+      "true": "Con llamada a la acción",
+      "false": "Sin llamada a la acción"
+    },
+    "hook_type": {
+      "question": "Pregunta",
+      "statistic": "Estadística",
+      "contrarian": "Postura contraria",
+      "story": "Historia",
+      "announcement": "Anuncio",
+      "how_to": "Paso a paso"
+    }
+  }
+}

@@ -116,8 +116,10 @@ function scan(roots: readonly string[], detector: (rel: string, source: string) 
   return filesOf(roots).flatMap((file) => detector(toRel(file), fs.readFileSync(file, 'utf8')))
 }
 
-// lib/analytics gained its first production file in O2.3 (the pure aggregation), so it left the list in that commit.
-const EXPECTED_PENDING: readonly string[] = ALL_ROOTS.filter((root) => root !== 'lib/analytics')
+// lib/analytics gained its first production file in O2.3 (the pure aggregation); the analytics page root and
+// components/analytics in O2.6 (the live surfaces), so each left the list in that commit.
+const POPULATED_ROOTS: readonly string[] = ['lib/analytics', 'app/[locale]/(dashboard)/analytics', 'components/analytics']
+const EXPECTED_PENDING: readonly string[] = ALL_ROOTS.filter((root) => !POPULATED_ROOTS.includes(root))
 
 describe('the scan roots (build-guide O2.1)', () => {
   it('a root with production files is no longer pending: the tripwire list must say exactly which roots are still empty', () => {

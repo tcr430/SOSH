@@ -16,7 +16,7 @@ import { OUTCOME_MATURITY_DAYS } from '@/lib/outcomes/constants'
 import { ANALYTICS_COMPARE_FLOOR } from './constants'
 import { exclusionReason, type ExclusionReason } from './exclusions'
 import { monthOf, periodBounds, previousPeriod, utcIso } from './period'
-import { formatRate } from './rates'
+import { formatRate, typicalOf } from './rates'
 import type { AnalyticsOutcome, AnalyticsPostRecord, MetricBasis } from './types'
 import {
   monthPairView,
@@ -96,7 +96,7 @@ interface PlatformStateBase {
 export type PlatformSectionOf<V> =
   | (PlatformStateBase & { state: 'unavailable'; published: number })
   | (PlatformStateBase & { state: 'error'; reason: 'ceiling' })
-  | (PlatformStateBase & { state: 'immature' | 'measured'; current: V; pair: MonthPairView | null })
+  | (PlatformStateBase & { state: 'immature' | 'measured'; current: V; pair: MonthPairView | null; finalOn: string | null })
 
 export type BasicPlatformSection = PlatformSectionOf<BasicPlatformMonthView>
 export type AdvancedPlatformSection = PlatformSectionOf<PlatformMonthView>
@@ -117,7 +117,7 @@ export interface CampaignTableRow {
 
 export interface TrendView {
   months: Array<{ period: string; published: number }>
-  series: Array<{ platform: string; points: Array<{ period: string; typical: TypicalView }> }>
+  series: Array<{ platform: string; points: Array<{ period: string; typical: TypicalView; dots: number[]; stats: { median: number; lo: number; hi: number } | null }> }>
 }
 
 export interface RetrospectiveListRow extends RetroView {
@@ -206,6 +206,8 @@ interface MeasuredPlatform {
   state: 'immature' | 'measured'
   view: PlatformMonthView
   pair: MonthPairView | null
+  /** For an immature platform: when the last of its posts becomes final (UTC). Null otherwise. */
+  finalOn: string | null
   /** The current month's measured outcomes of this platform. */
   outcomes: AnalyticsOutcome[]
 }
@@ -284,7 +286,7 @@ export async function loadPortfolio(
       continue
     }
     measuredByPlatform.set(platform, measured.data)
-    sections.push({ platform, state: measured.data.state, current: measured.data.view, pair: measured.data.pair })
+    sections.push({ platform, state: measured.data.state, current: measured.data.view, pair: measured.data.pair, finalOn: measured.data.finalOn })
   }
 
   // The campaign table: activity and the retrospective verdict and n only; each row links to the shipped campaign view.
@@ -328,10 +330,13 @@ export async function loadPortfolio(
       const rows = await listTrendOutcomes(client, businessId, { platform, start: first.start, end: current.end, outcomesThrough: now })
       series.push({
         platform,
-        points: months.map(({ period }) => ({
-          period,
-          typical: typicalView(rows.filter((r) => r.metric_basis === 'rate' && monthOf(r.published_at, timezone) === period).map((r) => r.value)),
-        })),
+        points: months.map(({ period }) => {
+          const values = rows.filter((r) => r.metric_basis === 'rate' && monthOf(r.published_at, timezone) === period).map((r) => r.value)
+          const typical = typicalView(values)
+          // Dots only for a month that reaches the floor: below it nothing is drawn (a gap, never a mark).
+          const t = typical.state === 'number' ? typicalOf(values) : null
+          return { period, typical, dots: t ? values : [], stats: t ? { median: t.median, lo: t.range.lo, hi: t.range.hi } : null }
+        }),
       })
     }
     return { months, series }
@@ -403,7 +408,7 @@ function toBasicSection(section: AdvancedPlatformSection): BasicPlatformSection 
   if (section.state === 'unavailable' || section.state === 'error') return section
   const { breakdowns: omitted, ...current } = section.current
   void omitted
-  return { platform: section.platform, state: section.state, current, pair: section.pair }
+  return { platform: section.platform, state: section.state, current, pair: section.pair, finalOn: section.finalOn }
 }
 
 async function measurePlatform(input: {
@@ -450,7 +455,9 @@ async function measurePlatform(input: {
     view.basis === 'rate'
       ? monthPairView({ period: previous, values: previousRates }, { period: month, values: currentOutcomes.filter((o) => o.basis === 'rate').map((o) => o.value) })
       : null
-  return { state, view, pair, outcomes: currentOutcomes }
+  const latest = Math.max(...monthPosts.map((p) => new Date(p.published_at).getTime()))
+  const finalOn = state === 'immature' ? utcIso(new Date(latest + OUTCOME_MATURITY_DAYS * 86_400_000)) : null
+  return { state, view, pair, finalOn, outcomes: currentOutcomes }
 }
 
 // ─── loadPosts ─────────────────────────────────────────────────────────────────────────────────────────────

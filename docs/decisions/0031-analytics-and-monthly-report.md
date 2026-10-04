@@ -1441,3 +1441,43 @@ Verdict: (b) is achievable with the synchronous-component design, an `await impo
 | a `loadCampaignLearningView` call under `lib/analytics` | the O2.1 scan #20 REAL TREE |
 
 **Verification (in the required order):** `npx tsc --noEmit --skipLibCheck` clean; `npx eslint .` 0 errors (113 pre-existing warnings, none from these files); `npm run test:app` with the CI dummy env: 396 files, 6,166 passed, 1 todo (O2.4 was 395 and 6,109). `test:db` not run: no migration, grant or DB behaviour touched. No ECC budget is allotted to O2.5.
+
+### V.9 — O2.6: the live surfaces, the nav and the shell fix
+
+**Shipped:** `app/[locale]/(dashboard)/analytics/page.tsx` (portfolio), `analytics/posts/page.tsx`, one `loading.tsx` and one `error.tsx` (the segment's only Client Component; it renders the 8.2 error copy and a "Reload" control calling `reset()` and never reads the error object); `components/analytics/{shared,charts,PortfolioView,PostsView}.tsx` (synchronous Server Components: the translator is a prop, so every state renders to static markup under test); `lib/analytics/search-params.ts` (Zod on `month`, `platform`, `account`, `campaign`; an invalid value falls back, a business id in the query is not a recognised key) and `format.ts`; `i18n/{en,pt,es}/analytics.json`, registered in `i18n/request.ts`; `nav.team` in the three `common.json` files; the nav change in `DashboardShell.tsx` (`analytics` moved from `COMING_SOON_NAV` to `ACTIVE_NAV` directly after `campaigns`, `inbox` stays coming soon); and the shell fix (`min-w-0` on the main flex column, premise 6). The charts use the three A-3' packages, `@visx/scale`, `@visx/shape` and `@visx/group` (`^4.0.0`, the only dependencies added; scan #32 stays green); axes are plain SVG `<text>`. The design skills did not run (O2.10).
+
+**Closed (Tier 2):** #4 `ANALYTICS-LINKEDIN-DISCLOSED`, #6 `ANALYTICS-FOUR-STATES`, #12 `ANALYTICS-COVERAGE-DISCLOSED`, #34 `ANALYTICS-A11Y-FLOOR`. **Authored:** #35's CI half (`nav.team` in three locales, and the nav order). The root tripwire in `source-scans.test.ts` now lists only `lib/reports`, `app/api/analytics`, `app/api/cron/generate-reports` and the email template as pending.
+
+**What the tests prove (executed in CI):** each of empty, immature, unavailable, thin, loading, error, gated and populated renders its expected key AND its en literal; the LinkedIn sentence renders VERBATIM wherever a count is shown (a count fixture and a capability flip), is absent when LinkedIn is unavailable, and pt and es carry their own; every breakdown carries its population tag and its "Covers k of n" line, below 10 per side is counts with "Provisional" and no bar, and `hook_type` is absent until a value reaches 10; every chart is a `<figure>` with a real `<table>` and an `aria-describedby` that resolves to a summary filled from a closed template; the badge carries text and an icon; no figure holds a focusable element; no `⟦missing⟧` key renders in any of the three locales; the three locale files have identical keys and ICU placeholders and every key the view models emit resolves.
+
+**Decisions recorded (Builder choices inside the ADR, none architectural):**
+
+1. **Two view-model keys were renamed because a JSON object cannot be both a string and a parent:** `analytics.monthPair.suppressed` is now `analytics.monthPairSuppressed`, and `analytics.exclusions` is now `analytics.exclusions.summary` (V.6 item 8 listed the old names; the three locale files use the new ones).
+2. **Copy beyond the ADR's literal list was authored by the Builder and is not counsel- or founder-reviewed:** the pt and es translations of the §8.2 states and of the LinkedIn sentence (ADR 0026 §10.2 gives English only), the `monthPairSuppressed` line, the Pro gated one-liners, the value labels (format, origin, length, call to action, opening) and the pattern-evidence line. The O2.10 copy lint (§8.4) runs over all of it.
+3. **The loader gained two things the charts need:** `finalOn` on an immature platform section (the date in "Final for {count} posts on {date}") and, per trend point, the month's dots and numeric median and range (drawn only for a month that reaches the floor). The breakdown view model rows gained `share` and `bar` (numeric, for the bar and its whisker; the text carries the same figures as k of n).
+4. **The breakdowns render under their own Pro heading, not inside the platform block**, so the order is exactly §10.1 (activity, results, campaigns, then trend, breakdowns, patterns, retrospectives, accounts). A basic business sees five gated one-liners and no chart, blur, number or dialog.
+5. **The responsive table recipe is Tailwind-only:** full columns from `lg`, secondary columns (status, published; account, campaign) hidden below `lg` behind a `<details>` between 640 and 1024, and stacked labelled cards below 640 (`max-sm:` variants with `data-label`).
+6. **The hidden chart tables sit in a clipped `<div class="sr-only">`.** A bare `<table class="sr-only">` ignored `overflow: hidden` and stretched the page (below). A Tier-2 assertion now pins the wrapper.
+
+**Manual QA, recorded (UNPROVEN in the ADR 0015 sense: a browser run is never counted as COVERED).** Local stack seeded with the O2.1 fixture (`seed-live`), dev server against it (the Supabase variables overridden), signed in as the fixture owner (business A, Europe/Lisbon, Pro) in a Playwright-driven Chromium; the fixture was removed afterwards (0 users, 0 businesses). `scrollWidth` against `clientWidth` of the document element (clientWidth is 15 px under the viewport on this machine because of the scrollbar):
+
+| Page | 1280 px | 640 px | 320 px |
+|---|---|---|---|
+| `/en/analytics?month=2026-03` (Pro) | 1265 / 1265 | 625 / 625 | **505 / 305 before the fix**, 305 / 305 after |
+| `/en/analytics/posts?month=2026-03` | 1265 / 1265 | 625 / 625 | 305 / 305 |
+| `/en/analytics?month=2026-03`, plan set to Plus | 1265 / 1265 | not measured | not measured |
+
+At 320 px the campaign rows computed to `display: block` (stacked cards) and the chart SVG was 225 px wide; at 640 px the secondary table column computed to `display: none`. The Pro page showed the literal fixture numbers end to end (13 posts published, 5 the month before; X "7 posts measured. Typical engagement rate: 3.1% (range 0.0%–6.4%)", "4 of 6 posts beat your usual engagement", "7 of 10 posts measured. 3 not included: no data returned (1), a field was missing (1), zero impressions (1)", the NULL account bucket labelled "Account not recorded or since removed"). On Plus, five "Available on Pro:" sections and no figure. The posts page showed 13 rows with the badge text beside each rate, and the LinkedIn sentence of unavailability once. The browser console carried the same React hydration warning (a `className` on the root layout) on the untouched login page, so it is pre-existing and not from these surfaces. **Not checked:** dark-mode contrast (O2.10), a keyboard walk, pt and es in the browser, real print, `loading.tsx` and `error.tsx` rendered by Next (both are covered only by Tier-2 renders), and a viewport between 640 and 1024 beyond the computed styles above. `scrollWidth <= clientWidth` at 320 px therefore holds on the two pages measured, in one browser, and remains recorded rather than covered.
+
+**Redden transcript (each applied with the changed line printed, tests run, restored byte-identical to a backup):**
+
+| Mutation | Tests that went red |
+|---|---|
+| remove `state.thin` from the en file | 5: key parity, the emitted-keys test, the ADR 8.2 literals, the thin-state render, and the en no-missing-key render |
+| paraphrase the LinkedIn sentence in the en file | 3: the verbatim assertion in the parity file, the portfolio render, the posts-table render |
+| drop the first chart's `<table>` | 2: the every-figure-has-a-table test and the no-number-only-as-a-shape test |
+| delete `nav.team` in the es file | 2: `nav.team` exists in three locales, and every nav key has a label in all three |
+
+(The first attempt at the last mutation did not apply because the file is CRLF, and its re-run without the CI dummy environment failed at import; the table is from the confirmed run, after a green baseline of 11.)
+
+**Verification (in the required order):** `npx tsc --noEmit --skipLibCheck` clean; `npx eslint .` 0 errors (113 pre-existing warnings, none from these files); `npm run test:app` with the CI dummy env: 399 files, 6,228 passed, 1 todo (O2.5 was 396 and 6,166). `test:db` not run: no migration, grant or DB behaviour touched. No ECC budget is allotted to O2.6 (react-reviewer runs at the end of O2.10).
