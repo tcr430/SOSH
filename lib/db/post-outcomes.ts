@@ -2,6 +2,8 @@ import { addDays, formatISO, parseISO } from 'date-fns'
 import type { BackfillRunStatus, PostMetricsRow, PostOutcomeInsert, PostRow } from './types'
 import { getErrorMessage } from './utils'
 import { OUTCOME_MATURITY_DAYS, OUTCOME_MATURITY_GRACE_DAYS } from '@/lib/outcomes/constants'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import { readAllPages, keysetFilterDesc } from './keyset-pager'
 
 // ADR 0026 §6 (Session 33 J2.7) — reads and the single write of the outcome worker. Every function is
 // SERVICE-ROLE (lazy import, NO client parameter), takes a businessId and filters on it, and every list is
@@ -194,4 +196,124 @@ export async function getEngagementSeed(businessId: string, platform: string): P
   if (summary.engagementBaselineBasis === 'impressions') return { value, basis: 'rate' }
   if (summary.engagementBaselineBasis === 'raw') return { value, basis: 'count' }
   return null
+}
+
+// ── Analytics reads (ADR 0031 §9.1; Session 37 O2.4) ──────────────────────────────────────────────────────────
+// AUTHENTICATED, business-bound, keyset-paged on (published_at DESC, post_id DESC). They ride
+// post_outcomes_business_platform_published_idx. `log_lift` is never selected (it is rendered nowhere, ADR 0031 §2.4).
+
+export const ANALYTICS_OUTCOMES_PAGE = 500
+export const ANALYTICS_TREND_PAGE = 1000
+
+export interface OutcomeForAnalytics {
+  post_id: string
+  business_id: string
+  platform: string
+  published_at: string
+  ai_original_id: string | null
+  metric_basis: 'rate' | 'count'
+  value: number
+  beat_baseline: boolean | null
+  baseline_source: 'own' | 'import_seed' | null
+  length_band: 'short' | 'medium' | 'long' | null
+  cta_present: boolean | null
+  hook_survived: boolean | null
+  measured_at: string
+}
+
+const OUTCOME_ANALYTICS_COLUMNS =
+  'post_id, business_id, platform, published_at, ai_original_id, metric_basis, value, beat_baseline, baseline_source, length_band, cta_present, hook_survived, measured_at'
+
+export interface OutcomeRangeQuery {
+  platform: string
+  /** published_at >= start */
+  start: string
+  /** published_at < end */
+  end: string
+  /** measured_at <= outcomesThrough: every read behind one view is bounded by the SAME instant ([db-1]). */
+  outcomesThrough: string
+}
+
+async function readOutcomes(
+  read: string,
+  client: SupabaseClient,
+  businessId: string,
+  q: OutcomeRangeQuery,
+  maxPage: number,
+  requested: number | undefined,
+): Promise<OutcomeForAnalytics[]> {
+  const pageSize = Math.min(Math.max(Math.trunc(requested ?? maxPage), 1), maxPage)
+  return readAllPages<OutcomeForAnalytics>({
+    read,
+    pageSize,
+    fetchPage: async (after, limit) => {
+      let query = client
+        .from('post_outcomes')
+        .select(OUTCOME_ANALYTICS_COLUMNS)
+        .eq('business_id', businessId)
+        .eq('platform', q.platform)
+        .gte('published_at', q.start)
+        .lt('published_at', q.end)
+        .lte('measured_at', q.outcomesThrough)
+      if (after) query = query.or(keysetFilterDesc('published_at', 'post_id', { primary: after.published_at, tiebreak: after.post_id }))
+      const { data, error } = await query
+        .order('published_at', { ascending: false })
+        .order('post_id', { ascending: false })
+        .limit(limit)
+      if (error) throw new Error(getErrorMessage(error))
+      return ((data ?? []) as Array<Omit<OutcomeForAnalytics, 'value'> & { value: number | string }>).map((r) => ({ ...r, value: Number(r.value) }))
+    },
+  })
+}
+
+// The month's outcomes for one platform, 500 a page.
+export function listMonthOutcomes(
+  client: SupabaseClient,
+  businessId: string,
+  q: OutcomeRangeQuery,
+  opts: { pageSize?: number } = {},
+): Promise<OutcomeForAnalytics[]> {
+  return readOutcomes('month outcomes', client, businessId, q, ANALYTICS_OUTCOMES_PAGE, opts.pageSize)
+}
+
+// The 12-month trend's outcomes for one platform, 1,000 a page (PostgREST's default max rows).
+export function listTrendOutcomes(
+  client: SupabaseClient,
+  businessId: string,
+  q: OutcomeRangeQuery,
+  opts: { pageSize?: number } = {},
+): Promise<OutcomeForAnalytics[]> {
+  return readOutcomes('trend outcomes', client, businessId, q, ANALYTICS_TREND_PAGE, opts.pageSize)
+}
+
+export interface DimensionForAnalytics {
+  ai_original_id: string
+  role: string | null
+  format: string | null
+  origin_mode: string | null
+  hook_type: string | null
+}
+
+const DIMENSION_CHUNK = 200
+
+// The generation-time dimensions of the given snapshots, in chunks of 200 ids (a URL and a row bound), business-bound.
+export async function listDimensionsForAnalytics(
+  client: SupabaseClient,
+  businessId: string,
+  aiOriginalIds: readonly string[],
+): Promise<DimensionForAnalytics[]> {
+  const ids = [...new Set(aiOriginalIds)]
+  const out: DimensionForAnalytics[] = []
+  for (let i = 0; i < ids.length; i += DIMENSION_CHUNK) {
+    const { data, error } = await client
+      .from('post_dimensions')
+      .select('ai_original_id, role, format, origin_mode, hook_type')
+      .eq('business_id', businessId)
+      .in('ai_original_id', ids.slice(i, i + DIMENSION_CHUNK))
+      .order('ai_original_id', { ascending: true })
+      .limit(DIMENSION_CHUNK)
+    if (error) throw new Error(getErrorMessage(error))
+    out.push(...((data ?? []) as DimensionForAnalytics[]))
+  }
+  return out
 }

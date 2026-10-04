@@ -1377,3 +1377,34 @@ Verdict: (b) is achievable with the synchronous-component design, an `await impo
 (The first attempt at the basis-pooling and NULL-coercion mutations did not apply or did not go red in the combined loop, so both were re-run alone with the mutated line printed first; the table is from the confirmed runs.)
 
 **Verification (in the required order):** `npx tsc --noEmit --skipLibCheck` clean; `npx eslint .` 0 errors (113 pre-existing warnings, none from `lib/analytics`); `npm run test:app` with the CI dummy env: 393 files, 6,065 passed, 1 todo (O2.2 was 386 and 5,934). `test:db` not run: no migration or DB behaviour touched. No ECC budget is allotted to O2.3.
+
+### V.7 — O2.4: bounded, authenticated reads
+
+**Shipped:** `lib/db/keyset-pager.ts` (`readAllPages`, `ReadCeilingExceeded`, `READ_CEILING` = 5,000, `keysetFilterDesc`); `lib/db/analytics-reports.ts` (`getReportByPeriod`, `getReportById`, `listReports`) and the `AnalyticsReportRow` type; and, appended to the existing per-table files, `listPublishedPostsInRange` and `countPublishedPostsInRange` (`posts.ts`), `listMonthOutcomes`, `listTrendOutcomes` and `listDimensionsForAnalytics` (`post-outcomes.ts`), `listMetricsForPosts` (`post-metrics.ts`), `listCompletedRetrospectivesInRange` (`campaign-retrospectives.ts`), `listAccountLabels` (`social-accounts.ts`). Every one takes `(client, businessId, ...)` and applies `.eq('business_id', businessId)` itself; none acquires the service-role client (the Tier-2 test mocks the factory to throw). `listTopPostMetrics`, `listCampaignRetrospectives` and every existing service-role reader are untouched, and nothing calls `listCampaignRetrospectives`.
+
+**Closed:** #16 `ANALYTICS-AUTHENTICATED-READS` (Tier 2 recording client + the O2.1 scan half + Tier 1), #18 `ANALYTICS-BOUNDED-INDEXED` (Tier 2 + Tier 1 EXPLAIN), #36 `ANALYTICS-NO-SILENT-TRUNCATION` (Tier 2: a two-page median equals the unpaged median, 5,001 rows throw; plus Tier 1: a page size of 1, 2, 3 and 5 returns exactly what 500 returns, so the keyset `or()` filter is proven against real PostgREST).
+
+**Decisions recorded (Builder choices inside the ADR, none architectural):**
+
+1. **The ceiling is detected by asking for one row past it.** Each page requests `min(pageSize, ceiling + 1 - rows)`, so the database is never asked for more than 5,001 rows in total, exactly 5,000 rows return in full, and 5,001 throw. The throw is the only way out: there is no code path that returns a partial list.
+2. **The cursor is a quoted PostgREST `or()`:** `published_at.lt."T",and(published_at.eq."T",id.lt."I")`, with `post_id` as the outcomes tie-breaker. Quoting keeps a timestamp's colons and sign out of the filter syntax; a double quote in a value is escaped.
+3. **Explicit column lists, never `*`, wherever a sensitive or forbidden column exists:** `log_lift` is not selected from `post_outcomes`, `median_log_lift` not from `campaign_retrospectives`, no token or vault column from `social_accounts`, and no post text from `posts`. Every selected shape carries `business_id` (§9.3).
+4. **A head count that comes back NULL throws** rather than reading as 0 (NULL is never zero).
+5. **Id-list reads are chunked** (dimensions 200, metrics 120, labels 20), de-duplicated first, and each chunk carries its own business filter. The retrospectives read keeps the ADR's `completed_at DESC` exactly (no extra tie-break).
+6. **`lib/outcomes/__tests__/no-cross-business.test.ts` is extended** with the four new readers that live in the modules it already enumerates (ADR §9.3); its completeness check turned red on them until they were added, which is the check working. The other new readers are covered by `lib/db/__tests__/analytics-reads.test.ts`, whose last test asserts that each of the eleven binds its business and that every query's select is followed by its business filter before the next select.
+7. **Tier 1 runs the real readers through an authenticated client whose user OWNS BOTH businesses** (A and B), so only the explicit filter separates them. B's post, snapshot, report and account ids asked for under A return nothing, though RLS lets the owner read them.
+8. **EXPLAIN uses the O2.2 technique:** the other business-id indexes are dropped inside a rolled-back transaction with `enable_seqscan` off, so the named index is used if and only if the reader's predicates imply its definition. The posts read names `posts_business_published_idx`; the month's outcomes read names `post_outcomes_business_platform_published_idx`.
+9. **Environment note (not code):** `npx supabase status` fails on this machine with `EUNKNOWN uv_spawn`, so the local anon and service keys were minted (HS256, the GoTrue JWT secret read from the running auth container) for the Tier-1 runs. CI is unaffected.
+
+**Redden transcript (each mutation applied with the changed line printed, the tests run, then restored byte-identical to a backup):**
+
+| Mutation | Tests that went red |
+|---|---|
+| drop `.eq('business_id')` from `listPublishedPostsInRange` | Tier 2: 3 (the row-by-row filter test, the page-two test, the eleven-readers test). Tier 1: 3 (A's 13 posts, B's positive control, the metrics isolation test) |
+| drop the `post_id` tie-breaker from the outcomes reader | Tier 2: 2 (the row-by-row test, the tie-breaker test) |
+| raise the ceiling to 500,000 | Tier 2: 3 (the ceiling constant, 5,001 throws, never more than ceiling + 1 requested) |
+| plant `components/analytics/Plant.tsx` importing `lib/supabase/service` | the O2.1 scan #16 REAL TREE, and the root tripwire (the root is no longer empty) |
+
+(The first Tier-1 run of the first mutation was inconclusive: it ran with an abbreviated dummy environment and the suite failed in setup with every test skipped. It was re-run with the CI dummy values after a green baseline of 16, and the table is from that run.)
+
+**Verification (in the required order):** `npx tsc --noEmit --skipLibCheck` clean; `npx eslint .` 0 errors (113 pre-existing warnings, none from these files); `npm run test:app` with the CI dummy env: 395 files, 6,109 passed, 1 todo (O2.3 was 393 and 6,065); `npm run test:db` against the local stack (migrations of O2.2, not freshly reset because O2.4 adds no migration, no grant and no function): 121 files, 1,374 passed (O2.2 was 120 and 1,358). No ECC budget is allotted to O2.4.

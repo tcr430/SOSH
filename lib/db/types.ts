@@ -1919,3 +1919,18 @@ export type InterviewConflictTargetRow = {
   status: MemoryStatus
   source: MemorySource
 }
+
+// ADR 0031 §5.1 — one immutable monthly report per business and month (write-once: the table has no UPDATE path).
+// The payload holds aggregates, template keys and params, exclusion counts and cited post ids: never post text.
+export type AnalyticsReportRow = {
+  id: string
+  business_id: string
+  /** The first day of the report's month in businesses.timezone (a date, YYYY-MM-01). */
+  period_month: string
+  tier: 'basic' | 'advanced'
+  schema_version: number
+  payload: Record<string, unknown>
+  /** The instant every read behind this report was bounded by ([db-1]). */
+  outcomes_through: string
+  generated_at: string
+}
