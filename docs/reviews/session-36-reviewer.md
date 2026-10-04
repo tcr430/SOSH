@@ -832,3 +832,36 @@ Command: `npx vitest run supabase/__tests__/substrate-two-business.test.ts --no-
 **Loop** (local stack, `http://127.0.0.1:54321` asserted, never the remote): `npx tsc --noEmit --skipLibCheck` clean; `npm run lint` 0 errors (112 warnings, unchanged; none in the touched files); `npm run test:app` with the `app-tests.yml` env block **382 files / 5881 tests passed**; `npm run test:db` **113 files / 1306 tests passed**.
 **Commit:** D7 (its SHA is recorded in D8's block).
 **What I did NOT touch:** no production file (every plant above was restored; `git diff` against `HEAD` is empty for `actions.ts`, `memory-evidence.ts` and `memory-brand.ts`); `#17`'s test (`actions.test.ts`) and `#24`'s test (`substrate-two-business.test.ts`) were run unchanged.
+
+### D8 — MAJOR-2 (no code)
+
+**D7's SHA, recorded here as promised:** `f4838abe` (NIT-2, and MINOR-5's closing row). The D7 rows' **Commit** field resolves to it.
+
+**Finding:** MAJOR-2, in three parts.
+
+**1. The repo half (landed before this pass).** `supabase/migrations/20260930100000_distilled_writer_rpcs_revoke_client_roles.sql` narrows `upsert_distilled_performance_pattern`, `promote_performance_pattern` and `demote_performance_pattern` (`REVOKE ALL … FROM PUBLIC, anon, authenticated`, `GRANT EXECUTE … TO service_role`). It landed at `1d10e8df`. **Re-verified on a fresh catalog at D5** (`70a1ccb6`): after `supabase db reset`, the W1 assertions (`has_function_privilege` false for `anon`, `authenticated` and `PUBLIC`, true for `service_role`) ran green for every registered memory RPC, including the three. I changed no function in this part.
+
+**2. The launch gate (this commit).** `docs/launch-checklist.md` §2 (Database) gains ONE new `- [ ]` row, in the section's style: **"SECURITY DEFINER functions not client-executable (ADR 0030 V.17, Session 36-D MAJOR-2)"**. It carries the audit query verbatim from backlog `S36-FRESH-DB-RPC-ACL-AUDIT`; where it must run (a fresh local database AND the hosted project); the expected result (only an enumerated allow-list, started with `get_user_business_ids`); the 8 functions by name, each marked "narrow, or justify onto the allow-list"; and a sub-check box for `20260930100000` applied on the hosted project. `docs/backlog.md` `S36-FRESH-DB-RPC-ACL-AUDIT` gains one appended sentence, "Now a launch gate: launch-checklist.md section 2, Session 36-D D8." and no other edit (`git diff --word-diff` shows that sentence and nothing else).
+
+**The fresh-database query I ran, quoted with its date.** On 2026-10-04, after `supabase db reset` of the LOCAL stack (`127.0.0.1:54322`, guard refusing any other target), at `f4838abe`, the verbatim backlog query returned **8 rows**:
+
+```
+accept_invite(p_member_id uuid, p_business_id uuid)        anon=false authenticated=true
+enforce_seat_cap()                                         anon=true  authenticated=true
+enqueue_post_edit_signal()                                 anon=true  authenticated=true
+ensure_owner_membership()                                  anon=true  authenticated=true
+get_user_business_ids()                                    anon=false authenticated=true
+increment_brand_voice_attempts(p_business_id uuid)         anon=true  authenticated=true
+increment_posts_generated(p_business_id uuid)              anon=true  authenticated=true
+user_can(p_business_id uuid, p_capability text)            anon=true  authenticated=true
+```
+
+That is the Reviewer's 8 (6 executable by `anon`), so the names in the checklist row match a fresh-db query run by me. I verified each against its callers before writing its line in the row: `get_user_business_ids` (37 migration files, 135 policy lines) and `user_can` (RLS plus `settings/team/page.tsx:31`, the social connect and disconnect routes) and `accept_invite` (`lib/db/business-members.ts:192`, the signed-in user's client) have client callers; `increment_brand_voice_attempts` and `increment_posts_generated` are called only through the **service-role** client (`lib/db/trial-state.ts:60`, `:67`) yet take a caller-supplied `p_business_id`, which is why the row marks them highest priority; the other three are trigger functions invoked by their triggers. I narrowed **none** of them: narrowing the 8 pre-existing SECURITY DEFINER functions was available and not taken (this pass's rule 12), so the row is the launch gate for deciding it.
+
+**3. The hosted half: LAUNCH-GATED (A-8 PENDING).** A-8 in section 4 of `docs/build-guide/session-36.md` is **PENDING**: the founder has not pasted hosted before/after output and has not confirmed a push. Per the step I record "hosted half LAUNCH-GATED (A-8 PENDING)", naming the row above (`docs/launch-checklist.md` §2, "SECURITY DEFINER functions not client-executable"), and its hosted sub-check stays unticked. I did not ask for credentials and ran **nothing** against the hosted project (no query, migration, `psql`, `supabase db push` or MCP call; `.env.local` targets the remote and was not used). If the founder runs the query and the push before D10, the dated output goes here verbatim and the sub-check is ticked then.
+
+**4. Process finding (d), for D10.** L2.0 checked W1 on the long-lived local database (`pg_default_acl {postgres=X}`), where function ACLs differ from a fresh one's, so the narrowing landed only after CI went red on a fresh database. D10 writes the Do-Not-Repeat in `.wolf/cerebrum.md`: a privilege property is not verified by a Tier-1 green on the long-lived local database; verify it after `supabase db reset`. (As D5 did.)
+
+**Reddening:** n/a (docs only). **Loop:** no `.ts`/`.tsx`/`.sql` file changed, so `tsc`, `lint`, `test:app` and `test:db` were not re-run for D8; the last full run is D7's (`test:app` 5881, `test:db` 1306).
+**Commit:** D8 (its SHA is recorded in D9's block).
+**What I did NOT touch:** no function narrowed; no remote command run; no migration; no code; no edit to the Reviewer's text above this appendix.
