@@ -1821,3 +1821,107 @@ The brief path returns exactly what the three reads returned on every corpus (th
 **Run 2** (at the head that carries this fix) is recorded below when it has completed. Nothing in V.16's map is COVERED before it.
 
 **Run 2, at `1d10e8df`** (event `pull_request`; the head that carries the fix, read from the logs): `app-tests` [36697366122](https://github.com/tcr430/SOSH/actions/runs/36697366122) **GREEN**, `skip-guard: 379 file(s) under [app, lib, components] all visible, zero failures — green. (5794/5794 tests passed)`; `db-tests` [36697366038](https://github.com/tcr430/SOSH/actions/runs/36697366038) **GREEN**, `skip-guard: 113 file(s) under [supabase/__tests__] all visible, zero failures — green. (1292/1292 tests passed)`, and the log holds zero `SIGSEGV`, `signal 11`, `OOMKilled=true` or `out of memory` lines; the eval job [36697365923](https://github.com/tcr430/SOSH/actions/runs/36697365923) **GREEN**. The 113 files are the same 113 the local Tier-1 run executes, so every `supabase/__tests__/substrate-*.test.ts` file of V.16's map ran in CI. **V.16's map is therefore executed green in CI at `1d10e8df`**; that is the head every COVERED claim of this session is dated to (later commits on the branch are documentation only). Both runs are `pull_request` events, so the `db-tests` promotion tally (`docs/current-phase.md`) is unchanged. Still MEASURED and never COVERED: `SIGNAL3-TRIAGE-QUALITY` (V.13) and the §11.5 measurement (V.15).
+
+
+---
+
+## Correction pass amendments (Session 36-D)
+
+**Status.** Appended after V.17. **Nothing in §0–§15 or V.1–V.17 is edited**; where this section corrects what an earlier section says, it says so here and the earlier text stands as written (the same append-only rule as `docs/reviews/session-36-reviewer.md`). Every statement cites the test (`file:line`, at the head of the pass, `c34caf49`) that proves it. The findings are `docs/reviews/session-36-reviewer.md`'s (range `e9de7b25..0605a97d`, 12 findings); the resolution rows are in that file's appendix. **No "executed green in CI" cell is filled here for the corrected range**: that is Session 36-D D10's, from the run logs, and until then every row of V.16's constraint → CI map is `AUTHORED-NOT-EXECUTED-IN-CI` for the corrected range.
+
+| Step | Commit | Closes |
+|---|---|---|
+| D0 | `1e258d85` | the Reviewer's report enters git exactly as written |
+| D1 | `7e53e680` | MAJOR-1; MINOR-5 for #12 |
+| D2 | `24840fb0` | MINOR-2, MINOR-3 |
+| D3 | `b61cdf57` | MINOR-1, NIT-1 |
+| D4 | `6d6b8b3e` | MINOR-4; MINOR-5 for #14 |
+| D5 | `70a1ccb6` | MINOR-6, code half (the one migration, `20260930110000`) |
+| D6 | `61fd060b` | MINOR-7, code half |
+| D7 | `f4838abe` | NIT-2; MINOR-5 for #17 and #24 |
+| D8 | `c34caf49` | MAJOR-2, the launch gate (hosted half LAUNCH-GATED, A-8 PENDING) |
+| D9 | this commit | NIT-3; the ADR halves of MINOR-6 and MINOR-7 |
+
+### C.1 §6.5 gains the outcome taxonomy (MINOR-6, D5 `70a1ccb6`)
+
+`recompute_dismissal_audience_signal` returns a text outcome. Before D5 the wrapper cast it to `string` and all three actions dropped it, and two conflations hid faults: `invalid_identifier` covered a regex failure, a source that no longer exists and a source that belongs to another business; `noop_unknown_source` covered both a NULL watched id and an unknown kind. §6.5 specified only the thrown-error path. **The vocabulary is now closed and typed**: the forward migration `supabase/migrations/20260930110000_recompute_dismissal_distinct_outcomes.sql` (same signature, `CREATE OR REPLACE`) returns the 16 outcomes below; `lib/db/memory-audience.ts` parses the RPC result with a `z.enum` of exactly those 16 (`DISMISSAL_OUTCOMES`), and unknown text throws into the caller's existing catch; `lib/memory/dismissal.ts` exports `DISMISSAL_OUTCOME_CLASS: Record<DismissalOutcome, 'decided' | 'anomalous'>`, exhaustive (the compiler refuses an unclassified outcome).
+
+| Outcome | Class | Reason |
+|---|---|---|
+| `noop_card_not_found` | **anomalous** | the card the action had just transitioned does not exist: the action's own premise failed |
+| `noop_card_state` | decided | a card state that does not teach the gate (pending, or dismissed for another reason): expected |
+| `anomaly_watched_id_null` | **anomalous** | a github/rss signal with no watched-source id; the exactly-one-parent CHECK should make it impossible |
+| `noop_unknown_kind` | decided | a source kind that is neither github nor rss; `signals_source_check` should make it impossible, and the function declines to write |
+| `noop_no_row` | decided | an approve or save on a source with no dismissal row: the common, correct outcome |
+| `invalid_identifier` | decided | the identifier failed the regex: the fail-closed path working as designed |
+| `retired_invalid_identifier` | decided | the same, with a live row retired |
+| `watched_source_gone` | decided | the watched source no longer exists; the function declined to write (the `ON DELETE CASCADE` chain makes this rare) |
+| `retired_watched_source_gone` | decided | the same, with a live row retired |
+| `anomaly_watched_source_foreign` | **anomalous** | the watched source belongs to another business: a tenancy fault the identity trigger exists to prevent |
+| `retired_anomaly_watched_source_foreign` | **anomalous** | the same, with a live row retired |
+| `deleted` | decided | a row retired for 30+ days was hard-deleted: retention working |
+| `retired` | decided | nothing is left to count, so the row was retired: the gate working |
+| `noop_nothing_counted` | decided | nothing counted and no row to retire |
+| `upserted` | decided | the row was written |
+| `updated` | decided | the row was updated |
+
+**What an anomalous outcome produces, and why it never throws.** Each of the three actions (`approveCardAction`, `dismissCardAction` for `not_relevant`, `saveCardAction`) emits **one** `console.error('opportunities/actions: recomputeDismissalSignal anomalous outcome', <action>, <cardId>, <outcome>)` for an anomalous outcome and nothing for a decided one. It does not throw and does not change the result, because the card's transition has already committed and a recompute failure must never turn a real approval or dismissal into an error toast (§6.5's existing rule for the thrown path). No new logger and no Sentry wiring: the house pattern is the existing recompute `console.error` in the same file.
+
+**The state change is unchanged.** Which rows are written, retired or deleted is byte-identical to `20260929140000`: the diff of the two function bodies shows only the new declarations, the step-3 split of the NULL-id and unknown-kind returns, `v_src_found := FOUND`, the one existence read and the returned text; everything from step 5 down, and the advisory lock taken before the retire, are untouched. The `database-reviewer` (read-only, once) confirmed all three of: the new read touches no text column, the state change is byte-identical, the REVOKE/GRANT restatement is complete. **The one new read** (`SELECT r.business_id INTO v_other_biz FROM public.watched_repos r WHERE r.id = v_repo_id`, and the `watched_feeds` twin) is the first read in the function not filtered by the card's `business_id`; it selects `business_id` only, runs only after the business-scoped read found nothing, and its result is used for `FOUND` and nothing else.
+
+**Two facts about reachability the Reviewer's reading did not have.** `watched_repos` / `watched_feeds` have no `deleted_at` column (unwatching is `is_active = false`, `lib/db/watched-repos.ts:97`), so "deleted" means the row is gone. And `signals.watched_repo_id` / `watched_feed_id` are `ON DELETE CASCADE` foreign keys, `signals_source_check` admits only github / rss, and `signals_exactly_one_parent_check` forbids a NULL parent id, so gone, NULL-id and unknown-kind are **defence in depth** (reachable only if a constraint is dropped or bypassed) and `foreign` needs the identity trigger bypassed or the watched source re-owned. They are named anyway so that a future constraint change surfaces in a log, not as a silent no-op.
+
+**Where it is proved.** Tier 1, `supabase/__tests__/substrate-dismissal-writer.test.ts:645` (describe `distinct outcomes for a gone, a foreign and a NULL watched source and an unknown kind`): each outcome through real rows (the broken-chain cases inside one transaction that drops the guarding constraint and rolls back), the state compared before and after with `status` masked, and `md5(prosrc)` of the live function equal to the migration body (`:800`). Tier 2: `lib/db/memory-audience.test.ts:309` (all 16 returned unchanged), `:323` (7 unrecognised results rejected); `lib/memory/dismissal.test.ts:138` (the class map: exactly four anomalous, twelve decided, literal); `app/[locale]/(dashboard)/opportunities/actions.test.ts:403` (per caller: four anomalous outcomes log exactly once, eight decided log nothing). Tier 3: `lib/memory/substrate-scans.test.ts:854`, describe `SUBSTRATE-DISMISSAL-OUTCOMES-CLASSIFIED`: the keys of `DISMISSAL_OUTCOME_CLASS` and `DISMISSAL_OUTCOMES` equal the `RETURN '…'` literals of the **latest** migration that defines the function (`:879`), with a planted positive and a floor of `>= 14` literals. The privileges are restated in the `20260930100000` form; on a fresh `supabase db reset` the W1 `has_function_privilege` assertions run green, and removing the restated REVOKE leaves them green because `CREATE OR REPLACE` preserves the ACL set by `20260929140000`, so the restatement is idempotent hardening and not the only guard (the W1 test does redden when the file is made to expose the function). Deployment order: apply this migration with or before the TypeScript deploy.
+
+### C.2 §9.1's hint copy (MINOR-7, D6 `61fd060b`)
+
+**The ruling, quoted.** A-9, ruled by the founder on 2026-10-04: **"Go with (a)"** (conditional copy), with the proposed EN text standing. The reason: the first and second `not_relevant` dismissals write a `candidate` row that no reader returns (`listSourceDismissalCandidates` reads `status = 'active'` only), an `active` row needs `n >= 3` and `n/m >= 0.75`, and even an active row reaches triage only if the model calls `list_audience_notes` (§6.8), so §9.1's original sentence promised an effect most single dismissals do not have. Human-in-the-loop is a product position, so the human is told the truth about the loop. The copy states the **counted, conditional** nature with no number and no new control (§9 forbids one).
+
+| Locale | `opportunities.dismissReason.teachesHint` |
+|---|---|
+| `en` | If you keep marking updates from this source as not relevant, Jemip will learn your audience isn't interested in them. |
+| `pt` | Se continuar a marcar as novidades desta fonte como não relevantes, o Jemip vai aprender que o seu público não tem interesse nelas. |
+| `es` | Si sigues marcando como no relevantes las novedades de esta fuente, Jemip aprenderá que a tu audiencia no le interesan. |
+
+(Replacing §9.1's `Jemip will remember your audience isn't interested in updates from this source.` and its `pt` and `es` counterparts.) Only the copy moved: no element, class, control or layout changed. The one copy assertion moved with it, `lib/i18n/memory-parity.test.ts:70`; the structural assertions of `SUBSTRATE-UX-DISCLOSED` (renders only under `not_relevant`, tied by `aria-describedby`, inside the persistent `role="status"` wrapper, no other reason has copy) stand in `OpportunityFeed.test.tsx` and are byte-unchanged. The longer text wraps in a block `<p>` with no `nowrap`, truncation or fixed width; that is a markup check, not a browser one (`S36-UX-UNVERIFIED-IN-BROWSER` stays open).
+
+### C.3 §3.4's caller set, restated and corrected (MAJOR-1, D1 `7e53e680`; NIT-3 iii)
+
+**V.11 and V.16 presented `SUBSTRATE-CALLERS-ENUMERATED` (#12) as proved row by row.** At `0605a97d` it was not: three §3.4 rows survived a mutation of their argument (`hasActiveEvidence` on the service-role generation path, where the explicit `business_id` filter is the only tenant boundary; the planner tools; the triage tools; Studio had the same hole). From D1's commit it is. Each row now asserts its exact argument; the V sections are not edited.
+
+| §3.4 caller | Function | Test asserting its exact argument |
+|---|---|---|
+| `lib/campaigns/generate.ts:569` | `hasActiveEvidence(client, businessId)` | `lib/campaigns/generate.test.ts:1269` (the service-role client by identity and the business id; a second business is named in the fixture) |
+| `lib/campaigns/planner/tools.ts:68`, `:82`, `:93` | `retrieveEvidenceMemory` / `retrieveBrandMemory` / `retrieveAudienceMemory` | `lib/campaigns/planner/__tests__/tools.test.ts:169` (the real retrievers still run) |
+| `lib/signals/triage/tools.ts:82`, `:107`, `:121` | the same three | `lib/signals/triage/tools.test.ts:42`; the audience read also `lib/signals/triage/tools.dismissal.test.ts:38` |
+| `app/[locale]/(dashboard)/studio/actions.ts:136`, `:137` | `retrieveStudioPerformancePatterns`, `retrieveEvidenceMemory` | `app/[locale]/(dashboard)/studio/actions.test.ts:122` |
+| `lib/campaigns/brief.ts:97` | `retrieveMemoryBundle` | `lib/campaigns/brief.test.ts`; Tier 1 `supabase/__tests__/substrate-two-business.test.ts`; the ordering itself `lib/memory/bundle.test.ts:222` (hint forwarding) and `:243` (the total tie order) |
+| **`scripts/measure-substrate.ts:60-64`** | `retrieveMemoryBundle`, `retrieveBrandMemory`, `retrieveEvidenceMemory`, `retrieveAudienceMemory` | **no test: operator script** |
+
+**`scripts/measure-substrate.ts` is added to §3.4's caller set by this note.** It was an unlisted caller. It is operator-only (it runs by hand against a database with a service-role client, in the L2.11 measurement), and **"no test, operator script" is a recorded decision, Tier 3 (diff-verified)**, not an oversight: a test of a one-shot measurement script would assert the measurement, not a property of the platform.
+
+### C.4 §6.8 and V.10 list Studio as a reader of `retrieveAudienceMemory`: corrected (NIT-3 ii)
+
+§6.8 and V.10 (`§V.10`'s caller table) name Studio among the readers of `retrieveAudienceMemory`. **At the range it is not one.** `studio/actions.ts` reads evidence (`retrieveEvidenceMemory`) and performance (`retrieveStudioPerformancePatterns`) only. The callers of `retrieveAudienceMemory` outside `lib/memory` and `lib/db` are the **planner tools** (`lib/campaigns/planner/tools.ts:93`), the **triage tools** (`lib/signals/triage/tools.ts:107`) and the operator script (`scripts/measure-substrate.ts:62`); the brief reads audience rows through `retrieveMemoryBundle`, not directly. This does not change §6.8's rule (a dismissal row is read by triage only); it corrects who the other readers are. One stale **code** comment says the same wrong thing: `lib/db/memory-audience.ts:29` ("Readers that inherit this: retrieveAudienceMemory (brief, planner tools, Studio) …"). It is not edited here (this step changes no code); it is recorded so the next pass that touches that file corrects it.
+
+### C.5 §13.2's timing rule: a lapse, self-disclosed (NIT-3 i)
+
+§13.2 requires each amendment to an earlier ADR to land in the commit that changes what it describes. The ADR 0029 §1.3 pointer ("the five provisional choices of §1.3 now have platform answers") landed at close-out, in `6d109db9` (L2.11), **not** with A-6 at L2.4 (`a7e91e98`, which changed ADR 0029 §4.5) or with `c07a2c5e` (L2.2, §2.4). The note itself says so ("This pointer was owed by ADR 0030 §13.2 and was not in the commits that changed §4.5 … or §2.4; it is added at close-out"). It is additive and nothing above it was edited, so no reader was misled; it is recorded here as a §13.2 timing lapse, self-disclosed by the Builder and not repaired by rewriting history.
+
+### C.6 The four scans' widened detectors (MINOR-1, MINOR-2, MINOR-3, NIT-1; D2 `24840fb0`, D3 `b61cdf57`)
+
+- **MINOR-2** (`SUBSTRATE-MEMBER-WRITE-CLOSED`, #6): `findMemberWriteViolations` now matches quoted and escaped policy names, quoted tables, column-list `GRANT`s, `public` as a grantee, any case and multi-line statements; planted positives for both of the Reviewer's missed shapes and negatives, `lib/memory/substrate-scans.test.ts:420`, `:431`; each shape planted alone as a migration reddens `:453`, the member-write test itself. Run over all 124 migrations the widened detector reports the same 15 pre-range hits as the old one (the member policies `20260929110000` closes), so the widening added none.
+- **MINOR-3**: the range guard is a floor, not an equality (`:123`): it must be non-empty and contain the five Session 36 migrations, so a later session's migration no longer reddens the file.
+- **MINOR-1** (`SUBSTRATE-ONE-DECISION-WRITER`, #22): the decision-derived source set is derived from this ADR's §6.7 table at test time (`parseDeferredDecisionSurfaces`), with the definition *a writer is decision-derived when its input is a human's accept/reject decision on a product artefact*; a vacuity floor (`>= 6` rows, containing `too_sensitive`); the registry has exactly one such entry, `dismissal → audience_memory` (`:688`, `:725`). A planted `too_sensitive` entry, green at `0605a97d`, now reddens.
+- **NIT-1** (`SUBSTRATE-CASCADE-COMPLETE`, #25): the cascade scan matches only the first cells of ADR 0010 §D2.5's table rows (`parseCascadeTableNames`), with a planted pair that makes it non-vacuous although the range creates no table (`:811`, `:828`). A table named only in ADR 0010's prose now reddens.
+
+`SUBSTRATE-CROSS-TYPE-BUDGET` (#14) is also strengthened (MINOR-4, D4 `6d6b8b3e`): hint forwarding with a fixture the hint reverses and one test per key of the total tie order (score, confidence, recency, id), each against the id order: `lib/memory/bundle.test.ts:222`, `:243`.
+
+### C.7 MAJOR-2: the W1 fresh-database lesson, and the launch gate (D8 `c34caf49`)
+
+**The lesson.** W1 (a SECURITY DEFINER writer is not executable by `anon` or `authenticated`) passed at L2.0 and L2.5 on the **long-lived** local database, whose function ACLs (`pg_default_acl {postgres=X}`) differ from a fresh Supabase database's, where the platform's defaults also grant EXECUTE on new functions to `anon` and `authenticated`. Three distilled-writer RPCs revoked `FROM PUBLIC` only therefore failed W1 on CI's fresh database, and the narrowing (`20260930100000`) landed only after CI went red. **A privilege property is verified after `supabase db reset`, never by a Tier-1 green on the long-lived local database** (verified that way at D5, `70a1ccb6`).
+**The gate.** `docs/launch-checklist.md` §2 has a new row, "SECURITY DEFINER functions not client-executable (ADR 0030 V.17, Session 36-D MAJOR-2)": the audit query verbatim from backlog `S36-FRESH-DB-RPC-ACL-AUDIT`, to run on a fresh local database and on the hosted project; an enumerated allow-list (starting with `get_user_business_ids`); the 8 pre-existing functions the query returns on a fresh database (run 2026-10-04: `accept_invite`, `enforce_seat_cap`, `enqueue_post_edit_signal`, `ensure_owner_membership`, `get_user_business_ids`, `increment_brand_voice_attempts`, `increment_posts_generated`, `user_can`), each marked narrow-or-justify; and a sub-check for `20260930100000` applied on the hosted project. **The hosted half is LAUNCH-GATED (A-8 PENDING)**: nothing was run against the hosted project. None of the 8 was narrowed (L-1 and this pass's scope).
+
+### C.8 The constraint count (§12)
+
+**28 `SUBSTRATE-*` constraints, unchanged.** D5's scan, `SUBSTRATE-DISMISSAL-OUTCOMES-CLASSIFIED`, is **not a new constraint**: it is a Tier-3 **arm of `SUBSTRATE-WRITER-CONTRACT` (#2)**, whose subject is what each registered RPC may do and return, and §12's table permits a multi-tier cell (rows 4, 6, 7, 9, 11, 15, 16, 25 and 28 already carry more than one). Row 2's Tier column therefore reads **1 + 3** (its Tier-1 half, W1–W9, is unchanged). No other correction step adds a constraint: D1 and D4 strengthen #12 and #14 (Tier 2), D2 and D3 widen #6, #22 and #25 (Tier 3 halves), D5's Tier-1 and Tier-2 cases belong to #2 and #17, D6 moves #26's copy assertion, D7 re-reddens #17 and #24. **Tier tallies, re-derived from §12's table** (rows containing the tier): **Tier 1: 14** (rows 1, 2, 3, 4, 6, 7, 8, 9, 19, 20, 21, 24, 25, 28), **Tier 2: 13** (4, 9, 10, 11, 12, 13, 14, 15, 16, 17, 26, 27, 28), **Tier 3: 12** (2, 5, 6, 7, 11, 15, 16, 18, 22, 23, 25, 28), up from 11 only because row 2 gains its Tier-3 arm. (The Reviewer's "11/11" tally in V.17's CI record is the count before this arm; V.17 is not edited.)
