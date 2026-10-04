@@ -1453,3 +1453,22 @@ Reviewer named.
   never retried" contract every caller already handles. The `DO UPDATE` branch and its guard are unchanged.
   `AGENCY-COST-CEILING-EXTENDED` covers the first-call-of-day case in `ai-budget-purpose.test.ts`. §7.5b's statement
   that the cap check is atomic was true of the update path only; it is now true of both.
+
+
+---
+
+## Amendment (2026-09-30, Session 36 L2.7 · ADR 0030 §3, founder ruling A-7) — §5.1: `objective`, `audience` and `role` are removed from `MemoryQueryContext`
+
+> Appended, dated and attributed to the Session 36 Builder. Nothing above is edited.
+
+§5.1 threaded `role` and `campaignId` through the query context (and §5.4 passed `{objective, audience, campaignId}` at the campaign level). ADR 0030 §3 found
+that **no scoring term ever read `objective`, `audience` or `role`** (`scopeMatch` reads only `platform` and `campaignId`), and `role` was already recorded as
+"threaded through even though no MemoryScope value maps to it yet". A field with no consuming term is removed (`SUBSTRATE-QUERY-FIELD-CONSUMED`).
+
+- **Removed:** `objective`, `audience`, `role`. `MemoryQueryContext` is now `ModelQueryHints & RetrieveScope` = `{ platform?, campaignId?, confidenceFloor? }`.
+- **Added:** `confidenceFloor`, a **caller-only**, **inclusive** eligibility filter on **stored** confidence, consumed by `rankAndCap` (which throws on NaN, < 0 or > 1). Its consumer is the cross-type bundle (L2.8).
+- **`campaignId` kept**, unchanged: it still makes the `'campaign'` scope-match branch do real work where a row carries `scope='campaign'`.
+- **The campaign-level context** in `lib/campaigns/generate.ts` is `{ campaignId }`; the per-post context is `{ campaignId, platform }`. The extra `getBrandVoice` read that existed only to fill `audience` is deleted. The post's `role` still reaches the generation **prompt**; it is no longer a memory query field.
+- **What a model may set** in a memory tool call is `{ platform }`, from one schema owned by `lib/memory/query-hints.ts` that the planner and triage tools both import (`SUBSTRATE-QUERY-MODEL-FIELDS-BOUNDED`). A stale call still carrying `objective` or `audience` fails the strict parse and reaches the model as a retryable `is_error` tool result.
+- **The format rejection's reason, corrected** (ADR 0030 §3.3): §5's rejection of a `format` query field said outcome rows do not carry `dimension = 'format'`. They do (ADR 0026 §5.1). The field is still not added, for a different reason: outcome retrieval is separate (`OUTCOME-SEPARATE-RETRIEVAL`), and distilled `format` rows carry no format **value** to match, so a `format` field would have no consumer in scored retrieval.
+- **Tests amended in place:** `generate.test.ts` and `generate.context-equivalence.test.ts` now assert the exact `{ campaignId }` and `{ campaignId, platform }` argument objects; the planner and triage tool tests assert the shared schema by identity and refuse the stale keys.

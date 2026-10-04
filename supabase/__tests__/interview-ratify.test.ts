@@ -511,7 +511,13 @@ describe('ratify_interview_round (ADR 0029 §8.5)', () => {
       expect((await pg.query('SELECT status FROM public.brand_memory WHERE id = $1', [rows[0].id])).rows[0].status).toBe('active')
     })
 
-    it("a replace target with source 'import' is rejected (a real import row, with its run)", async () => {
+    // AMENDED (Session 36 L2.4, ADR 0030 §4.2 and founder ruling A-6, SUBSTRATE-CONTRADICTION-CROSS-WRITER), in place and never
+    // deleted. This case asserted that a replace target with source 'import' was REJECTED — ADR 0029 §4.5's original rule.
+    // A-6 widens Replace to an import-sourced target (an explicit allow-list: 'interview' or 'import'; manual, distilled,
+    // outcome and dismissal stay refused, proven in substrate-ratify-import.test.ts). It now asserts the new truth on the SAME
+    // real import row with its run: the call succeeds, the row is RETIRED, and it keeps source='import' and its import_run_id.
+    // The other two sources this describe block rejects ('manual', 'distilled') are unchanged.
+    it("a replace target with source 'import' is now ACCEPTED and retired, keeping its provenance (a real import row, with its run) — ADR 0030 §4.2, A-6", async () => {
       const first = await awaitingRound()
       await ratify(first, first.owner, acceptAll(first))
       await pg.query("UPDATE public.founder_interview_rounds SET created_at = now() - interval '40 days' WHERE id = $1", [first.roundId])
@@ -531,9 +537,10 @@ describe('ratify_interview_round (ADR 0029 §8.5)', () => {
       const cand = at(r, 'brand:positioning')
       const decisions = acceptAll(r).map((d) => (d.id === cand.id ? { ...d, replaces: { type: 'brand', id: rows[0].id } } : d))
       const res = await ratify(r, r.owner, decisions)
-      expect(res.error?.code).toBe('22023')
-      expect(res.error?.message).toMatch(/not an active interview record of this business/)
-      expect((await pg.query('SELECT status FROM public.brand_memory WHERE id = $1', [rows[0].id])).rows[0].status).toBe('active')
+      expect(res.error, JSON.stringify(res.error)).toBeNull()
+      expect(res.data).toMatchObject({ outcome: 'ratified', accepted: 5, replaced: 1 })
+      const retired = (await pg.query('SELECT status, source, import_run_id FROM public.brand_memory WHERE id = $1', [rows[0].id])).rows[0]
+      expect(retired).toEqual({ status: 'retired', source: 'import', import_run_id: run[0].id })
     })
 
     it('a replace target that is not ACTIVE, the SAME target used twice, and a replace on a REJECT are rejected', async () => {

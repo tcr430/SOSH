@@ -2,8 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // ── Module mocks ────────────────────────────────────────────────────────────
 
+// One stable service-role client instance, so a test can assert the generation path hands THIS object (not any client) onward.
+const { SERVICE_CLIENT } = vi.hoisted(() => ({ SERVICE_CLIENT: { __role: 'service-role' } }))
 vi.mock('@/lib/supabase/service', () => ({
-  createServiceRoleClient: vi.fn(() => ({})),
+  createServiceRoleClient: vi.fn(() => SERVICE_CLIENT),
 }))
 
 vi.mock('@/lib/db/post-generation-sessions', () => ({
@@ -73,7 +75,7 @@ vi.mock('@/lib/ai/wrap-evidence', async (importOriginal) => {
 })
 vi.mock('@/lib/memory', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/memory')>()
-  return { ...actual, retrieveEvidenceMemory: vi.fn() }
+  return { ...actual, hasActiveEvidence: vi.fn() }
 })
 
 // ── Imports after mocks ─────────────────────────────────────────────────────
@@ -93,7 +95,7 @@ import { schedulePosts } from '@/lib/campaigns/schedule'
 import { getBusinessById } from '@/lib/db/businesses'
 import { reserveGenerationPost, releaseGenerationPost } from '@/lib/db/generation-budget'
 import { bindEvidenceForPrompt } from '@/lib/ai/wrap-evidence'
-import { retrieveEvidenceMemory } from '@/lib/memory'
+import { hasActiveEvidence } from '@/lib/memory'
 import type { CampaignRow, CampaignBriefRow, PostRow, BusinessRow } from '@/lib/db/types'
 import type { CustomerContext } from '@/lib/ai/context'
 import type { RubricOutput } from '@/lib/ai/prompts/rubric'
@@ -308,7 +310,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   // An EMPTY bound set by default: nothing pinned/sent. (A test that cares overrides it.)
   vi.mocked(bindEvidenceForPrompt).mockResolvedValue({ rendered: '', sentIds: new Set<string>() } as never)
-  vi.mocked(retrieveEvidenceMemory).mockResolvedValue([])
+  vi.mocked(hasActiveEvidence).mockResolvedValue(false)
   vi.mocked(getCampaignById).mockResolvedValue(mockCampaign)
   vi.mocked(getBriefByCampaign).mockResolvedValue(mockBrief)
   vi.mocked(markBriefGenerated).mockResolvedValue({ ...mockBrief, status: 'generated' })
@@ -463,55 +465,38 @@ describe('generatePostsForCampaign — MODE2-BRIEF-FROZEN', () => {
 
 // ADR 0024 §5.1/§5.4 (Session 31, H2.11) — the campaign-level queryContext.
 describe('generatePostsForCampaign — campaign-level query context (ADR §5.1/§5.4, H2.11)', () => {
-  it('calls buildCustomerContext with {objective, audience, campaignId} — the ONLY caller that passes a queryContext', async () => {
-    vi.mocked(getBrandVoice).mockResolvedValue({
-      id: 'bv-1', business_id: BUSINESS_ID, voice_axes: { formal_casual: 50, expert_peer: 50, serious_playful: 50, reserved_warm: 50, calm_energetic: 50, rational_emotional: 50, exclusive_inclusive: 50 },
-      tone: [], target_audience: 'Engineering leads', keywords: [], avoid_words: [], writing_examples: [], competitors: [],
-      unique_value_prop: '', inferred_from_url: null, created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z',
-    })
-
+  // AMENDED (Session 36 L2.7, ADR 0030 §3.4, A-7). This case asserted {objective, audience, campaignId}; `objective` and `audience` left the query
+  // context (no scoring term read them), so the campaign-level argument is EXACTLY { campaignId }.
+  it('calls buildCustomerContext with EXACTLY { campaignId } — the ONLY caller that passes a queryContext', async () => {
     await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
 
-    expect(buildCustomerContext).toHaveBeenCalledWith(BUSINESS_ID, mockCampaign.voice_variation_id, {
-      objective: mockCampaign.objective,
-      audience: 'Engineering leads',
-      campaignId: CAMPAIGN_ID,
-    })
+    expect(buildCustomerContext).toHaveBeenCalledWith(BUSINESS_ID, mockCampaign.voice_variation_id, { campaignId: CAMPAIGN_ID })
+    const arg = vi.mocked(buildCustomerContext).mock.calls[0][2]
+    expect(Object.keys(arg ?? {})).toEqual(['campaignId'])
   })
 
-  it('audience is undefined, not null or a thrown error, when no brand voice exists yet', async () => {
-    vi.mocked(getBrandVoice).mockResolvedValue(null)
-
+  // AMENDED (L2.7): "audience is undefined when no brand voice exists" no longer applies — the field is gone. What replaces it is the reason the field
+  // existed at all: the extra getBrandVoice read that only filled `audience` ([type-1b]) is DELETED, so generation no longer reads brand voice here.
+  it('no longer performs the extra getBrandVoice read that only existed to fill `audience` ([type-1b])', async () => {
     await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
 
-    expect(buildCustomerContext).toHaveBeenCalledWith(BUSINESS_ID, mockCampaign.voice_variation_id,
-      expect.objectContaining({ audience: undefined }),
-    )
+    expect(getBrandVoice).not.toHaveBeenCalled()
   })
 })
 
 // ADR 0024 §5.2b (Session 31, H2.11) — per-post refinement wiring.
 describe('generatePostsForCampaign — per-post query context (ADR §5.2b, H2.11)', () => {
-  it('calls withPostQueryContext once per roleSequence entry, with that entry\'s platform and role', async () => {
+  // AMENDED (Session 36 L2.7, ADR 0030 §3.4, A-7): the per-post context is EXACTLY { campaignId, platform }. `objective` and `role` left it (no scoring
+  // term read either); the post's role still reaches the generation prompt, just not the memory query.
+  it("calls withPostQueryContext once per roleSequence entry, with EXACTLY { campaignId, platform } (no role, no objective)", async () => {
     await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
 
     expect(withPostQueryContext).toHaveBeenCalledTimes(6) // 6 roleSequence entries
-    // Session 31-D, D4 (MAJOR-4): postContext now carries STEP 4's
-    // campaign-level queryContext (objective, campaignId — audience is
-    // undefined here since getBrandVoice is mocked to null) spread in
-    // alongside platform/role, not platform/role alone.
-    expect(withPostQueryContext).toHaveBeenCalledWith(mockCtx, {
-      objective: mockCampaign.objective,
-      campaignId: CAMPAIGN_ID,
-      platform: 'linkedin',
-      role: 'anchor_thesis',
-    })
-    expect(withPostQueryContext).toHaveBeenCalledWith(mockCtx, {
-      objective: mockCampaign.objective,
-      campaignId: CAMPAIGN_ID,
-      platform: 'twitter',
-      role: 'conversation_starter',
-    })
+    expect(withPostQueryContext).toHaveBeenCalledWith(mockCtx, { campaignId: CAMPAIGN_ID, platform: 'linkedin' })
+    expect(withPostQueryContext).toHaveBeenCalledWith(mockCtx, { campaignId: CAMPAIGN_ID, platform: 'twitter' })
+    for (const [, postContext] of vi.mocked(withPostQueryContext).mock.calls) {
+      expect(Object.keys(postContext).sort()).toEqual(['campaignId', 'platform'])
+    }
   })
 
   // Session 31-D, D4 (MAJOR-4). Closing the finding itself: campaignId must
@@ -1275,15 +1260,28 @@ describe('generatePostsForCampaign — claim verification (ADR 0027 §4)', () =>
 
   it('NO CORPUS: nothing sent AND no active evidence -> "no_corpus", never "N unsupported claims"', async () => {
     sent([])
-    vi.mocked(retrieveEvidenceMemory).mockResolvedValue([])
+    vi.mocked(hasActiveEvidence).mockResolvedValue(false)
     withClaims([{ text: CLAIM }, { text: 'It is the fastest tool.' }])
     await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
     for (const post of insertedPosts()) expect(checkOf(post)).toEqual({ status: 'no_corpus', contentFingerprint: contentFingerprint(post.content as string) })
   })
 
+  it('REDDEN (ADR 0030 3.4, MAJOR-1): hasActiveEvidence is called with the SERVICE-ROLE client the path built and THIS business id, never another tenant\'s', async () => {
+    // Two businesses exist in the fixture; the explicit business_id filter is the only tenant boundary on the service-role path.
+    const OTHER_BUSINESS_ID = 'biz-2'
+    sent([])
+    withClaims([{ text: CLAIM }])
+    await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+    expect(hasActiveEvidence).toHaveBeenCalledTimes(1)
+    const [client, businessId] = vi.mocked(hasActiveEvidence).mock.calls[0]
+    expect(client).toBe(SERVICE_CLIENT)
+    expect(businessId).toBe(BUSINESS_ID)
+    expect(businessId).not.toBe(OTHER_BUSINESS_ID)
+  })
+
   it('evidence EXISTS but none was pinned: the claims really are uncited, so they ARE flagged (not no_corpus)', async () => {
     sent([])
-    vi.mocked(retrieveEvidenceMemory).mockResolvedValue([{ id: 'ev-9' }] as never)
+    vi.mocked(hasActiveEvidence).mockResolvedValue(true)
     withClaims([{ text: CLAIM }])
     await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
     for (const post of insertedPosts()) expect(checkOf(post)?.status).toBe('checked')
@@ -1325,7 +1323,7 @@ describe('generatePostsForCampaign — claim verification (ADR 0027 §4)', () =>
 
   it('the corpus lookup FAILING leaves claimCheck absent ("not checked") — it never fails generation and never reads as clean', async () => {
     sent([])
-    vi.mocked(retrieveEvidenceMemory).mockRejectedValue(new Error('memory down'))
+    vi.mocked(hasActiveEvidence).mockRejectedValue(new Error('memory down'))
     withClaims([{ text: CLAIM }])
     await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
     const posts = insertedPosts()

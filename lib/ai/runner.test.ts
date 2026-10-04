@@ -732,10 +732,10 @@ describe('STUDIO-RUNNER-DEFAULT-PRESERVED (ADR 0019 §4.5 / A-5)', () => {
 // silently acquire both.
 describe('QUAL-THINKING-BUDGETED (ADR 0024 §3.3/§3.3a)', () => {
   // version 3: ADR 0017 Amendment E (J2.10) — the prompt text gained hypothesis/successCriteria; thinking and
-  // maxTokens are unchanged.
-  it('brief-assembly declares thinking:4000 AND maxTokens:12_000 at version:3', async () => {
+  // maxTokens are unchanged. version 4: ADR 0030 §5.4 (L2.8) — memory arrives through the bundle renderer; thinking and maxTokens unchanged.
+  it('brief-assembly declares thinking:4000 AND maxTokens:12_000 at version:4', async () => {
     const { briefAssemblyPrompt } = await import('@/lib/ai/prompts/brief')
-    expect(briefAssemblyPrompt.version).toBe(3)
+    expect(briefAssemblyPrompt.version).toBe(4)
     expect(briefAssemblyPrompt.thinking).toBe(4000)
     expect(briefAssemblyPrompt.maxTokens).toBe(12_000)
   })

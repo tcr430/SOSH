@@ -53,7 +53,8 @@ describe('recencyDecay', () => {
 })
 
 describe('scopeMatch', () => {
-  const ctx: MemoryQueryContext = { platform: 'linkedin', objective: 'awareness', audience: 'CTOs', campaignId: 'camp-1', role: 'anchor_thesis' }
+  // ADR 0030 §3 (L2.7): objective, audience and role left MemoryQueryContext (no scoring term read them).
+  const ctx: MemoryQueryContext = { platform: 'linkedin', campaignId: 'camp-1' }
 
   it('brand scope always matches fully, regardless of queryContext', () => {
     expect(scopeMatch({ scope: 'brand', scope_ref: null }, {})).toBe(1)
@@ -219,5 +220,48 @@ describe('rankAndCap', () => {
     const result = rankAndCap([lowConfHighScope, highConfLowScope], ctx, 1, NOW)
     expect(result).toHaveLength(1)
     expect(result[0].id).toBe('high-conf-low-scope')
+  })
+})
+
+// ADR 0030 §3.2 (Session 36 L2.7, A-7, R-5) — SUBSTRATE-QUERY-FIELD-CONSUMED: `confidenceFloor` is a CALLER-ONLY, INCLUSIVE eligibility filter on STORED
+// confidence, read by rankAndCap. Literal outputs; the edge case is the row EXACTLY at the floor.
+describe('rankAndCap — confidenceFloor (inclusive, on stored confidence)', () => {
+  const rows = [
+    makeRecord({ id: 'c90', confidence: 0.9 }),
+    makeRecord({ id: 'c50', confidence: 0.5 }),
+    makeRecord({ id: 'c49', confidence: 0.49 }),
+    makeRecord({ id: 'c10', confidence: 0.1 }),
+  ]
+
+  it('admits a row EXACTLY AT the floor (inclusive, >=) and excludes the ones below it — literal output', () => {
+    expect(rankAndCap(rows, { confidenceFloor: 0.5 }, 10, NOW).map((r) => r.id)).toEqual(['c90', 'c50'])
+  })
+
+  it('a floor of 0 excludes nothing, and a floor of 1 admits only a row at 1.0', () => {
+    expect(rankAndCap(rows, { confidenceFloor: 0 }, 10, NOW).map((r) => r.id)).toEqual(['c90', 'c50', 'c49', 'c10'])
+    expect(rankAndCap([...rows, makeRecord({ id: 'c100', confidence: 1 })], { confidenceFloor: 1 }, 10, NOW).map((r) => r.id)).toEqual(['c100'])
+  })
+
+  it('without a floor nothing is filtered on confidence (the pre-L2.7 behaviour is unchanged)', () => {
+    expect(rankAndCap(rows, {}, 10, NOW).map((r) => r.id)).toEqual(['c90', 'c50', 'c49', 'c10'])
+  })
+
+  it('the floor is applied BEFORE the cap: a slot freed by a below-floor row is not filled by filler below the floor', () => {
+    expect(rankAndCap(rows, { confidenceFloor: 0.5 }, 3, NOW).map((r) => r.id)).toEqual(['c90', 'c50'])
+  })
+
+  it.each([
+    ['NaN', Number.NaN],
+    ['-0.01', -0.01],
+    ['1.01', 1.01],
+    ['Infinity', Number.POSITIVE_INFINITY],
+    ['-Infinity', Number.NEGATIVE_INFINITY],
+  ])('THROWS on a confidenceFloor of %s rather than silently admitting or excluding everything', (_label, floor) => {
+    expect(() => rankAndCap(rows, { confidenceFloor: floor }, 10, NOW)).toThrow(/confidenceFloor must be a finite number in \[0, 1\]/)
+  })
+
+  it('a floor never rescues an ineligible row (candidate / expired) — it only narrows', () => {
+    const mixed = [makeRecord({ id: 'ok', confidence: 0.9 }), makeRecord({ id: 'cand', confidence: 0.99, status: 'candidate' })]
+    expect(rankAndCap(mixed, { confidenceFloor: 0.5 }, 10, NOW).map((r) => r.id)).toEqual(['ok'])
   })
 })

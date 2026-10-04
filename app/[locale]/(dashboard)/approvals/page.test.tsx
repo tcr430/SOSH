@@ -278,3 +278,33 @@ describe('ApprovalsPage — redundancy flags reach the gate (ADR 0027 §5.8(b), 
     expect(inboxElement?.props.redundancyByPostId).toEqual({ 'post-1': flag })
   })
 })
+
+// ADR 0030 §9.2 (Session 36 L2.10) — SUBSTRATE-UX-DISCLOSED. The evidence picker's options carry the row's OWN `source`, read from the row that
+// retrieveEvidenceMemory returned (a select that already returns full rows needs no widening) and never inferred downstream.
+describe('ApprovalsPage — the evidence picker options carry each row\'s own source (ADR 0030 §9.2)', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('threads { id, snippet, source } per evidence row to ApprovalsInbox when a post has an open claim flag', async () => {
+    const { retrieveEvidenceMemory } = await import('@/lib/memory')
+    const { listClaimChecksByPostIds } = await import('@/lib/db/posts')
+    mockClient(OWNER_ID)
+    vi.mocked(getBusinessForUser).mockResolvedValue(BUSINESS as never)
+    vi.mocked(listPendingDraftPosts).mockResolvedValue({ rows: [{ id: 'post-1' }] as never, total: 1 })
+    vi.mocked(listClaimChecksByPostIds).mockResolvedValue({
+      'post-1': { status: 'checked', claims: [{ outcome: 'unsupported', span: { start: 0, end: 4 } }] },
+    } as never)
+    vi.mocked(retrieveEvidenceMemory).mockResolvedValue([
+      { id: 'ev-1', content: 'Customer A cut churn', source: 'import' },
+      { id: 'ev-2', content: 'Customer B saved time', source: 'interview' },
+      { id: 'ev-3', content: 'A quote we wrote', source: 'manual' },
+    ] as never)
+
+    const result = await ApprovalsPage({ params: Promise.resolve({ locale: 'en' }), searchParams: NO_SEARCH_PARAMS })
+
+    type ReactElementLike = { type: unknown; props: { evidenceOptions?: Array<{ id: string; snippet: string; source: string }> } }
+    const outer = result as unknown as { props: { children: ReactElementLike[] } }
+    const inboxElement = outer.props.children.find((child) => child.type === ApprovalsInbox)
+    expect(inboxElement?.props.evidenceOptions?.map((o) => [o.id, o.source])).toEqual([['ev-1', 'import'], ['ev-2', 'interview'], ['ev-3', 'manual']])
+    expect(inboxElement?.props.evidenceOptions?.every((o) => typeof o.snippet === 'string' && o.snippet.length > 0)).toBe(true)
+  })
+})

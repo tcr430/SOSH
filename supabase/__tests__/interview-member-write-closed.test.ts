@@ -234,20 +234,24 @@ describe('INTERVIEW-MEMBER-WRITE-CLOSED (ADR 0029 §2.4)', () => {
 
   // ─── INTERVIEW-PERFORMANCE-POLICY-UNCHANGED (14), Tier-1 half ───────────────
 
-  it('performance_memory is UNTOUCHED: its four policies and its member INSERT/UPDATE/DELETE grants remain', async () => {
+  // SUPERSEDED for its performance_memory arm (Session 36 L2.2, ADR 0030 §2.4 and founder ruling A-5) by
+  // SUBSTRATE-MEMBER-WRITE-CLOSED. This case used to assert that performance_memory was UNTOUCHED — its four policies and
+  // its member INSERT/UPDATE/DELETE grants intact — because ADR 0029 deliberately left Session 33's outcome-loop surface
+  // alone. ADR 0030 closes it, so the SAME id (INTERVIEW-PERFORMANCE-POLICY-UNCHANGED) now records what the table looks
+  // like after that ruling: only performance_memory_select_own remains, and the member write grants are gone. Amended in
+  // place, never deleted; the full member-write proof (attempted INSERT/UPDATE/DELETE asserting 42501) is
+  // supabase/__tests__/substrate-member-write-closed.test.ts.
+  it('performance_memory (INTERVIEW-PERFORMANCE-POLICY-UNCHANGED, superseded by ADR 0030 §2.4): only the SELECT policy remains, and the member write grants are gone', async () => {
     const { rows } = await pg.query<{ policyname: string; cmd: string }>(
       'SELECT policyname, cmd FROM pg_policies WHERE schemaname = $1 AND tablename = $2 ORDER BY policyname',
       ['public', 'performance_memory'],
     )
-    expect(rows).toEqual([
-      { policyname: 'performance_memory_delete_own', cmd: 'DELETE' },
-      { policyname: 'performance_memory_insert_own', cmd: 'INSERT' },
-      { policyname: 'performance_memory_select_own', cmd: 'SELECT' },
-      { policyname: 'performance_memory_update_own', cmd: 'UPDATE' },
-    ])
-    for (const priv of ['SELECT', 'INSERT', 'UPDATE', 'DELETE']) {
+    expect(rows).toEqual([{ policyname: 'performance_memory_select_own', cmd: 'SELECT' }])
+    const { rows: sel } = await pg.query<{ ok: boolean }>('SELECT has_table_privilege($1, $2, $3) AS ok', ['authenticated', 'public.performance_memory', 'SELECT'])
+    expect(sel[0].ok, 'authenticated lost SELECT on performance_memory').toBe(true)
+    for (const priv of ['INSERT', 'UPDATE', 'DELETE']) {
       const { rows: g } = await pg.query<{ ok: boolean }>('SELECT has_table_privilege($1, $2, $3) AS ok', ['authenticated', 'public.performance_memory', priv])
-      expect(g[0].ok, `authenticated lost ${priv} on performance_memory`).toBe(true)
+      expect(g[0].ok, `authenticated still holds ${priv} on performance_memory`).toBe(false)
     }
   })
 })

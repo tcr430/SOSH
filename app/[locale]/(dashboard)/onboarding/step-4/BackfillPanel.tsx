@@ -7,6 +7,7 @@
 
 import { useState, useEffect, useRef, useTransition } from 'react'
 import { useTranslations } from 'next-intl'
+import { ProvenanceLabel, isProvenanceSource } from '@/components/memory/ProvenanceLabel'
 import Link from 'next/link'
 import { format } from 'date-fns'
 import { enUS, pt, es, type Locale } from 'date-fns/locale'
@@ -362,6 +363,7 @@ function RunCard({
                 items={candidates.performance.map((p) => ({
                   id: p.id,
                   label: t('performed.pattern', { pattern: p.pattern, count: p.observation_count }),
+                  source: p.source,
                 }))}
                 rejected={rejected}
                 onToggle={toggleReject}
@@ -373,7 +375,7 @@ function RunCard({
             {candidates.audience.length > 0 && (
               <CandidateGroup
                 title={t('audience.title')}
-                items={candidates.audience.map((a) => ({ id: a.id, label: a.statement }))}
+                items={candidates.audience.map((a) => ({ id: a.id, label: a.statement, source: a.source }))}
                 rejected={rejected}
                 onToggle={toggleReject}
                 onAcceptAll={acceptAll}
@@ -384,7 +386,7 @@ function RunCard({
             {candidates.evidence.length > 0 && (
               <CandidateGroup
                 title={t('evidence.title', { count: candidates.evidence.length })}
-                items={candidates.evidence.map((e) => ({ id: e.id, label: e.content }))}
+                items={candidates.evidence.map((e) => ({ id: e.id, label: e.content, source: e.source }))}
                 rejected={rejected}
                 onToggle={toggleReject}
                 onAcceptAll={acceptAll}
@@ -456,7 +458,8 @@ function CandidateGroup({
   footnote,
 }: {
   title: string
-  items: { id: string; label: string }[]
+  // `source` is each row's OWN source column (ADR 0030 §9.2), shown as its provenance label.
+  items: { id: string; label: string; source: string }[]
   rejected: Set<string>
   onToggle: (id: string) => void
   onAcceptAll: (ids: string[]) => void
@@ -486,8 +489,14 @@ function CandidateGroup({
               onChange={() => onToggle(item.id)}
               className="mt-1"
               aria-label={item.label}
+              aria-describedby={isProvenanceSource(item.source) ? `provenance-${item.id}` : undefined}
             />
-            <span className={rejected.has(item.id) ? 'line-through text-muted-foreground' : ''}>{item.label}</span>
+            <span className="flex flex-col">
+              <span className={rejected.has(item.id) ? 'line-through text-muted-foreground' : ''}>{item.label}</span>
+              {/* ADR 0030 §9.2: where this candidate came from — read from the row (backfill writes 'import', so "From your posts"). Tied to
+                  the checkbox by aria-describedby so it is announced with the control. */}
+              <ProvenanceLabel id={`provenance-${item.id}`} source={item.source} />
+            </span>
           </li>
         ))}
       </ul>

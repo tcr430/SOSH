@@ -1,7 +1,19 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { z } from 'zod'
+
+// Pass-through spies: the REAL retrievers still run (so the mock client's rows still flow); the spies only record the arguments each tool hands them.
+vi.mock('@/lib/memory', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/memory')>()
+  return {
+    ...actual,
+    retrieveEvidenceMemory: vi.fn(actual.retrieveEvidenceMemory),
+    retrieveBrandMemory: vi.fn(actual.retrieveBrandMemory),
+    retrieveAudienceMemory: vi.fn(actual.retrieveAudienceMemory),
+  }
+})
 import { createMockClient, createSequentialMockClient } from '@/lib/db/__test-utils__/mock-client'
-import { buildPlannerTools, queryContextInputSchema, emptyInputSchema } from '../tools'
+import { buildPlannerTools, emptyInputSchema } from '../tools'
+import { memoryQueryHintsSchema, MEMORY_QUERY_HINTS_JSON_SCHEMA, retrieveEvidenceMemory, retrieveBrandMemory, retrieveAudienceMemory } from '@/lib/memory'
 import { PLANNER_TOOL_NAMES } from '../constants'
 
 const NOW_ISO = new Date().toISOString()
@@ -71,8 +83,11 @@ describe('buildPlannerTools — AGENCY-TOOLS-TENANT-BOUND (ADR 0027 §2.4, const
     }
   })
 
-  it('(b) the query-context tools carry EXACTLY the zod schema shape keys, no more, no fewer', () => {
-    const expectedKeys = Object.keys(queryContextInputSchema.shape).sort()
+  it('(b) the query-context tools carry EXACTLY the zod schema shape keys, no more, no fewer — and that is the literal ["platform"]', () => {
+    // AMENDED (Session 36 L2.7, ADR 0030 §3.2, A-7): the schema is no longer declared in this module. It is memoryQueryHintsSchema from lib/memory,
+    // the one owner; the expected key set is derived FROM it AND pinned to the literal, so neither can drift.
+    const expectedKeys = Object.keys(memoryQueryHintsSchema.shape).sort()
+    expect(expectedKeys).toEqual(['platform'])
     for (const name of ['list_evidence', 'list_brand_claims', 'list_audience_notes'] as const) {
       const tool = tools.find((t) => t.name === name)!
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -80,6 +95,24 @@ describe('buildPlannerTools — AGENCY-TOOLS-TENANT-BOUND (ADR 0027 §2.4, const
       expect(Object.keys(properties).sort(), name).toEqual(expectedKeys)
     }
   })
+
+  it("(b) SUBSTRATE-QUERY-MODEL-FIELDS-BOUNDED: each query-context tool's inputSchema IS (by identity) MEMORY_QUERY_HINTS_JSON_SCHEMA", () => {
+    for (const name of ['list_evidence', 'list_brand_claims', 'list_audience_notes'] as const) {
+      expect(tools.find((t) => t.name === name)!.inputSchema, name).toBe(MEMORY_QUERY_HINTS_JSON_SCHEMA)
+    }
+  })
+
+  it.each(['list_evidence', 'list_brand_claims', 'list_audience_notes'])(
+    '%s: a stale call still carrying `objective` or `audience` fails the strict parse with unrecognized_keys (the dispatcher turns this into a retryable is_error tool result, [sec-8])',
+    async (name) => {
+      const tool = tools.find((t) => t.name === name)!
+      for (const stale of [{ objective: 'x' }, { audience: 'CTOs' }, { platform: 'linkedin', objective: 'x' }]) {
+        const err = await tool.execute(stale).then(() => null, (e: unknown) => e)
+        expect(err, `${name} accepted ${JSON.stringify(stale)}`).toBeInstanceOf(z.ZodError)
+        expect((err as z.ZodError).issues[0].code).toBe('unrecognized_keys')
+      }
+    },
+  )
 
   it('(b) the empty-schema tools carry EXACTLY the zod empty shape — zero keys', () => {
     const expectedKeys = Object.keys(emptyInputSchema.shape)
@@ -131,6 +164,25 @@ function deepWalkAssertGuarded(value: unknown, keyName: string | null, path: str
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) deepWalkAssertGuarded(v, k, `${path}.${k}`)
   }
 }
+
+// ADR 0030 §3.4 / §11.2 #6 (MAJOR-1) — one test per call site: each retrieve* is handed (client, businessId, <the parsed hints>) exactly.
+describe('buildPlannerTools — SUBSTRATE-CALLERS-ENUMERATED: exact retrieve* arguments (ADR 0030 §3.4, MAJOR-1)', () => {
+  it.each([
+    ['list_evidence', retrieveEvidenceMemory],
+    ['list_brand_claims', retrieveBrandMemory],
+    ['list_audience_notes', retrieveAudienceMemory],
+  ] as const)('%s hands its retriever the tool client, the closure business id and the PARSED hints', async (name, retriever) => {
+    vi.mocked(retriever).mockClear()
+    const { client } = createMockClient([], null)
+    const tools = buildPlannerTools(client, 'biz-1', 'camp-1')
+    await tools.find((t) => t.name === name)!.execute({ platform: 'linkedin' })
+    expect(retriever).toHaveBeenCalledTimes(1)
+    const [calledClient, calledBusinessId, calledHints] = vi.mocked(retriever).mock.calls[0]
+    expect(calledClient).toBe(client)
+    expect(calledBusinessId).toBe('biz-1')
+    expect(calledHints).toEqual({ platform: 'linkedin' })
+  })
+})
 
 describe('buildPlannerTools — AGENCY-TOOL-RESULTS-GUARDED deep-walk (ADR 0027 §6.3, constraint 37)', () => {
   it('list_evidence: every string in the result is guarded (ids by name, evidence by content)', async () => {

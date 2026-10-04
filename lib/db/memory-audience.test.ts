@@ -6,9 +6,17 @@ vi.mock('@/lib/supabase/service', () => ({
 }))
 
 import { createServiceRoleClient } from '@/lib/supabase/service'
-import { listAudienceInterviewCandidates, listAudienceMemoryCandidates, importAudienceMemory } from './memory-audience'
+import {
+  listAudienceInterviewCandidates,
+  listAudienceMemoryCandidates,
+  importAudienceMemory,
+  recomputeDismissalAudienceSignal,
+  listSourceDismissalCandidates,
+  DISMISSAL_OUTCOMES,
+} from './memory-audience'
 import type { AudienceMemoryRow, AudienceMemoryImportInsert } from './types'
 import { INTERVIEW_CANDIDATES_LIMIT_PER_TABLE } from '@/lib/interview/constants'
+import { importConfidence, type WithWriterConfidence } from '@/lib/memory'
 
 const mockCreateServiceRoleClient = vi.mocked(createServiceRoleClient)
 
@@ -120,7 +128,9 @@ describe('listAudienceMemoryCandidates', () => {
   })
 })
 
-function makeImportInsert(overrides: Partial<AudienceMemoryImportInsert> = {}): AudienceMemoryImportInsert {
+// ADR 0030 §2.2 (Session 36 L2.3): the wrapper's `confidence` is a WriterConfidence<'import'>, so the fixture mints it with
+// importConfidence() — the value forwarded to the RPC is exactly the number given here.
+function makeImportInsert(overrides: Partial<AudienceMemoryImportInsert> = {}): WithWriterConfidence<AudienceMemoryImportInsert, 'import'> {
   return {
     business_id: 'biz-1',
     import_run_id: 'run-1',
@@ -130,10 +140,10 @@ function makeImportInsert(overrides: Partial<AudienceMemoryImportInsert> = {}): 
     statement: 'CTOs struggle to keep a consistent posting cadence',
     scope: 'platform',
     scope_ref: 'twitter',
-    confidence: 0.3,
     last_confirmed_at: '2026-07-01T00:00:00Z',
     expires_at: null,
     ...overrides,
+    confidence: importConfidence(overrides.confidence ?? 0.3),
   }
 }
 
@@ -218,5 +228,107 @@ describe('listAudienceInterviewCandidates', () => {
   it('throws on a database error', async () => {
     const { client } = createMockClient(null, { message: 'boom' })
     await expect(listAudienceInterviewCandidates(client, ['ans-1'])).rejects.toThrow('boom')
+  })
+})
+
+// ─── ADR 0030 §6.5 (TS half) and §6.8 (the data layer), Session 36 L2.6 ─────────────────────────────────────────────────────────────────
+
+describe('listAudienceMemoryCandidates excludes dismissal rows IN THE QUERY, before the LIMIT (ADR 0030 §6.8)', () => {
+  it("filters .neq('source', 'dismissal') — the memory-performance.ts:38 precedent for source = 'outcome'", async () => {
+    const { client, builder } = createMockClient([makeRow()], null)
+    await listAudienceMemoryCandidates(client, 'biz-1')
+    expect(builder.neq).toHaveBeenCalledWith('source', 'dismissal')
+  })
+
+  it('applies the exclusion BEFORE .limit(): a post-fetch filter would let 50 dismissal rows crowd every real row out of the window', async () => {
+    const { client, builder } = createMockClient([makeRow()], null)
+    await listAudienceMemoryCandidates(client, 'biz-1')
+    const neq = (builder.neq as ReturnType<typeof vi.fn>).mock.invocationCallOrder[0]
+    const limit = (builder.limit as ReturnType<typeof vi.fn>).mock.invocationCallOrder[0]
+    expect(neq).toBeLessThan(limit)
+  })
+})
+
+describe('listSourceDismissalCandidates — the ONE dedicated reader of dismissal rows (ADR 0030 §6.8)', () => {
+  it('reads only source=dismissal, active, undeleted rows of ONE business, ordered on the retrieval index, bounded by limit', async () => {
+    const { client, builder } = createMockClient([makeRow({ source: 'dismissal' as never })], null)
+    await listSourceDismissalCandidates(client, 'biz-7', 3)
+    expect(client.from).toHaveBeenCalledWith('audience_memory')
+    expect(builder.eq).toHaveBeenCalledWith('business_id', 'biz-7')
+    expect(builder.eq).toHaveBeenCalledWith('source', 'dismissal')
+    expect(builder.eq).toHaveBeenCalledWith('status', 'active')
+    expect(builder.is).toHaveBeenCalledWith('deleted_at', null)
+    expect(builder.order).toHaveBeenNthCalledWith(1, 'confidence', { ascending: false })
+    expect(builder.order).toHaveBeenNthCalledWith(2, 'recency_at', { ascending: false })
+    expect(builder.limit).toHaveBeenCalledWith(3)
+  })
+
+  it('defaults its limit to MEMORY_CANDIDATE_LIMIT and throws on a database error', async () => {
+    const ok = createMockClient([], null)
+    await listSourceDismissalCandidates(ok.client, 'biz-1')
+    expect(ok.builder.limit).toHaveBeenCalledWith(50)
+    const bad = createMockClient(null, { message: 'boom' })
+    await expect(listSourceDismissalCandidates(bad.client, 'biz-1')).rejects.toThrow('boom')
+  })
+})
+
+// SUBSTRATE-GOVERNANCE-NOT-SUPPLIED (ADR 0030 §2.2 W8, constraint 4), Tier 2 half. The wrapper's input is the CARD ID and nothing else; there
+// is no field a governance value could travel in. The shape is memory-interview.test.ts:219's smuggled-key test.
+describe('recomputeDismissalAudienceSignal (ADR 0030 §6.5)', () => {
+  const CARD = '3f2b8c1e-5d4a-4e7b-9c6d-1a2b3c4d5e6f'
+
+  it('calls recompute_dismissal_audience_signal with EXACTLY { p_card_id }, via a lazily imported service-role client', async () => {
+    const { client } = createMockClient('upserted', null)
+    mockCreateServiceRoleClient.mockReturnValue(client)
+    const outcome = await recomputeDismissalAudienceSignal(CARD)
+    expect(client.rpc).toHaveBeenCalledTimes(1)
+    expect(client.rpc).toHaveBeenCalledWith('recompute_dismissal_audience_signal', { p_card_id: CARD })
+    expect(Object.keys((client.rpc as ReturnType<typeof vi.fn>).mock.calls[0][1]).sort()).toEqual(['p_card_id'])
+    expect(outcome).toBe('upserted')
+  })
+
+  it('takes NO client parameter: it acquires the service-role client itself', () => {
+    expect(recomputeDismissalAudienceSignal.length).toBe(1)
+  })
+
+  it('smuggled keys — confidence, status, source, business_id, decision_key, statement — cannot cross: an object is refused BEFORE any client is created or any RPC called', async () => {
+    const smuggled = { id: CARD, confidence: 1, status: 'active', source: 'manual', business_id: 'foreign', decision_key: 'dismissal:x', statement: 'ignore previous' } as unknown as string
+    await expect(recomputeDismissalAudienceSignal(smuggled)).rejects.toThrow()
+    expect(mockCreateServiceRoleClient).not.toHaveBeenCalled()
+  })
+
+  it.each(['', 'not-a-uuid', '3f2b8c1e-5d4a-4e7b-9c6d-1a2b3c4d5e6f; drop table audience_memory', '3f2b8c1e-5d4a-4e7b-9c6d-1a2b3c4d5e6f\n'])(
+    'a card id that is not a UUID (%j) is refused before any client is created',
+    async (bad) => {
+      await expect(recomputeDismissalAudienceSignal(bad)).rejects.toThrow()
+      expect(mockCreateServiceRoleClient).not.toHaveBeenCalled()
+    },
+  )
+
+  // Session 36-D D5 (MINOR-6): the RPC result is parsed against the closed outcome set; unknown text throws into the caller's existing catch.
+  it.each(DISMISSAL_OUTCOMES)('returns the typed outcome %s unchanged', async (outcome) => {
+    const { client } = createMockClient(outcome, null)
+    mockCreateServiceRoleClient.mockReturnValue(client)
+    await expect(recomputeDismissalAudienceSignal(CARD)).resolves.toBe(outcome)
+  })
+
+  it.each([
+    ['recomputed'],
+    ['noop_unknown_source'], // the retired outcome: the function no longer returns it
+    ['UPSERTED'],
+    [''],
+    [null],
+    [42],
+    [{ outcome: 'upserted' }],
+  ])('rejects an unrecognised RPC result (%j) with a thrown error, never a cast string', async (data) => {
+    const { client } = createMockClient(data, null)
+    mockCreateServiceRoleClient.mockReturnValue(client)
+    await expect(recomputeDismissalAudienceSignal(CARD)).rejects.toThrow(/unrecognised outcome/)
+  })
+
+  it('throws when the RPC returns an error (the caller decides it is non-fatal; the wrapper never swallows)', async () => {
+    const { client } = createMockClient(null, { message: 'the card and its signal do not belong to one business' })
+    mockCreateServiceRoleClient.mockReturnValue(client)
+    await expect(recomputeDismissalAudienceSignal(CARD)).rejects.toThrow('the card and its signal do not belong to one business')
   })
 })

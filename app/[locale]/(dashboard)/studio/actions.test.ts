@@ -119,6 +119,15 @@ describe('suggestStudioSuggestions', () => {
     expect(runPrompt).toHaveBeenCalledTimes(1)
   })
 
+  it('REDDEN (ADR 0030 §3.4, MAJOR-1): both governed reads receive the action client, the business id and the draft platform as the parsed hints', async () => {
+    vi.mocked(runPrompt).mockResolvedValue({ revision: draftRow.content, suggestions: [], draftObservations: [] } as never)
+    await suggestStudioSuggestions(DRAFT_ID)
+    expect(retrieveEvidenceMemory).toHaveBeenCalledTimes(1)
+    expect(retrieveEvidenceMemory).toHaveBeenCalledWith(FAKE_CLIENT, BUSINESS_ID, { platform: 'linkedin' })
+    expect(retrieveStudioPerformancePatterns).toHaveBeenCalledTimes(1)
+    expect(retrieveStudioPerformancePatterns).toHaveBeenCalledWith(FAKE_CLIENT, BUSINESS_ID, { platform: 'linkedin' })
+  })
+
   it('persists the exact text sent (§10.1 implicit save), even when zero suggestions render, guarded by the pre-call content_hash (MAJOR-1)', async () => {
     vi.mocked(runPrompt).mockResolvedValue({ revision: draftRow.content, suggestions: [], draftObservations: [] } as never)
     await suggestStudioSuggestions(DRAFT_ID)

@@ -3,7 +3,7 @@ import { runPrompt } from '@/lib/ai/runner'
 import { briefAssemblyPrompt } from '@/lib/ai/prompts/brief'
 import { rubricPrompt, BRIEF_QUALITY_THRESHOLD, type RubricOutput } from '@/lib/ai/prompts/rubric'
 import { wrapEvidenceForPrompt, neutralize } from '@/lib/ai/wrap-evidence'
-import { retrieveEvidenceMemory, retrieveAudienceMemory, retrieveBrandMemory, retrieveHypothesisResults } from '@/lib/memory'
+import { retrieveMemoryBundle, renderMemoryBundleForPrompt, retrieveHypothesisResults } from '@/lib/memory'
 import { getCampaignById, moveCampaignToAwaitingBrief } from '@/lib/db/campaigns'
 import {
   getBriefByCampaign,
@@ -90,26 +90,14 @@ export async function assembleBrief(campaignId: string): Promise<CampaignBriefRo
     throw new Error(`A brief already exists for campaign ${campaignId}`)
   }
 
-  const queryContext = { objective: campaign.objective }
-  const [evidenceRows, audienceRows, brandRows, priorHypotheses] = await Promise.all([
-    retrieveEvidenceMemory(client, campaign.business_id, queryContext),
-    retrieveAudienceMemory(client, campaign.business_id, queryContext),
-    retrieveBrandMemory(client, campaign.business_id, queryContext),
-    // ADR 0026 §8.4 (J2.10) — Stage A is the ONLY reader of acknowledged hypothesis results.
+  // ADR 0030 §5 (Session 36 L2.8): ONE bundle read (evidence, audience, brand; the brief reads NO performance) under the brief task budget,
+  // rendered through ONE guard. `businessId` is the campaign's own tenant, never request input. The acknowledged-hypothesis reader stays separate:
+  // Stage A is its only reader (ADR 0026 §8.4).
+  const [bundle, priorHypotheses] = await Promise.all([
+    retrieveMemoryBundle(client, campaign.business_id, { task: 'brief' }),
     retrieveHypothesisResults(campaign.business_id),
   ])
-
-  // ADR §9 single choke point — called once per evidence id (B2.3's
-  // committed contract returns one joined string, not a per-item map), so
-  // each candidate can be labeled with its id for the model to cite.
-  // Bounded by EVIDENCE_CAP (lib/memory/constants.ts, currently 5) — a small,
-  // acceptable number of extra round-trips versus modifying B2.3's tested API.
-  const evidenceCandidates = await Promise.all(
-    evidenceRows.map(async (row) => ({
-      id: row.id,
-      guardedContent: await wrapEvidenceForPrompt(client, campaign.business_id, [row.id]),
-    })),
-  )
+  const rendered = await renderMemoryBundleForPrompt(bundle)
 
   const ctx = await buildCustomerContext(campaign.business_id, campaign.voice_variation_id)
 
@@ -117,9 +105,9 @@ export async function assembleBrief(campaignId: string): Promise<CampaignBriefRo
     objective: campaign.objective,
     platforms: campaign.platforms,
     specialInstructions: campaign.special_instructions,
-    evidenceCandidates,
-    audienceCandidates: audienceRows.map((r) => ({ statement: r.statement, kind: r.kind })),
-    brandCandidates: brandRows.map((r) => ({ statement: r.statement, category: r.category })),
+    evidenceCandidates: rendered.evidence,
+    audienceCandidates: rendered.audience,
+    brandCandidates: rendered.brand,
     priorHypotheses: priorHypotheses.map((h) => ({ pattern: h.pattern, n: h.n })),
   })
 
@@ -129,7 +117,7 @@ export async function assembleBrief(campaignId: string): Promise<CampaignBriefRo
   // string, not membership in the candidate set the model was actually shown.
   // Reject any id outside that set HERE, at the point untrusted model output
   // is first accepted — before persistence, not just before rendering.
-  const candidateIds = new Set(evidenceCandidates.map((c) => c.id))
+  const candidateIds = rendered.evidence.sentIds
   const sanitizedContent: CampaignBriefContent = {
     ...content,
     pinnedEvidence: content.pinnedEvidence.filter((e) => candidateIds.has(e.evidenceMemoryId)),

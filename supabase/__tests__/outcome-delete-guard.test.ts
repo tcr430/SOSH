@@ -33,11 +33,18 @@ describe('performance_memory DELETE policy excludes outcome rows', () => {
     expect(still).toHaveLength(1)
   })
 
-  it('the member can still delete a manual row', async () => {
+  // AMENDED (Session 36 L2.2, ADR 0030 §2.4 / A-5): "the member can still delete a manual row" no longer holds. The whole
+  // member write path on performance_memory is closed at the GRANT layer, so the delete is refused with 42501 and the
+  // row survives. Amended, not deleted. The outcome-row case above still passes, now for the stronger reason that NO
+  // member DELETE reaches the table (the delete guard it was written for is kept, unreachable, as defence in depth).
+  it('the member can no longer delete a manual row either: refused with 42501, the row survives (ADR 0030 §2.4, A-5)', async () => {
     const { data: row } = await w.admin.from('performance_memory').insert({
       ...base, business_id: w.businessId, source: 'manual', pattern: 'manual pattern',
     }).select('id').single()
     const del = await member.from('performance_memory').delete().eq('id', row.id).select('id')
-    expect(del.data ?? []).toHaveLength(1)
+    expect(del.error?.code).toBe('42501')
+    expect(del.data ?? []).toHaveLength(0)
+    const { data: still } = await w.admin.from('performance_memory').select('id').eq('id', row.id)
+    expect(still).toHaveLength(1)
   })
 })

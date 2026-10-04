@@ -171,6 +171,7 @@
       "conflict_marker": "May conflict with something already saved: {target}",
       "replace": "Replace it",
       "replace_for": "Replace \"{target}\" with \"{text}\"",
+      "cannotReplace": "This wasn't added by an interview or an import, so it can't be replaced here.",
       "set_aside": "{count, plural, one {# statement about what performs was set aside.} other {# statements about what performs were set aside.}}"
     },
     "errors": {

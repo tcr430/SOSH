@@ -416,3 +416,73 @@ describe('BackfillPanel — Section 10.2 states', () => {
     expect(container.textContent).toContain('not_started.body')
   })
 })
+
+// ADR 0030 §9.2 (Session 36 L2.10) — SUBSTRATE-UX-DISCLOSED, backfill step 4. Every candidate in all three groups shows the label of its row's OWN
+// source. Backfill rows are written with source 'import', so the label reads "From your posts" - but it is read from the row, not hard-coded, which is
+// proven here by a row whose source differs. The label is tied to its checkbox by aria-describedby, so it is announced with the control.
+describe('BackfillPanel — ADR 0030 §9.2 provenance labels', () => {
+  function ratify(candidates: ReturnType<typeof makeCandidates>) {
+    const run = makeRun({ status: 'awaiting_ratification' })
+    const { container, cleanup } = renderPanel([{ run, accountLabel: 'acme', candidates }])
+    cleanupFns.push(cleanup)
+    return { run, container }
+  }
+  const labelsIn = (c: HTMLElement) => Array.from(c.querySelectorAll('li [data-provenance]')).map((e) => e.getAttribute('data-provenance'))
+
+  it('every candidate of every group shows a label, and for backfill rows it is "import" (From your posts)', () => {
+    const run = makeRun({ status: 'awaiting_ratification' })
+    const { container } = ratify(makeCandidates({
+      audience: [makeAudienceCandidate(run, 'au-1', 'CTOs want SSO')],
+      evidence: [makeEvidenceCandidate(run, 'ev-1', 'Saved 10 hours')],
+      performance: [makePerformanceCandidate(run, 'pf-1', 'Short posts win', 6)],
+    }))
+    expect(labelsIn(container)).toEqual(['import', 'import', 'import'])
+    expect(Array.from(container.querySelectorAll('li [data-provenance]')).map((e) => e.textContent)).toEqual(['provenance.import', 'provenance.import', 'provenance.import'])
+  })
+
+  it("the label is read from the row's OWN source, not hard-coded: a row with a different source shows a different label", () => {
+    const run = makeRun({ status: 'awaiting_ratification' })
+    const { container } = ratify(makeCandidates({
+      audience: [makeAudienceCandidate(run, 'au-1', 'A'), { ...makeAudienceCandidate(run, 'au-2', 'B'), source: 'manual' }],
+    }))
+    expect(labelsIn(container)).toEqual(['import', 'manual'])
+  })
+
+  it('is plain muted text (no badge classes) and is announced WITH its checkbox via aria-describedby', () => {
+    const run = makeRun({ status: 'awaiting_ratification' })
+    const { container } = ratify(makeCandidates({ evidence: [makeEvidenceCandidate(run, 'ev-1', 'Saved 10 hours')] }))
+    const label = container.querySelector('li [data-provenance]')!
+    expect(label.className).toContain('text-muted-foreground')
+    expect(label.className).not.toMatch(/\bbg-|\bborder|\bring-|\brounded/)
+    const box = container.querySelector('li input[type="checkbox"]')!
+    const describedBy = box.getAttribute('aria-describedby')
+    expect(describedBy).toBeTruthy()
+    expect(container.querySelector(`#${CSS.escape(describedBy!)}`)).toBe(label)
+  })
+
+  it('a row whose source is not one of the six renders no label and NO dangling aria-describedby', () => {
+    const run = makeRun({ status: 'awaiting_ratification' })
+    const { container } = ratify(makeCandidates({ audience: [{ ...makeAudienceCandidate(run, 'au-1', 'A'), source: 'audience_memory' as never }] }))
+    expect(container.querySelectorAll('li [data-provenance]')).toHaveLength(0)
+    expect(container.querySelector('li input[type="checkbox"]')!.hasAttribute('aria-describedby')).toBe(false)
+  })
+
+  it('adds no control: each item still has exactly one checkbox and no button', () => {
+    const run = makeRun({ status: 'awaiting_ratification' })
+    const { container } = ratify(makeCandidates({
+      audience: [makeAudienceCandidate(run, 'au-1', 'A'), makeAudienceCandidate(run, 'au-2', 'B')],
+    }))
+    expect(container.querySelectorAll('li input[type="checkbox"]')).toHaveLength(2)
+    expect(container.querySelectorAll('li button')).toHaveLength(0)
+  })
+
+  it('ids are unique across the panel (two items, two labels)', () => {
+    const run = makeRun({ status: 'awaiting_ratification' })
+    const { container } = ratify(makeCandidates({
+      audience: [makeAudienceCandidate(run, 'au-1', 'A'), makeAudienceCandidate(run, 'au-2', 'B')],
+      evidence: [makeEvidenceCandidate(run, 'ev-1', 'C')],
+    }))
+    const ids = Array.from(container.querySelectorAll('[id]')).map((e) => e.id)
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+})

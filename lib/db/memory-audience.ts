@@ -1,9 +1,11 @@
+import { z } from 'zod'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { AudienceMemoryRow, AudienceMemoryImportInsert, InterviewConflictTargetRow } from './types'
 import { INTERVIEW_CANDIDATES_LIMIT_PER_TABLE, INTERVIEW_CONFLICT_TARGETS_LIMIT, INTERVIEW_THINNESS_ROW_LIMIT } from '@/lib/interview/constants'
 import { getErrorMessage } from './utils'
 import { MEMORY_CANDIDATE_LIMIT } from './memory-constants'
 import { neutralizeWithSentinels } from '@/lib/ai/wrap-evidence'
+import type { WithWriterConfidence } from '@/lib/memory'
 
 // ADR 0016 §5.1 (Q4) — candidate query only. No scoring, no capping; that is
 // lib/memory/audience.ts's job (B2). business_id is filtered explicitly
@@ -20,11 +22,85 @@ export async function listAudienceMemoryCandidates(
     .eq('business_id', businessId)
     .eq('status', 'active')
     .is('deleted_at', null)
+    // ADR 0030 §6.8 (Session 36 L2.6) — dismissal rows are EXCLUDED FROM THIS SHARED READ, IN THE QUERY and BEFORE the LIMIT, exactly as
+    // listPerformanceMemoryCandidates excludes 'outcome' (memory-performance.ts). A post-fetch filter would let up to `limit` dismissal
+    // rows crowd real audience facts out of the window. They state which WATCHED SOURCES a business keeps rejecting, a triage fact, not
+    // something a brief, plan or post should argue from; their one reader is listSourceDismissalCandidates below.
+    // Readers that inherit this: retrieveAudienceMemory (the brief via the bundle, and the planner tools; Studio reads evidence and performance only, ADR 0030 C.4) and readInterviewConflictContext.
+    .neq('source', 'dismissal')
     .order('confidence', { ascending: false })
     .order('recency_at', { ascending: false }) // = COALESCE(last_confirmed_at, created_at), matches audience_memory_retrieval_idx
     .limit(limit)
   if (error) throw new Error(getErrorMessage(error))
   return (data as AudienceMemoryRow[]) ?? []
+}
+
+// ADR 0030 §6.8 (Session 36 L2.6) — the ONE dedicated reader of source='dismissal' audience rows. Same business_id / status / deleted_at /
+// ORDER BY / LIMIT shape as the shared read, on audience_memory_retrieval_idx. It is reached only through retrieveSourceDismissals in
+// lib/memory/dismissal.ts (scan-enforced), and its one consumer is triage's list_audience_notes tool (L2.9). NO seventh copy of any
+// sanitiser: these statements were built in SQL from a template and a regex-checked identifier (ADR §6.3), and every read path neutralises
+// and quotes them anyway (ADR §7.2).
+export async function listSourceDismissalCandidates(
+  client: SupabaseClient,
+  businessId: string,
+  limit = MEMORY_CANDIDATE_LIMIT,
+): Promise<AudienceMemoryRow[]> {
+  const { data, error } = await client
+    .from('audience_memory')
+    .select('*')
+    .eq('business_id', businessId)
+    .eq('source', 'dismissal')
+    .eq('status', 'active')
+    .is('deleted_at', null)
+    .order('confidence', { ascending: false })
+    .order('recency_at', { ascending: false })
+    .limit(limit)
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as AudienceMemoryRow[]) ?? []
+}
+
+// ADR 0030 §6.5 (Session 36 L2.6) — the ONLY writer of source='dismissal' audience_memory rows, over recompute_dismissal_audience_signal
+// (20260929140000). service-role, LAZILY imported, NO client parameter (so a caller cannot hand it an authenticated client and trigger
+// silent permission failures). Its input is the CARD ID and nothing else, Zod-validated as a UUID BEFORE any client is created: there is
+// no field a governance value (source, status, confidence, business_id, decision_key, statement) could travel in, and the RPC computes all
+// of them in SQL from rows it reads itself (SUBSTRATE-GOVERNANCE-NOT-SUPPLIED, W8). Callers: ONLY lib/memory/dismissal.ts
+// (scan-enforced). Returns the RPC's outcome text; it never swallows an error, because whether a failure is non-fatal is the caller's call.
+const CARD_ID_SCHEMA = z.string().uuid()
+
+// Session 36-D D5 (MINOR-6): EVERY outcome the function can return, as the closed set the wrapper parses the RPC result against. It equals the set of
+// RETURN '...' literals of the latest migration that defines the function (20260930110000); lib/memory/substrate-scans.test.ts ties the two, so a new
+// RETURN without an entry here (and a class in lib/memory/dismissal.ts) is a failing test, not a silent string. Unknown text throws into the caller's
+// existing catch rather than being cast to a string and dropped.
+export const DISMISSAL_OUTCOMES = [
+  'noop_card_not_found',
+  'noop_card_state',
+  'anomaly_watched_id_null',
+  'noop_unknown_kind',
+  'noop_no_row',
+  'invalid_identifier',
+  'retired_invalid_identifier',
+  'watched_source_gone',
+  'retired_watched_source_gone',
+  'anomaly_watched_source_foreign',
+  'retired_anomaly_watched_source_foreign',
+  'deleted',
+  'retired',
+  'noop_nothing_counted',
+  'upserted',
+  'updated',
+] as const
+export type DismissalOutcome = (typeof DISMISSAL_OUTCOMES)[number]
+const DISMISSAL_OUTCOME_SCHEMA = z.enum(DISMISSAL_OUTCOMES)
+
+export async function recomputeDismissalAudienceSignal(cardId: string): Promise<DismissalOutcome> {
+  const p_card_id = CARD_ID_SCHEMA.parse(cardId)
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client.rpc('recompute_dismissal_audience_signal', { p_card_id })
+  if (error) throw new Error(getErrorMessage(error))
+  const outcome = DISMISSAL_OUTCOME_SCHEMA.safeParse(data)
+  if (!outcome.success) throw new Error(`recompute_dismissal_audience_signal returned an unrecognised outcome: ${JSON.stringify(data)?.slice(0, 80)}`)
+  return outcome.data
 }
 
 // ADR 0025 §9.4 (Session 32 I2.7) — the ONLY writer that produces
@@ -38,7 +114,10 @@ export async function listAudienceMemoryCandidates(
 // importEvidenceMemory and the MEM-PATTERN-SENTINEL-GUARDED precedent.
 // Governance columns are fixed inside the RPC — this type has no field for
 // them.
-export async function importAudienceMemory(insert: AudienceMemoryImportInsert): Promise<AudienceMemoryRow[]> {
+export async function importAudienceMemory(
+  // ADR 0030 §2.2 [type-4] — `confidence` is a WriterConfidence<'import'> (importConfidence(), band (0, 0.60]); value unchanged.
+  insert: WithWriterConfidence<AudienceMemoryImportInsert, 'import'>,
+): Promise<AudienceMemoryRow[]> {
   const { createServiceRoleClient } = await import('@/lib/supabase/service')
   const client = createServiceRoleClient()
   const { data, error } = await client.rpc('import_audience_memory', {

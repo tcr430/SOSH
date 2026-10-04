@@ -46,7 +46,8 @@
     "already_covered": "Already covered",
     "too_sensitive": "Too sensitive",
     "wrong_timing": "Wrong timing",
-    "weak_evidence": "Weak evidence"
+    "weak_evidence": "Weak evidence",
+    "teachesHint": "If you keep marking updates from this source as not relevant, Jemip will learn your audience isn't interested in them."
   },
   "status": {
     "pending": "Pending",

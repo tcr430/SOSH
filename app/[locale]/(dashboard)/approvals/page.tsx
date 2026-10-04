@@ -91,7 +91,8 @@ export default async function ApprovalsPage({
     (c) => c.status === 'checked' && c.claims.some((claim) => claim.outcome !== 'supported' && !claim.resolution),
   )
   const evidenceRows = anyOpenFlag ? await retrieveEvidenceMemory(client, business.id, {}).catch(() => []) : []
-  const evidenceOptions = evidenceRows.map((row) => ({ id: row.id, snippet: toSnippet(row.content) }))
+  // ADR 0030 §9.2 — `source` is the row's own column, passed through for the picker's provenance label; the read already returns full rows.
+  const evidenceOptions = evidenceRows.map((row) => ({ id: row.id, snippet: toSnippet(row.content), source: row.source }))
 
   return (
     <div className="space-y-6">

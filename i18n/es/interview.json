@@ -171,6 +171,7 @@
       "conflict_marker": "Puede entrar en conflicto con algo ya guardado: {target}",
       "replace": "Reemplazar",
       "replace_for": "Reemplazar \"{target}\" por \"{text}\"",
+      "cannotReplace": "Esto no se añadió mediante una entrevista ni una importación, así que no se puede reemplazar aquí.",
       "set_aside": "{count, plural, one {# afirmación sobre lo que funciona se dejó de lado.} other {# afirmaciones sobre lo que funciona se dejaron de lado.}}"
     },
     "errors": {

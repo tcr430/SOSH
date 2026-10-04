@@ -46,7 +46,8 @@
     "already_covered": "Já coberto",
     "too_sensitive": "Muito sensível",
     "wrong_timing": "Momento errado",
-    "weak_evidence": "Evidência fraca"
+    "weak_evidence": "Evidência fraca",
+    "teachesHint": "Se continuar a marcar as novidades desta fonte como não relevantes, o Jemip vai aprender que o seu público não tem interesse nelas."
   },
   "status": {
     "pending": "Pendente",

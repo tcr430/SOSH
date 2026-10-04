@@ -96,6 +96,21 @@ Verification command (per row): `vercel env ls production | grep <VAR>`
   Expected: every row's `relrowsecurity = t`.
 - [ ] **Service-role-only tables have RLS enabled with no policies for `authenticated`:** `ai_usage`, `trial_state`, `auth_rate_limits`, `cron_health`, `billing_events` (writes only — read policy may exist).
 - [ ] **Vault extension enabled.** Verify `select extname from pg_extension where extname = 'supabase_vault';` returns one row.
+- [ ] **SECURITY DEFINER functions not client-executable (ADR 0030 V.17, Session 36-D MAJOR-2).** A SECURITY DEFINER function revoked `FROM PUBLIC` only is still executable by `anon` and `authenticated` on a **fresh** Supabase database, because the platform's default privileges grant both; a long-lived database hides it (backlog `S36-LOCAL-DB-NOT-FRESH`). Session 36 found three memory RPCs failing this and narrowed them (`20260930100000`), but the check was never run over the other SECURITY DEFINER functions in `public`, and the hosted project's grants were never read. Run the audit from backlog `S36-FRESH-DB-RPC-ACL-AUDIT`, verbatim, on **a fresh local database (`supabase db reset`) AND on the hosted project**:
+  ```sql
+  SELECT p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' AND p.prosecdef AND (has_function_privilege('anon', p.oid, 'EXECUTE') OR has_function_privilege('authenticated', p.oid, 'EXECUTE'))
+  ```
+  Expected: **only** the enumerated allow-list of deliberately client-callable functions below, each with its reason; any other row is a defect to narrow (`REVOKE ALL ON FUNCTION ... FROM PUBLIC, anon, authenticated` then `GRANT EXECUTE ... TO service_role`, in a forward migration, the `20260930100000` form) or a function to justify onto the list with a one-line reason. **Allow-list (verify each entry against its callers before adding it):** `get_user_business_ids` (authenticated): every RLS policy calls it as `authenticated` (37 migration files, 135 policy lines).
+  Run on a fresh `supabase db reset` at `f4838abe` on 2026-10-04, the query returned these **8** functions (6 executable by `anon`). All pre-existing and outside Session 36's range; each is **narrow, or justify onto the allow-list**:
+  - `accept_invite(uuid, uuid)` (authenticated only): called with the signed-in user's client, `lib/db/business-members.ts:192`. Likely allow-list.
+  - `enforce_seat_cap()` (anon, authenticated): a trigger function (`RETURNS trigger`), invoked by its trigger on `business_members`, with no client caller.
+  - `enqueue_post_edit_signal()` (anon, authenticated): a trigger function (`RETURNS TRIGGER`), invoked by its trigger on `posts`, with no client caller.
+  - `ensure_owner_membership()` (anon, authenticated): a trigger function (`RETURNS trigger`), invoked by its trigger on `businesses`, with no client caller.
+  - `get_user_business_ids()` (authenticated only): RLS (above). Allow-list.
+  - `increment_brand_voice_attempts(uuid)` (anon, authenticated): its only caller is the **service-role** `lib/db/trial-state.ts:60`, and it takes a caller-supplied `p_business_id`, so any signed-in user could call it for another business over PostgREST. **Narrowed in the repo by `20260930120000_trial_counter_rpcs_revoke_client_roles` (2026-10-04, with a Tier-1 test); not yet applied to the hosted project.**
+  - `increment_posts_generated(uuid)` (anon, authenticated): the same, `lib/db/trial-state.ts:67`. **Narrowed in the repo by `20260930120000`**, as above.
+  - `user_can(uuid, text)` (anon, authenticated): called as `authenticated` by `app/[locale]/(dashboard)/settings/team/page.tsx:31`, `app/api/social/[platform]/connect/route.ts:42` and `.../disconnect/route.ts:33`, and by RLS policies. Keep for `authenticated`; the `anon` grant has no caller.
+  - [ ] **Sub-check: `20260930100000_distilled_writer_rpcs_revoke_client_roles` (and `20260930110000` and `20260930120000`) are applied on the hosted project** (and the query above is re-run there after it). The hosted project is **not** assumed to have been fixed by it: ADR 0030 V.17, "exposure should be assumed" on any database that received the platform default grants. Record the dated before and after output here when done.
 
 ---
 
