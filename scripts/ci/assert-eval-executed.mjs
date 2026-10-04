@@ -38,7 +38,9 @@
 import { readFileSync, existsSync } from 'node:fs'
 
 const MIN_CORPUS_EXAMPLES = 40
-const ARTEFACT_PATH = 'lib/signals/__fixtures__/eval/latest-run.json'
+// Overridable for the same reason as scripts/eval/run-triage-eval.ts: its test
+// runs the guard against a temp artefact, never the checked-in one.
+const ARTEFACT_PATH = process.env.TRIAGE_EVAL_ARTEFACT_PATH ?? 'lib/signals/__fixtures__/eval/latest-run.json'
 
 // NIT-4 (D4) — previously hardcoded to 'corpus.v1.json' at this line, which
 // would leave the pre-run minimum reading a stale file once a v2 corpus

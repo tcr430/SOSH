@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterEach, afterAll } from 'vitest'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { execSync, spawnSync } from 'node:child_process'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 
 // ADR 0023 §2.4.2 (Session 30 G1b.11) — SIGNAL-MR-CORPUS-DISCRIMINATIVE.
@@ -61,8 +62,17 @@ const ROOT = process.cwd()
 // GitHub examples this file mutates are UNCHANGED aside from the added
 // `source` field; every assertion below now reads metricsBySource.github
 // rather than the removed blended `metrics` object (§2.8).
-const CORPUS_PATH = path.join(ROOT, 'lib', 'signals', '__fixtures__', 'eval', 'corpus.v2.json')
-const ARTEFACT_PATH = path.join(ROOT, 'lib', 'signals', '__fixtures__', 'eval', 'latest-run.json')
+//
+// The mutations below are written to a TEMP copy and handed to the script via
+// TRIAGE_EVAL_CORPUS_PATH / TRIAGE_EVAL_ARTEFACT_PATH. They used to rewrite the
+// checked-in corpus.v2.json in place, which raced corpus-v2-schema.test.ts
+// (a read-only test of the same file in another vitest worker) and made it fail
+// intermittently under a full run. The checked-in files are only ever READ here.
+const SOURCE_CORPUS_PATH = path.join(ROOT, 'lib', 'signals', '__fixtures__', 'eval', 'corpus.v2.json')
+const SCRATCH_DIR = mkdtempSync(path.join(tmpdir(), 'triage-eval-'))
+const CORPUS_PATH = path.join(SCRATCH_DIR, 'corpus.v2.json')
+const ARTEFACT_PATH = path.join(SCRATCH_DIR, 'latest-run.json')
+const EVAL_ENV = { ...process.env, TRIAGE_EVAL_CORPUS_PATH: CORPUS_PATH, TRIAGE_EVAL_ARTEFACT_PATH: ARTEFACT_PATH }
 
 interface EvalMetric {
   // D1 (Session 30-D, MINOR-5) — null, not 0, on a zero denominator.
@@ -98,11 +108,10 @@ interface EvalArtefact {
 }
 
 let originalCorpusText: string
-let originalArtefactText: string
 
 beforeAll(() => {
-  originalCorpusText = readFileSync(CORPUS_PATH, 'utf-8')
-  originalArtefactText = readFileSync(ARTEFACT_PATH, 'utf-8')
+  originalCorpusText = readFileSync(SOURCE_CORPUS_PATH, 'utf-8')
+  writeFileSync(CORPUS_PATH, originalCorpusText)
 })
 
 afterEach(() => {
@@ -110,11 +119,11 @@ afterEach(() => {
 })
 
 afterAll(() => {
-  writeFileSync(ARTEFACT_PATH, originalArtefactText)
+  rmSync(SCRATCH_DIR, { recursive: true, force: true })
 })
 
 function runEval(): EvalArtefact {
-  execSync('npx tsx scripts/eval/run-triage-eval.ts', { cwd: ROOT, stdio: 'pipe' })
+  execSync('npx tsx scripts/eval/run-triage-eval.ts', { cwd: ROOT, stdio: 'pipe', env: EVAL_ENV })
   return JSON.parse(readFileSync(ARTEFACT_PATH, 'utf-8')) as EvalArtefact
 }
 
@@ -365,6 +374,7 @@ describe('scripts/eval/run-triage-eval.ts — Tier A mutation test (SIGNAL-MR-CO
       const guard = spawnSync('node', ['scripts/ci/assert-eval-executed.mjs'], {
         cwd: ROOT,
         encoding: 'utf-8',
+        env: EVAL_ENV,
       })
       expect(guard.status).not.toBe(0)
       expect(guard.stderr).toMatch(/pending/i)
