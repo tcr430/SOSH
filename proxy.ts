@@ -1,6 +1,7 @@
 import createIntlMiddleware from "next-intl/middleware";
 import { type NextRequest, NextResponse } from "next/server";
 import { routing } from "@/i18n/routing";
+import { NEXT_INTL_LOCALE_HEADER, resolveRequestLocale } from "@/lib/i18n/request-locale";
 import { updateSession } from "@/lib/supabase/middleware";
 import { buildCsp } from "@/lib/observability/csp";
 import { deriveSentryCspReportUri } from "@/lib/observability/sentry-csp-report-uri";
@@ -49,6 +50,9 @@ export async function proxy(request: NextRequest) {
   //    via headers().get('x-pathname'). Required for onboarding redirect guard.
   const requestHeaders = new Headers(request.headers)
   requestHeaders.set('x-pathname', pathname)
+  // next-intl's own header would be lost with the cloned headers; see
+  // lib/i18n/request-locale.ts.
+  requestHeaders.set(NEXT_INTL_LOCALE_HEADER, resolveRequestLocale(pathname))
 
   // 4. Run locale routing. If i18n issues a redirect (locale normalisation),
   //    attach Supabase cookies and return it directly.

@@ -215,7 +215,8 @@ async function executePrompt<TInput, TOutput>(
     ...(prompt.useToolOutput
       ? { tools: anthropicTools, tool_choice: { type: 'tool' as const, name: toolName } }
       : {}),
-    // _sosh is stripped by the real Anthropic SDK (unknown fields ignored).
+    // _sosh is a mock-routing field. The real API rejects unknown fields
+    // (HTTP 400), so lib/ai/client.ts's real-client adapter strips it.
     // MockAnthropicClient reads it to route to per-prompt-id fixtures.
     _sosh: { promptId: prompt.id, input },
   }
