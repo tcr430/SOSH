@@ -107,10 +107,10 @@ Verification command (per row): `vercel env ls production | grep <VAR>`
   - `enqueue_post_edit_signal()` (anon, authenticated): a trigger function (`RETURNS TRIGGER`), invoked by its trigger on `posts`, with no client caller.
   - `ensure_owner_membership()` (anon, authenticated): a trigger function (`RETURNS trigger`), invoked by its trigger on `businesses`, with no client caller.
   - `get_user_business_ids()` (authenticated only): RLS (above). Allow-list.
-  - `increment_brand_voice_attempts(uuid)` (anon, authenticated): its only caller is the **service-role** `lib/db/trial-state.ts:60`, and it takes a caller-supplied `p_business_id`, so any signed-in user could call it for another business over PostgREST. Highest priority to narrow.
-  - `increment_posts_generated(uuid)` (anon, authenticated): the same, `lib/db/trial-state.ts:67`.
+  - `increment_brand_voice_attempts(uuid)` (anon, authenticated): its only caller is the **service-role** `lib/db/trial-state.ts:60`, and it takes a caller-supplied `p_business_id`, so any signed-in user could call it for another business over PostgREST. **Narrowed in the repo by `20260930120000_trial_counter_rpcs_revoke_client_roles` (2026-10-04, with a Tier-1 test); not yet applied to the hosted project.**
+  - `increment_posts_generated(uuid)` (anon, authenticated): the same, `lib/db/trial-state.ts:67`. **Narrowed in the repo by `20260930120000`**, as above.
   - `user_can(uuid, text)` (anon, authenticated): called as `authenticated` by `app/[locale]/(dashboard)/settings/team/page.tsx:31`, `app/api/social/[platform]/connect/route.ts:42` and `.../disconnect/route.ts:33`, and by RLS policies. Keep for `authenticated`; the `anon` grant has no caller.
-  - [ ] **Sub-check: `20260930100000_distilled_writer_rpcs_revoke_client_roles` is applied on the hosted project** (and the query above is re-run there after it). The hosted project is **not** assumed to have been fixed by it: ADR 0030 V.17, "exposure should be assumed" on any database that received the platform default grants. Record the dated before and after output here when done.
+  - [ ] **Sub-check: `20260930100000_distilled_writer_rpcs_revoke_client_roles` (and `20260930110000` and `20260930120000`) are applied on the hosted project** (and the query above is re-run there after it). The hosted project is **not** assumed to have been fixed by it: ADR 0030 V.17, "exposure should be assumed" on any database that received the platform default grants. Record the dated before and after output here when done.
 
 ---
 
