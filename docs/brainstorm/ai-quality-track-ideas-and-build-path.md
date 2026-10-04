@@ -513,7 +513,25 @@ economics several times over.
 
 ---
 
-## 10. Memory as a platform substrate — the 8-readers / 1-writer problem
+## 10. Memory as a platform substrate — the 8-readers / 1-writer problem — **SHIPPED, in a narrower form (Session 36, ADR 0030; see the dated note below)**
+
+> **Session 36 correction (2026-10-04):** §10 was built as Session 36 / Track L (ADR 0030), in a narrower form than
+> written here, and four of its claims are stale. **(1) "Exactly one thing writes memory" is no longer true.** The
+> registry (`lib/memory/writers.ts`) holds a retired `manual` source and five machine writers: `distilled` (the
+> edit-learning loop this section names), `import` (Session 32), `outcome` (Session 33, `performance_memory`),
+> `interview` (Session 35) and **`dismissal`** (Session 36, the one decision-derived writer). **(2) Shift 10.2:
+> `MemoryQueryContext` is no longer "three fields".** A model may set `{ platform }`; `campaignId` and
+> `confidenceFloor` are caller-only; `objective`, `audience` and `role` were removed because no scoring term read
+> them (ADR 0030 §3; ADR 0024 §5.1 amended). The widening to topic, format and time window proposed here was not
+> built (backlog `S36-FORMAT-QUERY-FIELD`). **(3) Shift 10.3: cross-type retrieval exists** (`retrieveMemoryBundle`,
+> per-task budgets of 14–15 records with per-type floors and ceilings, replacing "18 records selected without
+> reference to one another"), **but only the brief uses it**: the post, plan and triage budgets are defined and not
+> yet wired. **(4) Shift 10.4: write governance shipped in part**: per-writer provenance, per-source confidence
+> ceilings, a typed write contract, and Replace on import-sourced conflicts; **automated cross-writer
+> contradiction detection did not** (rows coexist, distinguished by provenance, ADR 0030 §4.2). Of Shift 10.1's
+> decision surfaces only the feed dismissal shipped; brief rejection, post skip, reschedule, Studio discard and
+> claim removal are deferred, each with its trigger (`docs/backlog.md` §3.3, `S36-WRITER-*`). The eight-readers
+> list above is also out of date: the brief now reads through the bundle. Nothing above is rewritten.
 
 **The retrieval half is already good, and better than a first read of the ADRs suggests.** `lib/memory/`
 is a real service, not a context blob: per-type `retrieveRelevant`, `scoreRecord`, `rankAndCap`, an
@@ -823,6 +841,13 @@ degrades each:
 > The chain's *code* is therefore in place through §11; what gates its value is not a missing session but **data**: the
 > outcome loop needs a connected production account with published, matured posts, and no production OAuth app is registered
 > yet. §13's later steps still follow the ordering above.
+
+> **Session 36 update (2026-10-04):** Session G shipped as Session 36 (Track L, ADR 0030) with a narrower writer
+> set than listed above: the writer registry and its nine-point write contract, the cross-type bundle (brief
+> only), a narrowed query contract, and **one** decision writer (feed dismissal). Brief rejection, post skip,
+> reschedule, Studio discard and claim removal are deferred. The registry now holds five machine writers (up from
+> one), but what measures §10 is still **not measured**: memory rows written per active brand per week, and
+> whether any dismissal row improves triage, need real tenants.
 
 ### The rulings that gate it
 

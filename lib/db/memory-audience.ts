@@ -26,7 +26,7 @@ export async function listAudienceMemoryCandidates(
     // listPerformanceMemoryCandidates excludes 'outcome' (memory-performance.ts). A post-fetch filter would let up to `limit` dismissal
     // rows crowd real audience facts out of the window. They state which WATCHED SOURCES a business keeps rejecting, a triage fact, not
     // something a brief, plan or post should argue from; their one reader is listSourceDismissalCandidates below.
-    // Readers that inherit this: retrieveAudienceMemory (brief, planner tools, Studio) and readInterviewConflictContext.
+    // Readers that inherit this: retrieveAudienceMemory (the brief via the bundle, and the planner tools; Studio reads evidence and performance only, ADR 0030 C.4) and readInterviewConflictContext.
     .neq('source', 'dismissal')
     .order('confidence', { ascending: false })
     .order('recency_at', { ascending: false }) // = COALESCE(last_confirmed_at, created_at), matches audience_memory_retrieval_idx

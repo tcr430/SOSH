@@ -10,6 +10,11 @@
 >
 > **Basis:** written 2026-09-02, verified against the source at `b297a4a8` rather than against planning
 > documents. **Naming:** the product is being renamed SOSH → Jemip; the codebase still says SOSH.
+>
+> **Updated 2026-10-04 for Session 36 only (Track L, ADR 0030).** Two entries under "Built and working" are new.
+> Everything else in this file still reflects the 2026-09-02 basis and was **not re-verified**; in particular
+> "In flight" predates Sessions 31–35 (generation quality, the social-history import, the outcome loop and the
+> agency tools have since been built), so read it as history. A full refresh is its own piece of work.
 
 ---
 
@@ -87,6 +92,22 @@ voice"* genuinely closes.
 - **Publishing** — scheduling, retries, status reconciliation.
 - **Learning from edits** — the difference between the AI's draft and the approved version is captured,
   classified and promoted into memory.
+- **Dismissals teach memory, conditionally (Session 36).** Dismissing an opportunity as "not relevant" is
+  counted per watched source (a GitHub repository or a feed). A single dismissal teaches nothing visible:
+  Jemip records that your audience isn't interested in a source only after at least three such dismissals, and
+  at least three in four of that source's decisions over the last six months. Approving or saving cards from
+  the same source counts against it, and the note expires after about six months. Only the signal-triage step
+  reads it, and it never changes a brief or a post. The dismiss menu says this in the product's own words
+  (*"If you keep marking updates from this source as not relevant, Jemip will learn your audience isn't
+  interested in them."*). There is no screen to view or edit these notes, and whether they improve triage is
+  **not measured**.
+- **Provenance labels on remembered facts (Session 36).** Where Jemip shows a remembered fact, it says where it
+  came from: "Added by you", "Learned from your edits", "From your posts", "From your interview", "From your
+  results" or "From dismissed ideas" (English, Portuguese and Spanish). They appear in three places: the
+  interview ratification step (a conflict marker), the approvals evidence picker, and the review step of the
+  social-history import. In interview ratification a new answer can replace a conflicting fact that came from
+  an interview or an import, and only those. These surfaces were checked by automated DOM assertions only, not
+  in a real browser or with a screen reader (backlog `S36-UX-UNVERIFIED-IN-BROWSER`).
 - **Billing** (Stripe), **transactional email** (Resend), **legal surface**, **marketing site**, and
   **three languages** (English, Portuguese, Spanish) throughout.
 
