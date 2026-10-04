@@ -785,3 +785,50 @@ PT and ES are translated naturally, not literally, keeping the three elements of
 **Loop:** `npx tsc --noEmit --skipLibCheck` clean; `npm run lint` 0 errors (112 warnings, unchanged); `npm run test:app` with the `app-tests.yml` env block **382 files / 5880 tests passed**.
 **Commit:** D6 (its SHA is recorded in D7's block). D9 records the ruling in ADR 0030 §9.1 and copies the old and new text.
 **What I did NOT touch:** no element, class, control or layout; `dismissSchema` and the dismiss action are untouched; the feed component and its structural tests are byte-unchanged; no new i18n key (the existing key's string changed in all three locales at once).
+
+### D7 — NIT-2 and MINOR-5 (closing: #17 and #24)
+
+**D6's SHA, recorded here as promised:** `61fd060b` (MINOR-7, code half). The D6 rows' **Commit** field resolves to it.
+
+**Finding:** NIT-2.
+**Fix:** test-only, two mock factories.
+- **(a)** `app/[locale]/(dashboard)/campaigns/[id]/brief/actions.supersede-callers.test.ts`: the `vi.mock('@/lib/memory')` factory carried `retrieveEvidenceMemory`, `retrieveAudienceMemory`, `retrieveBrandMemory` and `retrieveHypothesisResults`. I read the subject's import graph at the head: `lib/campaigns/brief.ts:6` imports `retrieveMemoryBundle`, `renderMemoryBundleForPrompt` and `retrieveHypothesisResults` from `@/lib/memory`, and the brief `actions.ts` imports nothing from it. The factory now carries exactly those three; the dead three are gone. This contradicted V.10 D13.
+- **(b)** `lib/campaigns/generate.context-equivalence.test.ts`: the `@/lib/db/memory-evidence` factory lacked `hasActiveEvidence`, so on the real chain (`generate.ts` -> `@/lib/memory` -> the mocked db layer) the call threw a `TypeError` that `generate.ts`'s advisory catch swallowed. The factory now carries it, and a NEW test makes the lookup reachable and its value consumed. The file's model output carried no `claims`, so the lookup was never reached at all (nothing in the file could notice its absence). The new test overrides the native-generation response to include one claim, with nothing pinned or sent, so the corpus lookup runs; it asserts `hasActiveEvidence` was called with `(anything, BUSINESS_ID)` and that the stored verdict follows the value: `true` -> `['checked','checked','checked']`, `false` -> `['no_corpus','no_corpus','no_corpus']`. The implementation override is restored in a `finally`.
+**Proof:** `generate.context-equivalence.test.ts`, test `the claim-check corpus lookup is reached with THIS business id and its value is CONSUMED (checked vs no_corpus)`; (a) is hygiene and carries no new assertion (see below).
+**Reddening:**
+
+| Mutation | Result |
+|---|---|
+| (b) delete `hasActiveEvidence` from the `@/lib/db/memory-evidence` factory | `× the claim-check corpus lookup is reached with THIS business id and its value is CONSUMED` · `Error: [vitest] No "hasActiveEvidence" export is defined on the "@/lib/db/memory-evidence" mock` · 1 failed / 6 passed. The other six tests pass without the entry, which is exactly why its absence was invisible before. Restored: 7 / 7. |
+| (a) | **Not reddenable, and I say so.** A named export missing from a `vi.mock` factory throws only when it is *accessed*, and none of the three approve/reject/edit actions under test reaches brief generation, so neither the old dead entries nor the new ones are ever touched. (a) corrects the factory to what the import graph reaches (V.10 D13); it asserts nothing new and I do not claim a redden for it. |
+
+One deliberate adjustment while building (b), reported: I first set a `beforeEach` default (`hasActiveEvidence` -> `false`), which would have made deleting the factory entry fail every test in the file through a noisy path. I removed it, because only the new test reaches the lookup; the deletion now reddens that one test.
+
+**Finding:** MINOR-5, closing row (constraints #17 and #24; #12 was recorded at D1, #14 at D4). `6c90c038`, `eab33b5e` and `b0286e02` were not amended and their bodies stay as they were; no history was rewritten. The Reviewer did not re-redden #17 or #24 and V.13 holds their evidence as prose only, so this pass re-reddens both at the head, with neither test changed (the only edit to `opportunities/actions.test.ts` in this pass is D5's, committed at `70a1ccb6`; `substrate-two-business.test.ts` is byte-unchanged).
+**Fix:** transcripts only; no test or production change.
+
+**#17 SUBSTRATE-DISMISS-MAPPING** (`app/[locale]/(dashboard)/opportunities/actions.test.ts`, plants applied one at a time to `opportunities/actions.ts`, file restored after each, `diff` against `HEAD` empty):
+
+| Plant | RED test (failing assertion line) |
+|---|---|
+| recompute on EVERY reason (`if (parsed.data.reason === 'not_relevant') {` -> `if (true) {`) | 5 failed / 67 passed: `dismiss with reason already_covered / too_sensitive / weak_evidence / wrong_timing / undefined -> 0 recompute call(s), and the call carries the cardId ONLY` (`:259`, `expect(recomputeDismissalSignal).toHaveBeenCalledTimes(calls)`) |
+| recompute NOT gated on `result.success` in `approveCardAction` | 2 failed / 70 passed: `approve: an already_triaged outcome NEVER calls the recompute` (assertion `:330`) and `approveCardAction does NOT call seedCampaignFromCard when the transition loses the race` (test at `:103`) |
+| the same in `dismissCardAction` | 2 failed / 70 passed: `dismiss (not_relevant): an already_triaged outcome NEVER calls the recompute` (`:330`) and `dismissing A's card while B is the active business: the transition fails and the recompute is never called` (`:356`) |
+| the same in `saveCardAction` | 1 failed / 71 passed: `save: an already_triaged outcome NEVER calls the recompute` (`:330`) |
+
+Command for each: `npx vitest run "app/[locale]/(dashboard)/opportunities/actions.test.ts" --retry=0` with the `app-tests.yml` env block. Green before and after: 72 / 72.
+
+**#24 SUBSTRATE-RLS-ISOLATED** (`supabase/__tests__/substrate-two-business.test.ts`, 10 / 10 green first; the plant is the business filter dropped from one reader, which matters because every one of these reads runs under the service-role client, where that filter is the only tenant boundary; local stack `http://127.0.0.1:54321` asserted; each file restored, diff-stat empty):
+
+| Plant | RED test (failing line) |
+|---|---|
+| `hasActiveEvidence` drops `.eq('business_id', businessId)` (`lib/db/memory-evidence.ts:42`) | 3 failed / 7 passed: `A has NO evidence and B holds one ACTIVE row -> false for A, true for B (positive control)` (`expected true to be false`; test at `:176`), `an EXPIRED-only corpus -> false; …` (test at `:185`), `candidate and retired rows do not count; …` (test at `:194`) |
+| `listBrandMemoryCandidates` drops its business filter (`lib/db/memory-brand.ts:18`) | 2 failed / 8 passed: `A's bundle holds none of B's rows of any type while B holds one ACTIVE row of every type (positive control)` (`expected [ 2, 1, 1 ] to deeply equal [ 1, 1, 1 ]`; test at `:241`) and `the brief bundle reads NO performance even when the business has an ACTIVE governed pattern (ceiling 0)` (test at `:258`) |
+
+Command: `npx vitest run supabase/__tests__/substrate-two-business.test.ts --no-file-parallelism --retry=0`.
+
+**The MINOR-5 closing statement:** #12 (D1, `7e53e680`), #14 (D4, `6d6b8b3e`), #17 and #24 (here) now each have a recorded redden transcript in this file, completing the four constraints the Reviewer named.
+
+**Loop** (local stack, `http://127.0.0.1:54321` asserted, never the remote): `npx tsc --noEmit --skipLibCheck` clean; `npm run lint` 0 errors (112 warnings, unchanged; none in the touched files); `npm run test:app` with the `app-tests.yml` env block **382 files / 5881 tests passed**; `npm run test:db` **113 files / 1306 tests passed**.
+**Commit:** D7 (its SHA is recorded in D8's block).
+**What I did NOT touch:** no production file (every plant above was restored; `git diff` against `HEAD` is empty for `actions.ts`, `memory-evidence.ts` and `memory-brand.ts`); `#17`'s test (`actions.test.ts`) and `#24`'s test (`substrate-two-business.test.ts`) were run unchanged.

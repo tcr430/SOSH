@@ -79,7 +79,10 @@ vi.mock('@/lib/db/brand-voices', () => ({ getBrandVoice: vi.fn() }))
 vi.mock('@/lib/db/voice', () => ({ getVariationForBusiness: vi.fn() }))
 vi.mock('@/lib/db/post-metrics', () => ({ listTopPostMetrics: vi.fn() }))
 vi.mock('@/lib/db/memory-performance', () => ({ listPerformanceMemoryCandidates: vi.fn(), listOutcomePatternsForGeneration: vi.fn(async () => []) }))
-vi.mock('@/lib/db/memory-evidence', () => ({ getEvidenceMemoryByIds: vi.fn().mockResolvedValue([]) }))
+// Session 36-D D7 (NIT-2b): hasActiveEvidence is carried too, because generate.ts reaches it (through @/lib/memory) whenever nothing was pinned AND a post made
+// a claim. Without it the call threw a TypeError that generate.ts's advisory catch swallowed, so its absence was invisible; the claim-check test below now
+// asserts the value is CONSUMED, so the absence reddens.
+vi.mock('@/lib/db/memory-evidence', () => ({ getEvidenceMemoryByIds: vi.fn().mockResolvedValue([]), hasActiveEvidence: vi.fn() }))
 vi.mock('@/lib/db/trial-state', () => ({
   getTrialStateMaybe: vi.fn(),
   incrementPostsGeneratedBy: vi.fn().mockResolvedValue(undefined),
@@ -110,6 +113,7 @@ import { getBrandVoice } from '@/lib/db/brand-voices'
 import { getVariationForBusiness } from '@/lib/db/voice'
 import { listTopPostMetrics } from '@/lib/db/post-metrics'
 import { listPerformanceMemoryCandidates } from '@/lib/db/memory-performance'
+import { hasActiveEvidence } from '@/lib/db/memory-evidence'
 import { getTrialStateMaybe } from '@/lib/db/trial-state'
 import { getAnthropicClient } from '@/lib/ai/client'
 import { countRecentCalls } from '@/lib/db/ai-usage'
@@ -350,6 +354,41 @@ describe('lib/campaigns/generate.ts caller — buildCustomerContext is called by
       'GOVERNED-PATTERN-0', 'GOVERNED-PATTERN-1', 'GOVERNED-PATTERN-2',
     ])
     expect(listTopPostMetrics).not.toHaveBeenCalled()
+  })
+
+  // Session 36-D D7 (NIT-2b), ADR 0030 §3.4: the claim-check's corpus lookup. The real chain runs (generate.ts -> @/lib/memory -> the mocked db layer), so the
+  // factory must carry hasActiveEvidence or the call throws and the advisory catch hides it. Nothing is pinned or sent (getEvidenceMemoryByIds returns []),
+  // and the post makes an uncited claim, so the lookup is reached; its VALUE decides the stored verdict: true -> "checked" (the claim is flagged uncited),
+  // false -> "no_corpus". Absent from the factory the verdict would be neither (claimCheck omitted: "not checked"), so this test reddens on the absence.
+  it('the claim-check corpus lookup is reached with THIS business id and its value is CONSUMED (checked vs no_corpus)', async () => {
+    const original = mockCreate.getMockImplementation()!
+    mockCreate.mockImplementation(async (params: { _sosh?: { promptId: string } }) => {
+      const res = await original(params)
+      if (params._sosh?.promptId === 'rubric') return res
+      return {
+        ...res,
+        content: [{ type: 'text', text: JSON.stringify({ format: 'single', body: 'Teams onboard 40% faster with Acme.', imageBrief: null, claims: [{ text: '40% faster' }] }) }],
+      }
+    })
+    const verdictOf = () => {
+      const posts = vi.mocked(createPosts).mock.calls[0][1] as Array<{ ai_generation_metadata?: { claimCheck?: { status: string } } }>
+      return posts.map((p) => p.ai_generation_metadata?.claimCheck?.status)
+    }
+    try {
+      vi.mocked(hasActiveEvidence).mockResolvedValue(true)
+      await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+      expect(hasActiveEvidence).toHaveBeenCalledWith(expect.anything(), BUSINESS_ID)
+      expect(verdictOf()).toEqual(['checked', 'checked', 'checked'])
+
+      vi.clearAllMocks()
+      vi.mocked(createPosts).mockResolvedValue([{}, {}, {}] as never)
+      vi.mocked(hasActiveEvidence).mockResolvedValue(false)
+      await generatePostsForCampaign(CAMPAIGN_ID, BUSINESS_ID, SESSION_ID)
+      expect(hasActiveEvidence).toHaveBeenCalledWith(expect.anything(), BUSINESS_ID)
+      expect(verdictOf()).toEqual(['no_corpus', 'no_corpus', 'no_corpus'])
+    } finally {
+      mockCreate.mockImplementation(original)
+    }
   })
 
   it('MODE2-BRIEF-BEFORE-COPY / end-to-end sanity: the run still succeeds and creates posts via the new brief-gated path', async () => {

@@ -23,10 +23,11 @@ vi.mock('@/lib/db/campaign-briefs', () => ({
 vi.mock('@/lib/ai/context', () => ({ buildCustomerContext: vi.fn() }))
 vi.mock('@/lib/ai/runner', () => ({ runPrompt: vi.fn() }))
 vi.mock('@/lib/ai/wrap-evidence', () => ({ wrapEvidenceForPrompt: vi.fn(), neutralize: vi.fn((s: string) => s) }))
+// Session 36-D D7 (NIT-2a): EXACTLY what lib/campaigns/brief.ts imports from '@/lib/memory' (read at the head: retrieveMemoryBundle,
+// renderMemoryBundleForPrompt, retrieveHypothesisResults). The three per-type readers it imported before ADR 0030 §5 are gone from it, so they are gone here.
 vi.mock('@/lib/memory', () => ({
-  retrieveEvidenceMemory: vi.fn(),
-  retrieveAudienceMemory: vi.fn(),
-  retrieveBrandMemory: vi.fn(),
+  retrieveMemoryBundle: vi.fn(),
+  renderMemoryBundleForPrompt: vi.fn(),
   retrieveHypothesisResults: vi.fn(),
 }))
 vi.mock('@/lib/db/posts', () => ({ listPostsByCampaign: vi.fn() }))
