@@ -86,9 +86,32 @@ class MockAnthropicClient implements AiClientLike {
   }
 }
 
+// ─── Real client adapter ───────────────────────────────────────────────────
+
+// runner.ts and tool-runner.ts attach a `_sosh` routing field for the mock
+// client. The real Anthropic API does NOT ignore unknown body fields — it
+// rejects them with HTTP 400 ("_sosh: Extra inputs are not permitted"), and
+// the SDK forwards them verbatim. This adapter is the one place the field is
+// removed before the request leaves the process, so no caller has to know.
+export function stripRoutingFields(
+  params: Anthropic.MessageCreateParamsNonStreaming & { _sosh?: unknown },
+): Anthropic.MessageCreateParamsNonStreaming {
+  const { _sosh: _routing, ...wire } = params
+  void _routing
+  return wire
+}
+
+export function wrapRealClient(real: Anthropic): AiClientLike {
+  return {
+    messages: {
+      create: (params) => real.messages.create(stripRoutingFields(params)),
+    },
+  }
+}
+
 // ─── Singleton ─────────────────────────────────────────────────────────────
 
-let _realClient: Anthropic | null = null
+let _realClient: AiClientLike | null = null
 let _mockClient: MockAnthropicClient | null = null
 
 // Lazy-imports config to avoid publicSchema.parse() at module load time,
@@ -104,7 +127,7 @@ export async function getAnthropicClient(): Promise<AiClientLike> {
   }
 
   if (!_realClient) {
-    _realClient = new Anthropic({ apiKey: config.server.ANTHROPIC_API_KEY })
+    _realClient = wrapRealClient(new Anthropic({ apiKey: config.server.ANTHROPIC_API_KEY }))
   }
   return _realClient
 }
