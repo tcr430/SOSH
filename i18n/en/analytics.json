@@ -31,7 +31,7 @@
   "monthPair": "{month}: {rate} ({n} posts) · {month2}: {rate2} ({n2} posts).",
   "monthPairSuppressed": "A side-by-side view appears when both months have at least 5 measured posts.",
   "exclusions": {
-    "summary": "{measured} of {published} posts measured.",
+    "summary": "{measured} of {published, plural, one {# post} other {# posts}} measured.",
     "excluded": "{notIncluded} not included: {reasons}.",
     "noDataReturned": "no data returned ({count})",
     "fieldMissing": "a field was missing ({count})",
@@ -70,9 +70,9 @@
     "unrecorded": "Account not recorded or since removed"
   },
   "activity": {
-    "line": "{count} posts published on {platform} ({account}).",
-    "total": "{count} posts published, {prev} the month before.",
-    "campaigns": "{active} active campaigns, {completed} completed."
+    "line": "{count, plural, one {# post} other {# posts}} published on {platform} ({account}).",
+    "total": "{count, plural, one {# post} other {# posts}} published, {prev} the month before.",
+    "campaigns": "{active, plural, one {# active campaign} other {# active campaigns}}, {completed} completed."
   },
   "platform": {
     "twitter": "X",
@@ -169,7 +169,7 @@
     },
     "value": {
       "rate": "{rate}",
-      "count": "{count} engagements"
+      "count": "{count, plural, one {# engagement} other {# engagements}}"
     },
     "badge": {
       "above": "Above your usual",

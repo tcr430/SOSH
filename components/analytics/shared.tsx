@@ -157,7 +157,7 @@ export const TABLE = {
   row: 'border-b border-border max-sm:mb-2 max-sm:block max-sm:rounded-md max-sm:border max-sm:p-3',
   // min-w-0 + wrap-anywhere: a cell that holds a customer string (a 120-character campaign name, an unbreakable handle) may shrink
   // and break anywhere, so it can never push the table or the 320 px card wider than its container.
-  cell: 'min-w-0 wrap-anywhere py-2 pr-4 align-top max-sm:flex max-sm:justify-between max-sm:gap-3 max-sm:py-1 max-sm:before:font-medium max-sm:before:text-muted-foreground max-sm:before:content-[attr(data-label)]',
+  cell: 'min-w-0 wrap-anywhere py-2 pr-4 align-top max-sm:flex max-sm:justify-between max-sm:gap-3 max-sm:py-1 max-sm:before:max-w-[45%] max-sm:before:shrink-0 max-sm:before:wrap-break-word max-sm:before:font-medium max-sm:before:text-muted-foreground max-sm:before:content-[attr(data-label)]',
   secondary: 'max-lg:hidden',
   th: 'py-2 pr-4 font-medium text-muted-foreground',
 } as const

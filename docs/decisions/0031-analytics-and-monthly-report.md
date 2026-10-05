@@ -1653,3 +1653,66 @@ Five skills ran in the guide's order, each against its named part of §10. Every
 | 2 | LOW, CONFIRMED | The "Saved." message in the report-email form is not cleared when the owner edits the select afterwards. | **ACCEPTED:** clearing it needs a third piece of client state in the island for one live-region message; the next save or error replaces it. |
 | 3 | LOW, CONFIRMED benign | `key={line.key + i}` (summary list) and `key={i}` (chart dots) on lists derived from an immutable stored payload. | **LEFT:** no state can attach to the wrong item. |
 | 4 | LOW, PLAUSIBLE | `months[0]` and `points[0]` in the chart components throw on an empty array; the invariant (a fixed-length loop) lives in the loader. | **LEFT:** guarding it would duplicate the loader's invariant; revisit if the window ever becomes configurable. |
+
+### V.17 — O2.11: real-browser verification (the build guide's "V.7"; V.7 is taken)
+
+**Recorded, never counted as COVERED.** Chromium (Playwright) against `next dev -p 3100` (Turbopack) on Windows 11, backed by the local Supabase stack (db, rest, auth, kong; all 129 migrations applied), the O2.1 fixture seeded with `seedPortfolio`. Business A is Pro (Lisbon, `en`), business B is Plus (São Paulo, `pt`). Both locales were driven at every width, so the pt pass is real (premise 8: `QA-LOCALE-HEADER-DROPPED` is fixed by `2f2b33676`). Screenshots are under `docs/reviews/assets/session-37/` (26 files).
+
+**Setup facts a reader needs.**
+
+- The fixture businesses were made *eligible* for a report on the local database only: `trial_state.trial_started_at` set, a dummy unique `stripe_subscription_id` on each business. Reports for 2026-03 were then generated with `generateReportForBusiness(id, FIXTURE_NOW)` (A: `advanced`, B: `basic`). None of this is in a migration or a fixture file.
+- The UI cannot reach business B: `getBusinessForUser(client, user.id)` is called with no preferred business, so it returns the first owned business by `created_at, id`. B was reached by moving B's `created_at` earlier on the local database for the Plus pass and moving it back. There is no active-business selector today (open item, not an analytics defect).
+- `document.documentElement.scrollWidth` reads the viewport width minus the 15 px vertical scrollbar on any page that scrolls, so a value of 1265, 625 or 305 means "no horizontal overflow, page scrolls vertically" and 1280, 640 or 320 means the page fits without scrolling.
+
+**`scrollWidth` table.** Identical in `en` and `pt`; every cell is at or below its viewport. Business A: 54 page × width × locale cells, then 48 re-measured after the fixes below. Business B: 42 cells, 28 of them (320 and 640) repeated after the fixes.
+
+| Page | 1280 | 640 | 320 |
+|---|---|---|---|
+| `/analytics?month=2026-03` populated (A: all sections; B: gated, LinkedIn unavailable) | 1265 | 625 | 305 |
+| `/analytics?month=2026-04` immature (A) | 1265 | 625 | 305 |
+| `/analytics?month=2026-01` thin (A) | 1265 | 625 | 305 |
+| `/analytics?month=2026-02` (A, B) | 1265 / 1280 | 625 / 640 | 305 / 320 |
+| `/analytics?month=2026-10` empty (A, B) | 1280 | 640 | 320 |
+| `/analytics/posts?month=2026-03&platform=linkedin` filtered (A, B) | 1280 | 640 | 305 |
+| `/analytics/posts?month=2026-03` (A, B) | 1265 / 1280 | 625 / 640 | 305 |
+| `/analytics/reports` (A, B) | 1280 | 640 | 320 |
+| `/analytics/reports/2026-03` (A, B) | 1265 | 625 | 305 |
+| Error boundary, `/analytics` and `/analytics/posts` (A) | 1280 | n/a | 320 |
+| Dark (`.dark` on `<html>`), `/analytics?month=2026-03` (A) | 1265 | n/a | 305 |
+| Print media, `/analytics/reports/2026-03` at 794 px (A4) | 779 | n/a | n/a |
+
+**Result for constraint #35 (ANALYTICS-SHELL-320, manual half): no 320 px `scrollWidth` exceeds 320, on any page, in either locale, in either plan, in dark mode or in the error state. #35 is closed.** This measures the document. It does not see content clipped by `overflow: hidden`, which is why the screenshots were read as well (see the findings).
+
+**States seen at least once.** Populated (A), immature (A, 2026-04), thin (A, 2026-01, and per account in A), empty (A and B, 2026-10), unavailable (LinkedIn, A and B), gated (B: every Pro section renders the "Available on Pro" line with a link), error (below), report (A advanced, B basic).
+
+**Error** was forced two ways. Stopping the PostgREST container gives the app-wide "Something went wrong" page, because the dashboard layout fails before the analytics segment does; that is the shell's boundary, not ours. Revoking `SELECT` on `post_outcomes` from `authenticated` (restored afterwards; grants verified identical) fails only the analytics reads and renders `analytics/error.tsx` inside the shell: "We couldn't load your results." with a Reload button, in `en` and `pt`, HTTP 200, no table name, no database wording, no overflow at 320.
+
+**Keyboard.** Tab order on `/analytics`, the report and the reports index, at 1280. Every stop inside `<main>` has a visible 2 px focus ring: *See every post*, *Monthly reports*, the month picker, *Show*, the three campaign links; *Back to monthly reports*, *Download PDF*; the report-email select and *Save*; the report link. At 640 the details disclosure opens and closes with Enter (ring 2 px). **Not covered by the ring: the dashboard sidebar links and the user-menu button show no outline** (outside ADR 0031; see the observations).
+
+**Print.** With print media emulated at A4 width the sidebar, nav, form and PDF link are hidden and the report fits (779 px). The browser's own `page.pdf` of the page is a valid `%PDF-` of 4 pages. Rows, charts and sub-headings stay whole in the screenshot.
+
+**Defects found, and what was done.**
+
+| # | Defect | Disposition |
+|---|---|---|
+| D1 | At 320 px the stacked-card label (`::before` of `TABLE.cell`) shrank to a few characters and broke mid-word: "Veredic / to" (pt campaign card), "Re / su / lts" and "Acc / ount" (A, Account by account). Cause: the cell's `wrap-anywhere` is inherited by its `::before` flex item, whose min-content is one character. | **FIXED** in `components/analytics/shared.tsx`: `max-sm:before:shrink-0 max-sm:before:max-w-[45%] max-sm:before:wrap-break-word`. Test: `worst-case.test.tsx` (the class set, and that the two utilities compile to real CSS). Reddened by removing `shrink-0`. Re-measured: labels render whole (Veredicto 63 px, Campaign 66 px), `scrollWidth` unchanged. |
+| D2 | Counted strings carried a bare `{count}`: "1 publicações no LinkedIn", "1 campanhas ativas, 1 concluídas", "1 posts published on X". | **FIXED** for `activity.line`, `activity.total`, `activity.campaigns`, `exclusions.summary` and the engagement count, in `en`, `pt`, `es`, as ICU plurals (pt has an explicit `=0` branch, because `Intl` treats 0 as "one" in Portuguese and "0 publicação" is wrong in pt-PT). Test: `lib/i18n/analytics-parity.test.ts` renders the real messages through `createTranslator` at 0, 1 and 2 in all three locales and checks no raw ICU survives. Reddened by restoring the bare `{count}` in pt. Every real consumer already uses next-intl's `getTranslations`, so the page, the stored report summary, the email and the PDF all render plurals. |
+| D3 | The posts-table Result cell put the rate and the badge in one row beside the label; at 320 px the badge wrapped to four lines in a ~70 px column. | **FIXED** in `PostsView.tsx` (`max-sm:flex-col max-sm:items-end max-sm:gap-1 max-sm:text-right`). **No test**: the change is a layout class and the worst-case suite has no assertion that can tell it from its absence; verified by screenshot (`fix_posts-result-cell_pt_320.png`). |
+| D4 | `state.immature` and `state.thin` still print "1 measured posts so far" and "Final for 1 posts" at a count of 1. | **NOT FIXED, by design.** They are the §8.2 literals, pinned verbatim by `analytics-parity.test.ts`; editing locked copy is an ADR amendment, not a Builder change. Proposed amendment: ICU plurals on those two keys. |
+| D5 | **Observed patterns** renders the generic empty-state literal "Nothing published yet. Results appear here after Jemip publishes your first post." on a month with 13 published posts, because the section reuses `state.empty` when no pattern qualifies. The sentence is false there. | **NOT FIXED**, same reason (§8.2 literal), and it needs a founder decision on the wording. Visible in `A_en_1280_portfolio-populated-2026-03.png` and the print render. |
+
+**Observations, outside ADR 0031, not changed.**
+
+- A hydration warning on every full page load in dev: `<body className="min-h-full flex flex-col">` differs between server HTML and client, in the root layout. The live DOM has the class and `display: flex`, so there is no visible effect; a dev-only React message, plus a dev-only `eval()`/CSP console error, both also present on `/en/login`.
+- The dashboard sidebar links and the user-menu button have no visible focus indicator (above).
+- The 12-month trend chart labels are about 5 px at 320 px (the known item; the sr-only chart table is not shown at that width).
+- No active-business selector, so a multi-business owner always lands on the oldest business.
+
+**What is NOT proven by this step.**
+
+- **The PDF route has not rendered a PDF in a served request.** `GET /api/analytics/reports/<id>/pdf` returned 500 here. Cause, confirmed by calling `launchChromium` directly: `Failed to launch the browser process: spawn C:\Users\tiago\AppData\Local\Temp\chromium ENOENT`. `@sparticuz/chromium` is a Linux binary, so the production launch path cannot run on this machine, and there is deliberately no environment override (V.14). The first-page screenshot of the downloaded PDF that the guide asks for was therefore not taken. What stands is the O2.9 real-browser spike (V.14) and the print render above. The Vercel preview (cold start, memory, traced files) stays the open launch-checklist row.
+- **200% zoom** was not run as a zoom; it is the same layout as the next width down (1280 at 200% is the 640 layout, 640 at 200% is the 320 layout), both measured.
+- **RTL** was not run; `dir="auto"` is on customer strings and is asserted in the worst-case tests only.
+- **Real data volumes.** The fixture is 30-odd posts; a business with thousands of posts was not loaded.
+
+**Commit scope.** `shared.tsx`, `PostsView.tsx`, the three `analytics.json` files, two test files, this entry and the screenshots.

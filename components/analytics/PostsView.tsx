@@ -84,7 +84,7 @@ function ResultCell({ t, locale, timezone, row }: { t: T; locale: string; timezo
   }
   if (row.state === 'final' && row.final) {
     return (
-      <span className="flex flex-wrap items-center gap-2">
+      <span className="flex flex-wrap items-center gap-2 max-sm:flex-col max-sm:items-end max-sm:gap-1 max-sm:text-right">
         <span>{row.final.rate !== null ? t('analytics.posts.value.rate', { rate: row.final.rate }) : t('analytics.posts.value.count', { count: row.final.value })}</span>
         <ResultBadge t={t} badge={row.final.badge} />
       </span>

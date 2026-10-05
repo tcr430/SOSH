@@ -7,6 +7,7 @@ import enCommon from '@/i18n/en/common.json'
 import ptCommon from '@/i18n/pt/common.json'
 import esCommon from '@/i18n/es/common.json'
 import enOutcome from '@/i18n/en/outcome.json'
+import { createTranslator } from 'next-intl'
 import { ACTIVE_NAV, COMING_SOON_NAV } from '@/components/layout/DashboardShell'
 
 // ADR 0031 §10.6, §10.4, build-guide O2.6 — the analytics namespace exists in en, pt AND es with IDENTICAL keys and the same
@@ -104,5 +105,64 @@ describe('nav (QA-MINOR-UI (1) and the nav entry)', () => {
   it('inbox stays "coming soon"', () => {
     expect(COMING_SOON_NAV.map((n) => n.key)).toEqual(['inbox'])
     expect((ACTIVE_NAV.map((n) => n.key) as string[])).not.toContain('inbox')
+  })
+})
+
+// O2.11 (real browser): "1 publicações no LinkedIn", "1 campanhas ativas" and "1 posts published" shipped because the counted
+// strings carried a bare {count}. The strings a customer can see at a count of 1 are ICU plurals now; this renders the REAL messages
+// through next-intl (not a key-echo mock), at 0, 1 and 2, in all three locales. pt has an explicit =0 branch: Intl treats 0 as "one"
+// in Portuguese, and "0 publicação" is wrong in pt-PT. state.immature and state.thin are NOT here: they are the ADR 0031 §8.2
+// literals (pinned above), so their singular is an open ADR amendment, not something a Builder edits.
+describe('analytics i18n plurals (rendered, not echoed)', () => {
+  const t = (locale: 'en' | 'pt' | 'es') => {
+    const messages = { analytics: { en, pt, es }[locale] }
+    return createTranslator({ locale, messages }) as unknown as (key: string, values?: Record<string, unknown>) => string
+  }
+  const acct = { platform: 'X', account: 'a' }
+
+  it.each([
+    ['en', 0, '0 posts published on X (a).'],
+    ['en', 1, '1 post published on X (a).'],
+    ['en', 2, '2 posts published on X (a).'],
+    ['pt', 0, '0 publicações no X (a).'],
+    ['pt', 1, '1 publicação no X (a).'],
+    ['pt', 2, '2 publicações no X (a).'],
+    ['es', 1, '1 publicación en X (a).'],
+    ['es', 2, '2 publicaciones en X (a).'],
+  ] as const)('activity.line %s count=%i', (locale, count, expected) => {
+    expect(t(locale)('analytics.activity.line', { count, ...acct })).toBe(expected)
+  })
+
+  it.each([
+    ['en', 1, 0, '1 post published, 0 the month before.'],
+    ['en', 2, 1, '2 posts published, 1 the month before.'],
+    ['pt', 1, 0, '1 publicação, 0 no mês anterior.'],
+    ['es', 1, 3, '1 publicación, 3 el mes anterior.'],
+  ] as const)('activity.total %s %i/%i', (locale, count, prev, expected) => {
+    expect(t(locale)('analytics.activity.total', { count, prev })).toBe(expected)
+  })
+
+  it.each([
+    ['en', 1, 1, '1 active campaign, 1 completed.'],
+    ['en', 2, 0, '2 active campaigns, 0 completed.'],
+    ['pt', 1, 1, '1 campanha ativa, 1 concluída.'],
+    ['pt', 0, 2, '0 campanhas ativas, 2 concluídas.'],
+    ['es', 1, 1, '1 campaña activa, 1 completada.'],
+    ['es', 2, 2, '2 campañas activas, 2 completadas.'],
+  ] as const)('activity.campaigns %s %i/%i', (locale, active, completed, expected) => {
+    expect(t(locale)('analytics.activity.campaigns', { active, completed })).toBe(expected)
+  })
+
+  it('every plural message in every locale renders at 0, 1 and 2 without throwing and never prints raw ICU', () => {
+    for (const [locale, flat] of [['en', E], ['pt', P], ['es', S]] as const) {
+      for (const [key, text] of Object.entries(flat)) {
+        if (!text.includes('plural')) continue
+        for (const n of [0, 1, 2]) {
+          const values = Object.fromEntries(placeholders(text).map((p) => [p, n]))
+          const out = t(locale)('analytics.' + key, values)
+          expect(out, locale + ' ' + key + ' n=' + n).not.toMatch(/plural|[{}#]/)
+        }
+      }
+    }
   })
 })

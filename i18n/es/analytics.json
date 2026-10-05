@@ -31,7 +31,7 @@
   "monthPair": "{month}: {rate} ({n} publicaciones) · {month2}: {rate2} ({n2} publicaciones).",
   "monthPairSuppressed": "La vista lado a lado aparece cuando ambos meses tienen al menos 5 publicaciones medidas.",
   "exclusions": {
-    "summary": "{measured} de {published} publicaciones medidas.",
+    "summary": "{measured} de {published, plural, one {# publicación} other {# publicaciones}} medidas.",
     "excluded": "{notIncluded} no incluidas: {reasons}.",
     "noDataReturned": "sin datos devueltos ({count})",
     "fieldMissing": "faltaba un campo ({count})",
@@ -70,9 +70,9 @@
     "unrecorded": "Cuenta no registrada o eliminada desde entonces"
   },
   "activity": {
-    "line": "{count} publicaciones en {platform} ({account}).",
-    "total": "{count} publicaciones, {prev} el mes anterior.",
-    "campaigns": "{active} campañas activas, {completed} completadas."
+    "line": "{count, plural, one {# publicación} other {# publicaciones}} en {platform} ({account}).",
+    "total": "{count, plural, one {# publicación} other {# publicaciones}}, {prev} el mes anterior.",
+    "campaigns": "{active, plural, one {# campaña activa} other {# campañas activas}}, {completed, plural, one {# completada} other {# completadas}}."
   },
   "platform": {
     "twitter": "X",
@@ -169,7 +169,7 @@
     },
     "value": {
       "rate": "{rate}",
-      "count": "{count} interacciones"
+      "count": "{count, plural, one {# interacción} other {# interacciones}}"
     },
     "badge": {
       "above": "Por encima de lo habitual",

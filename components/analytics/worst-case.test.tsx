@@ -11,6 +11,7 @@ import { loadPortfolioWith, type CampaignTableRow, type Portfolio, type PostRowV
 import { assembleReport, type ReportPayload } from '@/lib/reports/assemble'
 import { fixtureReaders } from '@/lib/reports/__fixtures__/readers'
 import { compileReportCss } from '@/lib/reports/pdf-css'
+import { TABLE } from '@/components/analytics/shared'
 import { PortfolioView } from './PortfolioView'
 import { PostsTable } from './PostsView'
 import { ReportBody } from './ReportBody'
@@ -315,5 +316,14 @@ describe('the class that makes a string breakable is real', () => {
     const css = await compileReportCss(['wrap-anywhere', 'min-w-0'])
     expect(css).toMatch(/overflow-wrap:\s*anywhere/)
     expect(css).toMatch(/min-width:\s*(calc\(var\(--spacing\)\s*\*\s*0\)|0)/)
+  })
+
+  // O2.11 (real browser, 320 px): the cell's wrap-anywhere is inherited by its ::before label, which is a flex item, so the label
+  // shrank to one character and "Verdict" rendered as "Veredic / to". The label must never shrink below its word.
+  it('the stacked-card label cannot be squeezed below its word: shrink-0, a width cap, and no break-anywhere on the ::before', async () => {
+    for (const cls of ['max-sm:before:shrink-0', 'max-sm:before:max-w-[45%]', 'max-sm:before:wrap-break-word']) expect(TABLE.cell).toContain(cls)
+    const css = await compileReportCss(['max-sm:before:shrink-0', 'max-sm:before:wrap-break-word'])
+    expect(css).toMatch(/::before[\s\S]*flex-shrink:\s*0/)
+    expect(css).toMatch(/::before[\s\S]*overflow-wrap:\s*break-word/)
   })
 })
