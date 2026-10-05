@@ -1809,3 +1809,23 @@ Paths: `LA` = `lib/analytics/__tests__/`, `LR` = `lib/reports/__tests__/`, `LD` 
 - the Vercel Firewall rule and the `generate-reports` QStash schedule (launch-checklist rows; neither exists yet).
 
 **Un-defer:** the first three real tenants with two generated reports each, reviewed against those questions.
+
+### V.20 — O2.12: the CI read (PR #20, head `1a70685ea`)
+
+Appended after the push; V.18 and V.19 above are left exactly as written and are **superseded by this entry only where it says so**. Draft PR #20 (base `master`, head `session-37-adr-0031`). Three **`pull_request`** runs at head `1a70685ea17b98e8490c6ccae2a3b11260f5f773` (created 2026-10-05 16:40 UTC), all `success`. Each log was read with `gh run view <id> --log`, not inferred from the status badge.
+
+| Run | Id | What the log says |
+|---|---|---|
+| `app-tests` (tsc + eslint + vitest) | 37342667544 | `tsc` step passed; eslint: `113 problems (0 errors, 113 warnings)`, the baseline. Skip-guard line, verbatim: **`skip-guard: 417 file(s) under [app, lib, components] all visible, zero failures — green. (6594/6594 tests passed)`**. Local `npm run test:app` reported 420 files and the same 6,594 tests; the guard counts files under `app`, `lib` and `components`, and `scripts/eval/` is the script's fourth path. That this accounts for the 3-file difference was inferred, not separately verified. |
+| `db-tests` (ADR 0013 RLS/migration suite) | 37342667556 | `vitest run supabase/__tests__ --no-file-parallelism --retry=2`. Skip-guard line, verbatim: **`skip-guard: 122 file(s) under [supabase/__tests__] all visible, zero failures — green. (1381/1381 tests passed)`**. A grep of the whole db log for `SIGSEGV`, `signal 11`, `OOMKilled` and `out of memory` finds **0** matches (0 in the app log too), so this is neither a stack crash nor an OOM masquerading as a pass. |
+| `Eval — signal triage quality` | 37342667551 | `success`. |
+
+**What this changes.**
+
+- **The local failure is local.** V.18 records that the full local `test:db` had one failure, `plan-proposals-current-version-read.test.ts` (an ADR 0027 `EXPLAIN` index-choice test). In CI the same file passes (1381/1381). It is therefore specific to the long-lived local database; its cause there was never determined and is still not known.
+- **The constraint map is now executed, at this head.** Every row of V.18 (e) whose job is `app-tests` or `db-tests` had its files run green in CI at `1a70685ea`, so those rows are **COVERED in the ADR 0015 sense, at that head**. The exceptions are the ones V.18 already named, and they stay exactly as named: #24 and #26 are not applicable (no model); #35's browser half is a record (V.17), not CI coverage; #30's Firewall rule and the Vercel preview-deploy check are launch-checklist rows, not CI; #5's real-capability flip needs LinkedIn to grant the permission. The DEFINER audit gate (3) is inside `db-tests`, which is green.
+- **The event type matters for the tally.** These are `pull_request` runs. They do not move the `db-tests` promotion tally (three consecutive full green runs on `master`); that tally is unchanged by this entry.
+
+**What this does not change.** Nothing in V.17 or V.19: the PDF route has still never rendered in a served request, no email has been sent, the Firewall rule and the `generate-reports` schedule do not exist, and real-tenant usefulness, stability, floors and day-10 latency remain UNPROVEN. CI executing the tests proves the tests pass; it does not make any of those true.
+
+**Scope of the claim.** It is dated to `1a70685ea`. The commit that records this entry (and the matching `current-phase.md` edit) changes only documents, which `git diff 1a70685ea..<that commit> --stat` shows; its own CI run is not read here. A Reviewer reading the range `0da603b4a..<head>` should re-run the check at the head they are given.
