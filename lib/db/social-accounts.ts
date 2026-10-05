@@ -238,7 +238,7 @@ export async function listByBusiness(
 // Labels only (never a token or a vault id): the account names a per-account row is shown under. AUTHENTICATED,
 // business-bound, on the primary key, 20 ids a chunk.
 
-export type SocialAccountLabel = Pick<SocialAccountPublic, 'id' | 'platform' | 'platform_username' | 'platform_display_name'>
+export type SocialAccountLabel = Pick<SocialAccountPublic, 'id' | 'platform' | 'platform_username' | 'platform_display_name'> & { business_id: string }
 
 const LABEL_CHUNK = 20
 
@@ -252,7 +252,7 @@ export async function listAccountLabels(
   for (let i = 0; i < unique.length; i += LABEL_CHUNK) {
     const { data, error } = await client
       .from('social_accounts')
-      .select('id, platform, platform_username, platform_display_name')
+      .select('id, business_id, platform, platform_username, platform_display_name')
       .eq('business_id', businessId)
       .in('id', unique.slice(i, i + LABEL_CHUNK))
       .order('id', { ascending: true })

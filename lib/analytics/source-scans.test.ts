@@ -117,8 +117,9 @@ function scan(roots: readonly string[], detector: (rel: string, source: string) 
 }
 
 // lib/analytics gained its first production file in O2.3 (the pure aggregation); the analytics page root and
-// components/analytics in O2.6 (the live surfaces), so each left the list in that commit.
-const POPULATED_ROOTS: readonly string[] = ['lib/analytics', 'app/[locale]/(dashboard)/analytics', 'components/analytics']
+// components/analytics in O2.6 (the live surfaces), lib/reports in O2.7 (the assembler and generator), so each left the
+// list in that commit.
+const POPULATED_ROOTS: readonly string[] = ['lib/analytics', 'app/[locale]/(dashboard)/analytics', 'components/analytics', 'lib/reports']
 const EXPECTED_PENDING: readonly string[] = ALL_ROOTS.filter((root) => !POPULATED_ROOTS.includes(root))
 
 describe('the scan roots (build-guide O2.1)', () => {

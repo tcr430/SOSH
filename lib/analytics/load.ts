@@ -2,13 +2,13 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { formatISO } from 'date-fns'
 import { getBusinessById } from '@/lib/db/businesses'
 import { listPublishedPostsInRange, countPublishedPostsInRange, type PublishedPostForAnalytics } from '@/lib/db/posts'
-import { listMonthOutcomes, listTrendOutcomes, listDimensionsForAnalytics, type OutcomeForAnalytics, type DimensionForAnalytics } from '@/lib/db/post-outcomes'
+import { listMonthOutcomes, listTrendOutcomes, listDimensionsForAnalytics, type OutcomeForAnalytics, type OutcomeRangeQuery, type DimensionForAnalytics } from '@/lib/db/post-outcomes'
 import { listMetricsForPosts, type MetricsForAnalytics } from '@/lib/db/post-metrics'
 import { listAccountLabels, type SocialAccountLabel } from '@/lib/db/social-accounts'
 import { listCampaigns } from '@/lib/db/campaigns'
 import { listCompletedRetrospectivesInRange, type RetrospectiveForAnalytics } from '@/lib/db/campaign-retrospectives'
 import { ReadCeilingExceeded } from '@/lib/db/keyset-pager'
-import type { Platform } from '@/lib/db/types'
+import type { BusinessRow, CampaignRow, Platform } from '@/lib/db/types'
 import { retrieveOutcomePatterns, type OutcomeObservation } from '@/lib/memory'
 import { metricsReadAvailableFor } from '@/lib/social'
 import { hasAdvancedAnalytics } from '@/lib/stripe/plan'
@@ -49,12 +49,18 @@ export interface LoaderDeps {
   /** The clock, injected: also the `outcomes_through` instant every read behind one view is bounded by. */
   now: () => string
   retrievePatterns: (businessId: string, options?: { platform?: string }) => Promise<OutcomeObservation[]>
+  /** Months in the Pro trend: 12 on the live page, 6 in the report (ADR 0031 s5.3 row 8). */
+  trendMonths: number
+  /** The live page adds hook_type; the report never does ([mle-6]). */
+  liveOnlyBreakdowns: boolean
 }
 
 const DEFAULT_DEPS: LoaderDeps = {
   metricsReadAvailable: metricsReadAvailableFor,
   now: () => formatISO(new Date()),
   retrievePatterns: retrieveOutcomePatterns,
+  trendMonths: 12,
+  liveOnlyBreakdowns: true,
 }
 
 export type Section<T> = { status: 'ok'; data: T } | { status: 'error'; reason: 'ceiling' }
@@ -178,10 +184,10 @@ function labelOf(accountId: string | null, labels: ReadonlyMap<string, SocialAcc
   return { label: row.platform_display_name ?? row.platform_username, labelKey: null }
 }
 
-async function readLabels(client: SupabaseClient, businessId: string, accountIds: ReadonlyArray<string | null>): Promise<Map<string, SocialAccountLabel>> {
+async function readLabels(r: Readers, businessId: string, accountIds: ReadonlyArray<string | null>): Promise<Map<string, SocialAccountLabel>> {
   const ids = [...new Set(accountIds.filter((id): id is string => id !== null))]
   if (ids.length === 0) return new Map()
-  return new Map((await listAccountLabels(client, businessId, ids)).map((l) => [l.id, l]))
+  return new Map((await r.listAccountLabels(businessId, ids)).map((l) => [l.id, l]))
 }
 
 function toOutcome(row: OutcomeForAnalytics, dimensions: ReadonlyMap<string, DimensionForAnalytics>): AnalyticsOutcome {
@@ -220,15 +226,15 @@ function shiftBack(period: string, months: number): string {
 
 // ─── loadPortfolio ─────────────────────────────────────────────────────────────────────────────────────────
 
-export async function loadPortfolio(
-  client: SupabaseClient,
+export async function loadPortfolioWith(
+  r: Readers,
   businessId: string,
   month: string,
   deps: Partial<LoaderDeps> = {},
 ): Promise<Portfolio> {
   const d: LoaderDeps = { ...DEFAULT_DEPS, ...deps }
   const previous = previousPeriod(month) // validates the month before any read
-  const business = await getBusinessById(client, businessId)
+  const business = await r.getBusinessById(businessId)
   const advanced = hasAdvancedAnalytics(business.plan)
   const timezone = business.timezone
   const now = d.now()
@@ -237,12 +243,12 @@ export async function loadPortfolio(
   const range = { start: before.start, end: current.end }
 
   const [campaigns, monthRetros] = await Promise.all([
-    listCampaigns(client, businessId),
-    listCompletedRetrospectivesInRange(client, businessId, current),
+    r.listCampaigns(businessId),
+    r.listCompletedRetrospectivesInRange(businessId, current),
   ])
   const campaignById = new Map(campaigns.map((c) => [c.id, c]))
 
-  const postsSection = await guarded(() => listPublishedPostsInRange(client, businessId, range))
+  const postsSection = await guarded(() => r.listPublishedPostsInRange(businessId, range))
   if (postsSection.status === 'error') {
     return assemble(false, { period: month, previousPeriod: previous, activity: postsSection, platforms: postsSection, campaigns: postsSection }, null)
   }
@@ -250,7 +256,7 @@ export async function loadPortfolio(
   const monthPosts = allPosts.filter((p) => monthOf(p.published_at, timezone) === month)
   const previousPosts = allPosts.filter((p) => monthOf(p.published_at, timezone) === previous)
 
-  const labels = await readLabels(client, businessId, monthPosts.map((p) => p.social_account_id))
+  const labels = await readLabels(r, businessId, monthPosts.map((p) => p.social_account_id))
 
   // Activity: platform x account, the NULL account in its own bucket, in a stable order (platform, then account, NULL last).
   const counts = new Map<string, ActivityRow>()
@@ -280,7 +286,7 @@ export async function loadPortfolio(
       sections.push({ platform, state: 'unavailable', published: published.length })
       continue
     }
-    const measured = await guarded(() => measurePlatform({ client, businessId, platform, month, previous, timezone, now, range, monthPosts: published, advanced }))
+    const measured = await guarded(() => measurePlatform({ r, businessId, platform, month, previous, timezone, now, range, monthPosts: published, advanced, liveOnly: d.liveOnlyBreakdowns }))
     if (measured.status === 'error') {
       sections.push({ platform, state: 'error', reason: 'ceiling' })
       continue
@@ -317,17 +323,17 @@ export async function loadPortfolio(
   if (!advanced) return assemble(false, base, null)
 
   // ── Pro only. Nothing below runs for a basic business. ──
-  const first = periodBounds(shiftBack(month, 11), timezone)
+  const first = periodBounds(shiftBack(month, d.trendMonths - 1), timezone)
   const trend = await guarded(async (): Promise<TrendView> => {
     const months: TrendView['months'] = []
-    for (let i = 11; i >= 0; i -= 1) {
+    for (let i = d.trendMonths - 1; i >= 0; i -= 1) {
       const period = shiftBack(month, i)
-      months.push({ period, published: await countPublishedPostsInRange(client, businessId, periodBounds(period, timezone)) })
+      months.push({ period, published: await r.countPublishedPostsInRange(businessId, periodBounds(period, timezone)) })
     }
     const series: TrendView['series'] = []
     for (const [platform, m] of measuredByPlatform) {
       if (m.view.basis !== 'rate') continue
-      const rows = await listTrendOutcomes(client, businessId, { platform, start: first.start, end: current.end, outcomesThrough: now })
+      const rows = await r.listTrendOutcomes(businessId, { platform, start: first.start, end: current.end, outcomesThrough: now })
       series.push({
         platform,
         points: months.map(({ period }) => {
@@ -343,7 +349,7 @@ export async function loadPortfolio(
   })
   const patterns = await guarded(() => d.retrievePatterns(businessId))
   const retrospectives = await guarded(async (): Promise<RetrospectiveListRow[]> => {
-    const rows = await listCompletedRetrospectivesInRange(client, businessId, { start: first.start, end: current.end })
+    const rows = await r.listCompletedRetrospectivesInRange(businessId, { start: first.start, end: current.end })
     return rows.map((r) => ({
       ...retroView(r),
       campaignId: r.campaign_id,
@@ -412,7 +418,7 @@ function toBasicSection(section: AdvancedPlatformSection): BasicPlatformSection 
 }
 
 async function measurePlatform(input: {
-  client: SupabaseClient
+  r: Readers
   businessId: string
   platform: string
   month: string
@@ -422,15 +428,16 @@ async function measurePlatform(input: {
   range: { start: string; end: string }
   monthPosts: PublishedPostForAnalytics[]
   advanced: boolean
+  liveOnly: boolean
 }): Promise<MeasuredPlatform> {
-  const { client, businessId, platform, month, previous, timezone, now, range, monthPosts, advanced } = input
-  const raw = await listMonthOutcomes(client, businessId, { platform, start: range.start, end: range.end, outcomesThrough: now })
+  const { r, businessId, platform, month, previous, timezone, now, range, monthPosts, advanced, liveOnly } = input
+  const raw = await r.listMonthOutcomes(businessId, { platform, start: range.start, end: range.end, outcomesThrough: now })
 
   // Pro breakdowns need the generation-time dimensions; a basic business never reads them.
   let dimensions = new Map<string, DimensionForAnalytics>()
   if (advanced) {
     const ids = raw.flatMap((r) => (r.ai_original_id ? [r.ai_original_id] : []))
-    if (ids.length > 0) dimensions = new Map((await listDimensionsForAnalytics(client, businessId, ids)).map((x) => [x.ai_original_id, x]))
+    if (ids.length > 0) dimensions = new Map((await r.listDimensionsForAnalytics(businessId, ids)).map((x) => [x.ai_original_id, x]))
   }
   const outcomes = raw.map((r) => toOutcome(r, dimensions))
   const currentOutcomes = outcomes.filter((o) => monthOf(o.publishedAt, timezone) === month)
@@ -439,7 +446,7 @@ async function measurePlatform(input: {
   const measuredIds = new Set(currentOutcomes.map((o) => o.postId))
   const unmeasured = monthPosts.filter((p) => !measuredIds.has(p.id)).map((p) => p.id)
   const metrics = new Map<string, MetricsForAnalytics>()
-  if (unmeasured.length > 0) for (const m of await listMetricsForPosts(client, businessId, unmeasured)) metrics.set(m.post_id, m)
+  if (unmeasured.length > 0) for (const m of await r.listMetricsForPosts(businessId, unmeasured)) metrics.set(m.post_id, m)
 
   const byId = new Map(currentOutcomes.map((o) => [o.postId, o]))
   const records: AnalyticsPostRecord[] = monthPosts.map((p) => ({
@@ -447,7 +454,7 @@ async function measurePlatform(input: {
     metrics: metrics.get(p.id) ?? null,
     outcome: byId.get(p.id) ?? null,
   }))
-  const view = platformMonthView({ platform, period: month, timezone, now, records, includeLiveOnly: advanced })
+  const view = platformMonthView({ platform, period: month, timezone, now, records, includeLiveOnly: advanced && liveOnly })
 
   const notFinal = view.exclusions.reasons.find((r) => r.key === 'analytics.exclusions.notFinal')?.count ?? 0
   const state = view.exclusions.params.measured === 0 && notFinal === view.exclusions.params.published ? 'immature' : 'measured'
@@ -499,22 +506,22 @@ export interface PostsView {
   posts: Section<PostRowView[]>
 }
 
-export async function loadPosts(
-  client: SupabaseClient,
+export async function loadPostsWith(
+  r: Readers,
   businessId: string,
   filters: PostFilters,
   deps: Partial<LoaderDeps> = {},
 ): Promise<PostsView> {
   const d: LoaderDeps = { ...DEFAULT_DEPS, ...deps }
   previousPeriod(filters.period) // validates the period before any read
-  const business = await getBusinessById(client, businessId)
+  const business = await r.getBusinessById(businessId)
   const tier = hasAdvancedAnalytics(business.plan) ? 'advanced' : 'basic'
   const timezone = business.timezone
   const now = d.now()
   const bounds = periodBounds(filters.period, timezone)
 
   const posts = await guarded(async (): Promise<PostRowView[]> => {
-    const all = await listPublishedPostsInRange(client, businessId, bounds)
+    const all = await r.listPublishedPostsInRange(businessId, bounds)
     const wanted = all.filter(
       (p) =>
         (filters.platform === undefined || p.platform === filters.platform) &&
@@ -523,18 +530,18 @@ export async function loadPosts(
     )
     if (wanted.length === 0) return []
 
-    const labels = await readLabels(client, businessId, wanted.map((p) => p.social_account_id))
-    const campaignNames = new Map((await listCampaigns(client, businessId)).map((c) => [c.id, c.name]))
+    const labels = await readLabels(r, businessId, wanted.map((p) => p.social_account_id))
+    const campaignNames = new Map((await r.listCampaigns(businessId)).map((c) => [c.id, c.name]))
 
     // Outcomes only for platforms whose capability says metrics are read; never for the others.
     const capable = [...new Set(wanted.map((p) => p.platform))].filter((p) => d.metricsReadAvailable(p as Platform))
     const outcomes = new Map<string, OutcomeForAnalytics>()
     for (const platform of capable) {
-      for (const o of await listMonthOutcomes(client, businessId, { platform, start: bounds.start, end: bounds.end, outcomesThrough: now })) outcomes.set(o.post_id, o)
+      for (const o of await r.listMonthOutcomes(businessId, { platform, start: bounds.start, end: bounds.end, outcomesThrough: now })) outcomes.set(o.post_id, o)
     }
     const unmeasured = wanted.filter((p) => capable.includes(p.platform) && !outcomes.has(p.id)).map((p) => p.id)
     const metrics = new Map<string, MetricsForAnalytics>()
-    if (unmeasured.length > 0) for (const m of await listMetricsForPosts(client, businessId, unmeasured)) metrics.set(m.post_id, m)
+    if (unmeasured.length > 0) for (const m of await r.listMetricsForPosts(businessId, unmeasured)) metrics.set(m.post_id, m)
 
     return wanted.map((p): PostRowView => {
       const account = labelOf(p.social_account_id, labels)
@@ -567,4 +574,43 @@ export async function loadPosts(
   })
 
   return { tier, period: filters.period, posts }
+}
+
+// ─── the readers: authenticated for the pages, business-verified service-role for the report worker ────────
+
+/** Every read the loaders make, with the business id as its first argument. The page binds the caller's AUTHENTICATED client; the report worker binds the service-role wrappers and verifies every row (lib/reports/isolation.ts). */
+export interface Readers {
+  getBusinessById: (businessId: string) => Promise<BusinessRow>
+  listCampaigns: (businessId: string) => Promise<CampaignRow[]>
+  listCompletedRetrospectivesInRange: (businessId: string, range: { start: string; end: string }) => Promise<RetrospectiveForAnalytics[]>
+  listPublishedPostsInRange: (businessId: string, range: { start: string; end: string }) => Promise<PublishedPostForAnalytics[]>
+  countPublishedPostsInRange: (businessId: string, range: { start: string; end: string }) => Promise<number>
+  listMonthOutcomes: (businessId: string, q: OutcomeRangeQuery) => Promise<OutcomeForAnalytics[]>
+  listTrendOutcomes: (businessId: string, q: OutcomeRangeQuery) => Promise<OutcomeForAnalytics[]>
+  listDimensionsForAnalytics: (businessId: string, ids: readonly string[]) => Promise<DimensionForAnalytics[]>
+  listMetricsForPosts: (businessId: string, ids: readonly string[]) => Promise<MetricsForAnalytics[]>
+  listAccountLabels: (businessId: string, ids: readonly string[]) => Promise<SocialAccountLabel[]>
+}
+
+export function authenticatedReaders(client: SupabaseClient): Readers {
+  return {
+    getBusinessById: (id) => getBusinessById(client, id),
+    listCampaigns: (id) => listCampaigns(client, id),
+    listCompletedRetrospectivesInRange: (id, range) => listCompletedRetrospectivesInRange(client, id, range),
+    listPublishedPostsInRange: (id, range) => listPublishedPostsInRange(client, id, range),
+    countPublishedPostsInRange: (id, range) => countPublishedPostsInRange(client, id, range),
+    listMonthOutcomes: (id, q) => listMonthOutcomes(client, id, q),
+    listTrendOutcomes: (id, q) => listTrendOutcomes(client, id, q),
+    listDimensionsForAnalytics: (id, ids) => listDimensionsForAnalytics(client, id, ids),
+    listMetricsForPosts: (id, ids) => listMetricsForPosts(client, id, ids),
+    listAccountLabels: (id, ids) => listAccountLabels(client, id, ids),
+  }
+}
+
+export function loadPortfolio(client: SupabaseClient, businessId: string, month: string, deps: Partial<LoaderDeps> = {}): Promise<Portfolio> {
+  return loadPortfolioWith(authenticatedReaders(client), businessId, month, deps)
+}
+
+export function loadPosts(client: SupabaseClient, businessId: string, filters: PostFilters, deps: Partial<LoaderDeps> = {}): Promise<PostsView> {
+  return loadPostsWith(authenticatedReaders(client), businessId, filters, deps)
 }

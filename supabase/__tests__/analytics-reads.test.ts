@@ -159,7 +159,7 @@ describe('analytics reads — authenticated, business-bound, paged, indexed (ADR
   it('account labels: A\'s two accounts, never B\'s, even when B\'s id is asked for', async () => {
     const rows = await listAccountLabels(owner, BUSINESS_A_ID, [A_X_ACCOUNT_ID, A_LI_ACCOUNT_ID, B_X_ACCOUNT_ID])
     expect(rows.map((r) => r.id).sort()).toEqual([A_X_ACCOUNT_ID, A_LI_ACCOUNT_ID].sort())
-    expect(Object.keys(rows[0]).sort()).toEqual(['id', 'platform', 'platform_display_name', 'platform_username'])
+    expect(Object.keys(rows[0]).sort()).toEqual(['business_id', 'id', 'platform', 'platform_display_name', 'platform_username'])
   })
 
   // ─── reports ─────────────────────────────────────────────────────────────────────────────────────────────

@@ -50,3 +50,35 @@ export async function listReports(client: SupabaseClient, businessId: string, li
   if (error) throw new Error(getErrorMessage(error))
   return (data as AnalyticsReportRow[]) ?? []
 }
+
+// ── The worker's writes and reads (service-role, lazy import, NO client parameter; ADR 0031 §5.2, §9.3) ───────────
+
+export type AnalyticsReportInsert = Omit<AnalyticsReportRow, 'id'>
+
+// INSERT ... ON CONFLICT (business_id, period_month) DO NOTHING, as a direct insert: no RPC, so no new SECURITY DEFINER
+// function. Returns whether a row came back (false = a report for the period already existed: the overlapping tick
+// lost). The row's business_id and tier are the CALLER's loop variable and plan read, never a payload field.
+export async function insertAnalyticsReport(insert: AnalyticsReportInsert): Promise<boolean> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client
+    .from('analytics_reports')
+    .upsert(insert, { onConflict: 'business_id,period_month', ignoreDuplicates: true })
+    .select('id')
+  if (error) throw new Error(getErrorMessage(error))
+  return (data ?? []).length > 0
+}
+
+// The anti-join probe on the unique key: does this business already have a report for the month?
+export async function analyticsReportExistsForWorker(businessId: string, periodMonth: string): Promise<boolean> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client
+    .from('analytics_reports')
+    .select('id')
+    .eq('business_id', businessId)
+    .eq('period_month', periodMonth)
+    .limit(1)
+  if (error) throw new Error(getErrorMessage(error))
+  return (data ?? []).length > 0
+}

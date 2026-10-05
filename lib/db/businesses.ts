@@ -3,6 +3,7 @@ import type { BusinessRow, BusinessInsert, BusinessUpdate, Plan } from './types'
 import type { PaidPlan } from '@/lib/stripe/products'
 import { getErrorMessage } from './utils'
 import { toUtcIso } from '@/lib/utils'
+import { parseISO } from 'date-fns'
 
 export async function getBusinessById(
   client: SupabaseClient,
@@ -231,4 +232,47 @@ export async function setStripeCustomerId(input: {
       )
     }
   }
+}
+
+// ── Report eligibility (ADR 0031 §5.2; founder ruling O-2, Session 37 O2.7) ────────────────────────────────────
+// No single liveness predicate existed (the 14-day trial arithmetic was inline in two pages, and
+// clearBillingOnCancellation resets plan to 'trial' and nulls stripe_subscription_id), so it is written ONCE here.
+//
+//   * a LIVE TRIAL is plan = 'trial' AND trial_started_at set AND under TRIAL_LENGTH_DAYS old: a business whose trial
+//     clock never started gets no report and no stub;
+//   * a LIVE PAID business has a non-null stripe_subscription_id. An unknown plan string on a live business is live and
+//     is served the basic tier by hasAdvancedAnalytics (fail closed), never "no report".
+// Pure: the clock is an argument.
+export const TRIAL_LENGTH_DAYS = 14
+
+export function isLiveForReports(
+  business: { plan: unknown; stripe_subscription_id: string | null; trial_started_at: string | null },
+  now: string,
+): boolean {
+  if (business.plan === 'trial') {
+    if (business.trial_started_at === null) return false
+    const started = parseISO(business.trial_started_at).getTime()
+    const at = parseISO(now).getTime()
+    if (!Number.isFinite(started) || !Number.isFinite(at)) throw new Error('isLiveForReports: non-finite timestamp')
+    return at < started + TRIAL_LENGTH_DAYS * 86_400_000
+  }
+  return business.stripe_subscription_id !== null && business.stripe_subscription_id !== ''
+}
+
+// The worker's read of one business (service-role, no client parameter): the row the loaders and the generator need.
+export async function getBusinessByIdForWorker(businessId: string): Promise<BusinessRow> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client.from('businesses').select('*').eq('id', businessId).is('deleted_at', null).single()
+  if (error) throw new Error(getErrorMessage(error))
+  if (!data) throw new Error('Business ' + businessId + ' not found')
+  return data as BusinessRow
+}
+
+export async function getTrialStartedAtForWorker(businessId: string): Promise<{ business_id: string; trial_started_at: string | null } | null> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client.from('trial_state').select('business_id, trial_started_at').eq('business_id', businessId).maybeSingle()
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as { business_id: string; trial_started_at: string | null } | null) ?? null
 }

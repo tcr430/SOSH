@@ -288,6 +288,7 @@ export function listTrendOutcomes(
 
 export interface DimensionForAnalytics {
   ai_original_id: string
+  business_id: string
   role: string | null
   format: string | null
   origin_mode: string | null
@@ -307,7 +308,7 @@ export async function listDimensionsForAnalytics(
   for (let i = 0; i < ids.length; i += DIMENSION_CHUNK) {
     const { data, error } = await client
       .from('post_dimensions')
-      .select('ai_original_id, role, format, origin_mode, hook_type')
+      .select('ai_original_id, business_id, role, format, origin_mode, hook_type')
       .eq('business_id', businessId)
       .in('ai_original_id', ids.slice(i, i + DIMENSION_CHUNK))
       .order('ai_original_id', { ascending: true })
