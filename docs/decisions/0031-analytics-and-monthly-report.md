@@ -1510,3 +1510,17 @@ At 320 px the campaign rows computed to `display: block` (stacked cards) and the
 | rank section 5 by recency instead of the day-7 value | 1: the ranking unit test (the fixture's top three are also in date order, so the end-to-end literal does not catch it; the unit test with ties and a count row does) |
 
 **Verification (in the required order):** `npx tsc --noEmit --skipLibCheck` clean; `npx eslint .` 0 errors (113 pre-existing warnings, none from these files); `npm run test:app` with the CI dummy env: 404 files, 6,304 passed, 1 todo (O2.6 was 399 and 6,228); `npm run test:db` against the local stack: 122 files, 1,381 passed (O2.4 was 121 and 1,374; not freshly reset because O2.7 adds no migration, grant or function). No ECC budget is allotted to O2.7 (security-reviewer runs at the end of O2.9).
+
+### V.11 — O2.7b: `/api` no longer goes through locale routing (O-1)
+
+**Closes no ADR 0031 constraint.** It is a prerequisite of O2.8 (the cron route) and O2.9 (the PDF route); the "a step that closes no constraint does not exist" rule is waived for it by founder ruling O-1.
+
+**Defect (read from the code, V.1 item 1):** `proxy.ts` matched `/api/*` and ran `handleI18n`; with `localePrefix: "always"` next-intl answers `/api/x` with a 307 to `/en/api/x`, which does not exist. The login guard was never involved (its regex needs a two-letter first segment).
+
+**Fix:** after `updateSession`, a request whose path is `/api` or starts with `/api/` returns the session response directly. The session refresh still runs, so cookie-authenticated routes (the PDF route, any `/api/analytics/*`) keep their refreshed cookies. Locale routing, the login guard, `x-pathname`, the nonce and the CSP are skipped: they are properties of rendered HTML pages. Each route owns its own authentication. The matcher is unchanged on purpose: excluding `/api` there would also drop the session refresh.
+
+**Tests (Tier 2, `lib/i18n/proxy-api.test.ts`, 11):** five `/api` paths are not redirected and never reach next-intl (the mocked handler redirects like the real one); the session is refreshed once and its cookie is on the response; no CSP header and no nonce on an API response; `/apix/foo` and `/en/api/foo` are NOT treated as the API; and the page behaviour is unchanged (a bare path still locale-redirects, an unauthenticated dashboard path still goes to login). Mutation: disabling the branch turns 5 red; restored byte-identical, 11 green.
+
+**UNPROVEN, not COVERED:** a real HTTP request to a running server returning the route's own status instead of a 307 has not been made. The unit tests prove what `proxy()` returns; they do not prove Next.js applies it in front of a route handler. This is the real-request proof ADR 0015 asks for and it is owed (the first `curl -i` of `/api/cron/generate-reports` against a dev server). Production reachability of the existing cron, webhook and OAuth routes before this fix is also unverified, and is a launch-checklist fact to check on a preview deploy.
+
+**Verification run:** `npx tsc --noEmit --skipLibCheck` clean; `npx eslint proxy.ts lib/i18n/proxy-api.test.ts` clean; `npx vitest run lib/i18n/proxy-api.test.ts lib/i18n/proxy-locale.test.ts` green. The full `npm run test:app` was NOT re-run for this commit: the CI dummy env was not available in this session, so suites that load config fail at import and prove nothing.

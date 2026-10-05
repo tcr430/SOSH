@@ -31,8 +31,18 @@ export async function proxy(request: NextRequest) {
   // 1. Refresh the Supabase session and get the current user in one call.
   const { response: supabaseResponse, user } = await updateSession(request);
 
-  // 2. Protect dashboard routes: redirect unauthenticated users to /[locale]/login.
   const { pathname } = request.nextUrl
+
+  // 1b. /api/* is not a localised page. Without this branch next-intl 307s every
+  //     API request (cron, webhooks, OAuth, PDF) to /{locale}/api/*, which 404s
+  //     (ADR 0031 O-1). Session refresh above still ran, so cookie-authenticated
+  //     routes keep working; each route owns its own auth. No locale routing, login
+  //     guard or CSP/nonce: those are for rendered HTML pages.
+  if (pathname === '/api' || pathname.startsWith('/api/')) {
+    return supabaseResponse
+  }
+
+  // 2. Protect dashboard routes: redirect unauthenticated users to /[locale]/login.
   const localeMatch = pathname.match(/^\/([a-z]{2})(\/.*)?$/)
   if (localeMatch) {
     const locale = localeMatch[1]

@@ -1041,6 +1041,7 @@ count until it is executed green in CI at the head it is dated to** (Session 28'
 | **O2.5** | `hasAdvancedAnalytics` + the portfolio and post loaders | 15, 20 *(authors 5's and 14's loader arms)* | 2 |
 | **O2.6** | `/analytics`, `/analytics/posts`, nav promotion, `nav.team`, the shell overflow fix, states, visx charts | 4, 6, 12, 34 *(authors 35's CI half)* | 2 |
 | **O2.7** | Report assembler + generator: payload, tier, abort-on-mismatch, section 5, methodology, eligibility, due rule | 5, 22, 25, 27, 31, 40 | 1 + 2 |
+| **O2.7b** | `proxy.ts`: `/api/*` skips locale routing, login guard and CSP but keeps the session refresh (O-1; waived: closes no constraint) | — | 2 |
 | **O2.8** | Report pages, `monthly-report` kind + template, recipients, `report_email` action, the cron route, the schedule row | 8, 9, 17, 23, 42 | 1 + 2 |
 | **O2.9** | The PDF route and Chromium hardening; the firewall row · **security-reviewer** | 14, 29, 30 | 2 |
 | **O2.10** | Design pass: taste-skill → impeccable → ui-ux-pro-max → emil-design-eng → break-ui · **react-reviewer** | 33 | 2 |
