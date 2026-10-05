@@ -157,6 +157,18 @@ describe('the helpers cannot be turned against the document', () => {
     expect(extractClasses(html)).toEqual(['text-sm', 'font-medium'])
   })
 
+  it('extractClasses decodes the "&amp;" React writes into a class attribute, so arbitrary variants reach the compiler as written', () => {
+    expect(extractClasses('<article class="[&amp;_section]:border-t print:[&amp;_tr]:break-inside-avoid">')).toEqual(['[&_section]:border-t', 'print:[&_tr]:break-inside-avoid'])
+  })
+
+  it('the PDF stylesheet really contains the report\'s arbitrary-variant rules (section hairlines, print breaks): they are not silently dropped', async () => {
+    const html = await buildReportHtml({ t: tFor('en'), locale: 'en', timezone: 'Europe/Lisbon', payload: await hostilePayload(), proAllowed: true })
+    const css = /<style>([\s\S]*?)<\/style>/.exec(html)![1]
+    expect(css).toMatch(/section[\s\S]{0,80}border-top-style|section[\s\S]{0,80}border-top-width/)
+    expect(css).toMatch(/@media print[\s\S]*break-inside:\s*avoid/)
+    expect(css).toMatch(/break-after:\s*avoid/)
+  })
+
   it('extractClasses drops a token that carries markup characters', () => {
     expect(extractClasses('<p class="ok <b>no</b>">')).toEqual(['ok'])
   })

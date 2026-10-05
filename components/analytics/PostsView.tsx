@@ -1,6 +1,6 @@
 import { dateLabel } from '@/lib/analytics/format'
 import type { PostRowView, PostsView as PostsModel } from '@/lib/analytics/load'
-import { Disclosures, ResultBadge, Section, SectionError, SelectField, StateNote, TABLE, type PickerOption, type T } from './shared'
+import { BUTTON, Disclosures, ResultBadge, Section, SectionError, SelectField, StateNote, TABLE, type PickerOption, type T } from './shared'
 
 // ADR 0031 §10.1 — the post level: a filter bar (GET form, native selects, no JavaScript), then a table with the date,
 // platform, account, campaign, state, and the value or the "so far" counts with the badge.
@@ -44,7 +44,7 @@ export function PostsFilters({
         options={[all, { value: 'none', label: t('analytics.posts.filters.none') }, ...accounts]}
       />
       <SelectField id="posts-campaign" label={t('analytics.posts.filters.campaign')} name="campaign" value={state.campaignId ?? ''} options={[all, ...campaigns]} />
-      <button type="submit" className="min-h-8 rounded-md border bg-secondary px-3 py-2 text-sm font-medium text-secondary-foreground">
+      <button type="submit" className={BUTTON}>
         {t('analytics.posts.filters.apply')}
       </button>
     </form>
@@ -135,10 +135,10 @@ export function PostsTable({ t, locale, timezone, model }: { t: T; locale: strin
             <tr key={r.postId} className={TABLE.row} data-state={r.state}>
               <td className={TABLE.cell} data-label={t('analytics.posts.col.date')}>{dateLabel(r.publishedAt, locale, timezone)}</td>
               <td className={TABLE.cell} data-label={t('analytics.posts.col.platform')}>{platformName(t, r.platform)}</td>
-              <td className={TABLE.cell + ' ' + TABLE.secondary} data-label={t('analytics.posts.col.account')}>
+              <td dir="auto" className={TABLE.cell + ' ' + TABLE.secondary} data-label={t('analytics.posts.col.account')}>
                 {r.accountLabel ?? t(r.accountLabelKey ?? 'analytics.account.unrecorded')}
               </td>
-              <td className={TABLE.cell + ' ' + TABLE.secondary} data-label={t('analytics.posts.col.campaign')}>{r.campaignName ?? '–'}</td>
+              <td dir="auto" className={TABLE.cell + ' ' + TABLE.secondary} data-label={t('analytics.posts.col.campaign')}>{r.campaignName ?? '–'}</td>
               <td className={TABLE.cell} data-label={t('analytics.posts.col.state')}><StateCell t={t} row={r} /></td>
               <td className={TABLE.cell} data-label={t('analytics.posts.col.result')}><ResultCell t={t} locale={locale} timezone={timezone} row={r} /></td>
             </tr>

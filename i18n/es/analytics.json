@@ -256,6 +256,9 @@
       "error": "No se pudo guardar.",
       "forbidden": "Solo el propietario del negocio puede cambiar esto.",
       "current": "Los informes se envían por email a: {value}."
+    },
+    "actions": {
+      "pdf": "Descargar PDF"
     }
   }
 }

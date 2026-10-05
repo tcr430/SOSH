@@ -84,7 +84,7 @@ export function GatedSection({ t, locale, id, titleKey, lineKey, plain = false }
         {!plain && (
           <>
             {' '}
-            <Link href={'/' + locale + '/billing'} className="font-medium text-foreground underline underline-offset-2">
+            <Link href={'/' + locale + '/billing'} className={'font-medium text-foreground underline underline-offset-2 ' + FOCUS}>
               {t('analytics.gated.link')}
             </Link>
           </>
@@ -110,8 +110,16 @@ export interface PickerOption {
   label: string
 }
 
-const SELECT = 'min-h-8 rounded-md border bg-background px-3 py-2 text-sm'
-const BUTTON = 'min-h-8 rounded-md border bg-secondary px-3 py-2 text-sm font-medium text-secondary-foreground'
+/**
+ * A full-contrast focus indicator for every control on these surfaces. The global base sets `outline-ring/50`, which is about
+ * 1.5:1 on the page background: below the 3:1 minimum for a focus indicator (WCAG 1.4.11, 2.4.11). `outline-foreground` is the
+ * body text colour in both themes.
+ */
+export const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground'
+// max-w-full: a select sizes itself to its LONGEST option, and the options carry customer names (campaigns, accounts).
+const SELECT = 'min-h-8 max-w-full rounded-md border bg-background px-3 py-2 text-sm ' + FOCUS
+// hover: only on a real hover device (Tailwind v4 gates it), active: an instant opacity change (no motion, so nothing to gate).
+export const BUTTON = 'min-h-8 rounded-md border bg-secondary px-3 py-2 text-sm font-medium text-secondary-foreground hover:bg-secondary/80 active:opacity-80 ' + FOCUS
 
 export function SelectField({ id, label, name, value, options }: { id: string; label: string; name: string; value: string; options: PickerOption[] }) {
   return (
@@ -147,7 +155,9 @@ export const TABLE = {
   table: 'w-full text-left text-sm',
   head: 'max-sm:sr-only',
   row: 'border-b border-border max-sm:mb-2 max-sm:block max-sm:rounded-md max-sm:border max-sm:p-3',
-  cell: 'py-2 pr-4 align-top max-sm:flex max-sm:justify-between max-sm:gap-3 max-sm:py-1 max-sm:before:font-medium max-sm:before:text-muted-foreground max-sm:before:content-[attr(data-label)]',
+  // min-w-0 + wrap-anywhere: a cell that holds a customer string (a 120-character campaign name, an unbreakable handle) may shrink
+  // and break anywhere, so it can never push the table or the 320 px card wider than its container.
+  cell: 'min-w-0 wrap-anywhere py-2 pr-4 align-top max-sm:flex max-sm:justify-between max-sm:gap-3 max-sm:py-1 max-sm:before:font-medium max-sm:before:text-muted-foreground max-sm:before:content-[attr(data-label)]',
   secondary: 'max-lg:hidden',
   th: 'py-2 pr-4 font-medium text-muted-foreground',
 } as const

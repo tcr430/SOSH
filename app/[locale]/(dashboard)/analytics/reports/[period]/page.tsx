@@ -9,7 +9,7 @@ import { hasAdvancedAnalytics } from '@/lib/stripe/plan'
 import { REPORT_SCHEMA_VERSION } from '@/lib/reports/constants'
 import type { ReportPayload } from '@/lib/reports/assemble'
 import { ReportBody } from '@/components/analytics/ReportBody'
-import type { T } from '@/components/analytics/shared'
+import { FOCUS, type T } from '@/components/analytics/shared'
 
 // ADR 0031 §5.4, §9.1, §10.5 — one stored report. The business is the SERVER-SIDE active business (never a param); the
 // period is Zod-validated and anything else is a 404; a period that belongs to another business is the same 404, because the
@@ -44,9 +44,18 @@ export default async function ReportPage({ params }: Props) {
 
   return (
     <div className="mx-auto max-w-5xl space-y-8 px-4 py-8 sm:px-6 print:max-w-none print:px-0 print:py-0">
-      <Link href={'/' + locale + '/analytics/reports'} className="text-sm font-medium underline underline-offset-2 print:hidden">
-        {t('analytics.report.back')}
-      </Link>
+      {/* The page's actions (ADR 0031 §10.1), outside ReportBody so they are never in the PDF and never in print. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 print:hidden">
+        <Link href={'/' + locale + '/analytics/reports'} className={'text-sm font-medium underline underline-offset-2 ' + FOCUS}>
+          {t('analytics.report.back')}
+        </Link>
+        {/* A plain anchor, not Link: the target is a file, not a page, so no client-side navigation or prefetch. The report id is
+            the row's own (loaded by the session business above), never a value from the URL. Print is the browser's own: the print
+            stylesheet applies, and a button would need a third client island (the ADR allows two). */}
+        <a href={'/api/analytics/reports/' + row.id + '/pdf'} download className={'inline-flex min-h-8 items-center rounded-md border bg-secondary px-3 py-2 text-sm font-medium text-secondary-foreground hover:bg-secondary/80 active:opacity-80 ' + FOCUS}>
+          {t('analytics.report.actions.pdf')}
+        </a>
+      </div>
       <ReportBody t={t} locale={locale} timezone={business.timezone} payload={payload} proAllowed={hasAdvancedAnalytics(business.plan)} />
     </div>
   )

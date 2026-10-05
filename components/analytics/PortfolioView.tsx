@@ -15,7 +15,7 @@ import type {
 } from '@/lib/analytics/load'
 import type { BreakdownView, MonthPairView, TypicalView, WinsView } from '@/lib/analytics/view-model'
 import { PostsPerMonthChart, TrendStrip, WinShareBars } from './charts'
-import { Disclosures, GatedSection, Section, SectionError, StateNote, TABLE, type T } from './shared'
+import { Disclosures, FOCUS, GatedSection, Section, SectionError, StateNote, TABLE, type T } from './shared'
 
 // ADR 0031 §10.1 — the portfolio, in reading order: activity, results (or the platform's state), campaigns, then the Pro
 // sections or their gated state. Synchronous Server Components: every figure arrives as a view model (keys and params),
@@ -75,7 +75,7 @@ export function ActivitySection({ t, activity }: { t: T; activity: Loaded<Activi
           <p className="text-sm text-foreground">{t('analytics.activity.total', { count: activity.data.total, prev: activity.data.previousTotal })}</p>
           <ul className="space-y-1 text-sm">
             {activity.data.rows.map((r) => (
-              <li key={r.platform + '|' + (r.accountId ?? '')}>
+              <li key={r.platform + '|' + (r.accountId ?? '')} className="wrap-anywhere">
                 {t('analytics.activity.line', { count: r.count, platform: platformName(t, r.platform), account: accountName(t, r) })}
               </li>
             ))}
@@ -154,6 +154,8 @@ function statusName(t: T, status: string | null): string {
 }
 
 export function CampaignsSection({ t, rows, plain = false }: { t: T; rows: Loaded<CampaignTableRow[]>; plain?: boolean }) {
+  // No campaigns (a business that only posts by hand): no section, rather than a header with nothing under it.
+  if (rows.status === 'ok' && rows.data.length === 0) return null
   return (
     <Section id="campaigns" title={t('analytics.section.campaigns')}>
       {rows.status === 'error' ? (
@@ -174,15 +176,16 @@ export function CampaignsSection({ t, rows, plain = false }: { t: T; rows: Loade
                 <td className={TABLE.cell} data-label={t('analytics.campaignTable.campaign')}>
                   <span>
                     {plain ? (
-                      <span className="font-medium">{r.name ?? t('analytics.campaignTable.open')}</span>
+                      <span dir="auto" className="font-medium">{r.name ?? t('analytics.campaignTable.open')}</span>
                     ) : (
-                      <Link href={r.href} className="font-medium underline underline-offset-2">
+                      <Link href={r.href} dir="auto" className={'font-medium underline underline-offset-2 ' + FOCUS}>
                         {r.name ?? t('analytics.campaignTable.open')}
                       </Link>
                     )}
                     {/* At 640 the secondary columns sit behind a disclosure. */}
                     <details className="lg:hidden max-sm:hidden">
-                      <summary className="cursor-pointer text-xs text-muted-foreground">{t('analytics.posts.details')}</summary>
+                      {/* min-h-6 (24 px): a text-xs summary alone is about 16 px tall, under the WCAG 2.5.8 target minimum. */}
+                      <summary className={'inline-flex min-h-6 cursor-pointer items-center text-xs text-muted-foreground hover:text-foreground ' + FOCUS}>{t('analytics.posts.details')}</summary>
                       <span className="block text-xs">{statusName(t, r.status)} · {r.published}</span>
                     </details>
                   </span>
@@ -290,7 +293,7 @@ export function PatternsSection({ t, patterns }: { t: T; patterns: AdvancedPortf
         <ul className="space-y-2 text-sm">
           {patterns.data.map((p) => (
             <li key={p.pattern}>
-              <span className="block">{p.pattern}</span>
+              <span className="block wrap-anywhere">{p.pattern}</span>
               <span className="block text-xs text-muted-foreground">{t('analytics.patternEvidence', { n: p.n, campaigns: p.campaigns })}</span>
             </li>
           ))}
@@ -311,7 +314,7 @@ function RetrospectivesSection({ t, rows }: { t: T; rows: Loaded<RetrospectiveLi
         <ul className="space-y-2 text-sm">
           {rows.data.map((r) => (
             <li key={r.campaignId}>
-              <Link href={r.href} className="font-medium underline underline-offset-2">
+              <Link href={r.href} className={'font-medium underline underline-offset-2 ' + FOCUS}>
                 {r.campaignName ?? t('analytics.campaignTable.open')}
               </Link>{' '}
               <RetroCell t={t} retro={r} />

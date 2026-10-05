@@ -51,6 +51,30 @@ export async function listReports(client: SupabaseClient, businessId: string, li
   return (data as AnalyticsReportRow[]) ?? []
 }
 
+// The list page's index: id, month and whether it is a stub, and NOTHING else. `listReports` selects `*`, which carries the whole
+// payload of up to 24 reports for a page that reads one flag (react review, O2.10). `stub:payload->>stub` is a jsonb path, so the
+// payload itself never leaves the database. Same filter, order and bound as listReports.
+export interface ReportIndexRow {
+  id: string
+  period_month: string
+  stub: boolean
+}
+
+export async function listReportIndex(client: SupabaseClient, businessId: string, limit = LIST_MAX): Promise<ReportIndexRow[]> {
+  const { data, error } = await client
+    .from('analytics_reports')
+    .select('id, period_month, stub:payload->>stub')
+    .eq('business_id', businessId)
+    .order('period_month', { ascending: false })
+    .limit(Math.min(Math.max(Math.trunc(limit), 1), LIST_MAX))
+  if (error) throw new Error(getErrorMessage(error))
+  return ((data as Array<{ id: string; period_month: string; stub: string | boolean | null }> | null) ?? []).map((r) => ({
+    id: r.id,
+    period_month: r.period_month,
+    stub: r.stub === true || r.stub === 'true',
+  }))
+}
+
 // ── The worker's writes and reads (service-role, lazy import, NO client parameter; ADR 0031 §5.2, §9.3) ───────────
 
 export type AnalyticsReportInsert = Omit<AnalyticsReportRow, 'id'>

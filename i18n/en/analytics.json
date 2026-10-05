@@ -256,6 +256,9 @@
       "error": "We couldn't save this.",
       "forbidden": "Only the business owner can change this.",
       "current": "Reports are emailed to: {value}."
+    },
+    "actions": {
+      "pdf": "Download PDF"
     }
   }
 }

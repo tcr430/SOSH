@@ -31,7 +31,7 @@ vi.mock('next/navigation', () => ({
 vi.mock('next-intl/server', () => ({ getTranslations: async () => (key: string, values?: Record<string, unknown>) => (values ? `${key} ${JSON.stringify(values)}` : key) }))
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => client }))
 vi.mock('@/lib/db/businesses', () => ({ getBusinessForUser }))
-vi.mock('@/lib/db/analytics-reports', () => ({ getReportByPeriod, listReports }))
+vi.mock('@/lib/db/analytics-reports', () => ({ getReportByPeriod, listReportIndex: listReports }))
 vi.mock('./actions', () => ({ setReportEmailAction: vi.fn() }))
 
 import ReportPage from './[period]/page'
@@ -44,7 +44,20 @@ const row = (businessId: string, period: string, extra: Record<string, unknown> 
   period_month: period + '-01',
   tier: 'advanced',
   schema_version: 1,
-  payload: { stub: false, period, ...extra },
+  // The fields ReportBody reads (the page tests below render it): a header, a summary and the methodology keys.
+  payload: {
+    schemaVersion: 1,
+    stub: false,
+    period,
+    timezone: 'Europe/Lisbon',
+    outcomesThrough: '2026-04-10T06:00:00Z',
+    generatedAt: '2026-04-10T06:00:00Z',
+    tier: 'advanced',
+    header: { key: 'analytics.report.header', params: { business: 'Acme', month: period, measuredAsOf: '2026-04-10T06:00:00Z', generatedOn: '2026-04-10T06:00:00Z' } },
+    summary: [],
+    methodology: { keys: [] },
+    ...extra,
+  },
   outcomes_through: '2026-04-10T06:00:00Z',
   generated_at: '2026-04-10T06:00:00Z',
 })
@@ -55,7 +68,12 @@ beforeEach(() => {
   client.auth.getUser = getUser.mockReset().mockResolvedValue({ data: { user: { id: 'user-owner' } } })
   getBusinessForUser.mockReset().mockResolvedValue(A)
   getReportByPeriod.mockReset().mockImplementation(async (_c: unknown, businessId: string, periodMonth: string) => DB.find((r) => r.business_id === businessId && r.period_month === periodMonth) ?? null)
-  listReports.mockReset().mockImplementation(async (_c: unknown, businessId: string) => DB.filter((r) => r.business_id === businessId).sort((a, b) => b.period_month.localeCompare(a.period_month)))
+  // The index reader returns id, month and the stub flag only: never a payload.
+  listReports.mockReset().mockImplementation(async (_c: unknown, businessId: string) =>
+    DB.filter((r) => r.business_id === businessId)
+      .sort((a, b) => b.period_month.localeCompare(a.period_month))
+      .map((r) => ({ id: r.id, period_month: r.period_month, stub: r.payload.stub === true })),
+  )
 })
 
 const page = (period: string, locale = 'en') => ReportPage({ params: Promise.resolve({ locale, period }) })
@@ -93,6 +111,24 @@ describe('the report page is bound to the active business (closes #17, Tier 2)',
   it('a stored payload with a schema version this build does not read is a 404 (never reinterpreted)', async () => {
     getReportByPeriod.mockResolvedValue({ ...row('biz-a', '2026-03'), schema_version: 2 })
     await expect(page('2026-03')).rejects.toBeInstanceOf(NotFound)
+  })
+
+  it('offers Download PDF (ADR §10.1): a plain download anchor to the PDF route for THIS report row, hidden in print, with the focus style', async () => {
+    const out = renderToStaticMarkup((await page('2026-03')) as React.ReactElement)
+    const m = /<a href="(\/api\/analytics\/reports\/[^"]+\/pdf)"([^>]*)>/.exec(out)
+    expect(m, 'no Download PDF anchor').toBeTruthy()
+    expect(m![1]).toBe('/api/analytics/reports/r-biz-a-2026-03/pdf')
+    expect(m![2]).toContain('download')
+    expect(m![2]).toContain('focus-visible:outline-foreground')
+    // The action row is outside the report body and hidden in print, so it can never be in the PDF or on paper.
+    expect(out).toMatch(/print:hidden[^>]*>[\s\S]*?\/pdf"/)
+    expect(out).toContain('analytics.report.actions.pdf')
+  })
+
+  it('the PDF link uses the row id the SESSION business loaded, never a value from the URL (a different period gives that row\'s id)', async () => {
+    const out = renderToStaticMarkup((await page('2026-04')) as React.ReactElement)
+    expect(out).toContain('/api/analytics/reports/r-biz-a-2026-04/pdf')
+    expect(out).not.toContain('r-biz-a-2026-03')
   })
 
   it('redirects an unauthenticated visitor to login and a user without a business to onboarding', async () => {

@@ -4,7 +4,7 @@ import type { BasicPlatformSection, Section as Loaded } from '@/lib/analytics/lo
 import { REPORT_KEYS } from '@/lib/reports/constants'
 import type { ReportPayload } from '@/lib/reports/assemble'
 import { ActivitySection, BreakdownBlock, CampaignsSection, PatternsSection, PlatformResults, TrendSection } from './PortfolioView'
-import { GatedSection, ResultBadge, Section, StateNote, type T } from './shared'
+import { FOCUS, GatedSection, ResultBadge, Section, StateNote, type T } from './shared'
 
 // ADR 0031 §5.3, §10.5 — ONE report, as the immutable stored payload says it. A synchronous Server Component: the page and
 // (O2.9) the PDF route render this same component with the same print rules, so the two can never disagree. Every figure
@@ -22,6 +22,11 @@ const PRO_SECTIONS = [
   { id: 'breakdowns', section: 'breakdowns' },
   { id: 'patterns', section: 'patterns' },
 ] as const
+
+// The report reads as a document: generous vertical rhythm, a hairline above each section (the page and the PDF carry the same
+// classes), section headings one step larger than on the live pages, and a heading never stranded at the foot of a printed page.
+// Scoped to this article with arbitrary variants, so the live pages that share the section components are untouched.
+const ARTICLE = 'space-y-12 print:space-y-8 [&_section]:border-t [&_section]:border-border [&_section]:pt-8 [&_h2]:text-xl print:[&_h2]:break-after-avoid print:[&_h3]:break-after-avoid print:[&_h4]:break-after-avoid print:[&_tr]:break-inside-avoid print:[&_svg]:break-inside-avoid'
 
 const ok = <V,>(data: V): Loaded<V> => ({ status: 'ok', data })
 
@@ -44,7 +49,7 @@ function Methodology({ t, keys }: { t: T; keys: readonly string[] }) {
   return (
     <div className="space-y-3 print:break-before-page">
       <Section id="methodology" title={t('analytics.report.section.methodology')}>
-        <ul className="space-y-2 text-sm">
+        <ul className="max-w-prose space-y-2 text-sm leading-relaxed text-muted-foreground">
           {keys.map((key) => (
             <li key={key}>{t(key)}</li>
           ))}
@@ -74,7 +79,7 @@ function RatedPosts({ t, locale, payload, plain }: { t: T; locale: string; paylo
           {!plain && (
             <Link
               href={'/' + locale + '/analytics/posts?month=' + payload.period + '&platform=' + p.platform}
-              className="text-sm font-medium underline underline-offset-2 print:hidden"
+              className={'text-sm font-medium underline underline-offset-2 print:hidden ' + FOCUS}
             >
               {t('analytics.postsLink')}
             </Link>
@@ -148,10 +153,10 @@ export function ReportBody(props: ReportBodyProps) {
   // §5.6: a month with nothing published is a stub: the sentence and the methodology, no empty tables.
   if (payload.stub) {
     return (
-      <article className="space-y-10 print:space-y-6">
-        <header className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">{month}</h1>
-          <p className="text-sm text-muted-foreground">{header}</p>
+      <article className={ARTICLE}>
+        <header className="space-y-2">
+          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{month}</h1>
+          <p className="max-w-prose wrap-anywhere text-sm text-muted-foreground">{header}</p>
         </header>
         <Section id="summary" title={t('analytics.report.section.summary')}>
           <p className="text-sm text-foreground">{t(REPORT_KEYS.stub, { month })}</p>
@@ -162,14 +167,14 @@ export function ReportBody(props: ReportBodyProps) {
   }
 
   return (
-    <article className="space-y-10 print:space-y-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">{month}</h1>
-        <p className="text-sm text-muted-foreground">{header}</p>
+    <article className={ARTICLE}>
+      <header className="space-y-2">
+        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{month}</h1>
+        <p className="max-w-prose wrap-anywhere text-sm text-muted-foreground">{header}</p>
       </header>
 
       <Section id="summary" title={t('analytics.report.section.summary')}>
-        <ul className="space-y-1 text-sm">
+        <ul className="max-w-prose space-y-2 text-base leading-relaxed">
           {payload.summary.map((line, i) => (
             <li key={line.key + i}>{t(line.key, line.params)}</li>
           ))}

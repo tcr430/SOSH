@@ -22,8 +22,11 @@ export interface ReportEmailFormLabels {
   options: Record<Setting, string>
 }
 
-const SELECT = 'min-h-8 rounded-md border bg-background px-3 py-2 text-sm'
-const BUTTON = 'min-h-8 rounded-md border bg-secondary px-3 py-2 text-sm font-medium text-secondary-foreground'
+// Kept local: this is a client island and must not pull the server-side section components into its bundle. The focus style is
+// the same full-contrast one components/analytics/shared.tsx defines (the global outline is ~1.5:1, under the 3:1 minimum).
+const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground'
+const SELECT = 'min-h-8 max-w-full rounded-md border bg-background px-3 py-2 text-sm ' + FOCUS
+const BUTTON = 'min-h-8 rounded-md border bg-secondary px-3 py-2 text-sm font-medium text-secondary-foreground hover:bg-secondary/80 active:opacity-80 disabled:cursor-not-allowed disabled:opacity-60 ' + FOCUS
 
 export function ReportEmailForm({
   action,

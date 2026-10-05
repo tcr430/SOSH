@@ -39,7 +39,11 @@ export function extractBlock(css: string, header: string): string {
 export function extractClasses(html: string): string[] {
   const out = new Set<string>()
   for (const m of html.matchAll(/\bclass="([^"]*)"/g)) {
-    for (const token of m[1].split(/\s+/)) if (token && !/[<>"'`\\]/.test(token)) out.add(token)
+    // React escapes "&" in an attribute as "&amp;", and a browser decodes it back. Tailwind must see the DECODED class, or every
+    // arbitrary variant ([&_section]:border-t, print:[&_tr]:break-inside-avoid) is a candidate that matches nothing and its rule
+    // silently vanishes from the PDF. Only &amp; is decoded: a class never carries another entity, and any other one is dropped
+    // by the markup-character filter below.
+    for (const token of m[1].replace(/&amp;/g, '&').split(/\s+/)) if (token && !/[<>"'`\\]/.test(token)) out.add(token)
   }
   return [...out]
 }

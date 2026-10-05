@@ -47,10 +47,10 @@ export function PostsPerMonthChart({ t, locale, id, months }: { t: T; locale: st
             return (
               <Group key={m.period}>
                 <Bar x={bx} y={y(m.published)} width={x.bandwidth()} height={barH} className="fill-primary" />
-                <text x={bx + x.bandwidth() / 2} y={y(m.published) - 4} textAnchor="middle" fontSize={10} className="fill-foreground">
+                <text x={bx + x.bandwidth() / 2} y={y(m.published) - 4} textAnchor="middle" fontSize={12} className="fill-foreground">
                   {m.published}
                 </text>
-                <text x={bx + x.bandwidth() / 2} y={innerH + 14} textAnchor="middle" fontSize={9} className="fill-muted-foreground">
+                <text x={bx + x.bandwidth() / 2} y={innerH + 14} textAnchor="middle" fontSize={11} className="fill-muted-foreground">
                   {monthLabel(m.period, locale, 'short')}
                 </text>
               </Group>
@@ -113,8 +113,10 @@ export function TrendStrip({
       </figcaption>
       <svg viewBox={'0 0 ' + VIEW_W + ' ' + height} role="img" aria-label={title} aria-describedby={id + '-summary'} className="h-auto max-h-60 w-full">
         <Group left={MARGIN.left} top={MARGIN.top}>
-          <line x1={0} x2={innerW} y1={innerH} y2={innerH} className="stroke-border" />
-          <text x={0} y={-6} fontSize={9} className="fill-muted-foreground">
+          {/* muted-foreground, not border: the baseline is 1.2:1 against the light background with `border` (4.5:1 with this), and a
+              hairline that faint disappears in the PDF. Tokens only. */}
+          <line x1={0} x2={innerW} y1={innerH} y2={innerH} className="stroke-muted-foreground" />
+          <text x={0} y={-6} fontSize={11} className="fill-muted-foreground">
             {formatRate(top)}
           </text>
           {points.map((p) => {
@@ -130,7 +132,7 @@ export function TrendStrip({
                     <line x1={cx - x.bandwidth() / 2} x2={cx + x.bandwidth() / 2} y1={y(p.stats.median)} y2={y(p.stats.median)} strokeWidth={3} className="stroke-foreground" />
                   </>
                 )}
-                <text x={cx} y={innerH + 14} textAnchor="middle" fontSize={9} className="fill-muted-foreground">
+                <text x={cx} y={innerH + 14} textAnchor="middle" fontSize={11} className="fill-muted-foreground">
                   {monthLabel(p.period, locale, 'short')}
                 </text>
               </Group>

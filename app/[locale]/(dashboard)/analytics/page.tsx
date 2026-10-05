@@ -8,7 +8,7 @@ import { loadPortfolio } from '@/lib/analytics/load'
 import { monthLabel } from '@/lib/analytics/format'
 import { currentPeriod, monthOptions, parsePeriod } from '@/lib/analytics/search-params'
 import { PortfolioView } from '@/components/analytics/PortfolioView'
-import { MonthPicker, type T } from '@/components/analytics/shared'
+import { FOCUS, MonthPicker, type T } from '@/components/analytics/shared'
 
 // ADR 0031 §4.1, §10.1 — the portfolio. The business is the SERVER-SIDE active business (never a param); the month is a
 // Zod-validated search param that falls back to the current month in the business timezone. The picker is a GET form.
@@ -45,10 +45,10 @@ export default async function AnalyticsPage({ params, searchParams }: Props) {
         <h1 className="text-2xl font-semibold tracking-tight">{t('analytics.title')}</h1>
         <p className="text-sm text-muted-foreground">{t('analytics.description')}</p>
         <div className="flex flex-wrap gap-x-6 gap-y-1">
-          <Link href={'/' + locale + '/analytics/posts?month=' + month} className="text-sm font-medium underline underline-offset-2">
+          <Link href={'/' + locale + '/analytics/posts?month=' + month} className={'text-sm font-medium underline underline-offset-2 ' + FOCUS}>
             {t('analytics.postsLink')}
           </Link>
-          <Link href={'/' + locale + '/analytics/reports'} className="text-sm font-medium underline underline-offset-2">
+          <Link href={'/' + locale + '/analytics/reports'} className={'text-sm font-medium underline underline-offset-2 ' + FOCUS}>
             {t('analytics.report.listLink')}
           </Link>
         </div>

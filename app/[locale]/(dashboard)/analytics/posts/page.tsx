@@ -10,7 +10,7 @@ import { loadPosts } from '@/lib/analytics/load'
 import { monthLabel } from '@/lib/analytics/format'
 import { FILTER_PLATFORMS, currentPeriod, monthOptions, parsePostFilters } from '@/lib/analytics/search-params'
 import { PostsFilters, PostsTable } from '@/components/analytics/PostsView'
-import type { T } from '@/components/analytics/shared'
+import { FOCUS, type T } from '@/components/analytics/shared'
 
 // ADR 0031 §4.1, §10.1 — the post level. Filters (month, platform, account, campaign) are GET search params, Zod-validated
 // in parsePostFilters; the business is the server-side active business, never a param.
@@ -50,7 +50,7 @@ export default async function AnalyticsPostsPage({ params, searchParams }: Props
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight">{t('analytics.posts.title')}</h1>
         <p className="text-sm text-muted-foreground">{t('analytics.posts.description')}</p>
-        <Link href={'/' + locale + '/analytics?month=' + filters.period} className="text-sm font-medium underline underline-offset-2">
+        <Link href={'/' + locale + '/analytics?month=' + filters.period} className={'text-sm font-medium underline underline-offset-2 ' + FOCUS}>
           {t('analytics.backLink')}
         </Link>
       </header>

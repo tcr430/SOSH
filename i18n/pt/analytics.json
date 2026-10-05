@@ -256,6 +256,9 @@
       "error": "Não foi possível guardar.",
       "forbidden": "Só o proprietário do negócio pode alterar isto.",
       "current": "Os relatórios são enviados por email a: {value}."
+    },
+    "actions": {
+      "pdf": "Transferir PDF"
     }
   }
 }

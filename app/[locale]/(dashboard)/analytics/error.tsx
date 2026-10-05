@@ -10,7 +10,12 @@ export default function AnalyticsError({ reset }: { error?: unknown; reset: () =
   return (
     <div role="alert" className="mx-auto max-w-5xl space-y-4 px-4 py-8 sm:px-6">
       <p className="text-sm text-foreground">{t('error')}</p>
-      <button type="button" onClick={() => reset()} className="min-h-8 rounded-md border bg-secondary px-3 py-2 text-sm font-medium text-secondary-foreground">
+      {/* Local, not imported: a client boundary must not pull the server section components in. Same full-contrast focus style as shared.tsx. */}
+      <button
+        type="button"
+        onClick={() => reset()}
+        className="min-h-8 rounded-md border bg-secondary px-3 py-2 text-sm font-medium text-secondary-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
+      >
         {t('reload')}
       </button>
     </div>
