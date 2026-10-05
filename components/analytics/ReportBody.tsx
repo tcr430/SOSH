@@ -32,6 +32,12 @@ export interface ReportBodyProps {
   payload: ReportPayload
   /** The CURRENT plan's gate (hasAdvancedAnalytics): the A-5 ruling renders Pro sections only while it is true. */
   proAllowed: boolean
+  /**
+   * The PDF's static render (ADR 0031 V.14): no link and no client-boundary component is invoked, because a route handler
+   * cannot invoke one under react-dom/server. Links become plain text (a forwarded document has nothing to navigate to).
+   * Default false: the page renders exactly as before.
+   */
+  plain?: boolean
 }
 
 function Methodology({ t, keys }: { t: T; keys: readonly string[] }) {
@@ -48,7 +54,7 @@ function Methodology({ t, keys }: { t: T; keys: readonly string[] }) {
   )
 }
 
-function RatedPosts({ t, locale, payload }: { t: T; locale: string; payload: ReportPayload }) {
+function RatedPosts({ t, locale, payload, plain }: { t: T; locale: string; payload: ReportPayload; plain: boolean }) {
   const rated = payload.ratedPosts
   if (!rated || rated.state !== 'shown') return null
   return (
@@ -65,24 +71,26 @@ function RatedPosts({ t, locale, payload }: { t: T; locale: string; payload: Rep
               </li>
             ))}
           </ol>
-          <Link
-            href={'/' + locale + '/analytics/posts?month=' + payload.period + '&platform=' + p.platform}
-            className="text-sm font-medium underline underline-offset-2 print:hidden"
-          >
-            {t('analytics.postsLink')}
-          </Link>
+          {!plain && (
+            <Link
+              href={'/' + locale + '/analytics/posts?month=' + payload.period + '&platform=' + p.platform}
+              className="text-sm font-medium underline underline-offset-2 print:hidden"
+            >
+              {t('analytics.postsLink')}
+            </Link>
+          )}
         </div>
       ))}
     </Section>
   )
 }
 
-function ProSections({ t, locale, payload, proAllowed }: ReportBodyProps) {
+function ProSections({ t, locale, payload, proAllowed, plain = false }: ReportBodyProps) {
   if (!proAllowed) {
     return (
       <>
         {PRO_SECTIONS.map((g) => (
-          <GatedSection key={g.id} t={t} locale={locale} id={g.id} titleKey={'analytics.section.' + g.section} lineKey={'analytics.gated.line.' + g.section} />
+          <GatedSection key={g.id} t={t} locale={locale} id={g.id} titleKey={'analytics.section.' + g.section} lineKey={'analytics.gated.line.' + g.section} plain={plain} />
         ))}
       </>
     )
@@ -128,7 +136,7 @@ function ProSections({ t, locale, payload, proAllowed }: ReportBodyProps) {
 }
 
 export function ReportBody(props: ReportBodyProps) {
-  const { t, locale, timezone, payload } = props
+  const { t, locale, timezone, payload, plain = false } = props
   const month = monthLabel(payload.period, locale)
   const header = t(payload.header.key, {
     business: payload.header.params.business,
@@ -179,7 +187,7 @@ export function ReportBody(props: ReportBodyProps) {
         )}
       </Section>
 
-      <RatedPosts t={t} locale={locale} payload={payload} />
+      <RatedPosts t={t} locale={locale} payload={payload} plain={plain} />
 
       {payload.unavailable && payload.unavailable.length > 0 && (
         <Section id="unavailable" title={t('analytics.report.section.unavailable')}>
@@ -189,7 +197,7 @@ export function ReportBody(props: ReportBodyProps) {
         </Section>
       )}
 
-      {payload.campaigns && <CampaignsSection t={t} rows={ok(payload.campaigns)} />}
+      {payload.campaigns && <CampaignsSection t={t} rows={ok(payload.campaigns)} plain={plain} />}
 
       <ProSections {...props} />
 

@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react'
 import Link from 'next/link'
-import { ArrowDown, ArrowUp, Minus } from 'lucide-react'
 
 // ADR 0031 §10 — the plainest correct version of the contract (the design pass is O2.10). Server Components: the
 // translator arrives as a prop, so every component here is synchronous and renders to static markup under test.
@@ -31,6 +30,33 @@ export function SectionError({ t }: { t: T }) {
   )
 }
 
+// Inline SVG with lucide's arrow-up, arrow-down and minus geometry. A component from a client-boundary package (lucide-react)
+// cannot be invoked by the PDF route's static render (ADR 0031 V.14), and the report tree is ONE tree for the page and the PDF.
+function Glyph({ children }: { children: ReactNode }) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3 shrink-0">
+      {children}
+    </svg>
+  )
+}
+const ArrowUp = () => (
+  <Glyph>
+    <path d="m5 12 7-7 7 7" />
+    <path d="M12 19V5" />
+  </Glyph>
+)
+const ArrowDown = () => (
+  <Glyph>
+    <path d="M12 5v14" />
+    <path d="m19 12-7 7-7-7" />
+  </Glyph>
+)
+const Minus = () => (
+  <Glyph>
+    <path d="M5 12h14" />
+  </Glyph>
+)
+
 const BADGES = {
   above: { key: 'analytics.posts.badge.above', Icon: ArrowUp },
   below: { key: 'analytics.posts.badge.below', Icon: ArrowDown },
@@ -42,21 +68,27 @@ export function ResultBadge({ t, badge }: { t: T; badge: keyof typeof BADGES }) 
   const { key, Icon } = BADGES[badge]
   return (
     <span className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-xs font-medium text-foreground">
-      <Icon aria-hidden="true" className="h-3 w-3 shrink-0" />
+      <Icon />
       {t(key)}
     </span>
   )
 }
 
 /** "Available on Pro: {one line}" with a plain link to billing. No blur, no fake numbers, no modal (ADR 0031 §10.2). */
-export function GatedSection({ t, locale, id, titleKey, lineKey }: { t: T; locale: string; id: string; titleKey: string; lineKey: string }) {
+export function GatedSection({ t, locale, id, titleKey, lineKey, plain = false }: { t: T; locale: string; id: string; titleKey: string; lineKey: string; plain?: boolean }) {
   return (
     <Section id={id} title={t(titleKey)}>
       <p className="text-sm text-muted-foreground">
-        {t('analytics.gated.prefix', { line: t(lineKey) })}{' '}
-        <Link href={'/' + locale + '/billing'} className="font-medium text-foreground underline underline-offset-2">
-          {t('analytics.gated.link')}
-        </Link>
+        {t('analytics.gated.prefix', { line: t(lineKey) })}
+        {/* `plain` is the PDF's static render: a document has no billing page to link to, and Link cannot be invoked there. */}
+        {!plain && (
+          <>
+            {' '}
+            <Link href={'/' + locale + '/billing'} className="font-medium text-foreground underline underline-offset-2">
+              {t('analytics.gated.link')}
+            </Link>
+          </>
+        )}
       </p>
     </Section>
   )

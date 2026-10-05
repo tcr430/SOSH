@@ -54,6 +54,8 @@ describe('the subject cannot be split (CR/LF stripped from every interpolated va
 
   it('oneLine collapses every kind of break and trims', () => {
     expect(oneLine('  a\r\nb\nc\rd' + String.fromCharCode(0x2029) + 'e  ')).toBe('a b c d e')
+    // Every C0 control, DEL and NEL go too (security review, finding 6).
+    expect(oneLine('a\tb\x0bc\x0cd\x00e\x7ff' + String.fromCharCode(0x85) + 'g')).toBe('a b c d e f g')
     // Digits are untouched (an earlier edit of this guard stripped 2, 0, 8 and 9 from the subject).
     expect(oneLine('Report 2028 and 2029')).toBe('Report 2028 and 2029')
   })

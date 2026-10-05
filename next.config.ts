@@ -16,6 +16,17 @@ const withMDX = createMDX({
 
 const nextConfig: NextConfig = {
   pageExtensions: ["js", "jsx", "md", "mdx", "ts", "tsx"],
+  // ADR 0031 §5.5 (V.3): the PDF route launches Chromium from these two packages, which cannot be bundled.
+  serverExternalPackages: ["puppeteer-core", "@sparticuz/chromium"],
+  // The PDF route reads these at request time (fs, not import), so the file tracer cannot see them: tailwindcss' own
+  // stylesheets and app/globals.css for the inlined CSS, and the bundled Chromium archives. UNPROVEN until a preview deploy.
+  outputFileTracingIncludes: {
+    "/api/analytics/reports/[id]/pdf": [
+      "./node_modules/tailwindcss/*.css",
+      "./app/globals.css",
+      "./node_modules/@sparticuz/chromium/bin/**",
+    ],
+  },
   async headers() {
     return [
       {

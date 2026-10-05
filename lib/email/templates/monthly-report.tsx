@@ -17,7 +17,8 @@ export const MonthlyReportPropsSchema = z.object({
 export type MonthlyReportProps = z.infer<typeof MonthlyReportPropsSchema>
 
 /** A header-injection guard: a CR, LF or line separator inside an interpolated value would split the subject line. */
-const LINE_BREAKS = new RegExp('[\\r\\n' + String.fromCharCode(0x2028, 0x2029) + ']+', 'g')
+// Every C0 control and DEL, plus NEL, LS and PS: anything a header or a log line could treat as a break (security review, finding 6).
+const LINE_BREAKS = new RegExp('[\\x00-\\x1f\\x7f' + String.fromCharCode(0x85, 0x2028, 0x2029) + ']+', 'g')
 
 export function oneLine(value: string): string {
   return value.replace(LINE_BREAKS, ' ').replace(/\s{2,}/g, ' ').trim()

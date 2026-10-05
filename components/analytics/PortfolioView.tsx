@@ -153,7 +153,7 @@ function statusName(t: T, status: string | null): string {
   return status ? t('analytics.status.' + status) : '–'
 }
 
-export function CampaignsSection({ t, rows }: { t: T; rows: Loaded<CampaignTableRow[]> }) {
+export function CampaignsSection({ t, rows, plain = false }: { t: T; rows: Loaded<CampaignTableRow[]>; plain?: boolean }) {
   return (
     <Section id="campaigns" title={t('analytics.section.campaigns')}>
       {rows.status === 'error' ? (
@@ -173,9 +173,13 @@ export function CampaignsSection({ t, rows }: { t: T; rows: Loaded<CampaignTable
               <tr key={r.campaignId} className={TABLE.row}>
                 <td className={TABLE.cell} data-label={t('analytics.campaignTable.campaign')}>
                   <span>
-                    <Link href={r.href} className="font-medium underline underline-offset-2">
-                      {r.name ?? t('analytics.campaignTable.open')}
-                    </Link>
+                    {plain ? (
+                      <span className="font-medium">{r.name ?? t('analytics.campaignTable.open')}</span>
+                    ) : (
+                      <Link href={r.href} className="font-medium underline underline-offset-2">
+                        {r.name ?? t('analytics.campaignTable.open')}
+                      </Link>
+                    )}
                     {/* At 640 the secondary columns sit behind a disclosure. */}
                     <details className="lg:hidden max-sm:hidden">
                       <summary className="cursor-pointer text-xs text-muted-foreground">{t('analytics.posts.details')}</summary>
