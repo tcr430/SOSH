@@ -383,6 +383,7 @@ These items are required by ADR 0010 and are not yet in the codebase. Each block
 - [ ] `welcome-to-plan` renders + sends
 - [ ] `payment-failed-courtesy` renders + sends
 - [ ] `first-post-published` renders + sends
+- [ ] **Real text, not raw keys** (found in Session 37; fixed in `24a2d0042`): send one message of each of `team-invite` and `monthly-report`, and one of the six above, and confirm the subject and body are written sentences, never `email.<kind>.subject`. `i18n/request.ts` did not load the `email` and `invite` namespaces before that commit, so every kind would have rendered keys in production; the fix is tested through the real request config, but **no message has been sent**. Check at least one send in each of `en`, `pt`, `es`.
 - [ ] Bounce simulation propagates to `email_suppressions`
 
 #### Smoke tests — auth email (3)

@@ -11,6 +11,8 @@
 > **Basis:** written 2026-09-02, verified against the source at `b297a4a8` rather than against planning
 > documents. **Naming:** the product is being renamed SOSH → Jemip; the codebase still says SOSH.
 >
+> **Updated 2026-10-05 (Session 37):** only the statements about analytics and the monthly report were changed; nothing else was re-verified.
+>
 > **Updated 2026-10-04 for Session 36 only (Track L, ADR 0030).** Two entries under "Built and working" are new.
 > Everything else in this file still reflects the 2026-09-02 basis and was **not re-verified**; in particular
 > "In flight" predates Sessions 31–35 (generation quality, the social-history import, the outcome loop and the
@@ -24,9 +26,9 @@
 to say* — governed memory, three campaign modes, signal ingestion and triage, a critique gate, a learning
 loop that reads the difference between what the AI wrote and what a human approved — are built, tested and
 better than what the market ships. The parts that make it a *service* rather than an engine — the
-engagement inbox, analytics, visual formats, and a reporting artefact — are not built at all. **It is not
-yet sellable at the advertised price**, because two of the things the pricing page promises have no
-surface in the product.
+engagement inbox and visual formats — are not built at all, and the analytics and the monthly report were built in Session 37 but have not been reviewed or used by a real customer. **It is not
+yet sellable at the advertised price**, because the engagement inbox the pricing page promises has no
+surface in the product, and the analytics promised in both tiers is unreviewed.
 
 ---
 
@@ -39,7 +41,7 @@ An agency sells four things. This is where we stand against each.
 | **Judgment** — what to say, why now, to whom | Campaign modes, memory, signals, critique gate | **Strong.** The most complete part of the product and the genuine differentiator. |
 | **Production** — making the artefacts | Copy, visuals, formats | **Partial.** Text only. No images, no carousels in practice, no video. |
 | **Execution** — publishing *and* engaging | Scheduling, publishing, replies | **Half.** Publishing works. Engagement does not exist. |
-| **Accountability** — reporting, owning the number | Analytics, insight, monthly report | **Absent.** Metrics are collected and never shown or learned from. |
+| **Accountability** — reporting, owning the number | Analytics, insight, monthly report | **Built, not yet reviewed or run for a real customer** (Session 37). Published results are now shown and a monthly report exists, both describing results and never claiming causes. LinkedIn shows publishing counts only. |
 
 ---
 
@@ -125,9 +127,6 @@ voice"* genuinely closes.
 ### Not built
 
 - **Engagement inbox.** No comment or mention handling of any kind. *Promised in both pricing tiers.*
-- **Analytics.** Metrics are collected from platforms and stored; **nothing displays them** and nothing
-  learns from them. *Promised in both pricing tiers.*
-- **Monthly report.** No artefact a customer could forward to a board.
 - **Image generation** — now scoped as pre-launch, not started.
 - **Video generation** — explicitly post-launch.
 - **Additional content sources** — Notion, Slack, Linear, call transcripts, support tickets. Only GitHub
@@ -139,6 +138,7 @@ voice"* genuinely closes.
   run~~ — **superseded 2026-09-28: M3 ran (21 findings) and the Session 35-D correction pass (M4) closed
   all 21, pushed, and got the first CI-executed-green run** (`docs/decisions/0029-founder-input-engine.md`
   §C.12). No production OAuth registration still means no real founder has completed a round end-to-end.
+- **Analytics and the monthly report** (Session 37, ADR 0031, 2026-10-05) — built, not pushed, not yet reviewed by an independent Reviewer. A customer can open an analytics page (a portfolio by month and a list of every post, with a filter), read an immutable monthly report per business, ask for it as a PDF download (built, but never rendered end to end), and, once the hourly schedule that generates it is created (it is not yet), receive it by email on about the 10th (admins by default; the business owner can widen it to all members or switch it off). Plus sees the basic tier and a Pro-only line where Pro sections would be; Pro sees the rest. LinkedIn shows publishing counts, because LinkedIn does not share engagement data with Jemip. Every figure comes from the same measured results, shows how many posts it rests on, and says what it cannot tell you. **Checked** in a real browser at three widths in English and Portuguese, in dark mode and in print, and by automated tests. **Not checked:** the PDF download (it has never rendered in a served request, and Chromium on Vercel is untried), a real email send, Spanish in a browser, and whether real customers find the report useful. The engagement-inbox half of the promise is still absent. *Promised in both pricing tiers.*
 
 ---
 
@@ -148,9 +148,9 @@ voice"* genuinely closes.
 
 | Promised in `CLAUDE.md` pricing | Reality |
 |---|---|
-| Plus (€79) — *"basic analytics"* | No analytics surface exists |
+| Plus (€79) — *"basic analytics"* | Built (Session 37), unreviewed: publishing activity, a typical engagement rate for X, LinkedIn as counts, the campaigns table and a monthly report. Not yet run on a real customer |
 | Plus (€79) — *"engagement inbox"* | No inbox exists |
-| Pro (€125) — *"advanced analytics"* | No analytics surface exists |
+| Pro (€125) — *"advanced analytics"* | Built (Session 37), unreviewed: everything in Plus plus a 12-month trend, results by post type, observed patterns, campaign verdicts and an account-by-account view. Not yet run on a real customer |
 | Pro (€125) — *"engagement inbox"* | No inbox exists |
 | Pro (€125) — *"AI driven posts/campaigns"* | **Built** — this one is real |
 

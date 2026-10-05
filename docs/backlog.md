@@ -21,12 +21,10 @@ for deferral; where a deferral has a condition attached, the **un-defer trigger*
 
 Must be resolved before the first paying customer.
 
-> **2026-10-04 — branch `fix-qa-defects-session-36` (not yet merged):** `QA-REAL-API-SOSH-FIELD` and `QA-LOCALE-HEADER-DROPPED` are **fixed on that branch**, each with a test proven by mutation (`lib/ai/client.real-path.test.ts`: the real client path strips `_sosh` in `lib/ai/client.ts`'s adapter, so `runner.ts` / `tool-runner.ts` are unchanged; `lib/i18n/proxy-locale.test.ts`: `proxy.ts` re-sets `X-NEXT-INTL-LOCALE`). Both rows stay listed until that branch merges. Not verified: a real-model call through the fixed client, and pt/es rendering in a browser — see `S34-E2E-UNVERIFIED` and `S36-UX-UNVERIFIED-IN-BROWSER`. Also fixed there: the intermittent `corpus-v2-schema.test.ts` failure — `scripts/eval/run-triage-eval.test.ts` rewrote the checked-in `corpus.v2.json` in place while that read-only test ran in another worker; it now mutates a temp copy (`TRIAGE_EVAL_CORPUS_PATH` / `TRIAGE_EVAL_ARTEFACT_PATH`), and the checked-in file's mtime is unchanged by the run. 4 consecutive full `test:app` runs green (384 files / 5887 tests).
+> **2026-10-04 — branch `fix-qa-defects-session-36` (CORRECTED 2026-10-05: merged to master as `2f2b33676`, PR #18; confirmed by ADR 0031 V.1 premise 8 and a real pt browser pass in Session 37 O2.11, V.17):** `QA-REAL-API-SOSH-FIELD` and `QA-LOCALE-HEADER-DROPPED` are **fixed**, each with a test proven by mutation (`lib/ai/client.real-path.test.ts`: the real client path strips `_sosh` in `lib/ai/client.ts`'s adapter, so `runner.ts` / `tool-runner.ts` are unchanged; `lib/i18n/proxy-locale.test.ts`: `proxy.ts` re-sets `X-NEXT-INTL-LOCALE`). Both rows are closed by that merge and have moved to §6. Not verified: a real-model call through the fixed client, and pt/es rendering in a browser — see `S34-E2E-UNVERIFIED` and `S36-UX-UNVERIFIED-IN-BROWSER`. Also fixed there: the intermittent `corpus-v2-schema.test.ts` failure — `scripts/eval/run-triage-eval.test.ts` rewrote the checked-in `corpus.v2.json` in place while that read-only test ran in another worker; it now mutates a temp copy (`TRIAGE_EVAL_CORPUS_PATH` / `TRIAGE_EVAL_ARTEFACT_PATH`), and the checked-in file's mtime is unchanged by the run. 4 consecutive full `test:app` runs green (384 files / 5887 tests).
 
 | ID | Area | Description | Filed |
 |----|------|-------------|-------|
-| **QA-REAL-API-SOSH-FIELD** | `lib/ai/runner.ts:193-220`, `lib/ai/tool-runner.ts:416-432` | **Every call through `runPrompt` fails against the real Anthropic API.** The runner attaches a `_sosh: { promptId, input }` field to the Messages request, for the mock client's fixture routing, under the comment "_sosh is stripped by the real Anthropic SDK (unknown fields ignored)". It is not: the API answers `HTTP 400 _sosh: Extra inputs are not permitted` (`@anthropic-ai/sdk` 0.91.1). Reproduced with a minimal call on `claude-haiku-4-5-20251001`: the identical request succeeds without the field and fails with it. So brief assembly and every other `runPrompt` consumer cannot reach a model in production; the tool runner sets the same field and was not run. Fix: attach `_sosh` only for the mock provider (or strip it in the real-client path of `lib/ai/client.ts`), with a test that the real path never sends it. Found by the S34-E2E smoke run; the earlier live cassette run predates this. | Session 36-D QA, 2026-10-04 |
-| **QA-LOCALE-HEADER-DROPPED** | `proxy.ts` (steps 3-6) | **Every page renders English, whatever the URL's locale.** `requestHeaders` is cloned before `handleI18n(request)` runs, and the final `NextResponse.next({ request: { headers: requestHeaders } })` discards the `X-NEXT-INTL-LOCALE` request header next-intl sets, so `getRequestConfig`'s `requestLocale` is empty and falls back to `en`. `/pt/login` shows "Welcome back" (the file says "Bem-vindo de volta") under `<html lang="pt">`; `/es/login` likewise. Verified in a browser and with `curl` on `/en`, `/pt`, `/es` `/login`; adding `requestHeaders.set('X-NEXT-INTL-LOCALE', <locale from the path>)` after the `x-pathname` line made all three render translated (experiment reverted, not committed). The i18n tests check key parity and never rendering. Violates CLAUDE.md "i18n from day one"; a pt or es customer gets an English product. | Session 36-D QA, 2026-10-04 |
 | **QA-MINOR-UI** | dashboard shell; sidebar | (1) The sidebar link for Team shows the raw key `nav.team` in every locale tried. (2) The dashboard shell overflows horizontally at a 320 px viewport (`scrollWidth` 367), independent of any page content (reproduced with the dismiss hint absent): the header and main are wider than a phone. | Session 36-D QA, 2026-10-04 |
 | **31-A1-PRICING-COPY** | pricing copy (CLAUDE.md Locked decisions, marketing surfaces, Stripe plan copy) | Session 31 founder adjudication **A-1** caps Pro at **15 generated posts/day/business**, which makes the Locked pricing line *"Pro — unlimited posts"* false. Copy must become *"unlimited campaigns; fair-use daily post limit"* (or equivalent) **before launch**. This is a founder/copy change to a Locked decision, deliberately **out of scope for the Session 31 Builder** — shipping the cap without the copy change is a customer-facing misrepresentation. | Session 31 §0.2 A-1 |
 | **B18-089** | ~15 sites across `lib/` | `formatISO(new Date())` writes **local-offset** strings to `timestamptz` columns; the `.toISOString()` ESLint ban does not catch `formatISO`. Postgres normalises `timestamptz` so live risk is low, but CLAUDE.md mandates `toUtcIso()`. **Do not fix piecemeal — one full sweep.** ~45min | 18B-5D |
@@ -145,8 +143,12 @@ Ordered loosely by likely value.
 | **S33-RETENTION** | Retention policy for `post_outcomes` (mirrors `post_metrics`' no-retention posture). | Belongs to the project retention ADR. |
 | **S33-QSTASH** | The `extract-outcomes` QStash schedule and Sentry monitor are documented but **not created** (`docs/launch-checklist.md`). | Before the outcome loop runs unattended in production. |
 
-Owned elsewhere and therefore not repeated here: UTM auto-tagging, conversion-event ingestion and the analytics
-surface (T1-B); cross-type retrieval and any further memory writer (Session 34+).
+Owned elsewhere and therefore not repeated here: cross-type retrieval and any further memory writer (Session 34+).
+
+**Corrected 2026-10-05 (Session 37 O2.12, ADR 0031 §14):** this paragraph used to name T1-B as the owner of UTM
+auto-tagging, conversion-event ingestion and the analytics surface. T1-B owns none of the first two (L-1 excludes
+them): they are **unowned, post-launch**, and un-defer only on a founder ruling. The analytics surface shipped in
+Session 37 (ADR 0031); its own deferrals are §3.4.
 
 ---
 
@@ -234,6 +236,36 @@ surface (T1-B); cross-type retrieval and any further memory writer (Session 34+)
 
 **Not attributable to this session:** `S34-E2E-UNVERIFIED` is still open. A brief that "used no memory" on a real run must not be blamed on Session 36 until that smoke test has run.
 
+### 3.4 Session 37 — analytics and the monthly report (ADR 0031), filed by O2.12
+
+**From ADR 0031 §14, each with its un-defer trigger:**
+
+| ID | Item | Un-defer trigger |
+|----|------|------------------|
+| **S37-RATIO-OF-SUMS** | A ratio-of-sums "overall rate" beside the median (ADR 0031 §14). Not built. | At least 3 real tenants with at least 3 matured months each, and a demonstrated founder need. |
+| **S37-NARRATIVE** | A model-written narrative for the report. No model is used at launch (ADR 0031 §6; scan `REPORT-NO-MODEL`). | A follow-on ADR that reopens §6's conditions. |
+| **S37-TOP-METRICS-BASIS** | `listTopPostMetrics` sorts across platforms whose measurement bases differ. The analytics surface never calls it (scan #20), so the defect is memory's, not analytics'. | The next session that touches `retrievePerformancePatterns`. |
+| **S37-PLAN-CHECKS** | Thirteen scattered plan checks. ADR 0031 added `hasAdvancedAnalytics` beside them (`lib/stripe/plan.ts`) rather than consolidating. | The next session that touches plan enforcement. |
+| **S37-PLUS-CAPS** | `lib/stripe/plan.ts` has Plus at 50 posts and 5 campaigns; `CLAUDE.md` states 250 posts and 25 active campaigns. Analytics depends on neither number. | The founder's pricing adjudication (C-2). |
+| **S37-REAL-TENANT-REVIEW** | Whether the report is useful and stable month to month, the size of the matured-post floor, and the day-10 delivery latency: none of which seeded data can show (ADR 0031 §12.5). | Real tenants with matured months, reviewed by the operator. |
+| **S37-PDF-RATE-LIMIT** | Filed in O2.9: see §2. | As there. |
+| **S37-REPORT-UNSUBSCRIBE** | An unsubscribe link on the `monthly-report` email. The business owner can switch report emails off (`report_email`), but the message carries no link. | The next counsel batch (ADR 0031 A-6). |
+| **S37-CAMPAIGN-YET-WORDING** | The shipped campaign page says "Metrics aren't available for {platform} yet"; ADR 0031 §8.2's wording is undated. | The next time the campaign page is touched. |
+
+Also deferred in ADR 0031 §14, with triggers already filed above or in §3.1: LinkedIn engagement metrics, pooled wins across platforms and follower-normalised LinkedIn numbers (all follow LinkedIn granting the metrics permission: `S33-LINKEDIN-RATE`); `hook_type` in the report (`S33-HOOK-KAPPA`); the `proof_type` display (`S33-PROOF-TYPE`); the content-mix view (`docs/ideas.md` §3); metrics history and per-post curves (a founder ruling on collection). **Never without a founder ruling:** cross-brand benchmarks (cross-tenant data, and counsel). **Parked, never:** prediction and growth simulation.
+
+**Found by the real-browser pass (ADR 0031 V.17, 2026-10-05) and not fixed there:**
+
+| ID | Item | Un-defer trigger |
+|----|------|------------------|
+| **S37-STATE-LITERALS** | `analytics.state.immature` and `.thin` print "Final for 1 posts" and "1 measured posts so far" at a count of 1; and the Observed patterns section reuses `state.empty` ("Nothing published yet…") on a month that has published posts, which is false there. All are ADR 0031 §8.2 literals pinned verbatim by `lib/i18n/analytics-parity.test.ts`. | An ADR 0031 amendment: ICU plurals on the two keys, and a founder-approved wording for "no pattern qualifies". |
+| **S37-PDF-ON-VERCEL** | The PDF route has never rendered in a served request. `@sparticuz/chromium` is a Linux binary, so on Windows the route returns 500 (`spawn …\Temp\chromium ENOENT`); only the O2.9 script spike and a print render exist. | A Vercel preview deploy (the last sentence of the Firewall row in `docs/launch-checklist.md`). **Blocks launch.** |
+| **S37-MEMBER-EMAIL-SYNC** | ADR 0031 V.13 finding 5: the report recipient is `business_members.email`. Whether it follows an account-email change was not confirmed. | Before report email is switched on in production (proposed; not yet a launch-checklist row). |
+| **S37-ACTIVE-BUSINESS** | There is no active-business selector: `getBusinessForUser` is called without a preferred business, so an owner of more than one business always sees the oldest. Pricing says one business per account, so this is not an analytics defect. | A founder ruling to support more than one business per account. |
+| **S37-SHELL-FOCUS** | The dashboard sidebar links and the user-menu button show no visible focus indicator (outside ADR 0031). | The next session that touches `DashboardShell`. |
+| **S37-A11Y-UNRUN** | 200% zoom run as a zoom, an RTL run and a screen-reader pass were not done on the analytics surfaces. | The first accessibility QA pass over the launch surfaces. |
+| **S37-DEV-HYDRATION-WARNING** | A dev-only React hydration warning on the root layout's `<body className>` on every full page load (no visible effect; the live DOM has the class). | The next session that touches the root layout. |
+
 ## 4. Filed for visibility — no action intended
 
 | ID | Item | Why it is here |
@@ -262,6 +294,8 @@ Struck-through IDs resolve historical references. Full closure evidence for the 
 
 | ID | Description | Closed |
 |----|-------------|--------|
+| ~~QA-REAL-API-SOSH-FIELD~~ | `lib/ai/runner.ts:193-220`, `lib/ai/tool-runner.ts:416-432`: **Every call through `runPrompt` fails against the real Anthropic API.** The runner attaches a `_sosh: { promptId, input }` field to the Messages request, for the mock client's fixture routing, under the comment "_sosh is stripped by the real Anthropic SDK (unknown fields ignored)". It is not: the API answers `HTTP 400 _sosh: Extra inputs are not permitted` (`@anthropic-ai/sdk` 0.91.1). Reproduced with a minimal call on `claude-haiku-4-5-20251001`: the identical request succeeds without the field and fails with it. So brief assembly and every other `runPrompt` consumer cannot reach a model in production; the tool runner sets the same field and was not run. Fix: attach `_sosh` only for the mock provider (or strip it in the real-client path of `lib/ai/client.ts`), with a test that the real path never sends it. Found by the S34-E2E smoke run; the earlier live cassette run predates this. | Fixed by `2f2b33676` (PR #18, in master). **Still unproven:** a real-model call through the fixed client (`S34-E2E-UNVERIFIED`). |
+| ~~QA-LOCALE-HEADER-DROPPED~~ | `proxy.ts` (steps 3-6): **Every page renders English, whatever the URL's locale.** `requestHeaders` is cloned before `handleI18n(request)` runs, and the final `NextResponse.next({ request: { headers: requestHeaders } })` discards the `X-NEXT-INTL-LOCALE` request header next-intl sets, so `getRequestConfig`'s `requestLocale` is empty and falls back to `en`. `/pt/login` shows "Welcome back" (the file says "Bem-vindo de volta") under `<html lang="pt">`; `/es/login` likewise. Verified in a browser and with `curl` on `/en`, `/pt`, `/es` `/login`; adding `requestHeaders.set('X-NEXT-INTL-LOCALE', <locale from the path>)` after the `x-pathname` line made all three render translated (experiment reverted, not committed). The i18n tests check key parity and never rendering. Violates CLAUDE.md "i18n from day one"; a pt or es customer gets an English product. | Fixed by `2f2b33676` (PR #18, in master). A real pt browser pass ran in Session 37 O2.11 (ADR 0031 V.17), 2026-10-05. |
 | ~~S34-APPROVE-TO-GENERATE~~ | No production path took an approved brief to generated posts (`startGenerationAction` demanded `draft`, `generatePostsForCampaign` demanded `awaiting_brief`, `approveBriefAction` started nothing). Fixed with a separate Generate control on an approved brief plus a retry for a draft campaign whose brief failed; ADR 0027 §V.9 | K2.13 |
 | ~~A4~~ | `suppressed` missing from `EmailProviderErrorCode` union | 18B-5 (B18-001) |
 | ~~E5~~ | Email footer 13 px → 14 px (WCAG 1.4.4) | 18B-5 + 18B-5D (B18-002) |

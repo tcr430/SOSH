@@ -1716,3 +1716,96 @@ Five skills ran in the guide's order, each against its named part of §10. Every
 - **Real data volumes.** The fixture is 30-odd posts; a business with thousands of posts was not loaded.
 
 **Commit scope.** `shared.tsx`, `PostsView.tsx`, the three `analytics.json` files, two test files, this entry and the screenshots.
+
+### V.18 — O2.12: the close-out checks (the build guide's "V.8"; V.8 is taken)
+
+Head at the time of writing: the commit after `24a2d0042`. BASE for every comparison is `0da603b4a` (V.2).
+
+**(a) The scans, re-run at HEAD.** `lib/analytics/source-scans.test.ts` and `lib/interview/__tests__/source-scans.test.ts`: 2 files, **80 tests, all passing**. No root is pending: the `it.todo` in `source-scans.test.ts` is now the closing assertion (`EXPECTED_PENDING` is `[]`, **and** every one of the 7 roots has production files on disk right now; two independent reads, so a stale list or an emptied root cannot pass alone). Every `PLANTED POSITIVE` test still passes, which means every detector still flags its planted violation; every `PLANTED NEGATIVE` still passes; every `REAL TREE` scan is green over a non-empty tree.
+
+**(b) SHARED-FUNCTION CALLERS (ADR 0031 §12.2), `git grep` at HEAD, production code only.**
+
+| Function | Callers at HEAD | New since BASE | Tests that exercise each caller |
+|---|---|---|---|
+| `loadCampaignLearningView` | `campaigns/[id]/page.tsx:73` | none | `lib/outcomes/__tests__/campaign-view.load.test.ts` (3); Tier-1 `outcome-campaign-view-rls.test.ts`; scan #20 asserts no second caller |
+| `unavailableMetricsPlatforms` | `lib/outcomes/campaign-view.ts:157` | none | `campaign-view.test.ts` (11); scan #20 |
+| `metricsReadAvailableFor` | `campaign-view.ts:130` (existing); **`lib/analytics/load.ts:59`** (new: the default of `LoaderDeps.metricsReadAvailable`) | **one textual caller.** The report assembler does not call it: it calls `loadPortfolioWith(..., { ...input.loaderDeps })` (`assemble.ts:123`) and so reaches it through the loader's default. The ADR's "two new callers" is one new call site and two consumers of it | `campaign-view.test.ts` (existing); `LA/load.test.ts:259-276, 392` (capability injected true, false and a spy); `LR/assemble.test.ts:131-144` (the assembler arm, flipped on and off by injection); scan #1a asserts nothing but this name is imported from `lib/social` |
+| `listTopPostMetrics` | `lib/memory/performance.ts:77` | none | `lib/memory/performance.test.ts` (18) and the three `*.context-equivalence` tests, **unmodified since BASE**; scan #20 |
+| `getPlanCapabilities` | `billing/page.tsx:38-39`, `lib/campaigns/enforcement.ts:25`, `lib/members/seats.ts:18`, and inside `lib/stripe/plan.ts` (`:78, :92, :97`, as at BASE) | none (the one new mention, `plan.ts:120`, is a comment) | `lib/stripe/plan.test.ts`; Tier-1 `seat-cap-enforcement.test.ts`. `hasAdvancedAnalytics` (new, `plan.ts:124`) is called from `lib/analytics/load.ts:238, :518` and `app/api/analytics/reports/[id]/pdf/route.ts:58`, and is tested in `plan.test.ts`, the loader, the assembler and the PDF route tests |
+| `eligibleValue` | `lib/outcomes/normalise.ts:171` (existing); **`lib/analytics/exclusions.ts:35`** (new) | exactly one | `lib/outcomes/__tests__/normalise.test.ts` (unmodified since BASE); `LA/exclusions.test.ts` (a spy that keeps the real function running) |
+| `reject_outcome_table_update()` (SQL) | triggers on `post_dimensions` and `post_outcomes` (`20260919110000`); **`analytics_reports`** (`20261004120000:47`) | one trigger | Tier-1 `analytics-reports-constraints.test.ts`, `analytics-reports-rls.test.ts` |
+
+**The V.2 baseline at HEAD (a drop is a STOP, even when green; there is none):** `campaign-view.load` 3 (3), `campaign-view` 11 (11), `performance` 18 (18), `generate.context-equivalence` 7 (7), `context-callers.context-equivalence` 6 (6), `actions.context-equivalence` 5 (5), `no-cross-business` **37 (33)**: 87 now against 83 at BASE, no drop. None of the ten files the ADR calls "unmodified" has a diff since BASE. **DEFINER audit gate: 3** on the local database (`accept_invite(uuid,uuid)`, `get_user_business_ids()`, `user_can(uuid,text)`), equal to V.2; this was measured on the long-lived local database, so the `db-tests` run on a fresh stack is the authority. The A-3 packages are the five ruled ones (scan #32, green).
+
+**(c) Amendments (ADR §14), each confirmed.** ADR 0010 §D2.5: the `analytics_reports` row is at `0010-legal-surface.md:1095` with its note at `:1175`, both from O2.2's commit `470445b0b`. ADR 0026: a dated note on §VI.2 appended (`hook_type`'s display is owned by ADR 0031 §2.6; `proof_type` still deferred). ADR 0014: a dated note appended (the `monthly-report` kind). `docs/launch-checklist.md`: the `generate-reports` schedule row and the PDF route's Firewall row (with the preview-deploy check) from O2.8 and O2.9.
+
+**(d) `docs/backlog.md`.** Every §14 deferral now has a row with its un-defer trigger (new §3.4); the UTM paragraph's owner is corrected (T1-B owns neither UTM nor conversion ingestion; both are unowned and post-launch); the stale "not yet merged" note on `QA-REAL-API-SOSH-FIELD` and `QA-LOCALE-HEADER-DROPPED` is corrected (merged as `2f2b33676`, PR #18) and both rows moved to §6. Seven findings of the O2.11 browser pass are filed there too (`S37-STATE-LITERALS`, `S37-PDF-ON-VERCEL`, `S37-MEMBER-EMAIL-SYNC`, `S37-ACTIVE-BUSINESS`, `S37-SHELL-FOCUS`, `S37-A11Y-UNRUN`, `S37-DEV-HYDRATION-WARNING`).
+
+**(e) The constraint → CI map.** Rule (ADR 0015): "covered" means **executed green in CI**, never authored. **Nothing has been pushed, so no row below is called COVERED.** Each row names the job that will execute it, by the repository's own selection rules: `app-tests` runs `npm run test:app` (`vitest run app/ lib/ components/ scripts/eval/`, skip-guarded by `assert-no-empty-suite.mjs`); `db-tests` runs `vitest run supabase/__tests__` against a live Postgres (on pull requests that change `supabase/**`, `lib/db/**`, `lib/members/**`, `lib/config.ts` or its own workflow, which this branch does, and on every push to master). Every file in the table sits under one of those globs, so none is `AUTHORED-NOT-EXECUTED` by construction. Whether each ran green in CI at the PR head is read after the push, not claimed here.
+
+Paths: `LA` = `lib/analytics/__tests__/`, `LR` = `lib/reports/__tests__/`, `LD` = `lib/db/__tests__/`, `CA` = `components/analytics/`, `RP` = `app/[locale]/(dashboard)/analytics/reports/`, `SS` = `lib/analytics/source-scans.test.ts`, `CL` = `lib/analytics/copy-lint.test.ts`, `PARITY` = `lib/i18n/analytics-parity.test.ts`, `PDFR` = `app/api/analytics/reports/[id]/pdf/route.test.ts`, `SQL` = `supabase/__tests__/`.
+
+| # | Constraint | Tier | Test file(s) | CI job |
+|---|---|---|---|---|
+| 1 | `ANALYTICS-READ-ONLY` | 2 (scan) | `SS` (arms a and b) | app-tests |
+| 2 | `ANALYTICS-NULL-NEVER-ZERO` | 2 | `LA/exclusions.test.ts`, `LA/rates.test.ts`, `LA/view-model.test.ts`, `CA/analytics-surfaces.test.tsx` | app-tests |
+| 3 | `ANALYTICS-BASIS-NEVER-MIXED` | 2 | `LA/rates.test.ts` | app-tests |
+| 4 | `ANALYTICS-LINKEDIN-DISCLOSED` | 2 | `CA/analytics-surfaces.test.tsx` | app-tests |
+| 5 | `ANALYTICS-UNAVAILABLE-FROM-CAPABILITY` | 2 | `LA/load.test.ts`, `LR/assemble.test.ts` | app-tests |
+| 6 | `ANALYTICS-FOUR-STATES` | 2 | `CA/analytics-surfaces.test.tsx` | app-tests |
+| 7 | `ANALYTICS-DISPLAY-FLOOR` | 2 | `LA/floors.test.ts` | app-tests |
+| 8 | `ANALYTICS-N-SHOWN` | 2 | `CL` | app-tests |
+| 9 | `ANALYTICS-NO-CAUSAL-COPY` | 2 | `CL` | app-tests |
+| 10 | `ANALYTICS-NO-DELTA` | 2 | `LA/view-model.test.ts` | app-tests |
+| 11 | `ANALYTICS-EXCLUSIONS-SHOWN` | 2 | `LA/exclusions.test.ts`, `LA/load.test.ts`, `LA/view-model.test.ts`, `CA/analytics-surfaces.test.tsx` | app-tests |
+| 12 | `ANALYTICS-COVERAGE-DISCLOSED` | 2 | `CA/analytics-surfaces.test.tsx`, `LA/breakdowns.test.ts` | app-tests |
+| 13 | `ANALYTICS-NO-LOG-LIFT` | 2 + scan | `SS`, `LA/view-model.test.ts` | app-tests |
+| 14 | `ANALYTICS-PLAN-GATE-SERVER` | 2 | `LA/load.test.ts`, `LR/assemble.test.ts`, `lib/stripe/plan.test.ts`, `PDFR` | app-tests |
+| 15 | `ANALYTICS-ACCOUNT-SLICEABLE` | 2 | `LA/load.test.ts` | app-tests |
+| 16 | `ANALYTICS-AUTHENTICATED-READS` | 2 + scan | `LD/analytics-reads.test.ts`, `SS`; Tier-1 `SQL/analytics-reads.test.ts` | app-tests, db-tests |
+| 17 | `ANALYTICS-TENANT-BOUNDED` | 1 + 2 | `SQL/analytics-reports-rls.test.ts`; `RP/reports-pages.test.tsx` | db-tests, app-tests |
+| 18 | `ANALYTICS-BOUNDED-INDEXED` | 2 + 1 | `LD/analytics-reads.test.ts` (limit and order, recording client); `SQL/analytics-reads.test.ts` (the index) | app-tests, db-tests |
+| 19 | `ANALYTICS-NORTHSTAR-FENCED` | 2 (scan) | `SS` | app-tests |
+| 20 | `ANALYTICS-CAMPAIGN-VIEW-SINGLE-SOURCE` | 2 + scan | `SS`, `lib/outcomes/__tests__/campaign-view.load.test.ts` (unmodified) | app-tests |
+| 21 | `REPORT-SNAPSHOT-IMMUTABLE` | 1 | `SQL/analytics-reports-constraints.test.ts`, `SQL/analytics-reports-rls.test.ts` | db-tests |
+| 22 | `REPORT-ONE-PER-PERIOD` | 1 + 2 | `SQL/analytics-reports-constraints.test.ts`, `SQL/report-generation.test.ts`; `LR/due.test.ts`, `LR/generate.test.ts` | db-tests, app-tests |
+| 23 | `REPORT-MEMBERS-ONLY` | 2 + scan | `LD/report-recipients.test.ts`, `LR/deliver.test.ts`, `SS` | app-tests |
+| 24 | `REPORT-NUMBERS-FIDELITY` | n/a | no model (§6); recorded for `S37-NARRATIVE` | none |
+| 25 | `REPORT-FALLBACK` | 2 | `LR/generate.test.ts` | app-tests |
+| 26 | `REPORT-COST-CEILING` | n/a | no model (§6); recorded for `S37-NARRATIVE` | none |
+| 27 | `REPORT-RLS-ISOLATED` | 1 + 2 | `SQL/analytics-reports-seed.test.ts`, `SQL/report-generation.test.ts`; `LR/isolation.test.ts`, `LR/generate.test.ts`, `LR/assemble.test.ts` | db-tests, app-tests |
+| 28 | `REPORT-CASCADE-COMPLETE` | 1 + 2 | `SQL/analytics-reports-purge.test.ts`; `LD/d2.5-analytics-reports-row.test.ts` (the §D2.5 row) | db-tests, app-tests |
+| 29 | `REPORT-OUTPUT-ESCAPING` | 2 | `LR/escaping.test.tsx` | app-tests |
+| 30 | `REPORT-PDF-ISOLATED` | 2 | `LR/pdf.test.ts`, `PDFR`. **The Vercel Firewall rule and the preview-deploy check are launch-checklist rows, not CI** | app-tests |
+| 31 | `REPORT-METHODOLOGY-PRESENT` | 2 | `LR/assemble.test.ts` | app-tests |
+| 32 | `ANALYTICS-NO-NEW-DEPENDENCY` | 2 (scan) | `SS` | app-tests |
+| 33 | `ANALYTICS-I18N-COMPLETE` | 2 | `PARITY`, `CL`, `lib/email/templates/__tests__/cross-kind.test.ts`, `.../monthly-report.test.tsx`, `CA/worst-case.test.tsx` | app-tests |
+| 34 | `ANALYTICS-A11Y-FLOOR` | 2 | `CA/analytics-surfaces.test.tsx` (markup). Keyboard and focus in a real browser: V.17 | app-tests |
+| 35 | `ANALYTICS-SHELL-320` | 2 + manual | CI: `PARITY` (`nav.team`). **Manual half closed in V.17** (no 320 px `scrollWidth` above 320, measured) | app-tests; manual, recorded |
+| 36 | `ANALYTICS-NO-SILENT-TRUNCATION` | 2 + 1 | `LA/load.test.ts`, `LD/keyset-pager.test.ts`; `SQL/analytics-reads.test.ts` | app-tests, db-tests |
+| 37 | `ANALYTICS-EXCLUSION-REASON-FROM-NORMALISER` | 2 | `LA/exclusions.test.ts` | app-tests |
+| 38 | `ANALYTICS-NO-MEMORY-WRITER` | 2 (scan) | `SS` | app-tests |
+| 39 | `REPORT-NO-MODEL` | 2 (scan) | `SS` | app-tests |
+| 40 | `REPORT-ELIGIBLE-LIVE-ONLY` | 2 + 1 | `LD/report-liveness.test.ts`, `LR/generate.test.ts`; `SQL/report-generation.test.ts` | app-tests, db-tests |
+| 41 | `REPORT-EMAIL-KIND-WIDENED` | 1 | `SQL/analytics-reports-constraints.test.ts` (the new kind and the six prior kinds) | db-tests |
+| 42 | `REPORT-EMAIL-SETTING-ADMIN-ONLY` | 1 + 2 | **Narrowed to OWNER by ruling O-3.** `SQL/analytics-reports-constraints.test.ts` (`report_email`); `RP/actions.test.ts` | db-tests, app-tests |
+
+**Reading the table.** 40 rows have a test that a CI job runs; #24 and #26 are NOT APPLICABLE (no model). #35's browser half is recorded in V.17, which is a record and not CI coverage. #30's firewall rule and #5's real-capability flip (LinkedIn granting the permission) are outside CI by nature.
+
+**What has actually executed, locally, on this tree:** `npm run test:app` 420 files, 6,594 tests passed, 0 todo (the it.todo is now a real assertion). Tier-1: the six O2 analytics files, **63 tests, 0 skipped**, plus the four older files that name email kinds or the DEFINER allowlist, **49 tests**, against the local stack (db, rest, auth, kong; the other services are stopped). Full `npm run test:db`: 121 of 122 files and 1,380 of 1,381 tests passed. The one failure is `supabase/__tests__/plan-proposals-current-version-read.test.ts` (an ADR 0027 `EXPLAIN` test: the planner chose `campaign_plan_proposals_brief_id_idx` plus a Sort instead of `campaign_plan_proposals_brief_version_idx`). This branch did not touch that test, that table or its index, and `ANALYZE` did not change the result. The cause was not determined, so it is recorded as an unexplained LOCAL failure and not as a CI result. **This is local evidence, not CI.** The local database is long-lived and not a fresh `supabase start`, and V.2 records that its function ACLs differ from a fresh one's.
+
+### V.19 — O2.12: measurement (ADR §12.5), REPORTED, never called COVERED
+
+**What the seeded data shows.** In a real browser against the fixture (V.17): every state renders (populated, immature, thin, empty, unavailable, gated, error, report) at 1280, 640 and 320 px in **two** locales (`en`, `pt`; `es` is covered by key-parity and copy tests only, not driven in a browser); the displayed numbers match the fixture's literals (business A, X, March: 13 published, 7 measured of 10 with 3 not included, typical rate 3.1% in the range 0.0%–6.4%, 4 of 6 beating the usual; February n = 5; January thin), and the gate holds (business B on Plus shows every Pro section as the "Available on Pro" line). The immutability, idempotence, tenant isolation and recipient rules are Tier-1 and Tier-2 results (V.5, V.10, V.12), not browser observations.
+
+**What it does not show, and stays UNPROVEN until real tenants exist (`S37-REAL-TENANT-REVIEW`):**
+
+- whether the report is useful, and to whom: nothing here measures that anyone reads it, forwards it or acts on it;
+- whether the medians are stable enough month to month, at real volume, to be read without over-interpretation (the fixture has 31 posts across two businesses);
+- whether the display floors (5 to show a rate, 10 to compare with bars) are the right size for real posting cadences;
+- whether day 10 is late enough for real X sync latency (the due rule is tested at the boundaries; the latency is not observed);
+- **the PDF**: that it matches the page, and that Chromium launches on Vercel (V.17: the route cannot launch Chromium on Windows; the preview deploy is open);
+- **a real send** of the monthly-report email (the delivery path, the recipient rule and the template are tested; no message was sent through Resend, and the email namespace fix `24a2d0042` is tested through the request config, not through a sent message);
+- the Vercel Firewall rule and the `generate-reports` QStash schedule (launch-checklist rows; neither exists yet).
+
+**Un-defer:** the first three real tenants with two generated reports each, reviewed against those questions.

@@ -148,7 +148,13 @@ describe('the scan roots (build-guide O2.1)', () => {
     expect(fs.existsSync(path.join(ROOT, 'lib/email/templates/team-invite.tsx'))).toBe(true)
   })
 
-  it.todo('O2.12: EXPECTED_PENDING is empty (every root has production files)')
+  // O2.12 (the closing assertion): the session ends with no root pending. Two independent reads, so neither a stale list nor
+  // an emptied root can pass alone: the list is empty, AND every root really has production files on disk right now.
+  it('O2.12: EXPECTED_PENDING is empty and every root has production files, so every scan below covers a non-empty tree', () => {
+    expect(EXPECTED_PENDING).toEqual([])
+    expect(ALL_ROOTS.filter((root) => rootProdFiles(root).length === 0)).toEqual([])
+    for (const root of ALL_ROOTS) expect(rootProdFiles(root).length, root).toBeGreaterThan(0)
+  })
 })
 
 // ═══ the import detector, shared by several scans ════════════════════════════════════════════════════════════

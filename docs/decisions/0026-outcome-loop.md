@@ -1301,3 +1301,15 @@ clients. Its **member arm asserts `42501`**: the cases in `supabase/__tests__/pe
 that once showed a member INSERT/UPDATE succeeding (manual INSERT, retire, un-retire, manual edit) were **amended, not
 deleted**, to assert the refusal. `supabase/__tests__/outcome-delete-guard.test.ts` likewise. `OUTCOME-SEPARATE-RETRIEVAL`
 is untouched.
+
+---
+
+## Dated note — 2026-10-05 (Session 37, O2.12): `hook_type`'s display is owned by ADR 0031 §2.6
+
+Appended by the Session 37 Builder, as ADR 0031 §14 requires. **Nothing in this ADR's normalisation, baseline, floor or promotion changes.** `hook_type` stays descriptive-only and is never promoted (§VI.2, constraint 7 `OUTCOME-DESCRIPTIVE-ONLY`); its κ ≥ 0.6 un-defer (§4.1) is unchanged.
+
+- **The display is specified elsewhere now.** ADR 0031 §2.6 owns how `hook_type` is shown: the live Pro page only, only where `post_outcomes.hook_survived = true`, only for a value with at least 10 posts (`ANALYTICS_HOOK_TYPE_FLOOR`), labelled as the AI's own classification when writing and not independently checked, and **not in the monthly report**. Implemented in `lib/analytics/breakdowns.ts` and `components/analytics/PortfolioView.tsx`; the floor and the survived filter are Tier-2 tested (`lib/analytics/__tests__/breakdowns.test.ts`, `floors.test.ts`).
+- **`proof_type` stays deferred**, trigger unchanged (a per-post evidence citation in the output schema; `S33-PROOF-TYPE`). It is not displayed anywhere.
+- **Not seen in a browser.** The seeded fixture has no `hook_type` value reaching 10, so the live page rendered no `hook_type` section in the O2.11 pass (ADR 0031 V.17). Its presentation is untested outside the component tests.
+
+_End of the 2026-10-05 note._
