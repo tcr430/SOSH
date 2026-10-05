@@ -362,10 +362,11 @@ describe('INTERVIEW-NO-EMAIL-KIND (ADR 0029 §5.5, A-5, constraint 33)', () => {
     expect(emailKindMembers("export type Other = 'x' | 'y'")).toEqual([])
   })
 
-  it('lib/email/types.ts declares exactly the six baseline kinds', () => {
+  it('lib/email/types.ts declares exactly the six baseline kinds plus the one ADR 0031 (Session 37 O2.8) added: the interview adds none', () => {
     const members = emailKindMembers(fs.readFileSync(path.join(ROOT, 'lib', 'email', 'types.ts'), 'utf8'))
     expect(members.length, 'no EmailKind union was found — the scan would pass vacuously').toBeGreaterThanOrEqual(1)
-    expect(members).toEqual(BASELINE_EMAIL_KINDS)
+    // monthly-report is ADR 0031's (founder ruling: the EmailKind unions widen in O2.8). Any further kind still fails here.
+    expect(members).toEqual([...BASELINE_EMAIL_KINDS, 'monthly-report'])
   })
 })
 

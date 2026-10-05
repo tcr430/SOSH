@@ -1524,3 +1524,41 @@ At 320 px the campaign rows computed to `display: block` (stacked cards) and the
 **UNPROVEN, not COVERED:** a real HTTP request to a running server returning the route's own status instead of a 307 has not been made. The unit tests prove what `proxy()` returns; they do not prove Next.js applies it in front of a route handler. This is the real-request proof ADR 0015 asks for and it is owed (the first `curl -i` of `/api/cron/generate-reports` against a dev server). Production reachability of the existing cron, webhook and OAuth routes before this fix is also unverified, and is a launch-checklist fact to check on a preview deploy.
 
 **Verification run:** `npx tsc --noEmit --skipLibCheck` clean; `npx eslint proxy.ts lib/i18n/proxy-api.test.ts` clean; `npx vitest run lib/i18n/proxy-api.test.ts lib/i18n/proxy-locale.test.ts` green. The full `npm run test:app` was NOT re-run for this commit: the CI dummy env was not available in this session, so suites that load config fail at import and prove nothing.
+
+### V.12 — O2.8: the report pages, the email, the recipients, the setting and the cron route
+
+**Closes:** #8 ANALYTICS-N-SHOWN, #9 ANALYTICS-NO-CAUSAL-COPY, #17 ANALYTICS-TENANT-BOUNDED (Tier-2 half; the Tier-1 half is O2.4/O2.7), #23 REPORT-MEMBERS-ONLY (Tier 2 + scan), #42 REPORT-EMAIL-SETTING-ADMIN-ONLY (narrowed to OWNER by ruling O-3).
+
+**Built.**
+- `resolveReportRecipients(businessId, setting)` in `lib/db/business-members.ts` (service-role, lazy import, no client parameter): ONE business, status `active`, `user_id` not null; `admins` is the admins (owner included), `all_members` widens, `off` and any unrecognised value return nobody without a query. Selects `id, email` only; ordered by `created_at`, limited to 200.
+- `lib/reports/deliver.ts`: enqueues one `monthly-report` per resolved member; recipient read off the member row; dedupe token `report:{YYYY-MM}:{member id}`; resolver called immediately before the enqueue; one failing member is captured and the rest proceed. The email carries the stored summary sentences rendered through the report's own closed templates in `businesses.language`: no figure of its own, no attachment.
+- `lib/reports/job.ts` and `app/api/cron/generate-reports/route.ts`: the tick, then delivery for exactly the reports the tick INSERTED and that are not stubs (`ReportTickSummary.insertedReports`, additive beside `insertedBusinessIds`); Sentry monitor `generate-reports` (`20 * * * *`); the dual QStash/bearer auth copied from extract-outcomes; ONE `report.tick` line of counts only (a throwing job logs `null` counters and `errors: 1`, never a fabricated 0).
+- `monthly-report` kind: the template, registry entry, `email.json` in en/pt/es, the `EmailKind` unions widened in `lib/email/types.ts` and `lib/db/types.ts` (founder ruling); the subject is built from a template key with CR, LF and line separators stripped from every interpolated value.
+- The pages `/analytics/reports` (newest first, at most 24) and `/analytics/reports/[period]` (Zod period; the business is the session business; another business's period, an unknown period and a payload schema this build does not read are all `notFound()`); the synchronous `ReportBody` (the ONE component O2.9's PDF reuses); a print stylesheet (page breaks before the trend and the methodology, no nav, no actions: `print:hidden` on the shell sidebar and top bar).
+- The report-email setting: `setReportEmailAction` (reads only `setting`; the business from `getBusinessForUser`; owner re-checked; `updateBusiness` on the authenticated client) and its `useActionState` form, the second client island. Non-owners read the value in words.
+- `analytics.report.*` copy in en, pt and es, including the eight methodology keys; a link from `/analytics` to the list; the launch-checklist row and the log-line check for `generate-reports` (A-7), ordered after extract-outcomes.
+
+**Decisions and adaptations (Builder).**
+- `ReportBody` takes `{ t, locale, timezone, payload, proAllowed }`, not the guide's `{ viewModel, messages }`: the codebase passes a translator function, and `proAllowed` is the CURRENT plan's gate (A-5), never the payload tier. A stored Pro report on a plan that no longer allows Pro shows the plain "Available on Pro" line; a basic report on a Pro plan says it was generated before the plan included the section and invents no number.
+- Scan #23 fixes the literal shape `const x = await resolveReportRecipients(` / `for (const member of x)` / `recipient: member.email`, so the delivery module calls the resolver directly and its tests `vi.mock` the modules; the delivery lives in `lib/reports` (a scanned root) on purpose.
+- The copy lint (`lib/analytics/copy-lint.test.ts`) holds the six §8.4 classes in three locales, whole-word and Unicode-aware, over the message files, the email strings, the RENDERED `ReportBody` of six fixture cases in each locale (Pro, downgraded, basic on Pro, basic on basic, February, the stub) and the rendered email. TWO named exemptions: the key `interval` ("likely between"), and, for the rendered check only, `outcome.role.customer_proof` (es "Prueba de cliente": the false positive §8.4 predicted; the class is not loosened and a test proves the exemption live and that "prueba" elsewhere is still caught). The n-rule exempts `posts.value.rate` (one post, n = 1).
+- The guide's redden step "plant boost in pt" was a wrong instruction: "boost" is an English term in the class table. The lint was proven red with "melhorou" (pt) and "will" (en) instead.
+- `lib/interview/__tests__/source-scans.test.ts` pinned `EmailKind` to six; it now pins the six plus `monthly-report`, so any further kind still fails (the interview adds none).
+
+**Redden transcript (each applied with the changed line printed, the owning test run, restored byte-identical):**
+
+| Mutation | Result |
+|---|---|
+| read the report by the URL period in place of the session business | 4 red (reports-pages) |
+| recipient taken from the business id, not the resolver | the scan #23 real-tree test red |
+| plant "melhorou" in pt / "will" in en | copy-lint red on `causal` / `prediction` |
+| drop the owner re-check from the action | 1 red (actions) |
+| ignore `proAllowed` in the body | 2 red (report-body) |
+| drop the `status = active` filter | 3 red (recipients) |
+| dedupe token by email in place of the member id | 1 red (deliver) |
+
+**Verification:** `npx tsc --noEmit --skipLibCheck` clean; `npx eslint .` 0 errors (113 warnings, none new); `npm run test:app` with the CI dummy env: 414 files, 6,469 passed, 1 todo. **`npm run test:db` was NOT run:** the local Supabase stack was not running this session and there is no migration since O2.2. O2.8 adds no Tier-1 test; the Tier-1 halves of #17 and #42 are O2.2, O2.4 and O2.7's.
+
+**UNPROVEN, not COVERED:** the report pages and the setting form have not been seen in a real browser (1280/640/320, dark mode, keyboard, real print), and the email has not been rendered through the real request config (see the finding below). The `/api` real-request proof (V.11) is still owed.
+
+**FINDING, NOT FIXED (outside O2.8, affects every email kind):** `i18n/request.ts` does not load `email.json` or `invite.json`, so `renderTemplate` (`getTranslations({ namespace: 'email' })`) would resolve no messages in a running server and return raw keys (`email.team_invite.subject`). Confirmed at the library level (`createTranslator` with a missing namespace returns the key plus `MISSING_MESSAGE`); not confirmed in a running server. The email tests build their own dictionary and cannot see it. This is a launch-checklist candidate and is raised to the founder; the monthly-report email inherits it.

@@ -4,7 +4,7 @@ import { listBusinessIdsPage, isLiveForReports, getTrialStartedAtForWorker } fro
 import { analyticsReportExistsForWorker, insertAnalyticsReport, type AnalyticsReportInsert } from '@/lib/db/analytics-reports'
 import { analyticsWorkerReaders } from '@/lib/db/analytics-worker-reads'
 import type { LoaderDeps, Readers } from '@/lib/analytics/load'
-import { assembleReport } from './assemble'
+import { assembleReport, type SummaryLine } from './assemble'
 import { REPORT_MAX_PER_TICK, REPORT_SCAN_CAP, REPORT_SCAN_PAGE } from './constants'
 import { reportPeriodDue } from './due'
 import { verifiedReaders } from './isolation'
@@ -35,7 +35,7 @@ export type GenerateOutcome =
   | { status: 'not_due'; inserted: false }
   | { status: 'ineligible'; inserted: false }
   | { status: 'exists'; inserted: false }
-  | { status: 'generated'; inserted: boolean; stub: boolean; tier: 'basic' | 'advanced'; period: string }
+  | { status: 'generated'; inserted: boolean; stub: boolean; tier: 'basic' | 'advanced'; period: string; summary: SummaryLine[] }
 
 export async function generateReportForBusiness(businessId: string, now: string, overrides: Partial<GenerateDeps> = {}): Promise<GenerateOutcome> {
   const deps: GenerateDeps = { ...defaultDeps(), ...overrides }
@@ -68,7 +68,7 @@ export async function generateReportForBusiness(businessId: string, now: string,
     outcomes_through: report.outcomesThrough,
     generated_at: report.generatedAt,
   })
-  return { status: 'generated', inserted, stub: report.stub, tier: report.tier, period }
+  return { status: 'generated', inserted, stub: report.stub, tier: report.tier, period, summary: report.payload.summary }
 }
 
 export interface ReportTickSummary {
@@ -84,6 +84,8 @@ export interface ReportTickSummary {
   capped: boolean
   /** The ids whose report was INSERTED this tick and is not a stub (the caller enqueues their email, O2.8). */
   insertedBusinessIds: string[]
+  /** The same reports with what the email needs: the period and the stored summary lines (no post text, keys and params). */
+  insertedReports: Array<{ businessId: string; period: string; summary: SummaryLine[] }>
 }
 
 export interface TickDeps extends Partial<GenerateDeps> {
@@ -95,7 +97,7 @@ export interface TickDeps extends Partial<GenerateDeps> {
 // One failing business NEVER fails the tick: it is captured (Sentry) and the loop continues with the next business.
 export async function runReportTick(now: string = formatISO(new Date()), deps: TickDeps = {}): Promise<ReportTickSummary> {
   const { listBusinessIds = listBusinessIdsPage, capture = (error, context) => Sentry.captureException(error, { tags: { worker: 'generate-reports' }, extra: context }), maxPerTick = REPORT_MAX_PER_TICK, ...generateDeps } = deps
-  const summary: ReportTickSummary = { scanned: 0, notDue: 0, ineligible: 0, exists: 0, inserted: 0, stubs: 0, raced: 0, errors: 0, capped: false, insertedBusinessIds: [] }
+  const summary: ReportTickSummary = { scanned: 0, notDue: 0, ineligible: 0, exists: 0, inserted: 0, stubs: 0, raced: 0, errors: 0, capped: false, insertedBusinessIds: [], insertedReports: [] }
   let attempts = 0
   let cursor: string | null = null
 
@@ -126,7 +128,10 @@ export async function runReportTick(now: string = formatISO(new Date()), deps: T
             if (outcome.inserted) {
               summary.inserted += 1
               if (outcome.stub) summary.stubs += 1
-              else summary.insertedBusinessIds.push(businessId)
+              else {
+                summary.insertedBusinessIds.push(businessId)
+                summary.insertedReports.push({ businessId, period: outcome.period, summary: outcome.summary })
+              }
             } else summary.raced += 1
             break
         }

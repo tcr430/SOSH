@@ -85,6 +85,7 @@ export type EmailKind =
   | 'payment-failed-courtesy'
   | 'first-post-published'
   | 'team-invite'
+  | 'monthly-report'
 export type EmailOutboxStatus = 'pending' | 'sending' | 'sent' | 'failed' | 'suppressed'
 export type EmailSuppressionReason = 'bounce' | 'complaint' | 'manual'
 export type MemberRole = 'approver' | 'editor' | 'viewer'

@@ -208,5 +208,54 @@
       "announcement": "Anuncio",
       "how_to": "Paso a paso"
     }
+  },
+  "report": {
+    "title": "Informes mensuales",
+    "description": "Un informe por mes, guardado tal como se generó.",
+    "listLink": "Informes mensuales",
+    "list": {
+      "empty": "Los informes aparecen aquí a partir del día 10 de cada mes, sobre el mes anterior.",
+      "open": "Abrir informe",
+      "stub": "Sin publicaciones"
+    },
+    "back": "Volver a los informes mensuales",
+    "header": "{business} · {month}. Medido hasta {measuredAsOf}. Generado el {generatedOn}.",
+    "stub": "No se publicó ninguna publicación en {month}, así que no hay nada que medir.",
+    "section": {
+      "summary": "Resumen",
+      "unavailable": "Plataformas sin datos de interacción",
+      "methodology": "Cómo leer este informe"
+    },
+    "ratedPosts": {
+      "title": "Tres publicaciones en X por tasa de interacción",
+      "caveat": "Una publicación vista por pocas personas puede tener una tasa alta.",
+      "row": "Publicación {position}: tasa de interacción {rate} (1 publicación)"
+    },
+    "lateOutcomes": "Las publicaciones medidas después del {date} no están incluidas.",
+    "notInReport": "Este informe se generó antes de que tu plan incluyera esta sección.",
+    "methodology": {
+      "median": "La tasa típica es la mediana de la tasa de interacción de las publicaciones medidas: la mitad quedó por encima y la mitad por debajo.",
+      "maturity": "Una publicación se mide 7 días después de salir. Las más recientes cuentan como publicadas, pero aún no medidas.",
+      "exclusions": "Las publicaciones sin datos utilizables aparecen con su motivo y no entran en ninguna tasa.",
+      "usual": "Lo habitual es tu mediana de los 90 días anteriores en X, o el historial que importaste. Se actualiza a medida que publicas, así que no mide el progreso global.",
+      "floors": "Mostramos una tasa típica a partir de 5 publicaciones medidas. Las comparaciones por tipo de publicación necesitan 10 publicaciones medidas por valor.",
+      "xOnly": "La tasa de interacción se mide solo en X. Las demás plataformas muestran la actividad de publicación.",
+      "descriptive": "Los desgloses describen publicaciones pasadas. Se solapan y no explican ningún resultado.",
+      "engagementOnly": "Esto mide interacción, no registros ni ingresos."
+    },
+    "setting": {
+      "label": "Enviar cada informe por email a",
+      "option": {
+        "admins": "Administradores",
+        "all_members": "Todos los miembros",
+        "off": "Nadie"
+      },
+      "help": "El informe siempre queda guardado aquí. Esto solo controla el email.",
+      "save": "Guardar",
+      "saved": "Guardado.",
+      "error": "No se pudo guardar.",
+      "forbidden": "Solo el propietario del negocio puede cambiar esto.",
+      "current": "Los informes se envían por email a: {value}."
+    }
   }
 }

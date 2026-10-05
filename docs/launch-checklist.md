@@ -151,6 +151,7 @@ Setup runbook: `docs/build-guide/runbooks/qstash-setup.md`
   - process-deletions (`0 3 * * *`, retries=0 — see `docs/build-guide/runbooks/qstash-setup.md` Step 2b)
   - capture-learning (`0 * * * *`, ADR 0018 §9.2 — see `docs/build-guide/runbooks/qstash-setup.md` Step 2c)
   - **extract-outcomes (`0 4 * * *`, ADR 0026 §14, Session 33 J2.8 — see `docs/build-guide/runbooks/qstash-setup.md` Step 2d) — NOT YET CREATED as a QStash schedule.** `/api/cron/extract-outcomes` exists; the Upstash schedule and the Sentry cron monitor (slug `extract-outcomes`, crontab `0 4 * * *`) are owed before the outcome loop can run unattended in production.
+  - **generate-reports (`20 * * * *`, ADR 0031 §5.2, Session 37 O2.8) — NOT YET CREATED as a QStash schedule, and it MUST be ordered AFTER extract-outcomes** (the report reads the outcomes that worker writes; `:20` leaves the daily 04:00 run ample room). `/api/cron/generate-reports` exists (dual-auth, one canonical `report.tick` line); the Upstash schedule and the Sentry cron monitor (slug `generate-reports`, crontab `20 * * * *`) are owed before monthly reports can generate and mail unattended. The route is reachable only because `proxy.ts` now passes `/api/*` through (O2.7b, ADR 0031 V.11): verify it on a preview deploy with a real request before relying on any cron route.
   - **backfill (`* * * * *`, every minute — ADR 0025 §6.6, Session 32 I2.9) — NOT YET CREATED as a QStash
     schedule.** `/api/cron/backfill` exists and is bounded (one queued/fetching/extracting run's worth
     of work per tick), but no schedule entry has been added to `qstash-setup.md` or provisioned in the
@@ -168,6 +169,7 @@ Setup runbook: `docs/build-guide/runbooks/qstash-setup.md`
   - `/api/cron/process-deletions` — look for `{"kind":"deletion.tick.end","triggeredBy":"qstash",...}` at 03:00 UTC. Expected at launch: `claimed=0, purged=0, retried=0, abandoned=0`.
   - `/api/cron/capture-learning` — look for `{"kind":"learning.tick","triggeredBy":"qstash",...}` within the first hour. Expected on a quiet queue: `claimed=0, classified=0, patternsUpserted=0, summarized=0, abandoned=0, retrying=0`.
   - `/api/cron/extract-outcomes` — look for `{"kind":"outcome.tick","triggeredBy":"qstash",...}` at 04:00 UTC. Expected with no matured posts: `candidates=0, matured=0, outcomesWritten=0, cellsRecomputed=0, promoted=0, demoted=0, errors=0`. `skippedNoMetrics` above 0 is normal while LinkedIn metrics remain not-implemented.
+  - `/api/cron/generate-reports` — look for `{"kind":"report.tick","triggeredBy":"qstash",...}` at :20 every hour. Expected before the 10th of the month, or with no live business: `inserted=0, emailsEnqueued=0, errors=0` (counts only; no business id or address is ever logged). Non-null `errors` or `emailErrors` is a Sentry event too.
 - [ ] **Drain-email-outbox smoke test.** Manually insert a row into `email_outbox` (`status='pending'`, `next_attempt_at=now()`, `recipient` = a real address you control, `kind='trial-warning-t3'`). Wait up to 90 seconds for the next cron tick. Confirm `status='sent'` and `provider_message_id IS NOT NULL`:
   ```sql
   select id, status, provider_message_id, sent_at

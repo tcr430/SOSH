@@ -1,6 +1,6 @@
 import { formatISO } from 'date-fns'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { BusinessMemberRow, MemberRole } from './types'
+import type { BusinessMemberRow, MemberRole, ReportEmailSetting } from './types'
 import { getErrorMessage } from './utils'
 
 export async function getMemberById(
@@ -200,4 +200,37 @@ export async function acceptInvite(
     throw new Error(getErrorMessage(error))
   }
   return { outcome: 'accepted', row: data as BusinessMemberRow }
+}
+
+// ADR 0031 §5.4, REPORT-MEMBERS-ONLY — the ONE source of a monthly report's recipients. Service-role (the report worker
+// has no user), lazy-imported, no client parameter. The address comes from the member row and nowhere else: ONE business,
+// status 'active' and bound to a user (an invited or revoked row, or an address with no account behind it, never
+// receives a report). 'admins' (the default) is the active admins, owner included; 'all_members' widens to every active
+// member; 'off' and any unrecognised value return nobody and do not query (fail closed). Call it immediately before
+// enqueue so a member revoked after the report was generated is not mailed.
+export const REPORT_RECIPIENT_MAX = 200
+
+export interface ReportRecipient {
+  /** The immutable `business_members.id`: the dedupe token uses it, never the email (no PII in the index). */
+  id: string
+  email: string
+}
+
+export async function resolveReportRecipients(
+  businessId: string,
+  setting: ReportEmailSetting,
+): Promise<ReportRecipient[]> {
+  if (setting !== 'admins' && setting !== 'all_members') return []
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  let query = client
+    .from('business_members')
+    .select('id, email')
+    .eq('business_id', businessId)
+    .eq('status', 'active')
+    .not('user_id', 'is', null)
+  if (setting === 'admins') query = query.eq('is_admin', true)
+  const { data, error } = await query.order('created_at', { ascending: true }).limit(REPORT_RECIPIENT_MAX)
+  if (error) throw new Error(getErrorMessage(error))
+  return ((data as Array<{ id: string; email: string }> | null) ?? []).map((m) => ({ id: m.id, email: m.email }))
 }

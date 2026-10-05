@@ -65,7 +65,7 @@ function PairLine({ t, locale, pair }: { t: T; locale: string; pair: MonthPairVi
 
 // ─── activity ──────────────────────────────────────────────────────────────────────────────────────────────
 
-function ActivitySection({ t, activity }: { t: T; activity: Loaded<Activity> }) {
+export function ActivitySection({ t, activity }: { t: T; activity: Loaded<Activity> }) {
   return (
     <Section id="activity" title={t('analytics.section.activity')}>
       {activity.status === 'error' ? (
@@ -89,7 +89,7 @@ function ActivitySection({ t, activity }: { t: T; activity: Loaded<Activity> }) 
 
 // ─── results, per platform ─────────────────────────────────────────────────────────────────────────────────
 
-function PlatformResults({ t, locale, timezone, section }: { t: T; locale: string; timezone: string; section: PlatformSection }) {
+export function PlatformResults({ t, locale, timezone, section }: { t: T; locale: string; timezone: string; section: PlatformSection }) {
   const name = platformName(t, section.platform)
   return (
     <div className="space-y-2" data-platform={section.platform} data-state={section.state}>
@@ -153,7 +153,7 @@ function statusName(t: T, status: string | null): string {
   return status ? t('analytics.status.' + status) : '–'
 }
 
-function CampaignsSection({ t, rows }: { t: T; rows: Loaded<CampaignTableRow[]> }) {
+export function CampaignsSection({ t, rows }: { t: T; rows: Loaded<CampaignTableRow[]> }) {
   return (
     <Section id="campaigns" title={t('analytics.section.campaigns')}>
       {rows.status === 'error' ? (
@@ -206,7 +206,7 @@ function valueLabelFor(t: T, dimension: string): (value: string) => string {
   return (v) => t('analytics.value.' + dimension + '.' + v)
 }
 
-function BreakdownBlock({ t, platform, view }: { t: T; platform: string; view: BreakdownView }) {
+export function BreakdownBlock({ t, platform, view }: { t: T; platform: string; view: BreakdownView }) {
   // hook_type is shown only where a value reaches 10 and its opening survived: with no row there is nothing to show.
   if (view.dimension === 'hook_type' && view.rows.length === 0) return null
   const dimensionLabel = t('analytics.breakdown.dimension.' + view.dimension)
@@ -237,7 +237,7 @@ function BreakdownBlock({ t, platform, view }: { t: T; platform: string; view: B
   )
 }
 
-function TrendSection({ t, locale, trend }: { t: T; locale: string; trend: Loaded<TrendView> }) {
+export function TrendSection({ t, locale, trend }: { t: T; locale: string; trend: Loaded<TrendView> }) {
   return (
     <Section id="trend" title={t('analytics.section.trend')}>
       {trend.status === 'error' ? (
@@ -275,7 +275,7 @@ function BreakdownsSection({ t, platforms }: { t: T; platforms: Loaded<AdvancedP
   )
 }
 
-function PatternsSection({ t, patterns }: { t: T; patterns: AdvancedPortfolio['patterns'] }) {
+export function PatternsSection({ t, patterns }: { t: T; patterns: AdvancedPortfolio['patterns'] }) {
   return (
     <Section id="patterns" title={t('analytics.section.patterns')}>
       {patterns.status === 'error' ? (

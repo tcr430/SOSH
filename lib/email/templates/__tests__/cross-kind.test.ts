@@ -40,6 +40,12 @@ const SAMPLE_PROPS: Record<EmailKind, Record<string, unknown>> = {
     roleLabelKey: 'team_invite.role.viewer',
     acceptUrl: 'https://app.sosh.app/en/invite/accept?token=abc',
   },
+  'monthly-report': {
+    businessName: 'Acme',
+    periodLabel: 'September 2026',
+    summaryLines: ['12 posts published, 9 the month before.'],
+    reportUrl: 'https://app.sosh.app/en/analytics/reports/2026-09',
+  },
 }
 
 describe('cross-kind: subject < 60 chars for all kinds × locales', () => {

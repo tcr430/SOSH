@@ -30,6 +30,11 @@ import {
   teamInviteSubject,
   TeamInviteEmail,
 } from './team-invite'
+import {
+  MonthlyReportPropsSchema,
+  monthlyReportSubject,
+  MonthlyReportEmail,
+} from './monthly-report'
 
 export interface KindEntry {
   propsSchema: ZodSchema
@@ -69,5 +74,10 @@ export const TEMPLATES: Record<EmailKind, KindEntry> = {
     propsSchema: TeamInvitePropsSchema,
     subject: teamInviteSubject,
     Component: TeamInviteEmail,
+  },
+  'monthly-report': {
+    propsSchema: MonthlyReportPropsSchema,
+    subject: monthlyReportSubject,
+    Component: MonthlyReportEmail,
   },
 } as const

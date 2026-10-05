@@ -39,6 +39,14 @@
     "supporting": "Keep the cadence going — review your next drafts and keep your audience engaged.",
     "cta": "View your posts"
   },
+  "monthly_report": {
+    "subject": "Your {month} report is ready",
+    "preheader": "{businessName}: how your posts were received in {month}.",
+    "heading": "{businessName}: your {month} report",
+    "lead": "Here is how the posts you published in {month} were received.",
+    "supporting": "This describes past posts, not the reason for their results. It measures engagement, not signups or revenue.",
+    "cta": "Open the full report"
+  },
   "footer": {
     "tagline": "SŌSH · hello@mail.sosh.app",
     "reply_to": "Reply to support@sosh.app"

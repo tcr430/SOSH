@@ -208,5 +208,54 @@
       "announcement": "Anúncio",
       "how_to": "Passo a passo"
     }
+  },
+  "report": {
+    "title": "Relatórios mensais",
+    "description": "Um relatório por mês, guardado tal como foi gerado.",
+    "listLink": "Relatórios mensais",
+    "list": {
+      "empty": "Os relatórios aparecem aqui a partir do dia 10 de cada mês, referentes ao mês anterior.",
+      "open": "Abrir relatório",
+      "stub": "Sem publicações"
+    },
+    "back": "Voltar aos relatórios mensais",
+    "header": "{business} · {month}. Medido até {measuredAsOf}. Gerado em {generatedOn}.",
+    "stub": "Não foi publicada nenhuma publicação em {month}, por isso não há nada para medir.",
+    "section": {
+      "summary": "Resumo",
+      "unavailable": "Plataformas sem dados de envolvimento",
+      "methodology": "Como ler este relatório"
+    },
+    "ratedPosts": {
+      "title": "Três publicações no X por taxa de envolvimento",
+      "caveat": "Uma publicação vista por poucas pessoas pode ter uma taxa elevada.",
+      "row": "Publicação {position}: taxa de envolvimento {rate} (1 publicação)"
+    },
+    "lateOutcomes": "As publicações medidas depois de {date} não estão incluídas.",
+    "notInReport": "Este relatório foi gerado antes de o seu plano incluir esta secção.",
+    "methodology": {
+      "median": "A taxa típica é a mediana da taxa de envolvimento das publicações medidas: metade ficou acima e metade abaixo.",
+      "maturity": "Uma publicação é medida 7 dias depois de sair. As mais recentes contam como publicadas, mas ainda não medidas.",
+      "exclusions": "As publicações sem dados utilizáveis aparecem com o motivo e não entram em nenhuma taxa.",
+      "usual": "O habitual é a sua mediana dos 90 dias anteriores no X, ou o histórico que importou. Atualiza-se à medida que publica, por isso não mede o progresso global.",
+      "floors": "Mostramos uma taxa típica a partir de 5 publicações medidas. As comparações por tipo de publicação precisam de 10 publicações medidas por valor.",
+      "xOnly": "A taxa de envolvimento é medida apenas no X. As outras plataformas mostram a atividade de publicação.",
+      "descriptive": "As repartições descrevem publicações passadas. Sobrepõem-se e não explicam nenhum resultado.",
+      "engagementOnly": "Isto mede envolvimento, não registos nem receita."
+    },
+    "setting": {
+      "label": "Enviar cada relatório por email a",
+      "option": {
+        "admins": "Administradores",
+        "all_members": "Todos os membros",
+        "off": "Ninguém"
+      },
+      "help": "O relatório fica sempre guardado aqui. Isto controla apenas o email.",
+      "save": "Guardar",
+      "saved": "Guardado.",
+      "error": "Não foi possível guardar.",
+      "forbidden": "Só o proprietário do negócio pode alterar isto.",
+      "current": "Os relatórios são enviados por email a: {value}."
+    }
   }
 }

@@ -130,7 +130,7 @@ export function DashboardShell({
   return (
     <div className="flex min-h-screen bg-background">
       {/* Sidebar */}
-      <aside className="hidden md:flex w-56 flex-col border-r border-border bg-card px-3 py-6 gap-1">
+      <aside className="hidden md:flex w-56 flex-col border-r border-border bg-card px-3 py-6 gap-1 print:hidden">
         <div className="px-3 mb-6">
           <span className="text-lg font-semibold tracking-tight">SŌSH</span>
         </div>
@@ -209,7 +209,7 @@ export function DashboardShell({
           shell past the viewport (QA-MINOR-UI (2), ADR 0031 premise 6: scrollWidth 367 at 320 px). */}
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Top bar */}
-        <header className="flex h-14 items-center justify-between border-b border-border px-6">
+        <header className="flex h-14 items-center justify-between border-b border-border px-6 print:hidden">
           <span className="text-sm font-medium text-foreground truncate max-w-xs">
             {activeBusiness.name}
           </span>

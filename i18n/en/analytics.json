@@ -208,5 +208,54 @@
       "announcement": "Announcement",
       "how_to": "How-to"
     }
+  },
+  "report": {
+    "title": "Monthly reports",
+    "description": "One report per month, kept as it was generated.",
+    "listLink": "Monthly reports",
+    "list": {
+      "empty": "Reports appear here from the 10th of each month, for the month before.",
+      "open": "Open report",
+      "stub": "No posts published"
+    },
+    "back": "Back to monthly reports",
+    "header": "{business} · {month}. Measured as of {measuredAsOf}. Generated on {generatedOn}.",
+    "stub": "No posts were published in {month}, so there is nothing to measure.",
+    "section": {
+      "summary": "Summary",
+      "unavailable": "Platforms without engagement data",
+      "methodology": "How to read this"
+    },
+    "ratedPosts": {
+      "title": "Three X posts by engagement rate",
+      "caveat": "A post seen by few people can have a high rate.",
+      "row": "Post {position}: engagement rate {rate} (1 post)"
+    },
+    "lateOutcomes": "Posts measured after {date} are not included.",
+    "notInReport": "This report was generated before your plan included this section.",
+    "methodology": {
+      "median": "The typical rate is the median engagement rate of the measured posts: half were above it and half below.",
+      "maturity": "A post is measured 7 days after it goes out. Newer posts count as published but not yet measured.",
+      "exclusions": "Posts without usable data are listed with the reason and are not included in any rate.",
+      "usual": "Usual is your median over the previous 90 days on X, or the history you imported. It updates as you post, so it is not a measure of overall progress.",
+      "floors": "A typical rate is shown from 5 measured posts. Comparisons by post type need 10 measured posts per value.",
+      "xOnly": "Engagement rates are measured on X only. Other platforms show publishing activity.",
+      "descriptive": "Breakdowns describe past posts. They overlap, and they are not the reason for any result.",
+      "engagementOnly": "This measures engagement, not signups or revenue."
+    },
+    "setting": {
+      "label": "Email each report to",
+      "option": {
+        "admins": "Admins",
+        "all_members": "All members",
+        "off": "No one"
+      },
+      "help": "The report is always kept here. This only controls the email.",
+      "save": "Save",
+      "saved": "Saved.",
+      "error": "We couldn't save this.",
+      "forbidden": "Only the business owner can change this.",
+      "current": "Reports are emailed to: {value}."
+    }
   }
 }
