@@ -44,10 +44,7 @@ const BAD = /NaN|undefined|\[object Object\]|⟦missing|\banalytics\.[a-z]+\.[a-
 
 let base: Portfolio
 beforeEach(async () => {
-  base ??= await loadPortfolioWith(fixtureReaders(), BUSINESS_A_ID, '2026-03', {
-    now: () => NOW,
-    retrievePatterns: async () => [{ platform: 'twitter' as const, pattern: LONG, wins: 7, n: 10, campaigns: 3 }],
-  })
+  base ??= await loadPortfolioWith(fixtureReaders({ patterns: [{ business_id: BUSINESS_A_ID, pattern_key: null, platform: 'twitter' as const, pattern: LONG, wins: 7, n: 10, campaigns: 3 }] }), BUSINESS_A_ID, '2026-03', { now: () => NOW })
 })
 
 function worst(): Portfolio {
@@ -241,7 +238,7 @@ describe('the filter selects', () => {
 
 describe('the report with the worst data', () => {
   async function payload(): Promise<ReportPayload> {
-    const p = (await assembleReport({ readers: fixtureReaders(), businessId: BUSINESS_A_ID, period: '2026-03', now: NOW, loaderDeps: { retrievePatterns: async () => [{ platform: 'twitter' as const, pattern: LONG, wins: 7, n: 10, campaigns: 3 }] } })).payload
+    const p = (await assembleReport({ readers: fixtureReaders({ patterns: [{ business_id: BUSINESS_A_ID, pattern_key: null, platform: 'twitter' as const, pattern: LONG, wins: 7, n: 10, campaigns: 3 }] }), businessId: BUSINESS_A_ID, period: '2026-03', now: NOW })).payload
     return {
       ...p,
       header: { ...p.header, params: { ...p.header.params, business: HANDLE } },
@@ -275,7 +272,7 @@ describe('the interaction floor (ADR 0031 §10.6: visible focus, targets of 24 p
     const controls = [...root.querySelectorAll('a, button, select, summary')]
     expect(controls.length).toBeGreaterThan(5)
     for (const el of controls) expect(el.className, el.outerHTML.slice(0, 80)).toContain('focus-visible:outline-foreground')
-    const report = mount(renderToStaticMarkup(<ReportBody t={tFor('en')} locale="en" timezone={LISBON} payload={(await assembleReport({ readers: fixtureReaders(), businessId: BUSINESS_A_ID, period: '2026-03', now: NOW, loaderDeps: { retrievePatterns: async () => [] } })).payload} proAllowed />))
+    const report = mount(renderToStaticMarkup(<ReportBody t={tFor('en')} locale="en" timezone={LISBON} payload={(await assembleReport({ readers: fixtureReaders(), businessId: BUSINESS_A_ID, period: '2026-03', now: NOW })).payload} proAllowed />))
     for (const el of report.querySelectorAll('a')) expect(el.className).toContain('focus-visible:outline-foreground')
   })
 
@@ -304,7 +301,7 @@ describe('the interaction floor (ADR 0031 §10.6: visible focus, targets of 24 p
   })
 
   it('the report print rules: rows and charts stay whole, sub-headings stay with their content, and the report page has no nav or action in print', async () => {
-    const out = renderToStaticMarkup(<ReportBody t={tFor('en')} locale="en" timezone={LISBON} payload={(await assembleReport({ readers: fixtureReaders(), businessId: BUSINESS_A_ID, period: '2026-03', now: NOW, loaderDeps: { retrievePatterns: async () => [] } })).payload} proAllowed />)
+    const out = renderToStaticMarkup(<ReportBody t={tFor('en')} locale="en" timezone={LISBON} payload={(await assembleReport({ readers: fixtureReaders(), businessId: BUSINESS_A_ID, period: '2026-03', now: NOW })).payload} proAllowed />)
     // Read through the DOM: React writes "&" in an attribute as "&amp;" and a browser decodes it.
     const article = mount(out).querySelector('article')?.className ?? ''
     for (const cls of ['print:[&_tr]:break-inside-avoid', 'print:[&_svg]:break-inside-avoid', 'print:[&_h2]:break-after-avoid', 'print:[&_h3]:break-after-avoid']) expect(article).toContain(cls)

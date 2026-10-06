@@ -254,7 +254,7 @@ const tFor = (locale: Locale): T => (key, values) => {
 }
 async function payload(over: { plan?: Record<string, unknown>; period: string }): Promise<ReportPayload> {
   return (
-    await assembleReport({ readers: fixtureReaders({ plan: over.plan }), businessId: BUSINESS_A_ID, period: over.period, now: NOW, loaderDeps: { retrievePatterns: async () => [{ platform: 'twitter' as const, pattern: 'Posts with a question opening beat your usual.', wins: 7, n: 10, campaigns: 3 }] } })
+    await assembleReport({ readers: fixtureReaders({ plan: over.plan, patterns: [{ business_id: BUSINESS_A_ID, pattern_key: null, platform: 'twitter' as const, pattern: 'Posts with a question opening beat your usual.', wins: 7, n: 10, campaigns: 3 }] }), businessId: BUSINESS_A_ID, period: over.period, now: NOW })
   ).payload
 }
 

@@ -18,7 +18,7 @@ import type { T } from './shared'
 
 const NOW = MARCH_REPORT_OUTCOMES_THROUGH
 const LISBON = 'Europe/Lisbon'
-const patterns = [{ platform: 'twitter' as const, pattern: 'Posts with a question opening beat your usual.', wins: 7, n: 10, campaigns: 3 }]
+const patterns = [{ business_id: BUSINESS_A_ID, pattern_key: null, platform: 'twitter' as const, pattern: 'Posts with a question opening beat your usual.', wins: 7, n: 10, campaigns: 3 }]
 
 const tFor = (locale: Locale): T => (key, values) => {
   const dot = key.indexOf('.')
@@ -27,11 +27,10 @@ const tFor = (locale: Locale): T => (key, values) => {
 
 async function payload(over: { plan?: Record<string, unknown>; period?: string } = {}): Promise<ReportPayload> {
   const r = await assembleReport({
-    readers: fixtureReaders({ plan: over.plan }),
+    readers: fixtureReaders({ plan: over.plan, patterns }),
     businessId: BUSINESS_A_ID,
     period: over.period ?? '2026-03',
     now: NOW,
-    loaderDeps: { retrievePatterns: async () => patterns },
   })
   return r.payload
 }

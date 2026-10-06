@@ -56,5 +56,6 @@ export function verifiedReaders(base: Readers, businessId: string): Readers {
     listDimensionsForAnalytics: (id, ids) => rows(id, 'listDimensionsForAnalytics', () => base.listDimensionsForAnalytics(id, ids)),
     listMetricsForPosts: (id, ids) => rows(id, 'listMetricsForPosts', () => base.listMetricsForPosts(id, ids)),
     listAccountLabels: (id, ids) => rows(id, 'listAccountLabels', () => base.listAccountLabels(id, ids)),
+    listPatterns: (id, options) => rows(id, 'listPatterns', () => base.listPatterns(id, options)),
   }
 }

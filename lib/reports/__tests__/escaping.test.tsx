@@ -30,11 +30,10 @@ const tFor = (locale: Locale): T => (key, values) => {
 async function hostilePayload(): Promise<ReportPayload> {
   const base = (
     await assembleReport({
-      readers: fixtureReaders(),
+      readers: fixtureReaders({ patterns: [{ business_id: BUSINESS_A_ID, pattern_key: null, platform: 'twitter' as const, pattern: HOSTILE, wins: 7, n: 10, campaigns: 3 }] }),
       businessId: BUSINESS_A_ID,
       period: '2026-03',
       now: MARCH_REPORT_OUTCOMES_THROUGH,
-      loaderDeps: { retrievePatterns: async () => [{ platform: 'twitter' as const, pattern: HOSTILE, wins: 7, n: 10, campaigns: 3 }] },
     })
   ).payload
   return {

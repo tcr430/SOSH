@@ -1,5 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { selectOutcomePatterns } from '@/lib/memory/outcomes'
+import { assertOwned } from '@/lib/reports/isolation'
 import { getBusinessByIdForWorker } from './businesses'
+import { listOutcomePatterns } from './memory-performance'
 import { listCampaigns } from './campaigns'
 import { listCompletedRetrospectivesInRange } from './campaign-retrospectives'
 import { listMetricsForPosts } from './post-metrics'
@@ -33,5 +36,14 @@ export function analyticsWorkerReaders() {
     listDimensionsForAnalytics: async (businessId: string, ids: readonly string[]) => listDimensionsForAnalytics(await service(), businessId, ids),
     listMetricsForPosts: async (businessId: string, ids: readonly string[]) => listMetricsForPosts(await service(), businessId, ids),
     listAccountLabels: async (businessId: string, ids: readonly string[]) => listAccountLabels(await service(), businessId, ids),
+    // The SAME query body the page runs (listOutcomePatterns, which applies .eq('business_id')) and the SAME pure
+    // selection, bound to the service-role client acquired here. Ownership is asserted on the RAW rows, BEFORE the
+    // selection: the selection drops ineligible and over-cap rows, and a foreign row dropped there would never raise the
+    // alarm (security-reviewer, Session 37-D D1). verifiedReaders then checks the selected rows again.
+    listPatterns: async (businessId: string, options: { platform?: string }) => {
+      const rows = await listOutcomePatterns(await service(), businessId, { status: 'active', platform: options.platform })
+      assertOwned(businessId, rows, 'listPatterns (raw rows)')
+      return selectOutcomePatterns(rows, options)
+    },
   }
 }

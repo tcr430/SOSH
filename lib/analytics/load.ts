@@ -9,7 +9,8 @@ import { listCampaigns } from '@/lib/db/campaigns'
 import { listCompletedRetrospectivesInRange, type RetrospectiveForAnalytics } from '@/lib/db/campaign-retrospectives'
 import { ReadCeilingExceeded } from '@/lib/db/keyset-pager'
 import type { BusinessRow, CampaignRow, Platform } from '@/lib/db/types'
-import { retrieveOutcomePatterns, type OutcomeObservation } from '@/lib/memory'
+import { listOutcomePatterns } from '@/lib/db/memory-performance'
+import { selectOutcomePatterns, type OutcomeObservation, type OutcomePatternRow } from '@/lib/memory'
 import { metricsReadAvailableFor } from '@/lib/social'
 import { hasAdvancedAnalytics } from '@/lib/stripe/plan'
 import { OUTCOME_MATURITY_DAYS } from '@/lib/outcomes/constants'
@@ -48,7 +49,6 @@ export interface LoaderDeps {
   metricsReadAvailable: (platform: Platform) => boolean
   /** The clock, injected: also the `outcomes_through` instant every read behind one view is bounded by. */
   now: () => string
-  retrievePatterns: (businessId: string, options?: { platform?: string }) => Promise<OutcomeObservation[]>
   /** Months in the Pro trend: 12 on the live page, 6 in the report (ADR 0031 s5.3 row 8). */
   trendMonths: number
   /** The live page adds hook_type; the report never does ([mle-6]). */
@@ -58,7 +58,6 @@ export interface LoaderDeps {
 const DEFAULT_DEPS: LoaderDeps = {
   metricsReadAvailable: metricsReadAvailableFor,
   now: () => formatISO(new Date()),
-  retrievePatterns: retrieveOutcomePatterns,
   trendMonths: 12,
   liveOnlyBreakdowns: true,
 }
@@ -347,7 +346,12 @@ export async function loadPortfolioWith(
     }
     return { months, series }
   })
-  const patterns = await guarded(() => d.retrievePatterns(businessId))
+  // Patterns are a Readers member like every other read (Session 37-D D1): the page binds the AUTHENTICATED client, the
+  // report worker binds a verified service-role wrapper. The row's identity (business_id, pattern_key) stays inside the
+  // reader; the portfolio carries only the observation.
+  const patterns = await guarded(async (): Promise<OutcomeObservation[]> =>
+    (await r.listPatterns(businessId, {})).map(({ platform, pattern, wins, n, campaigns }) => ({ platform, pattern, wins, n, campaigns })),
+  )
   const retrospectives = await guarded(async (): Promise<RetrospectiveListRow[]> => {
     const rows = await r.listCompletedRetrospectivesInRange(businessId, { start: first.start, end: current.end })
     return rows.map((r) => ({
@@ -590,6 +594,8 @@ export interface Readers {
   listDimensionsForAnalytics: (businessId: string, ids: readonly string[]) => Promise<DimensionForAnalytics[]>
   listMetricsForPosts: (businessId: string, ids: readonly string[]) => Promise<MetricsForAnalytics[]>
   listAccountLabels: (businessId: string, ids: readonly string[]) => Promise<SocialAccountLabel[]>
+  /** The business's ACTIVE outcome patterns, already eligible, ranked and capped (lib/memory selectOutcomePatterns). Rows carry business_id so the worker can verify them. */
+  listPatterns: (businessId: string, options: { platform?: string }) => Promise<OutcomePatternRow[]>
 }
 
 export function authenticatedReaders(client: SupabaseClient): Readers {
@@ -604,6 +610,9 @@ export function authenticatedReaders(client: SupabaseClient): Readers {
     listDimensionsForAnalytics: (id, ids) => listDimensionsForAnalytics(client, id, ids),
     listMetricsForPosts: (id, ids) => listMetricsForPosts(client, id, ids),
     listAccountLabels: (id, ids) => listAccountLabels(client, id, ids),
+    // listOutcomePatterns takes the caller's client: the performance_memory SELECT policy scopes the read. Never the
+    // ForGeneration variant, which acquires the service-role client (scan #16, arm 2).
+    listPatterns: async (id, options) => selectOutcomePatterns(await listOutcomePatterns(client, id, { status: 'active', platform: options.platform }), options),
   }
 }
 

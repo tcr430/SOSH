@@ -9,7 +9,6 @@ import { fixtureReaders } from '../__fixtures__/readers'
 // ADR 0031 §5.2, §5.6, §9.3 — generating one business's report and running the tick. The db is faked in memory: the
 // unique key behaves like the table's, so a second run really returns inserted = false.
 const DUE = '2026-04-10T06:00:00Z' // Lisbon 07:00 on day 10, Sao Paulo 03:00 on day 10: due for March
-const loaderDeps = { retrievePatterns: async () => [] }
 
 function memory(over: Partial<GenerateDeps> = {}) {
   const rows: AnalyticsReportInsert[] = []
@@ -23,7 +22,6 @@ function memory(over: Partial<GenerateDeps> = {}) {
   })
   const deps: Partial<GenerateDeps> = {
     readers: fixtureReaders(),
-    loaderDeps,
     trialStartedAt: async (businessId) => ({ business_id: businessId, trial_started_at: null }),
     reportExists: async () => false,
     insert,

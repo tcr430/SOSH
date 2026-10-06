@@ -1,5 +1,6 @@
 import { parseISO } from 'date-fns'
 import type { Readers } from '@/lib/analytics/load'
+import type { OutcomePatternRow } from '@/lib/memory'
 import {
   FIXTURE_ACCOUNTS,
   FIXTURE_BUSINESSES,
@@ -23,6 +24,8 @@ export const RETROS = [
 export interface FixtureReaderOptions {
   /** Per-business plan override (the fixture says A is pro and B is plus). */
   plan?: Record<string, unknown>
+  /** The outcome patterns the fixture's `listPatterns` returns (default none). Every row carries its business_id, like the real reader. */
+  patterns?: OutcomePatternRow[]
 }
 
 export function fixtureReaders(options: FixtureReaderOptions = {}): Readers {
@@ -51,5 +54,6 @@ export function fixtureReaders(options: FixtureReaderOptions = {}): Readers {
     listMetricsForPosts: async (biz, ids) => FIXTURE_POST_METRICS.filter((m) => m.business_id === biz && ids.includes(m.post_id)),
     listAccountLabels: async (biz, ids) =>
       FIXTURE_ACCOUNTS.filter((a) => a.business_id === biz && ids.includes(a.id)).map((a) => ({ id: a.id, business_id: a.business_id, platform: a.platform, platform_username: a.platform_username, platform_display_name: a.platform_display_name })),
+    listPatterns: async (biz, q) => (options.patterns ?? []).filter((p) => p.business_id === biz && (q.platform === undefined || p.platform === q.platform)),
   }
 }

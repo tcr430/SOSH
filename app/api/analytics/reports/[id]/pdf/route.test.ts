@@ -76,11 +76,10 @@ beforeEach(async () => {
   setContentHtml = undefined
   storedPayload ??= (
     await assembleReport({
-      readers: fixtureReaders(),
+      readers: fixtureReaders({ patterns: [{ business_id: BUSINESS_A_ID, pattern_key: null, platform: 'twitter' as const, pattern: 'Posts with a question opening beat your usual.', wins: 7, n: 10, campaigns: 3 }] }),
       businessId: BUSINESS_A_ID,
       period: '2026-03',
       now: MARCH_REPORT_OUTCOMES_THROUGH,
-      loaderDeps: { retrievePatterns: async () => [{ platform: 'twitter' as const, pattern: 'Posts with a question opening beat your usual.', wins: 7, n: 10, campaigns: 3 }] },
     })
   ).payload
   client.auth.getUser = getUser.mockReset().mockImplementation(async () => (order.push('getUser'), { data: { user: { id: 'user-a' } } }))

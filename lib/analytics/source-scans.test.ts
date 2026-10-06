@@ -610,6 +610,90 @@ describe('ANALYTICS-AUTHENTICATED-READS, scan half (scan #16, authored in O2.1)'
   })
 })
 
+// ─── #16 arm 2 (Session 37-D D1, MAJOR-3) ──────────────────────────────────────────────────────────────────
+// Arm 1 sees only a DIRECT import of lib/supabase/service. The shipped /analytics page reached the service-role client
+// one hop away: load.ts imported retrieveOutcomePatterns, which calls listOutcomePatternsForGeneration, which acquires it.
+// Arm 2 forbids every analytics root from importing any export of the two memory files that ACQUIRES the service-role
+// client. The list is DERIVED, never hand-written: an export reaches the factory when its body names it, or names an
+// export already known to (to a fixed point), so a new service-role reader added to either file is covered without an edit.
+const SERVICE_ROLE_SOURCES = ['lib/db/memory-performance.ts', 'lib/memory/outcomes.ts'] as const
+// The modules an importer can reach those exports through (the barrel re-exports lib/memory/outcomes).
+const SERVICE_ROLE_MODULES: readonly string[] = ['lib/memory', 'lib/memory/index', 'lib/memory/outcomes', 'lib/db/memory-performance']
+
+function exportedFunctionBodies(source: string): Map<string, string> {
+  const code = stripTsComments(source)
+  const heads = [...code.matchAll(/^export\s+(?:async\s+)?function\s+(\w+)/gm)]
+  return new Map(heads.map((m, i) => [m[1], code.slice(m.index ?? 0, heads[i + 1]?.index ?? code.length)]))
+}
+
+export function serviceRoleExports(sources: Readonly<Record<string, string>>): Record<string, string[]> {
+  const bodies = Object.fromEntries(Object.entries(sources).map(([rel, src]) => [rel, exportedFunctionBodies(src)]))
+  const known = new Set<string>()
+  for (let changed = true; changed; ) {
+    changed = false
+    for (const fns of Object.values(bodies)) {
+      for (const [name, body] of fns) {
+        if (known.has(name)) continue
+        if (/\bcreateServiceRoleClient\b/.test(body) || [...known].some((k) => new RegExp('\\b' + k + '\\b').test(body))) {
+          known.add(name)
+          changed = true
+        }
+      }
+    }
+  }
+  return Object.fromEntries(Object.entries(bodies).map(([rel, fns]) => [rel, [...fns.keys()].filter((n) => known.has(n))]))
+}
+
+function resolveSpecifier(specifier: string, rel: string): string {
+  if (specifier.startsWith('@/')) return specifier.slice(2)
+  if (specifier.startsWith('.')) return path.posix.normalize(path.posix.join(path.posix.dirname(rel), specifier))
+  return specifier
+}
+
+export function serviceRoleReachViolations(rel: string, source: string, names: readonly string[]): string[] {
+  return parseImports(source).flatMap((ref) => {
+    if (!SERVICE_ROLE_MODULES.includes(resolveSpecifier(ref.specifier, rel))) return []
+    if (ref.whole) return [rel + ': imports ' + ref.specifier + ' as a whole (default, namespace or dynamic), which reaches every export'] // a whole import cannot be narrowed
+    return ref.names.filter((n) => names.includes(n)).map((n) => rel + ': imports ' + n + ' from ' + ref.specifier + ', which acquires the service-role client')
+  })
+}
+
+describe('ANALYTICS-AUTHENTICATED-READS, arm 2: no analytics root imports a memory export that acquires the service-role client (scan #16, Session 37-D D1)', () => {
+  const derived = serviceRoleExports(Object.fromEntries(SERVICE_ROLE_SOURCES.map((rel) => [rel, fs.readFileSync(path.join(ROOT, rel), 'utf8')])))
+  const names = Object.values(derived).flat()
+
+  it('DERIVATION: the list is non-vacuous in BOTH files and names the exports the shipped page once reached', () => {
+    expect(derived['lib/db/memory-performance.ts'].length, 'memory-performance.ts: no service-role export derived, the arm would pass vacuously').toBeGreaterThanOrEqual(1)
+    expect(derived['lib/memory/outcomes.ts'].length, 'outcomes.ts: no service-role export derived, the arm would pass vacuously').toBeGreaterThanOrEqual(1)
+    expect(derived['lib/db/memory-performance.ts']).toContain('listOutcomePatternsForGeneration')
+    expect(derived['lib/memory/outcomes.ts']).toEqual(expect.arrayContaining(['retrieveOutcomePatterns', 'retrieveHypothesisResults']))
+  })
+
+  it('DERIVATION NEGATIVE CONTROL: the client-taking reader and the pure selection are NOT in the list (they are what the page uses)', () => {
+    expect(names).not.toContain('listOutcomePatterns')
+    expect(names).not.toContain('selectOutcomePatterns')
+  })
+
+  it('PLANTED POSITIVE: the barrel, the module, a relative path, a namespace and a dynamic import all fail', () => {
+    expect(serviceRoleReachViolations('lib/analytics/_plant.ts', "import { retrieveOutcomePatterns } from '@/lib/memory'", names)).toHaveLength(1)
+    expect(serviceRoleReachViolations('lib/analytics/_plant.ts', "import { retrieveHypothesisResults as r } from '@/lib/memory/outcomes'", names)).toHaveLength(1)
+    expect(serviceRoleReachViolations('lib/analytics/_plant.ts', "import { listOutcomePatternsForGeneration } from '../db/memory-performance'", names)).toHaveLength(1)
+    expect(serviceRoleReachViolations('lib/analytics/_plant.ts', "import * as perf from '@/lib/db/memory-performance'", names)).toHaveLength(1)
+    expect(serviceRoleReachViolations('lib/analytics/_plant.ts', "const m = await import('@/lib/memory')", names)).toHaveLength(1)
+  })
+
+  it('PLANTED NEGATIVE: the authenticated reader, the pure selection, other modules and a comment pass', () => {
+    expect(serviceRoleReachViolations('lib/analytics/n.ts', "import { listOutcomePatterns } from '@/lib/db/memory-performance'", names)).toEqual([])
+    expect(serviceRoleReachViolations('lib/analytics/n.ts', "import { selectOutcomePatterns, type OutcomePatternRow } from '@/lib/memory'", names)).toEqual([])
+    expect(serviceRoleReachViolations('lib/analytics/n.ts', "import { retrieveMemoryBundle } from '@/lib/campaigns/other'", names)).toEqual([])
+    expect(serviceRoleReachViolations('lib/analytics/n.ts', "// import { retrieveOutcomePatterns } from '@/lib/memory'", names)).toEqual([])
+  })
+
+  it('REAL TREE: no analytics, report or page root imports a service-role memory export', () => {
+    expect(scan(ALL_ROOTS, (rel, source) => serviceRoleReachViolations(rel, source, names))).toEqual([])
+  })
+})
+
 // ═══ #20 ANALYTICS-CAMPAIGN-VIEW-SINGLE-SOURCE, scan half (closes in O2.5) ═══════════════════════════════════
 // ADR 0031 §4.2, §9.2, §12.2 (SHARED-FUNCTION CALLERS). The campaign learning view stays the single campaign
 // surface: loadCampaignLearningView keeps its one caller, unavailableMetricsPlatforms stays internal to

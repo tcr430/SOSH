@@ -22,7 +22,7 @@ export {
   type PerformancePattern,
   type GovernedPerformancePattern,
 } from './performance'
-export { retrieveOutcomePatterns, retrieveHypothesisResults, type OutcomeObservation } from './outcomes'
+export { retrieveOutcomePatterns, retrieveHypothesisResults, selectOutcomePatterns, type OutcomeObservation, type OutcomePatternRow } from './outcomes'
 export { retrieveVoice, type CoreVoiceRules } from './voice'
 export {
   recordInterviewCandidates,

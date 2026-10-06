@@ -17,7 +17,21 @@ const mocks = vi.hoisted(() => ({
   listAccountLabels: vi.fn(),
   listCampaigns: vi.fn(),
   listCompletedRetrospectivesInRange: vi.fn(),
-  retrievePatterns: vi.fn(),
+  listOutcomePatterns: vi.fn(),
+}))
+// The page must never acquire the service-role client (ADR 0031 s9.1, L-8). The factory THROWS and counts: a page that reaches it
+// through ANY import fails this file, which scan #16 (direct imports only) cannot see (Session 37-D D1, MAJOR-3).
+const guard = vi.hoisted(() => ({ serviceRole: vi.fn() }))
+vi.mock('@/lib/supabase/service', () => ({
+  createServiceRoleClient: () => {
+    guard.serviceRole()
+    throw new Error('a user-facing analytics path acquired the service-role client')
+  },
+}))
+// PARTIAL: the REAL listOutcomePatternsForGeneration stays (it lazily imports the throwing factory above); only the authenticated reader is faked.
+vi.mock('@/lib/db/memory-performance', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/db/memory-performance')>()),
+  listOutcomePatterns: mocks.listOutcomePatterns,
 }))
 vi.mock('@/lib/db/businesses', () => ({ getBusinessById: mocks.getBusinessById }))
 vi.mock('@/lib/db/posts', () => ({ listPublishedPostsInRange: mocks.listPublishedPostsInRange, countPublishedPostsInRange: mocks.countPublishedPostsInRange }))
@@ -58,6 +72,15 @@ const RETROS = [
   { id: 'r2', campaign_id: A_CAMPAIGN_ACTIVE_ID, business_id: BUSINESS_A_ID, verdict: 'inconclusive', n: 3, wins: 1, interval_low: null, interval_high: null, status: 'completed', completed_at: '2026-03-30T10:00:00+00:00', acknowledged_at: null },
 ]
 
+// An ACTIVE outcome row exactly as performance_memory returns it (every eligibility and ranking field present).
+const outcomeRow = (businessId: string) => ({
+  id: 'p1', business_id: businessId, source: 'outcome', confidence: 0.5, observation_count: 10, status: 'active', sensitivity: 'internal', public_use_permission: false,
+  scope: 'platform', scope_ref: 'twitter', last_confirmed_at: '2026-03-20T00:00:00Z', recency_at: '2026-03-20T00:00:00Z', expires_at: null, deleted_at: null,
+  created_at: '2026-03-01T00:00:00Z', updated_at: '2026-03-20T00:00:00Z', import_run_id: null, import_source_post_ids: null, dimension: 'format',
+  pattern: 'Posts with a question opening beat your usual.', platform: 'twitter', pattern_key: 'outcome:format:question:above:twitter',
+  outcome_n: 10, outcome_wins: 7, outcome_distinct_campaigns: 3, interval_low: 0.4, interval_high: 0.9, metric_basis: 'rate', baseline_seeded: false, contradicted_at: null,
+})
+
 beforeEach(() => {
   planOverride = {}
   for (const fn of Object.values(mocks)) fn.mockReset()
@@ -95,11 +118,12 @@ beforeEach(() => {
   mocks.listCompletedRetrospectivesInRange.mockImplementation(async (_c: unknown, biz: string, r: { start: string; end: string }) =>
     RETROS.filter((x) => x.business_id === biz && inRange(x.completed_at, r.start, r.end)).sort((a, b) => b.completed_at.localeCompare(a.completed_at)),
   )
-  mocks.retrievePatterns.mockResolvedValue([{ platform: 'twitter', pattern: 'Posts with a question opening beat your usual.', wins: 7, n: 10, campaigns: 3 }])
+  guard.serviceRole.mockReset()
+  mocks.listOutcomePatterns.mockImplementation(async (_c: unknown, biz: string) => [outcomeRow(biz)])
 })
 
-const deps = (over: Record<string, unknown> = {}) => ({ now: () => FIXTURE_NOW, retrievePatterns: mocks.retrievePatterns, ...over })
-const proReaders = () => [mocks.listTrendOutcomes, mocks.listDimensionsForAnalytics, mocks.countPublishedPostsInRange, mocks.retrievePatterns]
+const deps = (over: Record<string, unknown> = {}) => ({ now: () => FIXTURE_NOW, ...over })
+const proReaders = () => [mocks.listTrendOutcomes, mocks.listDimensionsForAnalytics, mocks.countPublishedPostsInRange, mocks.listOutcomePatterns]
 
 async function portfolio(businessId: string, month = '2026-03', over: Record<string, unknown> = {}) {
   return loadPortfolio(client, businessId, month, deps(over))
@@ -305,16 +329,25 @@ describe('tenancy: every reader is handed the caller\'s client and the caller\'s
   it('no reader sees another business or a different client, across the whole Pro load', async () => {
     await portfolio(BUSINESS_A_ID)
     for (const [name, fn] of Object.entries(mocks)) {
-      if (name === 'retrievePatterns') {
-        for (const c of fn.mock.calls) expect(c[0], name).toBe(BUSINESS_A_ID)
-        continue
-      }
       expect(fn.mock.calls.length, name).toBeGreaterThan(0)
       for (const c of fn.mock.calls) {
         expect(c[0], `${name} client`).toBe(client)
         if (name !== 'getBusinessById') expect(c[1], `${name} business`).toBe(BUSINESS_A_ID)
       }
     }
+  })
+
+  it('PATTERNS are read through the AUTHENTICATED client, active only, and the page never acquires the service-role client (MAJOR-3)', async () => {
+    const p = (await portfolio(BUSINESS_A_ID)) as AdvancedPortfolio
+    expect(ok(p.patterns)).toEqual([{ platform: 'twitter', pattern: 'Posts with a question opening beat your usual.', wins: 7, n: 10, campaigns: 3 }])
+    expect(mocks.listOutcomePatterns).toHaveBeenCalledWith(client, BUSINESS_A_ID, { status: 'active', platform: undefined })
+    expect(guard.serviceRole).not.toHaveBeenCalled()
+  })
+
+  it('the Pro portfolio still loads with the service-role factory throwing: nothing on the page path reaches it', async () => {
+    await expect(portfolio(BUSINESS_A_ID)).resolves.toMatchObject({ tier: 'advanced' })
+    await expect(loadPosts(client, BUSINESS_A_ID, { period: '2026-03' }, deps())).resolves.toMatchObject({ tier: 'advanced' })
+    expect(guard.serviceRole).not.toHaveBeenCalled()
   })
 
   it('B\'s portfolio never contains one of A\'s ids', async () => {
@@ -424,7 +457,7 @@ describe('loadPosts: the post level, available to every plan (ADR 0031 §2.1, §
     const plus = await load(BUSINESS_B_ID)
     expect(plus.tier).toBe('basic')
     expect(await load(BUSINESS_A_ID)).toMatchObject({ tier: 'advanced' })
-    for (const reader of [mocks.listTrendOutcomes, mocks.listDimensionsForAnalytics, mocks.countPublishedPostsInRange, mocks.retrievePatterns]) expect(reader).not.toHaveBeenCalled()
+    for (const reader of [mocks.listTrendOutcomes, mocks.listDimensionsForAnalytics, mocks.countPublishedPostsInRange, mocks.listOutcomePatterns]) expect(reader).not.toHaveBeenCalled()
   })
 
   it('every reader gets the caller\'s client and business', async () => {

@@ -11,13 +11,15 @@ import { fixtureReaders } from '../__fixtures__/readers'
 // fixture; the numbers below are the fixture's hand-computed literals.
 const NOW = MARCH_REPORT_OUTCOMES_THROUGH // 2026-04-10T06:00:00Z
 const patterns = [{ platform: 'twitter' as const, pattern: 'Posts with a question opening beat your usual.', wins: 7, n: 10, campaigns: 3 }]
+// What the reader returns: the observation plus the row identity the isolation wrapper verifies (the payload keeps only the observation).
+const patternRows = patterns.map((p) => ({ ...p, business_id: BUSINESS_A_ID, pattern_key: null }))
 const run = (businessId: string, over: { readers?: Readers; plan?: Record<string, unknown>; period?: string; loaderDeps?: Record<string, unknown> } = {}) =>
   assembleReport({
-    readers: over.readers ?? fixtureReaders({ plan: over.plan }),
+    readers: over.readers ?? fixtureReaders({ plan: over.plan, patterns: patternRows }),
     businessId,
     period: over.period ?? '2026-03',
     now: NOW,
-    loaderDeps: { retrievePatterns: async () => patterns, ...over.loaderDeps },
+    loaderDeps: over.loaderDeps,
   })
 
 describe('the Pro report: business A, March 2026', () => {
@@ -122,8 +124,8 @@ describe('the tier is read from the PLAN on the business row (ANALYTICS-PLAN-GAT
   })
 
   it('the patterns reader (a Pro read) is never called for a basic business', async () => {
-    const spy = vi.fn(async () => patterns)
-    await run(BUSINESS_B_ID, { loaderDeps: { retrievePatterns: spy } })
+    const spy = vi.fn<Readers['listPatterns']>(async () => patternRows)
+    await run(BUSINESS_B_ID, { readers: { ...fixtureReaders({ patterns: patternRows }), listPatterns: spy } })
     expect(spy).not.toHaveBeenCalled()
   })
 })
