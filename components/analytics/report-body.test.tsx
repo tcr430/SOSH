@@ -9,7 +9,7 @@ import { makeTranslator, LOCALES, type Locale } from '@/lib/i18n/__test-utils__/
 import { BUSINESS_A_ID, MARCH_REPORT_OUTCOMES_THROUGH } from '@/lib/analytics/__fixtures__/portfolio'
 import { assembleReport, type ReportPayload } from '@/lib/reports/assemble'
 import { REPORT_METHODOLOGY_KEYS } from '@/lib/reports/constants'
-import { fixtureReaders } from '@/lib/reports/__fixtures__/readers'
+import { fixtureReaders, fixturePatternRow, FIXTURE_LABELS_A, FIXTURE_NAME_A } from '@/lib/reports/__fixtures__/readers'
 import { ReportBody } from './ReportBody'
 import type { T } from './shared'
 
@@ -18,7 +18,7 @@ import type { T } from './shared'
 
 const NOW = MARCH_REPORT_OUTCOMES_THROUGH
 const LISBON = 'Europe/Lisbon'
-const patterns = [{ business_id: BUSINESS_A_ID, pattern_key: null, platform: 'twitter' as const, pattern: 'Posts with a question opening beat your usual.', wins: 7, n: 10, campaigns: 3 }]
+const patterns = [fixturePatternRow()]
 
 const tFor = (locale: Locale): T => (key, values) => {
   const dot = key.indexOf('.')
@@ -36,7 +36,7 @@ async function payload(over: { plan?: Record<string, unknown>; period?: string }
 }
 
 const render = (p: ReportPayload, proAllowed: boolean, locale: Locale = 'en') =>
-  renderToStaticMarkup(<ReportBody t={tFor(locale)} locale={locale} timezone={LISBON} payload={p} proAllowed={proAllowed} />)
+  renderToStaticMarkup(<ReportBody t={tFor(locale)} locale={locale} timezone={LISBON} payload={p} proAllowed={proAllowed} businessName={FIXTURE_NAME_A} labels={FIXTURE_LABELS_A} />)
 
 const text = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
 const sectionIds = (html: string) => [...html.matchAll(/id="([a-z]+)-title"/g)].map((m) => m[1])
@@ -91,7 +91,7 @@ describe('A-5: Pro sections render only while the CURRENT plan allows them', () 
     const body = text(html)
     expect(body.match(/Available on Pro:/g)).toHaveLength(3)
     expect(sectionIds(html)).toEqual(['summary', 'activity', 'results', 'rated', 'unavailable', 'campaigns', 'trend', 'breakdowns', 'patterns', 'methodology'])
-    expect(body).not.toContain('Posts with a question opening beat your usual.')
+    expect(body).not.toContain('On X, thread posts beat your usual engagement.')
     expect(body).not.toContain('Based on 10 posts across 3 campaigns.')
     expect(html).not.toContain('trend-posts')
   })
@@ -102,7 +102,7 @@ describe('A-5: Pro sections render only while the CURRENT plan allows them', () 
     render(p, false)
     const restored = render(p, true)
     expect(JSON.stringify(p)).toBe(before)
-    expect(text(restored)).toContain('Posts with a question opening beat your usual.')
+    expect(text(restored)).toContain('On X, thread posts beat your usual engagement.')
   })
 
   it('a report generated on a basic plan, viewed on a Pro plan, says so plainly and invents no number', async () => {

@@ -8,8 +8,9 @@ vi.mock('next-intl/server', () => ({ getTranslations: async () => (key: string) 
 import { makeTranslator, LOCALES, type Locale } from '@/lib/i18n/__test-utils__/translator'
 import { BUSINESS_A_ID, MARCH_REPORT_OUTCOMES_THROUGH } from '@/lib/analytics/__fixtures__/portfolio'
 import { loadPortfolioWith, type CampaignTableRow, type Portfolio, type PostRowView, type PostsView as PostsModel } from '@/lib/analytics/load'
+import type { ReportLabels } from '@/lib/analytics/labels'
 import { assembleReport, type ReportPayload } from '@/lib/reports/assemble'
-import { fixtureReaders } from '@/lib/reports/__fixtures__/readers'
+import { fixtureReaders, fixturePatternRow, FIXTURE_LABELS_A, FIXTURE_NAME_A } from '@/lib/reports/__fixtures__/readers'
 import { compileReportCss } from '@/lib/reports/pdf-css'
 import { TABLE } from '@/components/analytics/shared'
 import { PortfolioView } from './PortfolioView'
@@ -44,7 +45,7 @@ const BAD = /NaN|undefined|\[object Object\]|⟦missing|\banalytics\.[a-z]+\.[a-
 
 let base: Portfolio
 beforeEach(async () => {
-  base ??= await loadPortfolioWith(fixtureReaders({ patterns: [{ business_id: BUSINESS_A_ID, pattern_key: null, platform: 'twitter' as const, pattern: LONG, wins: 7, n: 10, campaigns: 3 }] }), BUSINESS_A_ID, '2026-03', { now: () => NOW })
+  base ??= await loadPortfolioWith(fixtureReaders({ patterns: [fixturePatternRow()] }), BUSINESS_A_ID, '2026-03', { now: () => NOW })
 })
 
 function worst(): Portfolio {
@@ -238,15 +239,25 @@ describe('the filter selects', () => {
 
 describe('the report with the worst data', () => {
   async function payload(): Promise<ReportPayload> {
-    const p = (await assembleReport({ readers: fixtureReaders({ patterns: [{ business_id: BUSINESS_A_ID, pattern_key: null, platform: 'twitter' as const, pattern: LONG, wins: 7, n: 10, campaigns: 3 }] }), businessId: BUSINESS_A_ID, period: '2026-03', now: NOW })).payload
+    const p = (await assembleReport({ readers: fixtureReaders({ patterns: [fixturePatternRow()] }), businessId: BUSINESS_A_ID, period: '2026-03', now: NOW })).payload
     return {
       ...p,
-      header: { ...p.header, params: { ...p.header.params, business: HANDLE } },
-      campaigns: p.campaigns?.map((c, i) => ({ ...c, name: [LONG, JA, AR, EMOJI, null][i % 5], published: 1_000_000 })),
-      activity: p.activity && { ...p.activity, total: 1_000_000, previousTotal: 10_000, rows: p.activity.rows.map((r, i) => ({ ...r, label: [HANDLE, ONE, JA][i % 3], count: 10_000 })) },
+      campaigns: p.campaigns?.map((c) => ({ ...c, published: 1_000_000 })),
+      activity: p.activity && { ...p.activity, total: 1_000_000, previousTotal: 10_000, rows: p.activity.rows.map((r) => ({ ...r, count: 10_000 })) },
     }
   }
-  const html = async (locale: Locale, plain = false) => renderToStaticMarkup(<ReportBody t={tFor(locale)} locale={locale} timezone={LISBON} payload={await payload()} proAllowed plain={plain} />)
+  // The names and labels are NOT in the stored payload (MINOR-7): the worst data arrives where it now enters, at read time.
+  function worstLabels(p: ReportPayload): ReportLabels {
+    const names = [LONG, JA, AR, EMOJI, null]
+    return {
+      campaigns: Object.fromEntries((p.campaigns ?? []).flatMap((c, i) => (names[i % 5] === null ? [] : [[c.campaignId, names[i % 5] as string] as const]))),
+      accounts: Object.fromEntries((p.activity?.rows ?? []).flatMap((r, i) => (r.accountId === null ? [] : [[r.accountId, [HANDLE, ONE, JA][i % 3]] as const]))),
+    }
+  }
+  const html = async (locale: Locale, plain = false) => {
+    const p = await payload()
+    return renderToStaticMarkup(<ReportBody t={tFor(locale)} locale={locale} timezone={LISBON} payload={p} proAllowed plain={plain} businessName={HANDLE} labels={worstLabels(p)} />)
+  }
 
   it.each(LOCALES)('%s: nothing renders NaN, undefined, a raw key or a missing-key marker (page and PDF render)', async (locale) => {
     expect(await html(locale)).not.toMatch(BAD)
@@ -272,7 +283,7 @@ describe('the interaction floor (ADR 0031 §10.6: visible focus, targets of 24 p
     const controls = [...root.querySelectorAll('a, button, select, summary')]
     expect(controls.length).toBeGreaterThan(5)
     for (const el of controls) expect(el.className, el.outerHTML.slice(0, 80)).toContain('focus-visible:outline-foreground')
-    const report = mount(renderToStaticMarkup(<ReportBody t={tFor('en')} locale="en" timezone={LISBON} payload={(await assembleReport({ readers: fixtureReaders(), businessId: BUSINESS_A_ID, period: '2026-03', now: NOW })).payload} proAllowed />))
+    const report = mount(renderToStaticMarkup(<ReportBody t={tFor('en')} locale="en" timezone={LISBON} payload={(await assembleReport({ readers: fixtureReaders(), businessId: BUSINESS_A_ID, period: '2026-03', now: NOW })).payload} proAllowed businessName={FIXTURE_NAME_A} labels={FIXTURE_LABELS_A} />))
     for (const el of report.querySelectorAll('a')) expect(el.className).toContain('focus-visible:outline-foreground')
   })
 
@@ -301,7 +312,7 @@ describe('the interaction floor (ADR 0031 §10.6: visible focus, targets of 24 p
   })
 
   it('the report print rules: rows and charts stay whole, sub-headings stay with their content, and the report page has no nav or action in print', async () => {
-    const out = renderToStaticMarkup(<ReportBody t={tFor('en')} locale="en" timezone={LISBON} payload={(await assembleReport({ readers: fixtureReaders(), businessId: BUSINESS_A_ID, period: '2026-03', now: NOW })).payload} proAllowed />)
+    const out = renderToStaticMarkup(<ReportBody t={tFor('en')} locale="en" timezone={LISBON} payload={(await assembleReport({ readers: fixtureReaders(), businessId: BUSINESS_A_ID, period: '2026-03', now: NOW })).payload} proAllowed businessName={FIXTURE_NAME_A} labels={FIXTURE_LABELS_A} />)
     // Read through the DOM: React writes "&" in an attribute as "&amp;" and a browser decodes it.
     const article = mount(out).querySelector('article')?.className ?? ''
     for (const cls of ['print:[&_tr]:break-inside-avoid', 'print:[&_svg]:break-inside-avoid', 'print:[&_h2]:break-after-avoid', 'print:[&_h3]:break-after-avoid']) expect(article).toContain(cls)

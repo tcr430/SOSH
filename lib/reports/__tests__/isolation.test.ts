@@ -9,7 +9,7 @@ import type { Readers } from '@/lib/analytics/load'
 const RANGE = { start: '2026-03-01T00:00:00Z', end: '2026-03-31T23:00:00Z' }
 const OUT = { platform: 'twitter', ...RANGE, outcomesThrough: '2026-04-10T06:00:00Z' }
 // An ACTIVE outcome pattern of business A, as listPatterns returns it (the row identity is what the wrapper verifies).
-const PATTERN_A = { business_id: BUSINESS_A_ID, pattern_key: 'outcome:format:question:above:twitter', platform: 'twitter' as const, pattern: 'Posts with a question opening beat your usual.', wins: 7, n: 10, campaigns: 3 }
+const PATTERN_A = { business_id: BUSINESS_A_ID, pattern_key: 'outcome:format:question:above:twitter', metric_basis: 'rate' as const, platform: 'twitter' as const, pattern: 'Posts with a question opening beat your usual.', wins: 7, n: 10, campaigns: 3 }
 
 describe('assertOwned', () => {
   it('passes rows of the loop business, and an empty list', () => {

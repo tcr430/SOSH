@@ -101,7 +101,7 @@ describe('selectOutcomePatterns (pure)', () => {
 
   it('carries the row identity (business_id, pattern_key) the worker verifies and the report renders from', () => {
     expect(selectOutcomePatterns([row({ id: 'a', business_id: 'biz-9' })])).toEqual([
-      { business_id: 'biz-9', pattern_key: 'outcome:format:thread:above:twitter', platform: 'twitter', pattern: "On X, thread posts beat this brand's usual engagement.", wins: 9, n: 11, campaigns: 3 },
+      { business_id: 'biz-9', pattern_key: 'outcome:format:thread:above:twitter', metric_basis: 'rate', platform: 'twitter', pattern: "On X, thread posts beat this brand's usual engagement.", wins: 9, n: 11, campaigns: 3 },
     ])
   })
 

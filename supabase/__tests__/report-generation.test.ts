@@ -28,15 +28,18 @@ import { selectOutcomePatterns } from '@/lib/memory'
 //                                and the same read with its business filter dropped is refused by verifiedReaders (TenantMismatchError)
 const NOW = MARCH_REPORT_OUTCOMES_THROUGH // 2026-04-10T06:00:00Z: Lisbon 07:00 and Sao Paulo 03:00 on day 10
 
-// An ACTIVE outcome pattern, exactly the columns the floor RPC would have written. The same cell key for both businesses on purpose:
-// only the business filter tells them apart.
-const A_PATTERN = 'A-ONLY: posts with a question opening beat your usual.'
-const B_PATTERN = 'B-LEAK-CANARY: posts with a question opening beat your usual.'
-const outcomePattern = (businessId: string, pattern: string) => ({
-  business_id: businessId, source: 'outcome', status: 'active', scope: 'platform', scope_ref: 'twitter', dimension: 'format', pattern,
-  pattern_key: 'outcome:format:question:above:twitter', platform: 'twitter', confidence: 0.5, observation_count: 10,
-  outcome_n: 10, outcome_wins: 7, outcome_distinct_campaigns: 3, interval_low: 0.4, interval_high: 0.9, metric_basis: 'rate', baseline_seeded: false,
-})
+// An ACTIVE outcome pattern, exactly the columns the floor RPC would have written. A report stores the parsed CELL of the key, never
+// the sentence (Session 37-D D2), so B's canary differs from A's by cell and counts: only the business filter keeps it out of A's payload.
+const A_KEY = 'outcome:format:question:above:twitter'
+const B_KEY = 'outcome:role:customer_proof:below:twitter'
+const outcomePattern = (businessId: string, key: string, wins: number, n: number, campaigns: number) => {
+  const [, dimension] = key.split(':')
+  return {
+    business_id: businessId, source: 'outcome', status: 'active', scope: 'platform', scope_ref: 'twitter', dimension, pattern: 'Stored English sentence for ' + key,
+    pattern_key: key, platform: 'twitter', confidence: 0.5, observation_count: n,
+    outcome_n: n, outcome_wins: wins, outcome_distinct_campaigns: campaigns, interval_low: 0.4, interval_high: 0.9, metric_basis: 'rate', baseline_seeded: false,
+  }
+}
 
 describe('report generation against the live stack (ADR 0031 §5.2, §9.3)', () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -46,7 +49,7 @@ describe('report generation against the live stack (ADR 0031 §5.2, §9.3)', () 
     const { createServiceRoleClient } = await import('@/lib/supabase/service')
     admin = createServiceRoleClient()
     await seedPortfolio(admin)
-    for (const row of [outcomePattern(BUSINESS_A_ID, A_PATTERN), outcomePattern(BUSINESS_B_ID, B_PATTERN)]) {
+    for (const row of [outcomePattern(BUSINESS_A_ID, A_KEY, 7, 10, 3), outcomePattern(BUSINESS_B_ID, B_KEY, 9, 12, 4)]) {
       const { error } = await admin.from('performance_memory').insert(row)
       if (error) throw new Error('seed performance_memory: ' + error.message)
     }
@@ -71,7 +74,7 @@ describe('report generation against the live stack (ADR 0031 §5.2, §9.3)', () 
     expect(out).toMatchObject({ status: 'generated', inserted: true, stub: false, tier: 'advanced', period: '2026-03' })
     const rows = await reportsOf(BUSINESS_A_ID)
     expect(rows).toHaveLength(1)
-    expect(rows[0]).toMatchObject({ business_id: BUSINESS_A_ID, period_month: '2026-03-01', tier: 'advanced', schema_version: 1 })
+    expect(rows[0]).toMatchObject({ business_id: BUSINESS_A_ID, period_month: '2026-03-01', tier: 'advanced', schema_version: 2 })
     expect(new Date(rows[0].outcomes_through as string).toISOString()).toBe('2026-04-10T06:00:00.000Z')
   })
 
@@ -92,9 +95,10 @@ describe('report generation against the live stack (ADR 0031 §5.2, §9.3)', () 
   })
 
   it('MAJOR-4: the patterns read is the REAL binding (no stub): the stored patterns of business A are its own row and nothing of business B', async () => {
-    const payload = (await reportsOf(BUSINESS_A_ID))[0].payload as { patterns: Array<{ pattern: string }> }
-    expect(payload.patterns.map((p) => p.pattern)).toEqual([A_PATTERN])
-    expect(JSON.stringify(payload)).not.toContain('B-LEAK-CANARY')
+    const payload = (await reportsOf(BUSINESS_A_ID))[0].payload as { patterns: Array<Record<string, unknown>> }
+    expect(payload.patterns).toEqual([{ platform: 'twitter', dimension: 'format', value: 'question', direction: 'above', basis: 'rate', wins: 7, n: 10, campaigns: 3 }])
+    // B's cell (a customer_proof role pattern, below, 9 of 12) is not among them, and no stored sentence of either business is in the payload.
+    expect(JSON.stringify(payload)).not.toContain('Stored English sentence')
   })
 
   it('MAJOR-4: the SAME read with its business filter dropped returns a row of business B, and verifiedReaders REFUSES it (TenantMismatchError); no report is stored', async () => {

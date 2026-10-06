@@ -5,14 +5,15 @@ import { BUSINESS_A_ID, BUSINESS_B_ID, MARCH_REPORT_OUTCOMES_THROUGH, EXPECTED, 
 import { REPORT_METHODOLOGY_KEYS } from '../constants'
 import { assembleReport, rankTopPosts } from '../assemble'
 import { TenantMismatchError } from '../isolation'
-import { fixtureReaders } from '../__fixtures__/readers'
+import { fixtureReaders, fixturePatternRow } from '../__fixtures__/readers'
 
 // ADR 0031 §5.3, §5.6, §9.3 — one business's report for one month, as data. The readers are fakes driven by the O2.1
 // fixture; the numbers below are the fixture's hand-computed literals.
 const NOW = MARCH_REPORT_OUTCOMES_THROUGH // 2026-04-10T06:00:00Z
-const patterns = [{ platform: 'twitter' as const, pattern: 'Posts with a question opening beat your usual.', wins: 7, n: 10, campaigns: 3 }]
-// What the reader returns: the observation plus the row identity the isolation wrapper verifies (the payload keeps only the observation).
-const patternRows = patterns.map((p) => ({ ...p, business_id: BUSINESS_A_ID, pattern_key: null }))
+// What the reader returns: the row with its identity (business_id, pattern_key) and the English sentence memory stores.
+const patternRows = [fixturePatternRow()]
+// What the payload STORES (Session 37-D D2): the parsed cell and its evidence, no sentence.
+const patterns = [{ platform: 'twitter', dimension: 'format', value: 'thread', direction: 'above', basis: 'rate', wins: 7, n: 10, campaigns: 3 }]
 const run = (businessId: string, over: { readers?: Readers; plan?: Record<string, unknown>; period?: string; loaderDeps?: Record<string, unknown> } = {}) =>
   assembleReport({
     readers: over.readers ?? fixtureReaders({ plan: over.plan, patterns: patternRows }),
@@ -26,8 +27,8 @@ describe('the Pro report: business A, March 2026', () => {
   it('is the advanced tier, for 2026-03-01, measured as of the instant it was given', async () => {
     const r = await run(BUSINESS_A_ID)
     expect(r).toMatchObject({ periodMonth: '2026-03-01', tier: 'advanced', stub: false, outcomesThrough: NOW, generatedAt: NOW })
-    expect(r.payload).toMatchObject({ schemaVersion: 1, period: '2026-03', timezone: 'Europe/Lisbon', tier: 'advanced', outcomesThrough: NOW })
-    expect(r.payload.header).toEqual({ key: 'analytics.report.header', params: { business: 'Fixture A (Lisbon)', month: '2026-03', measuredAsOf: NOW, generatedOn: NOW } })
+    expect(r.payload).toMatchObject({ schemaVersion: 2, period: '2026-03', timezone: 'Europe/Lisbon', tier: 'advanced', outcomesThrough: NOW })
+    expect(r.payload.header).toEqual({ key: 'analytics.report.header', params: { month: '2026-03', measuredAsOf: NOW, generatedOn: NOW } })
   })
 
   it('section 3, activity: 13 published, 5 the month before, 2 active and 1 completed campaign', async () => {

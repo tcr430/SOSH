@@ -1,5 +1,6 @@
 import { createElement } from 'react'
 import { ReportBody } from '@/components/analytics/ReportBody'
+import type { ReportLabels } from '@/lib/analytics/labels'
 import type { T } from '@/components/analytics/shared'
 import type { ReportPayload } from './assemble'
 import { compileReportCss, extractClasses } from './pdf-css'
@@ -30,6 +31,9 @@ export interface ReportHtmlInput {
   payload: ReportPayload
   /** The CURRENT plan's gate (A-5): the PDF shows a Pro section only while the plan allows it, exactly as the page does. */
   proAllowed: boolean
+  /** The business's current name and the resolved campaign / account labels: the stored payload holds ids only (D2). */
+  businessName: string
+  labels: ReportLabels
 }
 
 export async function buildReportHtml(input: ReportHtmlInput): Promise<string> {

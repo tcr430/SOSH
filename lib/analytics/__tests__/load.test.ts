@@ -195,7 +195,7 @@ describe('loadPortfolio, an advanced (Pro) business: March 2026, business A (Eur
     // A gap is a thin point, never a zero: January's four posts carry no median.
     expect(JSON.stringify(series.points.slice(-3)[0])).not.toContain('2.3%')
 
-    expect(ok(p.patterns)).toEqual([{ platform: 'twitter', pattern: 'Posts with a question opening beat your usual.', wins: 7, n: 10, campaigns: 3 }])
+    expect(ok(p.patterns)).toEqual([{ platform: 'twitter', pattern: 'Posts with a question opening beat your usual.', wins: 7, n: 10, campaigns: 3, cell: { platform: 'twitter', dimension: 'format', value: 'question', direction: 'above', basis: 'rate', wins: 7, n: 10, campaigns: 3 } }])
     expect(ok(p.retrospectives).map((r) => [r.campaignId, r.verdict.key])).toEqual([
       [A_CAMPAIGN_ACTIVE_ID, 'outcome.retrospective.inconclusive'],
       [A_CAMPAIGN_COMPLETED_ID, 'outcome.retrospective.verdict_supported'],
@@ -339,7 +339,7 @@ describe('tenancy: every reader is handed the caller\'s client and the caller\'s
 
   it('PATTERNS are read through the AUTHENTICATED client, active only, and the page never acquires the service-role client (MAJOR-3)', async () => {
     const p = (await portfolio(BUSINESS_A_ID)) as AdvancedPortfolio
-    expect(ok(p.patterns)).toEqual([{ platform: 'twitter', pattern: 'Posts with a question opening beat your usual.', wins: 7, n: 10, campaigns: 3 }])
+    expect(ok(p.patterns)).toEqual([{ platform: 'twitter', pattern: 'Posts with a question opening beat your usual.', wins: 7, n: 10, campaigns: 3, cell: { platform: 'twitter', dimension: 'format', value: 'question', direction: 'above', basis: 'rate', wins: 7, n: 10, campaigns: 3 } }])
     expect(mocks.listOutcomePatterns).toHaveBeenCalledWith(client, BUSINESS_A_ID, { status: 'active', platform: undefined })
     expect(guard.serviceRole).not.toHaveBeenCalled()
   })

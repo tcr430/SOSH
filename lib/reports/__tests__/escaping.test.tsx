@@ -10,7 +10,8 @@ import { makeTranslator, type Locale } from '@/lib/i18n/__test-utils__/translato
 import { makeTranslator as makeEmailTranslator } from '@/lib/email/templates/__tests__/helpers'
 import { BUSINESS_A_ID, MARCH_REPORT_OUTCOMES_THROUGH } from '@/lib/analytics/__fixtures__/portfolio'
 import { assembleReport, type ReportPayload } from '../assemble'
-import { fixtureReaders } from '../__fixtures__/readers'
+import type { ReportLabels } from '@/lib/analytics/labels'
+import { fixtureReaders, fixturePatternRow, FIXTURE_LABELS_A } from '../__fixtures__/readers'
 import { ReportBody } from '@/components/analytics/ReportBody'
 import { MonthlyReportEmail, monthlyReportSubject } from '@/lib/email/templates/monthly-report'
 import type { T } from '@/components/analytics/shared'
@@ -30,18 +31,20 @@ const tFor = (locale: Locale): T => (key, values) => {
 async function hostilePayload(): Promise<ReportPayload> {
   const base = (
     await assembleReport({
-      readers: fixtureReaders({ patterns: [{ business_id: BUSINESS_A_ID, pattern_key: null, platform: 'twitter' as const, pattern: HOSTILE, wins: 7, n: 10, campaigns: 3 }] }),
+      readers: fixtureReaders({ patterns: [fixturePatternRow()] }),
       businessId: BUSINESS_A_ID,
       period: '2026-03',
       now: MARCH_REPORT_OUTCOMES_THROUGH,
     })
   ).payload
-  return {
-    ...base,
-    header: { ...base.header, params: { ...base.header.params, business: HOSTILE } },
-    campaigns: base.campaigns?.map((c, i) => (i === 0 ? { ...c, name: HOSTILE } : c)),
-    activity: base.activity && { ...base.activity, rows: base.activity.rows.map((r, i) => (i === 0 ? { ...r, label: HOSTILE } : r)) },
-  }
+  return base
+}
+
+// Customer strings no longer live in the payload (MINOR-7): the hostile business name, campaign names and account labels enter
+// ReportBody where they now arrive, as props resolved at read time. Pattern text is gone altogether: a stored pattern is a cell.
+const HOSTILE_LABELS: ReportLabels = {
+  campaigns: Object.fromEntries(Object.keys(FIXTURE_LABELS_A.campaigns).map((id) => [id, HOSTILE])),
+  accounts: Object.fromEntries(Object.keys(FIXTURE_LABELS_A.accounts).map((id) => [id, HOSTILE])),
 }
 
 // Inert means: no LIVE tag. Escaped text may contain the characters "onerror=" (it is text); a tag may not carry one. The email
@@ -55,15 +58,15 @@ const noLiveMarkup = (html: string, { layoutImage = false }: { layoutImage?: boo
 }
 
 describe('sink 1: the report page (ReportBody)', () => {
-  it('the hostile business name, campaign name, account label and pattern text are escaped text, never markup', async () => {
-    const html = renderToStaticMarkup(<ReportBody t={tFor('en')} locale="en" timezone="Europe/Lisbon" payload={await hostilePayload()} proAllowed={true} />)
+  it('the hostile business name, campaign names and account labels are escaped text, never markup', async () => {
+    const html = renderToStaticMarkup(<ReportBody t={tFor('en')} locale="en" timezone="Europe/Lisbon" payload={await hostilePayload()} proAllowed={true} businessName={HOSTILE} labels={HOSTILE_LABELS} />)
     noLiveMarkup(html)
     expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;')
   })
 
   it('the same holds with the plain (PDF) render and on a plan without Pro', async () => {
     const p = await hostilePayload()
-    noLiveMarkup(renderToStaticMarkup(<ReportBody t={tFor('pt')} locale="pt" timezone="Europe/Lisbon" payload={p} proAllowed={false} plain />))
+    noLiveMarkup(renderToStaticMarkup(<ReportBody t={tFor('pt')} locale="pt" timezone="Europe/Lisbon" payload={p} proAllowed={false} plain businessName={HOSTILE} labels={HOSTILE_LABELS} />))
   })
 })
 
@@ -94,14 +97,14 @@ describe('sinks 2 and 3: the email body and the email subject', () => {
 
 describe('sink 4: the PDF document', () => {
   it('has no script, image, link, iframe, base or form element, and no event handler, whatever the customer strings hold', async () => {
-    const html = await buildReportHtml({ t: tFor('en'), locale: 'en', timezone: 'Europe/Lisbon', payload: await hostilePayload(), proAllowed: true })
+    const html = await buildReportHtml({ t: tFor('en'), locale: 'en', timezone: 'Europe/Lisbon', payload: await hostilePayload(), proAllowed: true, businessName: HOSTILE, labels: HOSTILE_LABELS })
     noLiveMarkup(html)
     expect(html).not.toMatch(/<(link|iframe|object|embed|base|form|a)[\s>]/i)
     expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;')
   })
 
   it('is a sealed document: exactly one CSP meta (the ADR text, verbatim), exactly one style element, no external reference', async () => {
-    const html = await buildReportHtml({ t: tFor('en'), locale: 'en', timezone: 'Europe/Lisbon', payload: await hostilePayload(), proAllowed: true })
+    const html = await buildReportHtml({ t: tFor('en'), locale: 'en', timezone: 'Europe/Lisbon', payload: await hostilePayload(), proAllowed: true, businessName: HOSTILE, labels: HOSTILE_LABELS })
     expect(PDF_CSP).toBe("default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:")
     expect(html.match(/<meta http-equiv="Content-Security-Policy"/g)).toHaveLength(1)
     expect(html).toContain(`content="${PDF_CSP}"`)
@@ -112,7 +115,7 @@ describe('sink 4: the PDF document', () => {
   })
 
   it('carries the stylesheet inline and it is the page\'s: the tokens and the print rules are in it', async () => {
-    const html = await buildReportHtml({ t: tFor('en'), locale: 'en', timezone: 'Europe/Lisbon', payload: await hostilePayload(), proAllowed: true })
+    const html = await buildReportHtml({ t: tFor('en'), locale: 'en', timezone: 'Europe/Lisbon', payload: await hostilePayload(), proAllowed: true, businessName: HOSTILE, labels: HOSTILE_LABELS })
     const css = /<style>([\s\S]*?)<\/style>/.exec(html)![1]
     expect(css.length).toBeGreaterThan(2000)
     // `@theme inline` resolves the alias, so the utilities reference the page's own variables, which the :root block defines.
@@ -127,19 +130,19 @@ describe('sink 4: the PDF document', () => {
   })
 
   it('an unknown locale falls back to en in the lang attribute (it is never written unchecked)', async () => {
-    const html = await buildReportHtml({ t: tFor('en'), locale: '"><script>x</script>', timezone: 'Europe/Lisbon', payload: await hostilePayload(), proAllowed: true })
+    const html = await buildReportHtml({ t: tFor('en'), locale: '"><script>x</script>', timezone: 'Europe/Lisbon', payload: await hostilePayload(), proAllowed: true, businessName: HOSTILE, labels: HOSTILE_LABELS })
     expect(html).toContain('<html lang="en">')
     noLiveMarkup(html)
   })
 
   it('the title is a translated key, HTML-escaped', async () => {
     const t: T = (key) => (key === 'analytics.report.title' ? '<b>"x"</b>' : tFor('en')(key))
-    const html = await buildReportHtml({ t, locale: 'en', timezone: 'Europe/Lisbon', payload: await hostilePayload(), proAllowed: true })
+    const html = await buildReportHtml({ t, locale: 'en', timezone: 'Europe/Lisbon', payload: await hostilePayload(), proAllowed: true, businessName: HOSTILE, labels: HOSTILE_LABELS })
     expect(html).toContain('<title>&lt;b&gt;&quot;x&quot;&lt;/b&gt;</title>')
   })
 
   it('the plain render invokes no client-boundary component (it renders with no link element at all)', async () => {
-    const html = await buildReportHtml({ t: tFor('en'), locale: 'en', timezone: 'Europe/Lisbon', payload: await hostilePayload(), proAllowed: false })
+    const html = await buildReportHtml({ t: tFor('en'), locale: 'en', timezone: 'Europe/Lisbon', payload: await hostilePayload(), proAllowed: false, businessName: HOSTILE, labels: HOSTILE_LABELS })
     expect(html).not.toMatch(/<a[\s>]/)
     expect(html).toContain('Available on Pro:')
   })
@@ -161,7 +164,7 @@ describe('the helpers cannot be turned against the document', () => {
   })
 
   it('the PDF stylesheet really contains the report\'s arbitrary-variant rules (section hairlines, print breaks): they are not silently dropped', async () => {
-    const html = await buildReportHtml({ t: tFor('en'), locale: 'en', timezone: 'Europe/Lisbon', payload: await hostilePayload(), proAllowed: true })
+    const html = await buildReportHtml({ t: tFor('en'), locale: 'en', timezone: 'Europe/Lisbon', payload: await hostilePayload(), proAllowed: true, businessName: HOSTILE, labels: HOSTILE_LABELS })
     const css = /<style>([\s\S]*?)<\/style>/.exec(html)![1]
     expect(css).toMatch(/section[\s\S]{0,80}border-top-style|section[\s\S]{0,80}border-top-width/)
     expect(css).toMatch(/@media print[\s\S]*break-inside:\s*avoid/)

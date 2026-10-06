@@ -16,6 +16,12 @@ vi.mock('@sentry/nextjs', () => ({ captureException: capture }))
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => (order.push('client'), client) }))
 vi.mock('@/lib/db/businesses', () => ({ getBusinessForUser }))
 vi.mock('@/lib/db/analytics-reports', () => ({ getReportById }))
+// The label readers the route resolves the payload's ids through (MINOR-7). Spies that record WHEN they run, so the order test can
+// prove the names are resolved before Chromium launches. Partial: the loader the fixture assembler uses keeps its real imports.
+const listCampaignNamesByIds = vi.hoisted(() => vi.fn())
+const listAccountLabels = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/db/campaigns', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/lib/db/campaigns')>()), listCampaignNamesByIds }))
+vi.mock('@/lib/db/social-accounts', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/lib/db/social-accounts')>()), listAccountLabels }))
 // A Pro reader being called from the PDF route would be a bug: it renders the STORED payload and recomputes nothing. These are
 // call-through spies (the fixture assembler below uses the real loader to build the stored payload), cleared after that build.
 vi.mock('@/lib/analytics/load', async (importOriginal) => {
@@ -32,16 +38,16 @@ vi.mock('@/lib/reports/pdf-html', async (importOriginal) => {
 
 import { GET } from './route'
 import { PdfBusyError, PdfTimeoutError } from '@/lib/reports/pdf'
-import { BUSINESS_A_ID, MARCH_REPORT_OUTCOMES_THROUGH } from '@/lib/analytics/__fixtures__/portfolio'
+import { A_X_ACCOUNT_ID, BUSINESS_A_ID, B_CAMPAIGN_ACTIVE_ID, FIXTURE_ACCOUNTS, FIXTURE_CAMPAIGNS, MARCH_REPORT_OUTCOMES_THROUGH } from '@/lib/analytics/__fixtures__/portfolio'
 import { assembleReport } from '@/lib/reports/assemble'
-import { fixtureReaders } from '@/lib/reports/__fixtures__/readers'
+import { fixtureReaders, fixturePatternRow } from '@/lib/reports/__fixtures__/readers'
 import type { PdfBrowser } from '@/lib/reports/pdf'
 import * as load from '@/lib/analytics/load'
 import * as pdfHtml from '@/lib/reports/pdf-html'
 
 const REPORT_ID = '3f2b8a54-9c1d-4e0a-8a6b-7d5c2e1f9a10'
 const OTHER_ID = '9a1c7e22-4b3d-4c5e-9f60-1a2b3c4d5e6f'
-const A = { id: 'biz-a', plan: 'pro', timezone: 'Europe/Lisbon', language: 'en' }
+const A = { id: 'biz-a', name: 'Acme', plan: 'pro', timezone: 'Europe/Lisbon', language: 'en' }
 
 let storedPayload: unknown
 let setContentHtml: string | undefined
@@ -62,7 +68,7 @@ const row = (over: Record<string, unknown> = {}) => ({
   business_id: 'biz-a',
   period_month: '2026-03-01',
   tier: 'advanced',
-  schema_version: 1,
+  schema_version: 2,
   payload: storedPayload,
   outcomes_through: MARCH_REPORT_OUTCOMES_THROUGH,
   generated_at: MARCH_REPORT_OUTCOMES_THROUGH,
@@ -76,7 +82,7 @@ beforeEach(async () => {
   setContentHtml = undefined
   storedPayload ??= (
     await assembleReport({
-      readers: fixtureReaders({ patterns: [{ business_id: BUSINESS_A_ID, pattern_key: null, platform: 'twitter' as const, pattern: 'Posts with a question opening beat your usual.', wins: 7, n: 10, campaigns: 3 }] }),
+      readers: fixtureReaders({ patterns: [fixturePatternRow()] }),
       businessId: BUSINESS_A_ID,
       period: '2026-03',
       now: MARCH_REPORT_OUTCOMES_THROUGH,
@@ -86,6 +92,10 @@ beforeEach(async () => {
   getBusinessForUser.mockReset().mockImplementation(async () => (order.push('business'), A))
   // The fake database: keyed on (business, id), exactly as RLS plus .eq('business_id') would answer.
   getReportById.mockReset().mockImplementation(async (_c: unknown, businessId: string, id: string) => (order.push('report'), businessId === 'biz-a' && id === REPORT_ID ? row() : null))
+  // The fake label tables answer by ids ONLY, with no business filter at all: the worst case the resolver must survive. Each row
+  // carries its own business_id, so a foreign row is visible to the resolver's own check.
+  listCampaignNamesByIds.mockReset().mockImplementation(async (_c: unknown, _b: string, ids: string[]) => (order.push('labels:campaigns'), FIXTURE_CAMPAIGNS.filter((c) => ids.includes(c.id)).map((c) => ({ id: c.id, business_id: c.business_id === BUSINESS_A_ID ? 'biz-a' : 'biz-b', name: c.name }))))
+  listAccountLabels.mockReset().mockImplementation(async (_c: unknown, _b: string, ids: string[]) => (order.push('labels:accounts'), FIXTURE_ACCOUNTS.filter((a) => ids.includes(a.id)).map((a) => ({ ...a, business_id: a.business_id === BUSINESS_A_ID ? 'biz-a' : 'biz-b' }))))
   launch.mockReset().mockImplementation(async () => (order.push('launch'), fakeBrowser()))
   capture.mockReset()
   vi.mocked(load.loadPortfolio).mockClear()
@@ -133,7 +143,9 @@ describe('every rejection happens BEFORE Chromium launches', () => {
   })
 
   it('a payload schema this build does not read is a 404, and so is a malformed period', async () => {
-    getReportById.mockResolvedValueOnce(row({ schema_version: 2 }))
+    getReportById.mockResolvedValueOnce(row({ schema_version: 3 }))
+    expect((await call()).status).toBe(404)
+    getReportById.mockResolvedValueOnce(row({ schema_version: 1 }))
     expect((await call()).status).toBe(404)
     getReportById.mockResolvedValueOnce(row({ period_month: '2026-13-01' }))
     expect((await call()).status).toBe(404)
@@ -147,7 +159,24 @@ describe('the order is auth, business, report, THEN the browser', () => {
   it('records getUser, business, report and only then the launch and the document', async () => {
     const res = await call()
     expect(res.status).toBe(200)
-    expect(order).toEqual(['client', 'getUser', 'business', 'report', 'launch', 'setContent'])
+    // The payload's ids are resolved to names by (this business, ids) BEFORE the document is built and the browser launches (MINOR-7).
+    expect(order).toEqual(['client', 'getUser', 'business', 'report', 'labels:campaigns', 'labels:accounts', 'launch', 'setContent'])
+  })
+
+  it('the ids are resolved for the SESSION business and the names reach the document; a foreign id resolves to the fallback, never to the other business\'s name', async () => {
+    const stored = storedPayload as { campaigns: Array<Record<string, unknown>> }
+    await call()
+    expect(listCampaignNamesByIds.mock.calls[0][1]).toBe('biz-a')
+    expect(listAccountLabels.mock.calls[0][1]).toBe('biz-a')
+    expect(setContentHtml).toContain('A active')
+    // The account label travels as a `t` parameter (this suite's `t` prints bare keys), so it is asserted on what the document was built with.
+    expect(vi.mocked(pdfHtml.buildReportHtml).mock.calls.at(-1)?.[0].labels.accounts[A_X_ACCOUNT_ID]).toBe('Fixture A on X')
+    expect(vi.mocked(pdfHtml.buildReportHtml).mock.calls.at(-1)?.[0].businessName).toBe(A.name)
+    // The payload now cites an id that belongs to business B, and a leaky database returns B's row for it: the fallback, never B's name.
+    getReportById.mockResolvedValueOnce(row({ payload: { ...stored, campaigns: [{ ...stored.campaigns[0], campaignId: B_CAMPAIGN_ACTIVE_ID }] } }))
+    await call()
+    expect(setContentHtml).not.toContain('B active')
+    expect(setContentHtml).toContain('analytics.campaignTable.open')
   })
 
   it('the launcher is handed to the renderer only after the document is built (a build failure never launches)', async () => {

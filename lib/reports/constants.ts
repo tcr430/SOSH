@@ -1,7 +1,12 @@
 // ADR 0031 §5.2, §5.3 — the report's fixed numbers and the closed methodology keys.
 
-/** Stored with every report so a later reader knows which payload shape it holds. */
-export const REPORT_SCHEMA_VERSION = 1
+/**
+ * Stored with every report so a later reader knows which payload shape it holds.
+ * 2 (Session 37-D D2, MINOR-7): the payload stores ids, never a business name, a campaign name, an account label or pattern text.
+ * Version 1 was never released (PR #20 is unmerged, so no production report exists at it), so no back-compat renderer is kept and a
+ * reader that meets a version it does not read still answers not-found, exactly as before.
+ */
+export const REPORT_SCHEMA_VERSION = 2
 
 /** The report's trend is 6 months (the live Pro page shows 12): a forwarded document stays one readable page per section. */
 export const REPORT_TREND_MONTHS = 6

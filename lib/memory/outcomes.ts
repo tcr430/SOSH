@@ -46,6 +46,8 @@ export async function retrieveHypothesisResults(businessId: string): Promise<Out
 export type OutcomePatternRow = OutcomeObservation & {
   readonly business_id: string
   readonly pattern_key: string | null
+  /** The cell's basis ('rate' everywhere but LinkedIn, whose cells count). Needed to pick the verb a report renders. */
+  readonly metric_basis: PerformanceMemoryRow['metric_basis']
 }
 
 // PURE (no I/O, no client): eligibility, ranking and the cap over rows a caller has ALREADY read — with the user's
@@ -71,6 +73,7 @@ export function selectOutcomePatterns(
   return rankAndCap(eligible, { platform: options.platform }, OUTCOME_CAP, now).map((r) => ({
     business_id: r.business_id,
     pattern_key: r.pattern_key,
+    metric_basis: r.metric_basis,
     platform: r.platform,
     pattern: r.pattern,
     wins: r.outcome_wins as number,

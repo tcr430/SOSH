@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import { dateLabel, monthLabel } from '@/lib/analytics/format'
-import type { BasicPlatformSection, Section as Loaded } from '@/lib/analytics/load'
+import { hydrateActivity, hydrateCampaigns, type ReportLabels } from '@/lib/analytics/labels'
+import type { BasicPlatformSection, PatternCell, PatternObservation, Section as Loaded } from '@/lib/analytics/load'
+import type { Platform } from '@/lib/db/types'
 import { REPORT_KEYS } from '@/lib/reports/constants'
 import type { ReportPayload } from '@/lib/reports/assemble'
 import { ActivitySection, BreakdownBlock, CampaignsSection, PatternsSection, PlatformResults, TrendSection } from './PortfolioView'
@@ -37,12 +39,27 @@ export interface ReportBodyProps {
   payload: ReportPayload
   /** The CURRENT plan's gate (hasAdvancedAnalytics): the A-5 ruling renders Pro sections only while it is true. */
   proAllowed: boolean
+  /** The business's CURRENT name, from the business row: the stored payload holds none (Session 37-D D2, MINOR-7). */
+  businessName: string
+  /** Campaign names and account labels resolved by (business, id) at read time (lib/analytics/labels.ts); an absent id renders its fallback. */
+  labels: ReportLabels
   /**
    * The PDF's static render (ADR 0031 V.14): no link and no client-boundary component is invoked, because a route handler
    * cannot invoke one under react-dom/server. Links become plain text (a forwarded document has nothing to navigate to).
    * Default false: the page renders exactly as before.
    */
   plain?: boolean
+}
+
+// A stored pattern is a CELL, not a sentence: the words come from the reader's locale. (D6 refines these templates and their lint.)
+function patternObservation(t: T, c: PatternCell): PatternObservation {
+  const verb = t('outcome.observed.verb_' + c.direction + (c.basis === 'count' ? '_count' : ''))
+  const pattern = t('outcome.observed.provisional_line', {
+    platform: t('analytics.platform.' + c.platform),
+    subject: t('outcome.observed.subject.' + c.dimension + '.' + c.value),
+    verb,
+  })
+  return { platform: c.platform as Platform, pattern, wins: c.wins, n: c.n, campaigns: c.campaigns, cell: c }
 }
 
 function Methodology({ t, keys }: { t: T; keys: readonly string[] }) {
@@ -130,7 +147,7 @@ function ProSections({ t, locale, payload, proAllowed, plain = false }: ReportBo
         </Section>
       )}
       {payload.patterns ? (
-        <PatternsSection t={t} patterns={ok(payload.patterns)} />
+        <PatternsSection t={t} patterns={ok(payload.patterns.map((c) => patternObservation(t, c)))} />
       ) : (
         <Section id="patterns" title={t('analytics.section.patterns')}>
           <StateNote>{t('analytics.report.notInReport')}</StateNote>
@@ -141,10 +158,10 @@ function ProSections({ t, locale, payload, proAllowed, plain = false }: ReportBo
 }
 
 export function ReportBody(props: ReportBodyProps) {
-  const { t, locale, timezone, payload, plain = false } = props
+  const { t, locale, timezone, payload, plain = false, businessName, labels } = props
   const month = monthLabel(payload.period, locale)
   const header = t(payload.header.key, {
-    business: payload.header.params.business,
+    business: businessName,
     month,
     measuredAsOf: dateLabel(payload.header.params.measuredAsOf, locale, timezone),
     generatedOn: dateLabel(payload.header.params.generatedOn, locale, timezone),
@@ -181,7 +198,7 @@ export function ReportBody(props: ReportBodyProps) {
         </ul>
       </Section>
 
-      {payload.activity && <ActivitySection t={t} activity={ok(payload.activity)} />}
+      {payload.activity && <ActivitySection t={t} activity={ok(hydrateActivity(payload.activity, labels))} />}
 
       <Section id="results" title={t('analytics.section.results')}>
         {(payload.xResults ?? []).map((r) => (
@@ -202,7 +219,7 @@ export function ReportBody(props: ReportBodyProps) {
         </Section>
       )}
 
-      {payload.campaigns && <CampaignsSection t={t} rows={ok(payload.campaigns)} plain={plain} />}
+      {payload.campaigns && <CampaignsSection t={t} rows={ok(hydrateCampaigns(payload.campaigns, labels))} plain={plain} />}
 
       <ProSections {...props} />
 

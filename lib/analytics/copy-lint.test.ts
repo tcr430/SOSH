@@ -15,7 +15,7 @@ vi.mock('next-intl/server', () => ({ getTranslations: async () => (key: string) 
 import { makeTranslator, LOCALES, type Locale } from '@/lib/i18n/__test-utils__/translator'
 import { BUSINESS_A_ID, MARCH_REPORT_OUTCOMES_THROUGH } from '@/lib/analytics/__fixtures__/portfolio'
 import { assembleReport, type ReportPayload } from '@/lib/reports/assemble'
-import { fixtureReaders } from '@/lib/reports/__fixtures__/readers'
+import { fixtureReaders, fixturePatternRow, FIXTURE_LABELS_A, FIXTURE_NAME_A } from '@/lib/reports/__fixtures__/readers'
 import { ReportBody } from '@/components/analytics/ReportBody'
 import type { T } from '@/components/analytics/shared'
 import { MonthlyReportEmail } from '@/lib/email/templates/monthly-report'
@@ -254,7 +254,7 @@ const tFor = (locale: Locale): T => (key, values) => {
 }
 async function payload(over: { plan?: Record<string, unknown>; period: string }): Promise<ReportPayload> {
   return (
-    await assembleReport({ readers: fixtureReaders({ plan: over.plan, patterns: [{ business_id: BUSINESS_A_ID, pattern_key: null, platform: 'twitter' as const, pattern: 'Posts with a question opening beat your usual.', wins: 7, n: 10, campaigns: 3 }] }), businessId: BUSINESS_A_ID, period: over.period, now: NOW })
+    await assembleReport({ readers: fixtureReaders({ plan: over.plan, patterns: [fixturePatternRow()] }), businessId: BUSINESS_A_ID, period: over.period, now: NOW })
   ).payload
 }
 
@@ -269,7 +269,7 @@ describe('(c) the rendered ReportBody of every fixture month, in every locale', 
       ['stub month', await payload({ period: '2025-11' }), true],
     ]
     for (const [name, p, pro] of cases) {
-      let rendered = text(renderToStaticMarkup(React.createElement(ReportBody, { t: tFor(locale), locale, timezone: 'Europe/Lisbon', payload: p, proAllowed: pro })))
+      let rendered = text(renderToStaticMarkup(React.createElement(ReportBody, { t: tFor(locale), locale, timezone: 'Europe/Lisbon', payload: p, proAllowed: pro, businessName: FIXTURE_NAME_A, labels: FIXTURE_LABELS_A })))
       expect(rendered, name).not.toContain('⟦missing')
       expect(rendered.length, name).toBeGreaterThan(200)
       // Only the named rendered exemption is removed (see RENDERED_EXEMPT_KEYS); every other word is matched.

@@ -1,5 +1,6 @@
 import { parseISO } from 'date-fns'
 import type { Readers } from '@/lib/analytics/load'
+import type { ReportLabels } from '@/lib/analytics/labels'
 import type { OutcomePatternRow } from '@/lib/memory'
 import {
   FIXTURE_ACCOUNTS,
@@ -55,5 +56,27 @@ export function fixtureReaders(options: FixtureReaderOptions = {}): Readers {
     listAccountLabels: async (biz, ids) =>
       FIXTURE_ACCOUNTS.filter((a) => a.business_id === biz && ids.includes(a.id)).map((a) => ({ id: a.id, business_id: a.business_id, platform: a.platform, platform_username: a.platform_username, platform_display_name: a.platform_display_name })),
     listPatterns: async (biz, q) => (options.patterns ?? []).filter((p) => p.business_id === biz && (q.platform === undefined || p.platform === q.platform)),
+  }
+}
+
+/** The business the report tests render for, and the names and labels its ids stand for (resolved at read time, never stored: D2). */
+export const FIXTURE_NAME_A = FIXTURE_BUSINESSES.find((b) => b.id === BUSINESS_A_ID)?.name as string
+export const FIXTURE_LABELS_A: ReportLabels = {
+  campaigns: Object.fromEntries(FIXTURE_CAMPAIGNS.filter((c) => c.business_id === BUSINESS_A_ID).map((c) => [c.id, c.name])),
+  accounts: Object.fromEntries(FIXTURE_ACCOUNTS.filter((a) => a.business_id === BUSINESS_A_ID).map((a) => [a.id, a.platform_display_name ?? a.platform_username])),
+}
+
+/** One ACTIVE outcome pattern row of business A, with a REAL cell key (the English sentence is what memory stores; a report never prints it). */
+export function fixturePatternRow(over: Partial<OutcomePatternRow> = {}): OutcomePatternRow {
+  return {
+    business_id: BUSINESS_A_ID,
+    pattern_key: 'outcome:format:thread:above:twitter',
+    metric_basis: 'rate',
+    platform: 'twitter',
+    pattern: "On X, thread posts beat this brand's usual engagement.",
+    wins: 7,
+    n: 10,
+    campaigns: 3,
+    ...over,
   }
 }

@@ -33,27 +33,32 @@ vi.mock('@/lib/supabase/server', () => ({ createClient: async () => client }))
 vi.mock('@/lib/db/businesses', () => ({ getBusinessForUser }))
 vi.mock('@/lib/db/analytics-reports', () => ({ getReportByPeriod, listReportIndex: listReports }))
 vi.mock('./actions', () => ({ setReportEmailAction: vi.fn() }))
+// The label readers the page resolves the payload's ids through (MINOR-7). The fake tables answer by id only, never by business.
+const listCampaignNamesByIds = vi.hoisted(() => vi.fn())
+const listAccountLabels = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/db/campaigns', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/lib/db/campaigns')>()), listCampaignNamesByIds }))
+vi.mock('@/lib/db/social-accounts', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/lib/db/social-accounts')>()), listAccountLabels }))
 
 import ReportPage from './[period]/page'
 import ReportsPage from './page'
 
-const A = { id: 'biz-a', owner_id: 'user-owner', plan: 'pro', timezone: 'Europe/Lisbon', report_email: 'admins' }
+const A = { id: 'biz-a', name: 'Acme', owner_id: 'user-owner', plan: 'pro', timezone: 'Europe/Lisbon', report_email: 'admins' }
 const row = (businessId: string, period: string, extra: Record<string, unknown> = {}) => ({
   id: 'r-' + businessId + '-' + period,
   business_id: businessId,
   period_month: period + '-01',
   tier: 'advanced',
-  schema_version: 1,
+  schema_version: 2,
   // The fields ReportBody reads (the page tests below render it): a header, a summary and the methodology keys.
   payload: {
-    schemaVersion: 1,
+    schemaVersion: 2,
     stub: false,
     period,
     timezone: 'Europe/Lisbon',
     outcomesThrough: '2026-04-10T06:00:00Z',
     generatedAt: '2026-04-10T06:00:00Z',
     tier: 'advanced',
-    header: { key: 'analytics.report.header', params: { business: 'Acme', month: period, measuredAsOf: '2026-04-10T06:00:00Z', generatedOn: '2026-04-10T06:00:00Z' } },
+    header: { key: 'analytics.report.header', params: { month: period, measuredAsOf: '2026-04-10T06:00:00Z', generatedOn: '2026-04-10T06:00:00Z' } },
     summary: [],
     methodology: { keys: [] },
     ...extra,
@@ -67,6 +72,8 @@ const DB = [row('biz-a', '2026-03'), row('biz-a', '2026-04', { stub: true }), ro
 beforeEach(() => {
   client.auth.getUser = getUser.mockReset().mockResolvedValue({ data: { user: { id: 'user-owner' } } })
   getBusinessForUser.mockReset().mockResolvedValue(A)
+  listCampaignNamesByIds.mockReset().mockImplementation(async (_c: unknown, _b: string, ids: string[]) => ids.map((id) => ({ id, business_id: 'biz-a', name: 'Name of ' + id })))
+  listAccountLabels.mockReset().mockImplementation(async (_c: unknown, _b: string, ids: string[]) => ids.map((id) => ({ id, business_id: 'biz-a', platform: 'twitter', platform_username: 'user_' + id, platform_display_name: null })))
   getReportByPeriod.mockReset().mockImplementation(async (_c: unknown, businessId: string, periodMonth: string) => DB.find((r) => r.business_id === businessId && r.period_month === periodMonth) ?? null)
   // The index reader returns id, month and the stub flag only: never a payload.
   listReports.mockReset().mockImplementation(async (_c: unknown, businessId: string) =>
@@ -109,8 +116,21 @@ describe('the report page is bound to the active business (closes #17, Tier 2)',
   })
 
   it('a stored payload with a schema version this build does not read is a 404 (never reinterpreted)', async () => {
-    getReportByPeriod.mockResolvedValue({ ...row('biz-a', '2026-03'), schema_version: 2 })
+    getReportByPeriod.mockResolvedValue({ ...row('biz-a', '2026-03'), schema_version: 3 })
     await expect(page('2026-03')).rejects.toBeInstanceOf(NotFound)
+    // Version 1 (names in the payload) never shipped and is not reinterpreted either.
+    getReportByPeriod.mockResolvedValue({ ...row('biz-a', '2026-03'), schema_version: 1 })
+    await expect(page('2026-03')).rejects.toBeInstanceOf(NotFound)
+  })
+
+  it('resolves the payload\'s ids for the SESSION business with the authenticated client, and hands ReportBody the business name and the labels (MINOR-7)', async () => {
+    getReportByPeriod.mockResolvedValue(row('biz-a', '2026-03', { campaigns: [{ campaignId: 'c1', status: 'active', published: 2, href: '/campaigns/c1', retro: null }], activity: { total: 2, previousTotal: 0, campaigns: { active: 1, completed: 0 }, rows: [{ platform: 'twitter', accountId: 'acc1', count: 2 }] } }))
+    const el = (await page('2026-03')) as React.ReactElement<{ children: React.ReactNode }>
+    const body = (React.Children.toArray(el.props.children) as React.ReactElement<{ proAllowed?: boolean; businessName?: string; labels?: { campaigns: Record<string, string>; accounts: Record<string, string> } }>[]).find((c) => c.props && 'proAllowed' in c.props)!
+    expect(listCampaignNamesByIds).toHaveBeenCalledWith(client, 'biz-a', ['c1'])
+    expect(listAccountLabels).toHaveBeenCalledWith(client, 'biz-a', ['acc1'])
+    expect(body.props.businessName).toBe('Acme')
+    expect(body.props.labels).toEqual({ campaigns: { c1: 'Name of c1' }, accounts: { acc1: 'user_acc1' } })
   })
 
   it('offers Download PDF (ADR §10.1): a plain download anchor to the PDF route for THIS report row, hidden in print, with the focus style', async () => {

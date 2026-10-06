@@ -7,6 +7,7 @@ import { getBusinessForUser } from '@/lib/db/businesses'
 import { getReportByPeriod } from '@/lib/db/analytics-reports'
 import { hasAdvancedAnalytics } from '@/lib/stripe/plan'
 import { REPORT_SCHEMA_VERSION } from '@/lib/reports/constants'
+import { resolveReportLabels } from '@/lib/analytics/labels'
 import type { ReportPayload } from '@/lib/reports/assemble'
 import { ReportBody } from '@/components/analytics/ReportBody'
 import { FOCUS, type T } from '@/components/analytics/shared'
@@ -41,6 +42,8 @@ export default async function ReportPage({ params }: Props) {
   // does not read: not found. A report is never recomputed on view.
   if (!row || row.schema_version !== REPORT_SCHEMA_VERSION) notFound()
   const payload = row.payload as unknown as ReportPayload
+  // The stored payload holds ids only (MINOR-7): names and labels resolve here, by (this business, ids), with the authenticated client.
+  const labels = await resolveReportLabels(client, business.id, payload)
 
   return (
     <div className="mx-auto max-w-5xl space-y-8 px-4 py-8 sm:px-6 print:max-w-none print:px-0 print:py-0">
@@ -56,7 +59,7 @@ export default async function ReportPage({ params }: Props) {
           {t('analytics.report.actions.pdf')}
         </a>
       </div>
-      <ReportBody t={t} locale={locale} timezone={business.timezone} payload={payload} proAllowed={hasAdvancedAnalytics(business.plan)} />
+      <ReportBody t={t} locale={locale} timezone={business.timezone} payload={payload} proAllowed={hasAdvancedAnalytics(business.plan)} businessName={business.name} labels={labels} />
     </div>
   )
 }

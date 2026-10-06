@@ -7,6 +7,7 @@ import { getBusinessForUser } from '@/lib/db/businesses'
 import { getReportById } from '@/lib/db/analytics-reports'
 import { hasAdvancedAnalytics } from '@/lib/stripe/plan'
 import { REPORT_SCHEMA_VERSION } from '@/lib/reports/constants'
+import { resolveReportLabels } from '@/lib/analytics/labels'
 import type { ReportPayload } from '@/lib/reports/assemble'
 import { buildReportHtml } from '@/lib/reports/pdf-html'
 import { launchChromium } from '@/lib/reports/pdf-launch'
@@ -27,7 +28,9 @@ export const maxDuration = 60
 //   4. load the report by (that business, the id): another business's id is a 404, indistinguishable from an unknown one;
 //   5. a payload shape this build does not read is a 404 (never reinterpreted);
 //   6. read the CURRENT plan (A-5): a Pro section is in the PDF only while the plan allows it, as on the page;
-//   7. build the document (ReportBody, escaped by React, CSP meta, inlined CSS): still no browser;
+//   7. resolve the campaign names and account labels the payload's ids stand for, by (this business, ids), with the
+//      authenticated client (the payload holds ids only: MINOR-7); a foreign or removed id is its fallback, never a label;
+//   7b. build the document (ReportBody, escaped by React, CSP meta, inlined CSS): still no browser;
 //   8. ONLY THEN launch Chromium, sealed (lib/reports/pdf.ts).
 // No path, query, header or cookie is ever handed to the browser: the document is a string.
 
@@ -62,12 +65,16 @@ export async function GET(_request: NextRequest, { params }: Ctx): Promise<NextR
 
   const translate = await getTranslations({ locale: business.language })
   const t: T = (key, values) => translate(key as never, values as never)
+  const payload = row.payload as unknown as ReportPayload
+  const labels = await resolveReportLabels(client, business.id, payload)
   const html = await buildReportHtml({
     t,
     locale: business.language,
     timezone: business.timezone,
-    payload: row.payload as unknown as ReportPayload,
+    payload,
     proAllowed,
+    businessName: business.name,
+    labels,
   })
 
   try {

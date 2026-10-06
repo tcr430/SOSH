@@ -101,7 +101,7 @@ describe('what is stored (REPORT-ONE-PER-PERIOD, REPORT-FALLBACK)', () => {
   it('the row\'s business_id and tier are the LOOP variable and the plan read, and the payload agrees', async () => {
     const m = memory({ readers: withBusiness(fixtureReaders(), { plan: 'plus' }) })
     await generateReportForBusiness(BUSINESS_A_ID, DUE, m.deps)
-    expect(m.rows[0]).toMatchObject({ business_id: BUSINESS_A_ID, tier: 'basic', schema_version: 1, outcomes_through: DUE, generated_at: DUE })
+    expect(m.rows[0]).toMatchObject({ business_id: BUSINESS_A_ID, tier: 'basic', schema_version: 2, outcomes_through: DUE, generated_at: DUE })
     expect((m.rows[0].payload as { tier: string }).tier).toBe('basic')
   })
 

@@ -1,6 +1,5 @@
-import type { OutcomeObservation } from '@/lib/memory'
 import type { OutcomeForAnalytics } from '@/lib/db/post-outcomes'
-import { loadPortfolioWith, type Activity, type AdvancedPortfolio, type CampaignTableRow, type LoaderDeps, type Readers, type TrendView } from '@/lib/analytics/load'
+import { loadPortfolioWith, type Activity, type AdvancedPortfolio, type CampaignTableRow, type LoaderDeps, type PatternCell, type Readers, type TrendView } from '@/lib/analytics/load'
 import { periodBounds } from '@/lib/analytics/period'
 import { formatRate } from '@/lib/analytics/rates'
 import { ANALYTICS_DISPLAY_FLOOR } from '@/lib/analytics/constants'
@@ -50,19 +49,25 @@ interface PayloadBase {
   generatedAt: string
   tier: 'basic' | 'advanced'
   stub: boolean
-  header: { key: string; params: { business: string; month: string; measuredAsOf: string; generatedOn: string } }
+  /** No business name: it is resolved at render from the business row (MINOR-7). */
+  header: { key: string; params: { month: string; measuredAsOf: string; generatedOn: string } }
   summary: SummaryLine[]
   /** Section 11: every closed methodology key, in every payload. */
   methodology: { keys: readonly string[] }
 }
 
+/** The activity block as STORED: account ids and counts, no label (a handle is a natural person's data). Labels resolve at render. */
+export type StoredActivity = Omit<Activity, 'rows'> & { rows: Array<{ platform: string; accountId: string | null; count: number }> }
+/** A campaign row as STORED: the id (and its link), never the name. */
+export type StoredCampaignRow = Omit<CampaignTableRow, 'name'>
+
 export interface FullPayloadParts {
-  activity: Activity
+  activity: StoredActivity
   xResults: PlatformResult[]
   ratedPosts: { titleKey: string; caveatKey: string; state: 'shown' | 'absent'; byPlatform: Array<{ platform: string; posts: TopPost[] }> }
   /** Section 6: platforms whose capability says metrics are not read: activity only. */
   unavailable: Array<{ platform: string; published: number }>
-  campaigns: CampaignTableRow[]
+  campaigns: StoredCampaignRow[]
   /** "Posts measured after {date} are not included." */
   lateOutcomes: { key: string; params: { date: string } }
 }
@@ -70,7 +75,8 @@ export interface FullPayloadParts {
 export interface ProParts {
   trend: TrendView
   observed: Array<{ platform: string; breakdowns: BreakdownView[] }>
-  patterns: OutcomeObservation[]
+  /** The parsed cells (no sentence): rendered at read time, in the reader's language. */
+  patterns: PatternCell[]
 }
 
 export type ReportPayload = PayloadBase & Partial<FullPayloadParts> & Partial<ProParts>
@@ -140,13 +146,16 @@ export async function assembleReport(input: AssembleInput): Promise<AssembledRep
     generatedAt: now,
     tier: portfolio.tier,
     stub: false,
-    header: { key: REPORT_KEYS.header, params: { business: business.name, month: period, measuredAsOf: now, generatedOn: now } },
+    header: { key: REPORT_KEYS.header, params: { month: period, measuredAsOf: now, generatedOn: now } },
     summary: [],
     methodology: { keys: REPORT_METHODOLOGY_KEYS },
   }
   const periodMonth = period + '-01'
 
-  const activity = portfolio.activity.data
+  const activity: StoredActivity = {
+    ...portfolio.activity.data,
+    rows: portfolio.activity.data.rows.map(({ platform, accountId, count }) => ({ platform, accountId, count })),
+  }
   // §5.6: nothing published in the month (a live business): a STUB, so the history has no gap. No email (O2.8).
   if (activity.total === 0) {
     return {
@@ -193,7 +202,7 @@ export async function assembleReport(input: AssembleInput): Promise<AssembledRep
     xResults,
     ratedPosts: { titleKey: REPORT_KEYS.ratedPostsTitle, caveatKey: REPORT_KEYS.ratedPostsCaveat, state: byPlatform.length > 0 ? 'shown' : 'absent', byPlatform },
     unavailable,
-    campaigns: portfolio.campaigns.data,
+    campaigns: portfolio.campaigns.data.map(({ name: omitted, ...row }) => (void omitted, row)),
     lateOutcomes: { key: REPORT_KEYS.lateOutcomes, params: { date: now } },
   }
 
@@ -207,7 +216,7 @@ export async function assembleReport(input: AssembleInput): Promise<AssembledRep
       ...(adv.platforms.status === 'ok'
         ? { observed: adv.platforms.data.flatMap((s) => (s.state === 'measured' ? [{ platform: s.platform, breakdowns: s.current.breakdowns }] : [])) }
         : {}),
-      ...(adv.patterns.status === 'ok' ? { patterns: adv.patterns.data } : {}),
+      ...(adv.patterns.status === 'ok' ? { patterns: adv.patterns.data.flatMap((p) => (p.cell ? [p.cell] : [])) } : {}),
     }
   }
 

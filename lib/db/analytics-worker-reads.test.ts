@@ -26,7 +26,7 @@ describe('analyticsWorkerReaders().listPatterns', () => {
     mocks.listOutcomePatterns.mockResolvedValue([row(A)])
     const out = await analyticsWorkerReaders().listPatterns(A, { platform: 'twitter' })
     expect(mocks.listOutcomePatterns).toHaveBeenCalledWith(mocks.service, A, { status: 'active', platform: 'twitter' })
-    expect(out).toEqual([{ business_id: A, pattern_key: 'outcome:format:k:above:twitter', platform: 'twitter', pattern: 'P.', wins: 7, n: 10, campaigns: 3 }])
+    expect(out).toEqual([{ business_id: A, pattern_key: 'outcome:format:k:above:twitter', metric_basis: 'rate', platform: 'twitter', pattern: 'P.', wins: 7, n: 10, campaigns: 3 }])
   })
 
   it('a foreign row that the selection WOULD DROP (expired, candidate, hypothesis, over the cap) still throws TenantMismatchError', async () => {

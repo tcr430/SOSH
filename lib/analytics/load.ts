@@ -11,6 +11,7 @@ import { ReadCeilingExceeded } from '@/lib/db/keyset-pager'
 import type { BusinessRow, CampaignRow, Platform } from '@/lib/db/types'
 import { listOutcomePatterns } from '@/lib/db/memory-performance'
 import { selectOutcomePatterns, type OutcomeObservation, type OutcomePatternRow } from '@/lib/memory'
+import { parsePatternKey } from '@/lib/outcomes/pattern-key'
 import { metricsReadAvailableFor } from '@/lib/social'
 import { hasAdvancedAnalytics } from '@/lib/stripe/plan'
 import { OUTCOME_MATURITY_DAYS } from '@/lib/outcomes/constants'
@@ -106,6 +107,31 @@ export type PlatformSectionOf<V> =
 export type BasicPlatformSection = PlatformSectionOf<BasicPlatformMonthView>
 export type AdvancedPlatformSection = PlatformSectionOf<PlatformMonthView>
 
+/**
+ * A pattern as the report STORES it: the parsed cell of the row's pattern_key plus its evidence, and no text. The sentence is
+ * rendered from it at read time, in the reader's language (Session 37-D D2, MINOR-7; D6, MAJOR-2).
+ */
+export interface PatternCell {
+  platform: string
+  dimension: string
+  value: string
+  direction: 'above' | 'below'
+  basis: 'rate' | 'count'
+  wins: number
+  n: number
+  campaigns: number
+}
+
+/** What the loader returns: the live observation (its sentence is shown on the page only) plus the cell, null when the key does not parse. */
+export type PatternObservation = OutcomeObservation & { cell: PatternCell | null }
+
+export function patternCellOf(row: Pick<OutcomePatternRow, 'pattern_key' | 'metric_basis' | 'wins' | 'n' | 'campaigns'>): PatternCell | null {
+  const key = parsePatternKey(row.pattern_key)
+  if (!key || (key.direction !== 'above' && key.direction !== 'below')) return null
+  if (row.metric_basis !== 'rate' && row.metric_basis !== 'count') return null
+  return { platform: key.platform, dimension: key.dimension, value: key.value, direction: key.direction, basis: row.metric_basis, wins: row.wins, n: row.n, campaigns: row.campaigns }
+}
+
 export interface RetroView {
   verdict: { key: string; params: { n: number } }
   beat: { key: 'outcome.retrospective.posts_beat'; params: { wins: number; n: number } } | null
@@ -156,7 +182,7 @@ export type BasicPortfolio = PortfolioBase<BasicPlatformSection> & { tier: 'basi
 export type AdvancedPortfolio = PortfolioBase<AdvancedPlatformSection> & {
   tier: 'advanced'
   trend: Section<TrendView>
-  patterns: Section<OutcomeObservation[]>
+  patterns: Section<PatternObservation[]>
   retrospectives: Section<RetrospectiveListRow[]>
   accounts: Section<AccountComparisonRow[]>
 }
@@ -349,8 +375,8 @@ export async function loadPortfolioWith(
   // Patterns are a Readers member like every other read (Session 37-D D1): the page binds the AUTHENTICATED client, the
   // report worker binds a verified service-role wrapper. The row's identity (business_id, pattern_key) stays inside the
   // reader; the portfolio carries only the observation.
-  const patterns = await guarded(async (): Promise<OutcomeObservation[]> =>
-    (await r.listPatterns(businessId, {})).map(({ platform, pattern, wins, n, campaigns }) => ({ platform, pattern, wins, n, campaigns })),
+  const patterns = await guarded(async (): Promise<PatternObservation[]> =>
+    (await r.listPatterns(businessId, {})).map((row) => ({ platform: row.platform, pattern: row.pattern, wins: row.wins, n: row.n, campaigns: row.campaigns, cell: patternCellOf(row) })),
   )
   const retrospectives = await guarded(async (): Promise<RetrospectiveListRow[]> => {
     const rows = await r.listCompletedRetrospectivesInRange(businessId, { start: first.start, end: current.end })
@@ -401,7 +427,7 @@ function compareAccounts(a: string | null, b: string | null): number {
 
 interface ProParts {
   trend: Section<TrendView>
-  patterns: Section<OutcomeObservation[]>
+  patterns: Section<PatternObservation[]>
   retrospectives: Section<RetrospectiveListRow[]>
   accounts: Section<AccountComparisonRow[]>
 }
