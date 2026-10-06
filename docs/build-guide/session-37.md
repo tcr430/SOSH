@@ -1965,6 +1965,885 @@ resolution log.
 > **ECC budget, set when §4 is authored**, sized to the findings. The default is one targeted reviewer per
 > BLOCKER area, dispatched once.
 
+**✅ AUTHORED 2026-10-05 — the placeholder above is retained as the specification this section was written
+against; everything below is the section itself.**
+
+**Filled in from `docs/reviews/session-37-reviewer.md`** (Reviewer range **`0da603b4a..cea74d843`**: 14 non-merge
+commits, `O2.1` `10f5f534a` … `O2.12` `cea74d843`, on branch `session-37-adr-0031`, **PR #20, a draft open against
+`master`**). **Thirteen steps: D0–D12.** Correction passes are normal, not failures (constitution). **There is no
+independent re-review pass this session** (mirroring 23-D…36-D). This pass fixes the Reviewer's findings and
+records its own resolutions in the Reviewer's file. The founder adjudicates close-out.
+
+**Reviewer's tally: 0 BLOCKER, 10 MAJOR, 12 MINOR, 7 NIT, for 29 findings. Every one appears exactly once in the
+disposition table below, including every MINOR and NIT.** Nine are wholly or partly **ADR findings** (MAJOR-1,
+MAJOR-6, MAJOR-8, MAJOR-9, MINOR-2, MINOR-6, MINOR-7, MINOR-8, NIT-2). Each closes with an appended ADR 0031 entry
+(D11) as well as code where the table says so.
+
+> **Every finding is fixed in this pass. None is deferred.** The founder instruction for this pass is
+> *"include all items identified"* (2026-10-05). Eight findings change customer-visible copy, the stored
+> payload's personal data, or the ADR's delivery semantics. This guide may not decide those, so they wait on
+> founder rulings **A-8…A-15**, recorded below with a recommendation each. A step gated on a ruling **does not
+> begin** while its ruling reads PENDING. Under a ruling's losing branch, a finding may close as **RULED**: an ADR
+> amendment recording why the current behaviour stands. **RULED is a resolution, not a deferral.** No finding
+> closes as LAUNCH-GATED this session: nothing here needs the hosted project.
+
+**This pass starts from a pushed, GREEN range.** At `cea74d843`, `app-tests` (run 37343927608, skip-guard
+`417 file(s) … (6594/6594)`) and `db-tests` (run 37343927865, skip-guard `122 file(s) … (1381/1381)`) are green,
+and the Reviewer re-derived every number by hand and found **they match**. **None of the defects is a wrong number.
+Four kinds of defect remain, each something the tests could not see:**
+- **A correct number with the wrong label.** MAJOR-8 (a wins n printed as "measured posts"), MAJOR-9 (an IQR
+  printed as "range"), MAJOR-7 (a rate with no platform, a win count with no "usual"), MAJOR-1 (a true month
+  described as "Nothing published yet"), MINOR-1, MINOR-2, MINOR-6.
+- **A guarantee that holds by accident rather than by design.** MAJOR-3 (a service-role read in a page, which scan
+  #16 cannot see), MAJOR-4 (the one worker read outside `verifiedReaders`), MAJOR-10 (a truncated read under an
+  aggregate), MINOR-11 (the ceiling's two halves are each tested, but never together).
+- **A silent operational hole.** MAJOR-5 (businesses past the 2,000th id are never visited, and nothing reports
+  it), MINOR-8 (a failed delivery is never retried), NIT-6.
+- **Text outside the closed template set.** MAJOR-2 (memory's English sentence printed raw in every locale), and
+  MINOR-7 (personal data in a write-once snapshot that the §D2.5 row does not describe).
+
+---
+
+### Founder adjudications — **eight required (A-8 … A-15)**
+
+A-1…A-7, A-3′ and O-1…O-3 (§0.2) stand untouched and are **not** reopened. The eight below each change copy a
+customer reads, what a write-once table stores about a person, or what the ADR promises about delivery. This guide
+records a recommendation for each. **Each gated step names its ruling and STOPS if that ruling is PENDING.**
+
+| # | Finding | Question | Recommendation (this guide) | Decision |
+|---|---|---|---|---|
+| **A-8** | MAJOR-1 | What does a Pro page or report show under *Observed patterns* when the month has posts but no pattern has reached the learning floor? | **(a) A new §8.2 state, `analytics.state.noPatternYet`.** Proposed EN: *"No pattern has enough evidence yet. Jemip only learns a pattern from at least 10 posts across 3 campaigns."* PT and ES are translated naturally in D6 and shown in the commit body. Loser (b): reuse `state.empty`, which is false whenever posts exist (the finding). Loser (c): omit the section, which hides a Pro section the customer pays for and reads as broken. | **(a) RULED by the founder, 2026-10-05** ("Assume the recommendations", in the Session 37 conversation). The recommendation above stands unchanged. |
+| **A-9** | MAJOR-8 | When a win count is below the display floor, what does the wins slot say? | **(a) Its own thin key, `analytics.state.thinWins`, whose n is the baseline count and names it.** Proposed EN: *"{n, plural, one {# post} other {# posts}} had a usual to compare against. A win count appears from 5."* Loser (b): keep the shared thin key and pass it the measured n. The slot would then be thin while claiming the measured count is high enough, a contradiction on the same screen. Loser (c): hide the slot below the floor, which makes the floor invisible, against §8's "say why there is no number". | **(a) RULED by the founder, 2026-10-05** ("Assume the recommendations", in the Session 37 conversation). The recommendation above stands unchanged. |
+| **A-10** | MAJOR-9 | At n ≥ 10, what is the spread called? | **(a) Two templates, chosen by `rangeKind`.** Below 10, *"(range {lo}–{hi})"* stays. From 10: *"(middle half of posts {lo}–{hi})"*. The methodology `median` key gains: *"Below 10 posts the range is lowest to highest; from 10 it is the middle half of posts."* Loser (b): show min–max at every n. ADR §2.3 chose the IQR deliberately, because one viral post would otherwise define "range". Loser (c): print "IQR", which is jargon in a board document. | **(a) RULED by the founder, 2026-10-05** ("Assume the recommendations", in the Session 37 conversation). The recommendation above stands unchanged. |
+| **A-11** | MINOR-6 | Is a breakdown value with fewer than 5 posts shown as "k of n" or as thin? | **(a) Thin.** The value's row prints `analytics.breakdown.thinValue`, *"Fewer than 5 posts"*, with no k or n. That is §8.1's display floor applied as written ("a 'k of n'" is floored at 5). Loser (b): counts from n = 1 (today's behaviour), recorded as an ADR exception. "0 of 1 beat your usual. (Provisional)" in a board document is precisely what §8.1 exists to prevent. | **(a) RULED by the founder, 2026-10-05** ("Assume the recommendations", in the Session 37 conversation). The recommendation above stands unchanged. |
+| **A-12** | MINOR-7 | Does the write-once snapshot store display labels (business name, campaign names, account handles, pattern text)? | **(a) No: store ids and resolve labels at render.** The payload stores `campaignId`, `accountId` and the pattern cell (D6), never a name. The page and the PDF route resolve names with the authenticated client by (business, id). A removed campaign renders the existing "Open campaign" fallback, and a removed account renders the existing `UNRECORDED_KEY` (*"Account not recorded or since removed"*). The email, sent once at generation, may use live labels because nothing stores it. The §D2.5 row then stays **true as written**. Loser (b): amend ADR §11 and the §D2.5 row to declare the labels. The table is write-once even for service-role, so a natural person's handle (Session 38's founder profiles) could be rectified only by erasing the whole business. | **(a) RULED by the founder, 2026-10-05** ("Assume the recommendations", in the Session 37 conversation). The recommendation above stands unchanged. |
+| **A-13** | MINOR-8 | Is a delivery failure after a successful insert retried? | **(a) Yes, bounded and idempotent.** On a tick that finds the M−1 report already `exists` and non-stub, and whose `created_at` is under **72 h** old, the worker makes **one** read of the business's `email_outbox` rows whose dedupe token starts `report:{YYYY-MM}:`. If there are fewer of them than `resolveReportRecipients` returns, it re-runs `deliverMonthlyReport`, and `email_outbox_dedupe_uq` (`20260607100000_email_outbox.sql:27`) makes every already-queued member a no-op. Loser (b): accept and record. A board document is silently never sent and only Sentry knows. Loser (c): a `delivered_at` column on `analytics_reports`. That needs a migration and breaks the write-once trigger the table exists for. | **(a) RULED by the founder, 2026-10-05** ("Assume the recommendations", in the Session 37 conversation). The recommendation above stands unchanged. |
+| **A-14** | MAJOR-10 | What does "N active campaigns, M completed" mean for a past month? `campaigns` has no status history (`created_at`/`updated_at` only), and L-1 forbids a history table. | **(a) Make it true of the month, from reads the loader already makes.** The new line is *"Posts came from {n, plural, one {# campaign} other {# campaigns}}. {m, plural, one {# campaign} other {# campaigns}} completed {its|their} retrospective this month."* N is the distinct non-NULL `campaign_id`s of the month's published posts, and M is `monthRetros.length`. Campaign **names** are then read **by id** for exactly those ids (chunked, bounded by the ids), never through the 100-row `listCampaigns`. That removes the truncated read entirely. Loser (b): exact head counts of **current** statuses, labelled "now". A past month's write-once report would freeze today's state into last month's document. Loser (c): keep the wording and use head counts, which is false for every past month. | **(a) RULED by the founder, 2026-10-05** ("Assume the recommendations", in the Session 37 conversation). The recommendation above stands unchanged. |
+| **A-15** | NIT-4 | May the ADR §8.2 literals carry ICU plural forms? (V.17 D4 left them as "locked copy".) | **(a) Yes.** Every literal with a count becomes `{n, plural, one {…} other {…}}`. The `other` branch is byte-identical to today's ADR literal, so the en text the ADR quotes is unchanged for n ≠ 1. `S37-STATE-LITERALS` in `docs/backlog.md` gains an appended "closed by 37-D D9" pointer. Loser (b): keep "1 measured posts". The founder's instruction includes every finding, and the only reason it was left was the lock. | **(a) RULED by the founder, 2026-10-05** ("Assume the recommendations", in the Session 37 conversation). The recommendation above stands unchanged. |
+
+> **All eight ruled (a), founder, 2026-10-05:** *"Assume the recommendations."* No step is gated any longer, and
+> no finding is expected to close as RULED. The losing-branch text below stays as the record of what was not
+> chosen. The correction pass itself has **not** started: the founder said *"don't move to the correction pass
+> just yet"*. D0 runs only when the founder says so.
+
+**Under a losing branch:** the step omits that change, D11 records the ruling as an ADR 0031 amendment, and the
+finding closes as **RULED**. MAJOR-10's **truncated-read half** closes as a FIX under every branch of A-14: under
+(b) or (c) the counts become exact head counts behind the ceiling, so no branch leaves an aggregate over a
+truncated read.
+
+**Engineering decisions this pass takes without a ruling, with the reason:**
+
+| Finding | Remedy chosen | Loser (rationale) |
+|---|---|---|
+| **MAJOR-3 + MAJOR-4** | **Patterns become a `Readers` member.** `listPatterns(businessId, { platform })` is bound to a client like every other reader. The page binds `listOutcomePatterns(client, …)`, the authenticated function at `lib/db/memory-performance.ts` whose comment already names it for "the campaign PAGE". The worker binds the same function with its service-role client, **inside `verifiedReaders`**. Its rows are `PerformanceMemoryRow`, which carry `business_id`, so the wrapper checks them like every other read. Eligibility and ranking (`isEligible`, `rankAndCap`) move into a **pure** `lib/memory` export that both callers share, so `retrieveOutcomePatterns`'s generation behaviour is byte-unchanged. `load.ts` loses its default import of `retrieveOutcomePatterns`. | Keeping `retrievePatterns` as a loader dependency and adding a separate authenticated variant: two binding mechanisms for one read, and the worker's would still sit outside `verifiedReaders`. That is MAJOR-4's root cause. |
+| **MAJOR-3 (scan)** | **Scan #16 gains a second arm:** no non-test file under `lib/analytics/**` or the analytics/report page roots imports any export of `lib/db/memory-performance.ts` or `lib/memory/outcomes.ts` that acquires the service-role client. The list is derived by grepping those two files for `createServiceRoleClient`, not hand-written, with a vacuity floor of ≥ 1. A loader test runs through the **default** dependencies with `@/lib/supabase/service` mocked to throw (the `analytics-reads.test.ts` technique). | Making #16 a full transitive import graph walk: correct, but a new tool for one finding. The derived list plus the throwing factory together catch MAJOR-3's exact shape. |
+| **MAJOR-5** | **The tick stops starving, and when it cannot reach everyone it says so.** (1) The scan cursor starts at a deterministic offset derived from the tick's hour (the first 32 hex digits of `sha256(<tick hour ISO>)`, formatted as a uuid), scans ids above it, then wraps to ids at or below it, all under `REPORT_SCAN_CAP`. (2) Errors count against their own `REPORT_ERROR_CAP` (25), not the generation budget. (3) `capped` is set whenever a tick ends by **either** cap with unscanned rows remaining, and the cron route reports a capped tick to the Sentry monitor as a check-in with status `error`, so it alerts. The bound is recorded in ADR 0031: each tick covers `min(1, 2000 / N)` of the id space. Past ~2,000 eligible businesses the alert is the guarantee, not coverage. | Persisting a cursor: a new table, so a migration, RLS, a §D2.5 decision and an operator write path, for a latent scale problem. An anti-join candidate RPC: a new SQL function, which ADR 0031 §11 permits only as the one declared exception that V.1 did not need. |
+| **MAJOR-6** | **Bound the filter bar's width.** Its flex parent gets `min-w-0 w-full`, and the `<select>` gets `w-full max-w-full` (the long option then truncates inside the native control). D10 re-measures **every** element whose computed `overflow-x` is `auto` or `scroll`, not only `document.documentElement`. ADR §10.4's acceptance measure is amended to the same wording at D11. | Shortening the option's copy: the next long account name or locale breaks it again. |
+| **MAJOR-7** | **A platform heading, not a new sentence.** The summary and the email group rate and win lines under a platform label (the existing platform name keys). Each win line is followed by the same usual-definition and drift disclosure keys section 4 already renders (§2.4). There is **no new template**, because a heading is not a §8.4 sentence. | A new templated sentence ("On X, …"): it widens §8.4's closed set for something a heading already says. |
+| **MINOR-1** | `report.section.trend6`, *"6-month trend"*, passed to `TrendSection` as a heading prop from `ReportBody`. The page keeps `analytics.section.trend`. | Deriving the label from the series length: a heading that changes when data is thin. |
+| **MINOR-2** | Two coverage keys, `coverage.generated` (today's text) and `coverage.all` (*"Covers {k} of {n} measured posts."*), chosen by the breakdown's population. `length_band` and `cta_present` use `coverage.all`. | One key with a select param: it hides the population rule inside the copy. |
+| **MINOR-3** | **The interval in the payload.** `RetrospectiveForAnalytics` already selects `interval_low`/`interval_high` (`lib/db/campaign-retrospectives.ts:329`). The report's section 7 row renders them through the existing `interval` key ("likely between", the one exempt key). | An ADR note saying section 7 is the portfolio table: the data is already read, so dropping it is a choice nobody needs. |
+| **MINOR-4** | **Values stay stored; identity resolves at render.** The write-once snapshot keeps `{ postId, rate, badge }`. That is recorded at D11 as the ADR deviation, because a snapshot is meant not to change. At render, the page and the PDF read the cited post ids by (business, id) with the authenticated client: a present post renders its platform, date and a link, and an absent one renders `report.post.removed`, *"Post removed"*, which ADR §5.1 already specifies. | Re-reading values from `post_outcomes`: a write-once report whose numbers change after the fact. Leaving it: the three rows identify nothing, and §5.1's "Post removed" never renders. |
+| **MINOR-5** | The ADR §8.1 sentence verbatim in `report.methodology.floors`, en/pt/es, with a **content** test (not key presence). | — |
+| **MINOR-9** | One term per locale, matching the §8.2 literals: pt **"interação"**, es **"interacción"**. A parity test forbids `envolvimento` in pt and `engagement` in es analytics, report and email strings. | Choosing the minority term: it would rewrite the ADR literals. |
+| **MINOR-10** | **Recorded, not rewritten.** The appendix cites the Reviewer's own §10 re-redden of all 10 scans as the redden record, and V.15 as the per-skill record. `cb0f96e72` and `266f67456` are pushed and not amended. Every step of this pass pastes its redden transcript into its own commit body, and D12 checks it. | Amending pushed commits under an open PR. |
+| **MINOR-11** | `READ_CEILING` becomes an injectable loader dependency, defaulting to the constant. A loader test runs the **real** `readAllPages` over the fixture with the ceiling at 10 and asserts the section's error state. The generator test asserts that no report row is stored. | Lowering the global constant in a test: it would also redden the constant-pin tests, which prove something else. |
+| **MINOR-12** | The full SHARED-FUNCTION CALLERS table, with `hasAdvancedAnalytics`'s page caller and the new `listPatterns` binding, goes in an appended ADR entry at D11 (V.18 is not edited), with the test file:line for each caller. | — |
+| **NIT-1** | ADR 0031's **status line** and the two "awaiting" headings (§0.1, §3) are corrected in place, because a status line states current status by convention. The old text is quoted in the appendix. `current-phase.md`'s "before ADR 0031 can be marked Accepted" is corrected the same way. | Appending a note under a header that still says "It becomes Accepted when…": the reader meets the wrong status first. |
+| **NIT-2** | ADR amendment (D11): §10.1's Print action **is** the browser's print of the page under its print stylesheet, with no button. Download PDF is the document action. §10.6's two islands stand. | A third client island for a Print button. |
+| **NIT-3** | `min-h-6` (24 px) plus vertical padding on the standalone analytics links ("See every post" and the campaign links), measured in D10's browser pass. | Relying on WCAG 2.5.8's spacing exception, unmeasured. |
+| **NIT-5** | `patternEvidence` becomes plural-aware. pt/es `report.stub` are reworded to drop the repeated noun (pt *"Nenhuma publicação em {month}."*, es *"Ninguna publicación en {month}."*). `product-status.md` reads *"LinkedIn: posts published only (no engagement numbers)"*. | — |
+| **NIT-6** | `resolveReportRecipients` reads `REPORT_RECIPIENT_MAX + 1`. If the extra row arrives, it captures one Sentry message naming the business id and returns the first 200 in a stable order (`created_at, id`). | Paging past 200: no seat cap reaches it, so a signal is proportionate. |
+| **NIT-7** | ADR amendment (D11) adds `--no-sandbox` to §5.5's list, with why it is acceptable here (JavaScript off, every request aborted, the CSP, `setContent` only) and that it is standard on serverless Chromium. The launch-checklist Chromium-on-Vercel row gains the same sentence. | — |
+
+---
+
+### What the Reviewer found — disposition of all 29 findings (`session-37-reviewer.md` is authoritative)
+
+| ID | Tier | One line | Disposition | Step |
+|---|---|---|---|---|
+| **MAJOR-3** | MAJOR (client role) | `/analytics` reads patterns through a service-role function; scan #16 is green over it | FIX (`Readers.listPatterns`, scan #16 arm 2, throwing-factory test) | **D1** |
+| **MAJOR-4** | MAJOR (worker tenancy) | The worker's patterns read bypasses `verifiedReaders`; no Tier-1 test executes it | FIX (verified read + Tier-1 B-row test) | **D1** |
+| **MINOR-7** | MINOR (GDPR, **ADR** §11) | The snapshot stores names and handles that §D2.5 does not describe | FIX under **A-12(a)**, or RULED under A-12(b) | **D2 + D11** |
+| **MAJOR-10** | MAJOR (truncated aggregate) | Campaign counts are computed over a 100-row read and are current, not the month's | FIX (read by id; counts per **A-14**) | **D3** |
+| **MAJOR-5** | MAJOR (operational) | Businesses past the 2,000th id are never visited, and failing ids starve the tick, silently | FIX (wrapping offset, error cap, capped alert) | **D4** |
+| **MINOR-8** | MINOR (**ADR** §5.2) | A delivery failure after insert is never retried | FIX under **A-13(a)**, or RULED under A-13(b) | **D4 + D11** |
+| **NIT-6** | NIT | Recipients truncate at 200 without a signal | FIX (+1 read, Sentry signal) | **D4** |
+| **MINOR-11** | MINOR (test strength) | The ceiling's composition (real pager to error state) is untested | FIX (injectable ceiling, real-pager test) | **D5** |
+| **MAJOR-2** | MAJOR (i18n, §8.4) | Patterns print memory's English sentence raw in every locale | FIX (rendered from the `pattern_key` cell through analytics keys) | **D6** |
+| **MAJOR-1** | MAJOR (**ADR** §10.2) | "Nothing published yet" under Observed patterns in a month with posts | FIX under **A-8(a)**, or RULED under A-8(b) | **D6 + D11** |
+| **MAJOR-8** | MAJOR (**ADR** §8.1) | The thin key reused for a win count mislabels its n | FIX under **A-9(a)**, or RULED under A-9(b) | **D7 + D11** |
+| **MAJOR-9** | MAJOR (**ADR** §2.3/§8.4) | At n ≥ 10 the IQR is printed as "range" | FIX under **A-10(a)**, or RULED under A-10(b) | **D7 + D11** |
+| **MINOR-6** | MINOR (**ADR** §8.1/§2.6) | Breakdown "k of n" rows render below the display floor | FIX under **A-11(a)**, or RULED under A-11(b) | **D7 + D11** |
+| **MAJOR-7** | MAJOR (§2.4) | The summary and the email state a win count without "usual" and a rate without its platform | FIX (platform heading + disclosure keys) | **D8** |
+| **MINOR-1** | MINOR | The report's 6-month trend is headed "12-month trend" | FIX | **D8** |
+| **MINOR-3** | MINOR | Report section 7 omits the retrospective interval | FIX | **D8** |
+| **MINOR-4** | MINOR (**ADR** §5.1) | Cited posts are copied, and "Post removed" never renders | FIX (identity at render) + ADR record of the stored values | **D8 + D11** |
+| **MINOR-2** | MINOR (**ADR** §2.6) | The "aren't classified" clause sits under breakdowns that classify every post | FIX (population-specific coverage) | **D9** |
+| **MINOR-5** | MINOR | The methodology omits the learning-floor sentence | FIX (+ content test) | **D9** |
+| **MINOR-9** | MINOR | Inconsistent terms in pt and es | FIX (+ parity test) | **D9** |
+| **NIT-4** | NIT | Plural defects in the §8.2 literals | FIX under **A-15(a)**, or RULED under A-15(b) | **D9 + D11** |
+| **NIT-5** | NIT | Copy nits (plural, stub, product-status) | FIX | **D9** |
+| **MAJOR-6** | MAJOR (§10.4, **ADR**) | `/analytics/posts` overflows at 320 px inside `<main>`; #35 was closed on a measure that cannot see it | FIX (width bound + full re-measure) + ADR §10.4 measure amended | **D10 + D11** |
+| **NIT-3** | NIT | Some targets under 24 px | FIX (measured) | **D10** |
+| **NIT-1** | NIT (ADR text) | The ADR header and two headings still read as Proposed; `current-phase.md` likewise | FIX (in place, old text quoted) | **D11** |
+| **NIT-2** | NIT (**ADR** internal conflict) | §10.1 Print against §10.6 two islands | FIX (ADR amendment) | **D11** |
+| **NIT-7** | NIT | Chromium `--no-sandbox` unrecorded | FIX (ADR + launch-checklist sentence) | **D11** |
+| **MINOR-12** | MINOR (process) | SHARED-FUNCTION CALLERS table incomplete | FIX (appended table; D1's test covers the new binding) | **D1 + D11** |
+| **MINOR-10** | MINOR (process) | Redden transcripts and the per-skill record are not in the commit bodies | FIX (recorded in the appendix; every 37-D commit carries its own) | **D11 + D12** |
+
+**Count check, re-run at D12:** 29 rows, 29 distinct IDs, and every ID from the Reviewer's report exactly once
+(MAJOR-1…10; MINOR-1…12; NIT-1…7). **Zero DEFERRED. At most eight RULED** (MAJOR-1, MAJOR-8, MAJOR-9, MINOR-6,
+MINOR-7, MINOR-8, NIT-4, and MAJOR-10's **wording** half), each only under its ruling's losing branch. **Zero
+LAUNCH-GATED.** If the check fails, the pass is not closed.
+
+---
+
+### Ordering rationale
+
+1. **D0 first.** `docs/reviews/session-37-reviewer.md` is **untracked**. It must enter git exactly as written, so
+   that the appendix diff proves itself additive. This §4 is the pass's work order and lands in the same commit.
+2. **Client role, tenancy and personal data first, regardless of severity label** (the 35-D binding rule). **D1**
+   (MAJOR-3, MAJOR-4) puts the last unverified read behind `verifiedReaders` and takes service-role out of the
+   page. **D2** (MINOR-7) changes what the write-once table stores about people. It goes before every other
+   payload change, so D3–D8 build on the id-only shape and the schema version moves **once**.
+3. **D3–D5 are the remaining correctness of the inputs:** the truncated campaign read (D3), the tick that never
+   reaches some businesses, plus delivery and the recipient signal in the same worker files (D4), and the
+   ceiling's composition (D5). They come before any label change, so that D6–D8's render tests run over final
+   inputs.
+4. **D6–D8 are what a customer reads, in the order of the page:** patterns (D6), then the number labels (D7),
+   then the summary, email and report-only sections (D8). D6 and D7 are gated on rulings; **D8 needs none**, and it
+   may run while A-8…A-11 are pending as long as D6 and D7 are then taken in order.
+5. **D9 is copy hygiene across all three locales**, after every key the earlier steps added exists, so the parity
+   tests see the final key set.
+6. **D10 is the browser pass**, after every render change, because it measures the final page.
+7. **D11 is documentation truth, after every code step**, because every amendment cites the test that proves it.
+8. **D12 pushes last** to PR #20, runs the one deferred subagent, re-dates every constraint and closes Track O.
+
+**No migration in this pass.** No finding needs SQL. A-13 relies on the existing `email_outbox_dedupe_uq`, A-14 on
+existing columns, and MAJOR-5 deliberately avoids a cursor table. **If any step appears to need SQL, STOP.**
+
+---
+
+### Where resolutions go (CLAUDE.md — `REVIEWER-REPORT APPEND-ONLY`, revised Session 23-D)
+
+Resolutions go **into `docs/reviews/session-37-reviewer.md`**, under one appended, attributed
+`## CORRECTION PASS (Session 37-D)` section at the end, below the Reviewer's closing line (*"Session 37 review
+complete - 29 findings …"*). There is no separate corrections file.
+
+**The Reviewer's text is immutable:**
+- Not one character is edited.
+- No verdict is flipped, and no `RESOLVED` is stamped.
+- This covers §0's "What I ran" table, §1's hand re-derivation table, §8's browser table, §10's scan and
+  callers tables, every finding and "What I could NOT verify".
+
+**The appendix itself:**
+- It references findings **by ID** and records *finding → fix → proving test → reddening → SHA*.
+- A disputed finding is argued in the appendix, never erased. (Disagreeing with a finding is not grounds to skip
+  it.)
+- A **RULED** row quotes its A-n decision.
+
+**Never weaken a test to reach green.** These assertion changes are permitted, and each is recorded with the old
+assertion quoted:
+- **D2:** payload-shape assertions that expect a name where the payload now holds an id (under A-12(a)).
+- **D3:** the activity-campaigns assertions (under A-14).
+- **D6:** any test that asserted the injected English pattern sentence. Those tests were the blind spot MAJOR-2
+  names.
+- **D7 / D9:** a copy assertion whose text the ruling changed (A-9, A-10, A-11, A-15), quoting the ruling.
+
+Nothing else flips. ADR 0031 §0–§16 and its V.1–V.20 appendix are **not** edited, except NIT-1's status line and
+two headings, with the old text quoted. Amendments are one appended section (D11). The permitted in-place document
+edits are:
+- **ADR 0031:** the status line and the §0.1 / §3 "awaiting" headings (NIT-1).
+- **`docs/current-phase.md`:** the "before ADR 0031 can be marked Accepted" sentence (NIT-1), and the
+  constraint→CI map re-dated at D12, with its prior text quoted.
+- **`docs/product-status.md`:** the "LinkedIn as counts" phrase (NIT-5).
+- **`docs/launch-checklist.md`:** one sentence on the Chromium-on-Vercel row (NIT-7).
+- **`docs/backlog.md`:** an appended "closed by 37-D" pointer on `S37-STATE-LITERALS` (A-15(a) only).
+
+**Do not fold D0 and the first resolution row into one commit.**
+
+**ECC budget: three subagent invocations, total**, each dispatched once, read-only, at the step named:
+- **D1 → `ecc:security-reviewer`**, over `lib/analytics/load.ts`, `lib/reports/isolation.ts`,
+  `lib/reports/generate.ts`, `lib/db/memory-performance.ts`, `lib/memory/outcomes.ts` and the analytics page roots.
+  Ask specifically:
+  - Is any user-facing path still able to reach `createServiceRoleClient`?
+  - Does the worker's patterns read now fail closed on a foreign row?
+  - Is `retrieveOutcomePatterns`'s generation output byte-identical?
+- **D4 → `ecc:silent-failure-hunter`**, over `lib/reports/**` and the cron route. The Reviewer's dispatch of this
+  agent hit HTTP 429 and returned nothing (Reviewer §0). Running it once, after D4, closes that independence gap
+  where it matters most. The question is the Reviewer's own: *"which catch, early return, empty result, skipped
+  row, stub or non-enqueue here hides an ERROR rather than recording a DECIDED no-op?"*
+- **D12 (before the push) → `ecc:pr-test-analyzer`**, over every test file D1–D10 added or changed. The Reviewer's
+  dispatch of it also returned nothing. The question: *"which of these tests would stay green if the property it
+  names broke?"*
+
+Every other step carries **none**. **`taste-skill`, `impeccable`, `ui-ux-pro-max` and `emil-design-eng` are NOT
+invoked.** D10 changes two class lists and one target size inside existing elements. If a fix needs a layout
+change, **STOP**. The browser pass uses the Playwright MCP tools directly, not a subagent. Their output is evidence
+this pass verifies, not findings it copies.
+
+**The highest-risk classes:**
+- **(a) D1.** Moving patterns into `Readers` must not change what generation sees. `retrieveOutcomePatterns` and
+  `retrieveHypothesisResults` keep their signatures and outputs. The three context-equivalence tests (7/6/5) and
+  `performance.test.ts` (18) must stay byte-unchanged and green, because they are the V.2 baseline.
+- **(b) D2.** Resolving labels at render adds reads to the PDF route, which today "calls no reader". Each read must
+  happen **before** Chromium launches, through the authenticated client, by (business, id). It must never feed raw
+  HTML into the page: labels pass through React's escaping like everything else. Re-run the PDF isolation test after
+  D2.
+- **(c) D4.** The wrap-around scan must visit each business **at most once per tick**. A test with an offset that
+  lands exactly on an existing id proves there is no double visit and no skip at the seam.
+- **(d) D6.** `parseKey` returns `null` on a malformed key. A pattern whose key does not parse must be **dropped and
+  counted** (a Sentry message), never rendered from its raw `pattern` text. Falling back to the raw text would
+  reintroduce MAJOR-2 by the side door.
+
+Each step ends by re-running the full existing suite for its files and confirming that no previously green
+assertion changed, other than those recorded above.
+
+---
+
+### §4.0 — Correction primer  (paste first · wait for acknowledgement)
+
+```
+You are the Session 37-D correction pass (Track O, ADR 0031, analytics and the monthly report). You fix the
+findings in docs/reviews/session-37-reviewer.md - you do not re-review, and you do not re-litigate the
+Reviewer's verdicts. Acknowledge these twelve rules, then stop and wait for D0.
+
+1. THE REVIEWER'S TEXT IS IMMUTABLE. Resolutions go in ONE appended, attributed
+   "## CORRECTION PASS (Session 37-D)" section at the END of docs/reviews/session-37-reviewer.md, below the
+   Reviewer's closing line, opening with author, date and the commit range fixed. Not one character above it
+   changes. A disputed finding is argued in the appendix, never erased.
+2. ONE STEP, ONE COMMIT, THEN STOP. Each step's commit message is given; use it. Paste each step's redden
+   transcript into its commit body (MINOR-10 is about exactly this omission).
+3. EVERY FIX IS PROVED BY MUTATION. Apply the mutation named in each step, watch the new test go RED, restore,
+   and confirm `git diff --stat` is empty. Record the exact mutation and the failing line in the appendix.
+4. NEVER WEAKEN A TEST TO REACH GREEN. The only permitted assertion changes are listed in section 4 "Where
+   resolutions go" (D2 payload names -> ids, D3 campaign counts, D6 injected pattern sentences, D7/D9 copy
+   changed by a ruling). Quote each old assertion in the appendix. Amend ADR 0031 only as an APPENDED section
+   (D11), except NIT-1's status line and two headings.
+5. ALL 29 FINDINGS APPEAR IN THE APPENDIX, AND NONE IS DEFERRED (founder instruction, 2026-10-05: "include all
+   items identified"). A finding may close as RULED only under the losing branch of its A-n ruling. A finding you
+   cannot close, you REPORT and STOP - you do not defer it on your own authority.
+6. A-1..A-7, A-3', O-1..O-3 ARE RULED AND NOT REOPENED. A-8..A-15 live in section 4 of
+   docs/build-guide/session-37.md. A step gated on a ruling that still reads PENDING does not begin: STOP and say
+   which ruling. Never invent a ruling, and never pick the recommendation because it is recommended.
+7. NO MIGRATION. No finding needs SQL. If a step appears to need one, STOP.
+8. CLIENT ROLE, TENANCY AND PERSONAL DATA FIRST (D1, D2). No user-facing path may reach createServiceRoleClient;
+   every worker read goes through verifiedReaders; the write-once payload stores no name or handle under A-12(a).
+9. EVERY STEP'S LOOP: npm run typecheck; npm run lint; npm run test:app with app-tests.yml's env block; and for
+   D1, D2, D3, D4 and D5, npm run test:db against a running LOCAL Supabase stack (env from
+   `supabase status -o env`, 127.0.0.1:54321/54322). The .env.local targets the REMOTE project - never run
+   test:db, psql or the Supabase MCP against it. If the local stack cannot start, STOP - a Tier-1 change is never
+   committed unexecuted. plan-proposals-current-version-read.test.ts's local EXPLAIN failure is pre-existing
+   (V.18, Reviewer section 0); report it, do not fix it.
+10. SHARED-FUNCTION CALLERS. Before changing or testing any shared function, `git grep` its production callers
+    and name, per caller, the test that exercises it. In particular: retrieveOutcomePatterns and
+    retrieveHypothesisResults (lib/ai/context.ts, and lib/analytics/load.ts until D1 removes it),
+    listOutcomePatterns / listOutcomePatternsForGeneration, hasAdvancedAnalytics (load.ts, pdf/route.ts,
+    reports/[period]/page.tsx), listCampaigns (every caller - D3 must not change it for the others),
+    resolveReportRecipients, deliverMonthlyReport, TrendSection and PatternsSection (page AND ReportBody).
+11. DO NOT PUSH BEFORE D12. PR #20 is a draft open against master and green at cea74d843; D12 makes the corrected
+    head green.
+12. SCOPE IS THE FINDINGS. L-1 binds: no history table, collection change or platform read scope, no LinkedIn
+    estimate, model, narrative or budget purpose, no memory writer, no outside recipient, no new dependency, no
+    pricing-page or CLAUDE.md edit. i18n: every new key in en, pt AND es in the same commit, through the copy lint.
+    taste-skill, impeccable, ui-ux-pro-max and emil-design-eng are NOT invoked. ECC subagents:
+    security-reviewer once at D1, silent-failure-hunter once at D4, pr-test-analyzer once at D12, none anywhere
+    else.
+```
+
+---
+
+### §4.1 — Correction steps
+
+#### D0 — land the governing documents in git  ·  FIRST, by design  ·  no code
+
+```
+CORRECTION - Session 37-D · D0. No .ts/.tsx/.sql. No specialist.
+
+THE STATE: docs/reviews/session-37-reviewer.md is UNTRACKED. docs/build-guide/session-37.md is tracked but its
+committed version predates this section 4, which is this pass's work order.
+
+DO - commit exactly these two paths, AS THEY STAND:
+- docs/reviews/session-37-reviewer.md  (EXACTLY as the Reviewer left it)
+- docs/build-guide/session-37.md       (with section 4 authored - say so in the commit message)
+Do NOT append the CORRECTION PASS section. Do NOT stage any code file; report any present and leave it.
+supabase/.temp/cli-latest is local noise, and CLAUDE.md's working-tree change is not this pass's - stage
+neither.
+
+VERIFY: `git show <D0-sha>:docs/reviews/session-37-reviewer.md` byte-identical to the working tree and containing
+no "CORRECTION PASS"; `git show <D0-sha>:docs/build-guide/session-37.md | grep -c "### §4.1"` non-zero; no code
+file in the commit. Report which of A-8..A-15 read PENDING right now.
+On commit: "D0 - Session 37-D audit trail: the Reviewer's report enters git exactly as written (range
+0da603b4a..cea74d843, 29 findings) before any resolution row, so the appendix is provably additive;
+session-37.md lands with section 4 authored, since section 4 is this pass's work order." Then stop.
+```
+
+#### D1 — MAJOR-3 + MAJOR-4 (+ MINOR-12's new caller): patterns become a bound, verified reader
+
+```
+CORRECTION - Session 37-D · D1. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop.
+Specialist: ecc:security-reviewer, ONCE, after the code is green (section 4 ECC budget).
+
+THE DEFECTS:
+- MAJOR-3: lib/analytics/load.ts:12,61 defaults retrievePatterns to retrieveOutcomePatterns, which calls
+  listOutcomePatternsForGeneration -> createServiceRoleClient() (lib/db/memory-performance.ts:424-430). So
+  /analytics for a Pro business makes a service-role read in a user-facing path (ADR 9.1, L-8, constraint #16).
+  Scan #16 sees only direct imports of lib/supabase/service, so it is green over this.
+- MAJOR-4: retrievePatterns is a loader dependency, not a Readers member (load.ts:51,61,350), so verifiedReaders
+  (lib/reports/isolation.ts:29-59) never wraps it; OutcomeObservation has no business_id; its rows reach
+  payload.patterns (assemble.ts:210). Every worker test stubs it (report-generation.test.ts loaderDeps,
+  generate.test.ts:12, assemble.test.ts:20).
+
+FIRST: git grep the callers of retrieveOutcomePatterns, retrieveHypothesisResults, listOutcomePatterns and
+listOutcomePatternsForGeneration over app/ lib/ (excluding tests). Write the caller table into the appendix row.
+
+BUILD (section 4 ledger, MAJOR-3 + MAJOR-4):
+1. lib/memory/outcomes.ts: extract the eligibility filter + rankAndCap + mapping in retrieveOutcomePatterns into a
+   PURE exported function over PerformanceMemoryRow[] (no I/O). retrieveOutcomePatterns keeps its signature and
+   calls it - generation output byte-unchanged. The pure function's output type gains the row's business_id and
+   pattern_key (needed by D6); OutcomeObservation for lib/ai stays as it is.
+2. Readers (load.ts) gains listPatterns(businessId, { platform }) returning the pure function's rows. The page's
+   readers bind it to listOutcomePatterns(<the authenticated client>, ...). The worker's readers
+   (lib/db/analytics-worker-reads.ts) bind the same function with its service-role client, and verifiedReaders
+   wraps it like every other reader (argument == loop id; every row's business_id == loop id). Remove
+   retrievePatterns from the loader deps and the import of retrieveOutcomePatterns from load.ts.
+3. Scan #16 gains arm 2 (section 4 ledger): derive, by grepping lib/db/memory-performance.ts and
+   lib/memory/outcomes.ts, the exports that reach createServiceRoleClient (vacuity floor >= 1); forbid importing
+   any of them from non-test files under lib/analytics/** and the analytics / report page roots.
+4. Tier 2: a loader test through the DEFAULT page readers with vi.mock('@/lib/supabase/service') throwing - the
+   Pro portfolio loads, and the throw never fires.
+5. Tier 1 (supabase/__tests__/report-generation.test.ts): seed an ACTIVE outcome pattern row for business B, run
+   generation for A with the REAL listPatterns binding (no stub), assert A's payload.patterns holds no B row; and a
+   variant with .eq('business_id') removed from the worker's binding goes RED with TenantMismatchError.
+
+VERIFY:
+- REDDEN, each alone, restoring after each: (1) re-point the page's listPatterns at listOutcomePatternsForGeneration
+  -> the throwing-factory test RED AND scan #16 arm 2 RED; (2) drop .eq('business_id') from the worker binding ->
+  the Tier-1 test RED (TenantMismatchError); (3) plant `import { retrieveOutcomePatterns } from '@/lib/memory'` in
+  lib/analytics/_plant.ts -> arm 2 RED. `git diff --stat` empty after each.
+- context-equivalence (7/6/5) and performance.test.ts (18) byte-unchanged and green (section 4 risk (a)).
+- Full loop, including test:db on the LOCAL stack.
+- Dispatch ecc:security-reviewer ONCE with the three questions in section 4; disposition every point it raises in
+  the appendix (fixed here, or argued).
+Append the appendix opening block (section 4.2), the MAJOR-3 and MAJOR-4 rows, and MINOR-12's partial row (the new
+binding's caller and its test file:line).
+On commit: "D1 - MAJOR-3 MAJOR-4 closed: patterns are a Readers member - the page binds the authenticated
+listOutcomePatterns, the worker binds it inside verifiedReaders (Tier-1 B-row test reddens on a dropped filter);
+scan #16 gains a derived service-role-export arm; generation output unchanged. security-reviewer dispositioned."
+Then stop.
+```
+
+#### D2 — MINOR-7: the write-once snapshot stores ids, not names  ·  gated on A-12
+
+```
+CORRECTION - Session 37-D · D2. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+GATE: read A-12 in section 4 of docs/build-guide/session-37.md. PENDING -> STOP. (b) -> make no code change;
+append the MINOR-7 row as "RULED - A-12(b), recorded at D11" and commit nothing but the appendix row.
+
+THE DEFECT (MINOR-7): the payload stores the business name, campaign names, account labels
+(platform_display_name ?? platform_username - a natural person's handle once Session 38 ships) and, on Pro, memory
+pattern text (assemble.ts:143,196,210; load.ts:184). The section D2.5 row says "aggregates, template-sentence keys
+and params, exclusion counts and cited post ids ... no post text". The table is write-once, so a stored handle can
+be rectified only by erasing the business.
+
+BUILD under A-12(a):
+1. The report payload stores campaignId and accountId (or null) where it stored names/labels, and no business name.
+   Patterns: store nothing textual - D1's rows carry pattern_key, and the payload stores the parsed cell only
+   (D6 renders it). Bump REPORT_SCHEMA_VERSION ONCE here; later steps of this pass do not bump it again. PR #20 is
+   unmerged, so no production report exists at the old version - state this in the appendix as the reason no
+   back-compat renderer is added, and keep the reader's existing behaviour for an unknown version.
+2. A render-time resolver (lib/analytics, pure over two reads): campaigns and social_accounts by (business, ids),
+   authenticated client, columns listed, chunked by id. Missing campaign -> the existing "Open campaign" fallback;
+   missing account -> UNRECORDED_KEY. The page and the PDF route call it BEFORE rendering; the PDF route calls it
+   BEFORE Chromium launches (section 4 risk (b)).
+3. The email (sent once, not stored) may resolve live labels at generation time.
+
+VERIFY:
+- Tests: a payload-shape test asserting no string field in a stored payload equals the seeded business name, any
+  campaign name or any account label (walk the JSON); a render test with a deleted campaign and a removed account
+  (fallbacks render); the PDF route test asserting the resolver runs before launch and that a foreign id resolves
+  to the fallback, never to B's label.
+- REDDEN: put campaign.name back into the payload -> the JSON-walk test RED; drop the business filter from the
+  resolver's campaigns read -> the foreign-id test RED. Restore; `git diff --stat` empty.
+- Re-run the PDF isolation test (real Chromium path as in Reviewer section 7) - still 0 server hits.
+- Full loop, including test:db.
+Append the MINOR-7 row, quoting each payload assertion that changed from name to id.
+On commit: "D2 - MINOR-7 closed under A-12(a): the write-once report payload stores campaign and account ids, no
+business name, no pattern text; labels resolve at render by (business, id) through the authenticated client,
+before Chromium; schema version bumped once. The section D2.5 row is true as written." Then stop.
+```
+
+#### D3 — MAJOR-10: no aggregate over the 100-row campaign read  ·  wording gated on A-14
+
+```
+CORRECTION - Session 37-D · D3. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+GATE: read A-14. PENDING -> STOP.
+
+THE DEFECT (MAJOR-10): loadPortfolioWith reads r.listCampaigns(businessId) (load.ts:246) - default limit 100,
+created_at DESC, not paged (lib/db/campaigns.ts:6-19); "N active, M completed" is computed over that page
+(load.ts:273-276) and stored; campaign names come from it (load.ts:307). Not in ADR 9.1's table; the worker binds
+the same function with service-role and select('*') (analytics-worker-reads.ts:24). And it counts CURRENT
+statuses, not the month's.
+
+FIRST: git grep listCampaigns callers. Do NOT change listCampaigns itself; the analytics path stops using it.
+
+BUILD:
+1. lib/db/campaigns.ts gains listCampaignsByIds(client, businessId, ids) - columns listed (id, business_id, name,
+   status), .eq('business_id'), chunked .in('id', ...) - and the worker binds it inside verifiedReaders. Readers
+   loses listCampaigns. Campaign names for the campaign table come only from the ids that appear in the month's
+   posts and retrospectives.
+2. Under A-14(a): activity.campaigns becomes { withPosts: <distinct non-NULL campaign_id of monthPosts>,
+   retrospectivesCompleted: monthRetros.length } with the ruled key in en/pt/es.
+   Under A-14(b)/(c): exact head counts (count: 'exact', head: true) per status, behind the same ceiling rule,
+   with the wording the ruling chose; the wording half is then RULED at D11.
+3. Add the new read to ADR 9.1's table at D11 (note it in the appendix row now).
+
+VERIFY:
+- Test: a loader test with 101 campaigns (the oldest one carrying the month's posts) asserting the stored count and
+  the oldest campaign's name in the campaign table (today: missing - "Open campaign").
+- REDDEN: re-bind the loader to listCampaigns -> the 101-campaign test RED. Restore; `git diff --stat` empty.
+- Full loop, including test:db (the analytics-reads Tier-1 arm gains listCampaignsByIds' business filter).
+Append the MAJOR-10 row, quoting the old activity-campaigns assertions.
+On commit: "D3 - MAJOR-10 closed: analytics reads campaigns only by id (column-listed, business-bound, verified in
+the worker); the activity campaign line is <A-14 branch>; a 101-campaign test proves no truncated read reaches an
+aggregate." Then stop.
+```
+
+#### D4 — MAJOR-5 + MINOR-8 + NIT-6: the tick reaches everyone, delivery retries, the recipient cap signals
+
+```
+CORRECTION - Session 37-D · D4. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop.
+Specialist: ecc:silent-failure-hunter, ONCE, after the code is green.
+GATE: MINOR-8's part reads A-13. PENDING -> do MAJOR-5 and NIT-6, commit, and STOP before MINOR-8; resume it in a
+D4b commit once A-13 is ruled. (b) -> no MINOR-8 code; its row is "RULED - A-13(b), recorded at D11".
+
+THE DEFECTS:
+- MAJOR-5: runReportTick starts its cursor at null every tick (lib/reports/generate.ts:102) and stops at
+  REPORT_SCAN_CAP = 2000 (constants.ts:17, generate.ts:104), counting not-due and ineligible businesses, so from the
+  2,001st id onward nobody is visited, and capped stays false (set only at 25 attempts, generate.ts:109-111).
+  Errors count as attempts (generate.ts:140), so 25 persistently failing low ids starve every tick.
+- MINOR-8: if deliverMonthlyReport throws (job.ts:46-49) or one enqueueEmail fails (deliver.ts:73-76), the next
+  tick returns `exists` (generate.ts:58) and the email is never sent.
+- NIT-6: resolveReportRecipients truncates at REPORT_RECIPIENT_MAX = 200 silently (lib/db/business-members.ts).
+
+BUILD (section 4 ledger):
+1. MAJOR-5: the wrapping offset (sha256 of the tick hour ISO -> uuid), scan ids > offset then <= offset, each
+   business at most once per tick; REPORT_ERROR_CAP = 25 separate from the generation budget; capped = true when
+   either cap ends the tick with unscanned rows; the cron route reports a capped tick to the Sentry monitor with
+   status 'error'. Keep the one canonical report.tick JSON line (CLAUDE.md carve-out) and add `capped` and
+   `reason` to it.
+2. MINOR-8 under A-13(a): first VERIFY email_outbox_dedupe_uq (20260607100000_email_outbox.sql:27) is a UNIQUE
+   index on the column deliver.ts writes the report:{YYYY-MM}:{member id} token to; if not, STOP. Then: on `exists`,
+   non-stub, report created_at < 72 h ago -> one outbox read for that business and token prefix; fewer rows than
+   resolved recipients -> re-run deliverMonthlyReport. Never for a stub; never for `off`.
+3. NIT-6: read MAX + 1, order (created_at, id); on overflow capture one Sentry message with the business id and
+   return the first 200.
+
+VERIFY:
+- Tests: (a) 2,100 candidate ids, only the last due -> the first tick reports capped AND the business is generated
+  within the bounded number of ticks the deterministic offsets give (assert the exact tick); (b) 25 failing low ids
+  followed by one due business -> the due business is generated in the FIRST tick; (c) an offset equal to an
+  existing id -> visited exactly once (section 4 risk (c)); (d) MINOR-8: a delivery that throws once -> the next
+  tick inside 72 h enqueues the missing members only, the dedupe no-ops the rest, and nothing happens after 72 h;
+  (e) NIT-6: 201 eligible members -> 200 returned and one capture.
+- REDDEN, each alone: reset the cursor to null each tick -> (a) RED; count errors against the generation budget ->
+  (b) RED; remove the 72 h bound -> (d)'s "nothing after 72 h" RED; drop the overflow capture -> (e) RED. Restore;
+  `git diff --stat` empty after each.
+- Full loop, including test:db.
+- Dispatch ecc:silent-failure-hunter ONCE with the Reviewer's question (section 4); disposition every point.
+Append the MAJOR-5, MINOR-8 and NIT-6 rows.
+On commit: "D4 - MAJOR-5 NIT-6 closed (+ MINOR-8 under A-13 <branch>): the report tick wraps from a per-hour offset,
+counts errors on their own cap, and alerts the monitor when capped; delivery after a failed send retries for 72 h,
+idempotent on the dedupe index; the recipient cap signals. silent-failure-hunter dispositioned." Then stop.
+```
+
+#### D5 — MINOR-11: the ceiling proven end to end, through the real pager
+
+```
+CORRECTION - Session 37-D · D5. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+Test-led step; the only production change is making the ceiling injectable.
+
+THE DEFECT (MINOR-11): with READ_CEILING = 10 only keyset-pager.test.ts (3) and lib/db/__tests__/analytics-reads
+.test.ts (4) went red, and both pin the constant or the page arithmetic. Every loader, report and page test uses
+fake readers that bypass readAllPages, so "error, never a number" (#36) is proven in halves, never composed.
+
+BUILD:
+1. The loader's dependencies gain readCeiling (default READ_CEILING); readAllPages receives it. No behaviour change
+   at the default.
+2. A loader test whose readers run the REAL readAllPages over an in-memory paged source holding the O2.1 fixture's
+   18 posts in A's window, with readCeiling = 10 -> the activity section is { status: 'error' } and no number from
+   it appears anywhere in the view model.
+3. A generator test with the same setup -> no analytics_reports row is inserted and the tick records the business
+   as errored (D4's error cap).
+
+VERIFY:
+- REDDEN: make readAllPages return the partial pages instead of throwing at the ceiling -> both new tests RED.
+  Restore; `git diff --stat` empty. The constant-pin tests are untouched.
+- Full loop, including test:db.
+Append the MINOR-11 row.
+On commit: "D5 - MINOR-11 closed: the read ceiling is injectable and proven end to end - the real pager over the
+fixture with ceiling 10 yields the section error state and no stored report." Then stop.
+```
+
+#### D6 — MAJOR-2 + MAJOR-1: Observed patterns rendered from keys, with a true empty state  ·  MAJOR-1 gated on A-8
+
+```
+CORRECTION - Session 37-D · D6. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+GATE: MAJOR-2 needs no ruling. MAJOR-1 reads A-8: PENDING -> commit MAJOR-2 alone and STOP before MAJOR-1;
+(b) -> no MAJOR-1 change, its row is "RULED - A-8(b), recorded at D11".
+
+THE DEFECTS:
+- MAJOR-2: PatternsSection renders {p.pattern} (components/analytics/PortfolioView.tsx:296) - the stored
+  performance_memory.pattern from renderOutcomePattern (lib/outcomes/template.ts:50-62), English only - on the
+  page, in the payload (assemble.ts:210) and in the PDF, in pt and es too. Every test injects a made-up sentence
+  (load.test.ts:98, copy-lint.test.ts:257), so the lint never meets the real one.
+- MAJOR-1: PatternsSection renders analytics.state.empty when no pattern qualifies (PortfolioView.tsx:290-291;
+  ReportBody.tsx:132-133): "Nothing published yet" in a month with 13 posts, on every Pro page and report at launch.
+
+BUILD:
+1. MAJOR-2: from D1's rows, parse pattern_key with the same rule as lib/outcomes/campaign-view.ts:40-45 (move
+   parseKey to a shared pure export; campaign-view keeps calling it). A pattern is { platform, dimension, value,
+   direction, basis, wins, n, campaigns }. Render it through NEW analytics keys in en/pt/es: one template per
+   direction x basis, with the platform name key, the dimension-value subject key (reuse the outcome.* subject keys
+   ADR 0026's surfaces already translate, where they exist) and the counts. Drop the separate duplicate count
+   phrase so the evidence is stated once. A key that does not parse is dropped and counted with one Sentry message,
+   NEVER rendered from `pattern` (section 4 risk (d)).
+2. The copy lint and the locale parity test gain a corpus built by calling renderOutcomePattern's VOCABULARY
+   (every platform x dimension x value x direction x basis the SUBJECT table allows) through the new keys - the
+   real cells, not an invented sentence.
+3. MAJOR-1 under A-8(a): analytics.state.noPatternYet in en/pt/es with the ruled text; PatternsSection (page and
+   ReportBody) renders it when the month has measured posts and no pattern qualifies; state.empty stays for a month
+   with no published posts.
+
+VERIFY:
+- Tests: render A's March Pro page and report in pt and es with a REAL pattern row (pattern_key set, pattern text
+  English) -> no English sentence from template.ts appears (assert renderOutcomePattern's output is absent); a
+  malformed key -> dropped and captured; a Pro month with posts and zero patterns -> state.empty absent,
+  noPatternYet present (page and report).
+- REDDEN: render {p.pattern} again -> the pt/es test RED; reuse state.empty -> the MAJOR-1 test RED. Restore;
+  `git diff --stat` empty.
+- Full loop.
+Append the MAJOR-2 and MAJOR-1 rows, quoting the old injected-sentence assertions.
+On commit: "D6 - MAJOR-2 closed (+ MAJOR-1 under A-8 <branch>): Observed patterns render from the pattern_key cell
+through analytics keys in en/pt/es, the lint runs over the real vocabulary, an unparseable key is dropped and
+captured; a Pro month with posts and no pattern says so truthfully." Then stop.
+```
+
+#### D7 — MAJOR-8 + MAJOR-9 + MINOR-6: every number carries its true label  ·  gated on A-9, A-10, A-11
+
+```
+CORRECTION - Session 37-D · D7. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+GATE: each finding reads its own ruling (MAJOR-8 A-9, MAJOR-9 A-10, MINOR-6 A-11). PENDING -> skip that finding,
+do the ruled ones, commit, and STOP naming the pending ruling(s). A losing branch -> no code for that finding; its
+row is RULED, recorded at D11.
+
+THE DEFECTS:
+- MAJOR-8: winsView renders the thin state with params { n: w.of } (lib/analytics/view-model.ts:80) under the one
+  thin key "{n} measured posts so far" - B's pt page says "2 de 2 publicacoes medidas" and "1 publicacoes medidas
+  ate agora" for the same set.
+- MAJOR-9: TypicalLine drops rangeKind (components/analytics/PortfolioView.tsx:32-36); at n >= 10 the IQR prints as
+  "(range {lo}-{hi})"; the methodology median key does not mention the switch. The fixture never reaches 10.
+- MINOR-6: winShareBreakdown shows every value with of >= 1 (lib/analytics/breakdowns.ts:67-83): "0 of 1 beat your
+  usual. (Provisional)".
+
+BUILD (as ruled):
+1. A-9(a): analytics.state.thinWins, n = the baseline count; winsView uses it below the floor.
+2. A-10(a): the iqr template keyed on rangeKind in TypicalLine, page and report; the methodology sentence.
+3. A-11(a): analytics.breakdown.thinValue for a value with of < 5 - no k, no n.
+All keys in en/pt/es, through the copy lint.
+
+VERIFY:
+- Tests: B's March rendered in en/pt/es -> no line states a measured count that differs from the exclusions line
+  (the Reviewer's proof for MAJOR-8); a fixture month at n = 10 -> the IQR template, and n = 9 -> the range template
+  (literal expected strings, not recomputed); a breakdown value at n = 4 -> thinValue, at n = 5 -> "k of 5"
+  (literal).
+- REDDEN: params { n: w.of } back on the shared thin key -> RED; drop rangeKind -> the n = 10 test RED; floor the
+  breakdown at 1 -> the n = 4 test RED. Restore; `git diff --stat` empty after each.
+- Full loop.
+Append the MAJOR-8, MAJOR-9 and MINOR-6 rows, quoting each ruling and each copy assertion it changed.
+On commit: "D7 - MAJOR-8 MAJOR-9 MINOR-6 closed per A-9 A-10 A-11: the wins thin state names its own n, the spread
+says 'middle half' from 10 posts, and a breakdown value below 5 is thin; literal n = 4/5/9/10 tests." Then stop.
+```
+
+#### D8 — MAJOR-7 + MINOR-1 + MINOR-3 + MINOR-4: the summary, the email and the report-only sections
+
+```
+CORRECTION - Session 37-D · D8. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+No ruling needed (section 4 engineering ledger).
+
+THE DEFECTS:
+- MAJOR-7: the summary is activity.total then analytics.typical and analytics.wins per rate platform
+  (assemble.ts:186-189), with no disclosure keys and no platform; the email renders exactly these lines
+  (deliver.ts:49-51, monthly-report.tsx:40-44). ADR 2.4: "'Usual' is defined next to every win count."
+- MINOR-1: ReportBody reuses TrendSection (ReportBody.tsx:107) headed "12-month trend"; the payload holds 6
+  (REPORT_TREND_MONTHS = 6).
+- MINOR-3: report section 7 (ADR 5.3 row 7: "verdict, n, interval, link") carries verdict and n only
+  (assemble.ts:196, load.ts:168-178), though interval_low/high are already read
+  (lib/db/campaign-retrospectives.ts:329).
+- MINOR-4: cited posts store { postId, rate, badge } (assemble.ts:182); nothing renders "Post removed" or identifies
+  the post (ReportBody.tsx:62-90).
+
+BUILD (section 4 ledger):
+1. MAJOR-7: summary lines grouped under the platform name key; every win line followed by the usual-definition and
+   drift disclosure keys section 4 already uses; the email template renders the same structure.
+2. MINOR-1: report.section.trend6 passed as a heading prop from ReportBody.
+3. MINOR-3: RetroView gains the interval when interval_low/high are non-null, rendered through the existing
+   `interval` key in section 7 (page table unchanged unless it already shows one).
+4. MINOR-4: at render, D2's resolver also resolves cited post ids by (business, id) -> platform, date and a link,
+   or report.post.removed. Stored values untouched.
+New keys in en/pt/es.
+
+VERIFY:
+- Tests: the rendered email and the summary section for A's March -> every win line is followed by the usual
+  definition and the drift sentence, and every rate line sits under its platform name; the report trend heading is
+  the 6-month key; section 7 shows the interval for a supported retrospective; a deleted cited post renders "Post
+  removed" (page and PDF HTML).
+- REDDEN, each alone: drop the disclosure keys from the email -> RED; reuse analytics.section.trend -> RED; drop the
+  interval param -> RED; skip the cited-post resolver -> RED. Restore; `git diff --stat` empty after each.
+- Full loop.
+Append the MAJOR-7, MINOR-1, MINOR-3 and MINOR-4 rows.
+On commit: "D8 - MAJOR-7 MINOR-1 MINOR-3 MINOR-4 closed: the summary and the email state every win count with its
+usual and drift sentences under a platform heading; the report trend says 6 months; section 7 carries the
+interval; cited posts resolve at render or say 'Post removed'." Then stop.
+```
+
+#### D9 — MINOR-2 + MINOR-5 + MINOR-9 + NIT-4 + NIT-5: copy hygiene in all three locales  ·  NIT-4 gated on A-15
+
+```
+CORRECTION - Session 37-D · D9. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+GATE: NIT-4 reads A-15. PENDING -> do the rest, commit, STOP before NIT-4. (b) -> NIT-4 is RULED at D11.
+
+THE DEFECTS:
+- MINOR-2: the coverage key appends "Posts written outside Jemip's generator aren't classified" to length_band and
+  cta_present, whose population is all measured posts ("Covers 7 of 7 ... aren't classified").
+- MINOR-5: ADR 8.1's sentence "Jemip only learns a pattern from at least 10 posts across 3 campaigns; numbers shown
+  here are descriptions, not lessons." is absent from report.methodology.floors; #31's test checks key presence.
+- MINOR-9: pt mixes "interacao" (8.2 literals, disclosures) and "envolvimento" (report.ratedPosts.*,
+  report.section.unavailable, report.methodology.median|xOnly|engagementOnly, the email's supporting); es email
+  says "engagement" against "interaccion" elsewhere.
+- NIT-4: "1 measured posts so far", "Final for 1 posts" (pt "1 publicacoes").
+- NIT-5: patternEvidence "{campaigns} campaigns" has no singular; pt/es report.stub repeat the noun;
+  product-status.md "LinkedIn as counts".
+
+BUILD (section 4 ledger): coverage.generated / coverage.all by population; the 8.1 sentence verbatim in en with
+natural pt/es; one term per locale (pt interacao, es interaccion); under A-15(a) ICU plurals on every 8.2 literal
+with a count, the `other` branch byte-identical to the ADR literal; patternEvidence plural; the stub rewording;
+the product-status phrase. en, pt and es in one commit.
+
+VERIFY:
+- Tests: a render test of a length_band breakdown -> coverage.all, no "aren't classified"; a content test that
+  report.methodology.floors contains "10" and "3" and the description-not-lesson clause in each locale; a parity
+  test that pt analytics/report/email strings contain no "envolvimento" and es none "engagement"; n = 1 renders
+  "1 measured post so far" (and pt/es singulars); the en `other` branch equals the ADR 8.2 literal byte for byte.
+- REDDEN: put "envolvimento" back in one pt key -> parity RED; restore the old coverage key on length_band -> RED;
+  drop the plural -> the n = 1 test RED. Restore; `git diff --stat` empty after each.
+- Full loop (the copy lint must stay green over every new string).
+Append the MINOR-2, MINOR-5, MINOR-9, NIT-4 and NIT-5 rows; under A-15(a) append the "closed by 37-D D9" pointer to
+S37-STATE-LITERALS in docs/backlog.md.
+On commit: "D9 - MINOR-2 MINOR-5 MINOR-9 NIT-5 closed (+ NIT-4 under A-15 <branch>): population-true coverage
+lines, the learning-floor sentence with a content test, one engagement term per locale held by a parity test,
+plural-correct literals and copy nits." Then stop.
+```
+
+#### D10 — MAJOR-6 + NIT-3: the 320 px overflow, re-measured on every scroller
+
+```
+CORRECTION - Session 37-D · D10. /ecc:plan -> /ecc:tdd-workflow -> /ecc:verification-loop. No specialist.
+Browser pass with the Playwright MCP tools directly. Design skills are NOT invoked; if the fix needs a layout
+change beyond class lists, STOP.
+
+THE DEFECTS:
+- MAJOR-6: the shell scrolls inside <main class="flex-1 overflow-auto p-6">, so document.documentElement.scrollWidth
+  (the only measure V.17 recorded) cannot see overflow inside <main>. At 320 px /en/analytics/posts and
+  /pt/analytics/posts scroll 33 px / 62 px inside <main>; the account <select> sizes to its longest option (327 px
+  in pt); O2.10's max-w-full does not hold because its flex-column parent has no width bound.
+- NIT-3: standalone links render 18-20 px tall ("See every post", the campaign links) against ADR 10.6's 24 px.
+
+BUILD: the filter bar's flex parent min-w-0 w-full; the select w-full max-w-full; min-h-6 plus vertical padding on
+the standalone analytics links. Extend the existing break-ui Tier-2 test with the long account option in pt.
+
+VERIFY - THE BROWSER, yourself (next dev on the LOCAL stack, the O2.1 fixture seeded, March reports generated with
+the real loader deps, all removed afterwards; measure after streaming completes - an early measurement catches the
+"Loading results" skeleton):
+- Every analytics page the Reviewer visited (section 8 list), at 1280 / 640 / 320 px, in en, pt AND es, for
+  businesses A and B. For EACH page, run in the page:
+    [...document.querySelectorAll('*')].filter(e => ['auto','scroll'].includes(getComputedStyle(e).overflowX)
+      && e.scrollWidth > e.clientWidth).map(e => [e.tagName, e.className, e.scrollWidth, e.clientWidth])
+  Expected: [] everywhere. Record the full table (page x width x locale) in the appendix, plus
+  documentElement scrollWidth/clientWidth for continuity with V.17.
+- getBoundingClientRect().height >= 24 for "See every post" and every campaign link, at 1280 and 320.
+- REDDEN: remove min-w-0 from the parent -> the pt 320 px measure is non-empty again (record the number). Restore.
+- Full loop.
+Append the MAJOR-6 and NIT-3 rows with the measurement table.
+On commit: "D10 - MAJOR-6 NIT-3 closed: the posts filter bar is width-bounded; every overflow-x scroller measured
+empty at 1280/640/320 in en, pt and es for A and B (table in the appendix); standalone links >= 24 px." Then stop.
+```
+
+#### D11 — documentation truth: NIT-1, NIT-2, NIT-7, MINOR-10, MINOR-12, and every ADR half  ·  no code
+
+```
+CORRECTION - Session 37-D · D11. No .ts/.tsx/.sql. No specialist. Every statement cites the test (file:line) that
+now proves it, at D1..D10's SHAs.
+
+DO:
+1. ADR 0031 gains ONE appended section, "## Correction pass amendments (Session 37-D)", numbered C.1..., AFTER the
+   Builder's V.1-V.20 appendix. Never edit sections 0-16 or V.1-V.20 (NIT-1's three lines are the only exception,
+   item 2). It records:
+   - MAJOR-1 (10.2 gains noPatternYet, or A-8(b)), MAJOR-8 (8.1 thin wins, or A-9(b)), MAJOR-9 (2.3/8.4 the IQR
+     template, or A-10(b)), MINOR-6 (8.1/2.6 thin breakdown values, or A-11(b)), MINOR-7 (11: what the payload
+     holds, or A-12(b) with the section D2.5 row corrected IN THIS SAME COMMIT), MINOR-8 (5.2 the bounded retry, or
+     A-13(b)), MAJOR-10 (9.1's table gains listCampaignsByIds; 3.2's campaign line per A-14), NIT-4 (A-15) - each
+     quoting its ruling.
+   - MAJOR-5: the wrapping offset, the error cap, the capped alert, and the coverage bound min(1, 2000/N) per tick.
+   - MAJOR-6: 10.4's acceptance measure becomes "every element with computed overflow-x auto|scroll has
+     scrollWidth <= clientWidth", and #35's manual half is re-recorded with D10's table.
+   - MINOR-2 (2.6 coverage by population), MINOR-4 (5.1: values stored, identity at render, "Post removed"
+     renders), MAJOR-3 (scan #16 arm 2), MAJOR-2 (8.4: patterns render from the cell).
+   - NIT-2: 10.1's Print is the browser print under the print stylesheet, no button; 10.6's two islands stand.
+   - NIT-7: --no-sandbox added to 5.5's list, with why it is acceptable here.
+   - MINOR-12: the complete SHARED-FUNCTION CALLERS table at the corrected head (git grep it now), including
+     hasAdvancedAnalytics's page caller (reports-pages.test.tsx:143-150) and listPatterns' two bindings (D1's tests).
+   - MINOR-10: the Reviewer's section 10 re-redden of all 10 scans and V.15 are the redden and per-skill records for
+     O2.7 and O2.10; cb0f96e72 and 266f67456 not amended; every 37-D commit carries its own transcript.
+   - The constraint count: 42 (state whether scan #16 arm 2 and D4/D5's tests are arms of existing constraints -
+     prefer arms; a new number only if section 13's shape forbids it), tier tallies re-derived.
+2. NIT-1, in place: ADR 0031 line 3's status sentence, and the 0.1 and 3 headings' "awaiting" clauses; and
+   docs/current-phase.md's "before ADR 0031 can be marked Accepted". Quote every old line in the appendix.
+3. docs/launch-checklist.md: the --no-sandbox sentence on the Chromium-on-Vercel row (NIT-7). docs/product-status.md
+   already changed at D9 (NIT-5) - verify, do not re-edit.
+4. Do NOT fill any "executed green in CI" cell for the corrected range - that is D12's, from the logs.
+
+VERIFY: `git diff <D10-sha>..HEAD -- docs/decisions/0031-analytics-and-monthly-report.md` shows ADDITIONS ONLY below
+V.20, plus exactly the three NIT-1 lines. If A-12(b): the 0010-legal-surface.md D2.5 row changed in this same
+commit. Check three citations at random with `git show`.
+Append the NIT-1, NIT-2, NIT-7, MINOR-10 and MINOR-12 rows, and the ADR halves (and every RULED row) of the gated
+findings.
+On commit: "D11 - documentation truth: ADR 0031 gains its Session 37-D amendments (<list of C.n>), NIT-1's status
+corrected in place with the old text quoted; NIT-2 NIT-7 MINOR-10 MINOR-12 closed; <n> constraints." Then stop.
+```
+
+---
+
+### §4.2 — Resolution log (the appendix's required shape)
+
+The appendix in `docs/reviews/session-37-reviewer.md` is written **incrementally, one block per step**. D1 opens it,
+D2…D11 append, and D12 closes it. It is never assembled from memory at the end.
+
+**Opening block (written at D1):**
+
+```
+## CORRECTION PASS (Session 37-D)
+
+**Author:** Session 37-D correction pass · **Date:** <YYYY-MM-DD> · **Range fixed:** `cea74d843..<D12-sha>`
+**Reviewed head:** `cea74d843`, the head the Reviewer read. Only this pass's section 4 and the report itself landed
+after it, at D0 (`<D0-sha>`).
+**Founder adjudications consumed:** "include all items identified" (founder, 2026-10-05); A-8 = <a|b>;
+A-9 = <a|b>; A-10 = <a|b>; A-11 = <a|b>; A-12 = <a|b>; A-13 = <a|b>; A-14 = <a|b|c>; A-15 = <a|b>.
+A-1..A-7, A-3', O-1..O-3 stand.
+**Everything above this line is the Reviewer's. Everything below it is this pass's.**
+```
+
+**Per-finding row shape.** All five fields are required; a row missing one is not complete:
+
+| Field | What it must say |
+|---|---|
+| **Finding** | The ID, and nothing restated from the Reviewer's text |
+| **Fix** | What changed, in one sentence, naming the file. Or `RULED` with its A-n reference |
+| **Proof** | The test file **and line**, never "covered by the suite". For D10: the measurement table |
+| **Reddening** | The exact mutation, and the clean tree confirmed afterwards (n/a only for RULED / docs-only) |
+| **Commit** | The step's SHA(s) |
+
+**Rows that are not ordinary fixes:**
+- **MAJOR-3 / MAJOR-4** carry the caller table for the four pattern functions and the security-reviewer
+  dispositions.
+- **MAJOR-5 / MINOR-8 / NIT-6** carry the silent-failure-hunter dispositions. MINOR-8 may carry a D4b SHA.
+- **MAJOR-6** carries D10's full page × width × locale measurement table.
+- **MAJOR-10** carries two halves: the truncated read (always a FIX) and the wording (per A-14).
+- **MINOR-7** carries the JSON-walk proof, and under A-12(b) the §D2.5 row change's SHA.
+- **MINOR-10** cites the Reviewer's §10 and V.15, and states that `cb0f96e72` and `266f67456` were not amended.
+- **MINOR-12** carries the complete callers table at the corrected head.
+- **NIT-1** quotes the three old ADR lines and the old `current-phase.md` sentence.
+- Every **RULED** row quotes its A-n decision and names D11's SHA.
+
+**Every step appends a "what I did NOT touch" line** where it had a tempting adjacent target:
+- D1: `retrieveOutcomePatterns`'s output; the context-equivalence tests.
+- D2: no back-compat renderer; the email's live labels are not stored.
+- D3: `listCampaigns` itself and its other callers.
+- D4: no cursor table; no change to the due rule or eligibility.
+- D5: the `READ_CEILING` constant.
+- D6: `renderOutcomePattern` and `performance_memory.pattern` are unchanged, because ADR 0026's writer is out of
+  scope.
+- D7: no floor value changed.
+- D8: stored cited-post values unchanged.
+- D9: no en literal changed except through A-15's plural wrapper.
+- D10: no element added or removed.
+- D11: no ADR 0031 §0–16 or V.1–V.20 edit beyond NIT-1's three lines; no `executed green in CI` cell filled.
+
+---
+
+### §4.3 — Close-out
+
+#### D12 — push the corrected range to PR #20, re-date every constraint claim, close Track O
+
+```
+CORRECTION - Session 37-D · D12. Specialist: ecc:pr-test-analyzer, ONCE, BEFORE the push. At cea74d843 every
+workflow was green, so this step's job is not to turn anything green for the first time. It is to prove that
+D1..D11 - new readers, a payload shape, a worker change, new keys, ADR text - are executed green in CI at the
+corrected head, and that no count dropped.
+
+DO:
+1. Dispatch ecc:pr-test-analyzer ONCE over every test file D1..D10 added or changed, with the question in section
+   4. Disposition every point in the appendix (fixed in a D12a commit before the push, or argued). Then check every
+   37-D commit body carries its redden transcript (MINOR-10); list any that does not.
+2. Push D0..D11 to origin/session-37-adr-0031 (PR #20, draft, against master); run every required workflow to
+   green at the corrected head:
+   - app-tests (typecheck + lint + vitest) - REQUIRED.
+   - db-tests INCLUDING THE SKIP-GUARD. If red, OPEN THE RUN and distinguish a DB-behaviour regression from a stack
+     failure (grep the log for SIGSEGV, signal 11, OOMKilled=true, Restarting=true, out of memory), quoting the
+     deciding line.
+   - any other workflow the PR triggers.
+3. Record FROM THE LOGS: each workflow's run URL and counts; BOTH skip-guard lines QUOTED VERBATIM, as the Reviewer
+   did (at cea74d843: app `417 file(s) ... (6594/6594)`; db `122 file(s) ... (1381/1381)`). The new counts must be
+   HIGHER (this pass only adds tests; the recorded assertion changes remove none); if either is lower, STOP and
+   explain. Then, in ADR 0031's Session 37-D section, re-date all 42 constraints as "executed green in CI at
+   <corrected head>", per tier, and state for #16, #27, #35 and #36 that they now HOLD, not only execute (MAJOR-3,
+   MAJOR-4, MAJOR-6, MINOR-11 - the Reviewer's "executed is not the same as holding" list). #24 and #26 stay not
+   applicable. Tier E: none.
+4. docs/current-phase.md: QUOTE the current constraint->CI map line in the appendix, then replace it with the
+   corrected head's real per-tier counts. db-tests PROMOTION TALLY: pull_request runs never move it; only
+   consecutive green master PUSH runs do. Record the tally with each run's event type. Measurement stays honest:
+   the Reviewer's "What I could NOT verify" list is still unverified (no real tenant, @sparticuz/chromium on Vercel,
+   a real send, es/dark/print/zoom/RTL in a browser beyond D10's es pass); S34-E2E-UNVERIFIED still open; no
+   founder benefit claimed.
+5. Section 5 of docs/build-guide/session-37.md: tick each row with evidence, stating per item whether it applied
+   (in particular: ADR 0010 section D2.5 - no new table in this pass; the row changed only under A-12(b);
+   launch-checklist - only NIT-7's sentence; backlog - only A-15(a)'s pointer, and no new finding row because
+   nothing was deferred).
+6. THE APPENDIX CLOSING BLOCK: all 29 findings by ID -> disposition -> proving test -> SHA(s); re-run the count
+   check (29 rows, 29 distinct IDs; MAJOR-1..10, MINOR-1..12, NIT-1..7) - if it fails, the pass is not closed. Name
+   every RULED row with its A-n. State which Reviewer statements have since CHANGED - WITHOUT editing them: section
+   0's counts; section 8's 320 px row; section 10's "Executed is not the same as holding" list; the MAJOR-3 caveat
+   on scan #16.
+7. .wolf/anatomy.md (new and changed files), .wolf/memory.md, .wolf/cerebrum.md (Do-Not-Repeat: "measure overflow on
+   EVERY overflow-x:auto|scroll element, never only documentElement - a shell with an inner scroller hides it
+   (Session 37 MAJOR-6)"; "a test that injects an invented sentence instead of the producer's real output never
+   meets the real text - lint and parity checks must run over the producer's vocabulary (MAJOR-2)"; "an import
+   scan for a client role sees only direct imports - pair it with a throwing-factory test through the default
+   dependencies (MAJOR-3)"; "a scan or tick that restarts from the same cursor every run starves everything past
+   its cap, silently (MAJOR-5)"). Log MAJOR-2, MAJOR-3, MAJOR-5 and MAJOR-6 to .wolf/buglog.json at minimum.
+
+VERIFY: `git diff <D0-sha>..<D12-sha> -- docs/reviews/session-37-reviewer.md` shows additions BELOW the Reviewer's
+closing line and NOTHING ELSE. Required workflows green at the corrected head, or their red explained from the log
+with evidence in the appendix.
+On commit: "D12 - Session 37-D closed: D0..D11 pushed to PR #20; app-tests green at <sha> (<URL>, skip-guard <n>
+files / <n> tests quoted from the log); db-tests <state> (<URL>, skip-guard <n> files / <n> tests); all 42
+ANALYTICS-*/REPORT-* constraints re-dated to the corrected head per tier, #16/#27/#35/#36 now hold; db-tests tally
+recorded per run with event type; pr-test-analyzer dispositioned. The 37-D appendix records all 29 findings - none
+deferred; RULED: <list or none> - and the diff proves nothing above the appendix changed. Track O closed." Then
+stop.
+```
+
 ---
 
 ## §5 — Docs to update at close-out (Track O done)
