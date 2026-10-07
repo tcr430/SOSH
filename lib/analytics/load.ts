@@ -20,7 +20,7 @@ import { OUTCOME_MATURITY_DAYS } from '@/lib/outcomes/constants'
 import { ANALYTICS_COMPARE_FLOOR } from './constants'
 import { exclusionReason, type ExclusionReason } from './exclusions'
 import { monthOf, periodBounds, previousPeriod, utcIso } from './period'
-import { formatRate, typicalOf } from './rates'
+import { formatPercent, formatRate, typicalOf } from './rates'
 import type { AnalyticsOutcome, AnalyticsPostRecord, MetricBasis } from './types'
 import {
   monthPairView,
@@ -149,6 +149,8 @@ export function patternCellOf(row: Pick<OutcomePatternRow, 'pattern_key' | 'metr
 export interface RetroView {
   verdict: { key: string; params: { n: number } }
   beat: { key: 'outcome.retrospective.posts_beat'; params: { wins: number; n: number } } | null
+  /** The plain-language interval on the share of posts that beat the usual, when the retrospective computed one (ADR 0031 s5.3 row 7). */
+  interval: { key: 'analytics.interval'; params: { lo: string; hi: string } } | null
 }
 
 export interface CampaignTableRow {
@@ -204,16 +206,17 @@ export type Portfolio = BasicPortfolio | AdvancedPortfolio
 
 // ─── helpers ───────────────────────────────────────────────────────────────────────────────────────────────
 
-function retroView(r: Pick<RetrospectiveForAnalytics, 'verdict' | 'n' | 'wins'>): RetroView {
+function retroView(r: Pick<RetrospectiveForAnalytics, 'verdict' | 'n' | 'wins' | 'interval_low' | 'interval_high'>): RetroView {
   const params = { n: r.n }
+  const interval = r.interval_low !== null && r.interval_high !== null ? { key: 'analytics.interval' as const, params: { lo: formatPercent(r.interval_low), hi: formatPercent(r.interval_high) } } : null
   if (r.verdict === 'supported') {
-    return { verdict: { key: 'outcome.retrospective.verdict_supported', params }, beat: { key: 'outcome.retrospective.posts_beat', params: { wins: r.wins, n: r.n } } }
+    return { verdict: { key: 'outcome.retrospective.verdict_supported', params }, beat: { key: 'outcome.retrospective.posts_beat', params: { wins: r.wins, n: r.n } }, interval }
   }
   if (r.verdict === 'not_supported') {
-    return { verdict: { key: 'outcome.retrospective.verdict_not_supported', params }, beat: { key: 'outcome.retrospective.posts_beat', params: { wins: r.wins, n: r.n } } }
+    return { verdict: { key: 'outcome.retrospective.verdict_not_supported', params }, beat: { key: 'outcome.retrospective.posts_beat', params: { wins: r.wins, n: r.n } }, interval }
   }
-  // 'inconclusive' states only its n, exactly as RetrospectiveCard does.
-  return { verdict: { key: 'outcome.retrospective.inconclusive', params }, beat: null }
+  // 'inconclusive' states only its n, exactly as RetrospectiveCard does (and no interval: there is no share to bound).
+  return { verdict: { key: 'outcome.retrospective.inconclusive', params }, beat: null, interval: null }
 }
 
 function labelOf(accountId: string | null, labels: ReadonlyMap<string, SocialAccountLabel>): { label: string | null; labelKey: typeof UNRECORDED_KEY | null } {

@@ -62,6 +62,10 @@ export function fixtureReaders(options: FixtureReaderOptions = {}): Readers {
 /** The business the report tests render for, and the names and labels its ids stand for (resolved at read time, never stored: D2). */
 export const FIXTURE_NAME_A = FIXTURE_BUSINESSES.find((b) => b.id === BUSINESS_A_ID)?.name as string
 export const FIXTURE_LABELS_A: ReportLabels = {
+  // The posts business A's report can cite, as the read-time resolver would return them (platform, when it went out, its campaign).
+  posts: Object.fromEntries(
+    FIXTURE_POSTS.filter((p) => p.business_id === BUSINESS_A_ID && p.status === 'published' && p.deleted_at === null).map((p) => [p.id, { platform: p.platform, publishedAt: p.published_at as string, campaignId: p.campaign_id }]),
+  ),
   campaigns: Object.fromEntries(FIXTURE_CAMPAIGNS.filter((c) => c.business_id === BUSINESS_A_ID).map((c) => [c.id, c.name])),
   accounts: Object.fromEntries(FIXTURE_ACCOUNTS.filter((a) => a.business_id === BUSINESS_A_ID).map((a) => [a.id, a.platform_display_name ?? a.platform_username])),
 }

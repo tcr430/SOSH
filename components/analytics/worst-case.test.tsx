@@ -52,7 +52,7 @@ function worst(): Portfolio {
   if (base.activity.status !== 'ok') throw new Error('fixture activity')
   const campaigns: CampaignTableRow[] = [
     { campaignId: 'c1', name: LONG, status: 'active', published: 1_000_000, href: '/campaigns/c1', retro: null },
-    { campaignId: 'c2', name: ONE, status: 'completed', published: 1, href: '/campaigns/c2', retro: { verdict: { key: 'outcome.retrospective.verdict_supported', params: { n: 12 } }, beat: { key: 'outcome.retrospective.posts_beat', params: { wins: 8, n: 12 } } } },
+    { campaignId: 'c2', name: ONE, status: 'completed', published: 1, href: '/campaigns/c2', retro: { verdict: { key: 'outcome.retrospective.verdict_supported', params: { n: 12 } }, beat: { key: 'outcome.retrospective.posts_beat', params: { wins: 8, n: 12 } }, interval: null } },
     { campaignId: 'c3', name: JA, status: 'paused', published: 10_000, href: '/campaigns/c3', retro: null },
     { campaignId: 'c4', name: AR, status: 'draft', published: 0, href: '/campaigns/c4', retro: null },
     { campaignId: 'c5', name: EMOJI, status: null, published: 12, href: '/campaigns/c5', retro: null },
@@ -250,6 +250,7 @@ describe('the report with the worst data', () => {
   function worstLabels(p: ReportPayload): ReportLabels {
     const names = [LONG, JA, AR, EMOJI, null]
     return {
+      posts: {},
       campaigns: Object.fromEntries((p.campaigns ?? []).flatMap((c, i) => (names[i % 5] === null ? [] : [[c.campaignId, names[i % 5] as string] as const]))),
       accounts: Object.fromEntries((p.activity?.rows ?? []).flatMap((r, i) => (r.accountId === null ? [] : [[r.accountId, [HANDLE, ONE, JA][i % 3]] as const]))),
     }

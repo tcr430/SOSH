@@ -11,7 +11,7 @@ export const MonthlyReportPropsSchema = z.object({
   businessName: z.string().min(1).max(200),
   /** The month in the business language, e.g. "September 2026". */
   periodLabel: z.string().min(1).max(40),
-  summaryLines: z.array(z.string().min(1).max(400)).max(8),
+  summaryLines: z.array(z.string().min(1).max(400)).max(16),
   reportUrl: z.string().url(),
 })
 export type MonthlyReportProps = z.infer<typeof MonthlyReportPropsSchema>

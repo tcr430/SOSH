@@ -231,6 +231,7 @@
     "header": "{business} · {month}. Medido até {measuredAsOf}. Gerado em {generatedOn}.",
     "stub": "Não foi publicada nenhuma publicação em {month}, por isso não há nada para medir.",
     "section": {
+      "trend6": "Tendência de 6 meses",
       "summary": "Resumo",
       "unavailable": "Plataformas sem dados de envolvimento",
       "methodology": "Como ler este relatório"
@@ -241,6 +242,10 @@
       "row": "Publicação {position}: taxa de envolvimento {rate} (1 publicação)"
     },
     "lateOutcomes": "As publicações medidas depois de {date} não estão incluídas.",
+    "post": {
+      "removed": "Publicação removida",
+      "published": "{platform}, {date}"
+    },
     "notInReport": "Este relatório foi gerado antes de o seu plano incluir esta secção.",
     "methodology": {
       "median": "A taxa típica é a mediana da taxa de envolvimento das publicações medidas: metade ficou acima e metade abaixo. Abaixo de 10 publicações, o intervalo é do valor mais baixo ao mais alto; a partir de 10 é a metade central das publicações.",

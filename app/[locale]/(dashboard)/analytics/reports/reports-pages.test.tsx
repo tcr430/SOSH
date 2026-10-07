@@ -36,8 +36,10 @@ vi.mock('./actions', () => ({ setReportEmailAction: vi.fn() }))
 // The label readers the page resolves the payload's ids through (MINOR-7). The fake tables answer by id only, never by business.
 const listCampaignNamesByIds = vi.hoisted(() => vi.fn())
 const listAccountLabels = vi.hoisted(() => vi.fn())
+const listCitedPostsByIds = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/db/campaigns', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/lib/db/campaigns')>()), listCampaignNamesByIds }))
 vi.mock('@/lib/db/social-accounts', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/lib/db/social-accounts')>()), listAccountLabels }))
+vi.mock('@/lib/db/posts', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/lib/db/posts')>()), listCitedPostsByIds }))
 
 import ReportPage from './[period]/page'
 import ReportsPage from './page'
@@ -73,6 +75,7 @@ beforeEach(() => {
   client.auth.getUser = getUser.mockReset().mockResolvedValue({ data: { user: { id: 'user-owner' } } })
   getBusinessForUser.mockReset().mockResolvedValue(A)
   listCampaignNamesByIds.mockReset().mockImplementation(async (_c: unknown, _b: string, ids: string[]) => ids.map((id) => ({ id, business_id: 'biz-a', name: 'Name of ' + id })))
+  listCitedPostsByIds.mockReset().mockImplementation(async (_c: unknown, _b: string, ids: string[]) => ids.map((id) => ({ id, business_id: 'biz-a', platform: 'twitter', published_at: '2026-03-05T10:00:00Z', campaign_id: 'c1' })))
   listAccountLabels.mockReset().mockImplementation(async (_c: unknown, _b: string, ids: string[]) => ids.map((id) => ({ id, business_id: 'biz-a', platform: 'twitter', platform_username: 'user_' + id, platform_display_name: null })))
   getReportByPeriod.mockReset().mockImplementation(async (_c: unknown, businessId: string, periodMonth: string) => DB.find((r) => r.business_id === businessId && r.period_month === periodMonth) ?? null)
   // The index reader returns id, month and the stub flag only: never a payload.
@@ -130,7 +133,7 @@ describe('the report page is bound to the active business (closes #17, Tier 2)',
     expect(listCampaignNamesByIds).toHaveBeenCalledWith(client, 'biz-a', ['c1'])
     expect(listAccountLabels).toHaveBeenCalledWith(client, 'biz-a', ['acc1'])
     expect(body.props.businessName).toBe('Acme')
-    expect(body.props.labels).toEqual({ campaigns: { c1: 'Name of c1' }, accounts: { acc1: 'user_acc1' } })
+    expect(body.props.labels).toEqual({ campaigns: { c1: 'Name of c1' }, accounts: { acc1: 'user_acc1' }, posts: {} })
   })
 
   it('offers Download PDF (ADR §10.1): a plain download anchor to the PDF route for THIS report row, hidden in print, with the focus style', async () => {

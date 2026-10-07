@@ -20,8 +20,10 @@ vi.mock('@/lib/db/analytics-reports', () => ({ getReportById }))
 // prove the names are resolved before Chromium launches. Partial: the loader the fixture assembler uses keeps its real imports.
 const listCampaignNamesByIds = vi.hoisted(() => vi.fn())
 const listAccountLabels = vi.hoisted(() => vi.fn())
+const listCitedPostsByIds = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/db/campaigns', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/lib/db/campaigns')>()), listCampaignNamesByIds }))
 vi.mock('@/lib/db/social-accounts', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/lib/db/social-accounts')>()), listAccountLabels }))
+vi.mock('@/lib/db/posts', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/lib/db/posts')>()), listCitedPostsByIds }))
 // A Pro reader being called from the PDF route would be a bug: it renders the STORED payload and recomputes nothing. These are
 // call-through spies (the fixture assembler below uses the real loader to build the stored payload), cleared after that build.
 vi.mock('@/lib/analytics/load', async (importOriginal) => {
@@ -38,7 +40,7 @@ vi.mock('@/lib/reports/pdf-html', async (importOriginal) => {
 
 import { GET } from './route'
 import { PdfBusyError, PdfTimeoutError } from '@/lib/reports/pdf'
-import { A_X_ACCOUNT_ID, BUSINESS_A_ID, B_CAMPAIGN_ACTIVE_ID, FIXTURE_ACCOUNTS, FIXTURE_CAMPAIGNS, MARCH_REPORT_OUTCOMES_THROUGH } from '@/lib/analytics/__fixtures__/portfolio'
+import { A_X_ACCOUNT_ID, BUSINESS_A_ID, B_CAMPAIGN_ACTIVE_ID, FIXTURE_ACCOUNTS, FIXTURE_CAMPAIGNS, FIXTURE_POSTS, MARCH_REPORT_OUTCOMES_THROUGH } from '@/lib/analytics/__fixtures__/portfolio'
 import { assembleReport } from '@/lib/reports/assemble'
 import { fixtureReaders, fixturePatternRow } from '@/lib/reports/__fixtures__/readers'
 import type { PdfBrowser } from '@/lib/reports/pdf'
@@ -96,6 +98,8 @@ beforeEach(async () => {
   // carries its own business_id, so a foreign row is visible to the resolver's own check.
   listCampaignNamesByIds.mockReset().mockImplementation(async (_c: unknown, _b: string, ids: string[]) => (order.push('labels:campaigns'), FIXTURE_CAMPAIGNS.filter((c) => ids.includes(c.id)).map((c) => ({ id: c.id, business_id: c.business_id === BUSINESS_A_ID ? 'biz-a' : 'biz-b', name: c.name }))))
   listAccountLabels.mockReset().mockImplementation(async (_c: unknown, _b: string, ids: string[]) => (order.push('labels:accounts'), FIXTURE_ACCOUNTS.filter((a) => ids.includes(a.id)).map((a) => ({ ...a, business_id: a.business_id === BUSINESS_A_ID ? 'biz-a' : 'biz-b' }))))
+  // The cited posts resolve by id too (D8, MINOR-4), before Chromium launches, like the names.
+  listCitedPostsByIds.mockReset().mockImplementation(async (_c: unknown, _b: string, ids: string[]) => (order.push('labels:posts'), FIXTURE_POSTS.filter((p) => ids.includes(p.id)).map((p) => ({ id: p.id, business_id: p.business_id === BUSINESS_A_ID ? 'biz-a' : 'biz-b', platform: p.platform, published_at: p.published_at, campaign_id: p.campaign_id }))))
   launch.mockReset().mockImplementation(async () => (order.push('launch'), fakeBrowser()))
   capture.mockReset()
   vi.mocked(load.loadPortfolio).mockClear()
@@ -160,7 +164,7 @@ describe('the order is auth, business, report, THEN the browser', () => {
     const res = await call()
     expect(res.status).toBe(200)
     // The payload's ids are resolved to names by (this business, ids) BEFORE the document is built and the browser launches (MINOR-7).
-    expect(order).toEqual(['client', 'getUser', 'business', 'report', 'labels:campaigns', 'labels:accounts', 'launch', 'setContent'])
+    expect(order).toEqual(['client', 'getUser', 'business', 'report', 'labels:campaigns', 'labels:accounts', 'labels:posts', 'launch', 'setContent'])
   })
 
   it('the ids are resolved for the SESSION business and the names reach the document; a foreign id resolves to the fallback, never to the other business\'s name', async () => {

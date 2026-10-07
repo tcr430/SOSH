@@ -19,6 +19,7 @@ import { listDimensionsForAnalytics, listMonthOutcomes } from '@/lib/db/post-out
 import { listMetricsForPosts } from '@/lib/db/post-metrics'
 import { listAccountLabels } from '@/lib/db/social-accounts'
 import { listCampaignsByIds } from '@/lib/db/campaigns'
+import { listCitedPostsByIds } from '@/lib/db/posts'
 import { getReportById, getReportByPeriod, listReports } from '@/lib/db/analytics-reports'
 
 // ADR 0031 §9.1, §12.1 — Tier 1, live Postgres (Session 37 O2.4).
@@ -171,6 +172,18 @@ describe('analytics reads — authenticated, business-bound, paged, indexed (ADR
     expect(rows.map((r) => r.id).sort()).toEqual([...aIds].sort())
     expect(rows.every((r) => r.business_id === BUSINESS_A_ID)).toBe(true)
     expect(Object.keys(rows[0]).sort()).toEqual(['business_id', 'id', 'name', 'status'])
+  })
+
+  it('cited posts by id (MINOR-4): the owning business posts with exactly five columns, never the other business, even when its id is asked for', async () => {
+    const aIds = (await listPublishedPostsInRange(owner, BUSINESS_A_ID, LISBON_MARCH)).map((p) => p.id)
+    const bIds = (await listPublishedPostsInRange(owner, BUSINESS_B_ID, SAO_PAULO_MARCH)).map((p) => p.id)
+    expect(aIds.length).toBeGreaterThan(0)
+    expect(bIds.length).toBeGreaterThan(0)
+    const rows = await listCitedPostsByIds(owner, BUSINESS_A_ID, [...aIds, ...bIds])
+    expect(rows.map((r) => r.id).sort()).toEqual([...aIds].sort())
+    expect(rows.every((r) => r.business_id === BUSINESS_A_ID)).toBe(true)
+    expect(Object.keys(rows[0]).sort()).toEqual(['business_id', 'campaign_id', 'id', 'platform', 'published_at'])
+    expect(await listCitedPostsByIds(owner, BUSINESS_A_ID, [])).toEqual([])
   })
 
   // ─── reports ─────────────────────────────────────────────────────────────────────────────────────────────

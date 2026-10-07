@@ -70,7 +70,7 @@ describe('MonthlyReportPropsSchema', () => {
     ['a non-URL reportUrl', { reportUrl: '/analytics/reports/2026-09' }],
     ['an empty business name', { businessName: '' }],
     ['an empty period label', { periodLabel: '' }],
-    ['more than eight summary lines', { summaryLines: Array.from({ length: 9 }, (_, i) => 'line ' + i) }],
+    ['more than sixteen summary lines', { summaryLines: Array.from({ length: 17 }, (_, i) => 'line ' + i) }],
     ['an empty summary line', { summaryLines: [''] }],
   ])('rejects %s', (_name, over) => {
     expect(MonthlyReportPropsSchema.safeParse({ ...validProps, ...over }).success).toBe(false)

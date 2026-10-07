@@ -225,9 +225,10 @@ describe('loadPortfolio, an advanced (Pro) business: March 2026, business A (Eur
     expect(completed.retro).toEqual({
       verdict: { key: 'outcome.retrospective.verdict_supported', params: { n: 12 } },
       beat: { key: 'outcome.retrospective.posts_beat', params: { wins: 8, n: 12 } },
+      interval: { key: 'analytics.interval', params: { lo: '40%', hi: '85%' } },
     })
     const active = t.find((r) => r.campaignId === A_CAMPAIGN_ACTIVE_ID)!
-    expect(active.retro).toEqual({ verdict: { key: 'outcome.retrospective.inconclusive', params: { n: 3 } }, beat: null })
+    expect(active.retro).toEqual({ verdict: { key: 'outcome.retrospective.inconclusive', params: { n: 3 } }, beat: null, interval: null })
     expect(t.find((r) => r.campaignId === A_CAMPAIGN_MANUAL_ID)!.retro).toBeNull()
   })
 })

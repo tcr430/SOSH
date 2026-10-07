@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { listAccountLabels } from '@/lib/db/social-accounts'
 import { listCampaignNamesByIds } from '@/lib/db/campaigns'
+import { listCitedPostsByIds } from '@/lib/db/posts'
 import type { ReportPayload, StoredActivity, StoredCampaignRow } from '@/lib/reports/assemble'
 import type { Activity, CampaignTableRow } from './load'
 
@@ -14,30 +15,42 @@ import type { Activity, CampaignTableRow } from './load'
 //
 // The business name is the business row the page already holds; the email, sent once and never stored, uses live labels too.
 
+/** A cited post as it is NOW: its platform, when it went out, and the campaign it belongs to (for the link). Absent = removed. */
+export interface CitedPost {
+  platform: string
+  publishedAt: string
+  campaignId: string
+}
+
 export interface ReportLabels {
   campaigns: Readonly<Record<string, string>>
   accounts: Readonly<Record<string, string>>
+  /** Posts the report cites (section 5), by id. A post that is gone has no entry and renders "Post removed" (MINOR-4). */
+  posts: Readonly<Record<string, CitedPost>>
 }
 
-export const NO_LABELS: ReportLabels = { campaigns: {}, accounts: {} }
+export const NO_LABELS: ReportLabels = { campaigns: {}, accounts: {}, posts: {} }
 
 const UNRECORDED_KEY = 'analytics.account.unrecorded'
 
 /** The ids a stored payload cites, in first-seen order and de-duplicated. */
-export function labelIdsOf(payload: Pick<ReportPayload, 'activity' | 'campaigns'>): { campaignIds: string[]; accountIds: string[] } {
+export function labelIdsOf(payload: Pick<ReportPayload, 'activity' | 'campaigns'> & Partial<Pick<ReportPayload, 'ratedPosts'>>): { campaignIds: string[]; accountIds: string[]; postIds: string[] } {
   return {
+    postIds: [...new Set((payload.ratedPosts?.byPlatform ?? []).flatMap((p) => p.posts.map((post) => post.postId)))],
     campaignIds: [...new Set((payload.campaigns ?? []).map((c) => c.campaignId))],
     accountIds: [...new Set((payload.activity?.rows ?? []).flatMap((r) => (r.accountId === null ? [] : [r.accountId])))],
   }
 }
 
-export async function resolveReportLabels(client: SupabaseClient, businessId: string, payload: Pick<ReportPayload, 'activity' | 'campaigns'>): Promise<ReportLabels> {
-  const { campaignIds, accountIds } = labelIdsOf(payload)
-  const [campaigns, accounts] = await Promise.all([
+export async function resolveReportLabels(client: SupabaseClient, businessId: string, payload: Pick<ReportPayload, 'activity' | 'campaigns'> & Partial<Pick<ReportPayload, 'ratedPosts'>>): Promise<ReportLabels> {
+  const { campaignIds, accountIds, postIds } = labelIdsOf(payload)
+  const [campaigns, accounts, posts] = await Promise.all([
     campaignIds.length > 0 ? listCampaignNamesByIds(client, businessId, campaignIds) : Promise.resolve([]),
     accountIds.length > 0 ? listAccountLabels(client, businessId, accountIds) : Promise.resolve([]),
+    postIds.length > 0 ? listCitedPostsByIds(client, businessId, postIds) : Promise.resolve([]),
   ])
   return {
+    posts: Object.fromEntries(posts.filter((p) => p.business_id === businessId).map((p) => [p.id, { platform: p.platform, publishedAt: p.published_at, campaignId: p.campaign_id }])),
     campaigns: Object.fromEntries(campaigns.filter((c) => c.business_id === businessId && c.name).map((c) => [c.id, c.name])),
     accounts: Object.fromEntries(
       accounts.flatMap((a) => {

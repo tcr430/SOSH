@@ -1,3 +1,4 @@
+import type { ReportLabels } from '@/lib/analytics/labels'
 import { describe, it, expect } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { assembleReport, type ReportPayload } from '../assemble'
@@ -83,7 +84,7 @@ describe('the renderer puts the names back at read time, or says it cannot', () 
   }
   const t = tFor('en')
   const build = async (): Promise<ReportPayload> => (await assembleReport({ readers: fixtureReaders({ patterns: [fixturePatternRow()] }), businessId: BUSINESS_A_ID, period: '2026-03', now: NOW })).payload
-  const html = (payload: ReportPayload, businessName: string, labels: { campaigns: Record<string, string>; accounts: Record<string, string> }, locale: 'en' | 'pt' | 'es' = 'en') =>
+  const html = (payload: ReportPayload, businessName: string, labels: ReportLabels, locale: 'en' | 'pt' | 'es' = 'en') =>
     renderToStaticMarkup(<ReportBody t={tFor(locale)} locale={locale} timezone="Europe/Lisbon" payload={payload} proAllowed businessName={businessName} labels={labels} />)
 
   it('with every id resolved: the business name is in the header, the campaign names and account labels are in their sections', async () => {
@@ -94,7 +95,7 @@ describe('the renderer puts the names back at read time, or says it cannot', () 
   })
 
   it('a DELETED campaign renders the existing "Open campaign" fallback and an account that was REMOVED renders the unrecorded line', async () => {
-    const labels = { campaigns: { ...FIXTURE_LABELS_A.campaigns }, accounts: { ...FIXTURE_LABELS_A.accounts } }
+    const labels = { campaigns: { ...FIXTURE_LABELS_A.campaigns }, accounts: { ...FIXTURE_LABELS_A.accounts }, posts: {} }
     delete labels.campaigns[A_CAMPAIGN_ACTIVE_ID]
     delete labels.accounts[A_X_ACCOUNT_ID]
     const out = html(await build(), FIXTURE_NAME_A, labels)
@@ -105,7 +106,7 @@ describe('the renderer puts the names back at read time, or says it cannot', () 
   })
 
   it('with NO labels at all every campaign and account is its fallback, and nothing renders a raw key, NaN or undefined', async () => {
-    const out = html(await build(), FIXTURE_NAME_A, { campaigns: {}, accounts: {} })
+    const out = html(await build(), FIXTURE_NAME_A, { campaigns: {}, accounts: {}, posts: {} })
     for (const c of FIXTURE_CAMPAIGNS.filter((x) => x.business_id === BUSINESS_A_ID)) expect(out).not.toContain(c.name)
     expect(out).not.toMatch(/NaN|undefined|\[object Object\]/)
   })

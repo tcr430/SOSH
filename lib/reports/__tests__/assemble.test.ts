@@ -95,9 +95,28 @@ describe('the Pro report: business A, March 2026', () => {
     expect((await run(BUSINESS_A_ID)).payload.lateOutcomes).toEqual({ key: 'analytics.report.lateOutcomes', params: { date: NOW } })
   })
 
-  it('the summary is closed template sentences: the activity line, then the typical rate and the wins', async () => {
+  it('the summary is closed template sentences: the activity line, then each rate platform under its own name (MAJOR-7)', async () => {
     const s = (await run(BUSINESS_A_ID)).payload.summary
-    expect(s.map((l) => l.key)).toEqual(['analytics.activity.total', 'analytics.typical', 'analytics.wins'])
+    expect(s.map((l) => l.key)).toEqual([
+      'analytics.activity.total',
+      'analytics.platform.twitter',
+      'analytics.typical',
+      'analytics.wins',
+      'analytics.disclosure.usual',
+      'analytics.disclosure.usualUpdates',
+      'analytics.disclosure.importSeed',
+    ])
+    expect(s.filter((l) => l.heading).map((l) => l.key)).toEqual(['analytics.platform.twitter'])
+  })
+
+  it('MAJOR-7: EVERY win line is immediately followed by the usual definition and the drift sentence (ADR 0031 s2.4)', async () => {
+    const s = (await run(BUSINESS_A_ID)).payload.summary
+    const at = s.findIndex((l) => l.key === 'analytics.wins')
+    expect(at).toBeGreaterThan(0)
+    expect(s[at + 1].key).toBe('analytics.disclosure.usual')
+    expect(s[at + 2].key).toBe('analytics.disclosure.usualUpdates')
+    // and every rate line sits after its platform heading, never before one
+    expect(s[1]).toMatchObject({ key: 'analytics.platform.twitter', heading: true })
   })
 
   it('NO post text anywhere in the payload', async () => {

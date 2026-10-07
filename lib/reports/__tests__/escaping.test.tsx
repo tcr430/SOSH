@@ -43,6 +43,7 @@ async function hostilePayload(): Promise<ReportPayload> {
 // Customer strings no longer live in the payload (MINOR-7): the hostile business name, campaign names and account labels enter
 // ReportBody where they now arrive, as props resolved at read time. Pattern text is gone altogether: a stored pattern is a cell.
 const HOSTILE_LABELS: ReportLabels = {
+  posts: {},
   campaigns: Object.fromEntries(Object.keys(FIXTURE_LABELS_A.campaigns).map((id) => [id, HOSTILE])),
   accounts: Object.fromEntries(Object.keys(FIXTURE_LABELS_A.accounts).map((id) => [id, HOSTILE])),
 }

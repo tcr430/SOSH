@@ -231,6 +231,7 @@
     "header": "{business} · {month}. Measured as of {measuredAsOf}. Generated on {generatedOn}.",
     "stub": "No posts were published in {month}, so there is nothing to measure.",
     "section": {
+      "trend6": "6-month trend",
       "summary": "Summary",
       "unavailable": "Platforms without engagement data",
       "methodology": "How to read this"
@@ -241,6 +242,10 @@
       "row": "Post {position}: engagement rate {rate} (1 post)"
     },
     "lateOutcomes": "Posts measured after {date} are not included.",
+    "post": {
+      "removed": "Post removed",
+      "published": "{platform}, {date}"
+    },
     "notInReport": "This report was generated before your plan included this section.",
     "methodology": {
       "median": "The typical rate is the median engagement rate of the measured posts: half were above it and half below. Below 10 posts the range is lowest to highest; from 10 it is the middle half of posts.",

@@ -23,6 +23,8 @@ import { verifiedReaders } from './isolation'
 export interface SummaryLine {
   key: string
   params: Record<string, string | number>
+  /** A platform name that heads the lines below it (the platform name key, no params). The email prints it with a colon. */
+  heading?: boolean
 }
 
 export interface TopPost {
@@ -103,9 +105,16 @@ function badgeOf(beat: boolean | null): TopPost['badge'] {
   return beat === null ? 'no_baseline' : beat ? 'above' : 'below'
 }
 
-function typicalLines(view: TypicalView | WinsView | null): SummaryLine[] {
+function typicalLines(view: TypicalView | null): SummaryLine[] {
   if (!view || view.state === 'thin') return []
   return [{ key: view.key, params: view.params as unknown as Record<string, string | number> }]
+}
+
+// ADR 0031 s2.4: "usual" is defined next to EVERY win count, with the sentence that says it is not a measure of progress (and the import
+// disclosure when the baseline was seeded). The summary and the email read these lines alone, so the definitions travel with the count.
+function winsLines(view: WinsView): SummaryLine[] {
+  if (view.state === 'thin') return []
+  return [{ key: view.key, params: view.params }, ...view.disclosureKeys.map((key) => ({ key, params: {} }))]
 }
 
 export interface AssembleInput {
@@ -193,8 +202,10 @@ export async function assembleReport(input: AssembleInput): Promise<AssembledRep
   }
 
   const summary: SummaryLine[] = [{ key: 'analytics.activity.total', params: { count: activity.total, prev: activity.previousTotal } }]
+  // Each rate line sits under ITS platform's name (Session 37-D D8, MAJOR-7); a platform with no line to show adds no heading.
   for (const r of xResults) {
-    summary.push(...typicalLines(r.current.typical), ...typicalLines(r.current.wins))
+    const lines = [...typicalLines(r.current.typical), ...winsLines(r.current.wins)]
+    if (lines.length > 0) summary.push({ key: 'analytics.platform.' + r.platform, params: {}, heading: true }, ...lines)
   }
 
   const full: FullPayloadParts = {

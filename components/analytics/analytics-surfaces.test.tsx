@@ -64,7 +64,7 @@ const activity = {
 const unavailableLi: AdvancedPlatformSection = { platform: 'linkedin', state: 'unavailable', published: 3 }
 const campaigns = {
   status: 'ok' as const,
-  data: [{ campaignId: 'c1', name: 'A completed', status: 'completed', published: 2, href: '/campaigns/c1', retro: { verdict: { key: 'outcome.retrospective.verdict_supported', params: { n: 12 } }, beat: { key: 'outcome.retrospective.posts_beat' as const, params: { wins: 8, n: 12 } } } }],
+  data: [{ campaignId: 'c1', name: 'A completed', status: 'completed', published: 2, href: '/campaigns/c1', retro: { verdict: { key: 'outcome.retrospective.verdict_supported', params: { n: 12 } }, beat: { key: 'outcome.retrospective.posts_beat' as const, params: { wins: 8, n: 12 } }, interval: null } }],
 }
 
 const months = monthOptions('2026-03').reverse()
@@ -92,7 +92,7 @@ const advanced = (over: Partial<AdvancedPortfolio> = {}): AdvancedPortfolio => (
   campaigns,
   trend: { status: 'ok', data: trend },
   patterns: { status: 'ok', data: [{ platform: 'twitter', dimension: 'format', value: 'thread', direction: 'above', basis: 'rate', wins: 7, n: 10, campaigns: 3 }] },
-  retrospectives: { status: 'ok', data: [{ campaignId: 'c1', campaignName: 'A completed', completedAt: '2026-03-27T10:00:00+00:00', href: '/campaigns/c1', verdict: { key: 'outcome.retrospective.verdict_supported', params: { n: 12 } }, beat: { key: 'outcome.retrospective.posts_beat', params: { wins: 8, n: 12 } } }] },
+  retrospectives: { status: 'ok', data: [{ campaignId: 'c1', campaignName: 'A completed', completedAt: '2026-03-27T10:00:00+00:00', href: '/campaigns/c1', verdict: { key: 'outcome.retrospective.verdict_supported', params: { n: 12 } }, beat: { key: 'outcome.retrospective.posts_beat', params: { wins: 8, n: 12 } }, interval: null }] },
   accounts: { status: 'ok', data: [{ platform: 'twitter', accountId: 'a-x', label: 'Fixture A on X', labelKey: null, n: 6, typical: typicalView([0, 0.018, 0.025, 0.031, 0.04, 0.064]), wins: { state: 'thin', key: 'analytics.state.thinWins', params: { n: 4 } }, comparison: 'counts' }] },
   ...over,
 })

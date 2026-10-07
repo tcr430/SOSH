@@ -39,7 +39,7 @@ export interface DeliveryResult {
 }
 
 /** The email shows at most this many of the report's summary sentences (the template schema bounds it the same). */
-export const REPORT_EMAIL_MAX_LINES = 8
+export const REPORT_EMAIL_MAX_LINES = 16
 
 /**
  * MINOR-8 (A-13(a)): re-deliver an EXISTING report's email after a failed first attempt. One head count of the business's
@@ -67,7 +67,8 @@ export async function deliverMonthlyReport(report: DeliveredReport): Promise<Del
   const t = await getTranslations({ locale })
   const summaryLines = report.summary
     .slice(0, REPORT_EMAIL_MAX_LINES)
-    .map((line) => t(line.key as never, line.params as never))
+    // A platform heading is printed with a colon so the lines under it read as its own; every other line is its stored template.
+    .map((line) => (line.heading ? t(line.key as never, line.params as never) + ':' : t(line.key as never, line.params as never)))
   const props = {
     businessName: business.name,
     periodLabel: monthLabel(report.period, locale),

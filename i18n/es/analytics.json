@@ -231,6 +231,7 @@
     "header": "{business} · {month}. Medido hasta {measuredAsOf}. Generado el {generatedOn}.",
     "stub": "No se publicó ninguna publicación en {month}, así que no hay nada que medir.",
     "section": {
+      "trend6": "Tendencia de 6 meses",
       "summary": "Resumen",
       "unavailable": "Plataformas sin datos de interacción",
       "methodology": "Cómo leer este informe"
@@ -241,6 +242,10 @@
       "row": "Publicación {position}: tasa de interacción {rate} (1 publicación)"
     },
     "lateOutcomes": "Las publicaciones medidas después del {date} no están incluidas.",
+    "post": {
+      "removed": "Publicación eliminada",
+      "published": "{platform}, {date}"
+    },
     "notInReport": "Este informe se generó antes de que tu plan incluyera esta sección.",
     "methodology": {
       "median": "La tasa típica es la mediana de la tasa de interacción de las publicaciones medidas: la mitad quedó por encima y la mitad por debajo. Por debajo de 10 publicaciones, el rango va del más bajo al más alto; desde 10 es la mitad central de las publicaciones.",

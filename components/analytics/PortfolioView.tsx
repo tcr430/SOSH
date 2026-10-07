@@ -140,12 +140,14 @@ function ResultsSection({ t, locale, timezone, platforms }: { t: T; locale: stri
 
 // ─── campaigns ─────────────────────────────────────────────────────────────────────────────────────────────
 
-function RetroCell({ t, retro }: { t: T; retro: RetroView | null }) {
+function RetroCell({ t, retro, showInterval = false }: { t: T; retro: RetroView | null; showInterval?: boolean }) {
   if (!retro) return <span className="text-muted-foreground">{t('analytics.campaignTable.noVerdict')}</span>
   return (
     <span className="space-y-0.5">
       <span className="block">{t(retro.verdict.key, retro.verdict.params)}</span>
       {retro.beat && <span className="block text-muted-foreground">{t(retro.beat.key, retro.beat.params)}</span>}
+      {/* The report's section 7 carries the interval (ADR 0031 s5.3 row 7); the live page's table does not show one, so it is opt-in. */}
+      {showInterval && retro.interval && <span className="block text-muted-foreground">{t(retro.interval.key, retro.interval.params)}</span>}
     </span>
   )
 }
@@ -154,7 +156,7 @@ function statusName(t: T, status: string | null): string {
   return status ? t('analytics.status.' + status) : '–'
 }
 
-export function CampaignsSection({ t, rows, plain = false }: { t: T; rows: Loaded<CampaignTableRow[]>; plain?: boolean }) {
+export function CampaignsSection({ t, rows, plain = false, showInterval = false }: { t: T; rows: Loaded<CampaignTableRow[]>; plain?: boolean; showInterval?: boolean }) {
   // No campaigns (a business that only posts by hand): no section, rather than a header with nothing under it.
   if (rows.status === 'ok' && rows.data.length === 0) return null
   return (
@@ -193,7 +195,7 @@ export function CampaignsSection({ t, rows, plain = false }: { t: T; rows: Loade
                 </td>
                 <td className={TABLE.cell + ' ' + TABLE.secondary} data-label={t('analytics.campaignTable.status')}>{statusName(t, r.status)}</td>
                 <td className={TABLE.cell + ' ' + TABLE.secondary} data-label={t('analytics.campaignTable.published')}>{r.published}</td>
-                <td className={TABLE.cell} data-label={t('analytics.campaignTable.verdict')}><RetroCell t={t} retro={r.retro} /></td>
+                <td className={TABLE.cell} data-label={t('analytics.campaignTable.verdict')}><RetroCell t={t} retro={r.retro} showInterval={showInterval} /></td>
               </tr>
             ))}
           </tbody>
@@ -250,9 +252,9 @@ export function BreakdownBlock({ t, platform, view }: { t: T; platform: string; 
   )
 }
 
-export function TrendSection({ t, locale, trend }: { t: T; locale: string; trend: Loaded<TrendView> }) {
+export function TrendSection({ t, locale, trend, titleKey = 'analytics.section.trend' }: { t: T; locale: string; trend: Loaded<TrendView>; titleKey?: string }) {
   return (
-    <Section id="trend" title={t('analytics.section.trend')}>
+    <Section id="trend" title={t(titleKey)}>
       {trend.status === 'error' ? (
         <SectionError t={t} />
       ) : (

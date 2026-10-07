@@ -752,6 +752,39 @@ export async function listPostsByIds(
   return (data as PostRow[]) ?? []
 }
 
+const CITED_POST_CHUNK = 20
+
+export interface CitedPostRow {
+  id: string
+  business_id: string
+  platform: Platform
+  published_at: string
+  campaign_id: string
+}
+
+/**
+ * Exactly these posts, read BY ID for one business (Session 37-D D8, MINOR-4): the report cites a post by id, and its platform, date and
+ * campaign are resolved when it is READ. Column-listed, business-bound, chunked, soft-deleted posts excluded (their citation renders
+ * "Post removed").
+ */
+export async function listCitedPostsByIds(client: SupabaseClient, businessId: string, ids: readonly string[]): Promise<CitedPostRow[]> {
+  const unique = [...new Set(ids)]
+  const out: CitedPostRow[] = []
+  for (let i = 0; i < unique.length; i += CITED_POST_CHUNK) {
+    const { data, error } = await client
+      .from('posts')
+      .select('id, business_id, platform, published_at, campaign_id')
+      .eq('business_id', businessId)
+      .is('deleted_at', null)
+      .in('id', unique.slice(i, i + CITED_POST_CHUNK))
+      .order('id', { ascending: true })
+      .limit(CITED_POST_CHUNK)
+    if (error) throw new Error(getErrorMessage(error))
+    out.push(...((data ?? []) as CitedPostRow[]))
+  }
+  return out
+}
+
 export async function listPostsDue(
   client: SupabaseClient,
 ): Promise<PostRow[]> {

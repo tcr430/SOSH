@@ -50,6 +50,9 @@ export interface ReportBodyProps {
   plain?: boolean
 }
 
+// The report's trend holds REPORT_TREND_MONTHS (6), not the live page's 12: its heading says so (Session 37-D D8, MINOR-1).
+const REPORT_TREND_TITLE = 'analytics.report.section.trend6'
+
 function Methodology({ t, keys }: { t: T; keys: readonly string[] }) {
   return (
     <div className="space-y-3 print:break-before-page">
@@ -64,7 +67,23 @@ function Methodology({ t, keys }: { t: T; keys: readonly string[] }) {
   )
 }
 
-function RatedPosts({ t, locale, payload, plain }: { t: T; locale: string; payload: ReportPayload; plain: boolean }) {
+// A cited post is stored as an id and a rate. Its platform, date and campaign are read when the report is READ (by business and id), so a
+// post deleted since says so instead of leaving a rate that points at nothing.
+function CitedPostRef({ t, locale, timezone, period, cited, plain }: { t: T; locale: string; timezone: string; period: string; cited: ReportLabels['posts'][string] | undefined; plain: boolean }) {
+  if (!cited) return <span className="text-sm text-muted-foreground">{t('analytics.report.post.removed')}</span>
+  const label = t('analytics.report.post.published', { platform: t('analytics.platform.' + cited.platform), date: dateLabel(cited.publishedAt, locale, timezone) })
+  if (plain) return <span className="text-sm text-muted-foreground">{label}</span>
+  return (
+    <Link
+      href={'/' + locale + '/analytics/posts?month=' + period + '&platform=' + cited.platform + '&campaign=' + cited.campaignId}
+      className={'text-sm underline underline-offset-2 print:hidden ' + FOCUS}
+    >
+      {label}
+    </Link>
+  )
+}
+
+function RatedPosts({ t, locale, timezone, payload, plain, labels }: { t: T; locale: string; timezone: string; payload: ReportPayload; plain: boolean; labels: ReportLabels }) {
   const rated = payload.ratedPosts
   if (!rated || rated.state !== 'shown') return null
   return (
@@ -78,6 +97,7 @@ function RatedPosts({ t, locale, payload, plain }: { t: T; locale: string; paylo
               <li key={post.postId} className="flex flex-wrap items-center gap-2">
                 <span>{t('analytics.report.ratedPosts.row', { position: i + 1, rate: post.rate })}</span>
                 <ResultBadge t={t} badge={post.badge} />
+                <CitedPostRef t={t} locale={locale} timezone={timezone} period={payload.period} cited={labels.posts[post.postId]} plain={plain} />
               </li>
             ))}
           </ol>
@@ -100,7 +120,7 @@ function ProSections({ t, locale, payload, proAllowed, plain = false }: ReportBo
     return (
       <>
         {PRO_SECTIONS.map((g) => (
-          <GatedSection key={g.id} t={t} locale={locale} id={g.id} titleKey={'analytics.section.' + g.section} lineKey={'analytics.gated.line.' + g.section} plain={plain} />
+          <GatedSection key={g.id} t={t} locale={locale} id={g.id} titleKey={g.section === 'trend' ? REPORT_TREND_TITLE : 'analytics.section.' + g.section} lineKey={'analytics.gated.line.' + g.section} plain={plain} />
         ))}
       </>
     )
@@ -109,10 +129,10 @@ function ProSections({ t, locale, payload, proAllowed, plain = false }: ReportBo
     <>
       {payload.trend ? (
         <div className="print:break-before-page">
-          <TrendSection t={t} locale={locale} trend={ok(payload.trend)} />
+          <TrendSection t={t} locale={locale} trend={ok(payload.trend)} titleKey={REPORT_TREND_TITLE} />
         </div>
       ) : (
-        <Section id="trend" title={t('analytics.section.trend')}>
+        <Section id="trend" title={t(REPORT_TREND_TITLE)}>
           <StateNote>{t('analytics.report.notInReport')}</StateNote>
         </Section>
       )}
@@ -181,7 +201,9 @@ export function ReportBody(props: ReportBodyProps) {
       <Section id="summary" title={t('analytics.report.section.summary')}>
         <ul className="max-w-prose space-y-2 text-base leading-relaxed">
           {payload.summary.map((line, i) => (
-            <li key={line.key + i}>{t(line.key, line.params)}</li>
+            <li key={line.key + i} className={line.heading ? 'pt-2 font-semibold' : undefined}>
+              {t(line.key, line.params)}
+            </li>
           ))}
         </ul>
       </Section>
@@ -197,7 +219,7 @@ export function ReportBody(props: ReportBodyProps) {
         )}
       </Section>
 
-      <RatedPosts t={t} locale={locale} payload={payload} plain={plain} />
+      <RatedPosts t={t} locale={locale} timezone={timezone} payload={payload} plain={plain} labels={labels} />
 
       {payload.unavailable && payload.unavailable.length > 0 && (
         <Section id="unavailable" title={t('analytics.report.section.unavailable')}>
@@ -207,7 +229,7 @@ export function ReportBody(props: ReportBodyProps) {
         </Section>
       )}
 
-      {payload.campaigns && <CampaignsSection t={t} rows={ok(hydrateCampaigns(payload.campaigns, labels))} plain={plain} />}
+      {payload.campaigns && <CampaignsSection t={t} rows={ok(hydrateCampaigns(payload.campaigns, labels))} plain={plain} showInterval />}
 
       <ProSections {...props} />
 
