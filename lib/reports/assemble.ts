@@ -216,7 +216,7 @@ export async function assembleReport(input: AssembleInput): Promise<AssembledRep
       ...(adv.platforms.status === 'ok'
         ? { observed: adv.platforms.data.flatMap((s) => (s.state === 'measured' ? [{ platform: s.platform, breakdowns: s.current.breakdowns }] : [])) }
         : {}),
-      ...(adv.patterns.status === 'ok' ? { patterns: adv.patterns.data.flatMap((p) => (p.cell ? [p.cell] : [])) } : {}),
+      ...(adv.patterns.status === 'ok' ? { patterns: adv.patterns.data } : {}),
     }
   }
 

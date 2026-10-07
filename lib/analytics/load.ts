@@ -10,7 +10,9 @@ import { listCompletedRetrospectivesInRange, type RetrospectiveForAnalytics } fr
 import { READ_CEILING, ReadCeilingExceeded } from '@/lib/db/keyset-pager'
 import type { BusinessRow, Platform } from '@/lib/db/types'
 import { listOutcomePatterns } from '@/lib/db/memory-performance'
-import { selectOutcomePatterns, type OutcomeObservation, type OutcomePatternRow } from '@/lib/memory'
+import * as Sentry from '@sentry/nextjs'
+import { OUTCOME_PATTERN_VOCABULARY } from '@/lib/outcomes/template'
+import { selectOutcomePatterns, type OutcomePatternRow } from '@/lib/memory'
 import { parsePatternKey } from '@/lib/outcomes/pattern-key'
 import { metricsReadAvailableFor } from '@/lib/social'
 import { hasAdvancedAnalytics } from '@/lib/stripe/plan'
@@ -132,12 +134,15 @@ export interface PatternCell {
 }
 
 /** What the loader returns: the live observation (its sentence is shown on the page only) plus the cell, null when the key does not parse. */
-export type PatternObservation = OutcomeObservation & { cell: PatternCell | null }
+/** What the page and the report carry for a pattern: the CELL and its evidence, never a sentence (MAJOR-2). The words come from the reader's locale. */
+export type PatternObservation = PatternCell
 
 export function patternCellOf(row: Pick<OutcomePatternRow, 'pattern_key' | 'metric_basis' | 'wins' | 'n' | 'campaigns'>): PatternCell | null {
   const key = parsePatternKey(row.pattern_key)
   if (!key || (key.direction !== 'above' && key.direction !== 'below')) return null
   if (row.metric_basis !== 'rate' && row.metric_basis !== 'count') return null
+  // A cell the templates have no words for is not rendered at all (it would print a raw key): out of vocabulary is unparseable.
+  if (!OUTCOME_PATTERN_VOCABULARY.platforms.includes(key.platform) || !(OUTCOME_PATTERN_VOCABULARY.subjects[key.dimension] ?? []).includes(key.value)) return null
   return { platform: key.platform, dimension: key.dimension, value: key.value, direction: key.direction, basis: row.metric_basis, wins: row.wins, n: row.n, campaigns: row.campaigns }
 }
 
@@ -383,9 +388,19 @@ export async function loadPortfolioWith(
   // Patterns are a Readers member like every other read (Session 37-D D1): the page binds the AUTHENTICATED client, the
   // report worker binds a verified service-role wrapper. The row's identity (business_id, pattern_key) stays inside the
   // reader; the portfolio carries only the observation.
-  const patterns = await guarded(async (): Promise<PatternObservation[]> =>
-    (await r.listPatterns(businessId, {})).map((row) => ({ platform: row.platform, pattern: row.pattern, wins: row.wins, n: row.n, campaigns: row.campaigns, cell: patternCellOf(row) })),
-  )
+  const patterns = await guarded(async (): Promise<PatternObservation[]> => {
+    const cells: PatternObservation[] = []
+    let dropped = 0
+    for (const row of await r.listPatterns(businessId, {})) {
+      const cell = patternCellOf(row)
+      if (cell) cells.push(cell)
+      else dropped += 1
+    }
+    // A key that does not parse is DROPPED, never rendered from the stored English sentence (that would reintroduce MAJOR-2 by the side
+    // door), and counted: ONE message per load, carrying the count and the business, no key text.
+    if (dropped > 0) Sentry.captureMessage('analytics: pattern keys that did not parse were dropped', { level: 'warning', tags: { area: 'analytics' }, extra: { businessId, dropped } })
+    return cells
+  })
   const retrospectives = await guarded(async (): Promise<RetrospectiveListRow[]> => {
     const rows = await r.listCompletedRetrospectivesInRange(businessId, { start: first.start, end: current.end })
     // The window spans several months: names by id for exactly these retrospectives' campaigns, merged over the month's.

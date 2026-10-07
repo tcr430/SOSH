@@ -18,6 +18,7 @@ import { assembleReport, type ReportPayload } from '@/lib/reports/assemble'
 import { fixtureReaders, fixturePatternRow, FIXTURE_LABELS_A, FIXTURE_NAME_A } from '@/lib/reports/__fixtures__/readers'
 import { ReportBody } from '@/components/analytics/ReportBody'
 import type { T } from '@/components/analytics/shared'
+import { OUTCOME_PATTERN_VOCABULARY } from '@/lib/outcomes/template'
 import { MonthlyReportEmail } from '@/lib/email/templates/monthly-report'
 import { makeTranslator as makeEmailTranslator } from '@/lib/email/templates/__tests__/helpers'
 
@@ -311,5 +312,59 @@ describe('(d) the rendered monthly-report email, in every locale', () => {
     )
     expect(html.length).toBeGreaterThan(100)
     expect(violations(html.replace(/\[[^\]]*\]/g, ' '), locale)).toEqual([])
+  })
+})
+
+// ─── Session 37-D D6 (MAJOR-2): the lint meets the REAL vocabulary ──────────────────────────────────────────────────────────────────
+// Every platform x dimension x value x direction x basis the outcome-pattern template allows (OUTCOME_PATTERN_VOCABULARY, built from the
+// same tables renderOutcomePattern uses), rendered through the analytics pattern keys in all three locales. Not an invented sentence.
+function patternCorpus(): Array<{ platform: string; dimension: string; value: string; direction: 'above' | 'below'; basis: 'rate' | 'count' }> {
+  return OUTCOME_PATTERN_VOCABULARY.platforms.flatMap((platform) =>
+    Object.entries(OUTCOME_PATTERN_VOCABULARY.subjects).flatMap(([dimension, values]) =>
+      values.flatMap((value) => (['above', 'below'] as const).flatMap((direction) => (['rate', 'count'] as const).map((basis) => ({ platform, dimension, value, direction, basis })))),
+    ),
+  )
+}
+function patternSentence(locale: Locale, c: ReturnType<typeof patternCorpus>[number]): string {
+  const a = makeTranslator(locale, 'analytics')
+  const o = makeTranslator(locale, 'outcome')
+  return a('pattern.' + c.direction + (c.basis === 'count' ? '_count' : ''), {
+    platform: a('platform.' + c.platform),
+    subject: o('observed.subject.' + c.dimension + '.' + c.value),
+    wins: 7,
+    n: 10,
+    campaigns: 3,
+  })
+}
+
+describe('(e) every real pattern cell, rendered through the analytics pattern keys, in every locale', () => {
+  it('the corpus is the whole vocabulary: 2 platforms x 18 values x 2 directions x 2 bases', () => {
+    expect(patternCorpus()).toHaveLength(2 * 18 * 2 * 2)
+  })
+
+  it.each(LOCALES)('%s: no real cell trips any class, resolves every key, and prints no raw ICU', (locale) => {
+    // The ONE rendered exemption this corpus needs: es "prueba" also means "proof", and the customer-proof subject says "prueba de cliente"
+    // (ADR 0031 s8.4 known false positive, the same word as RENDERED_EXEMPT_KEYS). Only that subject's text is removed, and only here.
+    const exemptSubject = makeTranslator(locale, 'outcome')('observed.subject.role.customer_proof')
+    const offenders: string[] = []
+    for (const cell of patternCorpus()) {
+      const sentence = patternSentence(locale, cell)
+      expect(sentence, JSON.stringify(cell)).not.toContain('⟦missing')
+      expect(sentence, JSON.stringify(cell)).not.toMatch(/[{}#]/)
+      const checked = cell.dimension === 'role' && cell.value === 'customer_proof' ? sentence.replaceAll(exemptSubject, ' ') : sentence
+      offenders.push(...offences(checked, locale).map((o) => JSON.stringify(cell) + ' -> ' + o))
+    }
+    expect(offenders).toEqual([])
+  })
+
+  it('the exemption is live and the only one: of all real subjects, exactly the es customer-proof subject trips a class without it', () => {
+    const tripping = LOCALES.flatMap((locale) =>
+      patternCorpus().filter((c) => c.platform === 'twitter' && c.direction === 'above' && c.basis === 'rate' && violations(patternSentence(locale, c), locale).length > 0).map((c) => locale + ':' + c.dimension + '.' + c.value),
+    )
+    expect(tripping).toEqual(['es:role.customer_proof'])
+  })
+
+  it('every sentence states its n next to the win count (ANALYTICS-N-SHOWN), in every locale', () => {
+    for (const locale of LOCALES) for (const cell of patternCorpus()) expect(patternSentence(locale, cell)).toMatch(/7\D+10/)
   })
 })

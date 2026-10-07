@@ -91,7 +91,7 @@ const advanced = (over: Partial<AdvancedPortfolio> = {}): AdvancedPortfolio => (
   platforms: { status: 'ok', data: [unavailableLi, measured(view('twitter', '2026-03'))] },
   campaigns,
   trend: { status: 'ok', data: trend },
-  patterns: { status: 'ok', data: [{ platform: 'twitter', pattern: 'Posts with a question opening beat your usual.', wins: 7, n: 10, campaigns: 3, cell: null }] },
+  patterns: { status: 'ok', data: [{ platform: 'twitter', dimension: 'format', value: 'thread', direction: 'above', basis: 'rate', wins: 7, n: 10, campaigns: 3 }] },
   retrospectives: { status: 'ok', data: [{ campaignId: 'c1', campaignName: 'A completed', completedAt: '2026-03-27T10:00:00+00:00', href: '/campaigns/c1', verdict: { key: 'outcome.retrospective.verdict_supported', params: { n: 12 } }, beat: { key: 'outcome.retrospective.posts_beat', params: { wins: 8, n: 12 } } }] },
   accounts: { status: 'ok', data: [{ platform: 'twitter', accountId: 'a-x', label: 'Fixture A on X', labelKey: null, n: 6, typical: typicalView([0, 0.018, 0.025, 0.031, 0.04, 0.064]), wins: { state: 'thin', key: 'analytics.state.thin', params: { n: 4 } }, comparison: 'counts' }] },
   ...over,

@@ -32,7 +32,7 @@ const NOW = MARCH_REPORT_OUTCOMES_THROUGH // 2026-04-10T06:00:00Z: Lisbon 07:00 
 
 // An ACTIVE outcome pattern, exactly the columns the floor RPC would have written. A report stores the parsed CELL of the key, never
 // the sentence (Session 37-D D2), so B's canary differs from A's by cell and counts: only the business filter keeps it out of A's payload.
-const A_KEY = 'outcome:format:question:above:twitter'
+const A_KEY = 'outcome:format:thread:above:twitter'
 const B_KEY = 'outcome:role:customer_proof:below:twitter'
 const outcomePattern = (businessId: string, key: string, wins: number, n: number, campaigns: number) => {
   const [, dimension] = key.split(':')
@@ -98,7 +98,7 @@ describe('report generation against the live stack (ADR 0031 §5.2, §9.3)', () 
 
   it('MAJOR-4: the patterns read is the REAL binding (no stub): the stored patterns of business A are its own row and nothing of business B', async () => {
     const payload = (await reportsOf(BUSINESS_A_ID))[0].payload as { patterns: Array<Record<string, unknown>> }
-    expect(payload.patterns).toEqual([{ platform: 'twitter', dimension: 'format', value: 'question', direction: 'above', basis: 'rate', wins: 7, n: 10, campaigns: 3 }])
+    expect(payload.patterns).toEqual([{ platform: 'twitter', dimension: 'format', value: 'thread', direction: 'above', basis: 'rate', wins: 7, n: 10, campaigns: 3 }])
     // B's cell (a customer_proof role pattern, below, 9 of 12) is not among them, and no stored sentence of either business is in the payload.
     expect(JSON.stringify(payload)).not.toContain('Stored English sentence')
   })

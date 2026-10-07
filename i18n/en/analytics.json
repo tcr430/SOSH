@@ -24,7 +24,8 @@
     "thin": "{n} measured posts so far. A typical rate appears from 5.",
     "loading": "Loading results",
     "error": "We couldn't load your results.",
-    "reload": "Reload"
+    "reload": "Reload",
+    "noPatternYet": "No pattern has enough evidence yet. Jemip only learns a pattern from at least 10 posts across 3 campaigns."
   },
   "typical": "{n} posts measured. Typical engagement rate: {rate} (range {lo}–{hi}).",
   "wins": "{wins} of {n} posts beat your usual engagement.",
@@ -178,7 +179,12 @@
     },
     "details": "Details"
   },
-  "patternEvidence": "Based on {n} posts across {campaigns} campaigns.",
+  "pattern": {
+    "above": "On {platform}, {subject} beat your usual engagement in {wins} of {n} posts ({campaigns, plural, one {# campaign} other {# campaigns}}).",
+    "below": "On {platform}, {subject} were below your usual engagement in {wins} of {n} posts ({campaigns, plural, one {# campaign} other {# campaigns}}).",
+    "above_count": "On {platform}, {subject} beat your usual engagement count in {wins} of {n} posts ({campaigns, plural, one {# campaign} other {# campaigns}}).",
+    "below_count": "On {platform}, {subject} were below your usual engagement count in {wins} of {n} posts ({campaigns, plural, one {# campaign} other {# campaigns}})."
+  },
   "value": {
     "format": {
       "single": "Single post",

@@ -34,6 +34,8 @@ vi.mock('@/lib/db/memory-performance', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/db/memory-performance')>()),
   listOutcomePatterns: mocks.listOutcomePatterns,
 }))
+const sentry = vi.hoisted(() => ({ captureMessage: vi.fn() }))
+vi.mock('@sentry/nextjs', () => sentry)
 vi.mock('@/lib/db/businesses', () => ({ getBusinessById: mocks.getBusinessById }))
 vi.mock('@/lib/db/posts', () => ({ listPublishedPostsInRange: mocks.listPublishedPostsInRange, countPublishedPostsInRange: mocks.countPublishedPostsInRange }))
 vi.mock('@/lib/db/post-outcomes', () => ({ listMonthOutcomes: mocks.listMonthOutcomes, listTrendOutcomes: mocks.listTrendOutcomes, listDimensionsForAnalytics: mocks.listDimensionsForAnalytics }))
@@ -78,7 +80,7 @@ const outcomeRow = (businessId: string) => ({
   id: 'p1', business_id: businessId, source: 'outcome', confidence: 0.5, observation_count: 10, status: 'active', sensitivity: 'internal', public_use_permission: false,
   scope: 'platform', scope_ref: 'twitter', last_confirmed_at: '2026-03-20T00:00:00Z', recency_at: '2026-03-20T00:00:00Z', expires_at: null, deleted_at: null,
   created_at: '2026-03-01T00:00:00Z', updated_at: '2026-03-20T00:00:00Z', import_run_id: null, import_source_post_ids: null, dimension: 'format',
-  pattern: 'Posts with a question opening beat your usual.', platform: 'twitter', pattern_key: 'outcome:format:question:above:twitter',
+  pattern: 'On X, thread posts beat this brand\'s usual engagement.', platform: 'twitter', pattern_key: 'outcome:format:thread:above:twitter',
   outcome_n: 10, outcome_wins: 7, outcome_distinct_campaigns: 3, interval_low: 0.4, interval_high: 0.9, metric_basis: 'rate', baseline_seeded: false, contradicted_at: null,
 })
 
@@ -200,7 +202,7 @@ describe('loadPortfolio, an advanced (Pro) business: March 2026, business A (Eur
     // A gap is a thin point, never a zero: January's four posts carry no median.
     expect(JSON.stringify(series.points.slice(-3)[0])).not.toContain('2.3%')
 
-    expect(ok(p.patterns)).toEqual([{ platform: 'twitter', pattern: 'Posts with a question opening beat your usual.', wins: 7, n: 10, campaigns: 3, cell: { platform: 'twitter', dimension: 'format', value: 'question', direction: 'above', basis: 'rate', wins: 7, n: 10, campaigns: 3 } }])
+    expect(ok(p.patterns)).toEqual([{ platform: 'twitter', dimension: 'format', value: 'thread', direction: 'above', basis: 'rate', wins: 7, n: 10, campaigns: 3 }])
     expect(ok(p.retrospectives).map((r) => [r.campaignId, r.verdict.key])).toEqual([
       [A_CAMPAIGN_ACTIVE_ID, 'outcome.retrospective.inconclusive'],
       [A_CAMPAIGN_COMPLETED_ID, 'outcome.retrospective.verdict_supported'],
@@ -391,7 +393,7 @@ describe('tenancy: every reader is handed the caller\'s client and the caller\'s
 
   it('PATTERNS are read through the AUTHENTICATED client, active only, and the page never acquires the service-role client (MAJOR-3)', async () => {
     const p = (await portfolio(BUSINESS_A_ID)) as AdvancedPortfolio
-    expect(ok(p.patterns)).toEqual([{ platform: 'twitter', pattern: 'Posts with a question opening beat your usual.', wins: 7, n: 10, campaigns: 3, cell: { platform: 'twitter', dimension: 'format', value: 'question', direction: 'above', basis: 'rate', wins: 7, n: 10, campaigns: 3 } }])
+    expect(ok(p.patterns)).toEqual([{ platform: 'twitter', dimension: 'format', value: 'thread', direction: 'above', basis: 'rate', wins: 7, n: 10, campaigns: 3 }])
     expect(mocks.listOutcomePatterns).toHaveBeenCalledWith(client, BUSINESS_A_ID, { status: 'active', platform: undefined })
     expect(guard.serviceRole).not.toHaveBeenCalled()
   })
@@ -525,5 +527,38 @@ describe('loadPosts: the post level, available to every plan (ADR 0031 §2.1, §
   it('the posts read over the ceiling is the section\'s error state', async () => {
     mocks.listPublishedPostsInRange.mockRejectedValue(new ReadCeilingExceeded('published posts in the month', 5000))
     expect((await load(BUSINESS_A_ID)).posts).toEqual({ status: 'error', reason: 'ceiling' })
+  })
+})
+
+describe('MAJOR-2 (D6): a pattern key that does not parse is DROPPED and counted, never rendered from its stored sentence', () => {
+  const stored = (over: Record<string, unknown>) => ({ ...outcomeRow(BUSINESS_A_ID), pattern: 'STORED SENTENCE THAT MUST NEVER BE RENDERED', ...over })
+
+  it('a malformed key and an out-of-vocabulary cell are dropped, ONE Sentry message carries the count and the business, and no stored sentence is in the view model', async () => {
+    sentry.captureMessage.mockClear()
+    mocks.listOutcomePatterns.mockImplementation(async () => [
+      outcomeRow(BUSINESS_A_ID),
+      stored({ id: 'bad1', pattern_key: 'garbage' }),
+      stored({ id: 'bad2', pattern_key: 'outcome:format:question:above:twitter' }),
+    ])
+    const p = (await portfolio(BUSINESS_A_ID)) as AdvancedPortfolio
+    expect(ok(p.patterns)).toEqual([{ platform: 'twitter', dimension: 'format', value: 'thread', direction: 'above', basis: 'rate', wins: 7, n: 10, campaigns: 3 }])
+    expect(sentry.captureMessage).toHaveBeenCalledTimes(1)
+    expect(sentry.captureMessage.mock.calls[0][1]).toMatchObject({ extra: { businessId: BUSINESS_A_ID, dropped: 2 } })
+    expect(JSON.stringify(p)).not.toContain('STORED SENTENCE')
+    expect(JSON.stringify(p)).not.toContain('garbage')
+  })
+
+  it('a direction that is neither above nor below is dropped too (the memory selection caps at three rows, so this is its own case)', async () => {
+    sentry.captureMessage.mockClear()
+    mocks.listOutcomePatterns.mockImplementation(async () => [outcomeRow(BUSINESS_A_ID), stored({ id: 'bad3', pattern_key: 'outcome:format:thread:sideways:twitter' })])
+    const p = (await portfolio(BUSINESS_A_ID)) as AdvancedPortfolio
+    expect(ok(p.patterns)).toHaveLength(1)
+    expect(sentry.captureMessage.mock.calls[0][1]).toMatchObject({ extra: { dropped: 1 } })
+  })
+
+  it('no drop, no message', async () => {
+    sentry.captureMessage.mockClear()
+    await portfolio(BUSINESS_A_ID)
+    expect(sentry.captureMessage).not.toHaveBeenCalled()
   })
 })

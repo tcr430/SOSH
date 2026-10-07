@@ -198,7 +198,7 @@ describe('A-5 and #14: the plan gate on the PDF path', () => {
     getBusinessForUser.mockResolvedValue({ ...A, plan: 'plus' })
     expect((await call()).status).toBe(200)
     expect(setContentHtml).toContain('analytics.gated.prefix')
-    expect(setContentHtml).not.toContain('Posts with a question opening beat your usual.')
+    expect(setContentHtml).not.toContain('On X, thread posts beat this brand\'s usual engagement.')
     expect(setContentHtml).not.toContain('id="trend-posts"')
   })
 

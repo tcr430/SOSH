@@ -1,8 +1,7 @@
 import Link from 'next/link'
 import { dateLabel, monthLabel } from '@/lib/analytics/format'
 import { hydrateActivity, hydrateCampaigns, type ReportLabels } from '@/lib/analytics/labels'
-import type { BasicPlatformSection, PatternCell, PatternObservation, Section as Loaded } from '@/lib/analytics/load'
-import type { Platform } from '@/lib/db/types'
+import type { BasicPlatformSection, Section as Loaded } from '@/lib/analytics/load'
 import { REPORT_KEYS } from '@/lib/reports/constants'
 import type { ReportPayload } from '@/lib/reports/assemble'
 import { ActivitySection, BreakdownBlock, CampaignsSection, PatternsSection, PlatformResults, TrendSection } from './PortfolioView'
@@ -49,17 +48,6 @@ export interface ReportBodyProps {
    * Default false: the page renders exactly as before.
    */
   plain?: boolean
-}
-
-// A stored pattern is a CELL, not a sentence: the words come from the reader's locale. (D6 refines these templates and their lint.)
-function patternObservation(t: T, c: PatternCell): PatternObservation {
-  const verb = t('outcome.observed.verb_' + c.direction + (c.basis === 'count' ? '_count' : ''))
-  const pattern = t('outcome.observed.provisional_line', {
-    platform: t('analytics.platform.' + c.platform),
-    subject: t('outcome.observed.subject.' + c.dimension + '.' + c.value),
-    verb,
-  })
-  return { platform: c.platform as Platform, pattern, wins: c.wins, n: c.n, campaigns: c.campaigns, cell: c }
 }
 
 function Methodology({ t, keys }: { t: T; keys: readonly string[] }) {
@@ -147,7 +135,7 @@ function ProSections({ t, locale, payload, proAllowed, plain = false }: ReportBo
         </Section>
       )}
       {payload.patterns ? (
-        <PatternsSection t={t} patterns={ok(payload.patterns.map((c) => patternObservation(t, c)))} />
+        <PatternsSection t={t} patterns={ok(payload.patterns)} />
       ) : (
         <Section id="patterns" title={t('analytics.section.patterns')}>
           <StateNote>{t('analytics.report.notInReport')}</StateNote>

@@ -37,6 +37,16 @@ const SUBJECT: Record<OutcomePatternDimension, Record<string, string>> = {
   origin_mode: ORIGIN_LABEL,
 }
 
+/**
+ * The closed vocabulary of an outcome pattern's cell: every platform and every dimension x value the template above can name. The
+ * analytics page and report render a stored cell through their own locale keys (Session 37-D D6, MAJOR-2); this is what both the loader
+ * (an out-of-vocabulary cell is dropped, never rendered) and the copy lint (every real cell, in every locale) are built from.
+ */
+export const OUTCOME_PATTERN_VOCABULARY = {
+  platforms: Object.keys(PLATFORM_LABEL),
+  subjects: Object.fromEntries(Object.entries(SUBJECT).map(([dimension, values]) => [dimension, Object.keys(values)])) as Record<string, string[]>,
+} as const
+
 export interface OutcomePatternTemplateInput {
   platform: string
   dimension: OutcomePatternDimension

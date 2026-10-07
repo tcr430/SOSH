@@ -24,7 +24,8 @@
     "thin": "{n} publicaciones medidas hasta ahora. La tasa típica aparece a partir de 5.",
     "loading": "Cargando resultados",
     "error": "No hemos podido cargar tus resultados.",
-    "reload": "Recargar"
+    "reload": "Recargar",
+    "noPatternYet": "Todavía ningún patrón tiene evidencia suficiente. Jemip solo aprende un patrón a partir de al menos 10 publicaciones en 3 campañas."
   },
   "typical": "{n} publicaciones medidas. Tasa de interacción típica: {rate} (rango {lo}–{hi}).",
   "wins": "{wins} de {n} publicaciones superaron tu interacción habitual.",
@@ -178,7 +179,12 @@
     },
     "details": "Detalles"
   },
-  "patternEvidence": "Basado en {n} publicaciones en {campaigns} campañas.",
+  "pattern": {
+    "above": "En {platform}, {subject} superaron tu interacción habitual en {wins} de {n} publicaciones ({campaigns, plural, one {# campaña} other {# campañas}}).",
+    "below": "En {platform}, {subject} quedaron por debajo de tu interacción habitual en {wins} de {n} publicaciones ({campaigns, plural, one {# campaña} other {# campañas}}).",
+    "above_count": "En {platform}, {subject} superaron tu recuento habitual de interacción en {wins} de {n} publicaciones ({campaigns, plural, one {# campaña} other {# campañas}}).",
+    "below_count": "En {platform}, {subject} quedaron por debajo de tu recuento habitual de interacción en {wins} de {n} publicaciones ({campaigns, plural, one {# campaña} other {# campañas}})."
+  },
   "value": {
     "format": {
       "single": "Publicación única",

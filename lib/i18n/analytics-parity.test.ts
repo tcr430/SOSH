@@ -7,6 +7,9 @@ import enCommon from '@/i18n/en/common.json'
 import ptCommon from '@/i18n/pt/common.json'
 import esCommon from '@/i18n/es/common.json'
 import enOutcome from '@/i18n/en/outcome.json'
+import ptOutcome from '@/i18n/pt/outcome.json'
+import esOutcome from '@/i18n/es/outcome.json'
+import { OUTCOME_PATTERN_VOCABULARY } from '@/lib/outcomes/template'
 import { createTranslator } from 'next-intl'
 import { ACTIVE_NAV, COMING_SOON_NAV } from '@/components/layout/DashboardShell'
 
@@ -163,6 +166,42 @@ describe('analytics i18n plurals (rendered, not echoed)', () => {
           expect(out, locale + ' ' + key + ' n=' + n).not.toMatch(/plural|[{}#]/)
         }
       }
+    }
+  })
+})
+
+describe('the pattern templates over the real vocabulary (Session 37-D D6)', () => {
+  const cells = OUTCOME_PATTERN_VOCABULARY.platforms.flatMap((platform) =>
+    Object.entries(OUTCOME_PATTERN_VOCABULARY.subjects).flatMap(([dimension, values]) =>
+      values.flatMap((value) => (['above', 'below'] as const).flatMap((direction) => (['rate', 'count'] as const).map((basis) => ({ platform, dimension, value, direction, basis })))),
+    ),
+  )
+
+  // The REAL ICU formatter (next-intl), over the analytics and outcome namespaces a pattern line draws from.
+  const real = (locale: 'en' | 'pt' | 'es') =>
+    createTranslator({ locale, messages: { analytics: { en, pt, es }[locale], outcome: { en: enOutcome, pt: ptOutcome, es: esOutcome }[locale] } }) as unknown as (key: string, values?: Record<string, unknown>) => string
+
+  it.each(['en', 'pt', 'es'] as const)('%s: every real cell resolves all three keys it needs and prints no raw ICU or placeholder', (locale) => {
+    const a = real(locale)
+    for (const c of cells) {
+      const sentence = a('analytics.pattern.' + c.direction + (c.basis === 'count' ? '_count' : ''), {
+        platform: a('analytics.platform.' + c.platform),
+        subject: a('outcome.observed.subject.' + c.dimension + '.' + c.value),
+        wins: 7,
+        n: 10,
+        campaigns: 3,
+      })
+      expect(sentence, JSON.stringify(c)).not.toMatch(/[{}#]/)
+      expect(sentence).toContain('7')
+      expect(sentence).toContain('10')
+    }
+  })
+
+  it('noPatternYet exists in all three locales and says 10 posts and 3 campaigns', () => {
+    for (const locale of ['en', 'pt', 'es'] as const) {
+      const s = real(locale)('analytics.state.noPatternYet')
+      expect(s).toMatch(/10/)
+      expect(s).toMatch(/3/)
     }
   })
 })

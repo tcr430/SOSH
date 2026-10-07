@@ -12,6 +12,7 @@ import type {
   RetrospectiveListRow,
   Section as Loaded,
   TrendView,
+  PatternObservation,
 } from '@/lib/analytics/load'
 import type { BreakdownView, MonthPairView, TypicalView, WinsView } from '@/lib/analytics/view-model'
 import { PostsPerMonthChart, TrendStrip, WinShareBars } from './charts'
@@ -282,19 +283,36 @@ function BreakdownsSection({ t, platforms }: { t: T; platforms: Loaded<AdvancedP
   )
 }
 
+// A stored pattern is a CELL: the sentence is composed here, in the reader's locale, from closed analytics templates (one per direction x
+// basis) and the subject keys the campaign page already translates. The evidence (wins of n, campaigns) is stated once, inside it.
+function PatternLine({ t, cell }: { t: T; cell: PatternObservation }) {
+  return (
+    <>
+      {t('analytics.pattern.' + cell.direction + (cell.basis === 'count' ? '_count' : ''), {
+        platform: platformName(t, cell.platform),
+        subject: t('outcome.observed.subject.' + cell.dimension + '.' + cell.value),
+        wins: cell.wins,
+        n: cell.n,
+        campaigns: cell.campaigns,
+      })}
+    </>
+  )
+}
+
 export function PatternsSection({ t, patterns }: { t: T; patterns: AdvancedPortfolio['patterns'] }) {
   return (
     <Section id="patterns" title={t('analytics.section.patterns')}>
       {patterns.status === 'error' ? (
         <SectionError t={t} />
       ) : patterns.data.length === 0 ? (
-        <StateNote>{t('analytics.state.empty')}</StateNote>
+        // Reached only for a month that HAS posts (a month with none shows state.empty for the whole page), so "nothing published" would be
+        // false here: this says what is true (A-8(a), MAJOR-1).
+        <StateNote>{t('analytics.state.noPatternYet')}</StateNote>
       ) : (
         <ul className="space-y-2 text-sm">
           {patterns.data.map((p) => (
-            <li key={p.pattern}>
-              <span className="block wrap-anywhere">{p.pattern}</span>
-              <span className="block text-xs text-muted-foreground">{t('analytics.patternEvidence', { n: p.n, campaigns: p.campaigns })}</span>
+            <li key={[p.platform, p.dimension, p.value, p.direction].join(':')} className="wrap-anywhere">
+              <PatternLine t={t} cell={p} />
             </li>
           ))}
         </ul>
