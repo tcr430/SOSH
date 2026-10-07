@@ -49,7 +49,7 @@ export default async function ReportPage({ params }: Props) {
     <div className="mx-auto max-w-5xl space-y-8 px-4 py-8 sm:px-6 print:max-w-none print:px-0 print:py-0">
       {/* The page's actions (ADR 0031 §10.1), outside ReportBody so they are never in the PDF and never in print. */}
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 print:hidden">
-        <Link href={'/' + locale + '/analytics/reports'} className={'text-sm font-medium underline underline-offset-2 ' + FOCUS}>
+        <Link href={'/' + locale + '/analytics/reports'} className={'inline-block min-h-6 py-0.5 text-sm font-medium underline underline-offset-2 ' + FOCUS}>
           {t('analytics.report.back')}
         </Link>
         {/* A plain anchor, not Link: the target is a file, not a page, so no client-side navigation or prefetch. The report id is

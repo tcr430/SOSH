@@ -50,7 +50,7 @@ export default async function AnalyticsPostsPage({ params, searchParams }: Props
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight">{t('analytics.posts.title')}</h1>
         <p className="text-sm text-muted-foreground">{t('analytics.posts.description')}</p>
-        <Link href={'/' + locale + '/analytics?month=' + filters.period} className={'text-sm font-medium underline underline-offset-2 ' + FOCUS}>
+        <Link href={'/' + locale + '/analytics?month=' + filters.period} className={'inline-block min-h-6 py-0.5 text-sm font-medium underline underline-offset-2 ' + FOCUS}>
           {t('analytics.backLink')}
         </Link>
       </header>

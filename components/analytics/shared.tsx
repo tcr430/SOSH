@@ -117,13 +117,13 @@ export interface PickerOption {
  */
 export const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground'
 // max-w-full: a select sizes itself to its LONGEST option, and the options carry customer names (campaigns, accounts).
-const SELECT = 'min-h-8 max-w-full rounded-md border bg-background px-3 py-2 text-sm ' + FOCUS
+const SELECT = 'min-h-8 w-full max-w-full rounded-md border bg-background px-3 py-2 text-sm ' + FOCUS
 // hover: only on a real hover device (Tailwind v4 gates it), active: an instant opacity change (no motion, so nothing to gate).
 export const BUTTON = 'min-h-8 rounded-md border bg-secondary px-3 py-2 text-sm font-medium text-secondary-foreground hover:bg-secondary/80 active:opacity-80 ' + FOCUS
 
 export function SelectField({ id, label, name, value, options }: { id: string; label: string; name: string; value: string; options: PickerOption[] }) {
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex min-w-0 max-w-full flex-col gap-1">
       <label htmlFor={id} className="text-xs font-medium text-muted-foreground">
         {label}
       </label>

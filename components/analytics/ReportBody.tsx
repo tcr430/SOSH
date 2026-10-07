@@ -76,7 +76,7 @@ function CitedPostRef({ t, locale, timezone, period, cited, plain }: { t: T; loc
   return (
     <Link
       href={'/' + locale + '/analytics/posts?month=' + period + '&platform=' + cited.platform + '&campaign=' + cited.campaignId}
-      className={'text-sm underline underline-offset-2 print:hidden ' + FOCUS}
+      className={'inline-block min-h-6 py-0.5 text-sm underline underline-offset-2 print:hidden ' + FOCUS}
     >
       {label}
     </Link>
@@ -104,7 +104,7 @@ function RatedPosts({ t, locale, timezone, payload, plain, labels }: { t: T; loc
           {!plain && (
             <Link
               href={'/' + locale + '/analytics/posts?month=' + payload.period + '&platform=' + p.platform}
-              className={'text-sm font-medium underline underline-offset-2 print:hidden ' + FOCUS}
+              className={'inline-block min-h-6 py-0.5 text-sm font-medium underline underline-offset-2 print:hidden ' + FOCUS}
             >
               {t('analytics.postsLink')}
             </Link>

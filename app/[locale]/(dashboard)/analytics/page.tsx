@@ -45,10 +45,10 @@ export default async function AnalyticsPage({ params, searchParams }: Props) {
         <h1 className="text-2xl font-semibold tracking-tight">{t('analytics.title')}</h1>
         <p className="text-sm text-muted-foreground">{t('analytics.description')}</p>
         <div className="flex flex-wrap gap-x-6 gap-y-1">
-          <Link href={'/' + locale + '/analytics/posts?month=' + month} className={'text-sm font-medium underline underline-offset-2 ' + FOCUS}>
+          <Link href={'/' + locale + '/analytics/posts?month=' + month} className={'inline-block min-h-6 py-0.5 text-sm font-medium underline underline-offset-2 ' + FOCUS}>
             {t('analytics.postsLink')}
           </Link>
-          <Link href={'/' + locale + '/analytics/reports'} className={'text-sm font-medium underline underline-offset-2 ' + FOCUS}>
+          <Link href={'/' + locale + '/analytics/reports'} className={'inline-block min-h-6 py-0.5 text-sm font-medium underline underline-offset-2 ' + FOCUS}>
             {t('analytics.report.listLink')}
           </Link>
         </div>

@@ -181,7 +181,7 @@ export function CampaignsSection({ t, rows, plain = false, showInterval = false 
                     {plain ? (
                       <span dir="auto" className="font-medium">{r.name ?? t('analytics.campaignTable.open')}</span>
                     ) : (
-                      <Link href={r.href} dir="auto" className={'font-medium underline underline-offset-2 ' + FOCUS}>
+                      <Link href={r.href} dir="auto" className={'inline-block min-h-6 py-0.5 font-medium underline underline-offset-2 ' + FOCUS}>
                         {r.name ?? t('analytics.campaignTable.open')}
                       </Link>
                     )}
@@ -339,7 +339,7 @@ function RetrospectivesSection({ t, rows }: { t: T; rows: Loaded<RetrospectiveLi
         <ul className="space-y-2 text-sm">
           {rows.data.map((r) => (
             <li key={r.campaignId}>
-              <Link href={r.href} className={'font-medium underline underline-offset-2 ' + FOCUS}>
+              <Link href={r.href} className={'inline-block min-h-6 py-0.5 font-medium underline underline-offset-2 ' + FOCUS}>
                 {r.campaignName ?? t('analytics.campaignTable.open')}
               </Link>{' '}
               <RetroCell t={t} retro={r} />

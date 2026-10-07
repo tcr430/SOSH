@@ -716,3 +716,52 @@ No ruling is needed (section 4 engineering ledger).
 **What I did NOT touch (D9):** the floors' values, the Wilson interval, `outcome.json`/`common.json`, no migration.
 
 **Loop at this step.** `npm run typecheck` clean; `npm run lint` 0 errors, 113 warnings (unchanged); `npm run test:app` with `app-tests.yml`'s env block: 429 files, 6742 tests passed; `npm run test:db` against the LOCAL stack: 122 files, 1388 tests, 0 failed.
+
+### D10 — MAJOR-6, NIT-3
+
+| Field | MAJOR-6 | NIT-3 |
+|---|---|---|
+| **Finding** | MAJOR-6 | NIT-3 |
+| **Fix (class lists only, no layout change)** | `components/analytics/shared.tsx`: the `SelectField` wrapper `flex flex-col gap-1` becomes `flex min-w-0 max-w-full flex-col gap-1`, and `SELECT` gains `w-full` (`min-h-8 w-full max-w-full ...`). The wrapper is the flex item that had no width bound; it now shrinks and cannot exceed the bar, and the select fills it. The build guide said `w-full` on the wrapper: that would stack every field on its own row at 1280 as well, so I used `max-w-full` instead (same bound at 320, unchanged layout at 1280). | Standalone links get `inline-block min-h-6 py-0.5`: "See every post" and "Monthly reports" on the overview, the report's per-platform posts link, the cited-post link (D8), the campaign links in the campaigns table and the retrospectives list, the posts page's "Back to the overview", the reports list's "Back to the overview" and its per-month links, and the report page's "Back to monthly reports". The in-sentence billing link in a gated line is left as text (an inline link in a sentence is outside a 24 px target). |
+| **Proof** | **The browser pass below** (Playwright, Chromium, `next dev` on the LOCAL stack, the O2.1 fixture seeded, the March reports generated with the real loader dependencies, all removed afterwards). Tier-2: `worst-case.test.tsx` renders `PostsFilters` in pt with the real long option *"Conta não registada ou entretanto removida"* and asserts every select is `w-full max-w-full` and every wrapper `min-w-0 max-w-full`. | Browser: every `main a[href]` to `/analytics` or `/campaigns` measured at or above 24 px (the table below). Tier-2: every underlined, non-in-sentence link on the portfolio and the report carries `min-h-6` and `py-0.5`. |
+| **Reddening** | Pre-fix classes on the dev server (the guide's REDDEN): **pt 320: `<main class="flex-1 overflow-auto p-6">` scrollWidth/clientWidth = 367/305, the account select 327 px; en 320: 338/305, select 298 px**, exactly the Reviewer's numbers. The Tier-2 pin goes RED on the pre-fix classes. | The Tier-2 pin goes RED with the link classes removed. Restored with `cp`; `cmp` identical. |
+| **Commit** | D10 | D10 |
+
+**The guide's single-class REDDEN does not redden, and I report that rather than the expected result.** Removing `min-w-0` alone from the wrapper leaves pt 320 clean (select 225 px in a 305 px `<main>`), because the wrapper's `max-w-full` and the select's `w-full` each bound it. Each half of the fix also suffices alone (wrapper `min-w-0 max-w-full` with the old select: clean, 225 px). Only reverting BOTH reproduces the failure (367/305). The fix therefore has redundancy on purpose; the guide's expectation that `min-w-0` is the sole load-bearing class was wrong.
+
+**Measurement.** Method: after `networkidle` plus 600 ms (a run that caught the "Loading results" skeleton would show in the `loading` column; none did). For each page, `[...document.querySelectorAll('*')].filter(e => ['auto','scroll'].includes(getComputedStyle(e).overflowX) && e.scrollWidth > e.clientWidth)`, the `documentElement` `scrollWidth/clientWidth`, and the height of every `main a[href]` to `/analytics` or `/campaigns`. **Pages (8 per cell, the Reviewer's list):** `/analytics?month=` 2026-03 (populated), 2026-04 (immature), 2026-01 (thin), 2026-10 (empty); `/analytics/posts?month=2026-03` and the same with `&platform=linkedin`; `/analytics/reports`; `/analytics/reports/2026-03`. **Businesses:** A (Pro, active) and B (Plus, made the user's oldest business so it is the active one; gated lines confirmed on screen). **Totals: 2 businesses x 3 locales x 3 widths x 8 pages = 144 page loads.**
+
+| Business | Locale | Width | Pages | `overflow-x` scrollers with `scrollWidth > clientWidth` | `documentElement` scrollWidth/clientWidth | Min link height | Loading skeleton seen |
+|---|---|---|---|---|---|---|---|
+| A | en | 1280 | 8 | **none** | 1265/1265, 1280/1280 | 24 | none |
+| A | en | 640 | 8 | **none** | 625/625, 640/640 | 24 | none |
+| A | en | 320 | 8 | **none** | 305/305, 320/320 | 24 | none |
+| A | pt | 1280 | 8 | **none** | 1265/1265, 1280/1280 | 24 | none |
+| A | pt | 640 | 8 | **none** | 625/625, 640/640 | 24 | none |
+| A | pt | 320 | 8 | **none** | 305/305, 320/320 | 24 | none |
+| A | es | 1280 | 8 | **none** | 1265/1265, 1280/1280 | 24 | none |
+| A | es | 640 | 8 | **none** | 625/625, 640/640 | 24 | none |
+| A | es | 320 | 8 | **none** | 305/305, 320/320 | 24 | none |
+| B | en | 1280 | 8 | **none** | 1265/1265, 1280/1280 | 24 | none |
+| B | en | 640 | 8 | **none** | 625/625, 640/640 | 24 | none |
+| B | en | 320 | 8 | **none** | 305/305, 320/320 | 24 | none |
+| B | pt | 1280 | 8 | **none** | 1265/1265, 1280/1280 | 24 | none |
+| B | pt | 640 | 8 | **none** | 625/625, 640/640 | 24 | none |
+| B | pt | 320 | 8 | **none** | 305/305, 320/320 | 24 | none |
+| B | es | 1280 | 8 | **none** | 1265/1265, 1280/1280 | 24 | none |
+| B | es | 640 | 8 | **none** | 625/625, 640/640 | 24 | none |
+| B | es | 320 | 8 | **none** | 305/305, 320/320 | 24 | none |
+
+(The two document widths in a cell are the pages with a vertical scrollbar, 1265/625/305, and those without, 1280/640/320; every page's `scrollWidth` equals its `clientWidth`, so the document never overflows, equal to V.17.) Every one of the 144 measurements returned `[]` for the scroller query.
+
+**What the first English pass found, which the guide's list did not name.** The first run (before the last class edits) returned every scroller query empty but found **"Back to the overview" at 18 px** (posts, reports) and **"Back to monthly reports" at 20 px** (a report). They are the same NIT-3 defect on standalone links the finding's examples did not list. They are fixed in this commit and the table above is the re-run, after the fix, for all 144 loads.
+
+**Console during the pass.** Two errors on every page, both pre-existing and dev-only: React's development-mode `eval()` notice (production never uses `eval`) and the root-layout `<body className>` hydration warning already filed as `S37-DEV-HYDRATION-WARNING` in `docs/backlog.md`. Neither is related to this change.
+
+**Assertions changed:** none (the new tests are additions in `worst-case.test.tsx`, which gains the filter-bar and link-size describes; the existing "max-w-full" select test passes unchanged).
+
+**Shared-function callers (D10).** `SelectField`: `MonthPicker` (overview, reports) and `PostsFilters` (all four fields); both measured above. `SELECT`: the same two. The link classes are on the pages and components named in the Fix row; each page was loaded in the pass.
+
+**What I did NOT touch (D10):** the table recipe, the shell, the 640 px "Details" disclosure, the chart components, any copy, no migration. The ADR §10.4 acceptance wording ("shell `scrollWidth` <= 320" is not enough for a shell with an inner scroller) is D11's.
+
+**Loop at this step.** `npm run typecheck` clean; `npm run lint` 0 errors, 113 warnings (unchanged); `npm run test:app` with `app-tests.yml`'s env block: 429 files, 6745 tests passed; `npm run test:db` against the LOCAL stack: 122 files, 1388 tests, 0 failed. The dev server was stopped, the fixture removed from the local stack and the temporary seeding harness deleted before this commit.

@@ -14,7 +14,7 @@ import { fixtureReaders, fixturePatternRow, FIXTURE_LABELS_A, FIXTURE_NAME_A } f
 import { compileReportCss } from '@/lib/reports/pdf-css'
 import { TABLE } from '@/components/analytics/shared'
 import { PortfolioView } from './PortfolioView'
-import { PostsTable } from './PostsView'
+import { PostsFilters, PostsTable } from './PostsView'
 import { ReportBody } from './ReportBody'
 import { MonthPicker, SelectField, type T } from './shared'
 
@@ -334,5 +334,57 @@ describe('the class that makes a string breakable is real', () => {
     const css = await compileReportCss(['max-sm:before:shrink-0', 'max-sm:before:wrap-break-word'])
     expect(css).toMatch(/::before[\s\S]*flex-shrink:\s*0/)
     expect(css).toMatch(/::before[\s\S]*overflow-wrap:\s*break-word/)
+  })
+})
+
+// Session 37-D D10 (MAJOR-6, NIT-3). The Reviewer found the posts filter bar scrolling inside <main> at 320 px: the account select sized to
+// its longest option (327 px in pt) and the max-w-full on the select did not bind, because its flex-column parent had no width bound. The
+// pixel measure is the browser pass in the appendix; these pin the classes that bound it, with the REAL long pt option.
+const LONG_PT_ACCOUNT = 'Conta não registada ou entretanto removida'
+
+describe('the posts filter bar is width-bounded (MAJOR-6)', () => {
+  const bar = () =>
+    mount(
+      renderToStaticMarkup(
+        <PostsFilters
+          t={tFor('pt')}
+          action="/pt/analytics/posts"
+          state={{ period: '2026-03' }}
+          months={[{ value: '2026-03', label: 'março de 2026' }]}
+          platforms={[{ value: 'twitter', label: 'X' }]}
+          accounts={[{ value: 'a1', label: LONG_PT_ACCOUNT }]}
+          campaigns={[{ value: 'c1', label: LONG }]}
+        />,
+      ),
+    )
+
+  it('every field wrapper may shrink (min-w-0) and never exceeds the bar (max-w-full), and every select fills its wrapper and cannot exceed it', () => {
+    const root = bar()
+    const selects = [...root.querySelectorAll('select')]
+    expect(selects).toHaveLength(4)
+    for (const s of selects) {
+      expect(s.className, s.id).toMatch(/(^| )w-full( |$)/)
+      expect(s.className, s.id).toMatch(/(^| )max-w-full( |$)/)
+      const wrapper = s.parentElement!
+      expect(wrapper.className, s.id).toMatch(/(^| )min-w-0( |$)/)
+      expect(wrapper.className, s.id).toMatch(/(^| )max-w-full( |$)/)
+    }
+  })
+
+  it('the long Portuguese account option is really in the account select (so the classes above are bounding something)', () => {
+    expect(bar().querySelector('#posts-account')?.innerHTML).toContain(LONG_PT_ACCOUNT)
+  })
+})
+
+describe('standalone analytics links are 24 px targets (NIT-3)', () => {
+  it('every underlined link on the portfolio and the report carries min-h-6 and vertical padding', async () => {
+    const portfolio = mount(render('en', worst()))
+    const report = mount(renderToStaticMarkup(<ReportBody t={tFor('en')} locale="en" timezone={LISBON} payload={(await assembleReport({ readers: fixtureReaders(), businessId: BUSINESS_A_ID, period: '2026-03', now: MARCH_REPORT_OUTCOMES_THROUGH })).payload} proAllowed businessName={FIXTURE_NAME_A} labels={FIXTURE_LABELS_A} />))
+    const links = [...portfolio.querySelectorAll('a'), ...report.querySelectorAll('a')].filter((a) => a.className.includes('underline-offset-2') && !a.closest('p'))
+    expect(links.length).toBeGreaterThan(3)
+    for (const a of links) {
+      expect(a.className, a.outerHTML.slice(0, 90)).toMatch(/min-h-6/)
+      expect(a.className, a.outerHTML.slice(0, 90)).toMatch(/py-0.5/)
+    }
   })
 })

@@ -39,7 +39,7 @@ export default async function ReportsPage({ params }: Props) {
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold tracking-tight">{t('analytics.report.title')}</h1>
         <p className="text-sm text-muted-foreground">{t('analytics.report.description')}</p>
-        <Link href={'/' + locale + '/analytics'} className={'text-sm font-medium underline underline-offset-2 ' + FOCUS}>
+        <Link href={'/' + locale + '/analytics'} className={'inline-block min-h-6 py-0.5 text-sm font-medium underline underline-offset-2 ' + FOCUS}>
           {t('analytics.backLink')}
         </Link>
       </header>
@@ -71,7 +71,7 @@ export default async function ReportsPage({ params }: Props) {
             const stub = r.stub
             return (
               <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
-                <Link href={'/' + locale + '/analytics/reports/' + period} className={'font-medium underline underline-offset-2 ' + FOCUS}>
+                <Link href={'/' + locale + '/analytics/reports/' + period} className={'inline-block min-h-6 py-0.5 font-medium underline underline-offset-2 ' + FOCUS}>
                   {monthLabel(period, locale)}
                 </Link>
                 <span className="text-sm text-muted-foreground">{stub ? t('analytics.report.list.stub') : t('analytics.report.list.open')}</span>
