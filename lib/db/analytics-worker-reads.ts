@@ -27,12 +27,12 @@ export function analyticsWorkerReaders() {
     listCampaignsByIds: async (businessId: string, ids: readonly string[]) => listCampaignsByIds(await service(), businessId, ids),
     listCompletedRetrospectivesInRange: async (businessId: string, range: { start: string; end: string }) =>
       listCompletedRetrospectivesInRange(await service(), businessId, range),
-    listPublishedPostsInRange: async (businessId: string, range: { start: string; end: string }) =>
-      listPublishedPostsInRange(await service(), businessId, range),
+    listPublishedPostsInRange: async (businessId: string, range: { start: string; end: string }, opts?: { ceiling?: number }) =>
+      listPublishedPostsInRange(await service(), businessId, range, opts),
     countPublishedPostsInRange: async (businessId: string, range: { start: string; end: string }) =>
       countPublishedPostsInRange(await service(), businessId, range),
-    listMonthOutcomes: async (businessId: string, q: Parameters<typeof listMonthOutcomes>[2]) => listMonthOutcomes(await service(), businessId, q),
-    listTrendOutcomes: async (businessId: string, q: Parameters<typeof listTrendOutcomes>[2]) => listTrendOutcomes(await service(), businessId, q),
+    listMonthOutcomes: async (businessId: string, q: Parameters<typeof listMonthOutcomes>[2], opts?: { ceiling?: number }) => listMonthOutcomes(await service(), businessId, q, opts),
+    listTrendOutcomes: async (businessId: string, q: Parameters<typeof listTrendOutcomes>[2], opts?: { ceiling?: number }) => listTrendOutcomes(await service(), businessId, q, opts),
     listDimensionsForAnalytics: async (businessId: string, ids: readonly string[]) => listDimensionsForAnalytics(await service(), businessId, ids),
     listMetricsForPosts: async (businessId: string, ids: readonly string[]) => listMetricsForPosts(await service(), businessId, ids),
     listAccountLabels: async (businessId: string, ids: readonly string[]) => listAccountLabels(await service(), businessId, ids),

@@ -46,13 +46,13 @@ export function verifiedReaders(base: Readers, businessId: string): Readers {
     },
     listCampaignsByIds: (id, ids) => rows(id, 'listCampaignsByIds', () => base.listCampaignsByIds(id, ids)),
     listCompletedRetrospectivesInRange: (id, range) => rows(id, 'listCompletedRetrospectivesInRange', () => base.listCompletedRetrospectivesInRange(id, range)),
-    listPublishedPostsInRange: (id, range) => rows(id, 'listPublishedPostsInRange', () => base.listPublishedPostsInRange(id, range)),
+    listPublishedPostsInRange: (id, range, o) => rows(id, 'listPublishedPostsInRange', () => base.listPublishedPostsInRange(id, range, o)),
     countPublishedPostsInRange: async (id, range) => {
       same(id, 'countPublishedPostsInRange')
       return base.countPublishedPostsInRange(id, range)
     },
-    listMonthOutcomes: (id, q) => rows(id, 'listMonthOutcomes', () => base.listMonthOutcomes(id, q)),
-    listTrendOutcomes: (id, q) => rows(id, 'listTrendOutcomes', () => base.listTrendOutcomes(id, q)),
+    listMonthOutcomes: (id, q, o) => rows(id, 'listMonthOutcomes', () => base.listMonthOutcomes(id, q, o)),
+    listTrendOutcomes: (id, q, o) => rows(id, 'listTrendOutcomes', () => base.listTrendOutcomes(id, q, o)),
     listDimensionsForAnalytics: (id, ids) => rows(id, 'listDimensionsForAnalytics', () => base.listDimensionsForAnalytics(id, ids)),
     listMetricsForPosts: (id, ids) => rows(id, 'listMetricsForPosts', () => base.listMetricsForPosts(id, ids)),
     listAccountLabels: (id, ids) => rows(id, 'listAccountLabels', () => base.listAccountLabels(id, ids)),

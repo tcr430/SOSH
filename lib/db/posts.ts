@@ -922,12 +922,13 @@ export async function listPublishedPostsInRange(
   client: SupabaseClient,
   businessId: string,
   range: { start: string; end: string },
-  opts: { pageSize?: number } = {},
+  opts: { pageSize?: number; ceiling?: number } = {},
 ): Promise<PublishedPostForAnalytics[]> {
   const pageSize = Math.min(Math.max(Math.trunc(opts.pageSize ?? ANALYTICS_POSTS_PAGE), 1), ANALYTICS_POSTS_PAGE)
   return readAllPages<PublishedPostForAnalytics>({
     read: 'published posts in the month',
     pageSize,
+    ceiling: opts.ceiling,
     fetchPage: async (after, limit) => {
       let query = client
         .from('posts')

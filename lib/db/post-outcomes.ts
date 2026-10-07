@@ -241,11 +241,13 @@ async function readOutcomes(
   q: OutcomeRangeQuery,
   maxPage: number,
   requested: number | undefined,
+  ceiling: number | undefined,
 ): Promise<OutcomeForAnalytics[]> {
   const pageSize = Math.min(Math.max(Math.trunc(requested ?? maxPage), 1), maxPage)
   return readAllPages<OutcomeForAnalytics>({
     read,
     pageSize,
+    ceiling,
     fetchPage: async (after, limit) => {
       let query = client
         .from('post_outcomes')
@@ -271,9 +273,9 @@ export function listMonthOutcomes(
   client: SupabaseClient,
   businessId: string,
   q: OutcomeRangeQuery,
-  opts: { pageSize?: number } = {},
+  opts: { pageSize?: number; ceiling?: number } = {},
 ): Promise<OutcomeForAnalytics[]> {
-  return readOutcomes('month outcomes', client, businessId, q, ANALYTICS_OUTCOMES_PAGE, opts.pageSize)
+  return readOutcomes('month outcomes', client, businessId, q, ANALYTICS_OUTCOMES_PAGE, opts.pageSize, opts.ceiling)
 }
 
 // The 12-month trend's outcomes for one platform, 1,000 a page (PostgREST's default max rows).
@@ -281,9 +283,9 @@ export function listTrendOutcomes(
   client: SupabaseClient,
   businessId: string,
   q: OutcomeRangeQuery,
-  opts: { pageSize?: number } = {},
+  opts: { pageSize?: number; ceiling?: number } = {},
 ): Promise<OutcomeForAnalytics[]> {
-  return readOutcomes('trend outcomes', client, businessId, q, ANALYTICS_TREND_PAGE, opts.pageSize)
+  return readOutcomes('trend outcomes', client, businessId, q, ANALYTICS_TREND_PAGE, opts.pageSize, opts.ceiling)
 }
 
 export interface DimensionForAnalytics {
