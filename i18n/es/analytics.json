@@ -22,12 +22,14 @@
     "immature": "Midiendo. La interacción es definitiva 7 días después de publicar. Definitiva para {count} publicaciones el {date}.",
     "unavailable": "{platform} no comparte datos de interacción con Jemip, así que mostramos tu actividad de publicación.",
     "thin": "{n} publicaciones medidas hasta ahora. La tasa típica aparece a partir de 5.",
+    "thinWins": "Publicaciones con un habitual para comparar: {n}. El recuento de victorias aparece a partir de 5.",
     "loading": "Cargando resultados",
     "error": "No hemos podido cargar tus resultados.",
     "reload": "Recargar",
     "noPatternYet": "Todavía ningún patrón tiene evidencia suficiente. Jemip solo aprende un patrón a partir de al menos 10 publicaciones en 3 campañas."
   },
   "typical": "{n} publicaciones medidas. Tasa de interacción típica: {rate} (rango {lo}–{hi}).",
+  "typicalIqr": "{n} publicaciones medidas. Tasa de interacción típica: {rate} (mitad central de las publicaciones {lo}–{hi}).",
   "wins": "{wins} de {n} publicaciones superaron tu interacción habitual.",
   "monthPair": "{month}: {rate} ({n} publicaciones) · {month2}: {rate2} ({n2} publicaciones).",
   "monthPairSuppressed": "La vista lado a lado aparece cuando ambos meses tienen al menos 5 publicaciones medidas.",
@@ -55,6 +57,7 @@
     "row": "Publicaciones con {value}: {wins} de {n} superaron lo habitual.",
     "describes": "Esto describe publicaciones pasadas, no la razón de sus resultados.",
     "provisional": "Provisional",
+    "thinValue": "Menos de 5 publicaciones",
     "hookNote": "Según la clasificación de la IA al escribir, sin comprobación independiente.",
     "none": "Aún sin comparación: cada valor necesita 10 publicaciones medidas.",
     "dimension": {
@@ -240,7 +243,7 @@
     "lateOutcomes": "Las publicaciones medidas después del {date} no están incluidas.",
     "notInReport": "Este informe se generó antes de que tu plan incluyera esta sección.",
     "methodology": {
-      "median": "La tasa típica es la mediana de la tasa de interacción de las publicaciones medidas: la mitad quedó por encima y la mitad por debajo.",
+      "median": "La tasa típica es la mediana de la tasa de interacción de las publicaciones medidas: la mitad quedó por encima y la mitad por debajo. Por debajo de 10 publicaciones, el rango va del más bajo al más alto; desde 10 es la mitad central de las publicaciones.",
       "maturity": "Una publicación se mide 7 días después de salir. Las más recientes cuentan como publicadas, pero aún no medidas.",
       "exclusions": "Las publicaciones sin datos utilizables aparecen con su motivo y no entran en ninguna tasa.",
       "usual": "Lo habitual es tu mediana de los 90 días anteriores en X, o el historial que importaste. Se actualiza a medida que publicas, así que no mide el progreso global.",

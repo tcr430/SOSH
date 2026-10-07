@@ -228,7 +228,7 @@ export function BreakdownBlock({ t, platform, view }: { t: T; platform: string; 
       <StateNote>{t(view.coverage.key, view.coverage.params)}</StateNote>
       {view.presentation === 'bars' ? (
         <WinShareBars t={t} id={id} dimensionLabel={dimensionLabel} breakdown={view} valueLabel={valueLabel} />
-      ) : view.rows.length === 0 ? (
+      ) : view.rows.length === 0 && view.thinValues.length === 0 ? (
         <StateNote>{t('analytics.breakdown.none')}</StateNote>
       ) : (
         <ul className="space-y-1 text-sm">
@@ -237,9 +237,14 @@ export function BreakdownBlock({ t, platform, view }: { t: T; platform: string; 
               {t(r.key, { value: valueLabel(r.value), ...r.params })} {r.provisional && <span className="text-xs text-muted-foreground">({t('analytics.breakdown.provisional')})</span>}
             </li>
           ))}
+          {view.thinValues.map((value) => (
+            <li key={value}>
+              {valueLabel(value)}: {t('analytics.breakdown.thinValue')}
+            </li>
+          ))}
         </ul>
       )}
-      {view.rows.length > 0 && <StateNote>{t('analytics.breakdown.describes')}</StateNote>}
+      {(view.rows.length > 0 || view.thinValues.length > 0) && <StateNote>{t('analytics.breakdown.describes')}</StateNote>}
       {view.dimension === 'hook_type' && <StateNote>{t('analytics.breakdown.hookNote')}</StateNote>}
     </div>
   )

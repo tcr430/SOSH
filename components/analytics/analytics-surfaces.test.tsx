@@ -93,7 +93,7 @@ const advanced = (over: Partial<AdvancedPortfolio> = {}): AdvancedPortfolio => (
   trend: { status: 'ok', data: trend },
   patterns: { status: 'ok', data: [{ platform: 'twitter', dimension: 'format', value: 'thread', direction: 'above', basis: 'rate', wins: 7, n: 10, campaigns: 3 }] },
   retrospectives: { status: 'ok', data: [{ campaignId: 'c1', campaignName: 'A completed', completedAt: '2026-03-27T10:00:00+00:00', href: '/campaigns/c1', verdict: { key: 'outcome.retrospective.verdict_supported', params: { n: 12 } }, beat: { key: 'outcome.retrospective.posts_beat', params: { wins: 8, n: 12 } } }] },
-  accounts: { status: 'ok', data: [{ platform: 'twitter', accountId: 'a-x', label: 'Fixture A on X', labelKey: null, n: 6, typical: typicalView([0, 0.018, 0.025, 0.031, 0.04, 0.064]), wins: { state: 'thin', key: 'analytics.state.thin', params: { n: 4 } }, comparison: 'counts' }] },
+  accounts: { status: 'ok', data: [{ platform: 'twitter', accountId: 'a-x', label: 'Fixture A on X', labelKey: null, n: 6, typical: typicalView([0, 0.018, 0.025, 0.031, 0.04, 0.064]), wins: { state: 'thin', key: 'analytics.state.thinWins', params: { n: 4 } }, comparison: 'counts' }] },
   ...over,
 })
 const basic = (over: Partial<BasicPortfolio> = {}): BasicPortfolio => ({
@@ -268,9 +268,29 @@ describe('breakdowns carry their population tag and coverage line (ANALYTICS-COV
 
   it('below 10 per side the values are COUNTS with a Provisional label: no bar, no percentage', () => {
     const t = text(html.split('data-dimension="role"')[1].split('data-dimension="')[0])
-    expect(t).toContain('Posts with Founder perspective: 0 of 1 beat your usual.')
-    expect(t).toContain('Provisional')
+    // The fixture's value has 1 post: below the display floor of 5 it is thin and prints no k of n (A-11(a), MINOR-6).
+    expect(t).toContain('Founder perspective: Fewer than 5 posts')
+    expect(t).not.toContain('0 of 1')
+    expect(t).not.toContain('Provisional')
     expect(t).not.toMatch(/likely between/)
+  })
+
+  it('a value with 4 posts reads "Fewer than 5 posts" and one with 5 reads "k of 5" (literal), in the page', () => {
+    const bd = breakdownView({
+      dimension: 'role',
+      population: 'ai_only',
+      coverage: { k: 9, n: 9 },
+      presentation: 'counts',
+      values: [
+        { value: 'anchor_thesis', wins: 1, of: 4, provisional: true, interval: null },
+        { value: 'follow_up', wins: 3, of: 5, provisional: true, interval: null },
+      ],
+    })
+    const current = { ...view('twitter', '2026-03'), breakdowns: [bd] }
+    const t = text(render(tFor('en'), advanced({ platforms: { status: 'ok', data: [measured(current)] } })))
+    expect(t).toContain('Anchor thesis: Fewer than 5 posts')
+    expect(t).toContain('Posts with Follow-up: 3 of 5 beat your usual.')
+    expect(t).not.toContain('1 of 4')
   })
 
   it('hook_type is ABSENT below 10 (and when no opening survived)', () => {
@@ -280,7 +300,7 @@ describe('breakdowns carry their population tag and coverage line (ANALYTICS-COV
 
   it('hook_type appears with its caveat only when a value reaches 10', () => {
     const rows = Array.from({ length: 1 }, () => ({ value: 'question', key: 'analytics.breakdown.row' as const, params: { wins: 8, n: 12 }, provisional: false, interval: { key: 'analytics.interval' as const, params: { lo: '39%', hi: '86%' } }, share: 8 / 12, bar: { lo: 0.39, hi: 0.86 } }))
-    const hook = { dimension: 'hook_type' as const, populationKey: 'analytics.population.aiOnly' as const, coverage: { key: 'analytics.coverage' as const, params: { k: 12, n: 20 } }, presentation: 'counts' as const, rows }
+    const hook = { dimension: 'hook_type' as const, populationKey: 'analytics.population.aiOnly' as const, coverage: { key: 'analytics.coverage' as const, params: { k: 12, n: 20 } }, presentation: 'counts' as const, rows, thinValues: [] as string[] }
     const current = { ...view('twitter', '2026-03'), breakdowns: [hook] }
     const t = text(render(tFor('en'), advanced({ platforms: { status: 'ok', data: [measured(current)] } })))
     expect(t).toContain('As classified by the AI when writing, not independently checked.')

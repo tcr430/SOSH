@@ -18,12 +18,15 @@ import { winsOf, type WinsResult } from './wins'
 //     computed nowhere in that branch.
 
 const THIN_KEY = 'analytics.state.thin'
+/** The wins slot's own thin state (Session 37-D D7, MAJOR-8, A-9(a)): its n is the BASELINE count, not the measured count. */
+const THIN_WINS_KEY = 'analytics.state.thinWins'
 
 export type TypicalView =
   | { state: 'thin'; key: typeof THIN_KEY; params: { n: number } }
   | {
       state: 'number'
-      key: 'analytics.typical'
+      // Two templates by rangeKind (A-10(a)): "range" below 10 posts (lowest to highest), "middle half of posts" from 10 (the IQR).
+      key: 'analytics.typical' | 'analytics.typicalIqr'
       params: { n: number; rate: string; lo: string; hi: string; rangeKind: 'minmax' | 'iqr' }
     }
 
@@ -40,7 +43,7 @@ export function typicalView(values: readonly number[]): TypicalView {
   const t = typicalOf(values)
   return {
     state: 'number',
-    key: 'analytics.typical',
+    key: t.range.kind === 'iqr' ? 'analytics.typicalIqr' : 'analytics.typical',
     params: { n, rate: token(t.median), lo: token(t.range.lo), hi: token(t.range.hi), rangeKind: t.range.kind },
   }
 }
@@ -73,11 +76,11 @@ export function monthPairView(
 }
 
 export type WinsView =
-  | { state: 'thin'; key: typeof THIN_KEY; params: { n: number } }
+  | { state: 'thin'; key: typeof THIN_WINS_KEY; params: { n: number } }
   | { state: 'number'; key: 'analytics.wins'; params: { wins: number; n: number }; disclosureKeys: string[] }
 
 export function winsView(w: WinsResult): WinsView {
-  if (displayState(w.of) === 'thin') return { state: 'thin', key: THIN_KEY, params: { n: w.of } }
+  if (displayState(w.of) === 'thin') return { state: 'thin', key: THIN_WINS_KEY, params: { n: w.of } }
   return {
     state: 'number',
     key: 'analytics.wins',
@@ -129,6 +132,11 @@ export interface BreakdownView {
     /** The Wilson interval's bounds, for the whisker; null below the compare floor. */
     bar: { lo: number; hi: number } | null
   }>
+  /**
+   * Values with fewer than the display floor of posts (A-11(a), MINOR-6): named, and nothing else. No k, no n, no share, no bound is in
+   * the view model for them, so none can be printed. The page and the report say `analytics.breakdown.thinValue` beside the name.
+   */
+  thinValues: string[]
 }
 
 export function breakdownView(b: Breakdown): BreakdownView {
@@ -137,7 +145,8 @@ export function breakdownView(b: Breakdown): BreakdownView {
     populationKey: b.population === 'ai_only' ? 'analytics.population.aiOnly' : 'analytics.population.allMeasured',
     coverage: { key: 'analytics.coverage', params: { k: b.coverage.k, n: b.coverage.n } },
     presentation: b.presentation,
-    rows: b.values.map((v) => ({
+    thinValues: b.values.filter((v) => displayState(v.of) === 'thin').map((v) => v.value),
+    rows: b.values.filter((v) => displayState(v.of) === 'number').map((v) => ({
       value: v.value,
       key: 'analytics.breakdown.row',
       params: { wins: v.wins, n: v.of },

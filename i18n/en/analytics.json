@@ -22,12 +22,14 @@
     "immature": "Measuring. Engagement is final 7 days after a post goes out. Final for {count} posts on {date}.",
     "unavailable": "{platform} doesn't share engagement data with Jemip, so we show your publishing activity there instead.",
     "thin": "{n} measured posts so far. A typical rate appears from 5.",
+    "thinWins": "{n, plural, one {# post} other {# posts}} had a usual to compare against. A win count appears from 5.",
     "loading": "Loading results",
     "error": "We couldn't load your results.",
     "reload": "Reload",
     "noPatternYet": "No pattern has enough evidence yet. Jemip only learns a pattern from at least 10 posts across 3 campaigns."
   },
   "typical": "{n} posts measured. Typical engagement rate: {rate} (range {lo}–{hi}).",
+  "typicalIqr": "{n} posts measured. Typical engagement rate: {rate} (middle half of posts {lo}–{hi}).",
   "wins": "{wins} of {n} posts beat your usual engagement.",
   "monthPair": "{month}: {rate} ({n} posts) · {month2}: {rate2} ({n2} posts).",
   "monthPairSuppressed": "A side-by-side view appears when both months have at least 5 measured posts.",
@@ -55,6 +57,7 @@
     "row": "Posts with {value}: {wins} of {n} beat your usual.",
     "describes": "This describes past posts, not the reason for their results.",
     "provisional": "Provisional",
+    "thinValue": "Fewer than 5 posts",
     "hookNote": "As classified by the AI when writing, not independently checked.",
     "none": "No comparison yet: each value needs 10 measured posts.",
     "dimension": {
@@ -240,7 +243,7 @@
     "lateOutcomes": "Posts measured after {date} are not included.",
     "notInReport": "This report was generated before your plan included this section.",
     "methodology": {
-      "median": "The typical rate is the median engagement rate of the measured posts: half were above it and half below.",
+      "median": "The typical rate is the median engagement rate of the measured posts: half were above it and half below. Below 10 posts the range is lowest to highest; from 10 it is the middle half of posts.",
       "maturity": "A post is measured 7 days after it goes out. Newer posts count as published but not yet measured.",
       "exclusions": "Posts without usable data are listed with the reason and are not included in any rate.",
       "usual": "Usual is your median over the previous 90 days on X, or the history you imported. It updates as you post, so it is not a measure of overall progress.",

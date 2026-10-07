@@ -22,12 +22,14 @@
     "immature": "A medir. A interação fica final 7 dias depois de cada publicação. Final para {count} publicações a {date}.",
     "unavailable": "O {platform} não partilha dados de interação com o Jemip, por isso mostramos a sua atividade de publicação.",
     "thin": "{n} publicações medidas até agora. A taxa típica aparece a partir de 5.",
+    "thinWins": "Publicações com um habitual para comparar: {n}. A contagem de vitórias aparece a partir de 5.",
     "loading": "A carregar resultados",
     "error": "Não foi possível carregar os seus resultados.",
     "reload": "Recarregar",
     "noPatternYet": "Ainda nenhum padrão tem evidência suficiente. O Jemip só aprende um padrão a partir de, pelo menos, 10 publicações em 3 campanhas."
   },
   "typical": "{n} publicações medidas. Taxa de interação típica: {rate} (intervalo {lo}–{hi}).",
+  "typicalIqr": "{n} publicações medidas. Taxa de interação típica: {rate} (metade central das publicações {lo}–{hi}).",
   "wins": "{wins} de {n} publicações superaram a sua interação habitual.",
   "monthPair": "{month}: {rate} ({n} publicações) · {month2}: {rate2} ({n2} publicações).",
   "monthPairSuppressed": "A vista lado a lado aparece quando os dois meses têm pelo menos 5 publicações medidas.",
@@ -55,6 +57,7 @@
     "row": "Publicações com {value}: {wins} de {n} superaram o habitual.",
     "describes": "Isto descreve publicações passadas, não a razão dos seus resultados.",
     "provisional": "Provisório",
+    "thinValue": "Menos de 5 publicações",
     "hookNote": "Conforme classificado pela IA ao escrever, sem verificação independente.",
     "none": "Ainda sem comparação: cada valor precisa de 10 publicações medidas.",
     "dimension": {
@@ -240,7 +243,7 @@
     "lateOutcomes": "As publicações medidas depois de {date} não estão incluídas.",
     "notInReport": "Este relatório foi gerado antes de o seu plano incluir esta secção.",
     "methodology": {
-      "median": "A taxa típica é a mediana da taxa de envolvimento das publicações medidas: metade ficou acima e metade abaixo.",
+      "median": "A taxa típica é a mediana da taxa de envolvimento das publicações medidas: metade ficou acima e metade abaixo. Abaixo de 10 publicações, o intervalo é do valor mais baixo ao mais alto; a partir de 10 é a metade central das publicações.",
       "maturity": "Uma publicação é medida 7 dias depois de sair. As mais recentes contam como publicadas, mas ainda não medidas.",
       "exclusions": "As publicações sem dados utilizáveis aparecem com o motivo e não entram em nenhuma taxa.",
       "usual": "O habitual é a sua mediana dos 90 dias anteriores no X, ou o histórico que importou. Atualiza-se à medida que publica, por isso não mede o progresso global.",
