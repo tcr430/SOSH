@@ -34,7 +34,7 @@ const EMITTED = [
   'typical', 'wins', 'state.thin', 'monthPair', 'monthPairSuppressed',
   'exclusions.summary', 'exclusions.excluded', 'exclusions.noDataReturned', 'exclusions.fieldMissing', 'exclusions.zeroImpressions', 'exclusions.notFinal',
   'disclosure.usual', 'disclosure.usualUpdates', 'disclosure.importSeed', 'disclosure.engagementOnly', 'disclosure.linkedinCount',
-  'population.aiOnly', 'population.allMeasured', 'coverage', 'breakdown.row', 'interval', 'account.unrecorded',
+  'population.aiOnly', 'population.allMeasured', 'coverage.generated', 'coverage.all', 'breakdown.row', 'interval', 'account.unrecorded',
 ]
 
 describe('analytics i18n parity', () => {
@@ -75,9 +75,10 @@ describe('analytics i18n parity', () => {
 
   it('the eight state strings are the ADR 8.2 literals in en', () => {
     expect(E['state.empty']).toBe('Nothing published yet. Results appear here after Jemip publishes your first post.')
-    expect(E['state.immature']).toBe('Measuring. Engagement is final 7 days after a post goes out. Final for {count} posts on {date}.')
+    // A-15(a): the count carries an ICU plural; its `other` branch is the ADR literal byte for byte (asserted rendered, in copy-hygiene.test.ts).
+    expect(E['state.immature']).toBe('Measuring. Engagement is final 7 days after a post goes out. Final for {count, plural, one {# post} other {# posts}} on {date}.')
     expect(E['state.unavailable']).toBe("{platform} doesn't share engagement data with Jemip, so we show your publishing activity there instead.")
-    expect(E['state.thin']).toBe('{n} measured posts so far. A typical rate appears from 5.')
+    expect(E['state.thin']).toBe('{n, plural, one {# measured post} other {# measured posts}} so far. A typical rate appears from 5.')
     expect(E['state.error']).toBe("We couldn't load your results.")
     expect(E['state.reload']).toBe('Reload')
     expect(E['state.loading']).toBe('Loading results')

@@ -148,7 +148,7 @@ voice"* genuinely closes.
 
 | Promised in `CLAUDE.md` pricing | Reality |
 |---|---|
-| Plus (€79) — *"basic analytics"* | Built (Session 37), unreviewed: publishing activity, a typical engagement rate for X, LinkedIn as counts, the campaigns table and a monthly report. Not yet run on a real customer |
+| Plus (€79) — *"basic analytics"* | Built (Session 37), unreviewed: publishing activity, a typical engagement rate for X, LinkedIn shown as post counts (publishing activity, not engagement), the campaigns table and a monthly report. Not yet run on a real customer |
 | Plus (€79) — *"engagement inbox"* | No inbox exists |
 | Pro (€125) — *"advanced analytics"* | Built (Session 37), unreviewed: everything in Plus plus a 12-month trend, results by post type, observed patterns, campaign verdicts and an account-by-account view. Not yet run on a real customer |
 | Pro (€125) — *"engagement inbox"* | No inbox exists |

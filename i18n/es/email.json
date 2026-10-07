@@ -44,7 +44,7 @@
     "preheader": "{businessName}: cómo se recibieron tus publicaciones en {month}.",
     "heading": "{businessName}: tu informe de {month}",
     "lead": "Así se recibieron las publicaciones de {month}.",
-    "supporting": "Esto describe publicaciones pasadas, no el motivo de sus resultados. Mide el engagement, no los registros ni los ingresos.",
+    "supporting": "Esto describe publicaciones pasadas, no el motivo de sus resultados. Mide la interacción, no los registros ni los ingresos.",
     "cta": "Abrir el informe completo"
   },
   "footer": {

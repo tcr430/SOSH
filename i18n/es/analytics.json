@@ -19,9 +19,9 @@
   },
   "state": {
     "empty": "Aún no hay publicaciones. Los resultados aparecerán aquí cuando Jemip publique tu primera publicación.",
-    "immature": "Midiendo. La interacción es definitiva 7 días después de publicar. Definitiva para {count} publicaciones el {date}.",
+    "immature": "Midiendo. La interacción es definitiva 7 días después de publicar. Definitiva para {count, plural, one {# publicación} other {# publicaciones}} el {date}.",
     "unavailable": "{platform} no comparte datos de interacción con Jemip, así que mostramos tu actividad de publicación.",
-    "thin": "{n} publicaciones medidas hasta ahora. La tasa típica aparece a partir de 5.",
+    "thin": "{n, plural, one {# publicación medida} other {# publicaciones medidas}} hasta ahora. La tasa típica aparece a partir de 5.",
     "thinWins": "Publicaciones con un habitual para comparar: {n}. El recuento de victorias aparece a partir de 5.",
     "loading": "Cargando resultados",
     "error": "No hemos podido cargar tus resultados.",
@@ -52,7 +52,10 @@
     "aiOnly": "Solo publicaciones escritas por la IA",
     "allMeasured": "Todas las publicaciones medidas"
   },
-  "coverage": "Abarca {k} de {n} publicaciones medidas. Las publicaciones escritas fuera del generador de Jemip no se clasifican.",
+  "coverage": {
+    "generated": "Abarca {k} de {n} publicaciones medidas. Las publicaciones escritas fuera del generador de Jemip no se clasifican.",
+    "all": "Abarca {k} de {n} publicaciones medidas."
+  },
   "breakdown": {
     "row": "Publicaciones con {value}: {wins} de {n} superaron lo habitual.",
     "describes": "Esto describe publicaciones pasadas, no la razón de sus resultados.",
@@ -229,7 +232,7 @@
     },
     "back": "Volver a los informes mensuales",
     "header": "{business} · {month}. Medido hasta {measuredAsOf}. Generado el {generatedOn}.",
-    "stub": "No se publicó ninguna publicación en {month}, así que no hay nada que medir.",
+    "stub": "No se hizo ninguna publicación en {month}, así que no hay nada que medir.",
     "section": {
       "trend6": "Tendencia de 6 meses",
       "summary": "Resumen",
@@ -252,7 +255,7 @@
       "maturity": "Una publicación se mide 7 días después de salir. Las más recientes cuentan como publicadas, pero aún no medidas.",
       "exclusions": "Las publicaciones sin datos utilizables aparecen con su motivo y no entran en ninguna tasa.",
       "usual": "Lo habitual es tu mediana de los 90 días anteriores en X, o el historial que importaste. Se actualiza a medida que publicas, así que no mide el progreso global.",
-      "floors": "Mostramos una tasa típica a partir de 5 publicaciones medidas. Las comparaciones por tipo de publicación necesitan 10 publicaciones medidas por valor.",
+      "floors": "Mostramos una tasa típica a partir de 5 publicaciones medidas. Las comparaciones por tipo de publicación necesitan 10 publicaciones medidas por valor. Jemip solo aprende un patrón a partir de al menos 10 publicaciones en 3 campañas; los números que se muestran aquí son descripciones, no lecciones.",
       "xOnly": "La tasa de interacción se mide solo en X. Las demás plataformas muestran la actividad de publicación.",
       "descriptive": "Los desgloses describen publicaciones pasadas. Se solapan y no explican ningún resultado.",
       "engagementOnly": "Esto mide interacción, no registros ni ingresos."

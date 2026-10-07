@@ -190,7 +190,7 @@ describe('loadPortfolio, an advanced (Pro) business: March 2026, business A (Eur
     const x = ok(p.platforms).find((s) => s.platform === 'twitter')
     if (!x || x.state !== 'measured') throw new Error('X should be measured')
     expect(x.current.breakdowns.map((b) => b.dimension)).toEqual(['role', 'format', 'origin_mode', 'length_band', 'cta_present', 'hook_type'])
-    expect(x.current.breakdowns[0]).toMatchObject({ dimension: 'role', populationKey: 'analytics.population.aiOnly', coverage: { key: 'analytics.coverage', params: { k: 5, n: 7 } } })
+    expect(x.current.breakdowns[0]).toMatchObject({ dimension: 'role', populationKey: 'analytics.population.aiOnly', coverage: { key: 'analytics.coverage.generated', params: { k: 5, n: 7 } } })
 
     const trend = ok(p.trend)
     expect(trend.months).toHaveLength(12)

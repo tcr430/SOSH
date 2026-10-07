@@ -119,7 +119,8 @@ export interface BreakdownView {
   dimension: BreakdownDimension
   /** The title carries the population tag. */
   populationKey: 'analytics.population.aiOnly' | 'analytics.population.allMeasured'
-  coverage: { key: 'analytics.coverage'; params: { k: number; n: number } }
+  /** Two templates by population (MINOR-2): "generated" says posts written outside Jemip are not classified; "all" (length, CTA) says no such thing. */
+  coverage: { key: 'analytics.coverage.generated' | 'analytics.coverage.all'; params: { k: number; n: number } }
   presentation: 'counts' | 'bars'
   rows: Array<{
     value: string
@@ -143,7 +144,7 @@ export function breakdownView(b: Breakdown): BreakdownView {
   return {
     dimension: b.dimension,
     populationKey: b.population === 'ai_only' ? 'analytics.population.aiOnly' : 'analytics.population.allMeasured',
-    coverage: { key: 'analytics.coverage', params: { k: b.coverage.k, n: b.coverage.n } },
+    coverage: { key: b.population === 'ai_only' ? 'analytics.coverage.generated' : 'analytics.coverage.all', params: { k: b.coverage.k, n: b.coverage.n } },
     presentation: b.presentation,
     thinValues: b.values.filter((v) => displayState(v.of) === 'thin').map((v) => v.value),
     rows: b.values.filter((v) => displayState(v.of) === 'number').map((v) => ({

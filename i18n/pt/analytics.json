@@ -19,9 +19,9 @@
   },
   "state": {
     "empty": "Ainda não há publicações. Os resultados aparecem aqui depois de o Jemip publicar a sua primeira publicação.",
-    "immature": "A medir. A interação fica final 7 dias depois de cada publicação. Final para {count} publicações a {date}.",
+    "immature": "A medir. A interação fica final 7 dias depois de cada publicação. Final para {count, plural, =0 {# publicações} one {# publicação} other {# publicações}} a {date}.",
     "unavailable": "O {platform} não partilha dados de interação com o Jemip, por isso mostramos a sua atividade de publicação.",
-    "thin": "{n} publicações medidas até agora. A taxa típica aparece a partir de 5.",
+    "thin": "{n, plural, =0 {# publicações medidas} one {# publicação medida} other {# publicações medidas}} até agora. A taxa típica aparece a partir de 5.",
     "thinWins": "Publicações com um habitual para comparar: {n}. A contagem de vitórias aparece a partir de 5.",
     "loading": "A carregar resultados",
     "error": "Não foi possível carregar os seus resultados.",
@@ -52,7 +52,10 @@
     "aiOnly": "Apenas publicações escritas pela IA",
     "allMeasured": "Todas as publicações medidas"
   },
-  "coverage": "Abrange {k} de {n} publicações medidas. As publicações escritas fora do gerador do Jemip não são classificadas.",
+  "coverage": {
+    "generated": "Abrange {k} de {n} publicações medidas. As publicações escritas fora do gerador do Jemip não são classificadas.",
+    "all": "Abrange {k} de {n} publicações medidas."
+  },
   "breakdown": {
     "row": "Publicações com {value}: {wins} de {n} superaram o habitual.",
     "describes": "Isto descreve publicações passadas, não a razão dos seus resultados.",
@@ -183,10 +186,10 @@
     "details": "Detalhes"
   },
   "pattern": {
-    "above": "No {platform}, {subject} superaram o seu envolvimento habitual em {wins} de {n} publicações ({campaigns, plural, one {# campanha} other {# campanhas}}).",
-    "below": "No {platform}, {subject} ficaram abaixo do seu envolvimento habitual em {wins} de {n} publicações ({campaigns, plural, one {# campanha} other {# campanhas}}).",
-    "above_count": "No {platform}, {subject} superaram a sua contagem habitual de envolvimento em {wins} de {n} publicações ({campaigns, plural, one {# campanha} other {# campanhas}}).",
-    "below_count": "No {platform}, {subject} ficaram abaixo da sua contagem habitual de envolvimento em {wins} de {n} publicações ({campaigns, plural, one {# campanha} other {# campanhas}})."
+    "above": "No {platform}, {subject} superaram a sua interação habitual em {wins} de {n} publicações ({campaigns, plural, one {# campanha} other {# campanhas}}).",
+    "below": "No {platform}, {subject} ficaram abaixo da sua interação habitual em {wins} de {n} publicações ({campaigns, plural, one {# campanha} other {# campanhas}}).",
+    "above_count": "No {platform}, {subject} superaram a sua contagem habitual de interação em {wins} de {n} publicações ({campaigns, plural, one {# campanha} other {# campanhas}}).",
+    "below_count": "No {platform}, {subject} ficaram abaixo da sua contagem habitual de interação em {wins} de {n} publicações ({campaigns, plural, one {# campanha} other {# campanhas}})."
   },
   "value": {
     "format": {
@@ -229,17 +232,17 @@
     },
     "back": "Voltar aos relatórios mensais",
     "header": "{business} · {month}. Medido até {measuredAsOf}. Gerado em {generatedOn}.",
-    "stub": "Não foi publicada nenhuma publicação em {month}, por isso não há nada para medir.",
+    "stub": "Não foi feita nenhuma publicação em {month}, por isso não há nada para medir.",
     "section": {
       "trend6": "Tendência de 6 meses",
       "summary": "Resumo",
-      "unavailable": "Plataformas sem dados de envolvimento",
+      "unavailable": "Plataformas sem dados de interação",
       "methodology": "Como ler este relatório"
     },
     "ratedPosts": {
-      "title": "Três publicações no X por taxa de envolvimento",
+      "title": "Três publicações no X por taxa de interação",
       "caveat": "Uma publicação vista por poucas pessoas pode ter uma taxa elevada.",
-      "row": "Publicação {position}: taxa de envolvimento {rate} (1 publicação)"
+      "row": "Publicação {position}: taxa de interação {rate} (1 publicação)"
     },
     "lateOutcomes": "As publicações medidas depois de {date} não estão incluídas.",
     "post": {
@@ -248,14 +251,14 @@
     },
     "notInReport": "Este relatório foi gerado antes de o seu plano incluir esta secção.",
     "methodology": {
-      "median": "A taxa típica é a mediana da taxa de envolvimento das publicações medidas: metade ficou acima e metade abaixo. Abaixo de 10 publicações, o intervalo é do valor mais baixo ao mais alto; a partir de 10 é a metade central das publicações.",
+      "median": "A taxa típica é a mediana da taxa de interação das publicações medidas: metade ficou acima e metade abaixo. Abaixo de 10 publicações, o intervalo é do valor mais baixo ao mais alto; a partir de 10 é a metade central das publicações.",
       "maturity": "Uma publicação é medida 7 dias depois de sair. As mais recentes contam como publicadas, mas ainda não medidas.",
       "exclusions": "As publicações sem dados utilizáveis aparecem com o motivo e não entram em nenhuma taxa.",
       "usual": "O habitual é a sua mediana dos 90 dias anteriores no X, ou o histórico que importou. Atualiza-se à medida que publica, por isso não mede o progresso global.",
-      "floors": "Mostramos uma taxa típica a partir de 5 publicações medidas. As comparações por tipo de publicação precisam de 10 publicações medidas por valor.",
-      "xOnly": "A taxa de envolvimento é medida apenas no X. As outras plataformas mostram a atividade de publicação.",
+      "floors": "Mostramos uma taxa típica a partir de 5 publicações medidas. As comparações por tipo de publicação precisam de 10 publicações medidas por valor. O Jemip só aprende um padrão a partir de, pelo menos, 10 publicações em 3 campanhas; os números mostrados aqui são descrições, não lições.",
+      "xOnly": "A taxa de interação é medida apenas no X. As outras plataformas mostram a atividade de publicação.",
       "descriptive": "As repartições descrevem publicações passadas. Sobrepõem-se e não explicam nenhum resultado.",
-      "engagementOnly": "Isto mede envolvimento, não registos nem receita."
+      "engagementOnly": "Isto mede interação, não registos nem receita."
     },
     "setting": {
       "label": "Enviar cada relatório por email a",

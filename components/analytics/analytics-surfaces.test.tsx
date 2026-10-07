@@ -142,7 +142,7 @@ describe('the states: each renders its expected i18n key (ANALYTICS-FOUR-STATES)
   it('THIN: below 5 measured posts renders the thin copy with its n and no rate', () => {
     const april = toBasic(measured(view('twitter', '2026-04')))
     const html = render(tFor('en'), basic({ platforms: { status: 'ok', data: [april] } }))
-    expect(text(html)).toContain('1 measured posts so far. A typical rate appears from 5.')
+    expect(text(html)).toContain('1 measured post so far. A typical rate appears from 5.')
     expect(render(echo, basic({ platforms: { status: 'ok', data: [april] } }))).toContain('analytics.state.thin')
   })
 
@@ -254,7 +254,13 @@ describe('breakdowns carry their population tag and coverage line (ANALYTICS-COV
     for (const block of blocks) {
       const t = text(block)
       expect(t, block.slice(0, 20)).toMatch(/AI-written posts only|All measured posts/)
-      expect(t, block.slice(0, 20)).toMatch(/Covers \d+ of \d+ measured posts\. Posts written outside Jemip's generator aren't classified\./)
+      if (/AI-written posts only/.test(t)) {
+        expect(t, block.slice(0, 20)).toMatch(/Covers \d+ of \d+ measured posts\. Posts written outside Jemip's generator aren't classified\./)
+      } else {
+        // MINOR-2: length and CTA cover ALL measured posts, so the "not classified" tail would be false for them.
+        expect(t, block.slice(0, 20)).toMatch(/Covers \d+ of \d+ measured posts\./)
+        expect(t, block.slice(0, 20)).not.toContain("aren't classified")
+      }
     }
   })
 
@@ -300,7 +306,7 @@ describe('breakdowns carry their population tag and coverage line (ANALYTICS-COV
 
   it('hook_type appears with its caveat only when a value reaches 10', () => {
     const rows = Array.from({ length: 1 }, () => ({ value: 'question', key: 'analytics.breakdown.row' as const, params: { wins: 8, n: 12 }, provisional: false, interval: { key: 'analytics.interval' as const, params: { lo: '39%', hi: '86%' } }, share: 8 / 12, bar: { lo: 0.39, hi: 0.86 } }))
-    const hook = { dimension: 'hook_type' as const, populationKey: 'analytics.population.aiOnly' as const, coverage: { key: 'analytics.coverage' as const, params: { k: 12, n: 20 } }, presentation: 'counts' as const, rows, thinValues: [] as string[] }
+    const hook = { dimension: 'hook_type' as const, populationKey: 'analytics.population.aiOnly' as const, coverage: { key: 'analytics.coverage.generated' as const, params: { k: 12, n: 20 } }, presentation: 'counts' as const, rows, thinValues: [] as string[] }
     const current = { ...view('twitter', '2026-03'), breakdowns: [hook] }
     const t = text(render(tFor('en'), advanced({ platforms: { status: 'ok', data: [measured(current)] } })))
     expect(t).toContain('As classified by the AI when writing, not independently checked.')

@@ -36,9 +36,11 @@ function lookup(root: unknown, path: string[]): string | undefined {
 }
 
 function format(message: string, vars: Record<string, string | number> | undefined): string {
-  let out = message.replace(/\{(\w+),\s*plural,\s*one\s*\{([^}]*)\}\s*other\s*\{([^}]*)\}\}/g, (_m, name: string, one: string, other: string) => {
+  // An optional leading "=0 {…}" branch is read too (pt counts 0 as "one", so its copy spells 0 out), then "one" and "other".
+  let out = message.replace(/\{(\w+),\s*plural,\s*(?:=0\s*\{([^}]*)\}\s*)?one\s*\{([^}]*)\}\s*other\s*\{([^}]*)\}\}/g, (_m, name: string, zero: string | undefined, one: string, other: string) => {
     const n = Number(vars?.[name] ?? 0)
-    return (n === 1 ? one : other).replace(/#/g, String(n))
+    const branch = n === 0 && zero !== undefined ? zero : n === 1 ? one : other
+    return branch.replace(/#/g, String(n))
   })
   if (vars) for (const [k, v] of Object.entries(vars)) out = out.replaceAll(`{${k}}`, String(v))
   return out

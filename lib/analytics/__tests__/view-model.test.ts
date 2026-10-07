@@ -158,9 +158,11 @@ describe('platformMonthView: one platform, one month, one business: the composit
     expect(v.breakdowns.map((b) => b.dimension)).toEqual(['role', 'format', 'origin_mode', 'length_band', 'cta_present'])
     expect(v.breakdowns.find((b) => b.dimension === 'role')).toMatchObject({
       populationKey: 'analytics.population.aiOnly',
-      coverage: { key: 'analytics.coverage', params: { k: 5, n: 7 } },
+      coverage: { key: 'analytics.coverage.generated', params: { k: 5, n: 7 } },
     })
-    expect(v.breakdowns.find((b) => b.dimension === 'length_band')).toMatchObject({ populationKey: 'analytics.population.allMeasured' })
+    // MINOR-2: an all-measured population gets the coverage line that says nothing about classification.
+    expect(v.breakdowns.find((b) => b.dimension === 'length_band')).toMatchObject({ populationKey: 'analytics.population.allMeasured', coverage: { key: 'analytics.coverage.all' } })
+    expect(v.breakdowns.find((b) => b.dimension === 'cta_present')).toMatchObject({ coverage: { key: 'analytics.coverage.all' } })
   })
 
   it('a live Pro page adds hook_type; the report does not', () => {
@@ -247,7 +249,7 @@ describe('breakdownView', () => {
     expect(v).toEqual({
       dimension: 'role',
       populationKey: 'analytics.population.aiOnly',
-      coverage: { key: 'analytics.coverage', params: { k: 5, n: 7 } },
+      coverage: { key: 'analytics.coverage.generated', params: { k: 5, n: 7 } },
       presentation: 'counts',
       thinValues: [],
       rows: [{ value: 'anchor_thesis', key: 'analytics.breakdown.row', params: { wins: 3, n: 6 }, provisional: true, interval: null, share: 0.5, bar: null }],
