@@ -21,7 +21,7 @@ function secretReaders(plan?: Record<string, unknown>) {
   return {
     ...real,
     getBusinessById: async (id: string) => ({ ...(await real.getBusinessById(id)), name: SECRET + 'business' }),
-    listCampaigns: async (id: string) => (await real.listCampaigns(id)).map((c) => ({ ...c, name: SECRET + 'campaign ' + c.name })),
+    listCampaignsByIds: async (id: string, ids: readonly string[]) => (await real.listCampaignsByIds(id, ids)).map((c) => ({ ...c, name: SECRET + 'campaign ' + c.name })),
     listAccountLabels: async (id: string, ids: readonly string[]) =>
       (await real.listAccountLabels(id, ids)).map((a) => ({ ...a, platform_username: SECRET + 'handle ' + a.platform_username, platform_display_name: SECRET + 'display ' + a.id })),
   }

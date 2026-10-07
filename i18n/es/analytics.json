@@ -72,7 +72,7 @@
   "activity": {
     "line": "{count, plural, one {# publicación} other {# publicaciones}} en {platform} ({account}).",
     "total": "{count, plural, one {# publicación} other {# publicaciones}}, {prev} el mes anterior.",
-    "campaigns": "{active, plural, one {# campaña activa} other {# campañas activas}}, {completed, plural, one {# completada} other {# completadas}}."
+    "campaigns": "Las publicaciones vinieron de {withPosts, plural, one {# campaña} other {# campañas}}. {retrospectivesCompleted, plural, one {# campaña completó su veredicto} other {# campañas completaron su veredicto}} este mes."
   },
   "platform": {
     "twitter": "X",

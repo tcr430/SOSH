@@ -58,7 +58,7 @@ const activity = {
       { platform: 'twitter', accountId: 'a-x', label: 'Fixture A on X', labelKey: null, count: 9 },
       { platform: 'twitter', accountId: null, label: null, labelKey: 'analytics.account.unrecorded' as const, count: 1 },
     ],
-    campaigns: { active: 2, completed: 1 },
+    campaigns: { withPosts: 2, retrospectivesCompleted: 1 },
   },
 }
 const unavailableLi: AdvancedPlatformSection = { platform: 'linkedin', state: 'unavailable', published: 3 }

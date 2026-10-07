@@ -44,7 +44,7 @@ export function verifiedReaders(base: Readers, businessId: string): Readers {
       if (row.id !== businessId) throw new TenantMismatchError(businessId, row.id, 'getBusinessById')
       return row
     },
-    listCampaigns: (id) => rows(id, 'listCampaigns', () => base.listCampaigns(id)),
+    listCampaignsByIds: (id, ids) => rows(id, 'listCampaignsByIds', () => base.listCampaignsByIds(id, ids)),
     listCompletedRetrospectivesInRange: (id, range) => rows(id, 'listCompletedRetrospectivesInRange', () => base.listCompletedRetrospectivesInRange(id, range)),
     listPublishedPostsInRange: (id, range) => rows(id, 'listPublishedPostsInRange', () => base.listPublishedPostsInRange(id, range)),
     countPublishedPostsInRange: async (id, range) => {

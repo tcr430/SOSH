@@ -124,7 +124,7 @@ describe('the report page is bound to the active business (closes #17, Tier 2)',
   })
 
   it('resolves the payload\'s ids for the SESSION business with the authenticated client, and hands ReportBody the business name and the labels (MINOR-7)', async () => {
-    getReportByPeriod.mockResolvedValue(row('biz-a', '2026-03', { campaigns: [{ campaignId: 'c1', status: 'active', published: 2, href: '/campaigns/c1', retro: null }], activity: { total: 2, previousTotal: 0, campaigns: { active: 1, completed: 0 }, rows: [{ platform: 'twitter', accountId: 'acc1', count: 2 }] } }))
+    getReportByPeriod.mockResolvedValue(row('biz-a', '2026-03', { campaigns: [{ campaignId: 'c1', status: 'active', published: 2, href: '/campaigns/c1', retro: null }], activity: { total: 2, previousTotal: 0, campaigns: { withPosts: 1, retrospectivesCompleted: 0 }, rows: [{ platform: 'twitter', accountId: 'acc1', count: 2 }] } }))
     const el = (await page('2026-03')) as React.ReactElement<{ children: React.ReactNode }>
     const body = (React.Children.toArray(el.props.children) as React.ReactElement<{ proAllowed?: boolean; businessName?: string; labels?: { campaigns: Record<string, string>; accounts: Record<string, string> } }>[]).find((c) => c.props && 'proAllowed' in c.props)!
     expect(listCampaignNamesByIds).toHaveBeenCalledWith(client, 'biz-a', ['c1'])

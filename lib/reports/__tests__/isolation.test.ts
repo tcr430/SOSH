@@ -63,7 +63,7 @@ describe('verifiedReaders over the fixture', () => {
       real.listAccountLabels(BUSINESS_A_ID, [(await real.listPublishedPostsInRange(BUSINESS_A_ID, RANGE))[0].social_account_id as string]),
       real.listMetricsForPosts(BUSINESS_A_ID, (await real.listPublishedPostsInRange(BUSINESS_A_ID, RANGE)).map((p) => p.id)),
       real.listDimensionsForAnalytics(BUSINESS_A_ID, (await real.listMonthOutcomes(BUSINESS_A_ID, OUT)).flatMap((o) => (o.ai_original_id ? [o.ai_original_id] : []))),
-      real.listCampaigns(BUSINESS_A_ID),
+      real.listCampaignsByIds(BUSINESS_A_ID, (await real.listPublishedPostsInRange(BUSINESS_A_ID, RANGE)).map((p) => p.campaign_id)),
     ])
     const tainted: Readers = {
       ...real,
@@ -73,7 +73,7 @@ describe('verifiedReaders over the fixture', () => {
       listAccountLabels: async () => plant(labels),
       listMetricsForPosts: async () => plant(metrics),
       listDimensionsForAnalytics: async () => plant(dims),
-      listCampaigns: async () => plant(campaigns),
+      listCampaignsByIds: async () => plant(campaigns),
       listPatterns: async () => [PATTERN_A, { ...PATTERN_A, business_id: BUSINESS_B_ID }],
       listCompletedRetrospectivesInRange: async () => [{ business_id: BUSINESS_B_ID } as never],
       getBusinessById: async () => ({ id: BUSINESS_B_ID } as never),
@@ -86,7 +86,7 @@ describe('verifiedReaders over the fixture', () => {
       labels: () => v.listAccountLabels(BUSINESS_A_ID, ['x']),
       metrics: () => v.listMetricsForPosts(BUSINESS_A_ID, ['x']),
       dims: () => v.listDimensionsForAnalytics(BUSINESS_A_ID, ['x']),
-      campaigns: () => v.listCampaigns(BUSINESS_A_ID),
+      campaigns: () => v.listCampaignsByIds(BUSINESS_A_ID, ['x']),
       retros: () => v.listCompletedRetrospectivesInRange(BUSINESS_A_ID, RANGE),
       business: () => v.getBusinessById(BUSINESS_A_ID),
       patterns: () => v.listPatterns(BUSINESS_A_ID, {}),

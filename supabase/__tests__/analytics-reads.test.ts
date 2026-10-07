@@ -18,6 +18,7 @@ import { countPublishedPostsInRange, listPublishedPostsInRange } from '@/lib/db/
 import { listDimensionsForAnalytics, listMonthOutcomes } from '@/lib/db/post-outcomes'
 import { listMetricsForPosts } from '@/lib/db/post-metrics'
 import { listAccountLabels } from '@/lib/db/social-accounts'
+import { listCampaignsByIds } from '@/lib/db/campaigns'
 import { getReportById, getReportByPeriod, listReports } from '@/lib/db/analytics-reports'
 
 // ADR 0031 §9.1, §12.1 — Tier 1, live Postgres (Session 37 O2.4).
@@ -160,6 +161,16 @@ describe('analytics reads — authenticated, business-bound, paged, indexed (ADR
     const rows = await listAccountLabels(owner, BUSINESS_A_ID, [A_X_ACCOUNT_ID, A_LI_ACCOUNT_ID, B_X_ACCOUNT_ID])
     expect(rows.map((r) => r.id).sort()).toEqual([A_X_ACCOUNT_ID, A_LI_ACCOUNT_ID].sort())
     expect(Object.keys(rows[0]).sort()).toEqual(['business_id', 'id', 'platform', 'platform_display_name', 'platform_username'])
+  })
+  it('campaigns by id (MAJOR-10): the owning business campaigns with exactly four columns, never the other business, even when its id is asked for', async () => {
+    const aIds = [...new Set((await listPublishedPostsInRange(owner, BUSINESS_A_ID, LISBON_MARCH)).map((p) => p.campaign_id))]
+    const bIds = [...new Set((await listPublishedPostsInRange(owner, BUSINESS_B_ID, SAO_PAULO_MARCH)).map((p) => p.campaign_id))]
+    expect(aIds.length).toBeGreaterThan(0)
+    expect(bIds.length).toBeGreaterThan(0)
+    const rows = await listCampaignsByIds(owner, BUSINESS_A_ID, [...aIds, ...bIds])
+    expect(rows.map((r) => r.id).sort()).toEqual([...aIds].sort())
+    expect(rows.every((r) => r.business_id === BUSINESS_A_ID)).toBe(true)
+    expect(Object.keys(rows[0]).sort()).toEqual(['business_id', 'id', 'name', 'status'])
   })
 
   // ─── reports ─────────────────────────────────────────────────────────────────────────────────────────────

@@ -5,10 +5,10 @@ import { listPublishedPostsInRange, countPublishedPostsInRange, type PublishedPo
 import { listMonthOutcomes, listTrendOutcomes, listDimensionsForAnalytics, type OutcomeForAnalytics, type OutcomeRangeQuery, type DimensionForAnalytics } from '@/lib/db/post-outcomes'
 import { listMetricsForPosts, type MetricsForAnalytics } from '@/lib/db/post-metrics'
 import { listAccountLabels, type SocialAccountLabel } from '@/lib/db/social-accounts'
-import { listCampaigns } from '@/lib/db/campaigns'
+import { listCampaignsByIds, type CampaignForAnalytics } from '@/lib/db/campaigns'
 import { listCompletedRetrospectivesInRange, type RetrospectiveForAnalytics } from '@/lib/db/campaign-retrospectives'
 import { ReadCeilingExceeded } from '@/lib/db/keyset-pager'
-import type { BusinessRow, CampaignRow, Platform } from '@/lib/db/types'
+import type { BusinessRow, Platform } from '@/lib/db/types'
 import { listOutcomePatterns } from '@/lib/db/memory-performance'
 import { selectOutcomePatterns, type OutcomeObservation, type OutcomePatternRow } from '@/lib/memory'
 import { parsePatternKey } from '@/lib/outcomes/pattern-key'
@@ -91,7 +91,8 @@ export interface Activity {
   total: number
   previousTotal: number
   rows: ActivityRow[]
-  campaigns: { active: number; completed: number }
+  /** True of the MONTH, from reads the loader already makes (A-14(a)): distinct campaigns the month's posts came from, and retrospectives completed in it. */
+  campaigns: { withPosts: number; retrospectivesCompleted: number }
 }
 
 export type BasicPlatformMonthView = Omit<PlatformMonthView, 'breakdowns'>
@@ -267,11 +268,7 @@ export async function loadPortfolioWith(
   const before = periodBounds(previous, timezone)
   const range = { start: before.start, end: current.end }
 
-  const [campaigns, monthRetros] = await Promise.all([
-    r.listCampaigns(businessId),
-    r.listCompletedRetrospectivesInRange(businessId, current),
-  ])
-  const campaignById = new Map(campaigns.map((c) => [c.id, c]))
+  const monthRetros = await r.listCompletedRetrospectivesInRange(businessId, current)
 
   const postsSection = await guarded(() => r.listPublishedPostsInRange(businessId, range))
   if (postsSection.status === 'error') {
@@ -296,8 +293,8 @@ export async function loadPortfolioWith(
     previousTotal: previousPosts.length,
     rows: [...counts.values()].sort((a, b) => (a.platform === b.platform ? compareAccounts(a.accountId, b.accountId) : a.platform.localeCompare(b.platform))),
     campaigns: {
-      active: campaigns.filter((c) => c.status === 'active').length,
-      completed: campaigns.filter((c) => c.status === 'completed').length,
+      withPosts: new Set(monthPosts.map((p) => p.campaign_id)).size,
+      retrospectivesCompleted: monthRetros.length,
     },
   }
 
@@ -324,7 +321,10 @@ export async function loadPortfolioWith(
   const published = new Map<string, number>()
   for (const p of monthPosts) published.set(p.campaign_id, (published.get(p.campaign_id) ?? 0) + 1)
   const retroByCampaign = new Map(monthRetros.map((r) => [r.campaign_id, r]))
-  const campaignRows: CampaignTableRow[] = [...new Set([...published.keys(), ...retroByCampaign.keys()])]
+  const tableIds = [...new Set([...published.keys(), ...retroByCampaign.keys()])]
+  // Names and statuses come BY ID, only for the campaigns that appear in the month's posts and retrospectives (MAJOR-10).
+  const campaignById = new Map((tableIds.length > 0 ? await r.listCampaignsByIds(businessId, tableIds) : []).map((c) => [c.id, c]))
+  const campaignRows: CampaignTableRow[] = tableIds
     .map((id) => {
       const retro = retroByCampaign.get(id)
       return {
@@ -380,10 +380,13 @@ export async function loadPortfolioWith(
   )
   const retrospectives = await guarded(async (): Promise<RetrospectiveListRow[]> => {
     const rows = await r.listCompletedRetrospectivesInRange(businessId, { start: first.start, end: current.end })
+    // The window spans several months: names by id for exactly these retrospectives' campaigns, merged over the month's.
+    const names = new Map(campaignById)
+    for (const c of await r.listCampaignsByIds(businessId, rows.map((row) => row.campaign_id))) names.set(c.id, c)
     return rows.map((r) => ({
       ...retroView(r),
       campaignId: r.campaign_id,
-      campaignName: campaignById.get(r.campaign_id)?.name ?? null,
+      campaignName: names.get(r.campaign_id)?.name ?? null,
       completedAt: r.completed_at,
       href: '/campaigns/' + r.campaign_id,
     }))
@@ -561,7 +564,7 @@ export async function loadPostsWith(
     if (wanted.length === 0) return []
 
     const labels = await readLabels(r, businessId, wanted.map((p) => p.social_account_id))
-    const campaignNames = new Map((await r.listCampaigns(businessId)).map((c) => [c.id, c.name]))
+    const campaignNames = new Map((await r.listCampaignsByIds(businessId, wanted.map((p) => p.campaign_id))).map((c) => [c.id, c.name]))
 
     // Outcomes only for platforms whose capability says metrics are read; never for the others.
     const capable = [...new Set(wanted.map((p) => p.platform))].filter((p) => d.metricsReadAvailable(p as Platform))
@@ -611,7 +614,8 @@ export async function loadPostsWith(
 /** Every read the loaders make, with the business id as its first argument. The page binds the caller's AUTHENTICATED client; the report worker binds the service-role wrappers and verifies every row (lib/reports/isolation.ts). */
 export interface Readers {
   getBusinessById: (businessId: string) => Promise<BusinessRow>
-  listCampaigns: (businessId: string) => Promise<CampaignRow[]>
+  /** Exactly these campaigns, by id (column-listed, business-bound). Never a page of the business's campaigns (MAJOR-10). */
+  listCampaignsByIds: (businessId: string, ids: readonly string[]) => Promise<CampaignForAnalytics[]>
   listCompletedRetrospectivesInRange: (businessId: string, range: { start: string; end: string }) => Promise<RetrospectiveForAnalytics[]>
   listPublishedPostsInRange: (businessId: string, range: { start: string; end: string }) => Promise<PublishedPostForAnalytics[]>
   countPublishedPostsInRange: (businessId: string, range: { start: string; end: string }) => Promise<number>
@@ -627,7 +631,7 @@ export interface Readers {
 export function authenticatedReaders(client: SupabaseClient): Readers {
   return {
     getBusinessById: (id) => getBusinessById(client, id),
-    listCampaigns: (id) => listCampaigns(client, id),
+    listCampaignsByIds: (id, ids) => listCampaignsByIds(client, id, ids),
     listCompletedRetrospectivesInRange: (id, range) => listCompletedRetrospectivesInRange(client, id, range),
     listPublishedPostsInRange: (id, range) => listPublishedPostsInRange(client, id, range),
     countPublishedPostsInRange: (id, range) => countPublishedPostsInRange(client, id, range),

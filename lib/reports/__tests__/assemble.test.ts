@@ -31,11 +31,11 @@ describe('the Pro report: business A, March 2026', () => {
     expect(r.payload.header).toEqual({ key: 'analytics.report.header', params: { month: '2026-03', measuredAsOf: NOW, generatedOn: NOW } })
   })
 
-  it('section 3, activity: 13 published, 5 the month before, 2 active and 1 completed campaign', async () => {
+  it('section 3, activity: 13 published, 5 the month before, posts from 3 campaigns and 1 retrospective completed in the month', async () => {
     const a = (await run(BUSINESS_A_ID)).payload.activity!
     expect(a.total).toBe(13)
     expect(a.previousTotal).toBe(5)
-    expect(a.campaigns).toEqual({ active: 2, completed: 1 })
+    expect(a.campaigns).toEqual({ withPosts: 3, retrospectivesCompleted: 1 })
   })
 
   it('section 4, X results: 3.1% over 7, wins 4 of 6, 7 of 10 measured', async () => {

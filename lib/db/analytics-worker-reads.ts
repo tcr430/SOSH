@@ -3,7 +3,7 @@ import { selectOutcomePatterns } from '@/lib/memory/outcomes'
 import { assertOwned } from '@/lib/reports/isolation'
 import { getBusinessByIdForWorker } from './businesses'
 import { listOutcomePatterns } from './memory-performance'
-import { listCampaigns } from './campaigns'
+import { listCampaignsByIds } from './campaigns'
 import { listCompletedRetrospectivesInRange } from './campaign-retrospectives'
 import { listMetricsForPosts } from './post-metrics'
 import { listDimensionsForAnalytics, listMonthOutcomes, listTrendOutcomes } from './post-outcomes'
@@ -24,7 +24,7 @@ async function service(): Promise<SupabaseClient> {
 export function analyticsWorkerReaders() {
   return {
     getBusinessById: (businessId: string) => getBusinessByIdForWorker(businessId),
-    listCampaigns: async (businessId: string) => listCampaigns(await service(), businessId),
+    listCampaignsByIds: async (businessId: string, ids: readonly string[]) => listCampaignsByIds(await service(), businessId, ids),
     listCompletedRetrospectivesInRange: async (businessId: string, range: { start: string; end: string }) =>
       listCompletedRetrospectivesInRange(await service(), businessId, range),
     listPublishedPostsInRange: async (businessId: string, range: { start: string; end: string }) =>

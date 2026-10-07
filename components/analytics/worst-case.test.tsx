@@ -72,7 +72,7 @@ function worst(): Portfolio {
           { platform: 'linkedin', accountId: 'a3', label: JA, labelKey: null, count: 10_000 },
           { platform: 'linkedin', accountId: null, label: null, labelKey: 'analytics.account.unrecorded', count: 0 },
         ],
-        campaigns: { active: 10_000, completed: 1 },
+        campaigns: { withPosts: 10_000, retrospectivesCompleted: 1 },
       },
     },
     campaigns: { status: 'ok', data: campaigns },

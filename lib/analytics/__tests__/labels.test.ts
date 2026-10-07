@@ -27,7 +27,7 @@ const TABLE_ACCOUNTS = [
 
 const payload = (campaignIds: string[], accountIds: Array<string | null>) => ({
   campaigns: campaignIds.map((campaignId) => ({ campaignId, status: 'active', published: 1, href: '/campaigns/' + campaignId, retro: null })),
-  activity: { total: accountIds.length, previousTotal: 0, campaigns: { active: 0, completed: 0 }, rows: accountIds.map((accountId) => ({ platform: 'twitter', accountId, count: 1 })) },
+  activity: { total: accountIds.length, previousTotal: 0, campaigns: { withPosts: 0, retrospectivesCompleted: 0 }, rows: accountIds.map((accountId) => ({ platform: 'twitter', accountId, count: 1 })) },
 })
 
 beforeEach(() => {

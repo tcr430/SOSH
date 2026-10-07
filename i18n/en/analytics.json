@@ -72,7 +72,7 @@
   "activity": {
     "line": "{count, plural, one {# post} other {# posts}} published on {platform} ({account}).",
     "total": "{count, plural, one {# post} other {# posts}} published, {prev} the month before.",
-    "campaigns": "{active, plural, one {# active campaign} other {# active campaigns}}, {completed} completed."
+    "campaigns": "Posts came from {withPosts, plural, one {# campaign} other {# campaigns}}. {retrospectivesCompleted, plural, one {# campaign completed its retrospective} other {# campaigns completed their retrospective}} this month."
   },
   "platform": {
     "twitter": "X",

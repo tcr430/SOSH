@@ -170,6 +170,35 @@ export async function countActiveCampaigns(
 
 const NAME_CHUNK = 20
 
+export type CampaignForAnalytics = Pick<CampaignRow, 'id' | 'business_id' | 'name' | 'status'>
+
+/**
+ * Exactly these campaigns, read BY ID for one business (Session 37-D D3, MAJOR-10): columns listed, business-bound, chunked, never
+ * a page of the business's campaigns. The analytics loaders use this instead of listCampaigns, whose 100-row page truncated
+ * silently. Soft-deleted campaigns are not returned.
+ */
+export async function listCampaignsByIds(
+  client: SupabaseClient,
+  businessId: string,
+  ids: readonly string[],
+): Promise<CampaignForAnalytics[]> {
+  const unique = [...new Set(ids)]
+  const out: CampaignForAnalytics[] = []
+  for (let i = 0; i < unique.length; i += NAME_CHUNK) {
+    const { data, error } = await client
+      .from('campaigns')
+      .select('id, business_id, name, status')
+      .eq('business_id', businessId)
+      .is('deleted_at', null)
+      .in('id', unique.slice(i, i + NAME_CHUNK))
+      .order('id', { ascending: true })
+      .limit(NAME_CHUNK)
+    if (error) throw new Error(getErrorMessage(error))
+    out.push(...((data ?? []) as CampaignForAnalytics[]))
+  }
+  return out
+}
+
 /**
  * The names of exactly these campaigns, read BY ID for one business (Session 37-D D2): chunked, bounded by the ids, never a page of
  * the business's campaigns. Soft-deleted campaigns are not returned, so their rows render the "Open campaign" fallback.

@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   listDimensionsForAnalytics: vi.fn(),
   listMetricsForPosts: vi.fn(),
   listAccountLabels: vi.fn(),
+  listCampaignsByIds: vi.fn(),
   listCampaigns: vi.fn(),
   listCompletedRetrospectivesInRange: vi.fn(),
   listOutcomePatterns: vi.fn(),
@@ -38,7 +39,7 @@ vi.mock('@/lib/db/posts', () => ({ listPublishedPostsInRange: mocks.listPublishe
 vi.mock('@/lib/db/post-outcomes', () => ({ listMonthOutcomes: mocks.listMonthOutcomes, listTrendOutcomes: mocks.listTrendOutcomes, listDimensionsForAnalytics: mocks.listDimensionsForAnalytics }))
 vi.mock('@/lib/db/post-metrics', () => ({ listMetricsForPosts: mocks.listMetricsForPosts }))
 vi.mock('@/lib/db/social-accounts', () => ({ listAccountLabels: mocks.listAccountLabels }))
-vi.mock('@/lib/db/campaigns', () => ({ listCampaigns: mocks.listCampaigns }))
+vi.mock('@/lib/db/campaigns', () => ({ listCampaignsByIds: mocks.listCampaignsByIds, listCampaigns: mocks.listCampaigns }))
 vi.mock('@/lib/db/campaign-retrospectives', () => ({ listCompletedRetrospectivesInRange: mocks.listCompletedRetrospectivesInRange }))
 
 import {
@@ -114,7 +115,11 @@ beforeEach(() => {
   mocks.listAccountLabels.mockImplementation(async (_c: unknown, biz: string, ids: string[]) =>
     FIXTURE_ACCOUNTS.filter((a) => a.business_id === biz && ids.includes(a.id)).map((a) => ({ id: a.id, platform: a.platform, platform_username: a.platform_username, platform_display_name: a.platform_display_name })),
   )
-  mocks.listCampaigns.mockImplementation(async (_c: unknown, biz: string) => FIXTURE_CAMPAIGNS.filter((c) => c.business_id === biz))
+  mocks.listCampaignsByIds.mockImplementation(async (_c: unknown, biz: string, ids: string[]) =>
+    FIXTURE_CAMPAIGNS.filter((c) => c.business_id === biz && ids.includes(c.id)).map((c) => ({ id: c.id, business_id: c.business_id, name: c.name, status: c.status })),
+  )
+  // The page the loader must NEVER aggregate over: newest 100 only (lib/db/campaigns listCampaigns, default limit).
+  mocks.listCampaigns.mockImplementation(async (_c: unknown, biz: string) => FIXTURE_CAMPAIGNS.filter((c) => c.business_id === biz).slice(0, 100))
   mocks.listCompletedRetrospectivesInRange.mockImplementation(async (_c: unknown, biz: string, r: { start: string; end: string }) =>
     RETROS.filter((x) => x.business_id === biz && inRange(x.completed_at, r.start, r.end)).sort((a, b) => b.completed_at.localeCompare(a.completed_at)),
   )
@@ -141,11 +146,11 @@ describe('loadPortfolio, an advanced (Pro) business: March 2026, business A (Eur
     expect(p.previousPeriod).toBe('2026-02')
   })
 
-  it('activity: 13 published (X 9 + 1 with no account, LinkedIn 3), 5 the month before, 2 active and 1 completed campaign', async () => {
+  it('activity: 13 published (X 9 + 1 with no account, LinkedIn 3), 5 the month before, posts from N campaigns and M retrospectives completed in the month (A-14(a))', async () => {
     const a = ok((await portfolio(BUSINESS_A_ID)).activity)
     expect(a.total).toBe(13)
     expect(a.previousTotal).toBe(5)
-    expect(a.campaigns).toEqual({ active: 2, completed: 1 })
+    expect(a.campaigns).toEqual({ withPosts: 3, retrospectivesCompleted: 2 })
     expect(a.rows.map((r) => [r.platform, r.accountId, r.count])).toEqual([
       ['linkedin', A_LI_ACCOUNT_ID, 3],
       ['twitter', A_X_ACCOUNT_ID, 9],
@@ -325,10 +330,57 @@ describe('states: empty, immature and a month with no posts', () => {
   })
 })
 
+describe('MAJOR-10: no aggregate and no name comes from a truncated campaign read', () => {
+  it('101+ campaigns, the oldest carrying the month: the stored counts and their names are the same as with few', async () => {
+    const baseline = await portfolio(BUSINESS_A_ID)
+    const mine = FIXTURE_CAMPAIGNS.filter((c) => c.business_id === BUSINESS_A_ID)
+    // Newest first: 100 fillers, then the fixture campaigns, so a 100-row page holds NONE of the campaigns that carry the month.
+    const fillers = Array.from({ length: 100 }, (_, i) => ({ id: 'filler-' + i, business_id: BUSINESS_A_ID, name: 'Filler ' + i, status: 'active' as const }))
+    const store = [...fillers, ...mine]
+    mocks.listCampaigns.mockImplementation(async () => store.slice(0, 100))
+    mocks.listCampaignsByIds.mockImplementation(async (_c: unknown, biz: string, ids: string[]) =>
+      store.filter((c) => c.business_id === biz && ids.includes(c.id)).map((c) => ({ id: c.id, business_id: c.business_id, name: c.name, status: c.status })),
+    )
+    const crowded = (await portfolio(BUSINESS_A_ID)) as AdvancedPortfolio
+    expect(ok(crowded.activity).campaigns).toEqual(ok(baseline.activity).campaigns)
+    const rows = ok(crowded.campaigns)
+    expect(rows.length).toBeGreaterThan(0)
+    for (const row of rows) expect(row.name, row.campaignId).toBe(mine.find((c) => c.id === row.campaignId)?.name)
+    expect(ok(crowded.campaigns)).toEqual(ok(baseline.campaigns))
+  })
+
+  it('campaigns are read by id only, for the ids the month shows, and never as a page', async () => {
+    await portfolio(BUSINESS_A_ID)
+    expect(mocks.listCampaigns).not.toHaveBeenCalled()
+    expect(mocks.listCampaignsByIds).toHaveBeenCalled()
+    for (const c of mocks.listCampaignsByIds.mock.calls) {
+      expect(c[0]).toBe(client)
+      expect(c[1]).toBe(BUSINESS_A_ID)
+      expect(c[2].length).toBeGreaterThan(0)
+    }
+  })
+
+  it('loadPosts names a campaign beyond the 100-row page by id', async () => {
+    const mine = FIXTURE_CAMPAIGNS.filter((c) => c.business_id === BUSINESS_A_ID)
+    const store = [...Array.from({ length: 100 }, (_, i) => ({ id: 'filler-' + i, business_id: BUSINESS_A_ID, name: 'Filler ' + i, status: 'active' as const })), ...mine]
+    mocks.listCampaignsByIds.mockImplementation(async (_c: unknown, biz: string, ids: string[]) => store.filter((c) => c.business_id === biz && ids.includes(c.id)).map((c) => ({ id: c.id, business_id: c.business_id, name: c.name, status: c.status })))
+    const view = await loadPosts(client, BUSINESS_A_ID, { period: '2026-03' }, deps())
+    const posts = ok(view.posts)
+    expect(posts.length).toBeGreaterThan(0)
+    expect(posts.filter((p) => p.campaignName === null)).toEqual([])
+    expect(mocks.listCampaigns).not.toHaveBeenCalled()
+  })
+})
+
 describe('tenancy: every reader is handed the caller\'s client and the caller\'s business', () => {
   it('no reader sees another business or a different client, across the whole Pro load', async () => {
     await portfolio(BUSINESS_A_ID)
     for (const [name, fn] of Object.entries(mocks)) {
+      // The 100-row page is never read by the analytics path (MAJOR-10); every other reader is read, with the caller's client and business.
+      if (name === 'listCampaigns') {
+        expect(fn).not.toHaveBeenCalled()
+        continue
+      }
       expect(fn.mock.calls.length, name).toBeGreaterThan(0)
       for (const c of fn.mock.calls) {
         expect(c[0], `${name} client`).toBe(client)

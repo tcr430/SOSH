@@ -143,14 +143,14 @@ describe('analytics i18n plurals (rendered, not echoed)', () => {
   })
 
   it.each([
-    ['en', 1, 1, '1 active campaign, 1 completed.'],
-    ['en', 2, 0, '2 active campaigns, 0 completed.'],
-    ['pt', 1, 1, '1 campanha ativa, 1 concluída.'],
-    ['pt', 0, 2, '0 campanhas ativas, 2 concluídas.'],
-    ['es', 1, 1, '1 campaña activa, 1 completada.'],
-    ['es', 2, 2, '2 campañas activas, 2 completadas.'],
-  ] as const)('activity.campaigns %s %i/%i', (locale, active, completed, expected) => {
-    expect(t(locale)('analytics.activity.campaigns', { active, completed })).toBe(expected)
+    ['en', 1, 1, 'Posts came from 1 campaign. 1 campaign completed its retrospective this month.'],
+    ['en', 2, 0, 'Posts came from 2 campaigns. 0 campaigns completed their retrospective this month.'],
+    ['pt', 1, 1, 'As publicações vieram de 1 campanha. 1 campanha concluiu o seu veredicto este mês.'],
+    ['pt', 0, 2, 'As publicações vieram de 0 campanhas. 2 campanhas concluíram o seu veredicto este mês.'],
+    ['es', 1, 1, 'Las publicaciones vinieron de 1 campaña. 1 campaña completó su veredicto este mes.'],
+    ['es', 2, 2, 'Las publicaciones vinieron de 2 campañas. 2 campañas completaron su veredicto este mes.'],
+  ] as const)('activity.campaigns %s %i/%i', (locale, withPosts, retrospectivesCompleted, expected) => {
+    expect(t(locale)('analytics.activity.campaigns', { withPosts, retrospectivesCompleted })).toBe(expected)
   })
 
   it('every plural message in every locale renders at 0, 1 and 2 without throwing and never prints raw ICU', () => {

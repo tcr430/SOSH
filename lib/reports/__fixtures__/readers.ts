@@ -41,7 +41,7 @@ export function fixtureReaders(options: FixtureReaderOptions = {}): Readers {
       if (!b) throw new Error('not found')
       return { ...b, plan: id in (options.plan ?? {}) ? (options.plan as Record<string, unknown>)[id] : b.plan, stripe_subscription_id: 'sub_fixture', language: b.language } as never
     },
-    listCampaigns: async (biz) => FIXTURE_CAMPAIGNS.filter((c) => c.business_id === biz) as never,
+    listCampaignsByIds: async (biz, ids) => FIXTURE_CAMPAIGNS.filter((c) => c.business_id === biz && ids.includes(c.id)).map((c) => ({ id: c.id, business_id: c.business_id, name: c.name, status: c.status })) as never,
     listCompletedRetrospectivesInRange: async (biz, r) => RETROS.filter((x) => x.business_id === biz && inRange(x.completed_at, r.start, r.end)).sort((a, b) => b.completed_at.localeCompare(a.completed_at)),
     listPublishedPostsInRange: async (biz, r) =>
       FIXTURE_POSTS.filter((p) => p.business_id === biz && p.status === 'published' && p.deleted_at === null && inRange(p.published_at, r.start, r.end))
