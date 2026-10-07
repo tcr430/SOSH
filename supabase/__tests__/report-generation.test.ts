@@ -14,6 +14,8 @@ import {
 } from '@/lib/analytics/__fixtures__/portfolio'
 import { cleanPortfolio, seedPortfolio } from '@/lib/analytics/__fixtures__/seed-live'
 import { generateReportForBusiness } from '@/lib/reports/generate'
+import { getReportForRedeliveryForWorker } from '@/lib/db/analytics-reports'
+import { countMonthlyReportEmailsForWorker } from '@/lib/db/email-outbox'
 import { TenantMismatchError } from '@/lib/reports/isolation'
 import { analyticsWorkerReaders } from '@/lib/db/analytics-worker-reads'
 import { selectOutcomePatterns } from '@/lib/memory'
@@ -116,7 +118,7 @@ describe('report generation against the live stack (ADR 0031 §5.2, §9.3)', () 
 
   it('#22: a SECOND run inserts nothing', async () => {
     const again = await generateReportForBusiness(BUSINESS_A_ID, NOW)
-    expect(again).toEqual({ status: 'exists', inserted: false })
+    expect(again).toMatchObject({ status: 'exists', inserted: false, redeliver: { businessId: BUSINESS_A_ID, period: '2026-03' } })
     expect(await reportsOf(BUSINESS_A_ID)).toHaveLength(1)
   })
 
@@ -146,5 +148,56 @@ describe('report generation against the live stack (ADR 0031 §5.2, §9.3)', () 
     expect(out).toMatchObject({ status: 'generated', inserted: true, stub: true, period: '2025-11' })
     const stub = (await reportsOf(BUSINESS_A_ID)).find((r) => r.period_month === '2025-11-01')!
     expect((stub.payload as { stub: boolean }).stub).toBe(true)
+  })
+
+  it('MINOR-8: the redelivery read returns the stored generated_at, stub flag and summary for ONE business and month', async () => {
+    const march = await getReportForRedeliveryForWorker(BUSINESS_A_ID, '2026-03-01')
+    expect(march).not.toBeNull()
+    expect(march!.stub).toBe(false)
+    expect(Number.isNaN(new Date(march!.generated_at).getTime())).toBe(false)
+    expect(march!.summary.length).toBeGreaterThan(0)
+    expect(march!.summary[0]).toHaveProperty('key')
+    expect((await getReportForRedeliveryForWorker(BUSINESS_A_ID, '2025-11-01'))!.stub).toBe(true)
+    expect(await getReportForRedeliveryForWorker(BUSINESS_A_ID, '2020-01-01')).toBeNull()
+    // B's report is never read under A's id.
+    expect(await getReportForRedeliveryForWorker(BUSINESS_B_ID, '2025-11-01')).toBeNull()
+  })
+
+  it('M2: a stored report with no boolean stub flag or no summary list is an ERROR on the redelivery read, never a default', async () => {
+    const base = { business_id: BUSINESS_A_ID, tier: 'basic', schema_version: 2, outcomes_through: '2026-04-10T06:00:00Z', generated_at: '2026-04-10T06:05:00Z' }
+    const bad = await admin.from('analytics_reports').insert([
+      { ...base, period_month: '2025-01-01', payload: { summary: [{ key: 'k', params: {} }] } },
+      { ...base, period_month: '2025-02-01', payload: { stub: false } },
+    ]).select('id')
+    expect(bad.error).toBeNull()
+    try {
+      await expect(getReportForRedeliveryForWorker(BUSINESS_A_ID, '2025-01-01')).rejects.toThrow('boolean stub flag')
+      await expect(getReportForRedeliveryForWorker(BUSINESS_A_ID, '2025-02-01')).rejects.toThrow('summary list')
+    } finally {
+      await admin.from('analytics_reports').delete().in('id', (bad.data as Array<{ id: string }>).map((r) => r.id))
+    }
+  })
+
+  it('MINOR-8: the outbox count is per business, kind and month, on the dedupe token prefix', async () => {
+    const row = (businessId: string, token: string, kind = 'monthly-report') => ({ business_id: businessId, kind, recipient: 'x@example.com', locale: 'en', dedupe_token: token })
+    const rows = [
+      row(BUSINESS_A_ID, 'report:2026-03:m1'),
+      row(BUSINESS_A_ID, 'report:2026-03:m2'),
+      row(BUSINESS_A_ID, 'report:2026-04:m1'),
+      row(BUSINESS_B_ID, 'report:2026-03:m1'),
+    ]
+    const inserted = await admin.from('email_outbox').insert(rows).select('id')
+    expect(inserted.error).toBeNull()
+    try {
+      expect(await countMonthlyReportEmailsForWorker(BUSINESS_A_ID, '2026-03')).toBe(2)
+      expect(await countMonthlyReportEmailsForWorker(BUSINESS_A_ID, '2026-04')).toBe(1)
+      expect(await countMonthlyReportEmailsForWorker(BUSINESS_B_ID, '2026-03')).toBe(1)
+      expect(await countMonthlyReportEmailsForWorker(BUSINESS_A_ID, '2026-05')).toBe(0)
+      // The unique dedupe index is what makes a re-run a no-op: the same token for the same business cannot be inserted twice.
+      const dup = await admin.from('email_outbox').insert(row(BUSINESS_A_ID, 'report:2026-03:m1'))
+      expect(dup.error?.code).toBe('23505')
+    } finally {
+      await admin.from('email_outbox').delete().in('id', (inserted.data as Array<{ id: string }>).map((r) => r.id))
+    }
   })
 })

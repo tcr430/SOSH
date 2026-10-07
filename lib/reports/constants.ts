@@ -18,8 +18,16 @@ export const REPORT_DUE_UTC_HOUR = 6
 /** At most this many reports are GENERATED per hourly tick (candidates are scanned by id in pages). */
 export const REPORT_MAX_PER_TICK = 25
 export const REPORT_SCAN_PAGE = 100
-/** A scan bound: re-reading not-yet-due businesses each hour is accepted at launch scale (ADR 0031 §5.2 [db-2]). */
+/**
+ * A scan bound: re-reading not-yet-due businesses each hour is accepted at launch scale (ADR 0031 §5.2 [db-2]). The scan starts at
+ * a per-hour offset and wraps (Session 37-D D4, MAJOR-5), so each tick covers min(1, REPORT_SCAN_CAP / N) of the id space and a
+ * tick that cannot reach everyone says so (`capped`), instead of never visiting the ids past the cap.
+ */
 export const REPORT_SCAN_CAP = 2000
+/** Failing businesses stop the tick at this many errors; they do NOT spend the generation budget (MAJOR-5). */
+export const REPORT_ERROR_CAP = 25
+/** A report that already exists is re-delivered, idempotently, for this long after it was created (MINOR-8, A-13(a)). */
+export const REPORT_REDELIVERY_HOURS = 72
 
 /** Section 5: the three measured posts with the highest day-7 rate. */
 export const REPORT_TOP_POSTS = 3

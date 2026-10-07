@@ -12,13 +12,15 @@ vi.mock('@/lib/config', () => ({ config: { server: { APP_URL: 'https://app.examp
 vi.mock('@sentry/nextjs', () => ({ captureException: capture }))
 vi.mock('@/lib/db/businesses', () => ({ getBusinessByIdForWorker: getBusiness }))
 vi.mock('@/lib/db/business-members', () => ({ resolveReportRecipients: resolveRecipients }))
+const countQueued = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/db/email-outbox', () => ({ countMonthlyReportEmailsForWorker: countQueued }))
 vi.mock('@/lib/email/enqueue', () => ({ enqueueEmail: enqueue }))
 vi.mock('next-intl/server', () => ({
   getTranslations: async ({ locale }: { locale: string }) => (key: string, params?: Record<string, unknown>) =>
     `[${locale}] ${key} ${JSON.stringify(params ?? {})}`,
 }))
 
-import { deliverMonthlyReport, REPORT_EMAIL_MAX_LINES, type DeliveredReport } from '../deliver'
+import { deliverMonthlyReport, redeliverMonthlyReport, REPORT_EMAIL_MAX_LINES, type DeliveredReport } from '../deliver'
 
 const BUSINESS_A = '11111111-1111-4111-8111-111111111111'
 const report: DeliveredReport = {
@@ -42,6 +44,7 @@ beforeEach(() => {
   resolveRecipients.mockReset().mockImplementation(async () => (order.push('resolve'), [OWNER, EDITOR]))
   enqueue.mockReset().mockImplementation(async () => (order.push('enqueue'), { outcome: 'enqueued', row_id: 'row' }))
   capture.mockReset()
+  countQueued.mockReset().mockResolvedValue(0)
 })
 
 describe('who is mailed, and to what address', () => {
@@ -144,6 +147,32 @@ describe('outcomes and failures', () => {
   it('no recipients: nothing is rendered or enqueued and the result is all zero', async () => {
     resolveRecipients.mockImplementation(async () => [])
     expect(await deliverMonthlyReport(report)).toEqual({ recipients: 0, enqueued: 0, deduped: 0, suppressed: 0, errors: 0 })
+    expect(enqueue).not.toHaveBeenCalled()
+  })
+})
+
+describe('redeliverMonthlyReport (MINOR-8, A-13(a)): re-send only what the outbox is missing', () => {
+  it('makes NO delivery when the outbox already holds a row for every resolved recipient', async () => {
+    countQueued.mockResolvedValue(2)
+    expect(await redeliverMonthlyReport(report)).toBeNull()
+    expect(enqueue).not.toHaveBeenCalled()
+    expect(countQueued).toHaveBeenCalledWith(BUSINESS_A, '2026-09')
+  })
+
+  it('delivers again when the outbox is short; the dedupe index no-ops the member already queued and the other is enqueued', async () => {
+    countQueued.mockResolvedValue(1)
+    enqueue.mockReset().mockImplementation(async (input: { recipient: string }) =>
+      input.recipient === OWNER.email ? { outcome: 'deduped', row_id: 'row' } : { outcome: 'enqueued', row_id: 'row' },
+    )
+    expect(await redeliverMonthlyReport(report)).toEqual({ recipients: 2, enqueued: 1, deduped: 1, suppressed: 0, errors: 0 })
+    for (const c of enqueue.mock.calls) expect(c[0].dedupe_token).toMatch(/^report:2026-09:member-/)
+  })
+
+  it("never re-sends for 'off' (no recipients resolve), and does not even count the outbox", async () => {
+    resolveRecipients.mockResolvedValue([])
+    getBusiness.mockImplementation(async () => business({ report_email: 'off' }))
+    expect(await redeliverMonthlyReport(report)).toBeNull()
+    expect(countQueued).not.toHaveBeenCalled()
     expect(enqueue).not.toHaveBeenCalled()
   })
 })

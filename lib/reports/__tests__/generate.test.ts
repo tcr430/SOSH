@@ -2,7 +2,8 @@ import { describe, it, expect, vi } from 'vitest'
 import { BUSINESS_A_ID, BUSINESS_B_ID } from '@/lib/analytics/__fixtures__/portfolio'
 import type { Readers } from '@/lib/analytics/load'
 import type { AnalyticsReportInsert } from '@/lib/db/analytics-reports'
-import { generateReportForBusiness, runReportTick, type GenerateDeps } from '../generate'
+import { generateReportForBusiness, reportScanOffset, runReportTick, type GenerateDeps } from '../generate'
+import { REPORT_ERROR_CAP, REPORT_SCAN_CAP } from '../constants'
 import { TenantMismatchError } from '../isolation'
 import { fixtureReaders } from '../__fixtures__/readers'
 
@@ -24,6 +25,7 @@ function memory(over: Partial<GenerateDeps> = {}) {
     readers: fixtureReaders(),
     trialStartedAt: async (businessId) => ({ business_id: businessId, trial_started_at: null }),
     reportExists: async () => false,
+    redeliveryOf: async () => null,
     insert,
     ...over,
   }
@@ -173,7 +175,7 @@ describe('runReportTick', () => {
   it('at most maxPerTick reports are generated; the rest wait for the next tick', async () => {
     const m = memory()
     const s = await runReportTick(DUE, { ...m.deps, listBusinessIds: ids([BUSINESS_A_ID, BUSINESS_B_ID]), maxPerTick: 1 })
-    expect(s).toMatchObject({ inserted: 1, capped: true })
+    expect(s).toMatchObject({ inserted: 1, capped: true, reason: 'generation_cap' })
   })
 
   it('one failing business never fails the tick: it is captured and the next one is processed', async () => {
@@ -211,5 +213,165 @@ describe('runReportTick', () => {
     const s = await runReportTick('2026-04-09T22:00:00Z', { ...m.deps, listBusinessIds: ids([BUSINESS_A_ID, BUSINESS_B_ID]) })
     expect(s).toMatchObject({ scanned: 2, notDue: 2, inserted: 0 })
     expect(m.insert).not.toHaveBeenCalled()
+  })
+})
+
+// ─── MAJOR-5 (Session 37-D D4): the tick wraps from a per-hour offset, errors have their own cap, a capped tick says so ───────────────
+
+// ids spread evenly over the WHOLE uuid space, so a per-hour offset really lands among them (ids near zero would never be wrapped).
+const spread = (n: number): string[] =>
+  Array.from({ length: n }, (_, i) => {
+    const hex = ((BigInt(i) * BigInt('0x1' + '0'.repeat(32))) / BigInt(n)).toString(16).padStart(32, '0')
+    return hex.slice(0, 8) + '-' + hex.slice(8, 12) + '-' + hex.slice(12, 16) + '-' + hex.slice(16, 20) + '-' + hex.slice(20)
+  })
+// A pager that honours the cursor AND the limit, like businesses.listBusinessIdsPage.
+const pager = (sorted: string[]) => async (after: string | null, limit: number) => sorted.filter((i) => after === null || i > after).slice(0, limit)
+const ZERO = '00000000-0000-0000-0000-000000000000'
+const hoursAfter = (iso: string, h: number) => new Date(new Date(iso).getTime() + h * 3_600_000).toISOString().replace('.000Z', 'Z')
+
+// Readers for a synthetic fleet: ids in `due` are live Pro businesses (a stub report is generated for them: the fixture holds no posts
+// for an unknown id); every other id is a trial whose clock never started (ineligible); ids in `failing` throw.
+function fleetReaders(due: Set<string>, failing: Set<string> = new Set(), seen?: string[]): Readers {
+  const real = fixtureReaders()
+  return {
+    ...real,
+    getBusinessById: async (id) => {
+      seen?.push(id)
+      if (failing.has(id)) throw new Error('boom ' + id)
+      const base = await real.getBusinessById(BUSINESS_A_ID)
+      return { ...base, id, plan: due.has(id) ? 'pro' : 'trial', stripe_subscription_id: due.has(id) ? 'sub_x' : null } as never
+    },
+  }
+}
+
+describe('runReportTick wraps from a per-hour offset (MAJOR-5)', () => {
+  it('the offset is a uuid, stable within an hour and different the next hour', () => {
+    const a = reportScanOffset('2026-10-10T07:20:00Z')
+    expect(a).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
+    expect(reportScanOffset('2026-10-10T07:59:59Z')).toBe(a)
+    expect(reportScanOffset('2026-10-10T08:00:00Z')).not.toBe(a)
+  })
+
+  it('2,100 candidates, only the LAST due: a tick that cannot reach it says capped, and the exact tick the offsets reach it generates it', async () => {
+    const all = spread(2100)
+    const last = all[all.length - 1]
+    const m = memory({ readers: fleetReaders(new Set([last])) })
+    // The scan visits ids above the offset, then the ids at or below it: the last id's place in that order.
+    const rank = (offset: string) => (offset < last ? all.filter((i) => i > offset).length - 1 : all.length - 1)
+    const at = (k: number) => hoursAfter(DUE, k)
+    let start = 0
+    while (rank(reportScanOffset(at(start))) < REPORT_SCAN_CAP) start += 1
+    expect(start).toBeLessThan(400) // the same month, so every tick is "due"
+    let expectedTick = start + 1
+    while (rank(reportScanOffset(at(expectedTick))) >= REPORT_SCAN_CAP) expectedTick += 1
+
+    let generatedAt: number | null = null
+    for (let k = start; k <= expectedTick; k += 1) {
+      const s = await runReportTick(at(k), { ...m.deps, listBusinessIds: pager(all) })
+      if (m.rows.some((r) => r.business_id === last)) {
+        generatedAt = k
+        break
+      }
+      expect(s).toMatchObject({ capped: true, reason: 'scan_cap', scanned: REPORT_SCAN_CAP })
+    }
+    expect(generatedAt).toBe(expectedTick)
+  })
+
+  it('a tick that sees every business is not capped', async () => {
+    const all = spread(150)
+    const m = memory({ readers: fleetReaders(new Set()) })
+    const s = await runReportTick(DUE, { ...m.deps, listBusinessIds: pager(all) })
+    expect(s).toMatchObject({ scanned: 150, ineligible: 150, capped: false, reason: null })
+  })
+
+  it('25 failing ids ahead of one due business: the due business is generated in the FIRST tick (errors do not spend the generation budget)', async () => {
+    const all = spread(26)
+    const m = memory({ readers: fleetReaders(new Set([all[25]]), new Set(all.slice(0, 25))) })
+    const capture = vi.fn()
+    const s = await runReportTick(DUE, { ...m.deps, listBusinessIds: pager(all), scanOffset: ZERO, capture })
+    expect(s).toMatchObject({ errors: REPORT_ERROR_CAP, inserted: 1, capped: false, reason: null })
+    expect(m.rows.map((r) => r.business_id)).toEqual([all[25]])
+    expect(capture).toHaveBeenCalledTimes(REPORT_ERROR_CAP)
+  })
+
+  it('more failures than the error cap end the tick as capped with reason error_cap, and the rest wait', async () => {
+    const all = spread(40)
+    const m = memory({ readers: fleetReaders(new Set([all[39]]), new Set(all.slice(0, 30))) })
+    const s = await runReportTick(DUE, { ...m.deps, listBusinessIds: pager(all), scanOffset: ZERO, capture: vi.fn() })
+    expect(s).toMatchObject({ errors: REPORT_ERROR_CAP + 1, capped: true, reason: 'error_cap', inserted: 0 })
+  })
+
+  it('an offset equal to an existing id visits every business exactly once, in wrap order, with no skip at the seam', async () => {
+    const all = spread(7)
+    const seen: string[] = []
+    const m = memory({ readers: fleetReaders(new Set(), new Set(), seen) })
+    const s = await runReportTick(DUE, { ...m.deps, listBusinessIds: pager(all), scanOffset: all[3] })
+    expect(seen).toEqual([...all.slice(4), ...all.slice(0, 4)])
+    expect(new Set(seen).size).toBe(7)
+    expect(s).toMatchObject({ scanned: 7, capped: false })
+  })
+
+  it('an offset past the last id, and one below the first, both visit everything once', async () => {
+    const all = spread(5).slice(1)
+    for (const offset of ['ffffffff-ffff-ffff-ffff-ffffffffffff', ZERO]) {
+      const seen: string[] = []
+      const m = memory({ readers: fleetReaders(new Set(), new Set(), seen) })
+      await runReportTick(DUE, { ...m.deps, listBusinessIds: pager(all), scanOffset: offset })
+      expect([...seen].sort()).toEqual([...all].sort())
+      expect(seen).toHaveLength(all.length)
+    }
+  })
+})
+
+describe('an existing report inside its redelivery window is a candidate (MINOR-8, A-13(a))', () => {
+  const stored = (hoursAgo: number, over: Partial<{ stub: boolean }> = {}) => ({
+    generated_at: hoursAfter(DUE, -hoursAgo),
+    stub: false,
+    summary: [{ key: 'analytics.activity.total', params: { count: 3, prev: 1 } }],
+    ...over,
+  })
+  const run = (row: ReturnType<typeof stored> | null) => {
+    const m = memory({ reportExists: async () => true, redeliveryOf: async () => row })
+    return generateReportForBusiness(BUSINESS_A_ID, DUE, m.deps)
+  }
+
+  it('a non-stub report generated 10 hours ago is a candidate, carrying its stored summary', async () => {
+    expect(await run(stored(10))).toEqual({ status: 'exists', inserted: false, redeliver: { businessId: BUSINESS_A_ID, period: '2026-03', summary: stored(10).summary } })
+  })
+
+  it('71 hours is inside the window; 72 hours and 73 hours are not: nothing happens after 72 hours', async () => {
+    expect((await run(stored(71))) as { redeliver?: unknown }).toHaveProperty('redeliver')
+    expect(await run(stored(72))).toEqual({ status: 'exists', inserted: false })
+    expect(await run(stored(73))).toEqual({ status: 'exists', inserted: false })
+  })
+
+  it('a STUB is never a candidate, and neither is a report the read cannot find', async () => {
+    expect(await run(stored(1, { stub: true }))).toEqual({ status: 'exists', inserted: false })
+    expect(await run(null)).toEqual({ status: 'exists', inserted: false })
+  })
+
+  it('the tick collects the candidates and counts the business as exists', async () => {
+    const m = memory({ reportExists: async () => true, redeliveryOf: async () => stored(5) })
+    const s = await runReportTick(DUE, { ...m.deps, listBusinessIds: pager([BUSINESS_A_ID]) })
+    expect(s).toMatchObject({ exists: 1, inserted: 0 })
+    expect(s.redeliverReports).toEqual([{ businessId: BUSINESS_A_ID, period: '2026-03', summary: stored(5).summary }])
+  })
+})
+
+describe('a failing redelivery read is its own signal (silent-failure-hunter M1)', () => {
+  it('is captured and counted on its own counter, and never spends the error cap or ends the tick', async () => {
+    const all = spread(REPORT_ERROR_CAP + 5)
+    const capture = vi.fn()
+    const m = memory({
+      readers: fleetReaders(new Set(all)),
+      reportExists: async () => true,
+      redeliveryOf: async () => {
+        throw new Error('read failed')
+      },
+    })
+    const s = await runReportTick(DUE, { ...m.deps, listBusinessIds: pager(all), scanOffset: ZERO, capture })
+    expect(s).toMatchObject({ scanned: all.length, exists: all.length, errors: 0, redeliveryReadErrors: all.length, capped: false })
+    expect(capture).toHaveBeenCalledTimes(all.length)
+    expect(s.redeliverReports).toEqual([])
   })
 })

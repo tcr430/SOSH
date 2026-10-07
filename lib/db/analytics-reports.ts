@@ -93,6 +93,33 @@ export async function insertAnalyticsReport(insert: AnalyticsReportInsert): Prom
   return (data ?? []).length > 0
 }
 
+export interface ReportForRedelivery {
+  generated_at: string
+  stub: boolean
+  summary: Array<{ key: string; params: Record<string, unknown> }>
+}
+
+// MINOR-8 (A-13(a)): what the worker needs to re-send an EXISTING report's email: when it was generated, whether it is a stub, and its
+// stored summary lines. Read only when the probe says the report exists; null when it does not.
+export async function getReportForRedeliveryForWorker(businessId: string, periodMonth: string): Promise<ReportForRedelivery | null> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { data, error } = await client
+    .from('analytics_reports')
+    .select('generated_at, stub:payload->stub, summary:payload->summary')
+    .eq('business_id', businessId)
+    .eq('period_month', periodMonth)
+    .limit(1)
+  if (error) throw new Error(getErrorMessage(error))
+  const row = (data ?? [])[0] as { generated_at: string; stub: unknown; summary: unknown } | undefined
+  if (!row) return null
+  // A stored report that cannot say whether it is a stub, or whose summary is not a non-empty list, is an ERROR, not a default: a
+  // missing flag read as "not a stub" and a missing summary read as [] would re-send a blank email (silent-failure-hunter M2).
+  if (typeof row.stub !== 'boolean') throw new Error('stored report has no boolean stub flag (' + businessId + ', ' + periodMonth + ')')
+  if (!Array.isArray(row.summary) || (row.stub === false && row.summary.length === 0)) throw new Error('stored report has no summary list (' + businessId + ', ' + periodMonth + ')')
+  return { generated_at: row.generated_at, stub: row.stub, summary: row.summary as ReportForRedelivery['summary'] }
+}
+
 // The anti-join probe on the unique key: does this business already have a report for the month?
 export async function analyticsReportExistsForWorker(businessId: string, periodMonth: string): Promise<boolean> {
   const { createServiceRoleClient } = await import('@/lib/supabase/service')

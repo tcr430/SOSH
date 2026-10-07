@@ -7,7 +7,7 @@ const withMonitor = vi.hoisted(() => vi.fn((...args: [slug: string, fn: () => un
 const captureException = vi.hoisted(() => vi.fn())
 vi.mock('@sentry/nextjs', () => ({ withMonitor, captureException }))
 // deliver.ts is injected below, but job.ts imports its symbols at load: keep that import free of config and i18n.
-vi.mock('../deliver', () => ({ deliverMonthlyReport: vi.fn() }))
+vi.mock('../deliver', () => ({ deliverMonthlyReport: vi.fn(), redeliverMonthlyReport: vi.fn() }))
 
 import { runReportJob } from '../job'
 
@@ -15,8 +15,8 @@ const NOW = '2026-10-10T07:20:00Z'
 
 function tickSummary(over: Partial<ReportTickSummary> = {}): ReportTickSummary {
   return {
-    scanned: 3, notDue: 0, ineligible: 0, exists: 0, inserted: 0, stubs: 0, raced: 0, errors: 0, capped: false,
-    insertedBusinessIds: [], insertedReports: [],
+    scanned: 3, notDue: 0, ineligible: 0, exists: 0, inserted: 0, stubs: 0, raced: 0, errors: 0, redeliveryReadErrors: 0, capped: false, reason: null,
+    insertedBusinessIds: [], insertedReports: [], redeliverReports: [],
     ...over,
   }
 }
@@ -24,11 +24,13 @@ const sum = (businessId: string) => ({ businessId, period: '2026-09', summary: [
 
 const tick = vi.fn()
 const deliver = vi.fn()
+const redeliver = vi.fn()
 const capture = vi.fn()
 
 beforeEach(() => {
   tick.mockReset().mockResolvedValue(tickSummary())
   deliver.mockReset().mockResolvedValue({ recipients: 2, enqueued: 2, deduped: 0, suppressed: 0, errors: 0 })
+  redeliver.mockReset().mockResolvedValue(null)
   capture.mockReset()
   withMonitor.mockClear()
   captureException.mockClear()
@@ -93,5 +95,44 @@ describe('the Sentry monitor', () => {
     deliver.mockRejectedValueOnce(boom)
     await runReportJob(NOW, { tick, deliver })
     expect(captureException).toHaveBeenCalledWith(boom, { tags: { worker: 'generate-reports', phase: 'deliver' }, extra: { businessId: 'a' } })
+  })
+})
+
+describe('re-delivery of an existing report whose email never went out (MINOR-8, A-13(a))', () => {
+  it('asks to redeliver each candidate the tick found, and counts only the ones that actually re-sent', async () => {
+    tick.mockResolvedValue(tickSummary({ exists: 2, redeliverReports: [sum('a'), sum('b')] }))
+    redeliver.mockImplementation(async (r: { businessId: string }) => (r.businessId === 'a' ? { recipients: 3, enqueued: 1, deduped: 2, suppressed: 0, errors: 0 } : null))
+    const out = await runReportJob(NOW, { tick, deliver, redeliver, capture })
+    expect(redeliver).toHaveBeenCalledTimes(2)
+    expect(deliver).not.toHaveBeenCalled()
+    expect(out.redelivered).toBe(1)
+    expect(out.emails).toEqual({ recipients: 3, enqueued: 1, deduped: 2, suppressed: 0, errors: 0 })
+  })
+
+  it('a re-delivery that throws is captured and does not stop the next one', async () => {
+    tick.mockResolvedValue(tickSummary({ redeliverReports: [sum('a'), sum('b')] }))
+    redeliver.mockRejectedValueOnce(new Error('boom')).mockResolvedValueOnce({ recipients: 1, enqueued: 1, deduped: 0, suppressed: 0, errors: 0 })
+    const out = await runReportJob(NOW, { tick, deliver, redeliver, capture })
+    expect(capture).toHaveBeenCalledWith(expect.any(Error), { businessId: 'a' })
+    expect(out.redelivered).toBe(1)
+    expect(out.emails.errors).toBe(1)
+  })
+
+  it('redelivers nothing when the tick found no candidate', async () => {
+    await runReportJob(NOW, { tick, deliver, redeliver, capture })
+    expect(redeliver).not.toHaveBeenCalled()
+  })
+
+  it('a first delivery that throws once is retried by a LATER tick: the missing member is enqueued, the queued one is a no-op', async () => {
+    // Tick 1 inserted the report and delivery threw. Tick 2 finds it existing: the redelivery path (outbox short -> deliver again).
+    tick.mockResolvedValueOnce(tickSummary({ inserted: 1, insertedReports: [sum('a')] }))
+    deliver.mockRejectedValueOnce(new Error('send failed'))
+    const first = await runReportJob(NOW, { tick, deliver, redeliver, capture })
+    expect(first.emails.errors).toBe(1)
+    tick.mockResolvedValueOnce(tickSummary({ exists: 1, redeliverReports: [sum('a')] }))
+    redeliver.mockResolvedValueOnce({ recipients: 2, enqueued: 1, deduped: 1, suppressed: 0, errors: 0 })
+    const second = await runReportJob(NOW, { tick, deliver, redeliver, capture })
+    expect(second.redelivered).toBe(1)
+    expect(second.emails).toMatchObject({ enqueued: 1, deduped: 1 })
   })
 })

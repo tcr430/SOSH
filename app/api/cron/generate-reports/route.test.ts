@@ -28,7 +28,8 @@ vi.mock('@/lib/config', () => ({
 }))
 vi.mock('@/lib/cron/qstash-auth', () => ({ verifyQStashRequest: mockVerifyQStash, QStashAuthError: MockQStashAuthError }))
 const captureException = vi.hoisted(() => vi.fn())
-vi.mock('@sentry/nextjs', () => ({ captureException }))
+const captureCheckIn = vi.hoisted(() => vi.fn())
+vi.mock('@sentry/nextjs', () => ({ captureException, captureCheckIn }))
 vi.mock('@/lib/reports/job', () => ({ runReportJob: vi.fn() }))
 
 import { GET, POST } from './route'
@@ -37,12 +38,12 @@ import { runReportJob } from '@/lib/reports/job'
 const SECRET = 'test-secret-that-is-at-least-32-chars!!'
 
 const LINE_KEYS = [
-  'kind', 'triggeredBy', 'tick', 'durationMs', 'scanned', 'notDue', 'ineligible', 'exists', 'inserted', 'stubs', 'raced', 'capped',
+  'kind', 'triggeredBy', 'tick', 'durationMs', 'scanned', 'notDue', 'ineligible', 'exists', 'inserted', 'stubs', 'raced', 'capped', 'reason', 'redelivered',
   'emailsEnqueued', 'emailsDeduped', 'emailsSuppressed', 'emailErrors', 'errors',
 ].sort()
 
 const summary = {
-  scanned: 5, notDue: 2, ineligible: 1, exists: 0, inserted: 2, stubs: 0, raced: 0, errors: 0, capped: false,
+  scanned: 5, notDue: 2, ineligible: 1, exists: 0, inserted: 2, stubs: 0, raced: 0, errors: 0, capped: false, reason: null, redelivered: 0,
   tick: '2026-10-10T07:20:00Z',
   emails: { recipients: 4, enqueued: 3, deduped: 1, suppressed: 0, errors: 0 },
 }
@@ -153,7 +154,7 @@ describe('the canonical tick line', () => {
     expect(Object.keys(line).sort()).toEqual(LINE_KEYS)
     expect(line.errors).toBe(1)
     const counters = LINE_KEYS.filter((k) => !['kind', 'triggeredBy', 'tick', 'durationMs', 'errors'].includes(k))
-    expect(counters).toHaveLength(12)
+    expect(counters).toHaveLength(14)
     for (const k of counters) expect(line[k], `${k} must be null (unknown)`).toBeNull()
   })
 
@@ -163,5 +164,26 @@ describe('the canonical tick line', () => {
     await GET(makeRequest({ authorization: `Bearer ${SECRET}` }))
     expect(captureException).not.toHaveBeenCalled()
     expect(lines(log)[0]).toMatchObject({ scanned: 5, notDue: 2, ineligible: 1, inserted: 2, stubs: 0, emailsSuppressed: 0 })
+  })
+})
+
+describe('a capped tick alerts the monitor (MAJOR-5)', () => {
+  it('reports status error to the generate-reports monitor, and puts the reason on the canonical line', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.mocked(runReportJob).mockResolvedValue({ ...summary, capped: true, reason: 'scan_cap' } as never)
+    await GET(makeRequest({ authorization: `Bearer ${SECRET}` }))
+    expect(captureCheckIn).toHaveBeenCalledTimes(1)
+    expect(captureCheckIn.mock.calls[0][0]).toMatchObject({ monitorSlug: 'generate-reports', status: 'error' })
+    expect(lines(log)[0]).toMatchObject({ capped: true, reason: 'scan_cap' })
+  })
+
+  it('an uncapped tick sends no extra check-in, and neither does a job that threw', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    await GET(makeRequest({ authorization: `Bearer ${SECRET}` }))
+    vi.mocked(runReportJob).mockRejectedValue(new Error('boom'))
+    await GET(makeRequest({ authorization: `Bearer ${SECRET}` }))
+    expect(captureCheckIn).not.toHaveBeenCalled()
   })
 })

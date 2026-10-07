@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/nextjs'
 import { formatISO } from 'date-fns'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { BusinessMemberRow, MemberRole, ReportEmailSetting } from './types'
@@ -230,7 +231,15 @@ export async function resolveReportRecipients(
     .eq('status', 'active')
     .not('user_id', 'is', null)
   if (setting === 'admins') query = query.eq('is_admin', true)
-  const { data, error } = await query.order('created_at', { ascending: true }).limit(REPORT_RECIPIENT_MAX)
+  // MAX + 1 so an overflow is SEEN: the cap is a decided bound, but silently dropping the 201st member is not (NIT-6).
+  const { data, error } = await query
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true })
+    .limit(REPORT_RECIPIENT_MAX + 1)
   if (error) throw new Error(getErrorMessage(error))
-  return ((data as Array<{ id: string; email: string }> | null) ?? []).map((m) => ({ id: m.id, email: m.email }))
+  const rows = (data as Array<{ id: string; email: string }> | null) ?? []
+  if (rows.length > REPORT_RECIPIENT_MAX) {
+    Sentry.captureMessage('report recipients truncated at ' + REPORT_RECIPIENT_MAX, { level: 'warning', tags: { worker: 'generate-reports', phase: 'recipients' }, extra: { businessId } })
+  }
+  return rows.slice(0, REPORT_RECIPIENT_MAX).map((m) => ({ id: m.id, email: m.email }))
 }

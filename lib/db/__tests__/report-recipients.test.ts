@@ -16,6 +16,8 @@ interface Row {
 
 const table: { rows: Row[] } = vi.hoisted(() => ({ rows: [] }))
 const calls = vi.hoisted(() => ({ limit: undefined as number | undefined, order: undefined as string | undefined, from: [] as string[] }))
+const sentry = vi.hoisted(() => ({ captureMessage: vi.fn() }))
+vi.mock('@sentry/nextjs', () => sentry)
 
 function builder() {
   const filters: Array<(r: Row) => boolean> = []
@@ -27,7 +29,7 @@ function builder() {
       filters.push((r) => r[col] !== val)
       return q
     },
-    order: (col: string) => ((calls.order = col), q),
+    order: (col: string) => ((calls.order = calls.order ? calls.order + ',' + col : col), q),
     limit: (n: number) => ((calls.limit = n), q),
     then: (resolve: (v: { data: Array<Pick<Row, 'id' | 'email'>>; error: null }) => void) => {
       const out = table.rows
@@ -130,8 +132,30 @@ describe("resolveReportRecipients('off') and an unknown value", () => {
 describe('bounded and ordered', () => {
   it('applies an explicit limit and a created_at order (the list is never unbounded)', async () => {
     await resolveReportRecipients(A, 'admins')
-    expect(calls.limit).toBe(REPORT_RECIPIENT_MAX)
-    expect(calls.order).toBe('created_at')
+    expect(calls.limit).toBe(REPORT_RECIPIENT_MAX + 1) // one more than the cap, so an overflow is SEEN (NIT-6)
+    expect(calls.order).toBe('created_at,id')
     expect(REPORT_RECIPIENT_MAX).toBeGreaterThan(0)
+  })
+})
+
+describe('the recipient cap signals (NIT-6)', () => {
+  const stamp = (i: number) => '2026-01-01T00:' + String(Math.floor(i / 60)).padStart(2, '0') + ':' + String(i % 60).padStart(2, '0') + 'Z'
+
+  it('201 eligible members: the first 200 are returned, in order, and ONE Sentry message names the business', async () => {
+    table.rows = Array.from({ length: REPORT_RECIPIENT_MAX + 1 }, (_, i) => member({ id: 'm-' + String(i).padStart(3, '0'), is_admin: true, created_at: stamp(i) }))
+    sentry.captureMessage.mockClear()
+    const out = await resolveReportRecipients(A, 'admins')
+    expect(out).toHaveLength(REPORT_RECIPIENT_MAX)
+    expect(out[0].id).toBe('m-000')
+    expect(out[REPORT_RECIPIENT_MAX - 1].id).toBe('m-199')
+    expect(sentry.captureMessage).toHaveBeenCalledTimes(1)
+    expect(sentry.captureMessage.mock.calls[0][1]).toMatchObject({ extra: { businessId: A } })
+  })
+
+  it('exactly 200 eligible members is NOT an overflow: nothing is captured', async () => {
+    table.rows = Array.from({ length: REPORT_RECIPIENT_MAX }, (_, i) => member({ id: 'm-' + String(i).padStart(3, '0'), is_admin: true, created_at: stamp(i) }))
+    sentry.captureMessage.mockClear()
+    expect(await resolveReportRecipients(A, 'admins')).toHaveLength(REPORT_RECIPIENT_MAX)
+    expect(sentry.captureMessage).not.toHaveBeenCalled()
   })
 })

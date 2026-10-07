@@ -62,6 +62,12 @@ async function generateReportsTick(request: NextRequest): Promise<NextResponse> 
     Sentry.captureException(err, { tags: { cron: 'generate-reports', phase: 'route' } })
   }
 
+  // A capped tick could not reach every business (a scan, generation or error bound): the monitor must hear it. The job's own check-in
+  // says "ok" (it ran); this second one says "error" so a persistent shortfall alerts instead of passing silently (MAJOR-5).
+  if (report?.capped) {
+    Sentry.captureCheckIn({ monitorSlug: 'generate-reports', status: 'error', duration: Math.round((Date.now() - startedAt) / 1000) })
+  }
+
   // The ONE canonical structured-JSON line (CLAUDE.md worker carve-out): counts only, picked by name so nothing else can
   // leak in (no business id, no member, no address, no report text). A job that threw reports `null` counters and
   // errors: 1, never a fabricated 0 that would say "nothing was due".
@@ -78,6 +84,8 @@ async function generateReportsTick(request: NextRequest): Promise<NextResponse> 
     stubs: report?.stubs ?? null,
     raced: report?.raced ?? null,
     capped: report?.capped ?? null,
+    reason: report?.reason ?? null,
+    redelivered: report?.redelivered ?? null,
     emailsEnqueued: report?.emails.enqueued ?? null,
     emailsDeduped: report?.emails.deduped ?? null,
     emailsSuppressed: report?.emails.suppressed ?? null,
