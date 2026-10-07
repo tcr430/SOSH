@@ -765,3 +765,43 @@ No ruling is needed (section 4 engineering ledger).
 **What I did NOT touch (D10):** the table recipe, the shell, the 640 px "Details" disclosure, the chart components, any copy, no migration. The ADR §10.4 acceptance wording ("shell `scrollWidth` <= 320" is not enough for a shell with an inner scroller) is D11's.
 
 **Loop at this step.** `npm run typecheck` clean; `npm run lint` 0 errors, 113 warnings (unchanged); `npm run test:app` with `app-tests.yml`'s env block: 429 files, 6745 tests passed; `npm run test:db` against the LOCAL stack: 122 files, 1388 tests, 0 failed. The dev server was stopped, the fixture removed from the local stack and the temporary seeding harness deleted before this commit.
+
+### D11 — NIT-1, NIT-2, NIT-7, MINOR-10, MINOR-12, and every ADR half (documentation only)
+
+No `.ts`, `.tsx` or `.sql` is in this commit (`git show --stat HEAD` names only `docs/`). `docs/decisions/0031-analytics-and-monthly-report.md` gains ONE appended section, **"Correction pass amendments (Session 37-D)", C.1 to C.15, after V.20**, and exactly three in-place status lines (NIT-1). `git diff -U0 a41073340 -- docs/decisions/0031-analytics-and-monthly-report.md` shows four hunks: line 3, line 58, line 335, and a pure append at line 1832. Every citation in C.1 to C.15 is `file:line` at the head of D10 (`a41073340`); I checked four with `git show a41073340:<path>` (`worst-case.test.tsx:345`, `source-scans.test.ts:613`, `generate.test.ts:304`, and the Tier-1 dedupe test `report-generation.test.ts:181`): each is the test the amendment names. No "executed green in CI" cell is filled for the corrected range (D12's, from the logs).
+
+| Field | NIT-1 | NIT-2 | NIT-7 | MINOR-10 | MINOR-12 |
+|---|---|---|---|---|---|
+| **Finding** | NIT-1 | NIT-2 | NIT-7 | MINOR-10 | MINOR-12 |
+| **Fix** | Four status lines corrected in place (three in the ADR, one in `current-phase.md`), old text below. | ADR C.10: §10.1's "Print" is the browser's print under the print stylesheet, no button; §10.6's two islands stand. | ADR C.11: `--no-sandbox` is added to §5.5's list, with why it is acceptable here and where it would not be; the same sentence on the Vercel preview row of `docs/launch-checklist.md` (line 155). | ADR C.12: the Reviewer's section 10 re-redden of all 10 scans and V.15 are the redden and per-skill records for O2.7 and O2.10; `cb0f96e72` and `266f67456` are not amended; every 37-D code step carries its own transcript in its commit body. | ADR C.14: the complete callers table at the corrected head, from `git grep` run now, including `hasAdvancedAnalytics`'s page caller and `listOutcomePatterns`/`selectOutcomePatterns`'s two bindings. |
+| **Proof** | `git diff -U0 a41073340 -- <the ADR>`: hunks at 3, 58, 335 and the append; `git diff` of `docs/current-phase.md` is one line. | The sentence is in C.10; §10.6 is unchanged. | C.11 and the checklist row; the controls it relies on are tested (`lib/reports/__tests__/pdf.test.ts`, the PDF route test). | C.12; the commit bodies of D1 to D10 each carry a REDDEN paragraph (`git log --format=%b a41073340~10..a41073340`). | C.14's rows each name the test (file:line) that exercises each caller; D1 added `report-generation.test.ts:99, 106` and the `load.test.ts` page-binding test for the patterns bindings, and `reports-pages.test.tsx:166` is the page caller of `hasAdvancedAnalytics`. |
+| **Reddening** | n/a (documentation) | n/a | n/a | n/a | n/a |
+| **Commit** | D11 | D11 | D11 | D11 | D11 |
+
+**NIT-1, the old text, quoted:**
+1. ADR line 3: `- **Status:** Accepted. It becomes Accepted when the founder rules A-3…A-7 (§0.1); until then O2 does not start.` → `- **Status:** Accepted. The founder ruled A-3…A-7 (§0.1) before O2 started; the Session 37-D correction pass amendments are appended after V.20.`
+2. ADR §0.1 heading: `### §0.1 — Founder adjudications this ADR raises (A-3…A-7), **awaiting the founder**` → `### §0.1 — Founder adjudications this ADR raised (A-3…A-7), **ruled by the founder before O2 started**`.
+3. ADR §3 heading: `## §3 — The Plus / Pro split (Q2) — **recommendation, awaiting founder ruling A-4 and A-5**` → `## §3 — The Plus / Pro split (Q2) — **as ruled by the founder (A-4 and A-5)**`.
+4. `docs/current-phase.md` (Session 37 status paragraph): `O3 (the independent Reviewer) and, if it finds anything, O4 (a correction pass) remain before ADR 0031 can be marked Accepted at a head it is dated to.` → `… remain; ADR 0031 is already Accepted (the founder ruled A-3…A-7 before O2 started), and the review decides whether the build can be called verified at a head it is dated to.` The similar sentence on `current-phase.md` line 2269 is about ADR 0029 and is untouched.
+
+**Two other "awaiting" mentions the guide did not list, left alone and flagged.** ADR line 13 (the header block: "A-3…A-7, which this ADR raises and which are awaiting the founder") and the §0.1 body text ("O2 does not start until each one is ruled") still read as pending. The finding and the guide name three ADR lines; I changed exactly those. They are historical statements of what the ADR raised, and C.13 records that they are superseded. If you want them reworded too, that is one more in-place edit and the guide's "never edit §0 to §16" exception would have to be widened.
+
+**The ADR half of every gated finding.** All eight rulings landed as **(a)**, so there is no "(b) RULED" row to record: each is a FIX whose ADR half is in the amendments, with the ruling quoted:
+
+| Finding | Ruling | ADR half |
+|---|---|---|
+| MAJOR-1 | A-8(a) | C.1 (§10.2 `noPatternYet`) |
+| MAJOR-8 | A-9(a) | C.2 (§8.1 `thinWins`) |
+| MAJOR-9 | A-10(a) | C.3 (§2.3, §8.4 the IQR template) |
+| MINOR-6 | A-11(a) | C.2 (§8.1, §2.6 thin breakdown values) |
+| MINOR-7 | A-12(a) | C.5 (§11 what the payload holds; the §D2.5 row is true as written and was **not** edited, so no change to `0010-legal-surface.md`) |
+| MINOR-8 | A-13(a) | C.6 (§5.2 the bounded retry) |
+| MAJOR-10 | A-14(a) | C.7 (§9.1 `listCampaignsByIds`; §3.2's campaign line) |
+| NIT-4 | A-15(a) | C.4 (§8.2 plural literals) |
+| MAJOR-2, MAJOR-3, MAJOR-4, MAJOR-5, MAJOR-6, MINOR-2, MINOR-4, NIT-2, NIT-7, MINOR-11 | no ruling | C.8, C.7, C.7, C.6, C.9, C.2, C.5, C.10, C.11, C.7 |
+
+**The constraint count** is 42, with no new number: every 37-D test is an arm of an existing constraint (C.15), and the tier tally re-derived from §13 is 2 + 8 + 30 + 2 = 42.
+
+**What I did NOT touch (D11):** any `.ts`, `.tsx` or `.sql`; ADR sections 0 to 16 and V.1 to V.20 apart from the three NIT-1 lines; `docs/product-status.md` (D9 changed it; verified, not re-edited); the CI cells.
+
+**Loop at this step.** Documentation only; no test was changed. The code at this commit is D10's, whose loop was: typecheck clean, lint 0 errors (113 warnings), `test:app` 429 files / 6,745 tests, `test:db` 122 files / 1,388 tests, 0 failed.

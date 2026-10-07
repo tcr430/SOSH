@@ -1,6 +1,6 @@
 # ADR 0031 — Analytics and the monthly report: the Accountability surface
 
-- **Status:** Accepted. It becomes Accepted when the founder rules A-3…A-7 (§0.1); until then O2 does not start.
+- **Status:** Accepted. The founder ruled A-3…A-7 (§0.1) before O2 started; the Session 37-D correction pass amendments are appended after V.20.
 - **Date:** 2026-10-04 (revised the same day after an Architect-side consistency review; changes listed in §16)
 - **Track:** O (Session 37). Architect agent O1. This document is design only: **no `.ts`, `.sql`, `.tsx`, email
   template or prompt template was produced by this session.** The shapes below are the contract the Builder (O2)
@@ -55,7 +55,7 @@ Their dispositions are in §15.
 | **Q7** tenancy & cost | Authenticated, `.eq('business_id')`-bounded, indexed, limited reads; worker reads via business-binding wrappers with abort-on-mismatch; recipients server-side; **whole-repo** northstar scan | trusting RLS alone (array trap); a skip-on-mismatch assembler | 1 + 2 (incl. scans) |
 | **Q8** UX & tests | Specified in §10; this session **fixes** the inherited 320 px shell overflow and `nav.team`; no Tier E; real-browser checks are recorded manual QA, never counted as COVERED | deferring the shell fix while adding a table-heavy page | 1 + 2 + manual QA |
 
-### §0.1 — Founder adjudications this ADR raises (A-3…A-7), **awaiting the founder**
+### §0.1 — Founder adjudications this ADR raised (A-3…A-7), **ruled by the founder before O2 started**
 
 These are O1's recommendations. **O2 does not start until each one is ruled in `session-37.md` §0.2.**
 
@@ -332,7 +332,7 @@ so the analytics surface cannot disagree with the extractor about why a post was
 
 ---
 
-## §3 — The Plus / Pro split (Q2) — **recommendation, awaiting founder ruling A-4 and A-5**
+## §3 — The Plus / Pro split (Q2) — **as ruled by the founder (A-4 and A-5)**
 
 ### 3.1 The gate
 
@@ -1829,3 +1829,93 @@ Appended after the push; V.18 and V.19 above are left exactly as written and are
 **What this does not change.** Nothing in V.17 or V.19: the PDF route has still never rendered in a served request, no email has been sent, the Firewall rule and the `generate-reports` schedule do not exist, and real-tenant usefulness, stability, floors and day-10 latency remain UNPROVEN. CI executing the tests proves the tests pass; it does not make any of those true.
 
 **Scope of the claim.** It is dated to `1a70685ea`. The commit that records this entry (and the matching `current-phase.md` edit) changes only documents, which `git diff 1a70685ea..<that commit> --stat` shows; its own CI run is not read here. A Reviewer reading the range `0da603b4a..<head>` should re-run the check at the head they are given.
+
+
+---
+
+## Correction pass amendments (Session 37-D)
+
+> Appended by the Session 37-D correction pass (2026-10-08). Nothing in §0 to §16 or in V.1 to V.20 above is edited, except the three status lines of NIT-1 (C.13), whose old text is quoted there. The pass fixed the 29 findings of `docs/reviews/session-37-reviewer.md` (range `0da603b4a..cea74d843`); its per-finding resolution log is the `## CORRECTION PASS (Session 37-D)` section at the end of that file. The commits are: D0 `7c487b807`, D1 `9a54d5b56`, D2 `d7251892d`, D3 `e1bab9ea9`, D4 `3085fc3e8`, D5 `9c712fc67`, D6 `e5937cee1`, D7 `caea727d6`, D8 `9e1738a8a`, D9 `2f4cb5196`, D10 `a41073340`. **Every citation below is `file:line` at the head of D10 (`a41073340`).** Founder rulings A-8 to A-15 were all recorded 2026-10-05 as "(a) RULED by the founder" ("Assume the recommendations", in the Session 37 conversation); each is quoted where it lands.
+
+### C.1 — §10.2: a Pro month with posts and no pattern says so (MAJOR-1, **A-8(a)**)
+
+*Ruling A-8(a):* "A new §8.2 state, `analytics.state.noPatternYet`. Proposed EN: *No pattern has enough evidence yet. Jemip only learns a pattern from at least 10 posts across 3 campaigns.*" §10.2's Observed-patterns state is therefore `noPatternYet`, never `analytics.state.empty` ("Nothing published yet"), which is false for a month that has posts. pt and es are translated naturally (the texts are in the D6 appendix). Proven by `components/analytics/patterns.test.tsx:86` (page and report, en, pt, es: `noPatternYet` present, `state.empty` absent, the en text the ruled literal) and `lib/i18n/analytics-parity.test.ts:201` (the key exists in all three locales and names 10 and 3). Reddened at D6.
+
+### C.2 — §8.1, §8.2, §2.6: three display floors made explicit (MAJOR-8 **A-9(a)**, MINOR-6 **A-11(a)**, MINOR-2)
+
+- **Thin wins carry their own n** (*A-9(a):* "its own thin key, `analytics.state.thinWins`, whose n is the baseline count and names it"). The wins slot below the floor says how many posts had a usual to compare against, never the measured count, which the typical line carries. `lib/analytics/__tests__/view-model.test.ts:331` (business B, March: 2 measured, 1 with a usual).
+- **A breakdown value below 5 posts is thin** (*A-11(a):* "Thin. The value's row prints `analytics.breakdown.thinValue`, *Fewer than 5 posts*, with no k or n"). The view model carries only the value's name for it (`thinValues`); no k, n, share or bound is computed. `lib/analytics/__tests__/view-model.test.ts:274` (n = 4 thin, n = 5 a row, both sides in one breakdown).
+- **Coverage is true of its population** (MINOR-2, no ruling): the "Posts written outside Jemip's generator aren't classified" tail belongs to the AI-written populations only; length and CTA, whose population is all measured posts, use `analytics.coverage.all`. `components/analytics/analytics-surfaces.test.tsx` (every breakdown block) and `lib/analytics/__tests__/view-model.test.ts` (`length_band`, `cta_present`). The learning-floor sentence of §8.1 ("Jemip only learns a pattern from at least 10 posts across 3 campaigns; numbers shown here are descriptions, not lessons.") is now in `report.methodology.floors` in all three locales (MINOR-5): `lib/i18n/copy-hygiene.test.ts:43`.
+
+### C.3 — §2.3, §8.4: the spread is named for what it is (MAJOR-9, **A-10(a)**)
+
+*Ruling A-10(a):* "Two templates, chosen by `rangeKind`. Below 10, *(range {lo}–{hi})* stays. From 10: *(middle half of posts {lo}–{hi})*. The methodology `median` key gains: *Below 10 posts the range is lowest to highest; from 10 it is the middle half of posts.*" `typicalView` chooses `analytics.typical` or `analytics.typicalIqr`, and the page, report and email follow because they render `view.key`. `lib/analytics/__tests__/view-model.test.ts:296` (literal n = 9 and n = 10, hand-computed, in en, pt, es).
+
+### C.4 — §8.2: the count literals are plurals (NIT-4, **A-15(a)**)
+
+*Ruling A-15(a):* "Every literal with a count becomes `{n, plural, one {…} other {…}}`. The `other` branch is byte-identical to today's ADR literal." The two §8.2 literals with a count, `analytics.state.thin` and `.immature`, carry ICU plurals; the en `other` branch equals the ADR literal byte for byte, rendered through next-intl's real formatter at `lib/i18n/copy-hygiene.test.ts:17`. pt spells out `=0` because pt counts 0 as "one". `S37-STATE-LITERALS` in `docs/backlog.md` carries the "closed by 37-D D9" pointer. One engagement term per locale (MINOR-9: pt "interação", es "interacción"): `lib/i18n/copy-hygiene.test.ts:55`.
+
+### C.5 — §11, §5.1: what the stored payload holds (MINOR-7 **A-12(a)**, MINOR-4)
+
+*Ruling A-12(a):* "No: store ids and resolve labels at render." The write-once payload holds **ids and counts, never a business name, a campaign name, an account label, a handle or pattern text**; labels resolve at read time by (business, id) through the authenticated client, before Chromium launches (`lib/analytics/labels.ts`). The §D2.5 row ("aggregates, template-sentence keys and params, exclusion counts and cited post ids … no post text") is **true as written** and is not amended (`lib/db/__tests__/d2.5-analytics-reports-row.test.ts:11` still passes). `REPORT_SCHEMA_VERSION` is 2. Proven by `lib/reports/__tests__/payload-no-names.test.tsx:17` (a JSON walk over every string leaf with hostile marked names) and the PDF route's order test (`app/api/analytics/reports/[id]/pdf/route.test.ts`). **§5.1 (MINOR-4):** a cited post is stored as an id and a rate; its platform, date and campaign are resolved when the report is read (`listCitedPostsByIds`, business-bound), and a post since deleted renders `analytics.report.post.removed` ("Post removed"): `components/analytics/report-d8.test.tsx:154` (page and PDF HTML), `lib/analytics/__tests__/labels.test.ts:78`, Tier 1 `supabase/__tests__/analytics-reads.test.ts:177`.
+
+### C.6 — §5.2: the tick reaches everyone, and delivery is retried (MAJOR-5, MINOR-8 **A-13(a)**, NIT-6)
+
+- **The scan wraps.** It starts at a per-hour offset (the first 32 hex digits of `sha256(<tick hour, UTC ISO>)` as a uuid), visits ids above it and then ids at or below it (disjoint, so each business is visited at most once per tick), under three separate bounds: generation (`REPORT_MAX_PER_TICK`), errors (`REPORT_ERROR_CAP` = 25; the tick tolerates 25 and stops on the 26th) and scan (`REPORT_SCAN_CAP` = 2,000). `capped` is exact and `reason` names the bound; the cron route reports a capped tick to the `generate-reports` monitor with status `error`. **The coverage bound is `min(1, 2000 / N)` of the id space per tick**; past about 2,000 eligible businesses the alert is the guarantee, not coverage. Proven by `lib/reports/__tests__/generate.test.ts:219` and `:255` (2,100 candidates, the exact tick), `:287` (25 failing ids ahead of one due business), `:304` (an offset equal to an existing id), `app/api/cron/generate-reports/route.test.ts:170`.
+- **A failed delivery is retried, bounded and idempotent** (*A-13(a):* "On a tick that finds the M−1 report already `exists` and non-stub, and whose age is under 72 h, the worker makes one read of the business's `email_outbox` rows whose dedupe token starts `report:{YYYY-MM}:`. If there are fewer of them than `resolveReportRecipients` returns, it re-runs `deliverMonthlyReport`"). The age is read from `analytics_reports.generated_at` (the table has no `created_at`); `email_outbox_dedupe_uq` makes every member already queued a no-op, shown against the live database by Tier 1 `supabase/__tests__/report-generation.test.ts:181` (a duplicate token is `23505`). Never for a stub, never for `off`. `lib/reports/__tests__/generate.test.ts:326`, `lib/reports/__tests__/job.test.ts:101`, `lib/reports/__tests__/deliver.test.ts:154`. A failing redelivery read is counted on its own counter and does not spend the error cap.
+- **The recipient cap signals** (NIT-6): `resolveReportRecipients` reads 201, returns 200 and captures one Sentry message: `lib/db/__tests__/report-recipients.test.ts:141`.
+
+### C.7 — §9.1, §3.2, §9.3, §2.7: reads that cannot truncate or cross a tenant (MAJOR-10 **A-14(a)**, MAJOR-3, MAJOR-4, MINOR-11)
+
+- **§9.1's table gains `listCampaignsByIds`** (`id, business_id, name, status`; business-bound; chunked by 20; verified by `verifiedReaders` in the worker). The analytics path no longer reads campaigns through the 100-row `listCampaigns`. *A-14(a):* "Make it true of the month, from reads the loader already makes." **§3.2's campaign line** is now *"Posts came from n campaigns. m campaigns completed their retrospective this month."*, where n is the distinct campaigns of the month's published posts and m the retrospectives completed in it. Proven by `lib/analytics/__tests__/load.test.ts:336` (101+ campaigns, the oldest carrying the month) and Tier 1 `supabase/__tests__/analytics-reads.test.ts:166`. §9.1's table also gains `listCitedPostsByIds` (C.5).
+- **Patterns are a `Readers` member** (§9.3): the page binds the authenticated `listOutcomePatterns`, the worker binds a service-role wrapper inside `verifiedReaders`, both through the pure `selectOutcomePatterns` (`lib/memory/outcomes.ts`, generation output unchanged). The real worker binding is executed by Tier 1 `supabase/__tests__/report-generation.test.ts:99, 106`; `lib/reports/__tests__/isolation.test.ts` covers the wrapper. **Source scan #16 gains arm 2**: no `*ForGeneration` or other service-role export is reachable from the analytics roots (derived, not listed): `lib/analytics/source-scans.test.ts:613, 661`.
+- **§2.7 (MINOR-11):** the read ceiling is injectable and proven end to end through the real pager: `lib/analytics/__tests__/read-ceiling.test.ts:38` (the loader: a section at ceiling 17 over 18 posts is the error state, at 18 a number) and `:60` (the generator: no row stored, the tick records an error).
+
+### C.8 — §8.4, §5.3: patterns, the summary and the report sections (MAJOR-2, MAJOR-7, MINOR-1, MINOR-3)
+
+- **§8.4 (MAJOR-2):** a pattern is its **cell** (`platform, dimension, value, direction, basis, wins, n, campaigns`), parsed from `pattern_key`; the stored English sentence never leaves memory. The page and report compose it from four closed analytics templates (`analytics.pattern.{above,below,above_count,below_count}`) in the reader's locale. A key that does not parse, or names a cell outside the real vocabulary, is dropped and counted with one Sentry message, never rendered from `pattern`. The copy lint now runs over the real vocabulary, all 144 cells per locale (`lib/analytics/copy-lint.test.ts:340`). `components/analytics/patterns.test.tsx:15, 61`; `lib/analytics/__tests__/load.test.ts:534`.
+- **§5.3 row 1 (MAJOR-7):** the summary groups each rate platform under its name, and every win line is followed by the usual definition and the drift sentence (§2.4). The email prints the same lines (`REPORT_EMAIL_MAX_LINES` is 16 so none is truncated). `components/analytics/report-d8.test.tsx:66`.
+- **§5.3 rows 7 and 8 (MINOR-1, MINOR-3):** the report's trend heading says 6 months (`analytics.report.section.trend6`); section 7 carries the retrospective's interval (`analytics.interval`) beside the verdict and the share. `components/analytics/report-d8.test.tsx:117, 138`.
+
+### C.9 — §10.4: the 320 px acceptance measure (MAJOR-6, NIT-3)
+
+**§10.4's acceptance measure is amended.** "Shell `scrollWidth` ≤ 320" is not enough for a shell that scrolls inside `<main class="flex-1 overflow-auto p-6">`. The acceptance is: **every element whose computed `overflow-x` is `auto` or `scroll` has `scrollWidth <= clientWidth`, at 1280, 640 and 320 px, in en, pt and es, for a Pro and a Plus business**, plus the `documentElement` pair for continuity with V.17. **#35's manual half is re-recorded** by the Session 37-D D10 measurement: 144 page loads (2 businesses x 3 locales x 3 widths x the Reviewer's 8 pages), every scroller query returning `[]` and every standalone link at least 24 px; the full table is in the correction-pass appendix, and the pre-fix classes reproduce the Reviewer's numbers (pt 367/305, en 338/305). It remains a record, never CI coverage. `components/analytics/worst-case.test.tsx:345, 379` pin the classes that bound the filter bar and the 24 px links.
+
+### C.10 — §10.1 and §10.6: Print (NIT-2)
+
+**§10.1's "Print" is the browser's own print under the print stylesheet, and there is no Print button.** §10.6's rule of **two client islands stands** (`ReportEmailForm.tsx` and `analytics/error.tsx`); a Print button would need a client component. The Download PDF action §10.1 also lists is a plain anchor to the PDF route. The Builder's V.15 deviation is therefore the resolved reading, not an exception.
+
+### C.11 — §5.5: Chromium without a sandbox (NIT-7)
+
+**`--no-sandbox` is added to §5.5's list of launch arguments.** `launcherFor` passes it, and `@sparticuz/chromium`'s own arguments disable the sandbox as well, because a serverless function runtime typically does not grant the user namespaces Chromium's sandbox needs. It is acceptable here, and only here, because the renderer is already confined by §5.5's other controls: JavaScript disabled before any content, request interception aborting every request except the document, a `default-src 'none'` Content-Security-Policy, a document built from the stored payload with every customer string escaped, and a single render at a time per instance. It would not be acceptable for a renderer that loaded third-party pages. The Vercel preview check in `docs/launch-checklist.md` carries the same sentence.
+
+### C.12 — Process (MINOR-10)
+
+The Reviewer's section 10 re-reddened all 10 scans, and V.15 is the per-skill record; they are the redden record for O2.7 and the design pass for O2.10. The commits `cb0f96e72` and `266f67456` are **not amended** (history is not rewritten). Every Session 37-D commit carries its own redden transcript in its body.
+
+### C.13 — Status (NIT-1)
+
+The three status lines that still read as Proposed were corrected in place. The old text is quoted in the correction-pass appendix: line 3 (*"Accepted. It becomes Accepted when the founder rules A-3…A-7 (§0.1); until then O2 does not start."*), the §0.1 heading (*"…, **awaiting the founder**"*) and the §3 heading (*"…, **recommendation, awaiting founder ruling A-4 and A-5**"*), and `docs/current-phase.md`'s *"before ADR 0031 can be marked Accepted"*.
+
+### C.14 — Shared-function callers at the corrected head (MINOR-12)
+
+`git grep -w <name>` over `app lib components`, production code only, at `a41073340`. This **extends** V.18 (b), whose rows stand for the functions it names; the rows below are the ones the correction pass added or changed. Each caller is named with the test that exercises it.
+
+| Function | Production callers | Tests that exercise each caller |
+|---|---|---|
+| `hasAdvancedAnalytics` | `lib/analytics/load.ts:280` (portfolio), `:578` (posts); `app/api/analytics/reports/[id]/pdf/route.ts:61`; **`app/[locale]/(dashboard)/analytics/reports/[period]/page.tsx:62`** (the page caller V.18 omitted, via `proAllowed`) | `lib/analytics/__tests__/load.test.ts` (the gate); `app/api/analytics/reports/[id]/pdf/route.test.ts`; `app/[locale]/(dashboard)/analytics/reports/reports-pages.test.tsx:166` (pro allows, plus does not, an unknown plan fails closed) |
+| `listOutcomePatterns` | `lib/analytics/load.ts:672` (page, authenticated client); `lib/db/analytics-worker-reads.ts:44` (worker, service-role); `lib/db/memory-performance.ts:429` (`ForGeneration`, service-role); `lib/outcomes/campaign-view.ts:144, 145` (campaign page) | `load.test.ts` (page binding, `guard.serviceRole` never called); Tier 1 `report-generation.test.ts:99, 106` (the real worker binding); `lib/db/memory-performance.test.ts`; `lib/outcomes/__tests__/campaign-view.test.ts` |
+| `selectOutcomePatterns` | `lib/analytics/load.ts:672`; `lib/db/analytics-worker-reads.ts:46`; `lib/memory/outcomes.ts:90` (`retrieveOutcomePatterns`) | `lib/memory/outcomes.test.ts`; the three `*.context-equivalence` tests and `lib/memory/performance.test.ts` (**unmodified**, the V.2 baseline); `load.test.ts`; Tier 1 as above |
+| `retrieveOutcomePatterns` | `lib/ai/context.ts:95, 194` | the three `*.context-equivalence` tests (7/6/5), unmodified |
+| `listCampaignsByIds` | `lib/analytics/load.ts:342, 411, 594`; bound at `load.ts:661` (page) and `lib/db/analytics-worker-reads.ts:27` (worker) | `load.test.ts:336`; `lib/db/campaigns-by-ids.test.ts`; `lib/reports/__tests__/isolation.test.ts` (foreign row refused); Tier 1 `analytics-reads.test.ts:166` |
+| `listCitedPostsByIds` | `lib/analytics/labels.ts:50` | `labels.test.ts:78`; Tier 1 `analytics-reads.test.ts:177`; the report page and PDF route tests (`labels:posts` read) |
+| `resolveReportLabels` | `reports/[period]/page.tsx:46`; `pdf/route.ts:69` | `reports-pages.test.tsx`; `pdf/route.test.ts` (order: labels before launch) |
+| `resolveReportRecipients` | `lib/reports/deliver.ts:53, 64` | `lib/db/__tests__/report-recipients.test.ts:141` (cap); `deliver.test.ts`; scan #23 |
+| `deliverMonthlyReport` / `redeliverMonthlyReport` | `lib/reports/job.ts:30, 31` (the latter also calls the former, `deliver.ts:57`) | `job.test.ts:101`; `deliver.test.ts:154`; `components/analytics/report-d8.test.tsx:66` |
+| `runReportTick` / `generateReportForBusiness` | `lib/reports/job.ts:29`; `lib/reports/generate.ts:184` | `generate.test.ts:219-326`; `job.test.ts`; Tier 1 `report-generation.test.ts` |
+| `runReportJob` | `app/api/cron/generate-reports/route.ts:60` | `route.test.ts:170` |
+| `parsePatternKey` | `lib/analytics/load.ts:141` (`patternCellOf`); `lib/outcomes/campaign-view.ts:41` | `load.test.ts:534`; `lib/outcomes/__tests__/campaign-view.test.ts` (unmodified) |
+
+### C.15 — The constraint count after the correction pass
+
+**The count stays 42** (40 with a CI-executed test, #24 and #26 not applicable while there is no model). **No new number was needed; every 37-D addition is an arm of an existing constraint, because §13's shape forbids a constraint without a named tier and proof:** scan #16 arm 2 and the patterns Readers tests belong to #16 and #27; D4's tick, retry and recipient-cap tests to #22, #23 and #40; D5's end-to-end ceiling tests to #36; D2's payload walk to #27 and #28; D6's real-vocabulary corpus to #8 and #9; the D7, D8 and D9 summary, floor and copy tests to #7, #8, #9, #12 and #33; D10's measurement to #35's manual half. **Tier tally, re-derived from §13's Tier column at this head:** Tier 1 only 2 (#21, #41); Tier 1 + 2 eight (#17, #18, #22, #27, #28, #36, #40, #42); Tier 2 only 30 (of which 5 scans, 4 "2 + scan", and #35 with its manual half); not applicable 2 (#24, #26): 2 + 8 + 30 + 2 = 42. At this head, locally: `npm run test:app` 429 files, 6,745 tests; `npm run test:db` 122 files, 1,388 tests, 0 failed. **No "executed green in CI" cell is filled for the corrected range here:** that is read from the CI logs of the pushed head, after the push.
