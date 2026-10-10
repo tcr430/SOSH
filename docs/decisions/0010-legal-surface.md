@@ -1092,6 +1092,7 @@ GRANT EXECUTE ON FUNCTION public.purge_business(uuid) TO service_role;
 | campaign_plan_proposals | yes (business_id + campaign_id + brief_id) | CASCADE (all three) | yes | none — cascade = erasure (holds model-authored planner rationale about the customer's own campaign; decided_by is an auth.users id, ON DELETE SET NULL, so a user deletion anonymises the row rather than removing it; ADR 0027 §9) |
 | founder_interview_rounds | yes (business_id) | CASCADE | yes | none — cascade = erasure (round metadata, spend and yield counts; created_by/ratified_by are auth.users ids, ON DELETE SET NULL, so a user deletion anonymises the row; ADR 0029 §9) |
 | founder_interview_answers | yes (business_id + round_id) | CASCADE (both) | yes | none — cascade = erasure (holds the founder's free-text answers, which may contain founder personal data and third-party personal data; answer_text is redacted 30 days after the round closes and the row survives as a provenance stub referenced by interview memory rows ON DELETE NO ACTION; answered_by is an auth.users id, ON DELETE SET NULL; ADR 0029 §6.3, §9) |
+| analytics_reports | yes (business_id) | CASCADE | yes | none — cascade = erasure (stored monthly report snapshot: aggregates, template-sentence keys and params, exclusion counts and cited post ids of the customer's own posts; no post text; write-once, no authenticated write; ADR 0031) |
 
 Only `business_deletion_requests` (NO ACTION) would have blocked the root delete; D2.1 resolves it. Every other business-scoped table either cascades or is deliberately retained.
 
@@ -1169,6 +1170,19 @@ the same purpose. `ai_budget_daily` (renamed from `signal_triage_budget`, same A
 a `purpose` column added, not a new table — already covered by the existing row for that table under its
 new name, and it was never customer-content-bearing (a per-day reservation counter) so no redaction question
 arises. No other table-shaped change landed in Session 31 or its correction pass.
+
+**Session 37 O2.2 note (2026-10-04):** ADR 0031 (analytics and the monthly report) added one new table,
+`analytics_reports`, whose §D2.5 row is the one above, added in the same commit as its migration
+(`20261004120000_analytics_reports.sql`) per this file's mandatory rule and CLAUDE.md's erasure-cascade rule.
+It cascades from `businesses` (`ON DELETE CASCADE`) and carries no BEFORE DELETE trigger, so `purge_business` is
+unchanged and still removes it through the root `DELETE FROM public.businesses`; the write-once trigger is
+BEFORE UPDATE only (proved by `supabase/__tests__/analytics-reports-purge.test.ts`). The same migration added
+one new **column** to the existing `businesses` row above, `businesses.report_email` (`admins` | `all_members` |
+`off`, default `admins`) — a column on an already-cascaded table, so **no new §D2.5 row is required** on the
+Session 30.5 N2.4 / Session 31-D precedent: the existing `businesses` row already covers it, and the column holds
+a delivery preference, not personal data. The `email_outbox` kind CHECK was widened with `monthly-report`
+(a CHECK change, not a new table; `email_outbox` is already purged by cascade, D2.6). No new SQL function was
+added.
 
 #### D2.6 — Retention & redaction (D1 / D2)
 

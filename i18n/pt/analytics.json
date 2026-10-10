@@ -1,0 +1,281 @@
+{
+  "title": "Análises",
+  "description": "O que as suas publicações fizeram, medido sempre da mesma forma.",
+  "picker": {
+    "label": "Mês",
+    "submit": "Mostrar"
+  },
+  "postsLink": "Ver todas as publicações",
+  "backLink": "Voltar à visão geral",
+  "section": {
+    "activity": "Atividade de publicação",
+    "results": "Resultados",
+    "campaigns": "Campanhas",
+    "trend": "Tendência de 12 meses",
+    "breakdowns": "Resultados por tipo de publicação",
+    "patterns": "Padrões observados",
+    "retrospectives": "Veredictos das campanhas",
+    "accounts": "Conta a conta"
+  },
+  "state": {
+    "empty": "Ainda não há publicações. Os resultados aparecem aqui depois de o Jemip publicar a sua primeira publicação.",
+    "immature": "A medir. A interação fica final 7 dias depois de cada publicação. Final para {count, plural, =0 {# publicações} one {# publicação} other {# publicações}} a {date}.",
+    "unavailable": "O {platform} não partilha dados de interação com o Jemip, por isso mostramos a sua atividade de publicação.",
+    "thin": "{n, plural, =0 {# publicações medidas} one {# publicação medida} other {# publicações medidas}} até agora. A taxa típica aparece a partir de 5.",
+    "thinWins": "Publicações com um habitual para comparar: {n}. A contagem de vitórias aparece a partir de 5.",
+    "loading": "A carregar resultados",
+    "error": "Não foi possível carregar os seus resultados.",
+    "reload": "Recarregar",
+    "noPatternYet": "Ainda nenhum padrão tem evidência suficiente. O Jemip só aprende um padrão a partir de, pelo menos, 10 publicações em 3 campanhas."
+  },
+  "typical": "{n} publicações medidas. Taxa de interação típica: {rate} (intervalo {lo}–{hi}).",
+  "typicalIqr": "{n} publicações medidas. Taxa de interação típica: {rate} (metade central das publicações {lo}–{hi}).",
+  "wins": "{wins} de {n} publicações superaram a sua interação habitual.",
+  "monthPair": "{month}: {rate} ({n} publicações) · {month2}: {rate2} ({n2} publicações).",
+  "monthPairSuppressed": "A vista lado a lado aparece quando os dois meses têm pelo menos 5 publicações medidas.",
+  "exclusions": {
+    "summary": "{measured} de {published, plural, =0 {# publicações} one {# publicação} other {# publicações}} medidas.",
+    "excluded": "{notIncluded} não incluídas: {reasons}.",
+    "noDataReturned": "sem dados devolvidos ({count})",
+    "fieldMissing": "faltava um campo ({count})",
+    "zeroImpressions": "zero impressões ({count})",
+    "notFinal": "ainda não final ({count})"
+  },
+  "disclosure": {
+    "usual": "Habitual = a sua mediana nos 90 dias anteriores no X, ou o histórico que importou.",
+    "usualUpdates": "O 'habitual' atualiza-se à medida que publica, por isso isto não mede o progresso global.",
+    "importSeed": "Comparado com o histórico que importou.",
+    "engagementOnly": "Isto mede a interação, não registos nem receita.",
+    "linkedinCount": "Os resultados do LinkedIn comparam contagens de interação, que também aumentam à medida que a sua audiência cresce."
+  },
+  "population": {
+    "aiOnly": "Apenas publicações escritas pela IA",
+    "allMeasured": "Todas as publicações medidas"
+  },
+  "coverage": {
+    "generated": "Abrange {k} de {n} publicações medidas. As publicações escritas fora do gerador do Jemip não são classificadas.",
+    "all": "Abrange {k} de {n} publicações medidas."
+  },
+  "breakdown": {
+    "row": "Publicações com {value}: {wins} de {n} superaram o habitual.",
+    "describes": "Isto descreve publicações passadas, não a razão dos seus resultados.",
+    "provisional": "Provisório",
+    "thinValue": "Menos de 5 publicações",
+    "hookNote": "Conforme classificado pela IA ao escrever, sem verificação independente.",
+    "none": "Ainda sem comparação: cada valor precisa de 10 publicações medidas.",
+    "dimension": {
+      "role": "Função da publicação",
+      "format": "Formato",
+      "origin_mode": "Origem",
+      "length_band": "Extensão",
+      "cta_present": "Apelo à ação",
+      "hook_type": "Abertura"
+    }
+  },
+  "interval": "provavelmente entre {lo} e {hi} das publicações",
+  "account": {
+    "unrecorded": "Conta não registada ou entretanto removida"
+  },
+  "activity": {
+    "line": "{count, plural, =0 {# publicações} one {# publicação} other {# publicações}} no {platform} ({account}).",
+    "total": "{count, plural, =0 {# publicações} one {# publicação} other {# publicações}}, {prev} no mês anterior.",
+    "campaigns": "As publicações vieram de {withPosts, plural, =0 {# campanhas} one {# campanha} other {# campanhas}}. {retrospectivesCompleted, plural, =0 {# campanhas concluíram o seu veredicto} one {# campanha concluiu o seu veredicto} other {# campanhas concluíram o seu veredicto}} este mês."
+  },
+  "platform": {
+    "twitter": "X",
+    "linkedin": "LinkedIn",
+    "instagram": "Instagram",
+    "facebook": "Facebook",
+    "threads": "Threads"
+  },
+  "status": {
+    "draft": "Rascunho",
+    "awaiting_brief": "À espera do briefing",
+    "active": "Ativa",
+    "paused": "Em pausa",
+    "completed": "Concluída"
+  },
+  "campaignTable": {
+    "campaign": "Campanha",
+    "status": "Estado",
+    "published": "Publicadas",
+    "verdict": "Veredicto",
+    "noVerdict": "Sem veredicto este mês",
+    "open": "Abrir campanha"
+  },
+  "gated": {
+    "prefix": "Disponível no Pro: {line}",
+    "link": "Ver planos",
+    "line": {
+      "trend": "uma vista de 12 meses da sua interação típica e das publicações feitas.",
+      "breakdowns": "a quota de vitórias por função, formato, origem, extensão e apelo à ação.",
+      "patterns": "padrões observados nas suas campanhas, cada um com a sua evidência.",
+      "retrospectives": "veredictos das campanhas lado a lado.",
+      "accounts": "as suas contas lado a lado."
+    }
+  },
+  "chart": {
+    "postsPerMonth": {
+      "title": "Publicações por mês",
+      "summary": "{total} publicações entre {first} e {last}, por mês.",
+      "col": {
+        "month": "Mês",
+        "count": "Publicações"
+      }
+    },
+    "trend": {
+      "title": "Taxa de interação típica por mês",
+      "summary": "Taxa de interação típica no {platform} entre {first} e {last}; os meses com menos de 5 publicações medidas ficam em branco.",
+      "col": {
+        "month": "Mês",
+        "median": "Taxa típica",
+        "range": "Intervalo",
+        "n": "Publicações medidas"
+      },
+      "gap": "Publicações medidas insuficientes"
+    },
+    "winShare": {
+      "summary": "Quota de publicações que superaram o habitual, por {dimension}.",
+      "col": {
+        "value": "Valor",
+        "result": "Superaram o habitual",
+        "range": "Intervalo"
+      }
+    }
+  },
+  "posts": {
+    "title": "Todas as publicações",
+    "description": "Cada publicação feita e em que ponto está.",
+    "filters": {
+      "platform": "Plataforma",
+      "account": "Conta",
+      "campaign": "Campanha",
+      "all": "Todas",
+      "none": "Conta não registada ou entretanto removida",
+      "apply": "Aplicar"
+    },
+    "col": {
+      "date": "Data",
+      "platform": "Plataforma",
+      "account": "Conta",
+      "campaign": "Campanha",
+      "state": "Estado",
+      "result": "Resultado"
+    },
+    "state": {
+      "measuring": "A medir",
+      "soFar": "Até agora, a {asOf}: {likes} gostos, {comments} comentários, {shares} partilhas, {impressions} impressões. Final a {finalOn}.",
+      "soFarMissing": "indisponível",
+      "final": "Final",
+      "notMeasured": "Não medida: {reason}",
+      "reason": {
+        "no_data_returned": "sem dados devolvidos",
+        "field_missing": "faltava um campo",
+        "zero_impressions": "zero impressões"
+      }
+    },
+    "value": {
+      "rate": "{rate}",
+      "count": "{count, plural, =0 {# interações} one {# interação} other {# interações}}"
+    },
+    "badge": {
+      "above": "Acima do habitual",
+      "below": "Abaixo do habitual",
+      "noBaseline": "Ainda sem base de comparação"
+    },
+    "details": "Detalhes"
+  },
+  "pattern": {
+    "above": "No {platform}, {subject} superaram a sua interação habitual em {wins} de {n} publicações ({campaigns, plural, one {# campanha} other {# campanhas}}).",
+    "below": "No {platform}, {subject} ficaram abaixo da sua interação habitual em {wins} de {n} publicações ({campaigns, plural, one {# campanha} other {# campanhas}}).",
+    "above_count": "No {platform}, {subject} superaram a sua contagem habitual de interação em {wins} de {n} publicações ({campaigns, plural, one {# campanha} other {# campanhas}}).",
+    "below_count": "No {platform}, {subject} ficaram abaixo da sua contagem habitual de interação em {wins} de {n} publicações ({campaigns, plural, one {# campanha} other {# campanhas}})."
+  },
+  "value": {
+    "format": {
+      "single": "Publicação única",
+      "thread": "Thread",
+      "carousel": "Carrossel"
+    },
+    "origin_mode": {
+      "manual": "Escrita à mão",
+      "objective_generated": "A partir de um objetivo",
+      "signal_generated": "A partir de um sinal",
+      "studio_promoted": "A partir do estúdio"
+    },
+    "length_band": {
+      "short": "Curta",
+      "medium": "Média",
+      "long": "Longa"
+    },
+    "cta_present": {
+      "true": "Com apelo à ação",
+      "false": "Sem apelo à ação"
+    },
+    "hook_type": {
+      "question": "Pergunta",
+      "statistic": "Estatística",
+      "contrarian": "Posição contrária",
+      "story": "História",
+      "announcement": "Anúncio",
+      "how_to": "Passo a passo"
+    }
+  },
+  "report": {
+    "title": "Relatórios mensais",
+    "description": "Um relatório por mês, guardado tal como foi gerado.",
+    "listLink": "Relatórios mensais",
+    "list": {
+      "empty": "Os relatórios aparecem aqui a partir do dia 10 de cada mês, referentes ao mês anterior.",
+      "open": "Abrir relatório",
+      "stub": "Sem publicações"
+    },
+    "back": "Voltar aos relatórios mensais",
+    "header": "{business} · {month}. Medido até {measuredAsOf}. Gerado em {generatedOn}.",
+    "stub": "Não foi feita nenhuma publicação em {month}, por isso não há nada para medir.",
+    "section": {
+      "trend6": "Tendência de 6 meses",
+      "summary": "Resumo",
+      "unavailable": "Plataformas sem dados de interação",
+      "methodology": "Como ler este relatório"
+    },
+    "ratedPosts": {
+      "title": "Três publicações no X por taxa de interação",
+      "caveat": "Uma publicação vista por poucas pessoas pode ter uma taxa elevada.",
+      "row": "Publicação {position}: taxa de interação {rate} (1 publicação)"
+    },
+    "lateOutcomes": "As publicações medidas depois de {date} não estão incluídas.",
+    "post": {
+      "removed": "Publicação removida",
+      "published": "{platform}, {date}"
+    },
+    "notInReport": "Este relatório foi gerado antes de o seu plano incluir esta secção.",
+    "methodology": {
+      "median": "A taxa típica é a mediana da taxa de interação das publicações medidas: metade ficou acima e metade abaixo. Abaixo de 10 publicações, o intervalo é do valor mais baixo ao mais alto; a partir de 10 é a metade central das publicações.",
+      "maturity": "Uma publicação é medida 7 dias depois de sair. As mais recentes contam como publicadas, mas ainda não medidas.",
+      "exclusions": "As publicações sem dados utilizáveis aparecem com o motivo e não entram em nenhuma taxa.",
+      "usual": "O habitual é a sua mediana dos 90 dias anteriores no X, ou o histórico que importou. Atualiza-se à medida que publica, por isso não mede o progresso global.",
+      "floors": "Mostramos uma taxa típica a partir de 5 publicações medidas. As comparações por tipo de publicação precisam de 10 publicações medidas por valor. O Jemip só aprende um padrão a partir de, pelo menos, 10 publicações em 3 campanhas; os números mostrados aqui são descrições, não lições.",
+      "xOnly": "A taxa de interação é medida apenas no X. As outras plataformas mostram a atividade de publicação.",
+      "descriptive": "As repartições descrevem publicações passadas. Sobrepõem-se e não explicam nenhum resultado.",
+      "engagementOnly": "Isto mede interação, não registos nem receita."
+    },
+    "setting": {
+      "label": "Enviar cada relatório por email a",
+      "option": {
+        "admins": "Administradores",
+        "all_members": "Todos os membros",
+        "off": "Ninguém"
+      },
+      "help": "O relatório fica sempre guardado aqui. Isto controla apenas o email.",
+      "save": "Guardar",
+      "saved": "Guardado.",
+      "error": "Não foi possível guardar.",
+      "forbidden": "Só o proprietário do negócio pode alterar isto.",
+      "current": "Os relatórios são enviados por email a: {value}."
+    },
+    "actions": {
+      "pdf": "Transferir PDF"
+    }
+  }
+}

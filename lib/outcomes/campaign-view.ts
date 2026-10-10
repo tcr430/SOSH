@@ -9,6 +9,7 @@ import {
   type CampaignOutcomeCellSource,
 } from '@/lib/db/campaign-retrospectives'
 import { listOutcomePatterns } from '@/lib/db/memory-performance'
+import { parsePatternKey } from './pattern-key'
 import { metricsReadAvailableFor } from '@/lib/social'
 import { resolveHypothesis, retrospectiveDueAt } from './retrospective'
 
@@ -36,13 +37,8 @@ export interface ObservedRowView {
 
 const DIMENSIONS = new Set(['role', 'format', 'length_band', 'cta', 'origin_mode'])
 
-// outcome:<dimension>:<value>:<direction>:<platform> (no value contains a colon).
-function parseKey(key: string | null): { dimension: string; value: string; direction: string; platform: string } | null {
-  if (!key) return null
-  const [kind, dimension, value, direction, platform] = key.split(':')
-  if (kind !== 'outcome' || !dimension || !value || !direction || !platform) return null
-  return { dimension, value, direction, platform }
-}
+// outcome:<dimension>:<value>:<direction>:<platform> (no value contains a colon): lib/outcomes/pattern-key.ts, shared with the analytics report.
+const parseKey = parsePatternKey
 
 // The cells (dimension:value:platform) this campaign's frozen outcomes contributed to.
 export function campaignCellKeys(sources: readonly CampaignOutcomeCellSource[]): Set<string> {

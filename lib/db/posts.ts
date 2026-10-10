@@ -5,6 +5,7 @@ import { claimCheckMatchesContent, fingerprintMatchesContent } from '@/lib/campa
 import type { CalendarPostRow, CalendarPostMetrics } from '@/lib/calendar/types'
 import { getErrorMessage } from './utils'
 import { toUtcIso } from '@/lib/utils'
+import { readAllPages, keysetFilterDesc } from './keyset-pager'
 
 // ── Calendar layer (ADR 0012) ─────────────────────────────────────────────────
 
@@ -751,6 +752,39 @@ export async function listPostsByIds(
   return (data as PostRow[]) ?? []
 }
 
+const CITED_POST_CHUNK = 20
+
+export interface CitedPostRow {
+  id: string
+  business_id: string
+  platform: Platform
+  published_at: string
+  campaign_id: string
+}
+
+/**
+ * Exactly these posts, read BY ID for one business (Session 37-D D8, MINOR-4): the report cites a post by id, and its platform, date and
+ * campaign are resolved when it is READ. Column-listed, business-bound, chunked, soft-deleted posts excluded (their citation renders
+ * "Post removed").
+ */
+export async function listCitedPostsByIds(client: SupabaseClient, businessId: string, ids: readonly string[]): Promise<CitedPostRow[]> {
+  const unique = [...new Set(ids)]
+  const out: CitedPostRow[] = []
+  for (let i = 0; i < unique.length; i += CITED_POST_CHUNK) {
+    const { data, error } = await client
+      .from('posts')
+      .select('id, business_id, platform, published_at, campaign_id')
+      .eq('business_id', businessId)
+      .is('deleted_at', null)
+      .in('id', unique.slice(i, i + CITED_POST_CHUNK))
+      .order('id', { ascending: true })
+      .limit(CITED_POST_CHUNK)
+    if (error) throw new Error(getErrorMessage(error))
+    out.push(...((data ?? []) as CitedPostRow[]))
+  }
+  return out
+}
+
 export async function listPostsDue(
   client: SupabaseClient,
 ): Promise<PostRow[]> {
@@ -896,4 +930,73 @@ export async function listPostsForMetricsSync(
   })
   if (error) throw new Error(getErrorMessage(error))
   return (data as PostRow[]) ?? []
+}
+
+// ── Analytics reads (ADR 0031 §9.1; Session 37 O2.4) ──────────────────────────────────────────────────────────
+// AUTHENTICATED, business-bound, keyset-paged. A published post is `status = 'published' AND deleted_at IS NULL`, both
+// repeated literally so the planner can use posts_business_published_idx (business_id, published_at DESC).
+
+export const ANALYTICS_POSTS_PAGE = 500
+
+export interface PublishedPostForAnalytics {
+  id: string
+  business_id: string
+  platform: Platform
+  published_at: string
+  social_account_id: string | null
+  campaign_id: string
+}
+
+const ANALYTICS_POST_COLUMNS = 'id, business_id, platform, published_at, social_account_id, campaign_id'
+
+// Every published post of the business whose published_at is in [start, end), newest first. Pages on
+// (published_at DESC, id DESC) until exhausted; more than the ceiling THROWS ReadCeilingExceeded (never a partial list).
+export async function listPublishedPostsInRange(
+  client: SupabaseClient,
+  businessId: string,
+  range: { start: string; end: string },
+  opts: { pageSize?: number; ceiling?: number } = {},
+): Promise<PublishedPostForAnalytics[]> {
+  const pageSize = Math.min(Math.max(Math.trunc(opts.pageSize ?? ANALYTICS_POSTS_PAGE), 1), ANALYTICS_POSTS_PAGE)
+  return readAllPages<PublishedPostForAnalytics>({
+    read: 'published posts in the month',
+    pageSize,
+    ceiling: opts.ceiling,
+    fetchPage: async (after, limit) => {
+      let query = client
+        .from('posts')
+        .select(ANALYTICS_POST_COLUMNS)
+        .eq('business_id', businessId)
+        .eq('status', 'published')
+        .is('deleted_at', null)
+        .gte('published_at', range.start)
+        .lt('published_at', range.end)
+      if (after) query = query.or(keysetFilterDesc('published_at', 'id', { primary: after.published_at, tiebreak: after.id }))
+      const { data, error } = await query
+        .order('published_at', { ascending: false })
+        .order('id', { ascending: false })
+        .limit(limit)
+      if (error) throw new Error(getErrorMessage(error))
+      return (data as PublishedPostForAnalytics[]) ?? []
+    },
+  })
+}
+
+// The activity trend's per-month count: a head count, no rows. A null count THROWS (it is never read as 0).
+export async function countPublishedPostsInRange(
+  client: SupabaseClient,
+  businessId: string,
+  range: { start: string; end: string },
+): Promise<number> {
+  const { count, error } = await client
+    .from('posts')
+    .select('id', { count: 'exact', head: true })
+    .eq('business_id', businessId)
+    .eq('status', 'published')
+    .is('deleted_at', null)
+    .gte('published_at', range.start)
+    .lt('published_at', range.end)
+  if (error) throw new Error(getErrorMessage(error))
+  if (count === null) throw new Error('posts: the published count came back null; refusing to read it as 0')
+  return count
 }

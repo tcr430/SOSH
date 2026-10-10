@@ -1047,3 +1047,15 @@ itself touches.
 ---
 
 _End Amendment A._
+---
+
+## Dated note — 2026-10-05 (Session 37, O2.12): a second email kind, `monthly-report`
+
+Appended by the Session 37 Builder, as ADR 0031 §14 requires. **Nothing in this ADR's seats, permissions, invite flow or resolvers changes.** The `team-invite` kind (this ADR's invite email) and its template are untouched.
+
+- **The kind.** `'monthly-report'` is added to the `EmailKind` union (`lib/email/types.ts`) and registered in `lib/email/templates/index.ts`; the template is `lib/email/templates/monthly-report.tsx`. It carries a heading, the report's own pre-rendered summary sentences and a link: no attachment and no figure of its own (ADR 0031 §5.4).
+- **Who receives it.** `resolveReportRecipients` (`lib/db/business-members.ts`) returns the business's active admins by default, all active members when `businesses.report_email = 'all_members'`, and nobody when it is `'off'` (the column defaults to `'admins'`). The setting is changeable by the business **owner only** (the `businesses` UPDATE policy is owner-only, ADR 0031 O2.0 premise 3). Invited and revoked members are never recipients. The dedupe token is `report:{YYYY-MM}:{member id}`, the immutable member id and never the email (`lib/reports/deliver.ts`).
+- **Open.** The kind has no unsubscribe link yet; that is a counsel question (ADR 0031 A-6), carried in `docs/backlog.md`.
+- **A defect found while building it, fixed separately.** `i18n/request.ts` never loaded the `email` and `invite` namespaces, so every email kind, this one and `team-invite` included, would have rendered raw keys in production (the email tests build their own dictionary and could not see it). Fixed in `24a2d0042` with a test that goes through the real request config. Nothing about the kind's design changed.
+
+_End of the 2026-10-05 note._

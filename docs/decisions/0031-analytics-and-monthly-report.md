@@ -1,6 +1,6 @@
 # ADR 0031 — Analytics and the monthly report: the Accountability surface
 
-- **Status:** Accepted. It becomes Accepted when the founder rules A-3…A-7 (§0.1); until then O2 does not start.
+- **Status:** Accepted. The founder ruled A-3…A-7 (§0.1) before O2 started; the Session 37-D correction pass amendments are appended after V.20.
 - **Date:** 2026-10-04 (revised the same day after an Architect-side consistency review; changes listed in §16)
 - **Track:** O (Session 37). Architect agent O1. This document is design only: **no `.ts`, `.sql`, `.tsx`, email
   template or prompt template was produced by this session.** The shapes below are the contract the Builder (O2)
@@ -55,7 +55,7 @@ Their dispositions are in §15.
 | **Q7** tenancy & cost | Authenticated, `.eq('business_id')`-bounded, indexed, limited reads; worker reads via business-binding wrappers with abort-on-mismatch; recipients server-side; **whole-repo** northstar scan | trusting RLS alone (array trap); a skip-on-mismatch assembler | 1 + 2 (incl. scans) |
 | **Q8** UX & tests | Specified in §10; this session **fixes** the inherited 320 px shell overflow and `nav.team`; no Tier E; real-browser checks are recorded manual QA, never counted as COVERED | deferring the shell fix while adding a table-heavy page | 1 + 2 + manual QA |
 
-### §0.1 — Founder adjudications this ADR raises (A-3…A-7), **awaiting the founder**
+### §0.1 — Founder adjudications this ADR raised (A-3…A-7), **ruled by the founder before O2 started**
 
 These are O1's recommendations. **O2 does not start until each one is ruled in `session-37.md` §0.2.**
 
@@ -332,7 +332,7 @@ so the analytics surface cannot disagree with the extractor about why a post was
 
 ---
 
-## §3 — The Plus / Pro split (Q2) — **recommendation, awaiting founder ruling A-4 and A-5**
+## §3 — The Plus / Pro split (Q2) — **as ruled by the founder (A-4 and A-5)**
 
 ### 3.1 The gate
 
@@ -1242,3 +1242,702 @@ go to live businesses only. The other changes are corrections.
 | Volume figure corrected (outcome rows are X only) | §2.7 |
 | Missing constraint IDs added (#36–#42); count 35 → 42 | §13 |
 | ADR 0030's "A-8" audit gate renamed "the DEFINER audit gate" here | §0.1, §11, §12.1 |
+
+---
+
+## Builder verification (O2)
+
+> Appended by the Builder (O2). Nothing above this heading is edited. BASE = `0da603b4a` (master after PR #19 and PR #18), branch `session-37-adr-0031`. Dates are 2026-10-04.
+
+### V.1 — O2.0 premise table, drift and decisions
+
+| # | Premise | Evidence | Still true? |
+|---|---|---|---|
+| 1 | Active-business resolver | `getBusinessForUser(client, userId)` at `lib/db/businesses.ts:22`; the layout (`layout.tsx:33`) and every dashboard page and API route call it. No caller passes `preferredBusinessId`. | Yes. It means "earliest-created owned business, else the first visible one". |
+| 2 | One business-liveness predicate | None exists. `clearBillingOnCancellation` (`businesses.ts:167`) sets `plan='trial'` and nulls `stripe_subscription_id`. The 14-day trial arithmetic is inline in `layout.tsx:61` and `billing/page.tsx:34` only. | **No.** O2.7 writes the predicate once in `lib/db/businesses.ts` (ADR §5.2 anticipated this). |
+| 3 | `businesses` UPDATE policy | `20260430120017:25-27`: `USING (owner_id = auth.uid()) WITH CHECK (owner_id = auth.uid())`, identical in the live database. | Partly. Both clauses exist and only the OWNER can write `businesses`, so a non-admin member cannot write `report_email`. **No restricting trigger is needed**, so there is no exception to "no new SQL function". |
+| 4 | `reject_outcome_table_update` | `20260919110000:158-166`: SECURITY INVOKER, `TG_TABLE_NAME`, EXECUTE held by `postgres` only (REVOKE at `20260919150000:97`). | Yes. Its message still reads "ADR 0026 … OUTCOME-DIMENSIONS-WRITE-ONCE", so tests assert `TG_TABLE_NAME` plus "immutable", not the constraint name. |
+| 5 | The six email kinds | `20260709120000:3-9`, `lib/db/types.ts:79-85` and `lib/email/types.ts:1-7` carry the same six. | Yes. Two duplicate unions must both be widened. |
+| 6 | Shell overflow and `nav.team` | Reproduced. Overflowing element: `DashboardShell.tsx:207`, `<div className="flex flex-1 flex-col">`, which has no `min-w-0`; the header (`:209`) stretches with it. `nav.team` is still missing in en, pt and es. | Yes, but the backlog text ("independent of any page content") is wrong: the overflow depends on the page. Measured `scrollWidth` at 320 px: `/pt/opportunities` 359, `/pt/calendar` 575, `/pt/settings/team` 744; clean (305 = `clientWidth`) on campaigns, billing, create. Acceptance for #35 is `scrollWidth <= clientWidth`. |
+| 7 | Baselines | V.2. | n/a |
+| 8 | QA defects | `QA-LOCALE-HEADER-DROPPED` and `QA-REAL-API-SOSH-FIELD` are fixed by `2f2b33676` (in master via PR #18). `/pt/login` renders "Bem-vindo de volta" in a real browser. | Yes. The pt browser pass in O2.11 can be real. |
+
+**Findings and rulings (founder, 2026-10-04):**
+
+1. **`proxy.ts` redirects every `/api/*` request.** Its matcher has never excluded `/api`, so next-intl 307-redirects `/api/x` to `/{locale}/api/x`, which 404s, authenticated or not (reproduced on both a QA dev server and the spike server; `curl -X POST` to a cron route also gets the 307). The new cron route (O2.7/O2.8) and the PDF route (O2.9) would be unreachable, and the existing cron, billing and social routes are very likely affected. Production was not probed. **Ruling: fix it in Session 37, as its own tracked commit before O2.7.** It closes no ADR 0031 constraint; it is recorded here as a prerequisite, not as scope creep (the build guide's "a step that closes no constraint does not exist" is waived for it by this ruling).
+2. **A-3 loses `@visx/axis`** (V.3). **Ruling: dropped.** The shared report component draws its axes as plain SVG `<text>`. The O2.1 dependency scan allows exactly `@visx/scale`, `@visx/shape`, `@visx/group`, `puppeteer-core` and `@sparticuz/chromium`.
+3. **Live-trial definition (O2.7).** **Ruling:** a live trial is `plan = 'trial'` AND `trial_started_at` set AND under 14 days old. A business whose trial clock never started gets **no report and no stub**. A live paid business is a paid plan with a non-null `stripe_subscription_id`.
+4. **`report_email` writer (O2.8).** **Ruling: owner-only through RLS, using the authenticated client.** The ADR's "admin" wording (§5.4) is narrowed to "owner", because the `businesses` UPDATE policy is owner-only. No service-role use is added. Constraint #42's admin re-check becomes an owner check.
+5. Not a drift: `.env.local` points at the HOSTED Supabase project; every local QA run overrode the Supabase variables from `npx supabase status -o env` (cerebrum).
+
+### V.2 — Baselines (BASE `0da603b4a`)
+
+- **DEFINER audit gate** (SECURITY DEFINER functions executable by `anon` or `authenticated`): **3** on the local database, equal to the allow-list in `supabase/__tests__/security-definer-client-exec-allowlist.test.ts` (`accept_invite(uuid,uuid)`, `get_user_business_ids()`, `user_can(uuid,text)`). D12's "6" predates `20261004100000` and `20261004110000`. The local database is long-lived; a fresh `db reset` is the stronger check and is repeated in O2.2.
+- **Tests, all green** (CI dummy env): `campaign-view.load` 3, `campaign-view` 11, `performance` 18, `generate.context-equivalence` 7, `context-callers.context-equivalence` 6, `actions.context-equivalence` 5, `no-cross-business` 33. Total 83.
+- **A-3 packages** (`npm ls`): absent.
+- `npm run lint`: 0 errors, 113 pre-existing warnings.
+
+### V.3 — The PDF / visx spike (a scratch worktree, deleted; nothing committed)
+
+| Check | Result |
+|---|---|
+| (c) The same component in a Server Component page | Works: 4 bars and axis ticks rendered; a hostile `<script>` in the title stayed inert text. |
+| (b) `react-dom/server` in a Next 16 route handler | A **static** `import … from 'react-dom/server'` (and `react-dom/server.node`) fails to compile under Turbopack (the route graph aliases it to `server.react-server.js`). `await import('react-dom/server')` compiles. |
+| (b) packages | `@tailwindcss/postcss`, `lightningcss`, `@sparticuz/chromium` and `puppeteer-core` need `serverExternalPackages`. |
+| `@visx/axis` server-side | **Fails** under `renderToStaticMarkup` in the route handler: `Cannot read properties of null (reading 'useMemo')`. Cause: `@visx/text`'s `useText` hook (used by `@visx/axis` for tick labels); the route's components run on the react-server React copy while `react-dom/server` sets the dispatcher on the other. `@visx/scale`, `@visx/shape` (Bar, Group) have no hooks and work in both contexts. Plain SVG `<text>` axes also work. |
+| CSS inlinable | Yes. A request-time `@tailwindcss/postcss` compile produced 150,305 bytes in 63-282 ms and was inlined into the HTML. A build-time compile may suit better; that is O2.9's design choice. |
+| Timing and size | Cold 1.2 s (CSS 282 ms, Chrome launch 443 ms, PDF 376 ms), warm 0.8 s; PDFs 45-46 KB. Local Windows Chrome, not Vercel's Linux Chromium. |
+| Sealing | With the CSP removed, interception aborted exactly 1 request (a hostile `<img>`); with JavaScript disabled the hostile `<script>`'s fetch never ran; the server counted 0 pings in every run. With the CSP present, the `<img>` never reached the interceptor. Each layer holds on its own. |
+| Not proven | `@sparticuz/chromium` on Vercel's Linux runtime and its cold start: **UNPROVEN** until a preview deploy. |
+
+Verdict: (b) is achievable with the synchronous-component design, an `await import('react-dom/server')`, `serverExternalPackages`, and no hook-using component in the shared tree (hence no `@visx/axis`). It is not a "stop and report" failure of the design; the `@visx/axis` loss is the founder-visible A-3 change ruled in V.1 item 2.
+
+### V.4 — O2.1: the absence scans and the fixture
+
+`lib/analytics/source-scans.test.ts` (39 tests + 1 todo) and `lib/analytics/__fixtures__/portfolio.ts`.
+
+- **Closed here (Tier 2, scan):** #1 `ANALYTICS-READ-ONLY` (arm a: lib/social import; arm b: writes to the four measurement tables, the write RPC and the four named lib/db writers, plus a completeness test over those lib/db files), #19 `ANALYTICS-NORTHSTAR-FENCED` (whole repository; allowlist pinned to six exact files plus `supabase/migrations/**`), #32 `ANALYTICS-NO-NEW-DEPENDENCY` (literal baseline plus the five A-3 packages), #38 `ANALYTICS-NO-MEMORY-WRITER` (names derived from `MEMORY_WRITERS` and the exports of its sole-caller modules under `lib/memory/`), #39 `REPORT-NO-MODEL`.
+- **Scan halves authored (constraint closes in the named step):** #13 (O2.3), #16 (O2.4), #20 (O2.5; whole-repo, three functions), #23 (O2.8).
+- **Roots:** a tripwire test (`EXPECTED_PENDING`) lists the roots that have no production file yet; the step that creates a root must remove it from the list in the same commit, which is what turns every scan on for it. O2.12 empties the list (an `it.todo` records this).
+- **Decision recorded by the Builder (not an architectural choice):** the recipients function that scan #23 names is **`resolveReportRecipients`** in `lib/db/business-members.ts`. The ADR required one service-role function without naming it; the name is fixed here so the scan and O2.8 cannot disagree.
+- **Fixture:** two businesses sharing one user (A Europe/Lisbon, B America/Sao_Paulo); every row carries an explicit status; B holds an active row of every kind; `EXPECTED` is hand-computed literals (March: median 0.031, range 0 to 0.064, n 7 of 10, wins 4 of 6, exclusions 1/1/1/0; February n 5; January n 4). LinkedIn rows carry count-basis outcomes on purpose. `campaign_retrospectives` rows are deferred to O2.7, their first consumer.
+- **Redden transcript (real-tree arms, planted in the real roots, then reverted):** with one violation planted per scan (`lib/analytics/_plant_*`, `components/analytics/`, `lib/reports/`, `app/_plant_northstar.ts`, `lib/email/_plant_northstar.ts`, a `package.json` dependency), 11 tests went red: the tripwire and all 10 real-tree arms. The offenders named included `app/_plant_northstar.ts` and `lib/email/_plant_northstar.ts` (both northstar plants), `dependencies: left-pad`, `lib/analytics/_plant_social.ts: imports @/lib/social (getRegistry)`, `lib/analytics/_plant_memory.ts: uses the memory writer recordInterviewCandidates`, `lib/analytics/_plant_model.tsx: imports @anthropic-ai/sdk`, `lib/analytics/_plant_loglift.ts: names log_lift`, and `components/analytics/_plant_service.tsx: imports @/lib/supabase/service`. After the revert the file was green.
+- **Verification:** `npm run typecheck` clean; `npm run lint` 0 errors (113 pre-existing warnings); `npm run test:app` with the CI dummy env: 385 files, 5,926 passed, 1 todo. `test:db` not run (no DB behaviour touched).
+
+### V.5 — O2.2: the schema, the Tier-1 tests, and the database review
+
+(The build guide says to record the review as "V.4"; V.4 is O2.1's, so this continues the numbering.)
+
+**Shipped:** `supabase/migrations/20261004120000_analytics_reports.sql`; four Tier-1 files (`analytics-reports-seed|rls|constraints|purge.test.ts`, 40 tests); `lib/analytics/__fixtures__/seed-live.ts`; the §D2.5 row and a dated note in ADR 0010 Amendment 2; `lib/db/__tests__/d2.5-analytics-reports-row.test.ts` (Tier 2, the row-presence half of #28 plus a scan that the migration creates no function); `ReportEmailSetting` and an optional `BusinessRow.report_email` in `lib/db/types.ts`.
+
+**Closed (Tier 1):** #21 `REPORT-SNAPSHOT-IMMUTABLE`, #28 `REPORT-CASCADE-COMPLETE`, #41 `REPORT-EMAIL-KIND-WIDENED`. **Tier-1 halves authored:** #17 (the two-business arm), #22 (UNIQUE and ON CONFLICT), #27 (the worker-isolation seed: the fixture loads into live Postgres and the tagging-trigger-derived `post_dimensions` equal the fixture's), #42 (`report_email`, owner-only per O-3).
+
+**Decisions recorded (not architectural choices):**
+
+1. **The TypeScript `EmailKind` unions are NOT widened in O2.2** (founder, 2026-10-04, answering a Builder question). `TEMPLATES` is `Record<EmailKind, KindEntry>`, so widening the unions here breaks typecheck until the `monthly-report` template exists (O2.8). O2.2 widens only the DB CHECK (proved by Tier 1); `lib/email/types.ts` and `lib/db/types.ts` gain `'monthly-report'` in O2.8, in the commit that adds the template. This deviates from the O2.2 step text; nothing enqueues the kind before O2.8.
+2. **No `report_email` trigger and no new SQL function**, per V.1 premise 3 and ruling O-3. Tier 1 proves an admin member and a viewer each update zero rows and the value is unchanged.
+3. **The fixture changed to match the tagging trigger:** `post_dimensions.origin_mode` is the CAMPAIGN's origin, so each fixture campaign now carries an `origin` and an AI post's origin follows its campaign (a third campaign, "A manual", was added). The seed test asserts the trigger-derived dimensions equal the fixture's, so the Tier-1 and Tier-2 suites cannot read different numbers.
+4. `report_email` is optional on the `BusinessRow` type for the reason `interview_snoozed_until` is: unrelated fixtures build a full row.
+
+**Redden transcript (each applied to the local database, the four files run, then restored; baseline back to 40 passed):**
+
+| Mutation | Tests that went red |
+|---|---|
+| drop the write-once trigger | UPDATE raises for the service role; UPDATE raises for the table owner; the trigger catalogue (3) |
+| `GRANT UPDATE` to `authenticated` | the 42501 write test; the privilege matrix (2) |
+| remove `team-invite` from the kind CHECK | the six-prior-kinds test; the exactly-seven-kinds test (2) |
+| open the SELECT policy (`USING (true)`) | positive control, cross-tenant reads, B-only user, the policy-shape test (4) |
+| add a BEFORE DELETE guard | `purge_business must SUCCEED` and the plain-DELETE cascade test (checked in isolation; in the combined run the guard also broke cleanup) |
+| drop the posts index / loosen its predicate (drop `deleted_at IS NULL`) | the index-definition test and the plan test (2 each) |
+| drop the `period_month` CHECK; drop UNIQUE; drop the `report_email` CHECK | 1; 2; 1 |
+
+**Database review (ECC budget 2 of 4; `ecc:database-reviewer`, read-only, files and `git diff` only).** Verdict: no BLOCKER or MAJOR. Against §5.1, §5.4, §9.1 and §11 no policy, grant, CHECK, index, cascade or trigger is wrong or missing; the posts index matches the queries' predicates literally; the migration creates no function, so the DEFINER audit gate does not move; every §12.1 item 1-8 and 10 has a real Tier-1 assertion (item 9 is O2.7's).
+
+| # | Severity | Finding | Disposition |
+|---|---|---|---|
+| 1 | MINOR | The "query uses the new index" assertion is planner- and statistics-dependent; the negative half is deterministic. | **Adopted, and corrected by experiment.** The reviewer proposed `ANALYZE`; the Builder tried it and it made the test fail consistently (with real statistics on a tiny table the planner prefers `posts_business_id_status_idx` plus a sort). The test now drops the three competing `business_id` indexes inside a transaction it rolls back, so the new index is used if and only if the query's predicates imply its WHERE clause. Stable over three runs; red when the predicate is loosened. |
+| 2 | NIT | The index omits `id`, so the `ORDER BY published_at DESC, id DESC` keyset page does an incremental sort on ties. | **Declined.** The ADR specifies `(business_id, published_at DESC)`; 500 rows per page makes it harmless. Revisit only if the plan shows a sort cost. |
+| 3 | NIT | The REVOKEs leave `REFERENCES` and `TRIGGER` on `authenticated`. | **Declined.** Identical to the `20260919110000:152-154` precedent; not reachable through PostgREST. |
+| 4 | NIT | The reused trigger's message names ADR 0026. | **Acknowledged.** Unavoidable under the reuse ruling; tests assert `analytics_reports rows are immutable`. |
+| 5 | NIT | The Tier-1 DEFINER-count assertion duplicates the standing allow-list test. | **Kept.** The step asks for the V.2 count; a legitimate fourth allow-listed function would redden both on purpose. |
+
+**Verification (in the required order):** `npm run typecheck` clean; `npm run lint` 0 errors (113 pre-existing warnings); `npm run test:app` (CI dummy env) 386 files, 5,934 passed, 1 todo; `npm run test:db` on a FRESH `supabase db reset` (129 migrations applied through the real pipeline): 120 files, 1,358 passed, 0 failed, no empty or skipped file.
+
+### V.6 — O2.3: the pure aggregation
+
+**Shipped (no I/O, no clock, no client; every function is pure):** `lib/analytics/` `constants.ts`, `period.ts`, `rates.ts`, `floors.ts`, `wins.ts`, `exclusions.ts`, `breakdowns.ts`, `view-model.ts`, plus `types.ts` (the input shapes; not in the step's file list, added so the shapes have one home). Seven test files under `lib/analytics/__tests__/` (131 tests) and one test-side adapter, `lib/analytics/__fixtures__/adapters.ts`, that maps the portfolio fixture's rows into the input shape and does no arithmetic. `lib/analytics` left `EXPECTED_PENDING` in `source-scans.test.ts` in the same commit, so every O2.1 scan now walks it.
+
+**Closed (Tier 2):** #2 `ANALYTICS-NULL-NEVER-ZERO`, #3 `ANALYTICS-BASIS-NEVER-MIXED`, #7 `ANALYTICS-DISPLAY-FLOOR`, #10 `ANALYTICS-NO-DELTA`, #11 `ANALYTICS-EXCLUSIONS-SHOWN`, #13 `ANALYTICS-NO-LOG-LIFT` (the O2.1 scan half now has real files to walk, plus the type test and a deep-key test), #37 `ANALYTICS-EXCLUSION-REASON-FROM-NORMALISER` (a spy that keeps the real `eligibleValue` running and asserts its exact arguments, plus a source check that `exclusions.ts` holds no copy of its rules).
+
+**Every expected number is a literal hand-computed from the O2.1 fixture** (March, business A, X: median 0.031, range 0 to 0.064, 7 measured of 10 published, exclusions 1/1/1/0, wins 4 of 6, role/format/origin/length/CTA win counts, coverage 5 of 7; February n = 5; January n = 4 renders thin; the Lisbon and Sao Paulo boundary posts file into April and March). The Wilson literals were computed independently (5 of 10: 0.2366 to 0.7634; 8 of 10: 0.4902 to 0.9433; 9 of 12: 0.4677 to 0.9111).
+
+**Decisions recorded (Builder choices inside the ADR, none architectural):**
+
+1. **The IQR is the linear-interpolation (R-7) interquartile range.** The ADR says "IQR from n = 10" without naming a method; 1 to 10 gives 3.25 to 7.75. Pinned by literals so a change of method is a visible test change.
+2. **"Day 9" is `published_at` plus 9 x 86,400,000 ms**, so the boundary does not move with the machine's timezone (`subDays` is a local-calendar operation). The edge is tested to the millisecond.
+3. **`unsupported_platform` from `eligibleValue` is counted as "no data returned".** The ADR's closed union has four reasons and no fifth; a post is never dropped from the count.
+4. **`post_outcomes.length_band` and `cta_present` are nullable in the table** (typecheck found it; the first draft typed them as never null). A NULL is unclassified: it is in the coverage `n`, in no bucket, and never "false".
+5. **Bars need two or more values and 10 on every one of them.** One thin value makes the whole dimension counts only and provisional; the Wilson interval appears only in the bars case. A value with no baselined post (`of` = 0) is not shown as "0 of 0".
+6. **`winsOf` and `winShareBreakdown` throw on a set that spans platforms or bases** (house style: a malformed input fails loudly). `wins.ts` exports exactly two functions and `breakdowns.ts` exactly one; both lists are asserted, so a pooling or per-period function cannot be added silently.
+7. **`platformMonthView` is the one composition the surface and the report both read.** For a count basis (LinkedIn) it returns `typical: null` and `basis: 'count'`: a count is never described as a rate. The "unavailable by capability" state is NOT decided here; the callers read `metricsReadAvailableFor` (O2.4 and O2.10).
+8. **View models carry template keys and params, never sentences.** The key names are fixed in `view-model.ts` (`analytics.typical`, `analytics.wins`, `analytics.state.thin`, `analytics.monthPair`, `analytics.monthPair.suppressed`, `analytics.exclusions`, `analytics.exclusions.{noDataReturned,fieldMissing,zeroImpressions,notFinal}`, `analytics.disclosure.{usual,usualUpdates,importSeed}`, `analytics.population.{aiOnly,allMeasured}`, `analytics.coverage`, `analytics.breakdown.row`, `analytics.interval`). **They are not in the locale files yet: O2.10 creates exactly these in en, pt and es** (hand-off; the key-parity test lands there).
+
+**Redden transcript (each mutation applied, `lib/analytics` run, then restored byte-identical to a backup; baseline back to 170 passed):**
+
+| Mutation | Tests that went red |
+|---|---|
+| a NULL `beat_baseline` coerced to a loss (the skip removed) | 4: the 4-of-6 literal, NULL-is-not-a-loss, the 6-against-7 test, the per-platform result |
+| `formatRate(NULL)` returns `"0.0%"` | 1: NULL is no number |
+| aggregate across platform and basis (one key) | 5: two results, no pooled group, same platform two bases, ordering, business B |
+| mean instead of median | 8: the March, February, boundary and extreme-rate literals, the platform result, the typical and pair view models, the end-to-end view |
+| a `delta` field on the month pair | 2 at runtime (the deep-key scan, the exact-keys test) and a `tsc` error (`delta` does not exist in `MonthPairView`) |
+| `logLift` added to a view model and to the input type | 3 at runtime (the O2.1 scan #13 REAL TREE, the deep-key test, the type test) and two `tsc` errors (unused `@ts-expect-error`, unknown property) |
+| a copy of `eligibleValue`'s logic instead of the call | 2: the call-arguments spy and the no-copy source check |
+
+(The first attempt at the basis-pooling and NULL-coercion mutations did not apply or did not go red in the combined loop, so both were re-run alone with the mutated line printed first; the table is from the confirmed runs.)
+
+**Verification (in the required order):** `npx tsc --noEmit --skipLibCheck` clean; `npx eslint .` 0 errors (113 pre-existing warnings, none from `lib/analytics`); `npm run test:app` with the CI dummy env: 393 files, 6,065 passed, 1 todo (O2.2 was 386 and 5,934). `test:db` not run: no migration or DB behaviour touched. No ECC budget is allotted to O2.3.
+
+### V.7 — O2.4: bounded, authenticated reads
+
+**Shipped:** `lib/db/keyset-pager.ts` (`readAllPages`, `ReadCeilingExceeded`, `READ_CEILING` = 5,000, `keysetFilterDesc`); `lib/db/analytics-reports.ts` (`getReportByPeriod`, `getReportById`, `listReports`) and the `AnalyticsReportRow` type; and, appended to the existing per-table files, `listPublishedPostsInRange` and `countPublishedPostsInRange` (`posts.ts`), `listMonthOutcomes`, `listTrendOutcomes` and `listDimensionsForAnalytics` (`post-outcomes.ts`), `listMetricsForPosts` (`post-metrics.ts`), `listCompletedRetrospectivesInRange` (`campaign-retrospectives.ts`), `listAccountLabels` (`social-accounts.ts`). Every one takes `(client, businessId, ...)` and applies `.eq('business_id', businessId)` itself; none acquires the service-role client (the Tier-2 test mocks the factory to throw). `listTopPostMetrics`, `listCampaignRetrospectives` and every existing service-role reader are untouched, and nothing calls `listCampaignRetrospectives`.
+
+**Closed:** #16 `ANALYTICS-AUTHENTICATED-READS` (Tier 2 recording client + the O2.1 scan half + Tier 1), #18 `ANALYTICS-BOUNDED-INDEXED` (Tier 2 + Tier 1 EXPLAIN), #36 `ANALYTICS-NO-SILENT-TRUNCATION` (Tier 2: a two-page median equals the unpaged median, 5,001 rows throw; plus Tier 1: a page size of 1, 2, 3 and 5 returns exactly what 500 returns, so the keyset `or()` filter is proven against real PostgREST).
+
+**Decisions recorded (Builder choices inside the ADR, none architectural):**
+
+1. **The ceiling is detected by asking for one row past it.** Each page requests `min(pageSize, ceiling + 1 - rows)`, so the database is never asked for more than 5,001 rows in total, exactly 5,000 rows return in full, and 5,001 throw. The throw is the only way out: there is no code path that returns a partial list.
+2. **The cursor is a quoted PostgREST `or()`:** `published_at.lt."T",and(published_at.eq."T",id.lt."I")`, with `post_id` as the outcomes tie-breaker. Quoting keeps a timestamp's colons and sign out of the filter syntax; a double quote in a value is escaped.
+3. **Explicit column lists, never `*`, wherever a sensitive or forbidden column exists:** `log_lift` is not selected from `post_outcomes`, `median_log_lift` not from `campaign_retrospectives`, no token or vault column from `social_accounts`, and no post text from `posts`. Every selected shape carries `business_id` (§9.3).
+4. **A head count that comes back NULL throws** rather than reading as 0 (NULL is never zero).
+5. **Id-list reads are chunked** (dimensions 200, metrics 120, labels 20), de-duplicated first, and each chunk carries its own business filter. The retrospectives read keeps the ADR's `completed_at DESC` exactly (no extra tie-break).
+6. **`lib/outcomes/__tests__/no-cross-business.test.ts` is extended** with the four new readers that live in the modules it already enumerates (ADR §9.3); its completeness check turned red on them until they were added, which is the check working. The other new readers are covered by `lib/db/__tests__/analytics-reads.test.ts`, whose last test asserts that each of the eleven binds its business and that every query's select is followed by its business filter before the next select.
+7. **Tier 1 runs the real readers through an authenticated client whose user OWNS BOTH businesses** (A and B), so only the explicit filter separates them. B's post, snapshot, report and account ids asked for under A return nothing, though RLS lets the owner read them.
+8. **EXPLAIN uses the O2.2 technique:** the other business-id indexes are dropped inside a rolled-back transaction with `enable_seqscan` off, so the named index is used if and only if the reader's predicates imply its definition. The posts read names `posts_business_published_idx`; the month's outcomes read names `post_outcomes_business_platform_published_idx`.
+9. **Environment note (not code):** `npx supabase status` fails on this machine with `EUNKNOWN uv_spawn`, so the local anon and service keys were minted (HS256, the GoTrue JWT secret read from the running auth container) for the Tier-1 runs. CI is unaffected.
+
+**Redden transcript (each mutation applied with the changed line printed, the tests run, then restored byte-identical to a backup):**
+
+| Mutation | Tests that went red |
+|---|---|
+| drop `.eq('business_id')` from `listPublishedPostsInRange` | Tier 2: 3 (the row-by-row filter test, the page-two test, the eleven-readers test). Tier 1: 3 (A's 13 posts, B's positive control, the metrics isolation test) |
+| drop the `post_id` tie-breaker from the outcomes reader | Tier 2: 2 (the row-by-row test, the tie-breaker test) |
+| raise the ceiling to 500,000 | Tier 2: 3 (the ceiling constant, 5,001 throws, never more than ceiling + 1 requested) |
+| plant `components/analytics/Plant.tsx` importing `lib/supabase/service` | the O2.1 scan #16 REAL TREE, and the root tripwire (the root is no longer empty) |
+
+(The first Tier-1 run of the first mutation was inconclusive: it ran with an abbreviated dummy environment and the suite failed in setup with every test skipped. It was re-run with the CI dummy values after a green baseline of 16, and the table is from that run.)
+
+**Verification (in the required order):** `npx tsc --noEmit --skipLibCheck` clean; `npx eslint .` 0 errors (113 pre-existing warnings, none from these files); `npm run test:app` with the CI dummy env: 395 files, 6,109 passed, 1 todo (O2.3 was 393 and 6,065); `npm run test:db` against the local stack (migrations of O2.2, not freshly reset because O2.4 adds no migration, no grant and no function): 121 files, 1,374 passed (O2.2 was 120 and 1,358). No ECC budget is allotted to O2.4.
+
+### V.8 — O2.5: the plan gate and the loaders
+
+**Shipped:** `hasAdvancedAnalytics(plan: unknown): boolean` in `lib/stripe/plan.ts` beside `getPlanCapabilities` (which is unchanged); `lib/analytics/load.ts` (`loadPortfolio(client, businessId, month, deps?)` and `loadPosts(client, businessId, filters, deps?)`); `utcIso` exported from `period.ts`. Tests: `lib/analytics/__tests__/load.test.ts` (40) and 17 added to `lib/stripe/plan.test.ts`.
+
+**Closed (Tier 2):** #15 `ANALYTICS-ACCOUNT-SLICEABLE`, #20 `ANALYTICS-CAMPAIGN-VIEW-SINGLE-SOURCE` (the loaders never call `loadCampaignLearningView` or `unavailableMetricsPlatforms`: the O2.1 scan half walks `lib/analytics` and stays green). **Loader arms authored:** #5 (the capability decides the state, by injection) and #14 (the plan gate: a basic business never runs a Pro reader).
+
+**The gate.** `hasAdvancedAnalytics` is true only for an own property of the capability table whose `advancedAnalytics` is true. `null`, `undefined`, `42`, `''`, `'PRO'`, `'enterprise'`, `{}`, `['pro']` and the inherited keys `constructor`, `__proto__` and `toString` are all false (a plain `CAPABILITIES[plan]` would have resolved the inherited ones). The loaders read the plan from the business row (`getBusinessById(client, businessId)`), never from the caller, and `assemble` is the one place a model is built: a basic model is cut down to the allowed tier on the server, and `BasicPortfolio` and `AdvancedPortfolio` form a union on `tier`, so a Pro key on a basic model does not compile (a `@ts-expect-error` test pins it).
+
+**Decisions recorded (Builder choices inside the ADR, none architectural):**
+
+1. **The Pro set is exactly:** the 12-month trend, the breakdowns (and `hook_type`, on the live page), the patterns, the retrospective verdicts across campaigns, and account against account. For a basic business none of these readers is called: `listTrendOutcomes`, `listDimensionsForAnalytics`, `countPublishedPostsInRange`, the patterns retrieval and the 12-month retrospective read. Tested by argument-recording fakes that assert each reader's calls are empty, and by the exact key list of the basic model.
+2. **Patterns come through `@/lib/memory` (`retrieveOutcomePatterns`), injected as a dependency.** The guide names `listOutcomePatterns`, which is a `lib/db` reader the barrel does not export; the barrel's reader is the sanctioned route (MEM-NO-DIRECT-TABLE-ACCESS). It takes the business id and filters on it itself.
+3. **A platform section exists for each platform the month has posts on.** `unavailable` carries only the publishing count and issues no outcome or metrics read; `immature` means every post is "not final yet" and none is measured; `measured` otherwise (a thin typical is the view model's own state). The empty state is the page's (`activity.total` is 0); an `error` state is a `ReadCeilingExceeded` on that platform's outcomes. A platform with posts only in the PREVIOUS month has no section.
+4. **One outcomes read covers the month and the one before** (`published_at` in [previous start, month end)) and is bucketed by `monthOf`, so the month pair costs no second query. Only the current month's unmeasured posts get a metrics read, for the exclusion reasons.
+5. **A snapshot whose dimensions are partly NULL is unclassified** (no `dimensions`), never a made-up bucket.
+6. **The 12-month trend** is 12 head counts plus one outcomes read per measured RATE platform, drawn only for platforms present in the selected month (a business whose only X posts are older than the month has no X series there). A month below the floor is a thin point, never a zero.
+7. **Account against account** is per platform and RATE basis; `comparison` is `bars` only with two or more accounts and 10 on every one, otherwise `counts`. An account row whose label cannot be read falls back to the "not recorded" key (it cannot be told from a removed account).
+8. **`loadPosts` carries a `tier`** (read from the same plan) though post level is basic content: its rows are `unavailable` (capability false), `measuring`, `so_far` (raw counts, `finalOn` = `published_at` + 7 days in UTC), `final` (a rate token or a count, with `above`, `below` or `no_baseline`), or `not_measured` with the closed reason. Filters (platform, account with `none` for the NULL bucket, campaign) are applied after one bounded read.
+9. **The campaign table** is activity plus the verdict and n worded with RetrospectiveCard's keys (`outcome.retrospective.verdict_supported`, `.verdict_not_supported`, `.inconclusive`, `.posts_beat`), each row linking to `/campaigns/[id]`; `inconclusive` states only its n, as the card does.
+
+**Shared-function callers (re-run unmodified, counts against V.2):** `campaign-view.load.test.ts` 3 passed (V.2: 3), `campaign-view.test.ts` 11 passed (V.2: 11). `no-cross-business.test.ts` is now 37 (V.2: 33 plus the four readers O2.4 added). `loadCampaignLearningView`'s callers are unchanged: `campaigns/[id]/page.tsx` only.
+
+**Redden transcript (each mutation applied with the changed line printed, tests run, restored byte-identical to a backup):**
+
+| Mutation | Tests that went red |
+|---|---|
+| `hasAdvancedAnalytics` returns true for an unknown plan | 12 of the 12 unknown-plan gate tests, and the loader's unknown-plan tests |
+| fetch the Pro data (dimensions) for a basic business, then drop it | 6: the basic-keys test and the five unknown-plan loader tests (the recording fakes saw the Pro reader called) |
+| resolve the NULL account to the first known account | 2: the activity test and the NULL-bucket test |
+| a `loadCampaignLearningView` call under `lib/analytics` | the O2.1 scan #20 REAL TREE |
+
+**Verification (in the required order):** `npx tsc --noEmit --skipLibCheck` clean; `npx eslint .` 0 errors (113 pre-existing warnings, none from these files); `npm run test:app` with the CI dummy env: 396 files, 6,166 passed, 1 todo (O2.4 was 395 and 6,109). `test:db` not run: no migration, grant or DB behaviour touched. No ECC budget is allotted to O2.5.
+
+### V.9 — O2.6: the live surfaces, the nav and the shell fix
+
+**Shipped:** `app/[locale]/(dashboard)/analytics/page.tsx` (portfolio), `analytics/posts/page.tsx`, one `loading.tsx` and one `error.tsx` (the segment's only Client Component; it renders the 8.2 error copy and a "Reload" control calling `reset()` and never reads the error object); `components/analytics/{shared,charts,PortfolioView,PostsView}.tsx` (synchronous Server Components: the translator is a prop, so every state renders to static markup under test); `lib/analytics/search-params.ts` (Zod on `month`, `platform`, `account`, `campaign`; an invalid value falls back, a business id in the query is not a recognised key) and `format.ts`; `i18n/{en,pt,es}/analytics.json`, registered in `i18n/request.ts`; `nav.team` in the three `common.json` files; the nav change in `DashboardShell.tsx` (`analytics` moved from `COMING_SOON_NAV` to `ACTIVE_NAV` directly after `campaigns`, `inbox` stays coming soon); and the shell fix (`min-w-0` on the main flex column, premise 6). The charts use the three A-3' packages, `@visx/scale`, `@visx/shape` and `@visx/group` (`^4.0.0`, the only dependencies added; scan #32 stays green); axes are plain SVG `<text>`. The design skills did not run (O2.10).
+
+**Closed (Tier 2):** #4 `ANALYTICS-LINKEDIN-DISCLOSED`, #6 `ANALYTICS-FOUR-STATES`, #12 `ANALYTICS-COVERAGE-DISCLOSED`, #34 `ANALYTICS-A11Y-FLOOR`. **Authored:** #35's CI half (`nav.team` in three locales, and the nav order). The root tripwire in `source-scans.test.ts` now lists only `lib/reports`, `app/api/analytics`, `app/api/cron/generate-reports` and the email template as pending.
+
+**What the tests prove (executed in CI):** each of empty, immature, unavailable, thin, loading, error, gated and populated renders its expected key AND its en literal; the LinkedIn sentence renders VERBATIM wherever a count is shown (a count fixture and a capability flip), is absent when LinkedIn is unavailable, and pt and es carry their own; every breakdown carries its population tag and its "Covers k of n" line, below 10 per side is counts with "Provisional" and no bar, and `hook_type` is absent until a value reaches 10; every chart is a `<figure>` with a real `<table>` and an `aria-describedby` that resolves to a summary filled from a closed template; the badge carries text and an icon; no figure holds a focusable element; no `⟦missing⟧` key renders in any of the three locales; the three locale files have identical keys and ICU placeholders and every key the view models emit resolves.
+
+**Decisions recorded (Builder choices inside the ADR, none architectural):**
+
+1. **Two view-model keys were renamed because a JSON object cannot be both a string and a parent:** `analytics.monthPair.suppressed` is now `analytics.monthPairSuppressed`, and `analytics.exclusions` is now `analytics.exclusions.summary` (V.6 item 8 listed the old names; the three locale files use the new ones).
+2. **Copy beyond the ADR's literal list was authored by the Builder and is not counsel- or founder-reviewed:** the pt and es translations of the §8.2 states and of the LinkedIn sentence (ADR 0026 §10.2 gives English only), the `monthPairSuppressed` line, the Pro gated one-liners, the value labels (format, origin, length, call to action, opening) and the pattern-evidence line. The O2.10 copy lint (§8.4) runs over all of it.
+3. **The loader gained two things the charts need:** `finalOn` on an immature platform section (the date in "Final for {count} posts on {date}") and, per trend point, the month's dots and numeric median and range (drawn only for a month that reaches the floor). The breakdown view model rows gained `share` and `bar` (numeric, for the bar and its whisker; the text carries the same figures as k of n).
+4. **The breakdowns render under their own Pro heading, not inside the platform block**, so the order is exactly §10.1 (activity, results, campaigns, then trend, breakdowns, patterns, retrospectives, accounts). A basic business sees five gated one-liners and no chart, blur, number or dialog.
+5. **The responsive table recipe is Tailwind-only:** full columns from `lg`, secondary columns (status, published; account, campaign) hidden below `lg` behind a `<details>` between 640 and 1024, and stacked labelled cards below 640 (`max-sm:` variants with `data-label`).
+6. **The hidden chart tables sit in a clipped `<div class="sr-only">`.** A bare `<table class="sr-only">` ignored `overflow: hidden` and stretched the page (below). A Tier-2 assertion now pins the wrapper.
+
+**Manual QA, recorded (UNPROVEN in the ADR 0015 sense: a browser run is never counted as COVERED).** Local stack seeded with the O2.1 fixture (`seed-live`), dev server against it (the Supabase variables overridden), signed in as the fixture owner (business A, Europe/Lisbon, Pro) in a Playwright-driven Chromium; the fixture was removed afterwards (0 users, 0 businesses). `scrollWidth` against `clientWidth` of the document element (clientWidth is 15 px under the viewport on this machine because of the scrollbar):
+
+| Page | 1280 px | 640 px | 320 px |
+|---|---|---|---|
+| `/en/analytics?month=2026-03` (Pro) | 1265 / 1265 | 625 / 625 | **505 / 305 before the fix**, 305 / 305 after |
+| `/en/analytics/posts?month=2026-03` | 1265 / 1265 | 625 / 625 | 305 / 305 |
+| `/en/analytics?month=2026-03`, plan set to Plus | 1265 / 1265 | not measured | not measured |
+
+At 320 px the campaign rows computed to `display: block` (stacked cards) and the chart SVG was 225 px wide; at 640 px the secondary table column computed to `display: none`. The Pro page showed the literal fixture numbers end to end (13 posts published, 5 the month before; X "7 posts measured. Typical engagement rate: 3.1% (range 0.0%–6.4%)", "4 of 6 posts beat your usual engagement", "7 of 10 posts measured. 3 not included: no data returned (1), a field was missing (1), zero impressions (1)", the NULL account bucket labelled "Account not recorded or since removed"). On Plus, five "Available on Pro:" sections and no figure. The posts page showed 13 rows with the badge text beside each rate, and the LinkedIn sentence of unavailability once. The browser console carried the same React hydration warning (a `className` on the root layout) on the untouched login page, so it is pre-existing and not from these surfaces. **Not checked:** dark-mode contrast (O2.10), a keyboard walk, pt and es in the browser, real print, `loading.tsx` and `error.tsx` rendered by Next (both are covered only by Tier-2 renders), and a viewport between 640 and 1024 beyond the computed styles above. `scrollWidth <= clientWidth` at 320 px therefore holds on the two pages measured, in one browser, and remains recorded rather than covered.
+
+**Redden transcript (each applied with the changed line printed, tests run, restored byte-identical to a backup):**
+
+| Mutation | Tests that went red |
+|---|---|
+| remove `state.thin` from the en file | 5: key parity, the emitted-keys test, the ADR 8.2 literals, the thin-state render, and the en no-missing-key render |
+| paraphrase the LinkedIn sentence in the en file | 3: the verbatim assertion in the parity file, the portfolio render, the posts-table render |
+| drop the first chart's `<table>` | 2: the every-figure-has-a-table test and the no-number-only-as-a-shape test |
+| delete `nav.team` in the es file | 2: `nav.team` exists in three locales, and every nav key has a label in all three |
+
+(The first attempt at the last mutation did not apply because the file is CRLF, and its re-run without the CI dummy environment failed at import; the table is from the confirmed run, after a green baseline of 11.)
+
+**Verification (in the required order):** `npx tsc --noEmit --skipLibCheck` clean; `npx eslint .` 0 errors (113 pre-existing warnings, none from these files); `npm run test:app` with the CI dummy env: 399 files, 6,228 passed, 1 todo (O2.5 was 396 and 6,166). `test:db` not run: no migration, grant or DB behaviour touched. No ECC budget is allotted to O2.6 (react-reviewer runs at the end of O2.10).
+
+### V.10 — O2.7: the report assembler and generator
+
+**Shipped:** `lib/reports/{constants,due,isolation,assemble,generate}.ts`; `lib/db/analytics-worker-reads.ts` (the worker's readers); in the existing per-table files, `insertAnalyticsReport` and `analyticsReportExistsForWorker` (`analytics-reports.ts`, service-role, lazy import, NO client parameter) and `isLiveForReports`, `getBusinessByIdForWorker`, `getTrialStartedAtForWorker` and `TRIAL_LENGTH_DAYS` (`businesses.ts`). `lib/analytics/load.ts` was refactored onto an injectable `Readers` object (`loadPortfolioWith`; `loadPortfolio` and `loadPosts` keep their signatures and bind the caller's authenticated client), and the dimensions and account-label readers now select and return `business_id`. Tests: 5 files under `lib/reports/__tests__`, `lib/db/__tests__/report-liveness.test.ts`, a fixture-driven fake in `lib/reports/__fixtures__/readers.ts`, and the Tier-1 `supabase/__tests__/report-generation.test.ts` (7). No migration, no SQL function: the SECURITY DEFINER audit gate inside `test:db` stays at 3.
+
+**Closed:** #5 `ANALYTICS-UNAVAILABLE-FROM-CAPABILITY` (the assembler arm: flipping the capability by injection moves LinkedIn out of section 6 into the results as a count basis, and flipping it off for everything empties the results and section 5), #22 `REPORT-ONE-PER-PERIOD` (Tier 2: a second run returns `exists`, two overlapping runs give one `inserted = true`; Tier 1 on the live stack), #25 `REPORT-FALLBACK` (an unknown plan on a live business gets the basic report, never none), #27 `REPORT-RLS-ISOLATED` (Tier 2: every worker reader throws on one planted foreign row, and the generator inserts nothing; Tier 1: no B post, business, campaign or account id appears in A's stored payload, with A's own ids as the positive control), #31 `REPORT-METHODOLOGY-PRESENT` (all eight keys in every generated payload, the stub included), #40 `REPORT-ELIGIBLE-LIVE-ONLY`.
+
+**Decisions recorded (Builder choices inside the ADR, none architectural):**
+
+1. **One aggregation, two readers.** The assembler calls `loadPortfolioWith` over the VERIFIED service-role readers, so the report can never disagree with the live page about what a number is. It asks for a 6-month trend and no `hook_type`. The page binds the authenticated client; the worker binds `analyticsWorkerReaders()` (the same bodies, a service-role client acquired lazily inside `lib/db`) wrapped by `verifiedReaders`, which compares every returned row's `business_id` with the loop's and also refuses a call made with another id.
+2. **The UTC condition is evaluated per business, not once for the tick.** ADR §5.2 says it "gates the tick"; a tick-wide "UTC day >= 10" would hold back a west-of-UTC business on UTC days 1 to 9 of a month whose local month is still the previous one. The same rule applied against each business's own M+1 is stricter where it matters and never later than the tick-wide form.
+3. **`outcomes_through` and `generated_at` are the instant of generation**, set once and passed to every read. A later tick therefore says a later "measured as of"; the late-outcomes key carries the same instant.
+4. **Eligibility is the O-2 ruling, written once:** a live trial is `plan = 'trial'`, a started clock and under 14 days (a never-started clock gets no report and no stub); a live paid business has a non-null subscription id; an unknown plan with a subscription is live and basic. `clearBillingOnCancellation` leaves `plan = 'trial'` and a null subscription, so a cancelled business is live only if its trial clock is still inside 14 days: an accepted edge.
+5. **Section 5 is per RATE platform with at least 5 measured posts, ranked by `post_outcomes.value` DESC, ties by `published_at` DESC, then post id.** A count basis is never ranked and nothing is pooled. It is named `ratedPosts` (keys `analytics.report.ratedPosts.title` and `.caveat`), not `topPosts`: the title is by the closed key, and no identifier on this path says "top" or "best". Each cited post is exactly `{ postId, rate, badge }`.
+6. **A read over its ceiling FAILS that business's report** (activity, posts, campaigns, a platform's outcomes, the trend or the patterns): nothing is stored and the next tick retries. A Pro section is absent from a basic payload (no key), not empty.
+7. **The tick** pages candidates by id (100 a page, scan cap 2,000) and generates at most 25 per tick; an error counts toward that cap so a failing business cannot starve the others, is captured (Sentry) with its business id, and never fails the tick. It returns the ids whose NON-stub report was inserted: O2.8 enqueues their email. A stub is inserted and listed in no email.
+8. **The `analytics.report.*` keys** (`header`, `stub`, `ratedPosts.title`, `ratedPosts.caveat`, `lateOutcomes`, `methodology.{median, maturity, exclusions, usual, floors, xOnly, descriptive, engagementOnly}`) are fixed in `lib/reports/constants.ts` and are not in the locale files yet: O2.8 writes the copy in en, pt and es.
+
+**Redden transcript (each applied with the changed line printed, tests run, restored byte-identical to a backup):**
+
+| Mutation | Tests that went red |
+|---|---|
+| skip a mismatched row instead of throwing | 6: the throw-on-one-foreign-row test, the missing-business_id test, every-reader-throws, the assembler and generator planted-row tests, the tick capture test |
+| take the tier from the payload (advanced regardless of the plan) | 6: live trial basic, unknown plan basic (generator and assembler), the stored-tier test, Plus basic, trial basic |
+| generate M-2 (`previousPeriod` twice) | 9 or more: every due-rule test with a period, the M-2 test, the generator's March and stub tests |
+| drop the UTC condition | 4: Lisbon midnight on day 10, Auckland, Sao Paulo, and the generator's Auckland test |
+| rank section 5 by recency instead of the day-7 value | 1: the ranking unit test (the fixture's top three are also in date order, so the end-to-end literal does not catch it; the unit test with ties and a count row does) |
+
+**Verification (in the required order):** `npx tsc --noEmit --skipLibCheck` clean; `npx eslint .` 0 errors (113 pre-existing warnings, none from these files); `npm run test:app` with the CI dummy env: 404 files, 6,304 passed, 1 todo (O2.6 was 399 and 6,228); `npm run test:db` against the local stack: 122 files, 1,381 passed (O2.4 was 121 and 1,374; not freshly reset because O2.7 adds no migration, grant or function). No ECC budget is allotted to O2.7 (security-reviewer runs at the end of O2.9).
+
+### V.11 — O2.7b: `/api` no longer goes through locale routing (O-1)
+
+**Closes no ADR 0031 constraint.** It is a prerequisite of O2.8 (the cron route) and O2.9 (the PDF route); the "a step that closes no constraint does not exist" rule is waived for it by founder ruling O-1.
+
+**Defect (read from the code, V.1 item 1):** `proxy.ts` matched `/api/*` and ran `handleI18n`; with `localePrefix: "always"` next-intl answers `/api/x` with a 307 to `/en/api/x`, which does not exist. The login guard was never involved (its regex needs a two-letter first segment).
+
+**Fix:** after `updateSession`, a request whose path is `/api` or starts with `/api/` returns the session response directly. The session refresh still runs, so cookie-authenticated routes (the PDF route, any `/api/analytics/*`) keep their refreshed cookies. Locale routing, the login guard, `x-pathname`, the nonce and the CSP are skipped: they are properties of rendered HTML pages. Each route owns its own authentication. The matcher is unchanged on purpose: excluding `/api` there would also drop the session refresh.
+
+**Tests (Tier 2, `lib/i18n/proxy-api.test.ts`, 11):** five `/api` paths are not redirected and never reach next-intl (the mocked handler redirects like the real one); the session is refreshed once and its cookie is on the response; no CSP header and no nonce on an API response; `/apix/foo` and `/en/api/foo` are NOT treated as the API; and the page behaviour is unchanged (a bare path still locale-redirects, an unauthenticated dashboard path still goes to login). Mutation: disabling the branch turns 5 red; restored byte-identical, 11 green.
+
+**UNPROVEN, not COVERED:** a real HTTP request to a running server returning the route's own status instead of a 307 has not been made. The unit tests prove what `proxy()` returns; they do not prove Next.js applies it in front of a route handler. This is the real-request proof ADR 0015 asks for and it is owed (the first `curl -i` of `/api/cron/generate-reports` against a dev server). Production reachability of the existing cron, webhook and OAuth routes before this fix is also unverified, and is a launch-checklist fact to check on a preview deploy.
+
+**Verification run:** `npx tsc --noEmit --skipLibCheck` clean; `npx eslint proxy.ts lib/i18n/proxy-api.test.ts` clean; `npx vitest run lib/i18n/proxy-api.test.ts lib/i18n/proxy-locale.test.ts` green. The full `npm run test:app` was NOT re-run for this commit: the CI dummy env was not available in this session, so suites that load config fail at import and prove nothing.
+
+### V.12 — O2.8: the report pages, the email, the recipients, the setting and the cron route
+
+**Closes:** #8 ANALYTICS-N-SHOWN, #9 ANALYTICS-NO-CAUSAL-COPY, #17 ANALYTICS-TENANT-BOUNDED (Tier-2 half; the Tier-1 half is O2.4/O2.7), #23 REPORT-MEMBERS-ONLY (Tier 2 + scan), #42 REPORT-EMAIL-SETTING-ADMIN-ONLY (narrowed to OWNER by ruling O-3).
+
+**Built.**
+- `resolveReportRecipients(businessId, setting)` in `lib/db/business-members.ts` (service-role, lazy import, no client parameter): ONE business, status `active`, `user_id` not null; `admins` is the admins (owner included), `all_members` widens, `off` and any unrecognised value return nobody without a query. Selects `id, email` only; ordered by `created_at`, limited to 200.
+- `lib/reports/deliver.ts`: enqueues one `monthly-report` per resolved member; recipient read off the member row; dedupe token `report:{YYYY-MM}:{member id}`; resolver called immediately before the enqueue; one failing member is captured and the rest proceed. The email carries the stored summary sentences rendered through the report's own closed templates in `businesses.language`: no figure of its own, no attachment.
+- `lib/reports/job.ts` and `app/api/cron/generate-reports/route.ts`: the tick, then delivery for exactly the reports the tick INSERTED and that are not stubs (`ReportTickSummary.insertedReports`, additive beside `insertedBusinessIds`); Sentry monitor `generate-reports` (`20 * * * *`); the dual QStash/bearer auth copied from extract-outcomes; ONE `report.tick` line of counts only (a throwing job logs `null` counters and `errors: 1`, never a fabricated 0).
+- `monthly-report` kind: the template, registry entry, `email.json` in en/pt/es, the `EmailKind` unions widened in `lib/email/types.ts` and `lib/db/types.ts` (founder ruling); the subject is built from a template key with CR, LF and line separators stripped from every interpolated value.
+- The pages `/analytics/reports` (newest first, at most 24) and `/analytics/reports/[period]` (Zod period; the business is the session business; another business's period, an unknown period and a payload schema this build does not read are all `notFound()`); the synchronous `ReportBody` (the ONE component O2.9's PDF reuses); a print stylesheet (page breaks before the trend and the methodology, no nav, no actions: `print:hidden` on the shell sidebar and top bar).
+- The report-email setting: `setReportEmailAction` (reads only `setting`; the business from `getBusinessForUser`; owner re-checked; `updateBusiness` on the authenticated client) and its `useActionState` form, the second client island. Non-owners read the value in words.
+- `analytics.report.*` copy in en, pt and es, including the eight methodology keys; a link from `/analytics` to the list; the launch-checklist row and the log-line check for `generate-reports` (A-7), ordered after extract-outcomes.
+
+**Decisions and adaptations (Builder).**
+- `ReportBody` takes `{ t, locale, timezone, payload, proAllowed }`, not the guide's `{ viewModel, messages }`: the codebase passes a translator function, and `proAllowed` is the CURRENT plan's gate (A-5), never the payload tier. A stored Pro report on a plan that no longer allows Pro shows the plain "Available on Pro" line; a basic report on a Pro plan says it was generated before the plan included the section and invents no number.
+- Scan #23 fixes the literal shape `const x = await resolveReportRecipients(` / `for (const member of x)` / `recipient: member.email`, so the delivery module calls the resolver directly and its tests `vi.mock` the modules; the delivery lives in `lib/reports` (a scanned root) on purpose.
+- The copy lint (`lib/analytics/copy-lint.test.ts`) holds the six §8.4 classes in three locales, whole-word and Unicode-aware, over the message files, the email strings, the RENDERED `ReportBody` of six fixture cases in each locale (Pro, downgraded, basic on Pro, basic on basic, February, the stub) and the rendered email. TWO named exemptions: the key `interval` ("likely between"), and, for the rendered check only, `outcome.role.customer_proof` (es "Prueba de cliente": the false positive §8.4 predicted; the class is not loosened and a test proves the exemption live and that "prueba" elsewhere is still caught). The n-rule exempts `posts.value.rate` (one post, n = 1).
+- The guide's redden step "plant boost in pt" was a wrong instruction: "boost" is an English term in the class table. The lint was proven red with "melhorou" (pt) and "will" (en) instead.
+- `lib/interview/__tests__/source-scans.test.ts` pinned `EmailKind` to six; it now pins the six plus `monthly-report`, so any further kind still fails (the interview adds none).
+
+**Redden transcript (each applied with the changed line printed, the owning test run, restored byte-identical):**
+
+| Mutation | Result |
+|---|---|
+| read the report by the URL period in place of the session business | 4 red (reports-pages) |
+| recipient taken from the business id, not the resolver | the scan #23 real-tree test red |
+| plant "melhorou" in pt / "will" in en | copy-lint red on `causal` / `prediction` |
+| drop the owner re-check from the action | 1 red (actions) |
+| ignore `proAllowed` in the body | 2 red (report-body) |
+| drop the `status = active` filter | 3 red (recipients) |
+| dedupe token by email in place of the member id | 1 red (deliver) |
+
+**Verification:** `npx tsc --noEmit --skipLibCheck` clean; `npx eslint .` 0 errors (113 warnings, none new); `npm run test:app` with the CI dummy env: 414 files, 6,469 passed, 1 todo. **`npm run test:db` was NOT run:** the local Supabase stack was not running this session and there is no migration since O2.2. O2.8 adds no Tier-1 test; the Tier-1 halves of #17 and #42 are O2.2, O2.4 and O2.7's.
+
+**UNPROVEN, not COVERED:** the report pages and the setting form have not been seen in a real browser (1280/640/320, dark mode, keyboard, real print), and the email has not been rendered through the real request config (see the finding below). The `/api` real-request proof (V.11) is still owed.
+
+**FINDING, NOT FIXED (outside O2.8, affects every email kind):** `i18n/request.ts` does not load `email.json` or `invite.json`, so `renderTemplate` (`getTranslations({ namespace: 'email' })`) would resolve no messages in a running server and return raw keys (`email.team_invite.subject`). Confirmed at the library level (`createTranslator` with a missing namespace returns the key plus `MISSING_MESSAGE`); not confirmed in a running server. The email tests build their own dictionary and cannot see it. This is a launch-checklist candidate and is raised to the founder; the monthly-report email inherits it.
+
+### V.13 — O2.9: the security review (ECC budget invocation 3 of 4)
+
+(The build guide says to record this as "V.5"; V.5 is O2.2's, so it continues the numbering.)
+
+**Scope read by `ecc:security-reviewer` (read-only, one dispatch):** `git diff cb0f96e72..HEAD` (O2.7b and O2.8) and the uncommitted O2.9 files directly (`lib/reports/pdf*.ts`, the PDF route, the `next.config.ts` diff), plus `isolation.ts`, `generate.ts`, `job.ts`, `deliver.ts`, `analytics-reports.ts`, `resolveReportRecipients`, the `monthly-report` template, the cron route, the reports pages, the setting action, `ReportBody`, `ReportEmailForm` and `proxy.ts`. It did not read `assemble.ts`, `analytics-worker-reads.ts` or the ADR text, and it ran nothing.
+
+**Its question:** can any path mix two tenants, take a recipient or business from input, reach Chromium before auth, fetch anything from inside Chromium, or emit an unescaped customer string into the page, the email or the PDF? **Answer: nothing found in categories 1 to 5 and 8** (tenant mixing; recipient or business from input; Chromium before auth, business and plan; Chromium fetch or script; unescaped output; non-owner setting change and unauthenticated cron). The report-id enumeration question: a foreign and an unknown id take the same path and the same 404, no timing difference seen; 401 after the uuid check reveals nothing. `proxy.ts`'s `/api` early return keeps the session refresh and skips only locale routing, the login redirect and the CSP, which are for HTML pages.
+
+| # | Severity | Finding | Disposition |
+|---|---|---|---|
+| 1 | MEDIUM, CONFIRMED | `lib/reports/pdf.ts`: a timeout that fires DURING `launch()` closes nothing (the browser is still null); when the launch later resolves the work carries on, its `finally` closes only the context, and an orphan Chromium runs beside the next render, breaking concurrency 1. | **FIXED.** A `settled` flag set in the outer `finally`; a launch that resolves after it is closed at once and the work throws. Test: a launch released after the deadline logs `browser:close` and never `context:new` or `setContent`. Mutation (remove the guard) turns it red. |
+| 2 | LOW, CONFIRMED | No per-user rate limit: one member can hold all three slots (1 running + 2 waiting) of an instance for up to 25 s each; the HTML build and CSS compile ran before the queue. | **PARTLY FIXED:** the route now asks `pdfQueueFull()` BEFORE building the document or compiling CSS and answers 503 + `Retry-After` (test asserts `buildReportHtml` was not called; mutation red). The per-user limit stays the accepted residual risk `S37-PDF-RATE-LIMIT` (backlog) plus the Vercel Firewall rule (launch-checklist). |
+| 3 | LOW, CONFIRMED | `TenantMismatchError` names both business ids; the report job sends business ids to Sentry (`extra`). Ids only, never content or addresses; the throw path is the leak path. | **ACCEPTED, recorded here:** the ids are what makes a leak debuggable. No content, address or token is ever in them. |
+| 4 | LOW, PLAUSIBLE | The PDF route captures a render error to Sentry; Sentry's request data carries the URL, which holds the report id; a protocol error that echoes page content is possible. | **ACCEPTED, tracked:** the capture is tagged and carries no report data from our side (test pins it). Scrubbing `event.request.url` for this route is the follow-up if Sentry shows echoed content. |
+| 5 | LOW, PLAUSIBLE | `resolveReportRecipients` reads `business_members.email`, the member row's own copy, which could be stale after an account email change. Never from input: a correctness risk, not an injection one. | **OPEN, to confirm:** whether that column is kept in sync with `auth.users` on an email change. Filed for the next touch of the members flow; not changed here. |
+| 6 | INFO, CONFIRMED, not exploitable | `oneLine` stripped CR, LF, LS and PS only. The subject interpolates only our own month label and Resend is called over JSON. | **FIXED anyway** (cheap): every C0 control, DEL, NEL, LS and PS are stripped; test and mutation. |
+
+**Also noted by the reviewer:** `getBusinessForUser` binds a multi-business user to ONE business (the codebase-wide convention), so there is no cross-tenant risk but also no switcher in these routes; and `/api` responses no longer get the CSP, which matters only for an API route that returns HTML (none in scope does).
+
+### V.14 — O2.9: the PDF route and the Chromium hardening
+
+**Closes (Tier 2):** #14 ANALYTICS-PLAN-GATE-SERVER (third arm: the PDF), #29 REPORT-OUTPUT-ESCAPING, #30 REPORT-PDF-ISOLATED.
+
+**Built.**
+- `GET /api/analytics/reports/[id]/pdf` (Node runtime). The order IS the argument: uuid (404), authenticate (401), the session business (404), the report by (that business, the id) (another business's id is the same 404 as an unknown one), the schema version and period (404), the CURRENT plan (A-5), the queue check (503), the document, and only then Chromium. No path, query, header or cookie is ever handed to the browser; the response is the bytes with `attachment`, `private, no-store`, `nosniff`, and nothing is stored.
+- `lib/reports/pdf.ts`: the sealed render behind an injected launcher: a FRESH context closed in `finally`; JavaScript disabled before any content; request interception on and EVERY request aborted (no allow-list, not even the document or a `data:` URL); `setContent` only; a 25 s hard timeout over the whole render including the launch, which also kills the browser; concurrency 1 per instance with at most 2 waiting (a fourth is refused, `PdfBusyError`).
+- `lib/reports/pdf-html.ts` and `pdf-css.ts`: the SAME `ReportBody`, rendered with `renderToStaticMarkup` (`await import`, per V.3), into a document with the CSP meta (the ADR text verbatim), a whitelisted `lang`, an escaped `<title>` and one inline `<style>`. The stylesheet is compiled per request with `tailwindcss`' own `compile()` (a declared dependency; no PostCSS, no new package beyond ruling A-3') for ONLY the classes in the rendered markup, from tailwind's theme, preflight and utilities plus the `@theme inline` and `:root` blocks of `app/globals.css`, so a token changed for the page changes the PDF. Only those four files can be read by the compiler (`loadStylesheet` refuses anything else, `loadModule` always throws), candidate classes with markup characters are dropped, and output containing a closing tag is refused.
+- `lib/reports/pdf-launch.ts`: the only place Chromium launches. `launchChromium` uses the bundled binary and takes no environment or request input; `launcherFor(path)` exists for a developer or a script and the route never calls it.
+- `puppeteer-core` ^25 and `@sparticuz/chromium` ^153 (the two ruling A-3' packages; scan #32 passes); `next.config.ts` marks both server-external and traces the files the route reads with `fs` (tailwind's CSS, `globals.css`, the Chromium archives).
+- The plan gate on the PDF path: the route renders the STORED payload and recomputes nothing (the `loadPortfolio` and `loadPortfolioWith` spies are never called), and a plan without Pro (a downgrade, or an unknown plan, failing closed) gets the plain "Available on Pro" lines and none of the Pro content.
+- `docs/launch-checklist.md`: the Vercel Firewall rate-rule row for the PDF route (A-7, not ordered against the cron rows) and the preview-deploy check; `docs/backlog.md`: `S37-PDF-RATE-LIMIT` with its un-defer trigger.
+
+**A finding of the real-browser spike that changed the design (record, not an ADR change).** The shared report tree contained two client-boundary modules, `lucide-react` (the result badge icons) and `next/link`. Under `react-dom/server` inside a route handler they are client references and cannot be invoked: the first run failed with "Attempted to call the default export of lucide-react Icon.mjs from the server". vitest renders do not expose this; only a real `next dev` and a real request did. Fix, keeping ONE component: the badge icons are inline SVGs of lucide's arrow-up, arrow-down and minus geometry, and `ReportBody`, `CampaignsSection` and `GatedSection` take an optional `plain` flag (default false: the live pages render as before) that renders links as plain text, which is also the right thing in a forwarded document. The PDF passes `plain: true`.
+
+**Real-browser transcript (a temporary scratch route in a real `next dev`, local Windows Chrome via `launcherFor`; deleted, never committed).** Clean report: 36.9 KB of HTML with the inline stylesheet, a 79 KB PDF starting `%PDF-`, 0 blocked requests. Hostile RAW markup injected after React's escaping (an `<img>`, a `<link rel=stylesheet>` and a `<script>` that calls `fetch`) against a listening server: WITH the CSP, 0 requests reached even the interceptor; WITHOUT the CSP, the interceptor aborted exactly the image and the link and the script never ran (JavaScript off); the server counted 0 hits in every run. Each layer holds on its own. A screenshot of the same HTML showed the tokens, tables, badges and SVG charts rendering as on the page.
+
+**Redden transcript (each applied with the changed line printed, the owning test run, restored byte-identical):**
+
+| Mutation | Result |
+|---|---|
+| launch Chromium before authentication (the guide's "launch before the plan check") | 11 red (route) |
+| let a non-http request through the interception (the guide's "allow one image request") | 1 red (pdf) |
+| remove the CR/LF strip | 2 red (template) |
+| remove the late-launch guard | 1 red (pdf) |
+| remove the early queue-full refusal | 3 red (route) after the test was made discriminating: the first version stayed green because `renderPdf` refuses with the same 503, so the test now asserts `buildReportHtml` was not called |
+| remove the CSP meta | 1 red (escaping) |
+| leave JavaScript enabled | 1 red (pdf) |
+
+**Found by a test during the build (fixed):** the CSS compiler was first cached at module level. Tailwind's `build()` is incremental and remembers every candidate, so one refused candidate would have poisoned every later render and classes would have leaked between requests. It now compiles fresh per request and caches only the input text; a regression test asserts one request's classes are absent from the next.
+
+**Verification:** `npx tsc --noEmit --skipLibCheck` clean; `npx eslint .` 0 errors (113 warnings, none new); `npm run test:app` with the CI dummy env: 417 files, 6,526 passed, 1 todo; the O2.1 scans now cover `app/api/analytics` and the PDF modules (`EXPECTED_PENDING` is empty). `npm run test:db` was NOT run (no DB behaviour touched; no migration since O2.2).
+
+**UNPROVEN, not COVERED:** `@sparticuz/chromium` on Vercel's Linux runtime (cold start, memory, the traced files) until a preview deploy; the Vercel Firewall rule (dashboard, never CI); the report pages, the setting form and the PDF as seen in a browser at 1280/640/320, dark mode and keyboard (O2.11); real print fidelity of the PDF over multiple pages (the screenshot showed one tall page; page breaks rely on `break-before: page` in the stylesheet); the `/api` real-request proof (V.11) and the email namespace finding (V.12) remain open.
+
+### V.15 — O2.10: the design pass
+
+**Closes (Tier 2):** #33 `ANALYTICS-I18N-COMPLETE`: key parity en, pt and es across the analytics namespace (the report namespace included), the monthly-report email strings and the nav. The design pass added ONE key, `analytics.report.actions.pdf` ("Download PDF", "Transferir PDF", "Descargar PDF"), to all three locales in the same change; `lib/i18n/analytics-parity.test.ts` (identical keys and ICU placeholders) and the §8.4 copy lint were re-run green over the final tree, and the worst-case tests render every surface in all three locales with no missing key. The design-quality floor (focus, targets, hierarchy, print, worst-case data) is proven in MARKUP only; the layout half is UNPROVEN until O2.11.
+
+Five skills ran in the guide's order, each against its named part of §10. Every suggestion that needed something the ADR forbids was overruled.
+
+| Skill | Against | What changed | Overruled or declined |
+|---|---|---|---|
+| `/taste-skill` | §5.3, §10.5: the report as a document | Larger month heading and a quiet meta line; summary set at reading size in a 65ch measure; a hairline above every section and one step larger section headings (arbitrary variants scoped to the report article, so the live pages are untouched); generous rhythm; headings kept with their content in print; the methodology set as a muted footnote. Tailwind and existing tokens only. | The skill is for landing pages: its hero, bento, motion, marquee and image rules were not applicable and not applied. |
+| `/impeccable` | §10.1, §10.2, §8.2, §10.6 | A full-contrast focus indicator (`FOCUS`) on every control; the "Details" disclosure made a 24 px target; **the report page's Download PDF action** (§10.1) added as a plain `<a download>` to the route, from the loaded row's own id, outside `ReportBody` and `print:hidden`, with the copy in en, pt and es. | **Print** is NOT built as a button: `window.print()` needs a client island and §10.6 allows exactly two. The browser's own print works with the print stylesheet. A recorded deviation from §10.1. The skill's "update to v4.5.0" prompt was not acted on. |
+| `/ui-ux-pro-max` | §10.3: chart palette, type scale | **Measured** WCAG contrast from the oklch tokens in both themes (marks 4.5 to 19, 7.6 to 16; `muted-foreground` text 4.53 light, 7.63 dark): the palette PASSES and was not changed. The faint light axis baseline (`border`, 1.21) now uses `muted-foreground` (4.53); the smallest chart labels went from 9 and 10 to 11 and 12 units. | No new colours, fonts or palette. Making the sr-only chart tables visible below 640 px (the real fix for the illegible labels at 320) needs real-browser layout verification; an earlier sr-only table overflow was exactly the 320 px regression, so it is deferred to O2.11 as a MEASURED finding: at 320 px the 640-unit SVG renders at about 0.45 scale (labels about 5 px); the table is the text alternative and no number exists only as a shape. |
+| `/emil-design-eng` | the final polish | A hover state and an instant pressed state (`active:opacity-80`) on every button and the Download PDF link; `disabled:cursor-not-allowed`; `hover:text-foreground` on the disclosure; print: rows and charts kept whole and sub-headings kept with their content. | No transition, no scale-on-press, no entrance animation: §10.6 says no animation by default, and the constraint set allowed only gated colour or opacity changes. |
+| `/break-ui` | worst-case data | Run as Tier-2 vitest (`components/analytics/worst-case.test.tsx`, 33 tests), NOT as a demo toggle (no demo surface in product code). Real components and the real en, pt and es translators over the real loader's portfolio with the customer-supplied values replaced: a 120-character campaign name, a 60+ character unbreakable handle, one-letter, Japanese, Arabic and emoji names, null names and labels, 1,000,000 and 0 counts, zero posts, 1,000 posts rows. | Fixed what it exposed (below). |
+
+**What `/break-ui` exposed, and the fix (Tailwind and attributes only):** table cells holding customer strings could not shrink or break (`TABLE.cell` is now `min-w-0 wrap-anywhere`); activity lines, pattern text and the report header line likewise (`wrap-anywhere`); an empty campaigns list rendered a table with a header and nothing under it (the section is now omitted); customer names had no direction (`dir="auto"` on campaign and account names); a filter `<select>` sized itself to its longest option, which is a customer name (`max-w-full`).
+
+**A real PDF bug the work found (fixed):** React writes `&` in an attribute as `&amp;`, and `extractClasses` fed Tailwind the raw text, so every arbitrary-variant class (`[&_section]:border-t`, `print:[&_tr]:break-inside-avoid`) was a candidate that matched nothing and its rule silently vanished from the PDF only (the browser decodes the entity, so the page looked right). `extractClasses` now decodes `&amp;`; tests assert the decoded tokens and that the compiled PDF stylesheet really contains the section hairline and the print break rules.
+
+**Redden transcript (each applied, the owning test run, restored byte-identical):** cells that cannot shrink: 4 red; the empty campaigns table back: 1 red; `dir="auto"` removed: 1 red; the entity not decoded: 2 red; the select unbounded: 1 red; the Download PDF link built from the URL period: 2 red; the button focus style removed: red after the first version stayed green (the portfolio render holds no button; the test now renders the month picker).
+
+**Verification:** `npx tsc --noEmit --skipLibCheck` clean; `npx eslint .` 0 errors (113 warnings, none new); `npm run test:app` with the CI dummy env: 419 files, 6,568 passed, 1 todo. `test:db` was NOT run (the local stack is down; no migration since O2.2).
+
+**UNPROVEN, not COVERED (all of it is O2.11):** the real layout at 1280, 640 and 320 px (the markup tests prove a string CAN shrink and wrap, not that every box fits), 200% zoom, dark mode, RTL, the keyboard walk, the visual focus ring, print fidelity over several pages, and the PDF as a document. The new `listReportIndex` jsonb-path select (`stub:payload->>stub`) is proven against a fake builder only, not against a live PostgREST.
+
+### V.16 — O2.10: the React review (ECC budget invocation 4 of 4)
+
+**Scope read by `ecc:react-reviewer` (read-only, one dispatch):** the working-tree files of `app/[locale]/(dashboard)/analytics/**` (error, reports page, `[period]` page, actions), `components/analytics/**` (ReportEmailForm, charts, shared, ReportBody, PortfolioView, key lines of PostsView), the head of `lib/reports/pdf-html.ts` and the PDF route by grep. It did not read the committed range, `git diff`, `analytics/page.tsx`, `posts/page.tsx`, `loading.tsx` or most of PostsView.
+
+**Its question:** is any component a Client Component that need not be; does any receive more data than it renders; is any chart a focus trap or colour-only; does anything break the Base UI rules (`asChild`) or the Server Component default? **Answer: nothing found** in any of those; no hook in the shared report tree (so nothing that would break `renderToStaticMarkup` in the PDF route); only `ReportEmailForm` and `error.tsx` are `use client`; the form's props are the Server Action, a three-value union and strings only; `useActionState` is correct; the form's label, description and live region are right; all three `Link` call sites in the report tree are guarded by `!plain`; `dir="auto"` and `wrap-anywhere` are valid; the Download PDF anchor takes its id from the loaded row.
+
+| # | Severity | Finding | Disposition |
+|---|---|---|---|
+| 1 | LOW, CONFIRMED | `reports/page.tsx` called `listReports` (`select('*')`), loading the full payload of up to 24 reports for a page that reads one flag. Server-only over-fetch; nothing reaches a client island. | **FIXED:** a new `listReportIndex` selects `id, period_month, stub:payload->>stub` (same filter, order and bound), so the payload never leaves the database. Unit-tested against a fake builder; **UNPROVEN against a live PostgREST** (a Tier-1 read test would prove the alias and the text-to-boolean mapping). |
+| 2 | LOW, CONFIRMED | The "Saved." message in the report-email form is not cleared when the owner edits the select afterwards. | **ACCEPTED:** clearing it needs a third piece of client state in the island for one live-region message; the next save or error replaces it. |
+| 3 | LOW, CONFIRMED benign | `key={line.key + i}` (summary list) and `key={i}` (chart dots) on lists derived from an immutable stored payload. | **LEFT:** no state can attach to the wrong item. |
+| 4 | LOW, PLAUSIBLE | `months[0]` and `points[0]` in the chart components throw on an empty array; the invariant (a fixed-length loop) lives in the loader. | **LEFT:** guarding it would duplicate the loader's invariant; revisit if the window ever becomes configurable. |
+
+### V.17 — O2.11: real-browser verification (the build guide's "V.7"; V.7 is taken)
+
+**Recorded, never counted as COVERED.** Chromium (Playwright) against `next dev -p 3100` (Turbopack) on Windows 11, backed by the local Supabase stack (db, rest, auth, kong; all 129 migrations applied), the O2.1 fixture seeded with `seedPortfolio`. Business A is Pro (Lisbon, `en`), business B is Plus (São Paulo, `pt`). Both locales were driven at every width, so the pt pass is real (premise 8: `QA-LOCALE-HEADER-DROPPED` is fixed by `2f2b33676`). Screenshots are under `docs/reviews/assets/session-37/` (26 files).
+
+**Setup facts a reader needs.**
+
+- The fixture businesses were made *eligible* for a report on the local database only: `trial_state.trial_started_at` set, a dummy unique `stripe_subscription_id` on each business. Reports for 2026-03 were then generated with `generateReportForBusiness(id, FIXTURE_NOW)` (A: `advanced`, B: `basic`). None of this is in a migration or a fixture file.
+- The UI cannot reach business B: `getBusinessForUser(client, user.id)` is called with no preferred business, so it returns the first owned business by `created_at, id`. B was reached by moving B's `created_at` earlier on the local database for the Plus pass and moving it back. There is no active-business selector today (open item, not an analytics defect).
+- `document.documentElement.scrollWidth` reads the viewport width minus the 15 px vertical scrollbar on any page that scrolls, so a value of 1265, 625 or 305 means "no horizontal overflow, page scrolls vertically" and 1280, 640 or 320 means the page fits without scrolling.
+
+**`scrollWidth` table.** Identical in `en` and `pt`; every cell is at or below its viewport. Business A: 54 page × width × locale cells, then 48 re-measured after the fixes below. Business B: 42 cells, 28 of them (320 and 640) repeated after the fixes.
+
+| Page | 1280 | 640 | 320 |
+|---|---|---|---|
+| `/analytics?month=2026-03` populated (A: all sections; B: gated, LinkedIn unavailable) | 1265 | 625 | 305 |
+| `/analytics?month=2026-04` immature (A) | 1265 | 625 | 305 |
+| `/analytics?month=2026-01` thin (A) | 1265 | 625 | 305 |
+| `/analytics?month=2026-02` (A, B) | 1265 / 1280 | 625 / 640 | 305 / 320 |
+| `/analytics?month=2026-10` empty (A, B) | 1280 | 640 | 320 |
+| `/analytics/posts?month=2026-03&platform=linkedin` filtered (A, B) | 1280 | 640 | 305 |
+| `/analytics/posts?month=2026-03` (A, B) | 1265 / 1280 | 625 / 640 | 305 |
+| `/analytics/reports` (A, B) | 1280 | 640 | 320 |
+| `/analytics/reports/2026-03` (A, B) | 1265 | 625 | 305 |
+| Error boundary, `/analytics` and `/analytics/posts` (A) | 1280 | n/a | 320 |
+| Dark (`.dark` on `<html>`), `/analytics?month=2026-03` (A) | 1265 | n/a | 305 |
+| Print media, `/analytics/reports/2026-03` at 794 px (A4) | 779 | n/a | n/a |
+
+**Result for constraint #35 (ANALYTICS-SHELL-320, manual half): no 320 px `scrollWidth` exceeds 320, on any page, in either locale, in either plan, in dark mode or in the error state. #35 is closed.** This measures the document. It does not see content clipped by `overflow: hidden`, which is why the screenshots were read as well (see the findings).
+
+**States seen at least once.** Populated (A), immature (A, 2026-04), thin (A, 2026-01, and per account in A), empty (A and B, 2026-10), unavailable (LinkedIn, A and B), gated (B: every Pro section renders the "Available on Pro" line with a link), error (below), report (A advanced, B basic).
+
+**Error** was forced two ways. Stopping the PostgREST container gives the app-wide "Something went wrong" page, because the dashboard layout fails before the analytics segment does; that is the shell's boundary, not ours. Revoking `SELECT` on `post_outcomes` from `authenticated` (restored afterwards; grants verified identical) fails only the analytics reads and renders `analytics/error.tsx` inside the shell: "We couldn't load your results." with a Reload button, in `en` and `pt`, HTTP 200, no table name, no database wording, no overflow at 320.
+
+**Keyboard.** Tab order on `/analytics`, the report and the reports index, at 1280. Every stop inside `<main>` has a visible 2 px focus ring: *See every post*, *Monthly reports*, the month picker, *Show*, the three campaign links; *Back to monthly reports*, *Download PDF*; the report-email select and *Save*; the report link. At 640 the details disclosure opens and closes with Enter (ring 2 px). **Not covered by the ring: the dashboard sidebar links and the user-menu button show no outline** (outside ADR 0031; see the observations).
+
+**Print.** With print media emulated at A4 width the sidebar, nav, form and PDF link are hidden and the report fits (779 px). The browser's own `page.pdf` of the page is a valid `%PDF-` of 4 pages. Rows, charts and sub-headings stay whole in the screenshot.
+
+**Defects found, and what was done.**
+
+| # | Defect | Disposition |
+|---|---|---|
+| D1 | At 320 px the stacked-card label (`::before` of `TABLE.cell`) shrank to a few characters and broke mid-word: "Veredic / to" (pt campaign card), "Re / su / lts" and "Acc / ount" (A, Account by account). Cause: the cell's `wrap-anywhere` is inherited by its `::before` flex item, whose min-content is one character. | **FIXED** in `components/analytics/shared.tsx`: `max-sm:before:shrink-0 max-sm:before:max-w-[45%] max-sm:before:wrap-break-word`. Test: `worst-case.test.tsx` (the class set, and that the two utilities compile to real CSS). Reddened by removing `shrink-0`. Re-measured: labels render whole (Veredicto 63 px, Campaign 66 px), `scrollWidth` unchanged. |
+| D2 | Counted strings carried a bare `{count}`: "1 publicações no LinkedIn", "1 campanhas ativas, 1 concluídas", "1 posts published on X". | **FIXED** for `activity.line`, `activity.total`, `activity.campaigns`, `exclusions.summary` and the engagement count, in `en`, `pt`, `es`, as ICU plurals (pt has an explicit `=0` branch, because `Intl` treats 0 as "one" in Portuguese and "0 publicação" is wrong in pt-PT). Test: `lib/i18n/analytics-parity.test.ts` renders the real messages through `createTranslator` at 0, 1 and 2 in all three locales and checks no raw ICU survives. Reddened by restoring the bare `{count}` in pt. Every real consumer already uses next-intl's `getTranslations`, so the page, the stored report summary, the email and the PDF all render plurals. |
+| D3 | The posts-table Result cell put the rate and the badge in one row beside the label; at 320 px the badge wrapped to four lines in a ~70 px column. | **FIXED** in `PostsView.tsx` (`max-sm:flex-col max-sm:items-end max-sm:gap-1 max-sm:text-right`). **No test**: the change is a layout class and the worst-case suite has no assertion that can tell it from its absence; verified by screenshot (`fix_posts-result-cell_pt_320.png`). |
+| D4 | `state.immature` and `state.thin` still print "1 measured posts so far" and "Final for 1 posts" at a count of 1. | **NOT FIXED, by design.** They are the §8.2 literals, pinned verbatim by `analytics-parity.test.ts`; editing locked copy is an ADR amendment, not a Builder change. Proposed amendment: ICU plurals on those two keys. |
+| D5 | **Observed patterns** renders the generic empty-state literal "Nothing published yet. Results appear here after Jemip publishes your first post." on a month with 13 published posts, because the section reuses `state.empty` when no pattern qualifies. The sentence is false there. | **NOT FIXED**, same reason (§8.2 literal), and it needs a founder decision on the wording. Visible in `A_en_1280_portfolio-populated-2026-03.png` and the print render. |
+
+**Observations, outside ADR 0031, not changed.**
+
+- A hydration warning on every full page load in dev: `<body className="min-h-full flex flex-col">` differs between server HTML and client, in the root layout. The live DOM has the class and `display: flex`, so there is no visible effect; a dev-only React message, plus a dev-only `eval()`/CSP console error, both also present on `/en/login`.
+- The dashboard sidebar links and the user-menu button have no visible focus indicator (above).
+- The 12-month trend chart labels are about 5 px at 320 px (the known item; the sr-only chart table is not shown at that width).
+- No active-business selector, so a multi-business owner always lands on the oldest business.
+
+**What is NOT proven by this step.**
+
+- **The PDF route has not rendered a PDF in a served request.** `GET /api/analytics/reports/<id>/pdf` returned 500 here. Cause, confirmed by calling `launchChromium` directly: `Failed to launch the browser process: spawn C:\Users\tiago\AppData\Local\Temp\chromium ENOENT`. `@sparticuz/chromium` is a Linux binary, so the production launch path cannot run on this machine, and there is deliberately no environment override (V.14). The first-page screenshot of the downloaded PDF that the guide asks for was therefore not taken. What stands is the O2.9 real-browser spike (V.14) and the print render above. The Vercel preview (cold start, memory, traced files) stays the open launch-checklist row.
+- **200% zoom** was not run as a zoom; it is the same layout as the next width down (1280 at 200% is the 640 layout, 640 at 200% is the 320 layout), both measured.
+- **RTL** was not run; `dir="auto"` is on customer strings and is asserted in the worst-case tests only.
+- **Real data volumes.** The fixture is 30-odd posts; a business with thousands of posts was not loaded.
+
+**Commit scope.** `shared.tsx`, `PostsView.tsx`, the three `analytics.json` files, two test files, this entry and the screenshots.
+
+### V.18 — O2.12: the close-out checks (the build guide's "V.8"; V.8 is taken)
+
+Head at the time of writing: the commit after `24a2d0042`. BASE for every comparison is `0da603b4a` (V.2).
+
+**(a) The scans, re-run at HEAD.** `lib/analytics/source-scans.test.ts` and `lib/interview/__tests__/source-scans.test.ts`: 2 files, **80 tests, all passing**. No root is pending: the `it.todo` in `source-scans.test.ts` is now the closing assertion (`EXPECTED_PENDING` is `[]`, **and** every one of the 7 roots has production files on disk right now; two independent reads, so a stale list or an emptied root cannot pass alone). Every `PLANTED POSITIVE` test still passes, which means every detector still flags its planted violation; every `PLANTED NEGATIVE` still passes; every `REAL TREE` scan is green over a non-empty tree.
+
+**(b) SHARED-FUNCTION CALLERS (ADR 0031 §12.2), `git grep` at HEAD, production code only.**
+
+| Function | Callers at HEAD | New since BASE | Tests that exercise each caller |
+|---|---|---|---|
+| `loadCampaignLearningView` | `campaigns/[id]/page.tsx:73` | none | `lib/outcomes/__tests__/campaign-view.load.test.ts` (3); Tier-1 `outcome-campaign-view-rls.test.ts`; scan #20 asserts no second caller |
+| `unavailableMetricsPlatforms` | `lib/outcomes/campaign-view.ts:157` | none | `campaign-view.test.ts` (11); scan #20 |
+| `metricsReadAvailableFor` | `campaign-view.ts:130` (existing); **`lib/analytics/load.ts:59`** (new: the default of `LoaderDeps.metricsReadAvailable`) | **one textual caller.** The report assembler does not call it: it calls `loadPortfolioWith(..., { ...input.loaderDeps })` (`assemble.ts:123`) and so reaches it through the loader's default. The ADR's "two new callers" is one new call site and two consumers of it | `campaign-view.test.ts` (existing); `LA/load.test.ts:259-276, 392` (capability injected true, false and a spy); `LR/assemble.test.ts:131-144` (the assembler arm, flipped on and off by injection); scan #1a asserts nothing but this name is imported from `lib/social` |
+| `listTopPostMetrics` | `lib/memory/performance.ts:77` | none | `lib/memory/performance.test.ts` (18) and the three `*.context-equivalence` tests, **unmodified since BASE**; scan #20 |
+| `getPlanCapabilities` | `billing/page.tsx:38-39`, `lib/campaigns/enforcement.ts:25`, `lib/members/seats.ts:18`, and inside `lib/stripe/plan.ts` (`:78, :92, :97`, as at BASE) | none (the one new mention, `plan.ts:120`, is a comment) | `lib/stripe/plan.test.ts`; Tier-1 `seat-cap-enforcement.test.ts`. `hasAdvancedAnalytics` (new, `plan.ts:124`) is called from `lib/analytics/load.ts:238, :518` and `app/api/analytics/reports/[id]/pdf/route.ts:58`, and is tested in `plan.test.ts`, the loader, the assembler and the PDF route tests |
+| `eligibleValue` | `lib/outcomes/normalise.ts:171` (existing); **`lib/analytics/exclusions.ts:35`** (new) | exactly one | `lib/outcomes/__tests__/normalise.test.ts` (unmodified since BASE); `LA/exclusions.test.ts` (a spy that keeps the real function running) |
+| `reject_outcome_table_update()` (SQL) | triggers on `post_dimensions` and `post_outcomes` (`20260919110000`); **`analytics_reports`** (`20261004120000:47`) | one trigger | Tier-1 `analytics-reports-constraints.test.ts`, `analytics-reports-rls.test.ts` |
+
+**The V.2 baseline at HEAD (a drop is a STOP, even when green; there is none):** `campaign-view.load` 3 (3), `campaign-view` 11 (11), `performance` 18 (18), `generate.context-equivalence` 7 (7), `context-callers.context-equivalence` 6 (6), `actions.context-equivalence` 5 (5), `no-cross-business` **37 (33)**: 87 now against 83 at BASE, no drop. None of the ten files the ADR calls "unmodified" has a diff since BASE. **DEFINER audit gate: 3** on the local database (`accept_invite(uuid,uuid)`, `get_user_business_ids()`, `user_can(uuid,text)`), equal to V.2; this was measured on the long-lived local database, so the `db-tests` run on a fresh stack is the authority. The A-3 packages are the five ruled ones (scan #32, green).
+
+**(c) Amendments (ADR §14), each confirmed.** ADR 0010 §D2.5: the `analytics_reports` row is at `0010-legal-surface.md:1095` with its note at `:1175`, both from O2.2's commit `470445b0b`. ADR 0026: a dated note on §VI.2 appended (`hook_type`'s display is owned by ADR 0031 §2.6; `proof_type` still deferred). ADR 0014: a dated note appended (the `monthly-report` kind). `docs/launch-checklist.md`: the `generate-reports` schedule row and the PDF route's Firewall row (with the preview-deploy check) from O2.8 and O2.9.
+
+**(d) `docs/backlog.md`.** Every §14 deferral now has a row with its un-defer trigger (new §3.4); the UTM paragraph's owner is corrected (T1-B owns neither UTM nor conversion ingestion; both are unowned and post-launch); the stale "not yet merged" note on `QA-REAL-API-SOSH-FIELD` and `QA-LOCALE-HEADER-DROPPED` is corrected (merged as `2f2b33676`, PR #18) and both rows moved to §6. Seven findings of the O2.11 browser pass are filed there too (`S37-STATE-LITERALS`, `S37-PDF-ON-VERCEL`, `S37-MEMBER-EMAIL-SYNC`, `S37-ACTIVE-BUSINESS`, `S37-SHELL-FOCUS`, `S37-A11Y-UNRUN`, `S37-DEV-HYDRATION-WARNING`).
+
+**(e) The constraint → CI map.** Rule (ADR 0015): "covered" means **executed green in CI**, never authored. **Nothing has been pushed, so no row below is called COVERED.** Each row names the job that will execute it, by the repository's own selection rules: `app-tests` runs `npm run test:app` (`vitest run app/ lib/ components/ scripts/eval/`, skip-guarded by `assert-no-empty-suite.mjs`); `db-tests` runs `vitest run supabase/__tests__` against a live Postgres (on pull requests that change `supabase/**`, `lib/db/**`, `lib/members/**`, `lib/config.ts` or its own workflow, which this branch does, and on every push to master). Every file in the table sits under one of those globs, so none is `AUTHORED-NOT-EXECUTED` by construction. Whether each ran green in CI at the PR head is read after the push, not claimed here.
+
+Paths: `LA` = `lib/analytics/__tests__/`, `LR` = `lib/reports/__tests__/`, `LD` = `lib/db/__tests__/`, `CA` = `components/analytics/`, `RP` = `app/[locale]/(dashboard)/analytics/reports/`, `SS` = `lib/analytics/source-scans.test.ts`, `CL` = `lib/analytics/copy-lint.test.ts`, `PARITY` = `lib/i18n/analytics-parity.test.ts`, `PDFR` = `app/api/analytics/reports/[id]/pdf/route.test.ts`, `SQL` = `supabase/__tests__/`.
+
+| # | Constraint | Tier | Test file(s) | CI job |
+|---|---|---|---|---|
+| 1 | `ANALYTICS-READ-ONLY` | 2 (scan) | `SS` (arms a and b) | app-tests |
+| 2 | `ANALYTICS-NULL-NEVER-ZERO` | 2 | `LA/exclusions.test.ts`, `LA/rates.test.ts`, `LA/view-model.test.ts`, `CA/analytics-surfaces.test.tsx` | app-tests |
+| 3 | `ANALYTICS-BASIS-NEVER-MIXED` | 2 | `LA/rates.test.ts` | app-tests |
+| 4 | `ANALYTICS-LINKEDIN-DISCLOSED` | 2 | `CA/analytics-surfaces.test.tsx` | app-tests |
+| 5 | `ANALYTICS-UNAVAILABLE-FROM-CAPABILITY` | 2 | `LA/load.test.ts`, `LR/assemble.test.ts` | app-tests |
+| 6 | `ANALYTICS-FOUR-STATES` | 2 | `CA/analytics-surfaces.test.tsx` | app-tests |
+| 7 | `ANALYTICS-DISPLAY-FLOOR` | 2 | `LA/floors.test.ts` | app-tests |
+| 8 | `ANALYTICS-N-SHOWN` | 2 | `CL` | app-tests |
+| 9 | `ANALYTICS-NO-CAUSAL-COPY` | 2 | `CL` | app-tests |
+| 10 | `ANALYTICS-NO-DELTA` | 2 | `LA/view-model.test.ts` | app-tests |
+| 11 | `ANALYTICS-EXCLUSIONS-SHOWN` | 2 | `LA/exclusions.test.ts`, `LA/load.test.ts`, `LA/view-model.test.ts`, `CA/analytics-surfaces.test.tsx` | app-tests |
+| 12 | `ANALYTICS-COVERAGE-DISCLOSED` | 2 | `CA/analytics-surfaces.test.tsx`, `LA/breakdowns.test.ts` | app-tests |
+| 13 | `ANALYTICS-NO-LOG-LIFT` | 2 + scan | `SS`, `LA/view-model.test.ts` | app-tests |
+| 14 | `ANALYTICS-PLAN-GATE-SERVER` | 2 | `LA/load.test.ts`, `LR/assemble.test.ts`, `lib/stripe/plan.test.ts`, `PDFR` | app-tests |
+| 15 | `ANALYTICS-ACCOUNT-SLICEABLE` | 2 | `LA/load.test.ts` | app-tests |
+| 16 | `ANALYTICS-AUTHENTICATED-READS` | 2 + scan | `LD/analytics-reads.test.ts`, `SS`; Tier-1 `SQL/analytics-reads.test.ts` | app-tests, db-tests |
+| 17 | `ANALYTICS-TENANT-BOUNDED` | 1 + 2 | `SQL/analytics-reports-rls.test.ts`; `RP/reports-pages.test.tsx` | db-tests, app-tests |
+| 18 | `ANALYTICS-BOUNDED-INDEXED` | 2 + 1 | `LD/analytics-reads.test.ts` (limit and order, recording client); `SQL/analytics-reads.test.ts` (the index) | app-tests, db-tests |
+| 19 | `ANALYTICS-NORTHSTAR-FENCED` | 2 (scan) | `SS` | app-tests |
+| 20 | `ANALYTICS-CAMPAIGN-VIEW-SINGLE-SOURCE` | 2 + scan | `SS`, `lib/outcomes/__tests__/campaign-view.load.test.ts` (unmodified) | app-tests |
+| 21 | `REPORT-SNAPSHOT-IMMUTABLE` | 1 | `SQL/analytics-reports-constraints.test.ts`, `SQL/analytics-reports-rls.test.ts` | db-tests |
+| 22 | `REPORT-ONE-PER-PERIOD` | 1 + 2 | `SQL/analytics-reports-constraints.test.ts`, `SQL/report-generation.test.ts`; `LR/due.test.ts`, `LR/generate.test.ts` | db-tests, app-tests |
+| 23 | `REPORT-MEMBERS-ONLY` | 2 + scan | `LD/report-recipients.test.ts`, `LR/deliver.test.ts`, `SS` | app-tests |
+| 24 | `REPORT-NUMBERS-FIDELITY` | n/a | no model (§6); recorded for `S37-NARRATIVE` | none |
+| 25 | `REPORT-FALLBACK` | 2 | `LR/generate.test.ts` | app-tests |
+| 26 | `REPORT-COST-CEILING` | n/a | no model (§6); recorded for `S37-NARRATIVE` | none |
+| 27 | `REPORT-RLS-ISOLATED` | 1 + 2 | `SQL/analytics-reports-seed.test.ts`, `SQL/report-generation.test.ts`; `LR/isolation.test.ts`, `LR/generate.test.ts`, `LR/assemble.test.ts` | db-tests, app-tests |
+| 28 | `REPORT-CASCADE-COMPLETE` | 1 + 2 | `SQL/analytics-reports-purge.test.ts`; `LD/d2.5-analytics-reports-row.test.ts` (the §D2.5 row) | db-tests, app-tests |
+| 29 | `REPORT-OUTPUT-ESCAPING` | 2 | `LR/escaping.test.tsx` | app-tests |
+| 30 | `REPORT-PDF-ISOLATED` | 2 | `LR/pdf.test.ts`, `PDFR`. **The Vercel Firewall rule and the preview-deploy check are launch-checklist rows, not CI** | app-tests |
+| 31 | `REPORT-METHODOLOGY-PRESENT` | 2 | `LR/assemble.test.ts` | app-tests |
+| 32 | `ANALYTICS-NO-NEW-DEPENDENCY` | 2 (scan) | `SS` | app-tests |
+| 33 | `ANALYTICS-I18N-COMPLETE` | 2 | `PARITY`, `CL`, `lib/email/templates/__tests__/cross-kind.test.ts`, `.../monthly-report.test.tsx`, `CA/worst-case.test.tsx` | app-tests |
+| 34 | `ANALYTICS-A11Y-FLOOR` | 2 | `CA/analytics-surfaces.test.tsx` (markup). Keyboard and focus in a real browser: V.17 | app-tests |
+| 35 | `ANALYTICS-SHELL-320` | 2 + manual | CI: `PARITY` (`nav.team`). **Manual half closed in V.17** (no 320 px `scrollWidth` above 320, measured) | app-tests; manual, recorded |
+| 36 | `ANALYTICS-NO-SILENT-TRUNCATION` | 2 + 1 | `LA/load.test.ts`, `LD/keyset-pager.test.ts`; `SQL/analytics-reads.test.ts` | app-tests, db-tests |
+| 37 | `ANALYTICS-EXCLUSION-REASON-FROM-NORMALISER` | 2 | `LA/exclusions.test.ts` | app-tests |
+| 38 | `ANALYTICS-NO-MEMORY-WRITER` | 2 (scan) | `SS` | app-tests |
+| 39 | `REPORT-NO-MODEL` | 2 (scan) | `SS` | app-tests |
+| 40 | `REPORT-ELIGIBLE-LIVE-ONLY` | 2 + 1 | `LD/report-liveness.test.ts`, `LR/generate.test.ts`; `SQL/report-generation.test.ts` | app-tests, db-tests |
+| 41 | `REPORT-EMAIL-KIND-WIDENED` | 1 | `SQL/analytics-reports-constraints.test.ts` (the new kind and the six prior kinds) | db-tests |
+| 42 | `REPORT-EMAIL-SETTING-ADMIN-ONLY` | 1 + 2 | **Narrowed to OWNER by ruling O-3.** `SQL/analytics-reports-constraints.test.ts` (`report_email`); `RP/actions.test.ts` | db-tests, app-tests |
+
+**Reading the table.** 40 rows have a test that a CI job runs; #24 and #26 are NOT APPLICABLE (no model). #35's browser half is recorded in V.17, which is a record and not CI coverage. #30's firewall rule and #5's real-capability flip (LinkedIn granting the permission) are outside CI by nature.
+
+**What has actually executed, locally, on this tree:** `npm run test:app` 420 files, 6,594 tests passed, 0 todo (the it.todo is now a real assertion). Tier-1: the six O2 analytics files, **63 tests, 0 skipped**, plus the four older files that name email kinds or the DEFINER allowlist, **49 tests**, against the local stack (db, rest, auth, kong; the other services are stopped). Full `npm run test:db`: 121 of 122 files and 1,380 of 1,381 tests passed. The one failure is `supabase/__tests__/plan-proposals-current-version-read.test.ts` (an ADR 0027 `EXPLAIN` test: the planner chose `campaign_plan_proposals_brief_id_idx` plus a Sort instead of `campaign_plan_proposals_brief_version_idx`). This branch did not touch that test, that table or its index, and `ANALYZE` did not change the result. The cause was not determined, so it is recorded as an unexplained LOCAL failure and not as a CI result. **This is local evidence, not CI.** The local database is long-lived and not a fresh `supabase start`, and V.2 records that its function ACLs differ from a fresh one's.
+
+### V.19 — O2.12: measurement (ADR §12.5), REPORTED, never called COVERED
+
+**What the seeded data shows.** In a real browser against the fixture (V.17): every state renders (populated, immature, thin, empty, unavailable, gated, error, report) at 1280, 640 and 320 px in **two** locales (`en`, `pt`; `es` is covered by key-parity and copy tests only, not driven in a browser); the displayed numbers match the fixture's literals (business A, X, March: 13 published, 7 measured of 10 with 3 not included, typical rate 3.1% in the range 0.0%–6.4%, 4 of 6 beating the usual; February n = 5; January thin), and the gate holds (business B on Plus shows every Pro section as the "Available on Pro" line). The immutability, idempotence, tenant isolation and recipient rules are Tier-1 and Tier-2 results (V.5, V.10, V.12), not browser observations.
+
+**What it does not show, and stays UNPROVEN until real tenants exist (`S37-REAL-TENANT-REVIEW`):**
+
+- whether the report is useful, and to whom: nothing here measures that anyone reads it, forwards it or acts on it;
+- whether the medians are stable enough month to month, at real volume, to be read without over-interpretation (the fixture has 31 posts across two businesses);
+- whether the display floors (5 to show a rate, 10 to compare with bars) are the right size for real posting cadences;
+- whether day 10 is late enough for real X sync latency (the due rule is tested at the boundaries; the latency is not observed);
+- **the PDF**: that it matches the page, and that Chromium launches on Vercel (V.17: the route cannot launch Chromium on Windows; the preview deploy is open);
+- **a real send** of the monthly-report email (the delivery path, the recipient rule and the template are tested; no message was sent through Resend, and the email namespace fix `24a2d0042` is tested through the request config, not through a sent message);
+- the Vercel Firewall rule and the `generate-reports` QStash schedule (launch-checklist rows; neither exists yet).
+
+**Un-defer:** the first three real tenants with two generated reports each, reviewed against those questions.
+
+### V.20 — O2.12: the CI read (PR #20, head `1a70685ea`)
+
+Appended after the push; V.18 and V.19 above are left exactly as written and are **superseded by this entry only where it says so**. Draft PR #20 (base `master`, head `session-37-adr-0031`). Three **`pull_request`** runs at head `1a70685ea17b98e8490c6ccae2a3b11260f5f773` (created 2026-10-05 16:40 UTC), all `success`. Each log was read with `gh run view <id> --log`, not inferred from the status badge.
+
+| Run | Id | What the log says |
+|---|---|---|
+| `app-tests` (tsc + eslint + vitest) | 37342667544 | `tsc` step passed; eslint: `113 problems (0 errors, 113 warnings)`, the baseline. Skip-guard line, verbatim: **`skip-guard: 417 file(s) under [app, lib, components] all visible, zero failures — green. (6594/6594 tests passed)`**. Local `npm run test:app` reported 420 files and the same 6,594 tests; the guard counts files under `app`, `lib` and `components`, and `scripts/eval/` is the script's fourth path. That this accounts for the 3-file difference was inferred, not separately verified. |
+| `db-tests` (ADR 0013 RLS/migration suite) | 37342667556 | `vitest run supabase/__tests__ --no-file-parallelism --retry=2`. Skip-guard line, verbatim: **`skip-guard: 122 file(s) under [supabase/__tests__] all visible, zero failures — green. (1381/1381 tests passed)`**. A grep of the whole db log for `SIGSEGV`, `signal 11`, `OOMKilled` and `out of memory` finds **0** matches (0 in the app log too), so this is neither a stack crash nor an OOM masquerading as a pass. |
+| `Eval — signal triage quality` | 37342667551 | `success`. |
+
+**What this changes.**
+
+- **The local failure is local.** V.18 records that the full local `test:db` had one failure, `plan-proposals-current-version-read.test.ts` (an ADR 0027 `EXPLAIN` index-choice test). In CI the same file passes (1381/1381). It is therefore specific to the long-lived local database; its cause there was never determined and is still not known.
+- **The constraint map is now executed, at this head.** Every row of V.18 (e) whose job is `app-tests` or `db-tests` had its files run green in CI at `1a70685ea`, so those rows are **COVERED in the ADR 0015 sense, at that head**. The exceptions are the ones V.18 already named, and they stay exactly as named: #24 and #26 are not applicable (no model); #35's browser half is a record (V.17), not CI coverage; #30's Firewall rule and the Vercel preview-deploy check are launch-checklist rows, not CI; #5's real-capability flip needs LinkedIn to grant the permission. The DEFINER audit gate (3) is inside `db-tests`, which is green.
+- **The event type matters for the tally.** These are `pull_request` runs. They do not move the `db-tests` promotion tally (three consecutive full green runs on `master`); that tally is unchanged by this entry.
+
+**What this does not change.** Nothing in V.17 or V.19: the PDF route has still never rendered in a served request, no email has been sent, the Firewall rule and the `generate-reports` schedule do not exist, and real-tenant usefulness, stability, floors and day-10 latency remain UNPROVEN. CI executing the tests proves the tests pass; it does not make any of those true.
+
+**Scope of the claim.** It is dated to `1a70685ea`. The commit that records this entry (and the matching `current-phase.md` edit) changes only documents, which `git diff 1a70685ea..<that commit> --stat` shows; its own CI run is not read here. A Reviewer reading the range `0da603b4a..<head>` should re-run the check at the head they are given.
+
+
+---
+
+## Correction pass amendments (Session 37-D)
+
+> Appended by the Session 37-D correction pass (2026-10-08). Nothing in §0 to §16 or in V.1 to V.20 above is edited, except the three status lines of NIT-1 (C.13), whose old text is quoted there. The pass fixed the 29 findings of `docs/reviews/session-37-reviewer.md` (range `0da603b4a..cea74d843`); its per-finding resolution log is the `## CORRECTION PASS (Session 37-D)` section at the end of that file. The commits are: D0 `7c487b807`, D1 `9a54d5b56`, D2 `d7251892d`, D3 `e1bab9ea9`, D4 `3085fc3e8`, D5 `9c712fc67`, D6 `e5937cee1`, D7 `caea727d6`, D8 `9e1738a8a`, D9 `2f4cb5196`, D10 `a41073340`. **Every citation below is `file:line` at the head of D10 (`a41073340`).** Founder rulings A-8 to A-15 were all recorded 2026-10-05 as "(a) RULED by the founder" ("Assume the recommendations", in the Session 37 conversation); each is quoted where it lands.
+
+### C.1 — §10.2: a Pro month with posts and no pattern says so (MAJOR-1, **A-8(a)**)
+
+*Ruling A-8(a):* "A new §8.2 state, `analytics.state.noPatternYet`. Proposed EN: *No pattern has enough evidence yet. Jemip only learns a pattern from at least 10 posts across 3 campaigns.*" §10.2's Observed-patterns state is therefore `noPatternYet`, never `analytics.state.empty` ("Nothing published yet"), which is false for a month that has posts. pt and es are translated naturally (the texts are in the D6 appendix). Proven by `components/analytics/patterns.test.tsx:86` (page and report, en, pt, es: `noPatternYet` present, `state.empty` absent, the en text the ruled literal) and `lib/i18n/analytics-parity.test.ts:201` (the key exists in all three locales and names 10 and 3). Reddened at D6.
+
+### C.2 — §8.1, §8.2, §2.6: three display floors made explicit (MAJOR-8 **A-9(a)**, MINOR-6 **A-11(a)**, MINOR-2)
+
+- **Thin wins carry their own n** (*A-9(a):* "its own thin key, `analytics.state.thinWins`, whose n is the baseline count and names it"). The wins slot below the floor says how many posts had a usual to compare against, never the measured count, which the typical line carries. `lib/analytics/__tests__/view-model.test.ts:331` (business B, March: 2 measured, 1 with a usual).
+- **A breakdown value below 5 posts is thin** (*A-11(a):* "Thin. The value's row prints `analytics.breakdown.thinValue`, *Fewer than 5 posts*, with no k or n"). The view model carries only the value's name for it (`thinValues`); no k, n, share or bound is computed. `lib/analytics/__tests__/view-model.test.ts:274` (n = 4 thin, n = 5 a row, both sides in one breakdown).
+- **Coverage is true of its population** (MINOR-2, no ruling): the "Posts written outside Jemip's generator aren't classified" tail belongs to the AI-written populations only; length and CTA, whose population is all measured posts, use `analytics.coverage.all`. `components/analytics/analytics-surfaces.test.tsx` (every breakdown block) and `lib/analytics/__tests__/view-model.test.ts` (`length_band`, `cta_present`). The learning-floor sentence of §8.1 ("Jemip only learns a pattern from at least 10 posts across 3 campaigns; numbers shown here are descriptions, not lessons.") is now in `report.methodology.floors` in all three locales (MINOR-5): `lib/i18n/copy-hygiene.test.ts:43`.
+
+### C.3 — §2.3, §8.4: the spread is named for what it is (MAJOR-9, **A-10(a)**)
+
+*Ruling A-10(a):* "Two templates, chosen by `rangeKind`. Below 10, *(range {lo}–{hi})* stays. From 10: *(middle half of posts {lo}–{hi})*. The methodology `median` key gains: *Below 10 posts the range is lowest to highest; from 10 it is the middle half of posts.*" `typicalView` chooses `analytics.typical` or `analytics.typicalIqr`, and the page, report and email follow because they render `view.key`. `lib/analytics/__tests__/view-model.test.ts:296` (literal n = 9 and n = 10, hand-computed, in en, pt, es).
+
+### C.4 — §8.2: the count literals are plurals (NIT-4, **A-15(a)**)
+
+*Ruling A-15(a):* "Every literal with a count becomes `{n, plural, one {…} other {…}}`. The `other` branch is byte-identical to today's ADR literal." The two §8.2 literals with a count, `analytics.state.thin` and `.immature`, carry ICU plurals; the en `other` branch equals the ADR literal byte for byte, rendered through next-intl's real formatter at `lib/i18n/copy-hygiene.test.ts:17`. pt spells out `=0` because pt counts 0 as "one". `S37-STATE-LITERALS` in `docs/backlog.md` carries the "closed by 37-D D9" pointer. One engagement term per locale (MINOR-9: pt "interação", es "interacción"): `lib/i18n/copy-hygiene.test.ts:55`.
+
+### C.5 — §11, §5.1: what the stored payload holds (MINOR-7 **A-12(a)**, MINOR-4)
+
+*Ruling A-12(a):* "No: store ids and resolve labels at render." The write-once payload holds **ids and counts, never a business name, a campaign name, an account label, a handle or pattern text**; labels resolve at read time by (business, id) through the authenticated client, before Chromium launches (`lib/analytics/labels.ts`). The §D2.5 row ("aggregates, template-sentence keys and params, exclusion counts and cited post ids … no post text") is **true as written** and is not amended (`lib/db/__tests__/d2.5-analytics-reports-row.test.ts:11` still passes). `REPORT_SCHEMA_VERSION` is 2. Proven by `lib/reports/__tests__/payload-no-names.test.tsx:17` (a JSON walk over every string leaf with hostile marked names) and the PDF route's order test (`app/api/analytics/reports/[id]/pdf/route.test.ts`). **§5.1 (MINOR-4):** a cited post is stored as an id and a rate; its platform, date and campaign are resolved when the report is read (`listCitedPostsByIds`, business-bound), and a post since deleted renders `analytics.report.post.removed` ("Post removed"): `components/analytics/report-d8.test.tsx:154` (page and PDF HTML), `lib/analytics/__tests__/labels.test.ts:78`, Tier 1 `supabase/__tests__/analytics-reads.test.ts:177`.
+
+### C.6 — §5.2: the tick reaches everyone, and delivery is retried (MAJOR-5, MINOR-8 **A-13(a)**, NIT-6)
+
+- **The scan wraps.** It starts at a per-hour offset (the first 32 hex digits of `sha256(<tick hour, UTC ISO>)` as a uuid), visits ids above it and then ids at or below it (disjoint, so each business is visited at most once per tick), under three separate bounds: generation (`REPORT_MAX_PER_TICK`), errors (`REPORT_ERROR_CAP` = 25; the tick tolerates 25 and stops on the 26th) and scan (`REPORT_SCAN_CAP` = 2,000). `capped` is exact and `reason` names the bound; the cron route reports a capped tick to the `generate-reports` monitor with status `error`. **The coverage bound is `min(1, 2000 / N)` of the id space per tick**; past about 2,000 eligible businesses the alert is the guarantee, not coverage. Proven by `lib/reports/__tests__/generate.test.ts:219` and `:255` (2,100 candidates, the exact tick), `:287` (25 failing ids ahead of one due business), `:304` (an offset equal to an existing id), `app/api/cron/generate-reports/route.test.ts:170`.
+- **A failed delivery is retried, bounded and idempotent** (*A-13(a):* "On a tick that finds the M−1 report already `exists` and non-stub, and whose age is under 72 h, the worker makes one read of the business's `email_outbox` rows whose dedupe token starts `report:{YYYY-MM}:`. If there are fewer of them than `resolveReportRecipients` returns, it re-runs `deliverMonthlyReport`"). The age is read from `analytics_reports.generated_at` (the table has no `created_at`); `email_outbox_dedupe_uq` makes every member already queued a no-op, shown against the live database by Tier 1 `supabase/__tests__/report-generation.test.ts:181` (a duplicate token is `23505`). Never for a stub, never for `off`. `lib/reports/__tests__/generate.test.ts:326`, `lib/reports/__tests__/job.test.ts:101`, `lib/reports/__tests__/deliver.test.ts:154`. A failing redelivery read is counted on its own counter and does not spend the error cap.
+- **The recipient cap signals** (NIT-6): `resolveReportRecipients` reads 201, returns 200 and captures one Sentry message: `lib/db/__tests__/report-recipients.test.ts:141`.
+
+### C.7 — §9.1, §3.2, §9.3, §2.7: reads that cannot truncate or cross a tenant (MAJOR-10 **A-14(a)**, MAJOR-3, MAJOR-4, MINOR-11)
+
+- **§9.1's table gains `listCampaignsByIds`** (`id, business_id, name, status`; business-bound; chunked by 20; verified by `verifiedReaders` in the worker). The analytics path no longer reads campaigns through the 100-row `listCampaigns`. *A-14(a):* "Make it true of the month, from reads the loader already makes." **§3.2's campaign line** is now *"Posts came from n campaigns. m campaigns completed their retrospective this month."*, where n is the distinct campaigns of the month's published posts and m the retrospectives completed in it. Proven by `lib/analytics/__tests__/load.test.ts:336` (101+ campaigns, the oldest carrying the month) and Tier 1 `supabase/__tests__/analytics-reads.test.ts:166`. §9.1's table also gains `listCitedPostsByIds` (C.5).
+- **Patterns are a `Readers` member** (§9.3): the page binds the authenticated `listOutcomePatterns`, the worker binds a service-role wrapper inside `verifiedReaders`, both through the pure `selectOutcomePatterns` (`lib/memory/outcomes.ts`, generation output unchanged). The real worker binding is executed by Tier 1 `supabase/__tests__/report-generation.test.ts:99, 106`; `lib/reports/__tests__/isolation.test.ts` covers the wrapper. **Source scan #16 gains arm 2**: no `*ForGeneration` or other service-role export is reachable from the analytics roots (derived, not listed): `lib/analytics/source-scans.test.ts:613, 661`.
+- **§2.7 (MINOR-11):** the read ceiling is injectable and proven end to end through the real pager: `lib/analytics/__tests__/read-ceiling.test.ts:38` (the loader: a section at ceiling 17 over 18 posts is the error state, at 18 a number) and `:60` (the generator: no row stored, the tick records an error).
+
+### C.8 — §8.4, §5.3: patterns, the summary and the report sections (MAJOR-2, MAJOR-7, MINOR-1, MINOR-3)
+
+- **§8.4 (MAJOR-2):** a pattern is its **cell** (`platform, dimension, value, direction, basis, wins, n, campaigns`), parsed from `pattern_key`; the stored English sentence never leaves memory. The page and report compose it from four closed analytics templates (`analytics.pattern.{above,below,above_count,below_count}`) in the reader's locale. A key that does not parse, or names a cell outside the real vocabulary, is dropped and counted with one Sentry message, never rendered from `pattern`. The copy lint now runs over the real vocabulary, all 144 cells per locale (`lib/analytics/copy-lint.test.ts:340`). `components/analytics/patterns.test.tsx:15, 61`; `lib/analytics/__tests__/load.test.ts:534`.
+- **§5.3 row 1 (MAJOR-7):** the summary groups each rate platform under its name, and every win line is followed by the usual definition and the drift sentence (§2.4). The email prints the same lines (`REPORT_EMAIL_MAX_LINES` is 16 so none is truncated). `components/analytics/report-d8.test.tsx:66`.
+- **§5.3 rows 7 and 8 (MINOR-1, MINOR-3):** the report's trend heading says 6 months (`analytics.report.section.trend6`); section 7 carries the retrospective's interval (`analytics.interval`) beside the verdict and the share. `components/analytics/report-d8.test.tsx:117, 138`.
+
+### C.9 — §10.4: the 320 px acceptance measure (MAJOR-6, NIT-3)
+
+**§10.4's acceptance measure is amended.** "Shell `scrollWidth` ≤ 320" is not enough for a shell that scrolls inside `<main class="flex-1 overflow-auto p-6">`. The acceptance is: **every element whose computed `overflow-x` is `auto` or `scroll` has `scrollWidth <= clientWidth`, at 1280, 640 and 320 px, in en, pt and es, for a Pro and a Plus business**, plus the `documentElement` pair for continuity with V.17. **#35's manual half is re-recorded** by the Session 37-D D10 measurement: 144 page loads (2 businesses x 3 locales x 3 widths x the Reviewer's 8 pages), every scroller query returning `[]` and every standalone link at least 24 px; the full table is in the correction-pass appendix, and the pre-fix classes reproduce the Reviewer's numbers (pt 367/305, en 338/305). It remains a record, never CI coverage. `components/analytics/worst-case.test.tsx:345, 379` pin the classes that bound the filter bar and the 24 px links.
+
+### C.10 — §10.1 and §10.6: Print (NIT-2)
+
+**§10.1's "Print" is the browser's own print under the print stylesheet, and there is no Print button.** §10.6's rule of **two client islands stands** (`ReportEmailForm.tsx` and `analytics/error.tsx`); a Print button would need a client component. The Download PDF action §10.1 also lists is a plain anchor to the PDF route. The Builder's V.15 deviation is therefore the resolved reading, not an exception.
+
+### C.11 — §5.5: Chromium without a sandbox (NIT-7)
+
+**`--no-sandbox` is added to §5.5's list of launch arguments.** `launcherFor` passes it, and `@sparticuz/chromium`'s own arguments disable the sandbox as well, because a serverless function runtime typically does not grant the user namespaces Chromium's sandbox needs. It is acceptable here, and only here, because the renderer is already confined by §5.5's other controls: JavaScript disabled before any content, request interception aborting every request except the document, a `default-src 'none'` Content-Security-Policy, a document built from the stored payload with every customer string escaped, and a single render at a time per instance. It would not be acceptable for a renderer that loaded third-party pages. The Vercel preview check in `docs/launch-checklist.md` carries the same sentence.
+
+### C.12 — Process (MINOR-10)
+
+The Reviewer's section 10 re-reddened all 10 scans, and V.15 is the per-skill record; they are the redden record for O2.7 and the design pass for O2.10. The commits `cb0f96e72` and `266f67456` are **not amended** (history is not rewritten). Every Session 37-D commit carries its own redden transcript in its body.
+
+### C.13 — Status (NIT-1)
+
+The three status lines that still read as Proposed were corrected in place. The old text is quoted in the correction-pass appendix: line 3 (*"Accepted. It becomes Accepted when the founder rules A-3…A-7 (§0.1); until then O2 does not start."*), the §0.1 heading (*"…, **awaiting the founder**"*) and the §3 heading (*"…, **recommendation, awaiting founder ruling A-4 and A-5**"*), and `docs/current-phase.md`'s *"before ADR 0031 can be marked Accepted"*.
+
+### C.14 — Shared-function callers at the corrected head (MINOR-12)
+
+`git grep -w <name>` over `app lib components`, production code only, at `a41073340`. This **extends** V.18 (b), whose rows stand for the functions it names; the rows below are the ones the correction pass added or changed. Each caller is named with the test that exercises it.
+
+| Function | Production callers | Tests that exercise each caller |
+|---|---|---|
+| `hasAdvancedAnalytics` | `lib/analytics/load.ts:280` (portfolio), `:578` (posts); `app/api/analytics/reports/[id]/pdf/route.ts:61`; **`app/[locale]/(dashboard)/analytics/reports/[period]/page.tsx:62`** (the page caller V.18 omitted, via `proAllowed`) | `lib/analytics/__tests__/load.test.ts` (the gate); `app/api/analytics/reports/[id]/pdf/route.test.ts`; `app/[locale]/(dashboard)/analytics/reports/reports-pages.test.tsx:166` (pro allows, plus does not, an unknown plan fails closed) |
+| `listOutcomePatterns` | `lib/analytics/load.ts:672` (page, authenticated client); `lib/db/analytics-worker-reads.ts:44` (worker, service-role); `lib/db/memory-performance.ts:429` (`ForGeneration`, service-role); `lib/outcomes/campaign-view.ts:144, 145` (campaign page) | `load.test.ts` (page binding, `guard.serviceRole` never called); Tier 1 `report-generation.test.ts:99, 106` (the real worker binding); `lib/db/memory-performance.test.ts`; `lib/outcomes/__tests__/campaign-view.test.ts` |
+| `selectOutcomePatterns` | `lib/analytics/load.ts:672`; `lib/db/analytics-worker-reads.ts:46`; `lib/memory/outcomes.ts:90` (`retrieveOutcomePatterns`) | `lib/memory/outcomes.test.ts`; the three `*.context-equivalence` tests and `lib/memory/performance.test.ts` (**unmodified**, the V.2 baseline); `load.test.ts`; Tier 1 as above |
+| `retrieveOutcomePatterns` | `lib/ai/context.ts:95, 194` | the three `*.context-equivalence` tests (7/6/5), unmodified |
+| `listCampaignsByIds` | `lib/analytics/load.ts:342, 411, 594`; bound at `load.ts:661` (page) and `lib/db/analytics-worker-reads.ts:27` (worker) | `load.test.ts:336`; `lib/db/campaigns-by-ids.test.ts`; `lib/reports/__tests__/isolation.test.ts` (foreign row refused); Tier 1 `analytics-reads.test.ts:166` |
+| `listCitedPostsByIds` | `lib/analytics/labels.ts:50` | `labels.test.ts:78`; Tier 1 `analytics-reads.test.ts:177`; the report page and PDF route tests (`labels:posts` read) |
+| `resolveReportLabels` | `reports/[period]/page.tsx:46`; `pdf/route.ts:69` | `reports-pages.test.tsx`; `pdf/route.test.ts` (order: labels before launch) |
+| `resolveReportRecipients` | `lib/reports/deliver.ts:53, 64` | `lib/db/__tests__/report-recipients.test.ts:141` (cap); `deliver.test.ts`; scan #23 |
+| `deliverMonthlyReport` / `redeliverMonthlyReport` | `lib/reports/job.ts:30, 31` (the latter also calls the former, `deliver.ts:57`) | `job.test.ts:101`; `deliver.test.ts:154`; `components/analytics/report-d8.test.tsx:66` |
+| `runReportTick` / `generateReportForBusiness` | `lib/reports/job.ts:29`; `lib/reports/generate.ts:184` | `generate.test.ts:219-326`; `job.test.ts`; Tier 1 `report-generation.test.ts` |
+| `runReportJob` | `app/api/cron/generate-reports/route.ts:60` | `route.test.ts:170` |
+| `parsePatternKey` | `lib/analytics/load.ts:141` (`patternCellOf`); `lib/outcomes/campaign-view.ts:41` | `load.test.ts:534`; `lib/outcomes/__tests__/campaign-view.test.ts` (unmodified) |
+
+### C.15 — The constraint count after the correction pass
+
+**The count stays 42** (40 with a CI-executed test, #24 and #26 not applicable while there is no model). **No new number was needed; every 37-D addition is an arm of an existing constraint, because §13's shape forbids a constraint without a named tier and proof:** scan #16 arm 2 and the patterns Readers tests belong to #16 and #27; D4's tick, retry and recipient-cap tests to #22, #23 and #40; D5's end-to-end ceiling tests to #36; D2's payload walk to #27 and #28; D6's real-vocabulary corpus to #8 and #9; the D7, D8 and D9 summary, floor and copy tests to #7, #8, #9, #12 and #33; D10's measurement to #35's manual half. **Tier tally, re-derived from §13's Tier column at this head:** Tier 1 only 2 (#21, #41); Tier 1 + 2 eight (#17, #18, #22, #27, #28, #36, #40, #42); Tier 2 only 30 (of which 5 scans, 4 "2 + scan", and #35 with its manual half); not applicable 2 (#24, #26): 2 + 8 + 30 + 2 = 42. At this head, locally: `npm run test:app` 429 files, 6,745 tests; `npm run test:db` 122 files, 1,388 tests, 0 failed. **No "executed green in CI" cell is filled for the corrected range here:** that is read from the CI logs of the pushed head, after the push.
+
+### C.16 — The constraint map, re-dated to the corrected head (D12)
+
+**Head: `98e88bf57`** (D0 to D11 and D12a pushed to `session-37-adr-0031`, draft PR #20). Three `pull_request` runs at that head, all `success`, each log read with `gh run view <id> --log`:
+
+| Run | Id | What the log says |
+|---|---|---|
+| `app-tests` (tsc + eslint + vitest) | [38039503984](https://github.com/tcr430/SOSH/actions/runs/38039503984) | `tsc` passed; eslint `113 problems (0 errors, 113 warnings)`, the baseline. Skip-guard, verbatim: **`skip-guard: 426 file(s) under [app, lib, components] all visible, zero failures — green. (6751/6751 tests passed)`** |
+| `db-tests` (ADR 0013 RLS/migration suite) | [38039503983](https://github.com/tcr430/SOSH/actions/runs/38039503983) | Skip-guard, verbatim: **`skip-guard: 122 file(s) under [supabase/__tests__] all visible, zero failures — green. (1388/1388 tests passed)`**. The run's only "Restarting containers..." line is the `supabase db reset` step's own output (the deterministic re-apply of migrations), not a stack failure: the log has no `SIGSEGV`, `signal 11`, `OOMKilled`, `Restarting=true` or `out of memory`. |
+| `Eval — signal triage quality` | [38039504000](https://github.com/tcr430/SOSH/actions/runs/38039504000) | `success`. |
+
+**The counts rose, as a pass that only adds tests must.** At `cea74d843` the guards read app `417 file(s) … (6594/6594)` and db `122 file(s) … (1381/1381)`; now app **426 files, 6,751 tests** (+9 files, +157 tests) and db **122 files, 1,388 tests** (+7 tests). The recorded assertion changes (D1 to D10 appendix) removed none. Locally the same 6,751 tests run in 429 files; the same 3-file difference between the local count and the guard existed at `cea74d843` (local 420, guard 417) and is described in V.20, and the test counts are identical.
+
+**All 42 constraints, re-dated.** Every row of V.18 (e) whose job is `app-tests` or `db-tests` had its files run green in CI at `98e88bf57`, so each is **executed green in CI at `98e88bf57`**, per tier: **Tier 1 only (#21, #41) and the Tier-1 half of the eight Tier 1 + 2 rows (#17, #18, #22, #27, #28, #36, #40, #42): `db-tests` run 38039503983. Tier 2 (the 30 Tier-2-only rows, including the 5 scans, the 4 "2 + scan" rows and #35's CI half) and the Tier-2 half of the eight: `app-tests` run 38039503984.** #24 and #26 stay not applicable (no model). Tier E: none. The exceptions V.18 named stand unchanged: #30's Firewall rule and preview-deploy check are launch-checklist rows, not CI; #5's real-capability flip is outside CI by nature.
+
+**Executed is not the same as holding. The Reviewer's list, each now HOLDS (not only executes):**
+- **#16** holds over MAJOR-3: scan #16 arm 2 derives the service-role exports reachable from the analytics roots (`lib/analytics/source-scans.test.ts:613, 661`), and the page path runs through the default dependencies with the service-role factory throwing (`lib/analytics/__tests__/load.test.ts`, `guard.serviceRole` never called).
+- **#27** holds over MAJOR-4: Tier 1 executes the REAL patterns binding for the worker and refuses a read with its business filter dropped (`supabase/__tests__/report-generation.test.ts:99, 106`).
+- **#35** holds over MAJOR-6: the manual half is re-recorded by D10 with every overflow-x scroller measured at 1280/640/320 in en, pt and es for a Pro and a Plus business (144 loads, all empty). **It remains a record, not CI coverage**, and is dated to the D10 head.
+- **#36** holds over MINOR-11: the composition (pager, reader, loader, section, report) is tested end to end with an injected ceiling (`lib/analytics/__tests__/read-ceiling.test.ts:38, 60`).
+
+**What this does not change.** These are `pull_request` runs; they do **not** move the `db-tests` promotion tally (only consecutive green `master` push runs do), which is unchanged by this entry. Nothing in V.17, V.19 or the Reviewer's "What I could NOT verify" list is made true by a green run: the PDF route has still never rendered in a served request (`@sparticuz/chromium` on Vercel), no real email has been sent, the Firewall rule and the `generate-reports` schedule do not exist, and real-tenant usefulness, stability, floors and day-10 latency remain UNPROVEN; `es` was measured in a browser only for layout (D10), not for dark mode, print, 200% zoom or RTL. **Scope of the claim.** It is dated to `98e88bf57`; the commit that records this entry changes only documents (`git diff 98e88bf57..<that commit> --stat` shows it), and its own CI run is not read here.

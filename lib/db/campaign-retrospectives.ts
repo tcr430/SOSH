@@ -309,3 +309,29 @@ export async function listCampaignOutcomeCellSources(
     }
   })
 }
+
+// ── Analytics read (ADR 0031 §9.1 row 7; Session 37 O2.4) ─────────────────────────────────────────────────────
+// Retrospectives COMPLETED in [start, end), newest first. AUTHENTICATED, business-bound, at most 100 (one row per
+// campaign). median_log_lift is never selected (ADR 0031 §2.4). This is NOT a caller of listCampaignRetrospectives.
+
+export type RetrospectiveForAnalytics = Pick<
+  CampaignRetrospectiveRow,
+  'id' | 'campaign_id' | 'business_id' | 'verdict' | 'n' | 'wins' | 'interval_low' | 'interval_high' | 'status' | 'completed_at' | 'acknowledged_at'
+>
+
+export async function listCompletedRetrospectivesInRange(
+  client: SupabaseClient,
+  businessId: string,
+  range: { start: string; end: string },
+): Promise<RetrospectiveForAnalytics[]> {
+  const { data, error } = await client
+    .from('campaign_retrospectives')
+    .select('id, campaign_id, business_id, verdict, n, wins, interval_low, interval_high, status, completed_at, acknowledged_at')
+    .eq('business_id', businessId)
+    .gte('completed_at', range.start)
+    .lt('completed_at', range.end)
+    .order('completed_at', { ascending: false })
+    .limit(100)
+  if (error) throw new Error(getErrorMessage(error))
+  return (data as RetrospectiveForAnalytics[]) ?? []
+}

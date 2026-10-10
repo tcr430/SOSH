@@ -5,6 +5,7 @@ export type EmailKind =
   | 'payment-failed-courtesy'
   | 'first-post-published'
   | 'team-invite'
+  | 'monthly-report'
 
 export type EmailLocale = 'en' | 'pt' | 'es'
 

@@ -40,7 +40,9 @@ export const ACTIVE_NAV = [
   // separate entry, not a repoint (founder-directed, Session 26 D2.9).
   { key: 'create',    href: 'create',              icon: Plus,         capability: null },
   { key: 'campaigns', href: 'campaigns',         icon: Megaphone,    capability: null },
-  { key: 'interview', href: 'interview',          icon: MessageCircleQuestion, capability: null },
+  // ADR 0031 §4.5 — analytics is live for every plan (the Pro sections gate themselves): directly after campaigns.
+  { key: 'analytics', href: 'analytics',          icon: BarChart2,    capability: null },
+  { key: 'interview',href: 'interview',          icon: MessageCircleQuestion, capability: null },
   { key: 'calendar',  href: 'calendar',           icon: CalendarDays, capability: null },
   { key: 'billing',   href: 'billing',            icon: CreditCard,   capability: CAPABILITIES.MANAGE_BILLING },
   { key: 'team',      href: 'settings/team',      icon: Users,        capability: CAPABILITIES.MANAGE_MEMBERS },
@@ -49,7 +51,6 @@ export const ACTIVE_NAV = [
 
 export const COMING_SOON_NAV = [
   { key: 'inbox',     icon: Inbox        },
-  { key: 'analytics', icon: BarChart2    },
 ] as const
 
 // The Approvals surface shipped in 21C/C1 — this entry renders as a live,
@@ -129,7 +130,7 @@ export function DashboardShell({
   return (
     <div className="flex min-h-screen bg-background">
       {/* Sidebar */}
-      <aside className="hidden md:flex w-56 flex-col border-r border-border bg-card px-3 py-6 gap-1">
+      <aside className="hidden md:flex w-56 flex-col border-r border-border bg-card px-3 py-6 gap-1 print:hidden">
         <div className="px-3 mb-6">
           <span className="text-lg font-semibold tracking-tight">SŌSH</span>
         </div>
@@ -204,9 +205,11 @@ export function DashboardShell({
       </aside>
 
       {/* Main area */}
-      <div className="flex flex-1 flex-col">
+      {/* min-w-0: a flex item defaults to min-width:auto, so a wide table or header inside it stretched the whole
+          shell past the viewport (QA-MINOR-UI (2), ADR 0031 premise 6: scrollWidth 367 at 320 px). */}
+      <div className="flex min-w-0 flex-1 flex-col">
         {/* Top bar */}
-        <header className="flex h-14 items-center justify-between border-b border-border px-6">
+        <header className="flex h-14 items-center justify-between border-b border-border px-6 print:hidden">
           <span className="text-sm font-medium text-foreground truncate max-w-xs">
             {activeBusiness.name}
           </span>

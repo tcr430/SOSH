@@ -56,6 +56,11 @@ const CALLS: Array<[string, () => Promise<unknown>, { rpc?: string }]> = [
   ['post-outcomes.listLatestSnapshotsForPosts', () => postOutcomes.listLatestSnapshotsForPosts(BIZ, ['p1']), {}],
   ['post-outcomes.listPostDimensionsBySnapshot', () => postOutcomes.listPostDimensionsBySnapshot(BIZ, ['s1']), {}],
   ['post-outcomes.getEngagementSeed', () => postOutcomes.getEngagementSeed(BIZ, 'twitter'), {}],
+  // Session 37 O2.4 (ADR 0031 §9.1, §9.3): the AUTHENTICATED analytics readers, handed the recording client like the page readers.
+  ['post-outcomes.listMonthOutcomes', () => postOutcomes.listMonthOutcomes(recordingClient, BIZ, { platform: 'twitter', start: '2026-03-01T00:00:00Z', end: '2026-04-01T00:00:00Z', outcomesThrough: '2026-04-10T06:00:00Z' }), {}],
+  ['post-outcomes.listTrendOutcomes', () => postOutcomes.listTrendOutcomes(recordingClient, BIZ, { platform: 'twitter', start: '2025-04-01T00:00:00Z', end: '2026-04-01T00:00:00Z', outcomesThrough: '2026-04-10T06:00:00Z' }), {}],
+  ['post-outcomes.listDimensionsForAnalytics', () => postOutcomes.listDimensionsForAnalytics(recordingClient, BIZ, ['a1', 'a2']), {}],
+  ['campaign-retrospectives.listCompletedRetrospectivesInRange', () => retros.listCompletedRetrospectivesInRange(recordingClient, BIZ, { start: '2026-03-01T00:00:00Z', end: '2026-04-01T00:00:00Z' }), {}],
   ['campaign-retrospectives.getCampaignRetrospective', () => retros.getCampaignRetrospective(recordingClient, BIZ, 'c1'), {}],
   ['campaign-retrospectives.listCampaignRetrospectives', () => retros.listCampaignRetrospectives(BIZ), {}],
   ['campaign-retrospectives.listCampaignsAwaitingRetrospective', () => { rows = [{ id: 'c1', name: 'n' }]; return retros.listCampaignsAwaitingRetrospective(BIZ) }, {}],

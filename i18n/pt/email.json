@@ -39,6 +39,14 @@
     "supporting": "Mantém a cadência — revê os teus próximos rascunhos e mantém o teu público envolvido.",
     "cta": "Ver as tuas publicações"
   },
+  "monthly_report": {
+    "subject": "O seu relatório de {month} está pronto",
+    "preheader": "{businessName}: como foram recebidas as suas publicações em {month}.",
+    "heading": "{businessName}: o seu relatório de {month}",
+    "lead": "Veja como foram recebidas as publicações de {month}.",
+    "supporting": "Isto descreve publicações passadas, não a razão dos seus resultados. Mede a interação, não registos nem receita.",
+    "cta": "Abrir o relatório completo"
+  },
   "footer": {
     "tagline": "SŌSH · hello@mail.sosh.app",
     "reply_to": "Responder para support@sosh.app"

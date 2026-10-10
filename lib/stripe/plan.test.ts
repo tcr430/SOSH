@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getPlanCapabilities, MARKETING_PLANS, pricingFeatureRows } from './plan'
+import { getPlanCapabilities, hasAdvancedAnalytics, MARKETING_PLANS, pricingFeatureRows } from './plan'
 import type { PricingFeatureRow } from './plan'
 import marketingEn from '@/i18n/en/marketing.json'
 import type { Plan } from '@/lib/db/types'
@@ -119,5 +119,31 @@ describe('pricingFeatureRows (ADR 0009 §5.2)', () => {
         expect(marketingEn.pricing.feature).toHaveProperty(row.key)
       }
     }
+  })
+})
+
+// ADR 0031 §3.1 (ANALYTICS-PLAN-GATE-SERVER): the gate takes UNKNOWN and fails closed.
+describe('hasAdvancedAnalytics (ADR 0031 §3.1)', () => {
+  it.each([
+    ['trial', false],
+    ['plus', false],
+    ['pro', true],
+    ['agency', true],
+  ] as const)('%s -> %s', (plan, expected) => {
+    expect(hasAdvancedAnalytics(plan)).toBe(expected)
+  })
+
+  it.each([['enterprise'], [null], [undefined], [42], [''], ['PRO'], ['constructor'], ['__proto__'], ['toString'], [{}], [['pro']], [true]])(
+    'an unknown plan (%j) is basic: it fails closed',
+    (plan) => {
+      expect(hasAdvancedAnalytics(plan)).toBe(false)
+    },
+  )
+
+  it('agrees with getPlanCapabilities for every known plan, and getPlanCapabilities is unchanged', () => {
+    for (const plan of ['trial', 'plus', 'pro', 'agency'] as const) {
+      expect(hasAdvancedAnalytics(plan)).toBe(getPlanCapabilities(plan).advancedAnalytics)
+    }
+    expect(getPlanCapabilities('trial').advancedAnalytics).toBe(false)
   })
 })

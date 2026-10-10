@@ -8,7 +8,7 @@ import type { PerformanceMemoryRow } from '@/lib/db/types'
 const listOutcomePatternsForGeneration = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/db/memory-performance', () => ({ listOutcomePatternsForGeneration }))
 
-import { retrieveOutcomePatterns, retrieveHypothesisResults } from './outcomes'
+import { retrieveOutcomePatterns, retrieveHypothesisResults, selectOutcomePatterns } from './outcomes'
 
 const NOW = new Date('2026-09-19T12:00:00Z')
 
@@ -88,5 +88,41 @@ describe('retrieveOutcomePatterns', () => {
   it('drops a row that lacks its counts rather than rendering an observation without evidence', async () => {
     listOutcomePatternsForGeneration.mockResolvedValue([row({ id: 'x', outcome_n: null })])
     expect(await retrieveOutcomePatterns('biz-1')).toEqual([])
+  })
+})
+
+// Session 37-D D1 (MAJOR-3/4) — the selection is PURE and shared: the analytics page (authenticated client) and the report worker
+// (service-role client) read rows themselves and run exactly the selection generation runs.
+describe('selectOutcomePatterns (pure)', () => {
+  it('performs no read: the generation reader is never called', () => {
+    selectOutcomePatterns([row({ id: 'a' })])
+    expect(listOutcomePatternsForGeneration).not.toHaveBeenCalled()
+  })
+
+  it('carries the row identity (business_id, pattern_key) the worker verifies and the report renders from', () => {
+    expect(selectOutcomePatterns([row({ id: 'a', business_id: 'biz-9' })])).toEqual([
+      { business_id: 'biz-9', pattern_key: 'outcome:format:thread:above:twitter', metric_basis: 'rate', platform: 'twitter', pattern: "On X, thread posts beat this brand's usual engagement.", wins: 9, n: 11, campaigns: 3 },
+    ])
+  })
+
+  it('applies the SAME eligibility, ranking and cap as retrieveOutcomePatterns, over the same rows', async () => {
+    const rows = [
+      row({ id: 'cand', status: 'candidate', pattern: 'CANDIDATE.' }),
+      row({ id: 'exp', expires_at: formatISO(addDays(NOW, -1)), pattern: 'EXPIRED.' }),
+      row({ id: 'hyp', dimension: 'hypothesis' as never, pattern: 'HYPOTHESIS.' }),
+      row({ id: 'nocount', outcome_n: null, pattern: 'NO COUNTS.' }),
+      ...[0.9, 0.8, 0.7, 0.6, 0.5].map((confidence, i) => row({ id: 'r' + i, confidence, pattern: 'P' + i + '.', pattern_key: 'outcome:format:k' + i + ':above:twitter' })),
+    ]
+    listOutcomePatternsForGeneration.mockResolvedValue(rows)
+    const viaGeneration = await retrieveOutcomePatterns('biz-1', { platform: 'twitter' })
+    const viaSelection = selectOutcomePatterns(rows, { platform: 'twitter' })
+    expect(viaSelection.map((r) => r.pattern)).toEqual(['P0.', 'P1.', 'P2.'])
+    expect(viaGeneration).toEqual(viaSelection.map(({ platform, pattern, wins, n, campaigns }) => ({ platform, pattern, wins, n, campaigns })))
+  })
+
+  it('retrieveOutcomePatterns returns EXACTLY the five observation keys: lib/ai never sees business_id or pattern_key', async () => {
+    listOutcomePatternsForGeneration.mockResolvedValue([row({ id: 'a' })])
+    const [only] = await retrieveOutcomePatterns('biz-1')
+    expect(Object.keys(only).sort()).toEqual(['campaigns', 'n', 'pattern', 'platform', 'wins'])
   })
 })

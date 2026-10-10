@@ -1,4 +1,4 @@
-import type { Platform } from '@/lib/db/types'
+import type { PerformanceMemoryRow, Platform } from '@/lib/db/types'
 import { listOutcomePatternsForGeneration } from '@/lib/db/memory-performance'
 import { OUTCOME_CAP } from '@/lib/outcomes/constants'
 import { isEligible, rankAndCap } from './scoring'
@@ -40,14 +40,26 @@ export async function retrieveHypothesisResults(businessId: string): Promise<Out
     }))
 }
 
-export async function retrieveOutcomePatterns(
-  businessId: string,
+// An observation PLUS the row identity the analytics worker verifies and the report renders from (Session 37-D D1,
+// MAJOR-3/4): the owning business, and the pattern cell (`outcome:<dimension>:<value>:<direction>:<platform>`). lib/ai
+// never sees these two fields: retrieveOutcomePatterns strips them, so generation output is unchanged.
+export type OutcomePatternRow = OutcomeObservation & {
+  readonly business_id: string
+  readonly pattern_key: string | null
+  /** The cell's basis ('rate' everywhere but LinkedIn, whose cells count). Needed to pick the verb a report renders. */
+  readonly metric_basis: PerformanceMemoryRow['metric_basis']
+}
+
+// PURE (no I/O, no client): eligibility, ranking and the cap over rows a caller has ALREADY read — with the user's
+// authenticated client (the analytics page) or with the service-role client (generation, the report worker). The
+// choice of client stays with the caller; the selection can never differ between them (Session 37-D D1).
+export function selectOutcomePatterns(
+  rows: readonly PerformanceMemoryRow[],
   // MemoryQueryContext.platform is a plain string, so this accepts one; a value that is not a real platform
   // simply matches no row.
   options: { platform?: string } = {},
-): Promise<OutcomeObservation[]> {
-  const rows = await listOutcomePatternsForGeneration(businessId, { status: 'active', platform: options.platform })
-  const now = new Date()
+  now: Date = new Date(),
+): OutcomePatternRow[] {
   // 'hypothesis' rows are campaign-level retrospective results, read only by the brief stage (J2.10) — never here.
   const eligible = rows.filter(
     (r) =>
@@ -59,10 +71,21 @@ export async function retrieveOutcomePatterns(
   )
   // Ranked and capped AMONG OUTCOME ROWS ONLY.
   return rankAndCap(eligible, { platform: options.platform }, OUTCOME_CAP, now).map((r) => ({
+    business_id: r.business_id,
+    pattern_key: r.pattern_key,
+    metric_basis: r.metric_basis,
     platform: r.platform,
     pattern: r.pattern,
     wins: r.outcome_wins as number,
     n: r.outcome_n as number,
     campaigns: r.outcome_distinct_campaigns as number,
   }))
+}
+
+export async function retrieveOutcomePatterns(
+  businessId: string,
+  options: { platform?: string } = {},
+): Promise<OutcomeObservation[]> {
+  const rows = await listOutcomePatternsForGeneration(businessId, { status: 'active', platform: options.platform })
+  return selectOutcomePatterns(rows, options, new Date()).map(({ platform, pattern, wins, n, campaigns }) => ({ platform, pattern, wins, n, campaigns }))
 }

@@ -233,3 +233,32 @@ export async function listByBusiness(
   if (error) throw new Error(getErrorMessage(error))
   return (data as SocialAccountPublic[]) ?? []
 }
+
+// ── Analytics read (ADR 0031 §9.1 row 11; Session 37 O2.4) ────────────────────────────────────────────────────
+// Labels only (never a token or a vault id): the account names a per-account row is shown under. AUTHENTICATED,
+// business-bound, on the primary key, 20 ids a chunk.
+
+export type SocialAccountLabel = Pick<SocialAccountPublic, 'id' | 'platform' | 'platform_username' | 'platform_display_name'> & { business_id: string }
+
+const LABEL_CHUNK = 20
+
+export async function listAccountLabels(
+  client: SupabaseClient,
+  businessId: string,
+  ids: readonly string[],
+): Promise<SocialAccountLabel[]> {
+  const unique = [...new Set(ids)]
+  const out: SocialAccountLabel[] = []
+  for (let i = 0; i < unique.length; i += LABEL_CHUNK) {
+    const { data, error } = await client
+      .from('social_accounts')
+      .select('id, business_id, platform, platform_username, platform_display_name')
+      .eq('business_id', businessId)
+      .in('id', unique.slice(i, i + LABEL_CHUNK))
+      .order('id', { ascending: true })
+      .limit(LABEL_CHUNK)
+    if (error) throw new Error(getErrorMessage(error))
+    out.push(...((data ?? []) as SocialAccountLabel[]))
+  }
+  return out
+}

@@ -132,3 +132,21 @@ export async function reapStuckSendingRows(
   if (error) throw dbError(error)
   return Array.isArray(data) ? data.length : 0
 }
+
+/**
+ * MINOR-8 (A-13(a)): how many monthly-report emails are already queued for ONE business and month. One head count on
+ * email_outbox_dedupe_uq's leading columns (business_id, kind); the token prefix is `report:{YYYY-MM}:` (lib/reports/deliver.ts).
+ * Service-role, lazily acquired, no client parameter: the report worker has no user.
+ */
+export async function countMonthlyReportEmailsForWorker(businessId: string, period: string): Promise<number> {
+  const { createServiceRoleClient } = await import('@/lib/supabase/service')
+  const client = createServiceRoleClient()
+  const { count, error } = await client
+    .from('email_outbox')
+    .select('id', { count: 'exact', head: true })
+    .eq('business_id', businessId)
+    .eq('kind', 'monthly-report')
+    .like('dedupe_token', 'report:' + period + ':%')
+  if (error) throw dbError(error)
+  return count ?? 0
+}

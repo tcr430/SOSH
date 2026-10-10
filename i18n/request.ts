@@ -10,7 +10,7 @@ export default getRequestConfig(async ({ requestLocale }) => {
     locale = routing.defaultLocale;
   }
 
-  const [common, auth, posts, billing, errors, marketing, calendar, team, approvals, studio, signals, opportunities, outcome, agency, interview, memory] = await Promise.all([
+  const [common, auth, posts, billing, errors, marketing, calendar, team, approvals, studio, signals, opportunities, outcome, agency, interview, memory, analytics, email, invite] = await Promise.all([
     import(`./${locale}/common.json`),
     import(`./${locale}/auth.json`),
     import(`./${locale}/posts.json`),
@@ -27,6 +27,9 @@ export default getRequestConfig(async ({ requestLocale }) => {
     import(`./${locale}/agency.json`),
     import(`./${locale}/interview.json`),
     import(`./${locale}/memory.json`),
+    import(`./${locale}/analytics.json`),
+    import(`./${locale}/email.json`),
+    import(`./${locale}/invite.json`),
   ])
 
   return {
@@ -47,6 +50,10 @@ export default getRequestConfig(async ({ requestLocale }) => {
       agency: agency.default,
       interview: interview.default,
       memory: memory.default,
+      analytics: analytics.default,
+      // lib/email/render.tsx reads getTranslations({ namespace: 'email' }); the invite template's strings live in their own
+      // file but are read under the same namespace (the email tests build the same merge in templates/__tests__/helpers.ts).
+      email: { ...email.default, ...invite.default },
       errors: {
         ...(common.default.errors ?? {}),
         ...errors.default,
