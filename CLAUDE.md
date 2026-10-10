@@ -263,18 +263,20 @@ Other ECC agents, skills and commands may be used.
 
 ---
 
-## UI/UX tooling (`/impeccable` and `/taste-skill`)
+## UI/UX tooling (`/impeccable`, `/taste-skill`, `/ui-ux-pro-max` and `/emil-design-eng`)
 
-Design work uses two skills, the way engineering work uses `/ecc:`.
+Design work uses four skills, the way engineering work uses `/ecc:`.
 
 | Skill | Used for |
 |---|---|
 | `/impeccable` | UX review and interface design — visual hierarchy, information architecture, cognitive load, accessibility, responsive behaviour, theming, motion, error and empty states, UX copy, design tokens. The default for improving or auditing an existing surface. |
 | `/taste-skill` | Design direction — making a surface distinctive rather than templated. The default when a surface reads as generic, or when a new surface needs a point of view before it is built. |
+| `/ui-ux-pro-max` (plugin `ui-ux-pro-max`) | UI/UX design intelligence — styles, color palettes, typography pairings, UX guidelines and design-system generation. Use when choosing or validating a visual system (palette, type, style) for a surface. |
+| `/emil-design-eng` (Emil Kowalski) | UI polish and the invisible details — component design, animation and motion decisions, interaction feel. Use for the final polish pass on a built surface. Companion motion skills from the same collection: `/animate`, `/review-animations`, `/improve-animations`, `/break-ui`. |
 
 **When they run — this is a phase rule, not a preference:**
 
-- **Builder phase only.** The Builder invokes them **against the ADR's UX contract**, which the Architect wrote.
+- **Builder phase only.** The Builder invokes them **against the ADR's UX contract**, which the Architect wrote. This applies to all four skills.
 - **Never in an Architect session.** The Architect **specifies** UX — states, information hierarchy, accessibility floor, the Server/Client split — and does not design it. An Architect that invokes a design skill has stepped outside its role boundary, and its output is discarded like any other Architect-attempted implementation.
 - **One documented exception:** a single read-only `/impeccable` audit to ground a UX contract in already-shipped surfaces (the Session 29 precedent). Read-only, once, no design output.
 - Whatever they produce still obeys everything below: shadcn v4 / Base UI constraints, Tailwind only, i18n in all three locales, and the Server Component default.
