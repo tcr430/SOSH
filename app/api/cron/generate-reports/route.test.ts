@@ -178,6 +178,16 @@ describe('a capped tick alerts the monitor (MAJOR-5)', () => {
     expect(lines(log)[0]).toMatchObject({ capped: true, reason: 'scan_cap' })
   })
 
+  it.each(['scan_cap', 'generation_cap', 'error_cap'])('a tick capped by %s alerts the monitor too, and the reason is on the line', async (reason) => {
+    vi.stubEnv('NODE_ENV', 'development')
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.mocked(runReportJob).mockResolvedValue({ ...summary, capped: true, reason } as never)
+    await GET(makeRequest({ authorization: `Bearer ${SECRET}` }))
+    expect(captureCheckIn).toHaveBeenCalledTimes(1)
+    expect(captureCheckIn.mock.calls[0][0]).toMatchObject({ monitorSlug: 'generate-reports', status: 'error' })
+    expect(lines(log)[0]).toMatchObject({ capped: true, reason })
+  })
+
   it('an uncapped tick sends no extra check-in, and neither does a job that threw', async () => {
     vi.stubEnv('NODE_ENV', 'development')
     vi.spyOn(console, 'log').mockImplementation(() => {})

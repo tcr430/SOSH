@@ -10,6 +10,7 @@ vi.mock('@sentry/nextjs', () => ({ withMonitor, captureException }))
 vi.mock('../deliver', () => ({ deliverMonthlyReport: vi.fn(), redeliverMonthlyReport: vi.fn() }))
 
 import { runReportJob } from '../job'
+import { deliverMonthlyReport, redeliverMonthlyReport } from '../deliver'
 
 const NOW = '2026-10-10T07:20:00Z'
 
@@ -107,6 +108,15 @@ describe('re-delivery of an existing report whose email never went out (MINOR-8,
     expect(deliver).not.toHaveBeenCalled()
     expect(out.redelivered).toBe(1)
     expect(out.emails).toEqual({ recipients: 3, enqueued: 1, deduped: 2, suppressed: 0, errors: 0 })
+  })
+
+  it('by default a redelivery goes through redeliverMonthlyReport (the outbox-short gate), never straight to deliverMonthlyReport', async () => {
+    vi.mocked(redeliverMonthlyReport).mockReset().mockResolvedValue(null)
+    vi.mocked(deliverMonthlyReport).mockReset()
+    tick.mockResolvedValue(tickSummary({ redeliverReports: [sum('a')] }))
+    await runReportJob(NOW, { tick, capture })
+    expect(redeliverMonthlyReport).toHaveBeenCalledTimes(1)
+    expect(deliverMonthlyReport).not.toHaveBeenCalled()
   })
 
   it('a re-delivery that throws is captured and does not stop the next one', async () => {

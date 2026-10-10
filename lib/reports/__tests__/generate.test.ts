@@ -284,6 +284,26 @@ describe('runReportTick wraps from a per-hour offset (MAJOR-5)', () => {
     expect(s).toMatchObject({ scanned: 150, ineligible: 150, capped: false, reason: null })
   })
 
+  it('exactly REPORT_SCAN_CAP businesses: all are visited and the tick is NOT capped; one more and it is, with the scan reason', async () => {
+    const exact = spread(REPORT_SCAN_CAP)
+    const m1 = memory({ readers: fleetReaders(new Set()) })
+    const s1 = await runReportTick(DUE, { ...m1.deps, listBusinessIds: pager(exact) })
+    expect(s1).toMatchObject({ scanned: REPORT_SCAN_CAP, capped: false, reason: null })
+    const m2 = memory({ readers: fleetReaders(new Set()) })
+    const s2 = await runReportTick(DUE, { ...m2.deps, listBusinessIds: pager(spread(REPORT_SCAN_CAP + 1)) })
+    expect(s2).toMatchObject({ scanned: REPORT_SCAN_CAP, capped: true, reason: 'scan_cap' })
+  })
+
+  it('exactly maxPerTick due businesses and nobody left: generated, NOT capped; one fewer slot and it is, with the generation reason', async () => {
+    const two = spread(2)
+    const m1 = memory({ readers: fleetReaders(new Set(two)) })
+    const s1 = await runReportTick(DUE, { ...m1.deps, listBusinessIds: pager(two), scanOffset: ZERO, maxPerTick: 2 })
+    expect(s1).toMatchObject({ inserted: 2, capped: false, reason: null })
+    const m2 = memory({ readers: fleetReaders(new Set(two)) })
+    const s2 = await runReportTick(DUE, { ...m2.deps, listBusinessIds: pager(two), scanOffset: ZERO, maxPerTick: 1 })
+    expect(s2).toMatchObject({ inserted: 1, capped: true, reason: 'generation_cap' })
+  })
+
   it('25 failing ids ahead of one due business: the due business is generated in the FIRST tick (errors do not spend the generation budget)', async () => {
     const all = spread(26)
     const m = memory({ readers: fleetReaders(new Set([all[25]]), new Set(all.slice(0, 25))) })

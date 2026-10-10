@@ -185,6 +185,8 @@ describe('report generation against the live stack (ADR 0031 §5.2, §9.3)', () 
       row(BUSINESS_A_ID, 'report:2026-03:m2'),
       row(BUSINESS_A_ID, 'report:2026-04:m1'),
       row(BUSINESS_B_ID, 'report:2026-03:m1'),
+      // Another KIND with a report-looking token in the same business and month: it must not be counted.
+      row(BUSINESS_A_ID, 'report:2026-03:other-kind', 'welcome-to-plan'),
     ]
     const inserted = await admin.from('email_outbox').insert(rows).select('id')
     expect(inserted.error).toBeNull()

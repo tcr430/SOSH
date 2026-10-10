@@ -104,12 +104,18 @@ describe('MAJOR-7: the email states every win count with its usual and drift sen
 
   it.each(LOCALES)('%s: the report page shows the same structure: the platform heading, then its lines, with the definitions after the win count', async (locale) => {
     const p = await payload()
-    const t = text(body(p, locale))
+    const html = body(p, locale)
+    // The SUMMARY section only (a later section may print the same sentence or an "X" of its own): from its title to the next section's.
+    const start = html.indexOf('id="summary-title"')
+    expect(start).toBeGreaterThan(-1)
+    const section = html.slice(start, html.indexOf('-title"', start + 20))
     const d = FILES[locale].disclosure
-    const heading = t.indexOf(FILES[locale].platform.twitter)
-    expect(heading).toBeGreaterThan(-1)
+    // The heading is its own list item, marked as one, and says the platform name.
+    const heading = /<li[^>]*font-semibold[^>]*>([^<]*)</.exec(section)
+    expect(heading?.[1]?.trim()).toBe(FILES[locale].platform.twitter)
+    const t = text(section)
     const usual = t.indexOf(d.usual)
-    expect(usual).toBeGreaterThan(heading)
+    expect(usual).toBeGreaterThan(t.indexOf(FILES[locale].platform.twitter))
     expect(t.indexOf(d.usualUpdates)).toBeGreaterThan(usual)
   })
 })
