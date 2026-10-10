@@ -2848,27 +2848,37 @@ stop.
 
 ## §5 — Docs to update at close-out (Track O done)
 
-- [ ] `docs/current-phase.md`: the Session 37 entry (O1/O2/O3 and 37-D), the CI runs it is dated to, and
+- [x] `docs/current-phase.md`: the Session 37 entry (O1/O2/O3 and 37-D), the CI runs it is dated to, and
       the db-tests promotion tally.
-- [ ] `docs/decisions/0031-analytics-and-monthly-report.md`: constraint table re-dated per tier to the
+      *37-D D12 (2026-10-10): applied. The Session 37 entry carries the 37-D close, the CI runs at `98e88bf57` and the db-tests tally (unaffected: `pull_request` runs).*
+- [x] `docs/decisions/0031-analytics-and-monthly-report.md`: constraint table re-dated per tier to the
       corrected head.
-- [ ] Any ADR 0031 amends (ADR 0026 §10 if the campaign learning view changes; ADR 0014 for the new email
+      *37-D D12 (2026-10-10): applied. ADR 0031 C.16 re-dates all 42 constraints per tier to `98e88bf57`; sections 0 to 16 and V.1 to V.20 are untouched apart from the three NIT-1 lines (C.13).*
+- [x] Any ADR 0031 amends (ADR 0026 §10 if the campaign learning view changes; ADR 0014 for the new email
       kind), each with a dated amendment.
-- [ ] ADR 0010 Amendment 2 §D2.5: the cascade row for every new table, **or an explicit note that no new
+      *37-D D12 (2026-10-10): applied as C.1 to C.15 in ADR 0031. ADR 0026 and ADR 0014: no change in 37-D (the campaign learning view and the email kind did not change; their dated notes are from O2.12).*
+- [x] ADR 0010 Amendment 2 §D2.5: the cascade row for every new table, **or an explicit note that no new
       row was required** (the Session 28-D D7 precedent).
-- [ ] `docs/pre-launch-scope.md`: §10's T1-B box ticked with evidence, §15.1 updated, and **C-2 recorded as
+      *37-D D12 (2026-10-10): did NOT apply, and this is the explicit note: 37-D adds no table, and the `analytics_reports` row changes only under A-12(b); A-12 was ruled (a), so the row is true as written and `0010-legal-surface.md` is untouched (`lib/db/__tests__/d2.5-analytics-reports-row.test.ts` passes).*
+- [x] `docs/pre-launch-scope.md`: §10's T1-B box ticked with evidence, §15.1 updated, and **C-2 recorded as
       half-closed** with the founder's copy ruling (the inbox half stays open until Session 40).
-- [ ] `docs/product-status.md`: the analytics and monthly-report lines, and the Plus/Pro rows, rewritten to
+      *37-D D12 (2026-10-10): NOT applied by this pass, on purpose. Ticking the T1-B box "shipped" and recording C-2 as half-closed are founder launch-scope edits; the evidence is "built, CI-verified at `98e88bf57`, unproven with real tenants", which is not "shipped" under the launch definition. Left open and flagged to the founder.*
+- [x] `docs/product-status.md`: the analytics and monthly-report lines, and the Plus/Pro rows, rewritten to
       what shipped, **including what a LinkedIn-only customer sees**.
-- [ ] `docs/launch-checklist.md`: the report's QStash schedule row, ordered after `extract-outcomes`, and the
+      *37-D D12 (2026-10-10): applied earlier (O2.12) and refined by 37-D D9 (NIT-5: "LinkedIn shown as post counts (publishing activity, not engagement)"); verified at D11, not re-edited.*
+- [x] `docs/launch-checklist.md`: the report's QStash schedule row, ordered after `extract-outcomes`, and the
       Vercel Firewall rate-rule row for the PDF route (A-7; landed at `O2.8` and `O2.9`).
-- [ ] `docs/backlog.md`: correct the stale *"not yet merged"* note on `QA-REAL-API-SOSH-FIELD` /
+      *37-D D12 (2026-10-10): applied: the QStash schedule row (O2.8) and the Firewall row (O2.9) stand; 37-D added only NIT-7's `--no-sandbox` sentence (D11).*
+- [x] `docs/backlog.md`: correct the stale *"not yet merged"* note on `QA-REAL-API-SOSH-FIELD` /
       `QA-LOCALE-HEADER-DROPPED` (Reality §10); close or update `S36-WRITER-RESCHEDULE`'s trigger if T1-B
       shows a timing signal; file every ADR 0031 deferral with its un-defer trigger.
-- [ ] `CLAUDE.md`: **only if the founder adopts the C-2 copy.** The pricing line changes in that case
+      *37-D D12 (2026-10-10): applied: 37-D added only the "closed by 37-D D9" pointer on `S37-STATE-LITERALS` (A-15(a)); no new finding row, because nothing was deferred.*
+- [x] `CLAUDE.md`: **only if the founder adopts the C-2 copy.** The pricing line changes in that case
       alone, and as a founder-ruled amendment.
-- [ ] `.wolf/anatomy.md`, `.wolf/memory.md`, `.wolf/cerebrum.md` (Key Learnings: the metric model and the
+      *37-D D12 (2026-10-10): did NOT apply: the C-2 copy has not been adopted by the founder. (`CLAUDE.md` shows as modified in the working tree; that change is not this pass's and was never staged.)*
+- [x] `.wolf/anatomy.md`, `.wolf/memory.md`, `.wolf/cerebrum.md` (Key Learnings: the metric model and the
       honesty rules; Do-Not-Repeat for anything the Reviewer caught).
+      *37-D D12 (2026-10-10): applied (gitignored): anatomy section, memory lines per step, cerebrum Do-Not-Repeat entries, and `buglog.json` entries for MAJOR-2, MAJOR-3, MAJOR-5, MAJOR-6 and the one self-inflicted test-deletion slip.*
 
 **Next:** Session 38 — founder and personal profiles (T1-E, `docs/build-guide/session-38.md`). It opens the
 OAuth scope set, which is where LinkedIn metrics (ADR 0031's first deferral) gets its next hearing.
